@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "cloudflare": {
+      "command": "cmd",
+      "args": ["/c", "npx", "mcp-remote", "https://docs.mcp.cloudflare.com/sse"]
+    },
+    "mastra": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@mastra/mcp-docs-server"],
+      "type": "stdio"
+    },
+    "mcp-deepwiki": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "mcp-deepwiki@latest"]
+    }
+  }
+}

@@ -1,0 +1,28 @@
+main = ".open-next/worker.js"
+name = "novel2manga-mastra"
+compatibility_date = "2025-03-25"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+# 環境変数の設定（開発時はローカルの.envから読み込み）
+# 本番環境ではCloudflareダッシュボードで設定
+# [vars]
+# OPENAI_API_KEY = "your-api-key"
+
+# AI bindingの設定（必要に応じて）
+# [ai]
+# binding = "AI"
+
+# KV namespaceの設定（キャッシュ用）
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "your-kv-namespace-id"
+
+# D1データベースの設定（必要に応じて）
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "novel2manga-db"
+# database_id = "your-d1-database-id"
