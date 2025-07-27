@@ -1,0 +1,23 @@
+{
+  "feature_name": "novel-to-manga-converter",
+  "project_description": "ユーザーが小説やラノベのテキストを入力すると、自動的にマンガ形式のページレイアウトに変換するアプリケーション。Mastra AIフレームワークを使用して、テキストから画像生成、コマ割り、吹き出し配置などを自動化する。TypeScriptで実装。",
+  "created_at": "2025-01-27T09:50:00Z",
+  "updated_at": "2025-01-27T10:30:00Z",
+  "language": "japanese",
+  "phase": "tasks-generated",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": false
+    }
+  },
+  "ready_for_implementation": false
+}

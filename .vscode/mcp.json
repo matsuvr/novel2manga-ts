@@ -1,0 +1,18 @@
+{
+  "servers": {
+    "mastra": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@mastra/mcp-docs-server"
+      ],
+      "type": "stdio"
+    },
+    "cloudflare": {
+			"command": "cmd",
+			"args": ["/c", "npx", "-y", "mcp-remote", "https://docs.mcp.cloudflare.com/sse"]
+		}
+  }
+}
