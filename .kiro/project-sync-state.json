@@ -1,0 +1,36 @@
+{
+  "items": {},
+  "fieldIds": {
+    "Title": "PVTF_lAHOAe7rPM4A-9knzgyNQg8",
+    "Assignees": "PVTF_lAHOAe7rPM4A-9knzgyNQhA",
+    "Status": "PVTSSF_lAHOAe7rPM4A-9knzgyNQhE",
+    "Status_options": {
+      "Todo": "f75ad846",
+      "In Progress": "47fc9ee4",
+      "Done": "98236657"
+    },
+    "Labels": "PVTF_lAHOAe7rPM4A-9knzgyNQhI",
+    "Linked pull requests": "PVTF_lAHOAe7rPM4A-9knzgyNQhM",
+    "Milestone": "PVTF_lAHOAe7rPM4A-9knzgyNQhQ",
+    "Repository": "PVTF_lAHOAe7rPM4A-9knzgyNQhU",
+    "Reviewers": "PVTF_lAHOAe7rPM4A-9knzgyNQhY",
+    "Parent issue": "PVTF_lAHOAe7rPM4A-9knzgyNQhc",
+    "Sub-issues progress": "PVTF_lAHOAe7rPM4A-9knzgyNQhg",
+    "Phase": "PVTSSF_lAHOAe7rPM4A-9knzgyNQ6A",
+    "Phase_options": {
+      "Requirements": "206c146c",
+      "Design": "04929838",
+      "Implementation": "73bdb976",
+      "Testing": "26c74c63",
+      "Deployment": "c55a7fa5"
+    },
+    "Priority": "PVTSSF_lAHOAe7rPM4A-9knzgyNQ7U",
+    "Priority_options": {
+      "High": "3daad408",
+      "Medium": "c2f2f198",
+      "Low": "728be628"
+    },
+    "Spec": "PVTF_lAHOAe7rPM4A-9knzgyNQ8A"
+  },
+  "lastSync": "2025-07-27T17:58:21.887Z"
+}
