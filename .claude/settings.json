@@ -1,5 +1,0 @@
-{
-  "hooks": {
-    "assistant-message": "node .kiro/hooks/claude-notification-hook.js"
-  }
-}

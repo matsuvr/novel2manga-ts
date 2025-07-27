@@ -9,5 +9,18 @@
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "cloudflare"
-  ]
+  ],
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/claude-notification-hook.js"
+          }
+        ]
+      }
+    ]
+  }
 }
