@@ -191,8 +191,8 @@ The `/kiro:steering` command manages these files automatically. Manual updates t
 
 ### Custom Steering Files
 <!-- Added by /kiro:steering-custom command -->
+- `api-standards.md`: Conditional - `"src/app/api/**/*"`, `"**/route.ts"` - API design guidelines and standards
 <!-- Example entries:
-- `api-standards.md`: Conditional - `"src/api/**/*"`, `"**/*api*"` - API design guidelines
 - `testing-approach.md`: Conditional - `"**/*.test.*"`, `"**/spec/**/*"` - Testing conventions
 - `security-policies.md`: Manual - Security review guidelines (reference with @security-policies.md)
 -->
