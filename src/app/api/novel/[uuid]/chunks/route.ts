@@ -4,8 +4,10 @@ import { open } from 'sqlite'
 import path from 'path'
 import fs from 'fs/promises'
 import { splitTextIntoChunks } from '@/utils/chunk-splitter'
+import { getChunkingConfig, getStorageConfig, isDevelopment } from '@/config'
 
-// 開発環境用のSQLiteデータベースパス
+// ストレージ設定から取得
+const storageConfig = getStorageConfig()
 const DB_PATH = path.join(process.cwd(), '.local-storage', 'novel2manga.db')
 const LOCAL_STORAGE_DIR = path.join(process.cwd(), '.local-storage', 'novels')
 const CHUNKS_DIR = path.join(process.cwd(), '.local-storage', 'chunks')
@@ -37,14 +39,22 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     const { uuid } = params
     const body = await request.json() as { chunkSize?: unknown; overlapSize?: unknown }
     
-    // デフォルト値
-    const chunkSize = typeof body.chunkSize === 'number' ? body.chunkSize : 1000
-    const overlapSize = typeof body.overlapSize === 'number' ? body.overlapSize : 100
+    // 設定からデフォルト値を取得
+    const chunkingConfig = getChunkingConfig()
+    const chunkSize = typeof body.chunkSize === 'number' ? body.chunkSize : chunkingConfig.defaultChunkSize
+    const overlapSize = typeof body.overlapSize === 'number' ? body.overlapSize : chunkingConfig.defaultOverlapSize
     
-    // バリデーション
-    if (chunkSize <= 0) {
+    // バリデーション（設定値も考慮）
+    if (chunkSize < chunkingConfig.minChunkSize) {
       return NextResponse.json(
-        { error: 'チャンクサイズは0より大きい必要があります' },
+        { error: `チャンクサイズは${chunkingConfig.minChunkSize}以上である必要があります` },
+        { status: 400 }
+      )
+    }
+    
+    if (chunkSize > chunkingConfig.maxChunkSize) {
+      return NextResponse.json(
+        { error: `チャンクサイズは${chunkingConfig.maxChunkSize}以下である必要があります` },
         { status: 400 }
       )
     }
@@ -56,8 +66,16 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       )
     }
     
+    const overlapRatio = overlapSize / chunkSize
+    if (overlapRatio > chunkingConfig.maxOverlapRatio) {
+      return NextResponse.json(
+        { error: `オーバーラップ比率は${chunkingConfig.maxOverlapRatio}以下である必要があります` },
+        { status: 400 }
+      )
+    }
+    
     // 開発環境の場合
-    if (process.env.NODE_ENV === 'development') {
+    if (isDevelopment()) {
       const db = await getDatabase()
       
       try {
@@ -236,7 +254,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const { uuid } = params
     
     // 開発環境の場合
-    if (process.env.NODE_ENV === 'development') {
+    if (isDevelopment()) {
       const db = await getDatabase()
       
       try {
