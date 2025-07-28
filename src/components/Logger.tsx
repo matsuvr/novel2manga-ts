@@ -43,7 +43,7 @@ export default function Logger({ logs }: LoggerProps) {
       minute: '2-digit',
       second: '2-digit',
       millisecond: true
-    } as any).replace(/:/g, ':')
+    } as Intl.DateTimeFormatOptions).replace(/:/g, ':')
   }
 
   return (

@@ -156,7 +156,8 @@ describe('Novel Models', () => {
     })
 
     it('should throw error for invalid file type', () => {
-      expect(() => getR2FilePath(novelId, 'invalid' as any)).toThrow()
+      // @ts-expect-error - テスト用の無効な値
+      expect(() => getR2FilePath(novelId, 'invalid')).toThrow()
     })
 
     it('should throw error when required options are missing', () => {

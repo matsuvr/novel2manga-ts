@@ -23,15 +23,17 @@
 
 - [x] 2.3 プロジェクトモデルとリレーション
   - [x] Jobモデルの実装（workers/src/types/index.ts）
-  - [x] Cloudflare D1スキーマ定義（jobs、chunks）
+  - [x] Cloudflare D1スキーマ定義（jobs、novels、chunks）
+  - [x] チャンクテーブルの設計（位置情報、オーバーラップ対応）
   - [x] データベースサービスの実装（workers/src/services/database.ts）
   - _Requirements: REQ-6 - データ管理_
 
 - [ ] 3. AI処理レイヤーの実装（Mastraエージェント）
-- [ ] 3.1 テキスト解析エージェント
-  - TextAnalysisAgentのテスト作成（チャンク分割、要素抽出）
-  - Mastraエージェント実装（analyzeTextメソッド）
-  - 長文テキストのチャンク分割ロジック（10,000文字制限対応）
+- [x] 3.1 テキスト解析エージェント
+  - [x] チャンク分割ユーティリティ実装（src/utils/chunk-splitter.ts）
+  - [x] チャンクAPIエンドポイント実装（/api/novel/[uuid]/chunks）
+  - [x] オーバーラップ付き分割ロジック（文脈保持）
+  - [ ] Mastraエージェント実装（analyzeTextメソッド）
   - _Requirements: REQ-1 - テキスト入力と解析_
 
 - [ ] 3.2 5要素抽出エージェント
@@ -97,11 +99,18 @@
   - [x] エラーハンドリング基本実装
   - _Requirements: REQ-1, REQ-2, REQ-3_
 
-- [x] 6.3 エクスポートと共有API（基礎実装）
+- [x] 6.3 ストレージとデータ管理API（実装済み）
+  - [x] /api/novel/storageエンドポイント（テキスト保存・取得）
+  - [x] /api/novel/dbエンドポイント（Novel情報のDB管理）
+  - [x] /api/novel/[uuid]/chunksエンドポイント（チャンク分割・取得）
+  - [x] JSON形式でのメタデータ付きファイル保存
+  - [x] Cloudflare R2とローカルストレージの両対応
+  - _Requirements: REQ-6 - データ管理_
+
+- [ ] 6.4 エクスポートと共有API
   - [ ] /api/exportエンドポイントのテスト作成
   - [ ] PDF、PNG連番、CBZ形式のエクスポート実装
   - [ ] /api/shareエンドポイント（72時間有効リンク生成）
-  - [x] Cloudflare R2へのファイルアップロード基礎実装（StorageService）
   - _Requirements: REQ-5 - エクスポート_
 
 - [x] 7. フロントエンドコンポーネントの実装（基礎実装）

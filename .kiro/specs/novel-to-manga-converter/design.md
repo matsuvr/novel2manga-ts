@@ -163,7 +163,7 @@ class MangaLayoutEngine {
 
 | Component Name | Responsibility | Props/State Summary |
 |----------------|----------------|---------------------|
-| TextInputEditor | 小説テキスト入力UI | text, onAnalyze, maxLength |
+| TextInputEditor | テキスト入力UI | text, onAnalyze, maxLength |
 | ProgressTracker | 処理進捗表示 | steps, currentStep, progress |
 | MangaPreview | マンガプレビュー表示 | layout, panels, editable |
 | PanelEditor | コマ編集インターフェース | panel, onResize, onMove |
@@ -246,8 +246,7 @@ erDiagram
 // Core Models
 interface Novel {
   id: string;                    // UUID
-  title: string;
-  originalTextFile: string;      // R2: novels/{id}/original.txt
+  originalTextFile: string;      // R2: novels/{id}.json
   totalLength: number;
   createdAt: Date;
   updatedAt: Date;
@@ -256,23 +255,24 @@ interface Novel {
 interface Job {
   id: string;
   novelId: string;
+  type: 'text_analysis' | 'image_generation' | 'layout_generation';
   status: 'pending' | 'processing' | 'completed' | 'failed';
   progress: number;              // 0-100
-  totalChunks: number;
-  processedChunks: number;
-  startedAt?: Date;
-  completedAt?: Date;
+  result?: any;                  // 処理結果
   error?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 interface Chunk {
   id: string;
   novelId: string;
   chunkIndex: number;
-  textFile: string;              // R2: novels/{novelId}/chunks/chunk_{index}.txt
-  startIndex: number;
-  endIndex: number;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  startPosition: number;         // テキスト内の開始位置
+  endPosition: number;           // テキスト内の終了位置
+  chunkSize: number;            // チャンクサイズ設定値
+  overlapSize: number;          // オーバーラップサイズ設定値
+  createdAt: Date;
 }
 
 // Analysis Models
@@ -405,7 +405,6 @@ interface Situation {
 
 CREATE TABLE novels (
   id TEXT PRIMARY KEY,  -- UUID
-  title TEXT NOT NULL,
   original_text_file TEXT NOT NULL,  -- R2パス
   total_length INTEGER NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -415,13 +414,13 @@ CREATE TABLE novels (
 CREATE TABLE jobs (
   id TEXT PRIMARY KEY,
   novel_id TEXT NOT NULL,
+  type TEXT NOT NULL,  -- 'text_analysis', 'image_generation' など
   status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
-  progress INTEGER DEFAULT 0,
-  total_chunks INTEGER NOT NULL,
-  processed_chunks INTEGER DEFAULT 0,
-  started_at DATETIME,
-  completed_at DATETIME,
+  progress REAL DEFAULT 0,
+  result TEXT,  -- 処理結果JSON
   error TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE
 );
 
@@ -429,10 +428,11 @@ CREATE TABLE chunks (
   id TEXT PRIMARY KEY,
   novel_id TEXT NOT NULL,
   chunk_index INTEGER NOT NULL,
-  text_file TEXT NOT NULL,  -- R2パス
-  start_index INTEGER NOT NULL,
-  end_index INTEGER NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+  start_position INTEGER NOT NULL,  -- テキスト内の開始位置
+  end_position INTEGER NOT NULL,    -- テキスト内の終了位置
+  chunk_size INTEGER NOT NULL,      -- チャンクサイズ設定値
+  overlap_size INTEGER NOT NULL,    -- オーバーラップサイズ設定値
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE,
   UNIQUE(novel_id, chunk_index)
 );
@@ -516,23 +516,20 @@ CREATE INDEX idx_panels_page_id ON panels(page_id);
 
 ```
 novels/
+└── {novelId}.json                     # 元の小説全文（メタデータ付き）
+chunks/
+└── {chunkId}.json                     # チャンクテキスト（メタデータ付き）
+analysis/
 └── {novelId}/
-    ├── original.txt                    # 元の小説全文
-    ├── chunks/
-    │   ├── chunk_0.txt                # 分割されたチャンク
-    │   ├── chunk_1.txt
-    │   └── ...
-    ├── analysis/
-    │   ├── chunk_0.json               # チャンク毎の5要素解析結果
-    │   ├── chunk_1.json
-    │   ├── ...
-    │   └── integrated.json            # 統合された解析結果
-    └── episodes/
-        └── {episodeNumber}/
-            └── pages/
-                └── {pageNumber}/
-                    ├── layout.yaml     # レイアウト定義
-                    └── preview.png     # プレビュー画像
+    ├── chunk_{index}.json             # チャンク毎の5要素解析結果
+    └── integrated.json                # 統合された解析結果
+episodes/
+└── {novelId}/
+    └── {episodeNumber}/
+        └── pages/
+            └── {pageNumber}/
+                ├── layout.yaml         # レイアウト定義
+                └── preview.png         # プレビュー画像
 ```
 
 ### Migration Strategy

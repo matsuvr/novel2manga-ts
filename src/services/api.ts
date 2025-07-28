@@ -50,7 +50,7 @@ export const api = {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+      const error = await response.json().catch(() => ({ error: 'Unknown error' })) as { error?: string };
       throw new APIError(response.status, error.error || 'Failed to analyze text');
     }
 
@@ -66,7 +66,7 @@ export const api = {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+      const error = await response.json().catch(() => ({ error: 'Unknown error' })) as { error?: string };
       throw new APIError(response.status, error.error || 'Failed to get job');
     }
 

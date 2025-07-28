@@ -1,3 +1,14 @@
 {
-  "pages": {}
+  "pages": {
+    "/api/novel/[uuid]/chunks/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/novel/[uuid]/chunks/route.js"
+    ],
+    "/api/novel/db/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/novel/db/route.js"
+    ]
+  }
 }
