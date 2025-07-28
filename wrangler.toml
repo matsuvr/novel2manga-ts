@@ -26,3 +26,8 @@ binding = "ASSETS"
 # binding = "DB"
 # database_name = "novel2manga-db"
 # database_id = "your-d1-database-id"
+
+# R2バケットの設定
+[[r2_buckets]]
+binding = "NOVEL_STORAGE"
+bucket_name = "novel-storage"
