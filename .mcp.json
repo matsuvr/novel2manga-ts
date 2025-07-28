@@ -8,10 +8,6 @@
       "command": "cmd",
       "args": ["/c", "npx", "-y", "@mastra/mcp-docs-server"],
       "type": "stdio"
-    },
-    "mcp-deepwiki": {
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "mcp-deepwiki@latest"]
     }
   }
 }

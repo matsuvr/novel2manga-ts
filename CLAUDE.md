@@ -35,7 +35,13 @@ This project implements Kiro-style Spec-Driven Development for Claude Code using
    - Using Mastra AI features
    - Setting up Mastra database connections
 
-3. **Version Compatibility**: ALWAYS check for:
+3. **OpenNext Documentation**: When working with OpenNext Cloudflare adapter:
+   - Use WebFetch with URL: https://deepwiki.com/opennextjs/opennextjs-cloudflare
+   - Search for configuration details, deployment steps, and troubleshooting
+   - Check compatibility with Next.js versions
+   - Note: DeepWiki MCP is currently working, so can be used for documentation searches
+
+4. **Version Compatibility**: ALWAYS check for:
    - Breaking changes in recent versions
    - New features or deprecated APIs
    - Best practices updates
@@ -202,3 +208,6 @@ The `/kiro:steering` command manages these files automatically. Manual updates t
 - **Conditional files**: Loaded when working on matching file patterns
 - **Manual files**: Reference explicitly with `@filename.md` syntax when needed
 - **Updating**: Use `/kiro:steering` or `/kiro:steering-custom` commands to modify this configuration
+
+## Project Memories
+- DeepWikiのMCPが使えるようになったので、積極的に使うように

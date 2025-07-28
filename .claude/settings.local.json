@@ -9,7 +9,14 @@
       "Bash(gh project field-list:*)",
       "Bash(gh project field-create:*)",
       "Bash(node:*)",
-      "Bash(gh project item-list:*)"
+      "Bash(gh project item-list:*)",
+      "Bash(curl:*)",
+      "mcp__mcp-deepwiki__deepwiki_fetch",
+      "WebFetch(domain:deepwiki.com)",
+      "mcp__deepwiki__read_wiki_structure",
+      "mcp__deepwiki__read_wiki_contents",
+      "mcp__deepwiki__ask_question",
+      "Bash(find:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
