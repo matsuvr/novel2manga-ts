@@ -1,112 +1,112 @@
 export interface AppConfigType {
   chunking: {
-    defaultChunkSize: number;
-    defaultOverlapSize: number;
-    maxChunkSize: number;
-    minChunkSize: number;
-    maxOverlapRatio: number;
-  };
+    defaultChunkSize: number
+    defaultOverlapSize: number
+    maxChunkSize: number
+    minChunkSize: number
+    maxOverlapRatio: number
+  }
   llm: {
-    defaultProvider: 'openai' | 'gemini' | 'groq';
+    defaultProvider: 'openai' | 'gemini' | 'groq'
     providers: {
       openai: {
-        apiKey: string | undefined;
-        model: string;
-        maxTokens: number;
-        frequencyPenalty: number;
-        presencePenalty: number;
-        timeout: number;
-      };
+        apiKey: string | undefined
+        model: string
+        maxTokens: number
+        frequencyPenalty: number
+        presencePenalty: number
+        timeout: number
+      }
       gemini: {
-        apiKey: string | undefined;
-        model: string;
-        maxTokens: number;
-        timeout: number;
-      };
+        apiKey: string | undefined
+        model: string
+        maxTokens: number
+        timeout: number
+      }
       groq: {
-        apiKey: string | undefined;
-        model: string;
-        maxTokens: number;
-        timeout: number;
-      };
-    };
+        apiKey: string | undefined
+        model: string
+        maxTokens: number
+        timeout: number
+      }
+    }
     textAnalysis: {
-      provider: 'default' | 'openai' | 'gemini' | 'groq';
-      maxTokens: number;
+      provider: 'default' | 'openai' | 'gemini' | 'groq'
+      maxTokens: number
       modelOverrides: {
-        openai: string;
-        gemini: string;
-        groq: string;
-      };
-      systemPrompt: string;
-      userPromptTemplate: string;
-    };
+        openai: string
+        gemini: string
+        groq: string
+      }
+      systemPrompt: string
+      userPromptTemplate: string
+    }
     layoutGeneration: {
-      provider: 'default' | 'openai' | 'gemini' | 'groq';
-      maxTokens: number;
+      provider: 'default' | 'openai' | 'gemini' | 'groq'
+      maxTokens: number
       modelOverrides: {
-        openai: string;
-        gemini: string;
-        groq: string;
-      };
-      systemPrompt: string;
-    };
-  };
+        openai: string
+        gemini: string
+        groq: string
+      }
+      systemPrompt: string
+    }
+  }
   storage: {
     local: {
-      basePath: string;
-      novelsDir: string;
-      chunksDir: string;
-      analysisDir: string;
-    };
+      basePath: string
+      novelsDir: string
+      chunksDir: string
+      analysisDir: string
+    }
     r2: {
-      novelsBucket: string;
-      chunksBucket: string;
-      analysisBucket: string;
-    };
-  };
+      novelsBucket: string
+      chunksBucket: string
+      analysisBucket: string
+    }
+  }
   api: {
     rateLimit: {
       textAnalysis: {
-        requests: number;
-        window: number;
-      };
+        requests: number
+        window: number
+      }
       imageGeneration: {
-        requests: number;
-        window: number;
-      };
-    };
+        requests: number
+        window: number
+      }
+    }
     timeout: {
-      default: number;
-      textAnalysis: number;
-      imageGeneration: number;
-    };
+      default: number
+      textAnalysis: number
+      imageGeneration: number
+    }
     maxPayloadSize: {
-      text: number;
-      image: number;
-    };
-  };
+      text: number
+      image: number
+    }
+  }
   processing: {
-    maxConcurrentChunks: number;
+    maxConcurrentChunks: number
     retry: {
-      maxAttempts: number;
-      initialDelay: number;
-      maxDelay: number;
-      backoffFactor: number;
-    };
+      maxAttempts: number
+      initialDelay: number
+      maxDelay: number
+      backoffFactor: number
+    }
     cache: {
-      ttl: number;
-      analysisCache: boolean;
-      layoutCache: boolean;
-    };
-  };
+      ttl: number
+      analysisCache: boolean
+      layoutCache: boolean
+    }
+  }
   features: {
-    enableTextAnalysis: boolean;
-    enableLayoutGeneration: boolean;
-    enableImageGeneration: boolean;
-    enableAutoSave: boolean;
-    enableCaching: boolean;
-  };
+    enableTextAnalysis: boolean
+    enableLayoutGeneration: boolean
+    enableImageGeneration: boolean
+    enableAutoSave: boolean
+    enableCaching: boolean
+  }
 }
 
 export const appConfig: AppConfigType = {
@@ -169,9 +169,17 @@ export const appConfig: AppConfigType = {
 }`,
       userPromptTemplate: `以下の小説テキストを分析して、5つの要素（キャラクター、場面、対話、ハイライト、状況）を抽出してください。
 
-チャンク番号: {{chunkIndex}}
-テキスト:
-{{chunkText}}`,
+      解析するのは以下のチャンク番号のテキストです。文脈を考慮するために、前後のチャンクも付けます。
+解析対象チャンク番号: {{chunkIndex}}
+
+前のチャンク:
+{{previousChunkText}}
+===========
+**解析対象チャンク:**
+{{chunkText}}
+===========
+次のチャンク:
+{{nextChunkText}}`,
     },
 
     // レイアウト生成用設定

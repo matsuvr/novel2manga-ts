@@ -18,6 +18,8 @@ const analyzeChunkSchema = z.object({
   chunkText: z.string(),
   chunkIndex: z.number(),
   novelId: z.string(),
+  previousChunkText: z.string().optional(),
+  nextChunkText: z.string().optional(),
 });
 
 // 5要素の出力スキーマ
@@ -53,6 +55,23 @@ const textAnalysisOutputSchema = z.object({
   })),
 });
 
+// キャッシュされる分析結果の型
+type CachedAnalysisResult = {
+  chunkId: string;
+  chunkIndex: number;
+  novelId: string;
+  analysisId: string;
+  analysisPath: string;
+  analysis: z.infer<typeof textAnalysisOutputSchema>;
+  summary: {
+    characterCount: number;
+    sceneCount: number;
+    dialogueCount: number;
+    highlightCount: number;
+    situationCount: number;
+  };
+};
+
 export async function POST(request: NextRequest) {
   let db = null;
   
@@ -66,7 +85,48 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = analyzeChunkSchema.parse(body);
     
-    const { chunkId, chunkText, chunkIndex, novelId } = validatedData;
+    const { chunkId, chunkText, chunkIndex, novelId, previousChunkText, nextChunkText } = validatedData;
+    
+    // データベース接続を取得
+    db = await getDatabase();
+    
+    // 前後のチャンクテキストを取得（渡されていない場合）
+    let prevChunkText = previousChunkText;
+    let nextChunkText_ = nextChunkText;
+    
+    if (!prevChunkText || !nextChunkText_) {
+      // 前のチャンクを取得
+      if (!prevChunkText) {
+        if (chunkIndex > 0) {
+          const prevChunk = await getOne(db,
+            `SELECT content FROM chunks WHERE novel_id = ? AND chunk_index = ?`,
+            [novelId, chunkIndex - 1]
+          );
+          prevChunkText = prevChunk?.content || '（開始点）';
+        } else {
+          prevChunkText = '（開始点）';
+        }
+      }
+      
+      // 次のチャンクを取得
+      if (!nextChunkText_) {
+        const nextChunk = await getOne(db,
+          `SELECT content FROM chunks WHERE novel_id = ? AND chunk_index = ?`,
+          [novelId, chunkIndex + 1]
+        );
+        
+        if (nextChunk?.content) {
+          nextChunkText_ = nextChunk.content;
+        } else {
+          // 最後のチャンクかどうか確認
+          const maxChunkIndex = await getOne(db,
+            `SELECT MAX(chunk_index) as max_index FROM chunks WHERE novel_id = ?`,
+            [novelId]
+          );
+          nextChunkText_ = (maxChunkIndex?.max_index === chunkIndex) ? '（終了）' : '';
+        }
+      }
+    }
     
     // キャッシュが有効か確認
     const cacheEnabled = await isCacheEnabled('analysis');
@@ -74,7 +134,7 @@ export async function POST(request: NextRequest) {
     // キャッシュから取得を試みる
     if (cacheEnabled) {
       const cacheKey = getAnalysisCacheKey(novelId, chunkIndex);
-      const cachedResult = await getCachedData<any>(cacheKey);
+      const cachedResult = await getCachedData<CachedAnalysisResult>(cacheKey);
       
       if (cachedResult) {
         console.log(`Cache hit for chunk analysis: ${cacheKey}`);
@@ -105,15 +165,14 @@ export async function POST(request: NextRequest) {
     // プロンプトを生成
     const prompt = promptTemplate
       .replace('{{chunkIndex}}', chunkIndex.toString())
-      .replace('{{chunkText}}', chunkText);
+      .replace('{{chunkText}}', chunkText)
+      .replace('{{previousChunkText}}', prevChunkText || '（開始点）')
+      .replace('{{nextChunkText}}', nextChunkText_ || '（終了）');
     
     // Mastraエージェントを使用してチャンクを分析（構造化出力）
     const result = await chunkAnalyzerAgent.generate(prompt, {
       output: textAnalysisOutputSchema,
     });
-    
-    // データベース接続を取得
-    db = await getDatabase();
     
     // チャンクが存在するか確認
     const chunk = await getOne(db, 

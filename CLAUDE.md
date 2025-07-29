@@ -211,3 +211,4 @@ The `/kiro:steering` command manages these files automatically. Manual updates t
 
 ## Project Memories
 - DeepWikiのMCPが使えるようになったので、積極的に使うように
+- any禁止
