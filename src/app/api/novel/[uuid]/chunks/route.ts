@@ -4,10 +4,9 @@ import { open } from 'sqlite'
 import path from 'path'
 import fs from 'fs/promises'
 import { splitTextIntoChunks } from '@/utils/chunk-splitter'
-import { getChunkingConfig, getStorageConfig, isDevelopment } from '@/config'
+import { getChunkingConfig, isDevelopment } from '@/config'
 
 // ストレージ設定から取得
-const storageConfig = getStorageConfig()
 const DB_PATH = path.join(process.cwd(), '.local-storage', 'novel2manga.db')
 const LOCAL_STORAGE_DIR = path.join(process.cwd(), '.local-storage', 'novels')
 const CHUNKS_DIR = path.join(process.cwd(), '.local-storage', 'chunks')

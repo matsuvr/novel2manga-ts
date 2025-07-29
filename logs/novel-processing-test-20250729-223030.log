@@ -1,0 +1,486 @@
+[2025-07-29T13:30:30.710Z] === 小説処理テスト開始 ===
+[2025-07-29T13:30:30.711Z] ステップ1: 小説ファイルの読み込み
+[2025-07-29T13:30:30.712Z] 小説ファイル読み込み完了: 36941文字
+[2025-07-29T13:30:30.713Z] ステップ2: 小説のアップロード
+[2025-07-29T13:30:30.713Z] API Request: POST http://localhost:3000/api/novel
+{
+  "text": "モルグ街の殺人事件\r\nTHE MURDERS IN THE RUE MORGUE\r\nエドガー・アラン・ポー　Edgar Allan Poe\r\n佐々木直次郎訳\r\n\r\n\r\n\r\n［＃ページの左右中央］\r\n\r...",
+  "originalLength": 36941
+}
+[2025-07-29T13:30:30.776Z] API Response: 200 OK
+{
+  "preview": "モルグ街の殺人事件\r\nTHE MURDERS IN THE RUE MORGUE\r\nエドガー・アラン・ポー　Edgar Allan Poe\r\n佐々木直次郎訳\r\n\r\n\r\n\r\n［＃ページの左右中央］\r\n\r",
+  "originalLength": 36941,
+  "fileName": "novels/a93c0801-86e0-47cf-94d7-51c6fb96761f.json",
+  "uuid": "a93c0801-86e0-47cf-94d7-51c6fb96761f",
+  "message": "小説テキストを受信しました",
+  "job": {
+    "id": "30342144-f8ad-4fc7-b3d9-84a8febaf123",
+    "type": "text_analysis",
+    "status": "pending"
+  }
+}
+[2025-07-29T13:30:30.777Z] 小説アップロード完了: Novel ID = a93c0801-86e0-47cf-94d7-51c6fb96761f
+[2025-07-29T13:30:30.777Z] ステップ3: チャンク化の実行
+[2025-07-29T13:30:30.778Z] API Request: POST http://localhost:3000/api/novel/a93c0801-86e0-47cf-94d7-51c6fb96761f/chunks
+{
+  "chunkSize": 5000,
+  "overlapSize": 500
+}
+[2025-07-29T13:30:30.889Z] API Response: 200 OK
+{
+  "success": true,
+  "novelId": "a93c0801-86e0-47cf-94d7-51c6fb96761f",
+  "totalChunks": 9,
+  "chunkSize": 5000,
+  "overlapSize": 500,
+  "chunkIds": [
+    "4871deef-2439-4cc9-afbb-5e2d64766668",
+    "1b19fb01-e7b5-44c4-a0c6-edad3e1c7336",
+    "b005df36-829e-4a9b-8058-5f45c6f2729f",
+    "6320d386-c9b5-4b00-bf8f-0c8d166b77e3",
+    "d3c908c0-c886-4b0d-a5a8-d9427b96f6fc",
+    "4f285ac0-5f89-4524-81a9-4aed4ddb91ed",
+    "a8985755-4482-4ecc-9b85-b7457c018463",
+    "a13267de-26b1-4001-bedb-ce6ac4462ef3",
+    "f15daf07-9f77-4d00-a882-5f22e94c5d0a"
+  ]
+}
+[2025-07-29T13:30:30.890Z] チャンク化完了: 9個のチャンクを生成
+[2025-07-29T13:30:30.891Z] ステップ4: チャンクの取得
+[2025-07-29T13:30:30.891Z] API Request: GET http://localhost:3000/api/novel/a93c0801-86e0-47cf-94d7-51c6fb96761f/chunks
+[2025-07-29T13:30:30.936Z] API Response: 200 OK
+{
+  "novelId": "a93c0801-86e0-47cf-94d7-51c6fb96761f",
+  "totalChunks": 9,
+  "chunks": [
+    {
+      "id": "4871deef-2439-4cc9-afbb-5e2d64766668",
+      "index": 0,
+      "startPosition": 0,
+      "endPosition": 5000,
+      "chunkSize": 5000,
+      "overlapSize": 500,
+      "createdAt": "2025-07-29 13:30:30"
+    },
+    {
+      "id": "1b19fb01-e7b5-44c4-a0c6-edad3e1c7336",
+      "index": 1,
+      "startPosition": 4500,
+      "endPosition": 9500,
+      "chunkSize": 5000,
+      "overlapSize": 500,
+      "createdAt": "2025-07-29 13:30:30"
+    },
+    {
+      "id": "b005df36-829e-4a9b-8058-5f45c6f2729f",
+      "index": 2,
+      "startPosition": 9000,
+      "endPosition": 14000,
+      "chunkSize": 5000,
+      "overlapSize": 500,
+      "createdAt": "2025-07-29 13:30:30"
+    },
+    {
+      "id": "6320d386-c9b5-4b00-bf8f-0c8d166b77e3",
+      "index": 3,
+      "startPosition": 13500,
+      "endPosition": 18500,
+      "chunkSize": 5000,
+      "overlapSize": 500,
+      "createdAt": "2025-07-29 13:30:30"
+    },
+    {
+      "id": "d3c908c0-c886-4b0d-a5a8-d9427b96f6fc",
+      "index": 4,
+      "startPosition": 18000,
+      "endPosition": 23000,
+      "chunkSize": 5000,
+      "overlapSize": 500,
+      "createdAt": "2025-07-29 13:30:30"
+    },
+    {
+      "id": "4f285ac0-5f89-4524-81a9-4aed4ddb91ed",
+      "index": 5,
+      "startPosition": 22500,
+      "endPosition": 27500,
+      "chunkSize": 5000,
+      "overlapSize": 500,
+      "createdAt": "2025-07-29 13:30:30"
+    },
+    {
+      "id": "a8985755-4482-4ecc-9b85-b7457c018463",
+      "index": 6,
+      "startPosition": 27000,
+      "endPosition": 32000,
+      "chunkSize": 5000,
+      "overlapSize": 500,
+      "createdAt": "2025-07-29 13:30:30"
+    },
+    {
+      "id": "a13267de-26b1-4001-bedb-ce6ac4462ef3",
+      "index": 7,
+      "startPosition": 31500,
+      "endPosition": 36500,
+      "chunkSize": 5000,
+      "overlapSize": 500,
+      "createdAt": "2025-07-29 13:30:30"
+    },
+    {
+      "id": "f15daf07-9f77-4d00-a882-5f22e94c5d0a",
+      "index": 8,
+      "startPosition": 36000,
+      "endPosition": 36941,
+      "chunkSize": 5000,
+      "overlapSize": 500,
+      "createdAt": "2025-07-29 13:30:30"
+    }
+  ]
+}
+[2025-07-29T13:30:30.937Z] チャンク取得完了: 9個のチャンク
+[2025-07-29T13:30:30.937Z] ステップ5: チャンクの分析開始
+[2025-07-29T13:30:30.937Z] チャンク0の分析開始 (ID: 4871deef-2439-4cc9-afbb-5e2d64766668)
+[2025-07-29T13:30:30.938Z] API Request: POST http://localhost:3000/api/analyze/chunk
+{
+  "chunkId": "4871deef-2439-4cc9-afbb-5e2d64766668"
+}
+[2025-07-29T13:30:31.936Z] API Response: 400 Bad Request
+{
+  "success": false,
+  "error": "Invalid request data",
+  "details": [
+    {
+      "code": "invalid_type",
+      "expected": "string",
+      "received": "undefined",
+      "path": [
+        "chunkText"
+      ],
+      "message": "Required"
+    },
+    {
+      "code": "invalid_type",
+      "expected": "number",
+      "received": "undefined",
+      "path": [
+        "chunkIndex"
+      ],
+      "message": "Required"
+    },
+    {
+      "code": "invalid_type",
+      "expected": "string",
+      "received": "undefined",
+      "path": [
+        "novelId"
+      ],
+      "message": "Required"
+    }
+  ]
+}
+[2025-07-29T13:30:31.936Z] API Error: Error: API error: 400 Bad Request
+[2025-07-29T13:30:31.937Z] チャンク0の分析エラー: Error: API error: 400 Bad Request
+[2025-07-29T13:30:31.937Z] チャンク1の分析開始 (ID: 1b19fb01-e7b5-44c4-a0c6-edad3e1c7336)
+[2025-07-29T13:30:31.938Z] API Request: POST http://localhost:3000/api/analyze/chunk
+{
+  "chunkId": "1b19fb01-e7b5-44c4-a0c6-edad3e1c7336"
+}
+[2025-07-29T13:30:31.993Z] API Response: 400 Bad Request
+{
+  "success": false,
+  "error": "Invalid request data",
+  "details": [
+    {
+      "code": "invalid_type",
+      "expected": "string",
+      "received": "undefined",
+      "path": [
+        "chunkText"
+      ],
+      "message": "Required"
+    },
+    {
+      "code": "invalid_type",
+      "expected": "number",
+      "received": "undefined",
+      "path": [
+        "chunkIndex"
+      ],
+      "message": "Required"
+    },
+    {
+      "code": "invalid_type",
+      "expected": "string",
+      "received": "undefined",
+      "path": [
+        "novelId"
+      ],
+      "message": "Required"
+    }
+  ]
+}
+[2025-07-29T13:30:31.994Z] API Error: Error: API error: 400 Bad Request
+[2025-07-29T13:30:31.994Z] チャンク1の分析エラー: Error: API error: 400 Bad Request
+[2025-07-29T13:30:31.994Z] チャンク2の分析開始 (ID: b005df36-829e-4a9b-8058-5f45c6f2729f)
+[2025-07-29T13:30:31.994Z] API Request: POST http://localhost:3000/api/analyze/chunk
+{
+  "chunkId": "b005df36-829e-4a9b-8058-5f45c6f2729f"
+}
+[2025-07-29T13:30:32.051Z] API Response: 400 Bad Request
+{
+  "success": false,
+  "error": "Invalid request data",
+  "details": [
+    {
+      "code": "invalid_type",
+      "expected": "string",
+      "received": "undefined",
+      "path": [
+        "chunkText"
+      ],
+      "message": "Required"
+    },
+    {
+      "code": "invalid_type",
+      "expected": "number",
+      "received": "undefined",
+      "path": [
+        "chunkIndex"
+      ],
+      "message": "Required"
+    },
+    {
+      "code": "invalid_type",
+      "expected": "string",
+      "received": "undefined",
+      "path": [
+        "novelId"
+      ],
+      "message": "Required"
+    }
+  ]
+}
+[2025-07-29T13:30:32.052Z] API Error: Error: API error: 400 Bad Request
+[2025-07-29T13:30:32.052Z] チャンク2の分析エラー: Error: API error: 400 Bad Request
+[2025-07-29T13:30:32.052Z] チャンク3の分析開始 (ID: 6320d386-c9b5-4b00-bf8f-0c8d166b77e3)
+[2025-07-29T13:30:32.053Z] API Request: POST http://localhost:3000/api/analyze/chunk
+{
+  "chunkId": "6320d386-c9b5-4b00-bf8f-0c8d166b77e3"
+}
+[2025-07-29T13:30:32.111Z] API Response: 400 Bad Request
+{
+  "success": false,
+  "error": "Invalid request data",
+  "details": [
+    {
+      "code": "invalid_type",
+      "expected": "string",
+      "received": "undefined",
+      "path": [
+        "chunkText"
+      ],
+      "message": "Required"
+    },
+    {
+      "code": "invalid_type",
+      "expected": "number",
+      "received": "undefined",
+      "path": [
+        "chunkIndex"
+      ],
+      "message": "Required"
+    },
+    {
+      "code": "invalid_type",
+      "expected": "string",
+      "received": "undefined",
+      "path": [
+        "novelId"
+      ],
+      "message": "Required"
+    }
+  ]
+}
+[2025-07-29T13:30:32.112Z] API Error: Error: API error: 400 Bad Request
+[2025-07-29T13:30:32.112Z] チャンク3の分析エラー: Error: API error: 400 Bad Request
+[2025-07-29T13:30:32.112Z] チャンク4の分析開始 (ID: d3c908c0-c886-4b0d-a5a8-d9427b96f6fc)
+[2025-07-29T13:30:32.113Z] API Request: POST http://localhost:3000/api/analyze/chunk
+{
+  "chunkId": "d3c908c0-c886-4b0d-a5a8-d9427b96f6fc"
+}
+[2025-07-29T13:30:32.169Z] API Response: 400 Bad Request
+{
+  "success": false,
+  "error": "Invalid request data",
+  "details": [
+    {
+      "code": "invalid_type",
+      "expected": "string",
+      "received": "undefined",
+      "path": [
+        "chunkText"
+      ],
+      "message": "Required"
+    },
+    {
+      "code": "invalid_type",
+      "expected": "number",
+      "received": "undefined",
+      "path": [
+        "chunkIndex"
+      ],
+      "message": "Required"
+    },
+    {
+      "code": "invalid_type",
+      "expected": "string",
+      "received": "undefined",
+      "path": [
+        "novelId"
+      ],
+      "message": "Required"
+    }
+  ]
+}
+[2025-07-29T13:30:32.170Z] API Error: Error: API error: 400 Bad Request
+[2025-07-29T13:30:32.170Z] チャンク4の分析エラー: Error: API error: 400 Bad Request
+[2025-07-29T13:30:32.171Z] ステップ6: 分析結果のサマリー
+[2025-07-29T13:30:32.171Z] 分析結果サマリー
+{
+  "totalChunks": 9,
+  "analyzedChunks": 0,
+  "totalCharacters": 0,
+  "totalScenes": 0,
+  "totalDialogues": 0,
+  "totalHighlights": 0,
+  "totalSituations": 0
+}
+[2025-07-29T13:30:32.171Z] ステップ6: 詳細な分析結果の保存
+[2025-07-29T13:30:32.172Z] 詳細な分析結果を保存: G:\TsProjects\novel2manga-mastra\logs\analysis-details-20250729-223032.json
+[2025-07-29T13:30:32.172Z] ステップ7: データベース内のデータ確認
+[2025-07-29T13:30:32.173Z] API Request: GET http://localhost:3000/api/novel/db
+[2025-07-29T13:30:32.182Z] API Response: 200 OK
+{
+  "novels": [
+    {
+      "id": "a93c0801-86e0-47cf-94d7-51c6fb96761f",
+      "original_text_file": "novels/a93c0801-86e0-47cf-94d7-51c6fb96761f.json",
+      "total_length": 36941,
+      "created_at": "2025-07-29 13:30:30",
+      "updated_at": "2025-07-29 13:30:30"
+    },
+    {
+      "id": "0c510b10-0b7b-431f-ae81-aa39c614ce82",
+      "original_text_file": "novels/0c510b10-0b7b-431f-ae81-aa39c614ce82.json",
+      "total_length": 36941,
+      "created_at": "2025-07-29 13:26:30",
+      "updated_at": "2025-07-29 13:26:30"
+    },
+    {
+      "id": "6aececeb-c598-4974-b6dc-d96f3afa3b42",
+      "original_text_file": "novels/6aececeb-c598-4974-b6dc-d96f3afa3b42.json",
+      "total_length": 36941,
+      "created_at": "2025-07-29 13:20:23",
+      "updated_at": "2025-07-29 13:20:23"
+    },
+    {
+      "id": "cfbe487e-18e7-4f00-a4ad-c832b4cb85e6",
+      "original_text_file": "novels/cfbe487e-18e7-4f00-a4ad-c832b4cb85e6.json",
+      "total_length": 36941,
+      "created_at": "2025-07-29 13:18:39",
+      "updated_at": "2025-07-29 13:18:39"
+    },
+    {
+      "id": "c9deeec8-1a99-4b1a-9dd3-1bc9a14bc5ab",
+      "original_text_file": "novels/c9deeec8-1a99-4b1a-9dd3-1bc9a14bc5ab.json",
+      "total_length": 36941,
+      "created_at": "2025-07-29 13:17:11",
+      "updated_at": "2025-07-29 13:17:11"
+    },
+    {
+      "id": "bd8e6a94-9f8d-4e04-9f80-0ad69e3636c3",
+      "original_text_file": "novels/bd8e6a94-9f8d-4e04-9f80-0ad69e3636c3.json",
+      "total_length": 36941,
+      "created_at": "2025-07-29 13:08:58",
+      "updated_at": "2025-07-29 13:08:58"
+    },
+    {
+      "id": "9745de6e-2ea6-4484-8364-e5118375c83c",
+      "original_text_file": "空家の冒険",
+      "total_length": 25069,
+      "created_at": "2025-07-28 12:44:47",
+      "updated_at": "2025-07-28 12:44:47"
+    },
+    {
+      "id": "9639344c-b643-4f3d-afc5-907e42d57d5d",
+      "original_text_file": "novels/9639344c-b643-4f3d-afc5-907e42d57d5d.txt",
+      "total_length": 34,
+      "created_at": "2025-07-28 11:39:09",
+      "updated_at": "2025-07-28 11:39:09"
+    }
+  ]
+}
+[2025-07-29T13:30:32.183Z] データベース内の小説一覧
+{
+  "novels": [
+    {
+      "id": "a93c0801-86e0-47cf-94d7-51c6fb96761f",
+      "original_text_file": "novels/a93c0801-86e0-47cf-94d7-51c6fb96761f.json",
+      "total_length": 36941,
+      "created_at": "2025-07-29 13:30:30",
+      "updated_at": "2025-07-29 13:30:30"
+    },
+    {
+      "id": "0c510b10-0b7b-431f-ae81-aa39c614ce82",
+      "original_text_file": "novels/0c510b10-0b7b-431f-ae81-aa39c614ce82.json",
+      "total_length": 36941,
+      "created_at": "2025-07-29 13:26:30",
+      "updated_at": "2025-07-29 13:26:30"
+    },
+    {
+      "id": "6aececeb-c598-4974-b6dc-d96f3afa3b42",
+      "original_text_file": "novels/6aececeb-c598-4974-b6dc-d96f3afa3b42.json",
+      "total_length": 36941,
+      "created_at": "2025-07-29 13:20:23",
+      "updated_at": "2025-07-29 13:20:23"
+    },
+    {
+      "id": "cfbe487e-18e7-4f00-a4ad-c832b4cb85e6",
+      "original_text_file": "novels/cfbe487e-18e7-4f00-a4ad-c832b4cb85e6.json",
+      "total_length": 36941,
+      "created_at": "2025-07-29 13:18:39",
+      "updated_at": "2025-07-29 13:18:39"
+    },
+    {
+      "id": "c9deeec8-1a99-4b1a-9dd3-1bc9a14bc5ab",
+      "original_text_file": "novels/c9deeec8-1a99-4b1a-9dd3-1bc9a14bc5ab.json",
+      "total_length": 36941,
+      "created_at": "2025-07-29 13:17:11",
+      "updated_at": "2025-07-29 13:17:11"
+    },
+    {
+      "id": "bd8e6a94-9f8d-4e04-9f80-0ad69e3636c3",
+      "original_text_file": "novels/bd8e6a94-9f8d-4e04-9f80-0ad69e3636c3.json",
+      "total_length": 36941,
+      "created_at": "2025-07-29 13:08:58",
+      "updated_at": "2025-07-29 13:08:58"
+    },
+    {
+      "id": "9745de6e-2ea6-4484-8364-e5118375c83c",
+      "original_text_file": "空家の冒険",
+      "total_length": 25069,
+      "created_at": "2025-07-28 12:44:47",
+      "updated_at": "2025-07-28 12:44:47"
+    },
+    {
+      "id": "9639344c-b643-4f3d-afc5-907e42d57d5d",
+      "original_text_file": "novels/9639344c-b643-4f3d-afc5-907e42d57d5d.txt",
+      "total_length": 34,
+      "created_at": "2025-07-28 11:39:09",
+      "updated_at": "2025-07-28 11:39:09"
+    }
+  ]
+}
+[2025-07-29T13:30:32.184Z] === 小説処理テスト完了 ===
+[2025-07-29T13:30:32.184Z] ログファイル: G:\TsProjects\novel2manga-mastra\logs\novel-processing-test-20250729-223030.log
+[2025-07-29T13:30:32.184Z] 詳細結果ファイル: G:\TsProjects\novel2manga-mastra\logs\analysis-details-20250729-223032.json
