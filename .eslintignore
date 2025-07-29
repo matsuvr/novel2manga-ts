@@ -1,0 +1,50 @@
+# Dependencies
+node_modules
+
+# Build output
+.next
+out
+dist
+build
+.open-next
+.opennext-cache
+
+# Cache
+.next/cache
+.next/server
+.next/static
+.next/trace
+
+# Logs
+logs
+*.log
+
+# Environment files
+.env*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+
+# Cloudflare
+.wrangler
+.miniflare
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Coverage
+coverage
+.nyc_output
+
+# Test artifacts
+*.tsbuildinfo
+
+# Mastra
+.mastra
