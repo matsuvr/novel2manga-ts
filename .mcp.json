@@ -8,6 +8,16 @@
       "command": "cmd",
       "args": ["/c", "npx", "-y", "@mastra/mcp-docs-server"],
       "type": "stdio"
+    },
+    "serena": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "uvx",
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena-mcp-server.exe"
+      ]
     }
   }
 }

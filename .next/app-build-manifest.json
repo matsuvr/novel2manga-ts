@@ -1,14 +1,29 @@
 {
   "pages": {
-    "/api/novel/[uuid]/chunks/route": [
+    "/api/novel/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/api/novel/[uuid]/chunks/route.js"
+      "static/chunks/app/api/novel/route.js"
+    ],
+    "/api/novel/storage/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/novel/storage/route.js"
     ],
     "/api/novel/db/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/api/novel/db/route.js"
+    ],
+    "/api/novel/[uuid]/chunks/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/novel/[uuid]/chunks/route.js"
+    ],
+    "/api/analyze/chunk/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/analyze/chunk/route.js"
     ]
   }
 }

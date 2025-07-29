@@ -16,7 +16,11 @@
       "mcp__deepwiki__read_wiki_structure",
       "mcp__deepwiki__read_wiki_contents",
       "mcp__deepwiki__ask_question",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(npx tsx:*)",
+      "Bash(grep:*)",
+      "Bash(npm run test:*)",
+      "WebFetch(domain:ai-sdk.dev)"
     ]
   },
   "enableAllProjectMcpServers": true,

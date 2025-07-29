@@ -1,0 +1,36 @@
+[2025-07-29T13:26:30.536Z] === 小説処理テスト開始 ===
+[2025-07-29T13:26:30.537Z] ステップ1: 小説ファイルの読み込み
+[2025-07-29T13:26:30.539Z] 小説ファイル読み込み完了: 36941文字
+[2025-07-29T13:26:30.539Z] ステップ2: 小説のアップロード
+[2025-07-29T13:26:30.540Z] API Request: POST http://localhost:3000/api/novel
+{
+  "text": "モルグ街の殺人事件\r\nTHE MURDERS IN THE RUE MORGUE\r\nエドガー・アラン・ポー　Edgar Allan Poe\r\n佐々木直次郎訳\r\n\r\n\r\n\r\n［＃ページの左右中央］\r\n\r...",
+  "originalLength": 36941
+}
+[2025-07-29T13:26:30.610Z] API Response: 200 OK
+{
+  "preview": "モルグ街の殺人事件\r\nTHE MURDERS IN THE RUE MORGUE\r\nエドガー・アラン・ポー　Edgar Allan Poe\r\n佐々木直次郎訳\r\n\r\n\r\n\r\n［＃ページの左右中央］\r\n\r",
+  "originalLength": 36941,
+  "fileName": "novels/0c510b10-0b7b-431f-ae81-aa39c614ce82.json",
+  "uuid": "0c510b10-0b7b-431f-ae81-aa39c614ce82",
+  "message": "小説テキストを受信しました",
+  "job": {
+    "id": "aace618a-2ba5-45ea-82ed-85e125d892f9",
+    "type": "text_analysis",
+    "status": "pending"
+  }
+}
+[2025-07-29T13:26:30.611Z] 小説アップロード完了: Novel ID = 0c510b10-0b7b-431f-ae81-aa39c614ce82
+[2025-07-29T13:26:30.612Z] ステップ3: チャンクの取得
+[2025-07-29T13:26:35.612Z] API Request: GET http://localhost:3000/api/novel/0c510b10-0b7b-431f-ae81-aa39c614ce82/chunks
+[2025-07-29T13:26:35.666Z] API Response: 404 Not Found
+{
+  "error": "チャンクが見つかりません"
+}
+[2025-07-29T13:26:35.666Z] API Error: Error: API error: 404 Not Found
+[2025-07-29T13:26:35.666Z] テスト中にエラーが発生: Error: API error: 404 Not Found
+[2025-07-29T13:26:35.668Z] エラー詳細
+{
+  "message": "API error: 404 Not Found",
+  "stack": "Error: API error: 404 Not Found\n    at apiRequest (G:\\TsProjects\\novel2manga-mastra\\src\\test-novel-processing.ts:62:13)\n    at async testNovelProcessing (G:\\TsProjects\\novel2manga-mastra\\src\\test-novel-processing.ts:101:28)"
+}

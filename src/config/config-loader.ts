@@ -75,18 +75,7 @@ function getEnvOverrides(): Partial<AppConfig> {
     overrides.llm.providers.groq.model = process.env.GROQ_MODEL
   }
   
-  // 汎用LLM温度設定のオーバーライド
-  if (process.env.LLM_TEMPERATURE) {
-    const temperature = parseFloat(process.env.LLM_TEMPERATURE)
-    overrides.llm = overrides.llm || {}
-    overrides.llm.providers = overrides.llm.providers || {}
-    
-    // すべてのプロバイダーに適用
-    ;['openai', 'gemini', 'groq'].forEach(provider => {
-      overrides.llm.providers[provider] = overrides.llm.providers[provider] || {}
-      overrides.llm.providers[provider].temperature = temperature
-    })
-  }
+  // 汎用LLM温度設定のオーバーライド - リーズニングモデル対応のため削除
   
   // 並列処理数のオーバーライド
   if (process.env.MAX_CONCURRENT_CHUNKS) {
@@ -157,10 +146,7 @@ class ConfigLoader {
       throw new Error(`Overlap ratio ${overlapRatio} exceeds max overlap ratio ${config.chunking.maxOverlapRatio}`)
     }
     
-    // LLM設定の検証
-    if (config.llm.openai.temperature < 0 || config.llm.openai.temperature > 2) {
-      throw new Error('Temperature must be between 0 and 2')
-    }
+    // LLM設定の検証 - temperature検証を削除（リーズニングモデル対応）
     
     // API設定の検証
     if (config.api.timeout.default < 1000) {
