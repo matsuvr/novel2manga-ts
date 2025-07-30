@@ -35,7 +35,7 @@ interface RouteContext {
 // チャンク化リクエスト
 export async function POST(request: NextRequest, { params }: RouteContext) {
   try {
-    const { uuid } = params
+    const { uuid } = await params
     const body = await request.json() as { chunkSize?: unknown; overlapSize?: unknown }
     
     // 設定からデフォルト値を取得
@@ -223,6 +223,11 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
         ).bind(chunkId, uuid, chunk.index, chunk.startPosition, chunk.endPosition, chunkSize, overlapSize).run()
       }
       
+      // NovelテーブルのtotalChunksを更新
+      await db.prepare(
+        'UPDATE novels SET total_chunks = ? WHERE id = ?'
+      ).bind(chunks.length, uuid).run()
+      
       return NextResponse.json({
         success: true,
         novelId: uuid,
@@ -250,7 +255,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 // チャンク情報を取得
 export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
-    const { uuid } = params
+    const { uuid } = await params
     
     // 開発環境の場合
     if (isDevelopment()) {

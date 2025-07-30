@@ -80,3 +80,7 @@ Thumbs.db
 # Project specific
 output.txt
 .local-storage/
+
+# log files
+*.log
+logs/

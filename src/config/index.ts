@@ -22,7 +22,7 @@ export function getCurrentLLMProvider() {
 }
 
 // 特定のプロバイダー設定を取得
-export function getLLMProviderConfig(provider?: 'openai' | 'gemini' | 'groq') {
+export function getLLMProviderConfig(provider?: 'openai' | 'gemini' | 'groq' | 'openrouter' | 'local') {
   const llmConfig = getConfig().get().llm
   const targetProvider = provider || llmConfig.defaultProvider
   return llmConfig.providers[targetProvider]
@@ -34,7 +34,7 @@ export function getTextAnalysisConfig() {
   const textAnalysisConfig = config.llm.textAnalysis
   const provider = textAnalysisConfig.provider === 'default' 
     ? config.llm.defaultProvider 
-    : textAnalysisConfig.provider as 'openai' | 'gemini' | 'groq'
+    : textAnalysisConfig.provider
   
   const providerConfig = config.llm.providers[provider]
   const modelOverride = textAnalysisConfig.modelOverrides?.[provider]
@@ -53,7 +53,7 @@ export function getLayoutGenerationConfig() {
   const layoutConfig = config.llm.layoutGeneration
   const provider = layoutConfig.provider === 'default' 
     ? config.llm.defaultProvider 
-    : layoutConfig.provider as 'openai' | 'gemini' | 'groq'
+    : layoutConfig.provider
   
   const providerConfig = config.llm.providers[provider]
   const modelOverride = layoutConfig.modelOverrides?.[provider]

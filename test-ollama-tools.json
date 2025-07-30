@@ -1,0 +1,46 @@
+{
+  "model": "goekdenizguelmez/JOSIEFIED-Qwen3:14b",
+  "messages": [
+    {
+      "role": "system",
+      "content": "あなたは小説の登場人物を分析する専門家です。"
+    },
+    {
+      "role": "user",
+      "content": "モルグ街の殺人事件の主要登場人物を2人挙げてください。"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "extract_characters",
+        "description": "Extract characters from the text",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "characters": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Character name"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Character description"
+                  }
+                },
+                "required": ["name", "description"]
+              }
+            }
+          },
+          "required": ["characters"]
+        }
+      }
+    }
+  ],
+  "tool_choice": "auto"
+}

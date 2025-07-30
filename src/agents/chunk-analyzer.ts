@@ -2,6 +2,8 @@ import { Agent } from "@mastra/core/agent";
 import { openai } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createGroq } from "@ai-sdk/groq";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenRouter } from "@/lib/llm/openrouter-provider";
 import { getConfig } from "@/config/config-loader";
 import type { AppConfig } from "@/config/app.config";
 
@@ -33,6 +35,19 @@ function getModel() {
         apiKey: llmConfig.providers.groq.apiKey,
       });
       return groq(modelOverride || llmConfig.providers.groq.model);
+    }
+    case 'local': {
+      const localOpenAI = createOpenAI({
+        baseURL: llmConfig.providers.local.baseURL,
+        apiKey: 'dummy', // ローカルLLMではAPIキーは不要だがライブラリ仕様で必須
+      });
+      return localOpenAI(modelOverride || llmConfig.providers.local.model);
+    }
+    case 'openrouter': {
+      const openrouter = createOpenRouter({
+        apiKey: llmConfig.providers.openrouter.apiKey,
+      });
+      return openrouter(modelOverride || llmConfig.providers.openrouter.model);
     }
     default:
       throw new Error(`Unknown provider: ${provider}`);

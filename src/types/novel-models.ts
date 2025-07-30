@@ -10,9 +10,13 @@ export type JobStatus = z.infer<typeof JobStatusSchema>
 // Novel schema - 小説全体
 export const NovelSchema = z.object({
   id: z.string(), // UUID
-  title: z.string(),
   originalTextFile: z.string(), // R2: novels/{id}/original.txt
-  totalLength: z.number().nonnegative(),
+  totalLength: z.number().nonnegative(), // 総文字数
+  totalChunks: z.number().nonnegative(), // 分割されたチャンク数
+  chunkSize: z.number().positive(), // 1チャンクあたりの文字数（config値）
+  overlapSize: z.number().nonnegative(), // オーバーラップサイズ（config値）
+  totalEpisodes: z.number().nonnegative().optional(), // エピソード数（分析後に設定）
+  totalPages: z.number().nonnegative().optional(), // 総ページ数（レイアウト生成後に設定）
   createdAt: z.date(),
   updatedAt: z.date()
 })
@@ -168,15 +172,21 @@ export function validateNovelAnalysis(data: unknown): NovelAnalysis {
 // ヘルパー関数
 export function createNovel(
   id: string,
-  title: string,
-  totalLength: number
+  totalLength: number,
+  totalChunks: number,
+  chunkSize: number,
+  overlapSize: number
 ): Novel {
   const now = new Date()
   return {
     id,
-    title,
     originalTextFile: getR2FilePath(id, 'original'),
     totalLength,
+    totalChunks,
+    chunkSize,
+    overlapSize,
+    totalEpisodes: undefined,
+    totalPages: undefined,
     createdAt: now,
     updatedAt: now
   }

@@ -20,12 +20,15 @@
       "Bash(npx tsx:*)",
       "Bash(grep:*)",
       "Bash(npm run test:*)",
-      "WebFetch(domain:ai-sdk.dev)"
+      "WebFetch(domain:ai-sdk.dev)",
+      "Bash(ls:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
-    "cloudflare"
+    "cloudflare",
+    "mastra",
+    "serena"
   ],
   "hooks": {
     "Notification": [
