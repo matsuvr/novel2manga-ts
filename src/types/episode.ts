@@ -25,6 +25,9 @@ export interface NarrativeAnalysisInput {
   targetCharsPerEpisode: number;
   minCharsPerEpisode: number;
   maxCharsPerEpisode: number;
+  startingEpisodeNumber?: number; // エピソード番号の開始位置（デフォルト1）
+  previousEpisodeEndText?: string; // 前回の最後のエピソードの終わり部分テキスト
+  isMiddleOfNovel?: boolean; // 長編小説の途中かどうか
 }
 
 export interface NarrativeAnalysisResult {
