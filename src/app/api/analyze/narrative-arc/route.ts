@@ -45,9 +45,26 @@ export async function POST(request: NextRequest) {
         `total chars: ${input.chunks.reduce((sum, c) => sum + c.text.length, 0)}`
     );
 
-    const boundaries = await analyzeNarrativeArc(input);
+    let boundaries: EpisodeBoundary[];
+    try {
+      boundaries = await analyzeNarrativeArc(input);
+    } catch (analysisError) {
+      console.error("=== Narrative arc analysis failed ===");
+      console.error("Novel ID:", validatedData.novelId);
+      console.error("Input chunks:", input.chunks.length);
+      console.error("Error:", analysisError);
+      
+      // エラーをそのまま上位に伝える（フォールバックなし）
+      throw analysisError;
+    }
 
-    await saveEpisodeBoundaries(validatedData.novelId, boundaries);
+    // 分析に成功した場合のみ保存
+    if (boundaries.length > 0) {
+      await saveEpisodeBoundaries(validatedData.novelId, boundaries);
+      console.log(`Saved ${boundaries.length} episode boundaries for novel ${validatedData.novelId}`);
+    } else {
+      console.warn(`No boundaries found for novel ${validatedData.novelId} - not saving empty results`);
+    }
 
     const responseData = {
       novelId: validatedData.novelId,

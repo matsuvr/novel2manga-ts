@@ -24,6 +24,7 @@ const analyzeChunkSchema = z.object({
 
 // 5要素の出力スキーマ
 const textAnalysisOutputSchema = z.object({
+  summary: z.string().describe("このチャンクの内容要約（100-200文字）"),
   characters: z.array(z.object({
     name: z.string(),
     description: z.string(),
@@ -45,9 +46,10 @@ const textAnalysisOutputSchema = z.object({
   highlights: z.array(z.object({
     type: z.enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence']),
     description: z.string(),
-    importance: z.number().min(1).max(5),
+    importance: z.number().min(1).max(10).describe("重要度を1-10に変更"),
     startIndex: z.number(),
     endIndex: z.number(),
+    text: z.string().optional().describe("該当部分のテキスト抜粋"),
   })),
   situations: z.array(z.object({
     description: z.string(),
@@ -64,6 +66,7 @@ type CachedAnalysisResult = {
   analysisPath: string;
   analysis: z.infer<typeof textAnalysisOutputSchema>;
   summary: {
+    textSummary: string;
     characterCount: number;
     sceneCount: number;
     dialogueCount: number;
@@ -236,6 +239,7 @@ export async function POST(request: NextRequest) {
       analysisPath,
       analysis: result.object,
       summary: {
+        textSummary: result.object.summary,
         characterCount: result.object.characters.length,
         sceneCount: result.object.scenes.length,
         dialogueCount: result.object.dialogues.length,
