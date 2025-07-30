@@ -24,6 +24,11 @@ async function initializeDatabase() {
       id TEXT PRIMARY KEY,
       original_text_file TEXT NOT NULL,
       total_length INTEGER NOT NULL,
+      total_chunks INTEGER NOT NULL DEFAULT 0,
+      chunk_size INTEGER NOT NULL,
+      overlap_size INTEGER NOT NULL,
+      total_episodes INTEGER,
+      total_pages INTEGER,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
@@ -67,10 +72,19 @@ async function initializeDatabase() {
 // Novel要素を保存
 export async function POST(request: NextRequest) {
   try {
-    const { uuid, fileName, length } = await request.json() as { uuid: unknown; fileName: unknown; length: unknown }
+    const { uuid, fileName, length, totalChunks, chunkSize, overlapSize } = await request.json() as { 
+      uuid: unknown; 
+      fileName: unknown; 
+      length: unknown;
+      totalChunks: unknown;
+      chunkSize: unknown;
+      overlapSize: unknown;
+    }
     
     // バリデーション
-    if (!uuid || !fileName || typeof length !== 'number') {
+    if (!uuid || !fileName || typeof length !== 'number' || 
+        typeof totalChunks !== 'number' || typeof chunkSize !== 'number' || 
+        typeof overlapSize !== 'number') {
       return NextResponse.json(
         { error: '必須パラメータが不足しています' },
         { status: 400 }
@@ -85,9 +99,9 @@ export async function POST(request: NextRequest) {
       try {
         // Novel要素をデータベースに挿入
         await db.run(
-          `INSERT INTO novels (id, original_text_file, total_length) 
-           VALUES (?, ?, ?)`,
-          [uuid, fileName, length]
+          `INSERT INTO novels (id, original_text_file, total_length, total_chunks, chunk_size, overlap_size) 
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [uuid, fileName, length, totalChunks, chunkSize, overlapSize]
         )
         
         // 処理ジョブも同時に作成
@@ -103,7 +117,10 @@ export async function POST(request: NextRequest) {
           novel: {
             id: uuid,
             originalTextFile: fileName,
-            totalLength: length
+            totalLength: length,
+            totalChunks: totalChunks,
+            chunkSize: chunkSize,
+            overlapSize: overlapSize
           },
           job: {
             id: jobId,
@@ -129,9 +146,9 @@ export async function POST(request: NextRequest) {
       
       // Novel要素をD1に挿入
       await db.prepare(
-        `INSERT INTO novels (id, original_text_file, total_length) 
-         VALUES (?, ?, ?)`
-      ).bind(uuid, fileName, length).run()
+        `INSERT INTO novels (id, original_text_file, total_length, total_chunks, chunk_size, overlap_size) 
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).bind(uuid, fileName, length, totalChunks, chunkSize, overlapSize).run()
       
       // 処理ジョブも同時に作成
       const jobId = crypto.randomUUID()
@@ -145,7 +162,10 @@ export async function POST(request: NextRequest) {
         novel: {
           id: uuid,
           originalTextFile: fileName,
-          totalLength: length
+          totalLength: length,
+          totalChunks: totalChunks,
+          chunkSize: chunkSize,
+          overlapSize: overlapSize
         },
         job: {
           id: jobId,

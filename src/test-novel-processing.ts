@@ -136,7 +136,10 @@ async function testNovelProcessing() {
       }
     }
     
-    for (let i = 0; i < Math.min(chunksWithText.length, 5); i++) { // 最初の5チャンクのみテスト
+    // 順次処理でチャンクを分析
+    await log(`全${chunksWithText.length}チャンクの順次分析を開始`);
+    
+    for (let i = 0; i < chunksWithText.length; i++) {
       const chunk = chunksWithText[i];
       await log(`チャンク${i}の分析開始 (ID: ${chunk.id})`);
       

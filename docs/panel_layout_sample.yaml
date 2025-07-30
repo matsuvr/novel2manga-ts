@@ -1,0 +1,195 @@
+pages:
+  # ---------- 見開き1（004.jpg） ----------
+  - page_number: 1      # 004 右
+    panels:
+      - id: 1
+        position: {x: 0.0, y: 0.0}
+        size:     {width: 1.0, height: 1.0}
+        content: "木造三階建て旅館の正面全景。玄関前に主人公が小さく立つロングショット"
+        dialogues:
+          - speaker: "主人公"
+            text: "ひなた旅館か……"
+
+  - page_number: 2      # 004 左
+    panels:
+      - id: 1   # 上段
+        position: {x: 0.0, y: 0.00}
+        size:     {width: 1.0, height: 0.18}
+        content: "玄関扉を開ける主人公のアップ（背面）"
+      - id: 2   # 2段目
+        position: {x: 0.0, y: 0.18}
+        size:     {width: 1.0, height: 0.30}
+        content: "土間から玄関ホールを見た奥行きショット。中央に立つ主人公"
+        dialogues:
+          - speaker: "主人公"
+            text: "こんにちはー"
+      - id: 3   # 3段目
+        position: {x: 0.0, y: 0.48}
+        size:     {width: 1.0, height: 0.32}
+        content: "ロビーに上がり頭をかく主人公（ややローアングル）"
+      - id: 4   # 下段
+        position: {x: 0.0, y: 0.80}
+        size:     {width: 1.0, height: 0.20}
+        content: "汗をかき戸惑う主人公のバストアップ"
+        dialogues:
+          - speaker: "主人公"
+            text: "……？"
+
+  # ---------- 見開き2（005.jpg） ----------
+  - page_number: 3      # 005 右
+    panels:
+      - id: 1   # 上段横長
+        position: {x: 0.0, y: 0.00}
+        size:     {width: 1.0, height: 0.15}
+        content: "部屋に案内され喜ぶ主人公（肩から上）"
+      - id: 2   # 中段横長
+        position: {x: 0.0, y: 0.15}
+        size:     {width: 1.0, height: 0.35}
+        content: "和室を見回す主人公の後ろ姿。室内の広さを強調した構図"
+      - id: 3   # 下段３分割 ― 右端細長
+        position: {x: 0.00, y: 0.50}
+        size:     {width: 0.14, height: 0.30}
+        content: "荷物とふすまを映した縦長カット"
+      - id: 4   # 下段３分割 ― 中央
+        position: {x: 0.14, y: 0.50}
+        size:     {width: 0.43, height: 0.30}
+        content: "部屋の真ん中で膝を抱える主人公（フル）"
+      - id: 5   # 下段３分割 ― 左端
+        position: {x: 0.57, y: 0.50}
+        size:     {width: 0.43, height: 0.30}
+        content: "自己分析する主人公のアップ（眼鏡に手）"
+
+  - page_number: 4      # 005 左
+    panels:
+      # 1段目：大＋細縦
+      - id: 1                 # 大パネル
+        position: {x: 0.15, y: 0.00}
+        size:     {width: 0.85, height: 0.22}
+        content: "畳に寝転び天井を見上げる主人公"
+      - id: 2                 # 右細縦
+        position: {x: 0.00, y: 0.00}
+        size:     {width: 0.15, height: 0.22}
+        content: "湯呑みから湯気（縦長カット）"
+      # 2段目：横２分割
+      - id: 3
+        position: {x: 0.40, y: 0.22}
+        size:     {width: 0.60, height: 0.18}
+        content: "目を閉じる主人公の横顔クローズアップ"
+      - id: 4
+        position: {x: 0.00, y: 0.22}
+        size:     {width: 0.40, height: 0.18}
+        content: "『一度でいいから女子とデートを…』と絶叫する主人公"
+      # 3段目：横３分割（回想）
+      - id: 5
+        position: {x: 0.66, y: 0.40}
+        size:     {width: 0.34, height: 0.15}
+        content: "フォークダンスで男友達と組むシーン"
+      - id: 6
+        position: {x: 0.33, y: 0.40}
+        size:     {width: 0.33, height: 0.15}
+        content: "体育祭で出番がない主人公"
+      - id: 7
+        position: {x: 0.00, y: 0.40}
+        size:     {width: 0.33, height: 0.15}
+        content: "小中高すべて女子に避けられる回想"
+      # 4段目：下部ワイド
+      - id: 8
+        position: {x: 0.00, y: 0.55}
+        size:     {width: 1.0, height: 0.45}
+        content: "プリクラ帳が開き『全部ひとりで写ってる!!』と強調するギャグショット"
+
+  # ---------- 見開き3（006.jpg） ----------
+  - page_number: 5      # 006 右
+    panels:
+      - id: 1   # 上段
+        position: {x: 0.0, y: 0.00}
+        size:     {width: 1.0, height: 0.21}
+        content: "頭を抱えて暴れる主人公バストアップ"
+      - id: 2   # 中段
+        position: {x: 0.0, y: 0.21}
+        size:     {width: 1.0, height: 0.27}
+        content: "長い廊下を歩き独白する主人公（中央遠景）"
+      - id: 3   # 下段
+        position: {x: 0.0, y: 0.48}
+        size:     {width: 1.0, height: 0.52}
+        content: "露天風呂を見て感嘆する主人公。手前に湯けむり"
+
+  - page_number: 6      # 006 左
+    panels:
+      - id: 1   # 上段ワイド
+        position: {x: 0.0, y: 0.00}
+        size:     {width: 1.0, height: 0.22}
+        content: "露天風呂でリラックスする主人公（胸まで）"
+      # 2段目：4コマ横並び
+      - id: 2
+        position: {x: 0.75, y: 0.22}
+        size:     {width: 0.25, height: 0.13}
+        content: "足で戸を開けるシルエット"
+      - id: 3
+        position: {x: 0.50, y: 0.22}
+        size:     {width: 0.25, height: 0.13}
+        content: "湯けむりの中を泳ぐ主人公（遠景）"
+      - id: 4
+        position: {x: 0.25, y: 0.22}
+        size:     {width: 0.25, height: 0.13}
+        content: "驚く主人公の顔アップ"
+      - id: 5
+        position: {x: 0.00, y: 0.22}
+        size:     {width: 0.25, height: 0.13}
+        content: "「誰だ？」とつぶやくフキダシ中心"
+      - id: 6   # 下段大パネル
+        position: {x: 0.0, y: 0.35}
+        size:     {width: 1.0, height: 0.65}
+        content: "女性の脚が湯船に入り主人公がのけ反るリアクションショット"
+
+  # ---------- 見開き4（007.jpg） ----------
+  - page_number: 7      # 007 右
+    panels:
+      - id: 1   # 上段大
+        position: {x: 0.0, y: 0.00}
+        size:     {width: 1.0, height: 0.55}
+        content: "裸の少女が髪をかき上げ、主人公は湯船から仰天するロングショット"
+      - id: 2   # 中央細横
+        position: {x: 0.0, y: 0.55}
+        size:     {width: 1.0, height: 0.18}
+        content: "至近距離で見つめ合う二人のアイレベルショット"
+      - id: 3   # 下段２分割（左）
+        position: {x: 0.50, y: 0.73}
+        size:     {width: 0.50, height: 0.27}
+        content: "湯船で赤面する主人公のバストアップ"
+      - id: 4   # 下段２分割（右）
+        position: {x: 0.00, y: 0.73}
+        size:     {width: 0.50, height: 0.27}
+        content: "歓喜して両手を挙げる少女の全身カット"
+
+  - page_number: 8      # 007 左
+    panels:
+      - id: 1   # 上段大
+        position: {x: 0.0, y: 0.00}
+        size:     {width: 1.0, height: 0.45}
+        content: "湯船の縁に胸を乗せウインクする少女と驚く主人公（対角構図）"
+      - id: 2   # 中段ワイド
+        position: {x: 0.0, y: 0.45}
+        size:     {width: 1.0, height: 0.13}
+        content: "少女が主人公に肩を寄せるスキンシップのバストアップ"
+      # 3段目：３コマ横並び
+      - id: 3
+        position: {x: 0.67, y: 0.58}
+        size:     {width: 0.33, height: 0.12}
+        content: "少女が主人公を抱えバシャバシャ暴れるギャグカット"
+      - id: 4
+        position: {x: 0.34, y: 0.58}
+        size:     {width: 0.33, height: 0.12}
+        content: "少女の顔アップ『なんかだんだん大きく…』"
+      - id: 5
+        position: {x: 0.00, y: 0.58}
+        size:     {width: 0.34, height: 0.12}
+        content: "水面に浮かぶ髪留めと「……」のフキダシ"
+      - id: 6   # 下段ワイド
+        position: {x: 0.0, y: 0.70}
+        size:     {width: 1.0, height: 0.30}
+        content: "メガネ姿の少女と背中を向ける主人公のツーショット（ドット背景）"
+
+title: "（サンプル）ひなた旅館へようこそ"
+author: "例：赤松 健"
+created_at: "2025-07-06"

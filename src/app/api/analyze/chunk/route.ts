@@ -3,7 +3,7 @@ import { chunkAnalyzerAgent } from "@/agents/chunk-analyzer";
 import { z } from "zod";
 import { getConfig } from "@/config/config-loader";
 import { getDatabase, runQuery, getOne, initializeDatabase, closeDatabase } from "@/lib/db";
-import { saveJson, getChunkAnalysisPath } from "@/lib/storage/r2";
+import { saveJson, getChunkAnalysisPath, loadJson, getChunkTextPath } from "@/lib/storage/r2";
 import { 
   getAnalysisCacheKey, 
   getCachedData, 
@@ -98,11 +98,17 @@ export async function POST(request: NextRequest) {
       // 前のチャンクを取得
       if (!prevChunkText) {
         if (chunkIndex > 0) {
-          const prevChunk = await getOne(db,
-            `SELECT content FROM chunks WHERE novel_id = ? AND chunk_index = ?`,
+          const prevChunkMeta = await getOne(db,
+            `SELECT id FROM chunks WHERE novel_id = ? AND chunk_index = ?`,
             [novelId, chunkIndex - 1]
           );
-          prevChunkText = prevChunk?.content || '（開始点）';
+          if (prevChunkMeta?.id) {
+            // チャンクテキストをストレージから読み込む
+            const chunkData = await loadJson(getChunkTextPath(prevChunkMeta.id), 'CHUNKS_STORAGE');
+            prevChunkText = chunkData?.text || '（開始点）';
+          } else {
+            prevChunkText = '（開始点）';
+          }
         } else {
           prevChunkText = '（開始点）';
         }
@@ -110,13 +116,15 @@ export async function POST(request: NextRequest) {
       
       // 次のチャンクを取得
       if (!nextChunkText_) {
-        const nextChunk = await getOne(db,
-          `SELECT content FROM chunks WHERE novel_id = ? AND chunk_index = ?`,
+        const nextChunkMeta = await getOne(db,
+          `SELECT id FROM chunks WHERE novel_id = ? AND chunk_index = ?`,
           [novelId, chunkIndex + 1]
         );
         
-        if (nextChunk?.content) {
-          nextChunkText_ = nextChunk.content;
+        if (nextChunkMeta?.id) {
+          // チャンクテキストをストレージから読み込む
+          const chunkData = await loadJson(getChunkTextPath(nextChunkMeta.id), 'CHUNKS_STORAGE');
+          nextChunkText_ = chunkData?.text || '';
         } else {
           // 最後のチャンクかどうか確認
           const maxChunkIndex = await getOne(db,

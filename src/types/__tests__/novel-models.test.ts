@@ -18,9 +18,30 @@ describe('Novel Models', () => {
     it('should validate valid novel data', () => {
       const validNovel: Novel = {
         id: 'novel_123e4567-e89b-12d3-a456-426614174000',
-        title: 'テスト小説',
         originalTextFile: 'novels/novel_123e4567-e89b-12d3-a456-426614174000/original.txt',
         totalLength: 50000,
+        totalChunks: 10,
+        chunkSize: 5000,
+        overlapSize: 500,
+        totalEpisodes: undefined,
+        totalPages: undefined,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+      
+      expect(() => NovelSchema.parse(validNovel)).not.toThrow()
+    })
+    
+    it('should validate novel with optional fields', () => {
+      const validNovel: Novel = {
+        id: 'novel_123',
+        originalTextFile: 'novels/novel_123/original.txt',
+        totalLength: 10000,
+        totalChunks: 2,
+        chunkSize: 5000,
+        overlapSize: 0,
+        totalEpisodes: 3,
+        totalPages: 15,
         createdAt: new Date(),
         updatedAt: new Date()
       }

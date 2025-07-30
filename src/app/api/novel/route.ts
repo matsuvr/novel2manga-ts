@@ -48,6 +48,10 @@ export async function POST(request: NextRequest) {
     let dbData: { error?: string; job?: { id: string; type: string; status: string } } = {}
     const maxRetries = 3
     
+    // デフォルトのチャンク設定を使用（実際のチャンク分割は後で行われる）
+    const { getChunkingConfig } = await import('@/config')
+    const chunkingConfig = getChunkingConfig()
+    
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         dbResponse = await fetch(`${baseUrl}/api/novel/db`, {
@@ -59,6 +63,9 @@ export async function POST(request: NextRequest) {
             uuid: data.uuid,
             fileName: data.fileName,
             length: data.length,
+            totalChunks: 0, // チャンク分割前なので0
+            chunkSize: chunkingConfig.defaultChunkSize,
+            overlapSize: chunkingConfig.defaultOverlapSize,
           }),
         })
 

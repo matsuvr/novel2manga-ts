@@ -2,7 +2,7 @@
 
 ## Overview
 
-本設計書は、小説テキストをマンガ形式に自動変換するWebアプリケーションの技術実装について定義します。Mastra AIフレームワークをベースに、TypeScriptとNext.js 14を使用して、長文テキストの解析、5要素の抽出（登場人物・シーン・対話・ハイライト・状況）、連載エピソード構成、マンガレイアウト生成を実現します。
+本設計書は、小説テキストをマンガ形式のレイアウト（絵コンテ）に自動変換するWebアプリケーションの技術実装について定義します。本ツールは編集者を補佐するツールであり、マンガの絵そのものを生成するのではなく、コマ割りと吹き出し配置の構成案を提供します。Mastra AIフレームワークをベースに、TypeScriptとNext.js 14を使用して、長文テキストの解析、5要素の抽出（登場人物・シーン・対話・ハイライト・状況）、連載エピソード構成、マンガレイアウト生成を実現します。
 
 ## Requirements Mapping
 
@@ -13,8 +13,8 @@
 - **テキスト解析エンジン** → REQ-1: テキスト入力と解析（チャンク分割、会話/地の文識別）
 - **5要素抽出AI** → REQ-1.4: チャンク毎に会話部分、地の文、シーン転換の自動識別
 - **エピソード構成エンジン** → REQ-3: 連載マンガとしてのエピソード分割
-- **マンガレイアウト設計エンジン** → REQ-3: YAMLで漫画レイアウトを記述する
-- **マンガレイアウト生成エンジン** → YAMLからCanvas APIで、枠と状況説明とセリフによる絵コンテの描画（マンガそのものの絵作りは行わない）
+- **マンガレイアウト設計エンジン** → REQ-3: YAMLで漫画レイアウトを記述する（コマ割りと吹き出し配置）
+- **マンガレイアウト生成エンジン** → YAMLからCanvas APIで、枠と状況説明とセリフによる絵コンテの描画（編集者向けの構成案として、マンガそのものの絵は含まない）
 - **エクスポートサービス** → REQ-5: エクスポートと共有
 - **プロジェクト管理** → REQ-6: データ管理とプロジェクト保存
 
@@ -38,15 +38,17 @@ graph TB
 
     subgraph "AI Processing Layer"
         E[Mastra Framework] --> F[Text Analysis Agent]
-        E --> G[Image Generation Agent]
-        E --> H[Layout Generation Agent]
+        E --> G[Layout Generation Agent]
+        E --> H[Episode Composition Agent]
         F --> I[5-Element Extractor]
+        F --> J[Integration Service]
     end
 
     subgraph "Business Logic Layer"
-        J[Episode Composer] --> K[Panel Layout Engine]
-        K --> L[Speech Bubble Placer]
-        M[Export Service] --> N[Format Converters]
+        K[Episode Composer] --> L[Panel Layout Engine]
+        L --> M[Speech Bubble Placer]
+        N[Canvas Renderer] --> O[Storyboard Generator]
+        P[Export Service] --> Q[Format Converters]
     end
 
     subgraph "Data Layer"
@@ -56,12 +58,13 @@ graph TB
     end
 
     B --> E
-    C --> J
-    E --> J
-    J --> O
-    G --> R
-    M --> O
-    M --> R
+    C --> K
+    E --> K
+    K --> O
+    G --> N
+    N --> R
+    P --> O
+    P --> R
 ```
 
 ### Technology Stack
@@ -70,11 +73,13 @@ graph TB
 
 - **Frontend**: Next.js 15.4.4 (App Router) + TypeScript 5.8.3 + Tailwind CSS 4.1.11
 - **AI Framework**: Mastra 0.10.15 (TypeScript agent framework)
-- **レイアウト画像生成**: Canvas API
+- **絵コンテ生成**: Canvas API（枠線・テキスト・吹き出しのみ、イラストは含まない）
 - **Backend**: Next.js API Routes + Mastra Workflows
 - **Database**: Mastra LibSQL 0.11.2 (Edge-compatible SQLite)
-- **Cache**: Cloudflare KV (Edge caching)
+- **Cache**: 2層キャッシュ構造 (MemoryCache + Cloudflare KV)
 - **File Storage**: Cloudflare R2 (画像保存)
+- **LLM Providers**: OpenAI, Gemini, Groq, Local (Ollama), OpenRouter
+- **Configuration**: app.config.ts による集中管理 + 環境変数 (シークレットのみ)
 - **Authentication**: NextAuth.js v5
 - **Testing**: Vitest + Playwright + React Testing Library
 - **Deployment**: Cloudflare Workers (OpenNext adapter)
@@ -86,10 +91,12 @@ graph TB
 - **Mastra LibSQL**: Edge環境対応のSQLite、Cloudflare D1互換、TypeScript型安全性
 - **Cloudflare R2**: S3互換API、エッジ配信、コスト効率
 - **Cloudflare Workers**: グローバルエッジ配信、低レイテンシー、自動スケーリング、KVキャッシュ統合
+- **設定管理**: app.config.ts による一元管理、環境変数オーバーライド、チューニング用コメント付き
+- **複数LLMプロバイダー**: 用途に応じた最適なモデル選択、フォールバック機能、コスト最適化
 
 ## Data Flow
 
-### Primary User Flow: テキストからマンガ生成
+### Primary User Flow: テキストからマンガレイアウト生成
 
 ```mermaid
 sequenceDiagram
@@ -99,36 +106,48 @@ sequenceDiagram
     participant AI as AI Services
     participant DB as Database
     participant Storage as R2 Storage
+    participant Canvas as Canvas API
 
     User->>RSC: 小説テキスト投稿
     RSC->>Mastra: テキスト解析リクエスト
-    Mastra->>AI: 5要素抽出
-    AI-->>Mastra: 要素データ
-    Mastra->>AI: 画像プロンプト生成
-    AI-->>Mastra: プロンプト
-    Mastra->>AI: 画像生成API
-    AI-->>Storage: 画像保存
+    Mastra->>AI: チャンク毎の5要素抽出
+    AI-->>Mastra: 要素データ（登場人物、シーン、対話、ハイライト、状況）
+    Mastra->>Mastra: 全チャンクの統合分析
+    Mastra->>AI: エピソード構成分析
+    AI-->>Mastra: エピソード分割案
+    Mastra->>AI: レイアウトYAML生成
+    AI-->>Mastra: コマ割り・吹き出し配置YAML
+    Mastra->>Canvas: レイアウト描画（枠線・テキスト・吹き出しのみ）
+    Canvas-->>Storage: 絵コンテ画像保存
     Mastra->>DB: プロジェクト保存
-    Mastra-->>RSC: 生成結果
-    RSC-->>User: マンガプレビュー表示
+    Mastra-->>RSC: レイアウト結果
+    RSC-->>User: 絵コンテプレビュー表示
 ```
 
-### エピソード構成フロー
+### エピソード構成とレイアウト生成フロー
 
 ```mermaid
 sequenceDiagram
-    participant TextEngine as Text Analysis Engine
+    participant Chunks as Chunk Analyses
+    participant Integration as Integration Service
     participant Episode as Episode Composer
     participant Layout as Layout Engine
-    participant Panel as Panel Generator
+    participant Canvas as Canvas Renderer
+    participant Output as Output Files
 
-    TextEngine->>Episode: 解析済みテキスト
+    Chunks->>Integration: チャンク毎の5要素データ
+    Integration->>Integration: 重複排除・統合
+    Integration->>Episode: 統合済み解析データ
     Episode->>Episode: チャプター分割
     Episode->>Episode: クライマックス検出
     Episode->>Layout: エピソード構成
-    Layout->>Panel: ページ分割指示
-    Panel->>Panel: コマ割り計算
-    Panel-->>Layout: レイアウトデータ
+    Layout->>Layout: コマ割り計算（重要度ベース）
+    Layout->>Layout: 吹き出し配置（読み順考慮）
+    Layout->>Canvas: レイアウトYAML
+    Canvas->>Canvas: 枠線描画
+    Canvas->>Canvas: 状況説明テキスト配置
+    Canvas->>Canvas: セリフ吹き出し描画
+    Canvas-->>Output: 絵コンテ画像（PNG）
 ```
 
 ## Components and Interfaces
@@ -138,10 +157,23 @@ sequenceDiagram
 ```typescript
 // Mastra Agent定義
 class NovelToMangaAgent {
-  async analyzeText(text: string): Promise<TextAnalysis> // テキスト解析と5要素抽出
+  async analyzeText(text: string, options?: AnalysisOptions): Promise<TextAnalysis> // テキスト解析と5要素抽出
+  async analyzeChunk(chunk: ChunkAnalysisRequest): Promise<ChunkAnalysisResult> // チャンク単位の分析（前後チャンク参照付き）
+  async analyzeNarrativeArc(text: string): Promise<NarrativeArcAnalysis> // 物語構造分析
+  async integrateChunkAnalyses(chunks: ChunkAnalysisResult[]): Promise<TextAnalysis> // チャンク分析結果の統合
   async generateEpisodes(analysis: TextAnalysis): Promise<Episode[]> // エピソード構成
-  async generateImages(scenes: Scene[]): Promise<GeneratedImage[]> // 画像生成
-  async createLayout(episode: Episode): Promise<MangaLayout> // レイアウト生成
+  async createLayout(episode: Episode): Promise<MangaLayout> // レイアウトYAML生成（コマ割り・吹き出し配置）
+  async renderStoryboard(layout: MangaLayout): Promise<StoryboardImage> // 絵コンテ画像生成（Canvas API）
+}
+
+// LLMプロバイダー設定
+interface LLMProviderConfig {
+  provider: 'openai' | 'gemini' | 'groq' | 'local' | 'openrouter';
+  apiKey?: string;
+  model: string;
+  temperature?: number;
+  maxTokens?: number;
+  timeout?: number;
 }
 
 // エピソード構成サービス
@@ -176,8 +208,10 @@ class MangaLayoutEngine {
 | Method | Route | Purpose | Auth | Status Codes |
 |--------|-------|---------|------|--------------|
 | POST | /api/analyze | テキスト解析と5要素抽出 | Required | 200, 400, 401, 413, 500 |
+| POST | /api/analyze/chunk | チャンク単位の分析（前後チャンク参照付き） | Required | 200, 400, 401, 500 |
+| POST | /api/analyze/narrative-arc | 物語構造分析 | Required | 200, 400, 401, 500 |
 | POST | /api/episodes | エピソード構成生成 | Required | 201, 400, 401, 500 |
-| POST | /api/generate-images | レイアウト画像生成 | Required | 201, 400, 401, 429, 500 |
+| POST | /api/generate-storyboard | 絵コンテ画像生成（枠線・テキストのみ） | Required | 201, 400, 401, 500 |
 | GET | /api/projects | プロジェクト一覧取得 | Required | 200, 401, 500 |
 | GET | /api/projects/:id | プロジェクト詳細取得 | Required | 200, 401, 404, 500 |
 | PUT | /api/projects/:id | プロジェクト更新 | Required | 200, 400, 401, 404, 500 |
@@ -211,9 +245,13 @@ erDiagram
     
     NOVEL {
         string id PK
-        string title
         string originalTextFile
         number totalLength
+        number totalChunks
+        number chunkSize
+        number overlapSize
+        number totalEpisodes
+        number totalPages
         datetime createdAt
         datetime updatedAt
     }
@@ -247,7 +285,12 @@ erDiagram
 interface Novel {
   id: string;                    // UUID
   originalTextFile: string;      // R2: novels/{id}.json
-  totalLength: number;
+  totalLength: number;           // 総文字数
+  totalChunks: number;           // 分割されたチャンク数
+  chunkSize: number;             // 1チャンクあたりの文字数（config値）
+  overlapSize: number;           // オーバーラップサイズ（config値）
+  totalEpisodes?: number;        // エピソード数（分析後に設定）
+  totalPages?: number;           // 総ページ数（レイアウト生成後に設定）
   createdAt: Date;
   updatedAt: Date;
 }
@@ -346,15 +389,27 @@ interface Panel {
 
 // 5要素の詳細（R2に保存）
 interface TextAnalysis {
-  id: string;
   chunkId?: string;              // ChunkAnalysisの場合
   characters: Character[];       // 登場人物
   scenes: Scene[];              // シーン
   dialogues: Dialogue[];        // 対話
   highlights: Highlight[];      // ハイライト
   situations: Situation[];      // 状況
+  metadata?: {
+    chunkIndex?: number;
+    totalChunks?: number;
+    previousChunkText?: string;
+    nextChunkText?: string;
+  };
   createdAt: Date;
   updatedAt: Date;
+}
+
+// キャッシュされた分析結果
+interface CachedAnalysisResult {
+  result: TextAnalysis;
+  timestamp: number;
+  ttl?: number;
 }
 
 interface Character {
@@ -407,6 +462,11 @@ CREATE TABLE novels (
   id TEXT PRIMARY KEY,  -- UUID
   original_text_file TEXT NOT NULL,  -- R2パス
   total_length INTEGER NOT NULL,
+  total_chunks INTEGER NOT NULL DEFAULT 0,
+  chunk_size INTEGER NOT NULL,  -- configで与えられた値
+  overlap_size INTEGER NOT NULL,  -- configで与えられた値
+  total_episodes INTEGER,  -- 分析後に更新
+  total_pages INTEGER,  -- レイアウト生成後に更新
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -575,9 +635,133 @@ export function errorHandler(error: unknown): Response {
 ### エラーシナリオ
 
 - テキスト解析失敗: 適切なフォールバックとユーザー通知
-- 画像生成API制限: キューイングとリトライ機構
+- Canvas API処理エラー: デフォルトレイアウトへのフォールバック
 - レイアウト生成エラー: デフォルトレイアウトへのフォールバック
 - ストレージエラー: ローカルキャッシュとリトライ
+
+## Configuration Management
+
+### 設定ファイル構造
+
+```typescript
+// src/config/app.config.ts
+export const appConfig = {
+  // チャンク分割設定
+  chunks: {
+    defaultChunkSize: 5000,        // 【ここを設定】
+    defaultOverlapSize: 500,       // 【ここを設定】
+    minChunkSize: 1000,
+    maxChunkSize: 10000,
+  },
+  
+  // LLMプロバイダー設定
+  llm: {
+    defaultProvider: 'openrouter', // 【ここを設定】
+    providers: {
+      openai: { model: 'gpt-4-turbo', temperature: 0.7 },
+      gemini: { model: 'gemini-1.5-pro-002', temperature: 0.7 },
+      groq: { model: 'compound-beta', maxTokens: 8192 },
+      local: { model: 'llama3.1:70b', baseUrl: 'http://localhost:11434' },
+      openrouter: { model: 'nvidia/llama-3.1-nemotron-70b-instruct', temperature: 0.7 },
+    },
+  },
+  
+  // 処理設定
+  processing: {
+    maxConcurrentChunks: 3,        // 【ここを設定】
+    retryAttempts: 3,
+    retryDelay: 1000,
+    cacheEnabled: true,
+    cacheTTL: 86400000, // 24時間
+  },
+};
+```
+
+### 設定の優先順位
+
+1. **ハードコード値** (app.config.ts)
+2. **環境変数オーバーライド** (process.env)
+3. **ランタイム設定** (APIパラメータ)
+
+### 環境変数
+
+```bash
+# .env - シークレットのみ
+OPENAI_API_KEY=sk-...
+GEMINI_API_KEY=...
+GROQ_API_KEY=gsk_...
+OPENROUTER_API_KEY=sk-or-...
+
+# オーバーライド用環境変数
+APP_LLM_DEFAULT_PROVIDER=openrouter
+APP_CHUNKS_DEFAULT_SIZE=7000
+APP_PROCESSING_MAX_CONCURRENT=5
+```
+
+## Cloudflare Bindings
+
+### 型定義
+
+```typescript
+// src/types/cloudflare.d.ts
+declare global {
+  // R2 Bucket
+  const NOVEL_STORAGE: R2Bucket;
+  
+  // D1 Database
+  const DB: D1Database;
+  
+  // KV Namespace
+  const CACHE: KVNamespace;
+  
+  // Environment Variables
+  interface CloudflareEnv {
+    NOVEL_STORAGE: R2Bucket;
+    DB: D1Database;
+    CACHE: KVNamespace;
+    OPENAI_API_KEY?: string;
+    GEMINI_API_KEY?: string;
+    GROQ_API_KEY?: string;
+    OPENROUTER_API_KEY?: string;
+  }
+}
+
+export interface R2Bucket {
+  put(key: string, value: ReadableStream | ArrayBuffer | string, options?: R2PutOptions): Promise<R2Object | null>;
+  get(key: string, options?: R2GetOptions): Promise<R2ObjectBody | null>;
+  delete(key: string): Promise<void>;
+  list(options?: R2ListOptions): Promise<R2Objects>;
+}
+
+export interface D1Database {
+  prepare(query: string): D1PreparedStatement;
+  batch<T>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]>;
+  exec<T>(query: string): Promise<D1ExecResult>;
+}
+```
+
+### wrangler.toml設定
+
+```toml
+name = "novel2manga"
+compatibility_date = "2024-01-01"
+
+[vars]
+NEXT_PUBLIC_APP_NAME = "Novel2Manga"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "novel2manga"
+database_id = "your-database-id"
+
+[[r2_buckets]]
+binding = "NOVEL_STORAGE"
+bucket_name = "novel2manga-storage"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "your-kv-namespace-id"
+```
 
 ## Security Considerations
 
@@ -624,7 +808,7 @@ sequenceDiagram
 |--------|--------|-------------|
 | 初期表示時間 (FCP) | < 1.5秒 | Lighthouse |
 | API レスポンス (p95) | < 200ms | APIエンドポイント |
-| 画像生成時間 | < 30秒/画像 | 生成API測定 |
+| 絵コンテ生成時間 | < 5秒/ページ | Canvas API測定 |
 | テキスト解析 | < 5秒/10,000文字 | 処理時間測定 |
 | 同時ユーザー数 | > 1,000 | 負荷テスト |
 
@@ -632,15 +816,39 @@ sequenceDiagram
 
 - **ブラウザキャッシュ**: Next.js自動最適化、静的アセット
 - **CDN**: Cloudflare経由での画像配信
-- **アプリケーションキャッシュ**: Cloudflare KVによる解析結果キャッシュ
+- **アプリケーションキャッシュ**: 2層構造
+  - **L1 - MemoryCache**: インメモリキャッシュ、高速アクセス、TTL管理
+  - **L2 - Cloudflare KV**: 永続化キャッシュ、グローバル分散、大容量対応
+  
+  ```typescript
+  // キャッシュ実装例
+  async function getCachedData<T>(key: string): Promise<T | null> {
+    // L1: MemoryCacheチェック
+    const memCached = memoryCache.get<T>(key);
+    if (memCached) return memCached;
+    
+    // L2: Cloudflare KVチェック
+    const kvCached = await CACHE.get(key, 'json');
+    if (kvCached) {
+      memoryCache.set(key, kvCached, 3600); // 1時間メモリキャッシュ
+      return kvCached as T;
+    }
+    
+    return null;
+  }
+  ```
 - **データベースキャッシュ**: D1クエリ結果キャッシュ
 - **Edge キャッシュ**: Cloudflare Tiered Cacheによる多階層キャッシュ
+- **キャッシュ戦略**:
+  - チャンク分析結果: 24時間TTL
+  - 統合分析結果: 7日間TTL
+  - LRU eviction policy for MemoryCache
 
 ### Scalability Approach
 
 - Cloudflare Workersによるグローバルエッジスケーリング
 - Mastraワークフローの並列処理
-- 画像生成のキューシステム実装（Cloudflare Queues）
+- 大規模テキスト処理のキューシステム実装（Cloudflare Queues）
 - D1の自動レプリケーション機能
 - Cloudflareの自動スケーリングとDDoS保護
 
@@ -672,13 +880,13 @@ sequenceDiagram
    - データベース統合テスト
 
 3. **E2Eテスト (Playwright)**
-   - テキスト投稿からマンガ生成フロー
-   - 編集機能の動作確認
+   - テキスト投稿から絵コンテ生成フロー
+   - レイアウト編集機能の動作確認
    - エクスポート機能テスト
 
 4. **パフォーマンステスト**
    - k6による負荷テスト
-   - 画像生成のストレステスト
+   - Canvas API処理のストレステスト
    - メモリリーク検出
 
 ### CI/CD Pipeline
