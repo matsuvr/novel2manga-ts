@@ -30,57 +30,60 @@
 
 ```mermaid
 graph TB
-    subgraph "Frontend Layer (Next.js 14)"
+    subgraph "Frontend Layer (Next.js 15)"
         A[Next.js App Router] --> B[Server Components]
         A --> C[Client Components]
         C --> D[Interactive Editor]
     end
 
-    subgraph "AI Processing Layer"
-        E[Mastra Framework] --> F[Text Analysis Agent]
-        E --> G[Layout Generation Agent]
-        E --> H[Episode Composition Agent]
+    subgraph "AI Processing Layer (Mastra Agents)"
+        E[Mastra Framework] --> F[ChunkAnalyzer Agent]
+        E --> G[LayoutGenerator Agent]
+        E --> H[NarrativeArcAnalyzer Agent]
         F --> I[5-Element Extractor]
-        F --> J[Integration Service]
+        H --> J[Episode Boundary Detection]
     end
 
     subgraph "Business Logic Layer"
-        K[Episode Composer] --> L[Panel Layout Engine]
-        L --> M[Speech Bubble Placer]
-        N[Canvas Renderer] --> O[Storyboard Generator]
-        P[Export Service] --> Q[Format Converters]
+        K[JobNarrativeProcessor] --> L[DatabaseService]
+        M[Panel Layout Engine] --> N[Layout Templates]
+        O[Canvas Renderer] --> P[Storyboard Generator]
+        Q[Export Service] --> R[Format Converters]
     end
 
     subgraph "Data Layer"
-        O[Mastra LibSQL/D1] --> P[Project Storage]
-        O --> Q[Cache Layer - Cloudflare KV]
-        R[Cloudflare R2] --> S[Image Storage]
+        S[Cloudflare D1] --> T[Novel/Job/Chunk Tables]
+        S --> U[Episode/Layout/Render Tables]
+        S --> V[Storage Files Tracking]
+        W[Cloudflare R2] --> X[File Storage]
+        Y[Local Storage] --> Z[Dev Environment]
     end
 
     B --> E
     C --> K
     E --> K
-    K --> O
-    G --> N
-    N --> R
-    P --> O
-    P --> R
+    K --> S
+    G --> M
+    M --> O
+    O --> W
+    Q --> S
+    Q --> W
 ```
 
 ### Technology Stack
 
 調査結果に基づく技術選定：
 
-- **Frontend**: Next.js 15.4.4 (App Router) + TypeScript 5.8.3 + Tailwind CSS 4.1.11
-- **AI Framework**: Mastra 0.10.15 (TypeScript agent framework)
+- **Frontend**: Next.js 15 (App Router) + TypeScript 5 + Tailwind CSS
+- **AI Framework**: Mastra (TypeScript agent framework)
 - **絵コンテ生成**: Canvas API（枠線・テキスト・吹き出しのみ、イラストは含まない）
-- **Backend**: Next.js API Routes + Mastra Workflows
-- **Database**: Mastra LibSQL 0.11.2 (Edge-compatible SQLite)
-- **Cache**: 2層キャッシュ構造 (MemoryCache + Cloudflare KV)
-- **File Storage**: Cloudflare R2 (画像保存)
+- **Backend**: Next.js API Routes + Mastra Agents
+- **Database**: Cloudflare D1 (SQLite ベース)
+- **Cache**: Cloudflare KV (APIレスポンスキャッシュ)
+- **File Storage**: Cloudflare R2 (プロダクション) / Local Storage (開発)
 - **LLM Providers**: OpenAI, Gemini, Groq, Local (Ollama), OpenRouter
 - **Configuration**: app.config.ts による集中管理 + 環境変数 (シークレットのみ)
-- **Authentication**: NextAuth.js v5
+- **Authentication**: NextAuth.js v5 (未実装)
 - **Testing**: Vitest + Playwright + React Testing Library
 - **Deployment**: Cloudflare Workers (OpenNext adapter)
 
@@ -88,7 +91,7 @@ graph TB
 
 - **Next.js 15 App Router**: Server Componentsによる高速レンダリング、RSCによるクライアントJSの削減、Cloudflare Workers対応
 - **Mastra Framework**: TypeScript完全対応、エージェント型アーキテクチャ、統合済みのLLM/画像生成API連携
-- **Mastra LibSQL**: Edge環境対応のSQLite、Cloudflare D1互換、TypeScript型安全性
+- **Cloudflare D1**: SQLiteベースのエッジデータベース、階層構造データ管理、ジョブステータス追跡
 - **Cloudflare R2**: S3互換API、エッジ配信、コスト効率
 - **Cloudflare Workers**: グローバルエッジ配信、低レイテンシー、自動スケーリング、KVキャッシュ統合
 - **設定管理**: app.config.ts による一元管理、環境変数オーバーライド、チューニング用コメント付き
@@ -156,14 +159,34 @@ sequenceDiagram
 
 ```typescript
 // Mastra Agent定義
-class NovelToMangaAgent {
-  async analyzeText(text: string, options?: AnalysisOptions): Promise<TextAnalysis> // テキスト解析と5要素抽出
-  async analyzeChunk(chunk: ChunkAnalysisRequest): Promise<ChunkAnalysisResult> // チャンク単位の分析（前後チャンク参照付き）
-  async analyzeNarrativeArc(text: string): Promise<NarrativeArcAnalysis> // 物語構造分析
-  async integrateChunkAnalyses(chunks: ChunkAnalysisResult[]): Promise<TextAnalysis> // チャンク分析結果の統合
-  async generateEpisodes(analysis: TextAnalysis): Promise<Episode[]> // エピソード構成
-  async createLayout(episode: Episode): Promise<MangaLayout> // レイアウトYAML生成（コマ割り・吹き出し配置）
-  async renderStoryboard(layout: MangaLayout): Promise<StoryboardImage> // 絵コンテ画像生成（Canvas API）
+// ChunkAnalyzerAgent - チャンク分析エージェント
+class ChunkAnalyzerAgent extends Agent {
+  async analyzeChunk(params: {
+    currentChunk: string;
+    previousChunk?: string;
+    nextChunk?: string;
+    chunkMetadata: ChunkMetadata;
+  }): Promise<ChunkAnalysisResult> // 5要素抽出（前後チャンク参照付き）
+}
+
+// NarrativeArcAnalyzerAgent - 物語構造分析エージェント
+class NarrativeArcAnalyzerAgent extends Agent {
+  async analyzeNarrativeArc(text: string, options: {
+    targetCharsPerEpisode: number;
+    minCharsPerEpisode: number;
+    maxCharsPerEpisode: number;
+    isMiddleOfNovel: boolean;
+    startingEpisodeNumber: number;
+  }): Promise<NarrativeArcAnalysis> // エピソード境界検出
+}
+
+// LayoutGeneratorAgent - レイアウト生成エージェント
+class LayoutGeneratorAgent extends Agent {
+  async generateLayout(episodeData: {
+    episodeNumber: number;
+    chunkAnalyses: ChunkAnalysisResult[];
+    episodeInfo: Episode;
+  }): Promise<MangaLayout> // レイアウトYAML生成（コマ割り・吹き出し配置）
 }
 
 // LLMプロバイダー設定
@@ -176,18 +199,35 @@ interface LLMProviderConfig {
   timeout?: number;
 }
 
-// エピソード構成サービス
-class EpisodeComposer {
-  splitIntoChapters(text: string): Chapter[] // チャプター分割
-  identifyClimaxPoints(chapter: Chapter): ClimaxPoint[] // クライマックス検出
-  composeEpisode(chapters: Chapter[]): Episode // エピソード構成
+// ジョブ管理サービス
+class JobNarrativeProcessor {
+  async processJob(
+    jobId: string,
+    onProgress?: (progress: JobProgress) => void
+  ): Promise<JobProgress> // ジョブ全体の処理
+  
+  async canResumeJob(jobId: string): Promise<boolean> // 再開可能かチェック
 }
 
-// レイアウトエンジン
-class MangaLayoutEngine {
-  generatePanelLayout(scenes: Scene[]): PanelLayout // コマ割り生成
-  placeSpeechBubbles(panels: Panel[]): BubblePlacement[] // 吹き出し配置
-  applyReadingOrder(layout: PanelLayout): OrderedLayout // 読み順適用
+// データベースサービス
+class DatabaseService {
+  // Novel管理
+  async createNovel(novel: Omit<Novel, 'id' | 'createdAt'>): Promise<string>
+  async getNovel(id: string): Promise<Novel | null>
+  
+  // Job管理
+  async createJob(job: Omit<Job, 'id' | 'createdAt'>): Promise<string>
+  async updateJobStatus(id: string, status: JobStatus, error?: string): Promise<void>
+  async updateJobProgress(id: string, progress: JobProgress): Promise<void>
+  
+  // Episode管理
+  async createEpisodes(episodes: Episode[]): Promise<void>
+  async getEpisodesByJobId(jobId: string): Promise<Episode[]>
+  
+  // 各ステップの状態管理
+  async updateChunkAnalysisStatus(jobId: string, chunkIndex: number, status: AnalysisStatus): Promise<void>
+  async updateLayoutStatus(jobId: string, episodeNumber: number, status: LayoutStatus): Promise<void>
+  async updateRenderStatus(jobId: string, episodeNumber: number, pageNumber: number, status: RenderStatus): Promise<void>
 }
 ```
 
@@ -207,90 +247,121 @@ class MangaLayoutEngine {
 
 | Method | Route | Purpose | Auth | Status Codes |
 |--------|-------|---------|------|--------------|
-| POST | /api/analyze | テキスト解析と5要素抽出 | Required | 200, 400, 401, 413, 500 |
-| POST | /api/analyze/chunk | チャンク単位の分析（前後チャンク参照付き） | Required | 200, 400, 401, 500 |
-| POST | /api/analyze/narrative-arc | 物語構造分析 | Required | 200, 400, 401, 500 |
-| POST | /api/episodes | エピソード構成生成 | Required | 201, 400, 401, 500 |
-| POST | /api/generate-storyboard | 絵コンテ画像生成（枠線・テキストのみ） | Required | 201, 400, 401, 500 |
-| GET | /api/projects | プロジェクト一覧取得 | Required | 200, 401, 500 |
-| GET | /api/projects/:id | プロジェクト詳細取得 | Required | 200, 401, 404, 500 |
-| PUT | /api/projects/:id | プロジェクト更新 | Required | 200, 400, 401, 404, 500 |
-| POST | /api/export | マンガエクスポート | Required | 201, 400, 401, 500 |
-| POST | /api/share | 共有リンク生成 | Required | 201, 401, 500 |
+| POST | /api/novel/storage | 小説テキスト保存 | Implemented | 200, 400, 413, 500 |
+| GET | /api/novel/storage/:id | 小説テキスト取得 | Implemented | 200, 404, 500 |
+| POST | /api/novel/db | 小説メタデータDB保存 | Implemented | 200, 400, 500 |
+| GET | /api/novel/[uuid]/chunks | チャンク分割・取得 | Implemented | 200, 404, 500 |
+| POST | /api/analyze/chunk | チャンク単位の5要素分析 | Implemented | 200, 400, 500 |
+| POST | /api/analyze/narrative-arc/full | 全体物語構造分析 | Implemented | 200, 400, 500 |
+| GET | /api/job/[id] | ジョブ情報取得 | Implemented | 200, 404, 500 |
+| GET | /api/jobs/[jobId]/status | ジョブステータス取得 | Implemented | 200, 404, 500 |
+| GET | /api/jobs/[jobId]/episodes | エピソード一覧取得 | Implemented | 200, 404, 500 |
+| POST | /api/jobs/[jobId]/resume | ジョブ再開 | Implemented | 200, 400, 404, 500 |
+| POST | /api/layout/generate | レイアウトYAML生成 | Implemented | 200, 400, 500 |
+| POST | /api/render | Canvasレンダリング | Not Implemented | 201, 400, 500 |
+| POST | /api/export | マンガエクスポート | Not Implemented | 201, 400, 500 |
+| POST | /api/share | 共有リンク生成 | Not Implemented | 201, 401, 500 |
 
 ## Data Models
 
-### Domain Entities
+### Domain Entities (新スキーマ対応)
 
-1. **Novel**: 入力された小説全体（テキストはR2に保存）
-2. **Job**: 処理ジョブ（進捗管理）
-3. **Chunk**: 分割されたテキストチャンク（R2に保存）
-4. **ChunkAnalysis**: チャンク毎の解析結果（R2に保存）
-5. **NovelAnalysis**: 統合された解析結果（5要素、シーン、会話をR2に保存）
-6. **Episode**: 連載エピソード単位のデータ
-7. **MangaPage**: マンガページ（レイアウトYAMLはR2に保存）
-8. **Panel**: 個別コマのデータ（位置、サイズ、読み順）
+1. **Novel**: 小説エンティティ（最上位）
+2. **Job**: 変換ジョブ（Novelに対する処理単位）
+3. **JobStepHistory**: 各処理ステップの履歴
+4. **Chunk**: 分割されたテキストチャンク
+5. **ChunkAnalysisStatus**: チャンク分析状態
+6. **Episode**: エピソード境界情報
+7. **LayoutStatus**: レイアウト生成状態
+8. **RenderStatus**: 描画状態
+9. **Output**: 最終成果物
+10. **StorageFiles**: ファイル管理
 
 ### Entity Relationships
 
 ```mermaid
 erDiagram
-    NOVEL ||--|| JOB : "has processing"
-    NOVEL ||--|{ CHUNK : "divided into"
-    CHUNK ||--|| CHUNK_ANALYSIS : "analyzed to"
-    NOVEL ||--|| NOVEL_ANALYSIS : "has integrated"
-    NOVEL ||--|{ EPISODE : "consists of"
-    EPISODE ||--|{ MANGA_PAGE : "contains"
-    MANGA_PAGE ||--|{ PANEL : "contains"
+    NOVEL ||--|{ JOB : "has multiple"
+    JOB ||--|{ CHUNK : "divided into"
+    JOB ||--|{ JOB_STEP_HISTORY : "has history"
+    JOB ||--|{ CHUNK_ANALYSIS_STATUS : "tracks analysis"
+    JOB ||--|{ EPISODE : "generates"
+    JOB ||--|{ LAYOUT_STATUS : "tracks layout"
+    JOB ||--|{ RENDER_STATUS : "tracks render"
+    JOB ||--|{ OUTPUT : "produces"
+    NOVEL ||--|{ STORAGE_FILES : "has files"
     
     NOVEL {
         string id PK
-        string originalTextFile
-        number totalLength
-        number totalChunks
-        number chunkSize
-        number overlapSize
-        number totalEpisodes
-        number totalPages
-        datetime createdAt
-        datetime updatedAt
+        string title
+        string author
+        string original_text_path
+        number text_length
+        string language
+        string metadata_path
+        datetime created_at
+        datetime updated_at
     }
     
     JOB {
         string id PK
-        string novelId FK
+        string novel_id FK
+        string job_name
         string status
-        number progress
-        number totalChunks
-        number processedChunks
+        string current_step
+        boolean split_completed
+        boolean analyze_completed
+        boolean episode_completed
+        boolean layout_completed
+        boolean render_completed
+        string chunks_dir_path
+        string analyses_dir_path
+        string episodes_data_path
+        string layouts_dir_path
+        string renders_dir_path
+        number total_chunks
+        number processed_chunks
+        number total_episodes
+        number processed_episodes
+        number total_pages
+        number rendered_pages
+        string last_error
+        string last_error_step
+        number retry_count
+        string resume_data_path
+        datetime created_at
+        datetime updated_at
+        datetime started_at
+        datetime completed_at
     }
     
     CHUNK {
         string id PK
-        string novelId FK
-        number chunkIndex
-        string textFile
-        number startIndex
-        number endIndex
-        string status
+        string novel_id FK
+        string job_id FK
+        number chunk_index
+        string content_path
+        number start_position
+        number end_position
+        number word_count
+        datetime created_at
     }
 ```
 
 ### Data Model Definitions
 
 ```typescript
-// TypeScript インターフェース定義
+// TypeScript インターフェース定義（新スキーマ対応）
 
 // Core Models
 interface Novel {
   id: string;                    // UUID
-  originalTextFile: string;      // R2: novels/{id}.json
-  totalLength: number;           // 総文字数
-  totalChunks: number;           // 分割されたチャンク数
-  chunkSize: number;             // 1チャンクあたりの文字数（config値）
-  overlapSize: number;           // オーバーラップサイズ（config値）
-  totalEpisodes?: number;        // エピソード数（分析後に設定）
-  totalPages?: number;           // 総ページ数（レイアウト生成後に設定）
+  title?: string;                // 小説タイトル
+  author?: string;               // 著者名
+  originalTextPath: string;      // ストレージ上のファイルパス
+  textLength: number;            // 総文字数
+  language: string;              // 言語コード
+  metadataPath?: string;         // メタデータJSONパス
   createdAt: Date;
   updatedAt: Date;
 }
@@ -298,93 +369,143 @@ interface Novel {
 interface Job {
   id: string;
   novelId: string;
-  type: 'text_analysis' | 'image_generation' | 'layout_generation';
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  progress: number;              // 0-100
-  result?: any;                  // 処理結果
-  error?: string;
+  jobName?: string;              // ジョブ名
+  status: JobStatus;             // pending/processing/completed/failed/paused
+  currentStep: JobStep;          // initialized/split/analyze/episode/layout/render/complete
+  splitCompleted: boolean;
+  analyzeCompleted: boolean;
+  episodeCompleted: boolean;
+  layoutCompleted: boolean;
+  renderCompleted: boolean;
+  chunksDirPath?: string;        // チャンクファイルディレクトリ
+  analysesDirPath?: string;      // 分析結果ディレクトリ
+  episodesDataPath?: string;     // エピソード情報JSON
+  layoutsDirPath?: string;       // レイアウトディレクトリ
+  rendersDirPath?: string;       // 描画結果ディレクトリ
+  totalChunks: number;
+  processedChunks: number;
+  totalEpisodes: number;
+  processedEpisodes: number;
+  totalPages: number;
+  renderedPages: number;
+  lastError?: string;
+  lastErrorStep?: string;
+  retryCount: number;
+  resumeDataPath?: string;       // 再開用データJSON
   createdAt: Date;
   updatedAt: Date;
+  startedAt?: Date;
+  completedAt?: Date;
 }
 
 interface Chunk {
   id: string;
   novelId: string;
+  jobId: string;
   chunkIndex: number;
+  contentPath: string;           // ストレージ上のファイルパス
   startPosition: number;         // テキスト内の開始位置
   endPosition: number;           // テキスト内の終了位置
-  chunkSize: number;            // チャンクサイズ設定値
-  overlapSize: number;          // オーバーラップサイズ設定値
+  wordCount?: number;
   createdAt: Date;
 }
 
-// Analysis Models
-interface ChunkAnalysis {
+// Status Tracking Models
+interface JobStepHistory {
   id: string;
-  chunkId: string;
-  analysisFile: string;          // R2: novels/{novelId}/analysis/chunk_{index}.json
-  processedAt: Date;
-  summary: {
-    characterCount: number;
-    sceneCount: number;
-    dialogueCount: number;
-    highlightCount: number;
-    situationCount: number;
-  };
-}
-
-interface NovelAnalysis {
-  id: string;
-  novelId: string;
-  analysisFile: string;          // R2: novels/{novelId}/analysis/integrated.json
-  summary: {
-    totalCharacters: number;
-    totalScenes: number;
-    totalDialogues: number;
-    totalHighlights: number;
-    totalSituations: number;
-  };
+  jobId: string;
+  stepName: JobStep;
+  status: 'started' | 'completed' | 'failed' | 'skipped';
+  startedAt: Date;
+  completedAt?: Date;
+  durationSeconds?: number;
+  inputPath?: string;
+  outputPath?: string;
+  errorMessage?: string;
+  metadata?: any;
   createdAt: Date;
-  updatedAt: Date;
 }
 
-// Manga Models
+interface ChunkAnalysisStatus {
+  id: string;
+  jobId: string;
+  chunkIndex: number;
+  isAnalyzed: boolean;
+  analysisPath?: string;         // 分析結果ファイルパス
+  analyzedAt?: Date;
+  retryCount: number;
+  lastError?: string;
+  createdAt: Date;
+}
+
 interface Episode {
   id: string;
   novelId: string;
+  jobId: string;
   episodeNumber: number;
-  title: string;
-  chapters: string[];
-  climaxPoint?: number;
-  startIndex: number;
-  endIndex: number;
+  title?: string;
+  summary?: string;
+  startChunk: number;
+  startCharIndex: number;
+  endChunk: number;
+  endCharIndex: number;
+  estimatedPages: number;
+  confidence: number;
   createdAt: Date;
-  updatedAt: Date;
 }
 
-interface MangaPage {
+interface LayoutStatus {
   id: string;
-  episodeId: string;
+  jobId: string;
+  episodeNumber: number;
+  isGenerated: boolean;
+  layoutPath?: string;           // レイアウトYAMLパス
+  totalPages?: number;
+  totalPanels?: number;
+  generatedAt?: Date;
+  retryCount: number;
+  lastError?: string;
+  createdAt: Date;
+}
+
+interface RenderStatus {
+  id: string;
+  jobId: string;
+  episodeNumber: number;
   pageNumber: number;
-  layoutFile: string;            // R2: novels/{novelId}/episodes/{episodeNumber}/pages/{pageNumber}/layout.yaml
-  previewImageFile?: string;     // R2: novels/{novelId}/episodes/{episodeNumber}/pages/{pageNumber}/preview.png
-  panels: Panel[];
+  isRendered: boolean;
+  imagePath?: string;            // 画像ファイルパス
+  thumbnailPath?: string;
+  width?: number;
+  height?: number;
+  fileSize?: number;
+  renderedAt?: Date;
+  retryCount: number;
+  lastError?: string;
   createdAt: Date;
-  updatedAt: Date;
 }
 
-interface Panel {
+interface Output {
   id: string;
-  pageId: string;
-  position: { x: number; y: number };
-  size: { width: number; height: number };
-  panelType: 'normal' | 'action' | 'emphasis';
-  content: {
-    sceneId?: string;
-    dialogueIds?: string[];
-    situationId?: string;
-  };
-  readingOrder: number;          // 日本式読み順
+  novelId: string;
+  jobId: string;
+  outputType: 'pdf' | 'cbz' | 'images_zip' | 'epub';
+  outputPath: string;
+  fileSize?: number;
+  pageCount?: number;
+  metadataPath?: string;
+  createdAt: Date;
+}
+
+interface StorageFile {
+  id: string;
+  novelId: string;
+  jobId?: string;
+  filePath: string;
+  fileCategory: 'original' | 'chunk' | 'analysis' | 'episode' | 'layout' | 'render' | 'output' | 'metadata';
+  fileType: 'txt' | 'json' | 'yaml' | 'png' | 'jpg' | 'pdf' | 'zip';
+  fileSize?: number;
+  createdAt: Date;
 }
 
 // 5要素の詳細（R2に保存）

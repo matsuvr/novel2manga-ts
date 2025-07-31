@@ -1,0 +1,228 @@
+pages:
+  # ---------- 見開き1（17.jpg, 16.jpg） ----------
+  - page_number: 1      # 17 右
+    panels:
+      - id: 1
+        position: {x: 0.53, y: 0.05}
+        size:     {width: 0.47, height: 0.23}
+        content: "街を歩く千恵と叶。叶が千恵に話しかけている"
+        dialogues:
+          - speaker: "叶"
+            text: "フラン受ける奴がいても役に立った"
+          - speaker: "千恵"
+            text: "えぇ!?"
+      - id: 2
+        position: {x: 0.0, y: 0.05}
+        size:     {width: 0.48, height: 0.45}
+        content: "真剣な表情で語る千恵のバストアップ"
+        dialogues:
+          - speaker: "千恵"
+            text: "いまの社会で必要なのはお金よ その為の学歴"
+      - id: 3
+        position: {x: 0.0, y: 0.50}
+        size:     {width: 0.48, height: 0.18}
+        content: "驚いた表情の叶のアップ"
+        dialogues:
+          - speaker: "叶"
+            text: "お金!?"
+      - id: 4
+        position: {x: 0.53, y: 0.28}
+        size:     {width: 0.47, height: 0.27}
+        content: "泣きそうな顔で千恵を見つめる叶"
+        dialogues:
+          - speaker: "叶"
+            text: "私たちにお金が大事なの…？"
+      - id: 5
+        position: {x: 0.35, y: 0.55}
+        size:     {width: 0.50, height: 0.18}
+        content: "呆れたような表情の千恵の顔アップ"
+        dialogues:
+          - speaker: "千恵"
+            text: "は？ そりゃ叶の方が大事でしょ"
+          - speaker: "叶"
+            text: "え!?"
+      - id: 6
+        position: {x: 0.0, y: 0.73}
+        size:     {width: 1.0, height: 0.27}
+        content: "持論を語る千恵に、後ろから感動して抱きつく叶"
+        dialogues:
+          - speaker: "千恵"
+            text: "大事な友達を幸せにするにもお金が必要ってこと"
+          - speaker: "千恵"
+            text: "時に守る為にも"
+          - speaker: "叶"
+            text: "(ななな…)"
+          - speaker: "叶"
+            text: "千恵ちゃん好きーー!! 私も千恵ちゃんを幸せにする!!"
+          - speaker: "千恵"
+            text: "(重い!!)"
+
+  - page_number: 2      # 16 左
+    panels:
+      - id: 1
+        position: {x: 0.0, y: 0.05}
+        size:     {width: 1.0, height: 0.40}
+        content: "決意を固めた表情の千恵。背景に集中線と効果音"
+        dialogues:
+          - speaker: "千恵"
+            text: "まあ　将来への不安を消すためなら　しんどい勉強も毎日15時間以上　我慢できる才能はあるかな"
+      - id: 2
+        position: {x: 0.58, y: 0.48}
+        size:     {width: 0.42, height: 0.17}
+        content: "悲しそうな、呆れたような表情の叶のアップ"
+        dialogues:
+          - speaker: "叶"
+            text: "悲しい才能!!"
+      - id: 3
+        position: {x: 0.0, y: 0.65}
+        size:     {width: 0.60, height: 0.35}
+        content: "千恵に抱きつく叶と、驚く千恵"
+        dialogues:
+          - speaker: "叶"
+            text: "未来は明るいって！ ムリはだめよ！"
+          - speaker: "千恵"
+            text: "(根拠がない)"
+      - id: 4
+        position: {x: 0.60, y: 0.65}
+        size:     {width: 0.40, height: 0.35}
+        content: "ウインクしながら親指を立てる叶と、呆れる千恵"
+        dialogues:
+          - speaker: "叶"
+            text: "千恵ちゃんのそばには　いつも　大親友の私がいるから!! そーゆー顔ふりまくよ！"
+          - speaker: "千恵"
+            text: "(自己評価高いな)"
+
+  # ---------- 場面転換（19.jpg, 22.jpg, 21.jpg, 20.jpg） ----------
+  - page_number: 3      # 19 右
+    panels:
+      - id: 1
+        position: {x: 0.50, y: 0.05}
+        size:     {width: 0.50, height: 0.55}
+        content: "部屋でくつろぐ二人。叶がスマホを見ながら話している"
+        dialogues:
+          - speaker: "叶"
+            text: "――で　当選発表が今日なの！"
+      - id: 2
+        position: {x: 0.0, y: 0.05}
+        size:     {width: 0.50, height: 0.20}
+        content: "気のない返事をする千恵のバストアップ"
+        dialogues:
+          - speaker: "千恵"
+            text: "はいはい"
+      - id: 3
+        position: {x: 0.0, y: 0.25}
+        size:     {width: 0.50, height: 0.35}
+        content: "期待に胸を膨らませる叶と、呆れる千恵"
+        dialogues:
+          - speaker: "叶"
+            text: "１等何枚当たるかな"
+          - speaker: "千恵"
+            text: "(前向きにも程がある)"
+      - id: 4
+        position: {x: 0.0, y: 0.58}
+        size:     {width: 1.0, height: 0.42}
+        content: "叶が宝くじの束を千恵にプレゼントする。千恵は呆れている"
+        dialogues:
+          - speaker: "叶"
+            text: "千恵ちゃんがお金必要って言ってたから　全財産つぎ込んで宝くじ100枚プレゼント！！"
+          - speaker: "千恵"
+            text: "バカがいる…"
+          - speaker: "叶"
+            text: "(勉強しろ)"
+          - speaker: "叶"
+            text: "１等前後賞で７億円だよ!!"
+          - speaker: "叶"
+            text: "うれしい！？ いや…"
+          - speaker: "千恵"
+            text: "…当たればうれしいね…"
+          - speaker: "叶"
+            text: "えへへ!!"
+          - speaker: "千恵"
+            text: "あ"
+
+  - page_number: 4      # 22 右
+    panels:
+      - id: 1
+        position: {x: 0.0, y: 0.0}
+        size:     {width: 1.0, height: 1.0}
+        content: "本棚のある部屋で、スマホ画面を見て「え…！？」と固まる千恵。後ろから叶が笑顔で覗き込んでいる。"
+        dialogues:
+          - speaker: "千恵"
+            text: "え…!?"
+          - speaker: "叶"
+            text: "(うふ)"
+
+  - page_number: 5      # 21 左
+    panels:
+      - id: 1
+        position: {x: 0.52, y: 0.05}
+        size:     {width: 0.48, height: 0.25}
+        content: "驚きに見開かれる千恵の目"
+        dialogues:
+          - speaker: "千恵"
+            text: "ん!?"
+      - id: 2
+        position: {x: 0.0, y: 0.05}
+        size:     {width: 0.50, height: 0.48}
+        content: "スマホの当せん番号案内画面のアップ。みずは銀行のサイトで第985回全国宝くじ（ジャンボミニ）の結果が表示されている。"
+        dialogues:
+          - speaker: "千恵"
+            text: "(えーと…？ これはこの前の第985回の当選番号で…)"
+          - speaker: "千恵"
+            text: "(で… この宝くじは…)"
+      - id: 3
+        position: {x: 0.0, y: 0.30}
+        size:     {width: 0.50, height: 0.23}
+        content: "宝くじ券面のアップ。「第985回」と印字されている。"
+        dialogues:
+          - speaker: "ナレーション"
+            text: "第985回 全国宝くじ 11組 181298"
+      - id: 4
+        position: {x: 0.0, y: 0.53}
+        size:     {width: 1.0, height: 0.20}
+        content: "恐怖に目を見開く千恵の顔の極端なクローズアップ"
+      - id: 5
+        position: {x: 0.0, y: 0.73}
+        size:     {width: 1.0, height: 0.27}
+        content: "宝くじ券面の数字（985回、11組、181298）が効果線と共に迫ってくるインパクトのあるコマ"
+
+  - page_number: 6      # 20 左
+    panels:
+      - id: 1
+        position: {x: 0.52, y: 0.05}
+        size:     {width: 0.48, height: 0.33}
+        content: "叶が宝くじを片手に飛び上がって大喜びしている。千恵は呆然としている。"
+        dialogues:
+          - speaker: "叶"
+            text: "やったー!! １等当たったー!!"
+          - speaker: "千恵"
+            text: "はぁ？"
+      - id: 2
+        position: {x: 0.52, y: 0.38}
+        size:     {width: 0.48, height: 0.28}
+        content: "興奮して当せん金額を告げる叶"
+        dialogues:
+          - speaker: "叶"
+            text: "あっ　前後賞もゲットで７億円だー!!"
+      - id: 3
+        position: {x: 0.0, y: 0.66}
+        size:     {width: 1.0, height: 0.34}
+        content: "信じられない千恵が叶からスマホと宝くじを奪い取る"
+        dialogues:
+          - speaker: "千恵"
+            text: "ちょっと… あんな簡単に出るわけないでしょ… 見せなさい"
+      - id: 4
+        position: {x: 0.0, y: 0.05}
+        size:     {width: 0.50, height: 0.95}
+        content: "当せん番号を確認する画面と、宝くじ券面の数字が一致している様子が描かれている"
+        dialogues:
+          - speaker: "ナレーション"
+            text: "えーと 11組の 181298"
+          - speaker: "ナレーション"
+            text: "で… 今回の歳末ジャンボの 当選番号は… 11組 181298番"
+          - speaker: "ナレーション"
+            text: "当せん金額 5億円"
+
+title: "ドリーム★ジャンボ★ガール"
+author: "ヒロユキ"
+created_at: "2025-07-31"

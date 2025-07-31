@@ -1,23 +1,29 @@
 {
   "mcpServers": {
     "cloudflare": {
-      "command": "cmd",
-      "args": ["/c", "npx", "mcp-remote", "https://docs.mcp.cloudflare.com/sse"]
+      "command": "npx",
+      "args": ["mcp-remote", "https://docs.mcp.cloudflare.com/sse"]
     },
     "mastra": {
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "@mastra/mcp-docs-server"],
+      "command": "npx",
+      "args": ["-y", "@mastra/mcp-docs-server"],
       "type": "stdio"
     },
     "serena": {
-      "command": "cmd",
+      "command": "uvx",
       "args": [
-        "/c",
-        "uvx",
         "--from",
         "git+https://github.com/oraios/serena",
-        "serena-mcp-server.exe"
+        "serena-mcp-server",
+        "--context",
+        "ide-assistant",
+        "--project",
+        "$(pwd)"
       ]
+    },
+    "deepwiki": {
+      "type": "http",
+      "url": "https://mcp.deepwiki.com/mcp"
     }
   }
 }
