@@ -21,11 +21,11 @@
   - [x] 日本式読み順（右上から左下）のロジック実装
   - _Requirements: REQ-3 - エピソード構成_
 
-- [x] 2.3 プロジェクトモデルとリレーション
-  - [x] Jobモデルの実装（workers/src/types/index.ts）
-  - [x] Cloudflare D1スキーマ定義（jobs、novels、chunks）
-  - [x] チャンクテーブルの設計（位置情報、オーバーラップ対応）
-  - [x] データベースサービスの実装（workers/src/services/database.ts）
+- [x] 2.3 プロジェクトモデルとリレーション（2025-07-31大幅更新）
+  - [x] Novel最上位構造の実装（database/schema.sql）
+  - [x] Cloudflare D1スキーマ定義（novels、jobs、chunks、episodes等）
+  - [x] ジョブ管理の包括的実装（ステップ履歴、再開機能）
+  - [x] データベースサービスの拡張（src/services/database.ts）
   - _Requirements: REQ-6 - データ管理_
 
 - [x] 3. AI処理レイヤーの実装（Mastraエージェント）（部分実装）
@@ -45,17 +45,18 @@
   - [x] 分析結果のDB保存とファイルストレージ実装
   - _Requirements: REQ-1.4 - 5要素識別_
 
-- [ ] 3.3 レイアウト生成エージェント
-  - [ ] LayoutGenerationAgentのテスト作成
-  - [ ] YAML形式のマンガレイアウト記述生成
-  - [ ] コマ割りアルゴリズム実装（重要度ベース、読み順考慮）
-  - _Requirements: REQ-3 - レイアウト設計_
+- [x] 3.3 レイアウト生成エージェント（2025-07-31実装）
+  - [x] LayoutGeneratorAgentの実装（src/agents/layout-generator.ts）
+  - [x] YAML形式のマンガレイアウト記述生成
+  - [x] コマ割りアルゴリズム実装（重要度ベース、読み順考慮）
+  - [x] 均等分割回避ロジックの実装
+  - _Requirements: REQ-3 - レイアウト設訨_
 
 - [ ] 4. ビジネスロジックレイヤーの実装
-- [ ] 4.1 エピソード構成サービス
-  - [ ] EpisodeComposerのテスト作成
-  - [ ] チャプター分割とクライマックス検出アルゴリズム
-  - [ ] 連載形式のエピソード分割ロジック
+- [x] 4.1 エピソード構成サービス（部分実装）
+  - [x] JobNarrativeProcessorの実装（src/services/job-narrative-processor.ts）
+  - [x] チャプター分割とクライマックス検出（NarrativeArcAnalyzer統合）
+  - [x] 連載形式のエピソード分割ロジック
   - _Requirements: REQ-3 - 連載エピソード構成_
 
 - [ ] 4.2 パネルレイアウトエンジン
@@ -94,12 +95,13 @@
   - _Requirements: REQ-6 - プロジェクト管理_
 
 - [x] 6.2 テキスト解析とレイアウト生成API（部分実装）
-  - [x] /api/analyzeエンドポイント実装（workers/src/routes/analyze.ts）
-  - [x] テキストチャンク分割機能（workers/src/utils/text-splitter.ts）
+  - [x] /api/analyzeエンドポイント実装（src/app/api/analyze/route.ts）
+  - [x] テキストチャンク分割機能（src/utils/chunk-splitter.ts）
   - [x] Mastraエージェント統合（テキスト解析、5要素抽出）（2025-07-29）
   - [x] /api/analyze/chunkエンドポイント実装（2025-07-29）
   - [x] 前後チャンク参照機能とキャッシュ実装（2025-07-29）
-  - [ ] /api/episodesエンドポイント実装
+  - [x] /api/jobs/[jobId]/episodesエンドポイント実装（2025-07-31）
+  - [x] /api/layout/generateエンドポイント実装（2025-07-31）
   - [ ] /api/generate-imagesエンドポイント（Canvas描画）
   - [x] エラーハンドリング基本実装
   - _Requirements: REQ-1, REQ-2, REQ-3_
@@ -159,9 +161,16 @@
   - [x] NarrativeArcAnalyzerエージェント実装
   - [x] /api/analyze/narrative-arcエンドポイント実装
   - [x] 分析結果のファイル保存機能（エピソード境界情報）
-  - [ ] 分析結果のDB保存機能
+  - [x] 分析結果のDB保存機能（episodesテーブルへの保存）
   - [ ] UIコンポーネントの作成
   - _Requirements: REQ-1.4 - 物語構造解析_
+
+- [x] 11. ジョブ管理と状態追跡機能（2025-07-31追加）
+  - [x] ジョブステータスAPI（/api/jobs/[jobId]/status）
+  - [x] ジョブ再開機能（/api/jobs/[jobId]/resume）
+  - [x] 各ステップの詳細状態追跡（job_step_history）
+  - [x] ファイル管理統合（storage_filesテーブル）
+  - _Requirements: REQ-6 - データ管理、ジョブ状態追跡_
 
 - [ ] 8.2 E2Eテストの実装
   - [ ] Playwrightによる完全なユーザーフローテスト

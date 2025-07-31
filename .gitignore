@@ -72,6 +72,7 @@ wrangler.toml.local
 *.swp
 *.swo
 *~
+.mcp.json
 
 # OS
 .DS_Store

@@ -21,7 +21,12 @@
       "Bash(grep:*)",
       "Bash(npm run test:*)",
       "WebFetch(domain:ai-sdk.dev)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "mcp__serena__find_symbol",
+      "mcp__serena__activate_project",
+      "Bash(cat:*)",
+      "mcp__serena__search_for_pattern",
+      "mcp__serena__list_dir"
     ]
   },
   "enableAllProjectMcpServers": true,

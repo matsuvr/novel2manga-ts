@@ -6,3 +6,9 @@ export * from './text-analysis'
 
 // Manga Models Types
 export * from './manga-models'
+
+// Job Types
+export * from './job'
+
+// Environment Types
+export * from './env'
