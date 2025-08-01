@@ -1,10 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import { analyzeNarrativeArc } from "@/agents/narrative-arc-analyzer";
-import { prepareNarrativeAnalysisInput } from "@/utils/episode-utils";
-import { saveEpisodeBoundaries } from "@/utils/storage";
-import { EpisodeBoundary } from "@/types/episode";
-import { appConfig } from "@/config/app.config";
+import { type NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
+import type { EpisodeBoundary } from '@/types/episode'
+import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
+import { saveEpisodeBoundaries } from '@/utils/storage'
 
 const requestSchema = z.object({
   novelId: z.string(),
@@ -12,12 +11,12 @@ const requestSchema = z.object({
   targetChars: z.number().int().optional(),
   minChars: z.number().int().optional(),
   maxChars: z.number().int().optional(),
-});
+})
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const validatedData = requestSchema.parse(body);
+    const body = await request.json()
+    const validatedData = requestSchema.parse(body)
 
     const input = await prepareNarrativeAnalysisInput({
       novelId: validatedData.novelId,
@@ -25,16 +24,16 @@ export async function POST(request: NextRequest) {
       targetChars: validatedData.targetChars,
       minChars: validatedData.minChars,
       maxChars: validatedData.maxChars,
-    });
+    })
 
     if (!input) {
       return NextResponse.json(
         {
-          error: "Failed to prepare narrative analysis input",
-          details: "Not enough chunks available or invalid chunk range",
+          error: 'Failed to prepare narrative analysis input',
+          details: 'Not enough chunks available or invalid chunk range',
         },
-        { status: 400 }
-      );
+        { status: 400 },
+      )
     }
 
     console.log(
@@ -42,28 +41,32 @@ export async function POST(request: NextRequest) {
         `chunks ${input.chunks[0].chunkIndex}-${
           input.chunks[input.chunks.length - 1].chunkIndex
         }, ` +
-        `total chars: ${input.chunks.reduce((sum, c) => sum + c.text.length, 0)}`
-    );
+        `total chars: ${input.chunks.reduce((sum, c) => sum + c.text.length, 0)}`,
+    )
 
-    let boundaries: EpisodeBoundary[];
+    let boundaries: EpisodeBoundary[]
     try {
-      boundaries = await analyzeNarrativeArc(input);
+      boundaries = await analyzeNarrativeArc(input)
     } catch (analysisError) {
-      console.error("=== Narrative arc analysis failed ===");
-      console.error("Novel ID:", validatedData.novelId);
-      console.error("Input chunks:", input.chunks.length);
-      console.error("Error:", analysisError);
-      
+      console.error('=== Narrative arc analysis failed ===')
+      console.error('Novel ID:', validatedData.novelId)
+      console.error('Input chunks:', input.chunks.length)
+      console.error('Error:', analysisError)
+
       // エラーをそのまま上位に伝える（フォールバックなし）
-      throw analysisError;
+      throw analysisError
     }
 
     // 分析に成功した場合のみ保存
     if (boundaries.length > 0) {
-      await saveEpisodeBoundaries(validatedData.novelId, boundaries);
-      console.log(`Saved ${boundaries.length} episode boundaries for novel ${validatedData.novelId}`);
+      await saveEpisodeBoundaries(validatedData.novelId, boundaries)
+      console.log(
+        `Saved ${boundaries.length} episode boundaries for novel ${validatedData.novelId}`,
+      )
     } else {
-      console.warn(`No boundaries found for novel ${validatedData.novelId} - not saving empty results`);
+      console.warn(
+        `No boundaries found for novel ${validatedData.novelId} - not saving empty results`,
+      )
     }
 
     const responseData = {
@@ -81,33 +84,36 @@ export async function POST(request: NextRequest) {
           end: { chunk: b.endChunk, char: b.endCharIndex },
         },
       })),
-      suggestions: boundaries.length === 0 ? [
-        "No natural episode breaks found in this range",
-        "Consider analyzing a larger text range",
-        "The content might need manual division",
-      ] : undefined,
-    };
+      suggestions:
+        boundaries.length === 0
+          ? [
+              'No natural episode breaks found in this range',
+              'Consider analyzing a larger text range',
+              'The content might need manual division',
+            ]
+          : undefined,
+    }
 
-    return NextResponse.json(responseData);
+    return NextResponse.json(responseData)
   } catch (error) {
-    console.error("Narrative arc analysis error:", error);
+    console.error('Narrative arc analysis error:', error)
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         {
-          error: "Invalid request data",
+          error: 'Invalid request data',
           details: error.errors,
         },
-        { status: 400 }
-      );
+        { status: 400 },
+      )
     }
 
     return NextResponse.json(
       {
-        error: "Failed to analyze narrative arc",
-        details: error instanceof Error ? error.message : "Unknown error",
+        error: 'Failed to analyze narrative arc',
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
-      { status: 500 }
-    );
+      { status: 500 },
+    )
   }
 }

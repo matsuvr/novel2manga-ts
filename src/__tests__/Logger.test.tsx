@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import Logger from '@/components/Logger'
 
 describe('Logger Component', () => {
@@ -14,15 +14,15 @@ describe('Logger Component', () => {
       {
         timestamp: new Date('2025-01-27T10:00:00'),
         level: 'info' as const,
-        message: 'テストメッセージ1'
+        message: 'テストメッセージ1',
       },
       {
         timestamp: new Date('2025-01-27T10:00:01'),
         level: 'error' as const,
-        message: 'エラーメッセージ'
-      }
+        message: 'エラーメッセージ',
+      },
     ]
-    
+
     render(<Logger logs={mockLogs} />)
     expect(screen.getByText('テストメッセージ1')).toBeInTheDocument()
     expect(screen.getByText('エラーメッセージ')).toBeInTheDocument()

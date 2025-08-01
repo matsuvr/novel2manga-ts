@@ -5,7 +5,7 @@ export const CharacterSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
-  firstAppearance: z.number() // テキスト内での初登場位置（インデックス）
+  firstAppearance: z.number(), // テキスト内での初登場位置（インデックス）
 })
 
 // シーンスキーマ
@@ -15,7 +15,7 @@ export const SceneSchema = z.object({
   time: z.string().optional(),
   description: z.string(),
   startIndex: z.number(),
-  endIndex: z.number()
+  endIndex: z.number(),
 })
 
 // 対話スキーマ
@@ -24,7 +24,7 @@ export const DialogueSchema = z.object({
   speakerId: z.string(), // Character.idへの参照
   text: z.string(),
   emotion: z.string().optional(), // 感情（happy, sad, angry, surprised等）
-  index: z.number() // テキスト内での位置
+  index: z.number(), // テキスト内での位置
 })
 
 // ハイライトスキーマ（重要なシーン）
@@ -34,14 +34,14 @@ export const HighlightSchema = z.object({
   description: z.string(),
   importance: z.number().min(1).max(5), // 1-5の重要度
   startIndex: z.number(),
-  endIndex: z.number()
+  endIndex: z.number(),
 })
 
 // 状況説明スキーマ
 export const SituationSchema = z.object({
   id: z.string(),
   description: z.string(),
-  index: z.number() // テキスト内での位置
+  index: z.number(), // テキスト内での位置
 })
 
 // テキスト解析結果の統合スキーマ
@@ -55,7 +55,7 @@ export const TextAnalysisSchema = z.object({
   highlights: z.array(HighlightSchema),
   situations: z.array(SituationSchema),
   createdAt: z.date(),
-  updatedAt: z.date()
+  updatedAt: z.date(),
 })
 
 // TypeScript型定義のエクスポート

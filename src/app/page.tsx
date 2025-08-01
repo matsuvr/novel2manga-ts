@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Logger from '@/components/Logger'
-import { api, AnalyzeResponse, JobResponse } from '@/services/api'
+import { api, type JobResponse } from '@/services/api'
 
 interface LogEntry {
   timestamp: Date
@@ -14,15 +14,18 @@ export default function Home() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [novelText, setNovelText] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null)
+  const [_currentJobId, setCurrentJobId] = useState<string | null>(null)
   const [jobData, setJobData] = useState<JobResponse | null>(null)
 
   const addLog = (level: LogEntry['level'], message: string) => {
-    setLogs(prev => [...prev, {
-      timestamp: new Date(),
-      level,
-      message
-    }])
+    setLogs((prev) => [
+      ...prev,
+      {
+        timestamp: new Date(),
+        level,
+        message,
+      },
+    ])
   }
 
   const handleProcess = async () => {
@@ -39,7 +42,7 @@ export default function Home() {
       // Workers APIにテキストを送信
       addLog('debug', 'テキスト解析APIを呼び出しています...')
       const analyzeResult = await api.analyzeText(novelText)
-      
+
       setCurrentJobId(analyzeResult.jobId)
       addLog('info', `テキスト解析完了: ${analyzeResult.message}`)
       addLog('info', `ジョブID: ${analyzeResult.jobId}`)
@@ -49,10 +52,10 @@ export default function Home() {
       addLog('debug', 'ジョブ詳細を取得しています...')
       const jobDetails = await api.getJob(analyzeResult.jobId)
       setJobData(jobDetails)
-      
+
       addLog('info', 'ジョブ詳細の取得完了')
       addLog('info', `作成日時: ${new Date(jobDetails.job.createdAt).toLocaleString('ja-JP')}`)
-      
+
       // チャンク情報をログに表示
       jobDetails.chunks.forEach((chunk, index) => {
         addLog('debug', `チャンク${index + 1}: ${chunk.fileName} (${chunk.content.length}文字)`)
@@ -60,7 +63,10 @@ export default function Home() {
 
       addLog('info', '処理が完了しました！')
     } catch (error) {
-      addLog('error', `エラーが発生しました: ${error instanceof Error ? error.message : String(error)}`)
+      addLog(
+        'error',
+        `エラーが発生しました: ${error instanceof Error ? error.message : String(error)}`,
+      )
     } finally {
       setIsProcessing(false)
     }
@@ -94,10 +100,9 @@ export default function Home() {
               disabled={isProcessing}
             />
             <div className="mt-4 flex justify-between items-center">
-              <span className="text-sm text-gray-600">
-                文字数: {novelText.length} / 10,000
-              </span>
+              <span className="text-sm text-gray-600">文字数: {novelText.length} / 10,000</span>
               <button
+                type="button"
                 onClick={handleProcess}
                 disabled={isProcessing || !novelText.trim()}
                 className={`px-6 py-2 rounded-md font-medium transition-colors ${
@@ -119,7 +124,10 @@ export default function Home() {
               <h3 className="text-lg font-semibold mb-4">分割結果</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {jobData.chunks.map((chunk, index) => (
-                  <div key={chunk.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <div
+                    key={chunk.id}
+                    className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                  >
                     <h4 className="font-medium text-sm mb-2">チャンク {index + 1}</h4>
                     <p className="text-xs text-gray-600 mb-2">{chunk.fileName}</p>
                     <p className="text-xs text-gray-700 line-clamp-3">{chunk.content}</p>

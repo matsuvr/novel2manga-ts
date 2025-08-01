@@ -5,7 +5,11 @@ import type { D1Database } from '@cloudflare/workers-types'
 declare global {
   // Cloudflare R2 Bucket
   interface NOVEL_STORAGE {
-    put(key: string, value: ReadableStream | ArrayBuffer | ArrayBufferView | string | null, options?: R2PutOptions): Promise<R2Object>
+    put(
+      key: string,
+      value: ReadableStream | ArrayBuffer | ArrayBufferView | string | null,
+      options?: R2PutOptions,
+    ): Promise<R2Object>
     get(key: string, options?: R2GetOptions): Promise<R2ObjectBody | null>
     delete(key: string): Promise<void>
     list(options?: R2ListOptions): Promise<R2Objects>
@@ -106,5 +110,3 @@ interface R2Range {
   length?: number
   suffix?: number
 }
-
-export {}

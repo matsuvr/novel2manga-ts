@@ -1,62 +1,57 @@
-import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { createGroq } from "@ai-sdk/groq";
-import { createOpenAI } from "@ai-sdk/openai";
-import { createOpenRouter } from "@/lib/llm/openrouter-provider";
-import { getConfig } from "@/config/config-loader";
-import type { AppConfig } from "@/config/app.config";
+import { anthropic } from '@ai-sdk/anthropic'
+import { openai } from '@ai-sdk/openai'
+import { Agent } from '@mastra/core/agent'
+import { getCurrentLLMProvider, getTextAnalysisConfig } from '@/config'
 
 // 設定を取得
-const config = getConfig();
-const llmConfig = config.getPath<AppConfig['llm']>('llm');
-const textAnalysisConfig = llmConfig.textAnalysis;
-
-// プロバイダーの決定
-const provider = textAnalysisConfig.provider === 'default' 
-  ? llmConfig.defaultProvider 
-  : textAnalysisConfig.provider;
-
-// モデルの取得
 function getModel() {
-  const modelOverride = textAnalysisConfig.modelOverrides[provider];
-  
+  const { provider, config: providerConfig } = getCurrentLLMProvider()
+
   switch (provider) {
-    case 'openai':
-      return openai(modelOverride || llmConfig.providers.openai.model);
+    case 'openai': {
+      const openaiKey = providerConfig.apiKey
+      const openaiModel = providerConfig.model
+      if (!openaiKey) throw new Error('OpenAI API key not configured')
+      return openai(openaiModel)
+    }
+    case 'claude': {
+      const claudeKey = providerConfig.apiKey
+      const claudeModel = providerConfig.model
+      if (!claudeKey) throw new Error('Claude API key not configured')
+
+      // 環境変数を設定してantropic関数を使用
+      process.env.ANTHROPIC_API_KEY = claudeKey
+      return anthropic(claudeModel)
+    }
     case 'gemini': {
-      const gemini = createGoogleGenerativeAI({
-        apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || llmConfig.providers.gemini.apiKey,
-      });
-      return gemini(modelOverride || llmConfig.providers.gemini.model);
+      // Geminiサポートは将来的に追加
+      throw new Error('Gemini provider is not yet supported')
     }
     case 'groq': {
-      const groq = createGroq({
-        apiKey: llmConfig.providers.groq.apiKey,
-      });
-      return groq(modelOverride || llmConfig.providers.groq.model);
+      // Groqサポートは将来的に追加
+      throw new Error('Groq provider is not yet supported')
     }
-    case 'local': {
-      const localOpenAI = createOpenAI({
-        baseURL: llmConfig.providers.local.baseURL,
-        apiKey: 'dummy', // ローカルLLMではAPIキーは不要だがライブラリ仕様で必須
-      });
-      return localOpenAI(modelOverride || llmConfig.providers.local.model);
+    default: {
+      // デフォルトはOpenAIにフォールバック
+      const { config: fallbackConfig } = getCurrentLLMProvider()
+      const openaiKey = fallbackConfig.apiKey
+      if (!openaiKey) throw new Error('Default provider API key not configured')
+      return openai(fallbackConfig.model)
     }
-    case 'openrouter': {
-      const openrouter = createOpenRouter({
-        apiKey: llmConfig.providers.openrouter.apiKey,
-      });
-      return openrouter(modelOverride || llmConfig.providers.openrouter.model);
-    }
-    default:
-      throw new Error(`Unknown provider: ${provider}`);
   }
 }
 
 export const chunkAnalyzerAgent = new Agent({
-  name: "chunk-analyzer",
-  description: "小説のチャンクを分析して、キャラクター、場面、対話、ハイライト、状況を抽出するエージェント",
-  instructions: textAnalysisConfig.systemPrompt,
-  model: getModel(),
-});
+  name: 'chunk-analyzer',
+  description:
+    '小説のチャンクを分析して、キャラクター、場面、対話、ハイライト、状況を抽出するエージェント',
+  instructions: () => {
+    const config = getTextAnalysisConfig()
+    return config.systemPrompt
+  },
+  model: ({ runtimeContext: _runtimeContext }) => {
+    // プロバイダー設定を取得してモデルを返す
+    const model = getModel()
+    return model as any // Mastraの型互換性のための一時的な回避策
+  },
+})

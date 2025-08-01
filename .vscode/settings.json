@@ -23,5 +23,59 @@
   "[jsonc]": {
     "editor.defaultFormatter": "biomejs.biome"
   },
-  "biome.lspBin": null
+
+  // TypeScript設定
+  "typescript.preferences.detectTypeScriptAliases": true,
+  "typescript.suggest.autoImports": true,
+  "typescript.preferences.includePackageJsonAutoImports": "auto",
+  "typescript.updateImportsOnFileMove.enabled": "always",
+
+  // ファイル除外設定（エクスプローラーとウォッチャー）
+  "files.exclude": {
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/CVS": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    "**/.next": true,
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/build": true,
+    "**/coverage": true,
+    "**/.turbo": true,
+    "**/.vercel": true
+  },
+
+  // 検索除外設定
+  "search.exclude": {
+    "**/.next": true,
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/build": true,
+    "**/coverage": true,
+    "**/.turbo": true,
+    "**/.vercel": true,
+    "**/test": true,
+    "**/tests": true,
+    "**/__tests__": true,
+    "**/*.test.*": true,
+    "**/*.spec.*": true
+  },
+
+  // ウォッチャー除外設定
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true,
+    "**/.next/**": true,
+    "**/dist/**": true,
+    "**/build/**": true,
+    "**/coverage/**": true,
+    "**/.turbo/**": true,
+    "**/.vercel/**": true
+  },
+
+  // Biome診断設定
+  "biome.enable": true
 }

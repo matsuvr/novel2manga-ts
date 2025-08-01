@@ -172,6 +172,14 @@
   - [x] ファイル管理統合（storage_filesテーブル）
   - _Requirements: REQ-6 - データ管理、ジョブ状態追跡_
 
+- [x] 12. ストレージとデータベース抽象化（2025-08-01追加）
+  - [x] Storage/DatabaseAdapterインターフェース実装
+  - [x] 環境別実装（LocalFileStorage、R2Storage、SQLiteAdapter、D1Adapter）
+  - [x] StorageFactoryによる環境自動切り替え
+  - [x] APIエラーハンドリング統一（ApiError、createErrorResponse）
+  - [x] 包括的なユニットテスト・統合テスト実装
+  - _Requirements: REQ-6 - データ管理、環境対応_
+
 - [ ] 8.2 E2Eテストの実装
   - [ ] Playwrightによる完全なユーザーフローテスト
   - [ ] テキスト投稿→解析→レイアウト生成→編集→エクスポートのフロー

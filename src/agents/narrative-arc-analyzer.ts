@@ -1,111 +1,134 @@
-import { Agent } from "@mastra/core";
-import { z } from "zod";
-import { openai } from "@ai-sdk/openai";
-import { google } from "@ai-sdk/google";
-import { createGroq } from "@ai-sdk/groq";
-import { createOpenAI } from "@ai-sdk/openai";
-import { createOpenRouter } from "@/lib/llm/openrouter-provider";
-import { NarrativeAnalysisInput, EpisodeBoundary } from "@/types/episode";
-import { appConfig } from "@/config/app.config";
-import { getConfig } from "@/config/config-loader";
-import { analyzeChunkBundle, BundleAnalysisResult } from "@/agents/chunk-bundle-analyzer";
-import { ChunkAnalysisResult } from "@/types/chunk";
+import { anthropic } from '@ai-sdk/anthropic'
+import { openai } from '@ai-sdk/openai'
+import { Agent } from '@mastra/core'
+import { z } from 'zod'
+import { analyzeChunkBundle, type BundleAnalysisResult } from '@/agents/chunk-bundle-analyzer'
+import { getCurrentLLMProvider, getEpisodeConfig, getNarrativeAnalysisConfig } from '@/config'
+import type { ChunkAnalysisResult } from '@/types/chunk'
+import type { EpisodeBoundary, NarrativeAnalysisInput } from '@/types/episode'
 
 function getModel() {
-  const episodeConfig = appConfig.episode.narrativeAnalysis;
-  const providerName = episodeConfig.provider === 'default' 
-    ? appConfig.llm.defaultProvider 
-    : episodeConfig.provider;
-  
-  const modelName = episodeConfig.modelOverrides[providerName];
+  const { provider, config: providerConfig } = getCurrentLLMProvider()
 
-  switch (providerName) {
-    case 'openai':
-      return openai(modelName, { apiKey: appConfig.llm.providers.openai.apiKey! });
-    case 'gemini':
-      return google(modelName, { apiKey: appConfig.llm.providers.gemini.apiKey! });
-    case 'groq':
-      return createGroq({ apiKey: appConfig.llm.providers.groq.apiKey! })(modelName);
-    case 'local':
-      return createOpenAI({ 
-        baseURL: appConfig.llm.providers.local.baseURL,
-        apiKey: 'dummy-key'
-      })(modelName);
-    case 'openrouter':
-      return createOpenRouter({ apiKey: appConfig.llm.providers.openrouter.apiKey! })(modelName);
-    default:
-      throw new Error(`Unknown provider: ${providerName}`);
+  switch (provider) {
+    case 'openai': {
+      const openaiKey = providerConfig.apiKey
+      const openaiModel = providerConfig.model
+      if (!openaiKey) throw new Error('OpenAI API key not configured')
+      return openai(openaiModel)
+    }
+    case 'claude': {
+      const claudeKey = providerConfig.apiKey
+      const claudeModel = providerConfig.model
+      if (!claudeKey) throw new Error('Claude API key not configured')
+
+      // 環境変数を設定してantropic関数を使用
+      process.env.ANTHROPIC_API_KEY = claudeKey
+      return anthropic(claudeModel)
+    }
+    case 'gemini': {
+      // Geminiサポートは将来的に追加
+      throw new Error('Gemini provider is not yet supported')
+    }
+    case 'groq': {
+      // Groqサポートは将来的に追加
+      throw new Error('Groq provider is not yet supported')
+    }
+    default: {
+      // デフォルトはOpenAIにフォールバック
+      const { config: fallbackConfig } = getCurrentLLMProvider()
+      const openaiKey = fallbackConfig.apiKey
+      if (!openaiKey) throw new Error('Default provider API key not configured')
+      return openai(fallbackConfig.model)
+    }
   }
 }
 
 const narrativeArcAnalyzer = new Agent({
-  name: "Narrative Arc Analyzer",
-  instructions: appConfig.episode.narrativeAnalysis.systemPrompt,
-  model: getModel(),
-});
+  name: 'Narrative Arc Analyzer',
+  instructions: () => {
+    const config = getNarrativeAnalysisConfig()
+    return config.systemPrompt
+  },
+  model: ({ runtimeContext: _runtimeContext }) => {
+    // プロバイダー設定を取得してモデルを返す
+    const model = getModel()
+    return model as any // Mastraの型互換性のための一時的な回避策
+  },
+})
 
 export async function analyzeNarrativeArc(
-  input: NarrativeAnalysisInput
+  input: NarrativeAnalysisInput,
 ): Promise<EpisodeBoundary[]> {
   console.log('analyzeNarrativeArc called with:', {
     chunks: input.chunks.length,
     targetChars: input.targetCharsPerEpisode,
     startingEpisodeNumber: input.startingEpisodeNumber || 1,
     isMiddleOfNovel: input.isMiddleOfNovel || false,
-  });
-  
-  const targetPages = Math.round(input.targetCharsPerEpisode / appConfig.episode.charsPerPage);
-  const minPages = Math.round(input.minCharsPerEpisode / appConfig.episode.charsPerPage);
-  const maxPages = Math.round(input.maxCharsPerEpisode / appConfig.episode.charsPerPage);
+  })
+
+  const episodeConfig = getEpisodeConfig()
+  const targetPages = Math.round(input.targetCharsPerEpisode / episodeConfig.charsPerPage)
+  const minPages = Math.round(input.minCharsPerEpisode / episodeConfig.charsPerPage)
+  const maxPages = Math.round(input.maxCharsPerEpisode / episodeConfig.charsPerPage)
 
   // チャンクを完全に繋げて、一つの連続したテキストとして扱う
   // 前回のエピソードの終わり部分があれば、それを先頭に追加
-  const chunksText = input.chunks.map((chunk) => chunk.text).join("");
-  const fullText = input.previousEpisodeEndText 
-    ? input.previousEpisodeEndText + chunksText 
-    : chunksText;
-  
+  const chunksText = input.chunks.map((chunk) => chunk.text).join('')
+  const fullText = input.previousEpisodeEndText
+    ? input.previousEpisodeEndText + chunksText
+    : chunksText
+
   // まず、チャンクの束を統合分析
-  console.log('Performing bundle analysis first...');
-  const chunksWithAnalyses = input.chunks.map(chunk => ({
+  console.log('Performing bundle analysis first...')
+  const chunksWithAnalyses = input.chunks.map((chunk) => ({
     text: chunk.text,
     analysis: {
-      characters: chunk.characters?.map(name => ({ name, description: '', firstAppearance: 0 })) || [],
+      characters:
+        chunk.characters?.map((name) => ({ name, description: '', firstAppearance: 0 })) || [],
       scenes: [],
       dialogues: [],
-      highlights: chunk.highlights || [],
+      highlights: (chunk.highlights || []).map((h) => ({
+        type: 'emotional_peak' as const,
+        description: h.text,
+        importance: h.importance,
+        startIndex: 0,
+        endIndex: h.text.length,
+        text: h.text,
+      })),
       situations: [],
-      summary: chunk.summary,
-    } as ChunkAnalysisResult
-  }));
-  
-  let bundleAnalysis: BundleAnalysisResult;
+      summary: chunk.summary || '',
+    } as ChunkAnalysisResult,
+  }))
+
+  let bundleAnalysis: BundleAnalysisResult
   try {
-    bundleAnalysis = await analyzeChunkBundle(chunksWithAnalyses);
+    bundleAnalysis = await analyzeChunkBundle(chunksWithAnalyses)
   } catch (error) {
-    console.error('Bundle analysis failed:', error);
-    throw new Error('Failed to perform bundle analysis before narrative arc analysis');
+    console.error('Bundle analysis failed:', error)
+    throw new Error('Failed to perform bundle analysis before narrative arc analysis')
   }
-  
-  console.log('Bundle analysis completed, proceeding to narrative arc analysis...');
+
+  console.log('Bundle analysis completed, proceeding to narrative arc analysis...')
 
   // 統合分析結果を使用してプロンプトを作成
   const characterList = bundleAnalysis.mainCharacters
-    .map(char => `${char.name}（${char.role}）`)
-    .join('、');
-  
+    .map((char) => `${char.name}（${char.role}）`)
+    .join('、')
+
   const highlightsInfo = bundleAnalysis.highlights
-    .filter(h => h.importance >= 6)
-    .map(h => `- ${h.text} (重要度: ${h.importance})${h.context ? `\n  ${h.context}` : ''}`)
-    .join('\n');
-  
+    .filter((h) => h.importance >= 6)
+    .map((h) => `- ${h.text} (重要度: ${h.importance})${h.context ? `\n  ${h.context}` : ''}`)
+    .join('\n')
+
   const characterActions = bundleAnalysis.keyDialogues
-    .map(d => `${d.speaker}: 「${d.text}」\n  意味: ${d.significance}`)
-    .join('\n\n');
-  
+    .map((d) => `${d.speaker}: 「${d.text}」\n  意味: ${d.significance}`)
+    .join('\n\n')
+
   // プロンプトのカスタマイズ
-  let customizedPrompt = appConfig.episode.narrativeAnalysis.userPromptTemplate;
-  
+  const narrativeConfig = getNarrativeAnalysisConfig()
+  let customizedPrompt: string = narrativeConfig.userPromptTemplate
+
   // 長編小説の途中の場合、その旨を追加
   if (input.isMiddleOfNovel) {
     const contextInfo = `
@@ -114,10 +137,10 @@ export async function analyzeNarrativeArc(
 - エピソード番号は${input.startingEpisodeNumber || 1}から始めてください
 - テキストの冲頭は前のエピソードの続きから始まっています
 - テキストの最後がエピソードの途中で終わっている可能性があります
-`;
-    customizedPrompt = customizedPrompt.replace('【分析対象】', '【分析対象】' + contextInfo);
+`
+    customizedPrompt = customizedPrompt.replace('【分析対象】', `【分析対象】${contextInfo}`)
   }
-  
+
   const userPrompt = customizedPrompt
     .replace('{{totalChars}}', fullText.length.toString())
     .replace('{{targetPages}}', targetPages.toString())
@@ -125,105 +148,105 @@ export async function analyzeNarrativeArc(
     .replace('{{maxPages}}', maxPages.toString())
     .replace('{{characterList}}', characterList || 'なし')
     .replace('{{overallSummary}}', bundleAnalysis.summary || 'なし')
-    .replace('{{highlightsInfo}}', highlightsInfo || "なし")
-    .replace('{{characterActions}}', characterActions || "なし")
-    .replace('{{fullText}}', fullText);
+    .replace('{{highlightsInfo}}', highlightsInfo || 'なし')
+    .replace('{{characterActions}}', characterActions || 'なし')
+    .replace('{{fullText}}', fullText)
 
   const responseSchema = z.object({
     boundaries: z.array(
       z.object({
-        startPosition: z.number().describe("エピソード開始位置（全文テキストの先頭からの文字数）"),
-        endPosition: z.number().describe("エピソード終了位置（全文テキストの先頭からの文字数）"),
-        episodeNumber: z.number().describe(`エピソード番号（${input.startingEpisodeNumber || 1}から開始）`),
+        startPosition: z.number().describe('エピソード開始位置（全文テキストの先頭からの文字数）'),
+        endPosition: z.number().describe('エピソード終了位置（全文テキストの先頭からの文字数）'),
+        episodeNumber: z
+          .number()
+          .describe(`エピソード番号（${input.startingEpisodeNumber || 1}から開始）`),
         title: z.string().optional(),
         summary: z.string().optional(),
         estimatedPages: z.number(),
         confidence: z.number().min(0).max(1),
         reasoning: z.string(),
-      })
+      }),
     ),
     overallAnalysis: z.string(),
     suggestions: z.array(z.string()).optional(),
-  });
+  })
 
   try {
-    console.log('Sending to LLM for analysis...');
-    console.log('Text length:', fullText.length);
-    console.log('Target pages:', targetPages);
-    
-    const result = await narrativeArcAnalyzer.generate([
-      { role: "user", content: userPrompt }
-    ], {
+    console.log('Sending to LLM for analysis...')
+    console.log('Text length:', fullText.length)
+    console.log('Target pages:', targetPages)
+
+    const result = await narrativeArcAnalyzer.generate([{ role: 'user', content: userPrompt }], {
       output: responseSchema,
-    });
+    })
 
     if (!result.object) {
-      const errorMsg = "Failed to generate narrative analysis - LLM returned no object";
-      console.error(errorMsg);
-      console.error('Result:', result);
-      throw new Error(errorMsg);
+      const errorMsg = 'Failed to generate narrative analysis - LLM returned no object'
+      console.error(errorMsg)
+      console.error('Result:', result)
+      throw new Error(errorMsg)
     }
 
-    console.log('LLM analysis successful');
-    console.log('Found boundaries:', result.object.boundaries.length);
-    console.log('Overall analysis:', result.object.overallAnalysis);
-    
+    console.log('LLM analysis successful')
+    console.log('Found boundaries:', result.object.boundaries.length)
+    console.log('Overall analysis:', result.object.overallAnalysis)
+
     // バウンダリーが空の場合の警告
     if (result.object.boundaries.length === 0) {
-      console.warn('WARNING: No episode boundaries found by LLM');
-      console.warn('Suggestions:', result.object.suggestions);
-      return [];
+      console.warn('WARNING: No episode boundaries found by LLM')
+      console.warn('Suggestions:', result.object.suggestions)
+      return []
     }
 
     // 文字位置からチャンク番号・位置を計算
-    const previousTextLength = input.previousEpisodeEndText?.length || 0;
+    const previousTextLength = input.previousEpisodeEndText?.length || 0
     const boundaries = convertPositionsToBoundaries(
       result.object.boundaries,
       input.chunks,
-      previousTextLength
-    );
+      previousTextLength,
+    )
 
-    return boundaries;
+    return boundaries
   } catch (error) {
-    console.error("=== Narrative arc analysis FAILED ===");
-    console.error("Error details:", error);
-    console.error("Input chunks:", input.chunks.length);
-    console.error("Total characters:", fullText.length);
-    
+    console.error('=== Narrative arc analysis FAILED ===')
+    console.error('Error details:', error)
+    console.error('Input chunks:', input.chunks.length)
+    console.error('Total characters:', fullText.length)
+
     // エラーを再スロー（フォールバックなし）
-    throw error;
+    throw error
   }
 }
 
 // 文字位置からチャンク番号・文字位置を計算
 function convertPositionsToBoundaries(
   rawBoundaries: Array<{
-    startPosition: number;
-    endPosition: number;
-    episodeNumber: number;
-    title?: string;
-    summary?: string;
-    estimatedPages: number;
-    confidence: number;
-    reasoning: string;
+    startPosition: number
+    endPosition: number
+    episodeNumber: number
+    title?: string
+    summary?: string
+    estimatedPages: number
+    confidence: number
+    reasoning: string
   }>,
-  chunks: NarrativeAnalysisInput["chunks"],
-  previousTextLength: number = 0
+  chunks: NarrativeAnalysisInput['chunks'],
+  previousTextLength: number = 0,
 ): EpisodeBoundary[] {
   // 各チャンクの開始位置を計算
   // 前回のテキスト長を考慮
-  const chunkPositions: Array<{ chunkIndex: number; startPos: number; endPos: number }> = [];
-  let currentPos = previousTextLength;
-  
+  const chunkPositions: Array<{ chunkIndex: number; startPos: number; endPos: number }> = []
+  let currentPos = previousTextLength
+
   chunks.forEach((chunk) => {
-    const chunkLength = chunk.text.length;
+    const chunkLength = chunk.text.length
     chunkPositions.push({
       chunkIndex: chunk.chunkIndex,
       startPos: currentPos,
-      endPos: currentPos + chunkLength
-    });
-    currentPos += chunkLength;
-  });
+      endPos: currentPos + chunkLength,
+    })
+    currentPos += chunkLength
+  })
 
   // 位置からチャンク番号を找す関数
   const findChunkAndOffset = (position: number): { chunkIndex: number; charIndex: number } => {
@@ -231,23 +254,25 @@ function convertPositionsToBoundaries(
       if (position >= chunkPos.startPos && position <= chunkPos.endPos) {
         return {
           chunkIndex: chunkPos.chunkIndex,
-          charIndex: position - chunkPos.startPos
-        };
+          charIndex: position - chunkPos.startPos,
+        }
       }
     }
     // 最後の位置の場合
-    const lastChunk = chunkPositions[chunkPositions.length - 1];
+    const lastChunk = chunkPositions[chunkPositions.length - 1]
     return {
       chunkIndex: lastChunk.chunkIndex,
-      charIndex: lastChunk.endPos - lastChunk.startPos
-    };
-  };
+      charIndex: lastChunk.endPos - lastChunk.startPos,
+    }
+  }
 
   return rawBoundaries.map((boundary) => {
-    const start = findChunkAndOffset(boundary.startPosition);
-    const end = findChunkAndOffset(boundary.endPosition);
+    const start = findChunkAndOffset(boundary.startPosition)
+    const end = findChunkAndOffset(boundary.endPosition)
 
-    console.log(`Episode ${boundary.episodeNumber}: Position ${boundary.startPosition}-${boundary.endPosition} -> Chunk ${start.chunkIndex}:${start.charIndex} - ${end.chunkIndex}:${end.charIndex}`);
+    console.log(
+      `Episode ${boundary.episodeNumber}: Position ${boundary.startPosition}-${boundary.endPosition} -> Chunk ${start.chunkIndex}:${start.charIndex} - ${end.chunkIndex}:${end.charIndex}`,
+    )
 
     return {
       startChunk: start.chunkIndex,
@@ -258,53 +283,56 @@ function convertPositionsToBoundaries(
       title: boundary.title,
       summary: boundary.summary,
       estimatedPages: boundary.estimatedPages,
-      confidence: boundary.confidence
-    };
-  });
+      confidence: boundary.confidence,
+    }
+  })
 }
 
 export function findOptimalBreakpoints(
   text: string,
-  chunkIndex: number,
-  targetPosition: number
+  _chunkIndex: number,
+  targetPosition: number,
 ): { position: number; context: string } {
-  const searchRange = 500;
-  const start = Math.max(0, targetPosition - searchRange);
-  const end = Math.min(text.length, targetPosition + searchRange);
-  const searchText = text.substring(start, end);
+  const searchRange = 500
+  const start = Math.max(0, targetPosition - searchRange)
+  const end = Math.min(text.length, targetPosition + searchRange)
+  const searchText = text.substring(start, end)
 
   const breakIndicators = [
     /[。！？」』】\n]+\s*$/gm,
     /第[一二三四五六七八九十\d]+[章話節]/g,
     /\n\s*[＊※◇◆■□●○★☆×]\s*\n/g,
     /\n\s*\d+\s*\n/g,
-  ];
+  ]
 
-  let bestBreak = targetPosition;
-  let bestScore = 0;
+  let bestBreak = targetPosition
+  let bestScore = 0
 
   for (const pattern of breakIndicators) {
-    const matches = [...searchText.matchAll(pattern)];
-    for (const match of matches) {
-      if (match.index !== undefined) {
-        const absolutePos = start + match.index + match[0].length;
-        const distance = Math.abs(absolutePos - targetPosition);
-        const score = 1 - distance / searchRange;
+    pattern.lastIndex = 0 // Reset regex state
+    let match: RegExpExecArray | null = pattern.exec(searchText)
+    while (match !== null) {
+      const absolutePos = start + match.index + match[0].length
+      const distance = Math.abs(absolutePos - targetPosition)
+      const score = 1 - distance / searchRange
 
-        if (score > bestScore) {
-          bestScore = score;
-          bestBreak = absolutePos;
-        }
+      if (score > bestScore) {
+        bestScore = score
+        bestBreak = absolutePos
       }
+
+      // Prevent infinite loop for global regex
+      if (!pattern.global) break
+      match = pattern.exec(searchText)
     }
   }
 
-  const contextStart = Math.max(0, bestBreak - 100);
-  const contextEnd = Math.min(text.length, bestBreak + 100);
-  const context = text.substring(contextStart, contextEnd);
+  const contextStart = Math.max(0, bestBreak - 100)
+  const contextEnd = Math.min(text.length, bestBreak + 100)
+  const context = text.substring(contextStart, contextEnd)
 
   return {
     position: bestBreak,
     context: context,
-  };
+  }
 }

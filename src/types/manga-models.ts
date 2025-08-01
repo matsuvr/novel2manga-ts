@@ -3,19 +3,19 @@ import { z } from 'zod'
 // Position and Size schemas
 const PositionSchema = z.object({
   x: z.number(),
-  y: z.number()
+  y: z.number(),
 })
 
 const SizeSchema = z.object({
   width: z.number().positive(),
-  height: z.number().positive()
+  height: z.number().positive(),
 })
 
 const MarginSchema = z.object({
   top: z.number().nonnegative(),
   right: z.number().nonnegative(),
   bottom: z.number().nonnegative(),
-  left: z.number().nonnegative()
+  left: z.number().nonnegative(),
 })
 
 // Episode schema - 連載エピソード単位
@@ -29,14 +29,14 @@ export const EpisodeSchema = z.object({
   startIndex: z.number(),
   endIndex: z.number(),
   createdAt: z.date(),
-  updatedAt: z.date()
+  updatedAt: z.date(),
 })
 
 // Panel content schema
 const PanelContentSchema = z.object({
   sceneId: z.string().optional(),
   dialogueIds: z.array(z.string()).optional(),
-  situationId: z.string().optional()
+  situationId: z.string().optional(),
 })
 
 // Panel schema - 個別コマ
@@ -47,7 +47,7 @@ export const PanelSchema = z.object({
   size: SizeSchema,
   panelType: z.enum(['normal', 'action', 'emphasis']),
   content: PanelContentSchema,
-  readingOrder: z.number().positive()
+  readingOrder: z.number().positive(),
 })
 
 // Panel layout schema
@@ -56,7 +56,7 @@ export const PanelLayoutSchema = z.object({
   columns: z.number().positive().optional(),
   rows: z.number().positive().optional(),
   gutterSize: z.number().nonnegative(),
-  margin: MarginSchema
+  margin: MarginSchema,
 })
 
 // MangaPage schema - マンガページ
@@ -68,7 +68,7 @@ export const MangaPageSchema = z.object({
   previewImageFile: z.string().optional(), // R2: novels/{novelId}/episodes/{episodeNumber}/pages/{pageNumber}/preview.png
   panels: z.array(PanelSchema),
   createdAt: z.date(),
-  updatedAt: z.date()
+  updatedAt: z.date(),
 })
 
 // Reading order mapping
@@ -91,26 +91,26 @@ export function getJapaneseReadingOrder(panels: Panel[]): ReadingOrder {
   // パネルを位置でソート
   // 1. Y座標（上から下）でグループ化
   // 2. 同じY座標内では、X座標（右から左）でソート
-  
+
   const sortedPanels = [...panels].sort((a, b) => {
     // まずY座標で比較（上が優先）
     const yDiff = a.position.y - b.position.y
-    
+
     // Y座標が近い場合（20px以内）は同じ行とみなす
     if (Math.abs(yDiff) <= 20) {
       // X座標で比較（右が優先 = 大きい値が先）
       return b.position.x - a.position.x
     }
-    
+
     return yDiff
   })
-  
+
   // 読み順を割り当て
   const readingOrder: ReadingOrder = {}
   sortedPanels.forEach((panel, index) => {
     readingOrder[panel.id] = index + 1
   })
-  
+
   return readingOrder
 }
 
@@ -142,14 +142,14 @@ export function createMangaPage(
   pageNumber: number,
   layoutFile: string,
   panels: Panel[] = [],
-  previewImageFile?: string
+  previewImageFile?: string,
 ): Omit<MangaPage, 'id' | 'createdAt' | 'updatedAt'> {
   return {
     episodeId,
     pageNumber,
     layoutFile,
     previewImageFile,
-    panels
+    panels,
   }
 }
 
@@ -161,34 +161,34 @@ export function generateGridPanels(
   pageWidth: number,
   pageHeight: number,
   margin: Margin,
-  gutterSize: number
+  gutterSize: number,
 ): Omit<Panel, 'id' | 'content'>[] {
   const panels: Omit<Panel, 'id' | 'content'>[] = []
-  
-  const availableWidth = pageWidth - margin.left - margin.right - (gutterSize * (columns - 1))
-  const availableHeight = pageHeight - margin.top - margin.bottom - (gutterSize * (rows - 1))
-  
+
+  const availableWidth = pageWidth - margin.left - margin.right - gutterSize * (columns - 1)
+  const availableHeight = pageHeight - margin.top - margin.bottom - gutterSize * (rows - 1)
+
   const panelWidth = availableWidth / columns
   const panelHeight = availableHeight / rows
-  
+
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < columns; col++) {
       const panel: Omit<Panel, 'id' | 'content'> = {
         pageId,
         position: {
-          x: margin.left + (col * (panelWidth + gutterSize)),
-          y: margin.top + (row * (panelHeight + gutterSize))
+          x: margin.left + col * (panelWidth + gutterSize),
+          y: margin.top + row * (panelHeight + gutterSize),
         },
         size: {
           width: panelWidth,
-          height: panelHeight
+          height: panelHeight,
         },
         panelType: 'normal',
-        readingOrder: 0 // 後で日本式読み順を適用
+        readingOrder: 0, // 後で日本式読み順を適用
       }
       panels.push(panel)
     }
   }
-  
+
   return panels
 }

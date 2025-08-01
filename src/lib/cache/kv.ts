@@ -3,7 +3,11 @@ import { getConfig } from '@/config/config-loader'
 // KVのバインディング型定義
 interface KVNamespace {
   get(key: string, options?: { type?: 'text' | 'json' | 'arrayBuffer' | 'stream' }): Promise<any>
-  put(key: string, value: string | ArrayBuffer | ArrayBufferView | ReadableStream, options?: KVPutOptions): Promise<void>
+  put(
+    key: string,
+    value: string | ArrayBuffer | ArrayBufferView | ReadableStream,
+    options?: KVPutOptions,
+  ): Promise<void>
   delete(key: string): Promise<void>
   list(options?: { prefix?: string; limit?: number; cursor?: string }): Promise<KVListResult>
 }
@@ -24,27 +28,27 @@ interface KVListResult {
 class MemoryCache {
   private cache: Map<string, { value: any; expiration?: number }> = new Map()
 
-  async get(key: string, options?: { type?: string }): Promise<any> {
+  async get(key: string, _options?: { type?: string }): Promise<any> {
     const item = this.cache.get(key)
     if (!item) return null
-    
+
     if (item.expiration && Date.now() > item.expiration) {
       this.cache.delete(key)
       return null
     }
-    
+
     return item.value
   }
 
   async put(key: string, value: any, options?: KVPutOptions): Promise<void> {
     let expiration: number | undefined
-    
+
     if (options?.expirationTtl) {
-      expiration = Date.now() + (options.expirationTtl * 1000)
+      expiration = Date.now() + options.expirationTtl * 1000
     } else if (options?.expiration) {
       expiration = options.expiration * 1000
     }
-    
+
     this.cache.set(key, { value, expiration })
   }
 
@@ -54,13 +58,13 @@ class MemoryCache {
 
   async list(options?: { prefix?: string; limit?: number }): Promise<KVListResult> {
     const keys = Array.from(this.cache.keys())
-      .filter(key => !options?.prefix || key.startsWith(options.prefix))
+      .filter((key) => !options?.prefix || key.startsWith(options.prefix))
       .slice(0, options?.limit || 1000)
-      .map(name => ({ name }))
-    
+      .map((name) => ({ name }))
+
     return {
       keys,
-      list_complete: true
+      list_complete: true,
     }
   }
 }
@@ -73,14 +77,14 @@ export function getCache(): KVNamespace | MemoryCache {
   if (process.env.NODE_ENV === 'development') {
     return memoryCache
   }
-  
+
   // 本番環境：KVを使用
   // @ts-expect-error - KVバインディングはランタイムで利用可能
   if (globalThis.CACHE) {
     // @ts-expect-error - KVバインディングはランタイムで利用可能
     return globalThis.CACHE as KVNamespace
   }
-  
+
   // フォールバック
   return memoryCache
 }
@@ -104,16 +108,16 @@ export function getLayoutCacheKey(episodeId: string, pageNumber: number): string
 export function getCacheTTL(type: 'analysis' | 'layout'): number {
   const config = getConfig()
   const baseTTL = config.getPath<number>('processing.cache.ttl')
-  
+
   // KVのベストプラクティス: 最小60秒のTTL
   const minTTL = 60
-  
+
   // タイプ別の推奨TTL（パフォーマンス最適化）
   const recommendedTTL = {
     analysis: Math.max(3600, baseTTL), // 分析結果は1時間以上キャッシュ推奨
-    layout: Math.max(1800, baseTTL),   // レイアウトは30分以上キャッシュ推奨
+    layout: Math.max(1800, baseTTL), // レイアウトは30分以上キャッシュ推奨
   }
-  
+
   return Math.max(minTTL, recommendedTTL[type] || baseTTL)
 }
 
@@ -122,28 +126,28 @@ export async function isCacheEnabled(type: 'analysis' | 'layout'): Promise<boole
   const config = getConfig()
   const features = config.getPath<any>('features')
   const processingCache = config.getPath<any>('processing.cache')
-  
+
   // 全体的なキャッシュ機能が無効の場合
   if (!features.enableCaching) {
     return false
   }
-  
+
   // 特定のタイプのキャッシュが無効の場合
   if (type === 'analysis' && !processingCache.analysisCache) {
     return false
   }
-  
+
   if (type === 'layout' && !processingCache.layoutCache) {
     return false
   }
-  
+
   return true
 }
 
 // キャッシュから取得（型安全・パフォーマンス最適化）
 export async function getCachedData<T>(
   key: string,
-  options?: { type?: 'json' | 'text' | 'arrayBuffer' | 'stream' }
+  options?: { type?: 'json' | 'text' | 'arrayBuffer' | 'stream' },
 ): Promise<T | null> {
   const cache = getCache()
   try {
@@ -161,12 +165,12 @@ export async function setCachedData<T>(key: string, data: T, ttl?: number): Prom
   const cache = getCache()
   try {
     const options: KVPutOptions = {}
-    
+
     // KVベストプラクティス: TTLは最小60秒
     if (ttl) {
       options.expirationTtl = Math.max(60, ttl)
     }
-    
+
     // データサイズチェック（KVの制限: 25MB）
     const serialized = JSON.stringify(data)
     const sizeInMB = new Blob([serialized]).size / (1024 * 1024)
@@ -174,7 +178,7 @@ export async function setCachedData<T>(key: string, data: T, ttl?: number): Prom
       console.error(`Data size (${sizeInMB.toFixed(2)}MB) exceeds KV limit of 25MB for key: ${key}`)
       return
     }
-    
+
     await cache.put(key, serialized, options)
   } catch (error) {
     console.error(`Failed to set cached data for key ${key}:`, error)
