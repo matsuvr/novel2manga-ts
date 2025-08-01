@@ -11,7 +11,12 @@ export const appConfig = {
   // LLM設定
   llm: {
     // デフォルトプロバイダー
-    defaultProvider: 'claude' as 'openai' | 'gemini' | 'groq' | 'claude' | 'openrouter',
+    defaultProvider: 'openrouter' as 'openai' | 'gemini' | 'groq' | 'claude' | 'openrouter',
+
+    // フォールバック設定
+    fallbackChain: ['openrouter', 'gemini', 'claude'] as Array<
+      'openai' | 'gemini' | 'groq' | 'claude' | 'openrouter'
+    >,
 
     // プロバイダー別設定
     providers: {
@@ -36,7 +41,7 @@ export const appConfig = {
       groq: {
         apiKey: process.env.GROQ_API_KEY,
         model: 'compound-beta',
-        maxTokens: 4096,
+        maxTokens: 8192,
         timeout: 30000,
       },
       openrouter: {

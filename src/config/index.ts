@@ -85,6 +85,19 @@ export function getCurrentLLMProvider() {
   }
 }
 
+// 特定のLLMプロバイダー設定を取得
+export function getLLMProviderConfig(
+  provider: 'openai' | 'gemini' | 'groq' | 'claude' | 'openrouter',
+) {
+  const config = getAppConfig()
+  return config.llm.providers[provider]
+}
+
+// フォールバックチェーンを取得
+export function getLLMFallbackChain() {
+  return getAppConfig().llm.fallbackChain
+}
+
 // プロセッシング設定を取得
 export function getProcessingConfig(): ProcessingConfig {
   return getConfig().get('processing') as ProcessingConfig
