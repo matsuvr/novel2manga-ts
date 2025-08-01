@@ -1,7 +1,7 @@
-import { createOpenAI } from '@ai-sdk/openai'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createGroq } from '@ai-sdk/groq'
-import { getTextAnalysisConfig, getLayoutGenerationConfig, getLLMProviderConfig } from '@/config'
+import { createOpenAI } from '@ai-sdk/openai'
+import { getLayoutGenerationConfig, getLLMProviderConfig, getTextAnalysisConfig } from '@/config'
 
 // プロバイダーインスタンスのキャッシュ
 const providerCache = {
@@ -13,11 +13,11 @@ const providerCache = {
 // プロバイダーインスタンスを取得
 function getProviderInstance(provider: 'openai' | 'gemini' | 'groq') {
   const config = getLLMProviderConfig(provider)
-  
+
   if (!config.apiKey) {
     throw new Error(`API key not found for provider: ${provider}`)
   }
-  
+
   switch (provider) {
     case 'openai':
       if (!providerCache.openai) {
@@ -26,7 +26,7 @@ function getProviderInstance(provider: 'openai' | 'gemini' | 'groq') {
         })
       }
       return providerCache.openai
-      
+
     case 'gemini':
       if (!providerCache.gemini) {
         providerCache.gemini = createGoogleGenerativeAI({
@@ -34,7 +34,7 @@ function getProviderInstance(provider: 'openai' | 'gemini' | 'groq') {
         })
       }
       return providerCache.gemini
-      
+
     case 'groq':
       if (!providerCache.groq) {
         providerCache.groq = createGroq({
@@ -42,7 +42,7 @@ function getProviderInstance(provider: 'openai' | 'gemini' | 'groq') {
         })
       }
       return providerCache.groq
-      
+
     default:
       throw new Error(`Unknown provider: ${provider}`)
   }
@@ -52,7 +52,7 @@ function getProviderInstance(provider: 'openai' | 'gemini' | 'groq') {
 export function getTextAnalysisLLM() {
   const config = getTextAnalysisConfig()
   const provider = getProviderInstance(config.provider)
-  
+
   return {
     provider,
     model: config.model,
@@ -72,7 +72,7 @@ export function getTextAnalysisLLM() {
 export function getLayoutGenerationLLM() {
   const config = getLayoutGenerationConfig()
   const provider = getProviderInstance(config.provider)
-  
+
   return {
     provider,
     model: config.model,
@@ -97,21 +97,21 @@ export function getLLM(
     temperature?: number
     maxTokens?: number
     systemPrompt?: string
-  }
+  },
 ) {
   if (useCase === 'textAnalysis') {
     return getTextAnalysisLLM()
   }
-  
+
   if (useCase === 'layoutGeneration') {
     return getLayoutGenerationLLM()
   }
-  
+
   // カスタム設定
   const provider = overrides?.provider || 'gemini'
   const config = getLLMProviderConfig(provider)
   const providerInstance = getProviderInstance(provider)
-  
+
   return {
     provider: providerInstance,
     model: overrides?.model || config.model,

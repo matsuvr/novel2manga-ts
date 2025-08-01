@@ -18,7 +18,7 @@ export const NovelSchema = z.object({
   totalEpisodes: z.number().nonnegative().optional(), // エピソード数（分析後に設定）
   totalPages: z.number().nonnegative().optional(), // 総ページ数（レイアウト生成後に設定）
   createdAt: z.date(),
-  updatedAt: z.date()
+  updatedAt: z.date(),
 })
 
 // Job schema - 処理ジョブ（既存のJobを拡張）
@@ -31,7 +31,7 @@ export const JobSchema = z.object({
   processedChunks: z.number().nonnegative(),
   startedAt: z.date().optional(),
   completedAt: z.date().optional(),
-  error: z.string().optional()
+  error: z.string().optional(),
 })
 
 // Chunk schema - テキストチャンク
@@ -42,7 +42,7 @@ export const ChunkSchema = z.object({
   textFile: z.string(), // R2: novels/{novelId}/chunks/chunk_{index}.txt
   startIndex: z.number().nonnegative(),
   endIndex: z.number().nonnegative(),
-  status: ChunkStatusSchema
+  status: ChunkStatusSchema,
 })
 
 // Analysis summary schemas
@@ -51,7 +51,7 @@ const AnalysisSummarySchema = z.object({
   sceneCount: z.number().nonnegative(),
   dialogueCount: z.number().nonnegative(),
   highlightCount: z.number().nonnegative(),
-  situationCount: z.number().nonnegative()
+  situationCount: z.number().nonnegative(),
 })
 
 const IntegratedAnalysisSummarySchema = z.object({
@@ -59,7 +59,7 @@ const IntegratedAnalysisSummarySchema = z.object({
   totalScenes: z.number().nonnegative(),
   totalDialogues: z.number().nonnegative(),
   totalHighlights: z.number().nonnegative(),
-  totalSituations: z.number().nonnegative()
+  totalSituations: z.number().nonnegative(),
 })
 
 // ChunkAnalysis schema - チャンク毎の解析結果
@@ -68,7 +68,7 @@ export const ChunkAnalysisSchema = z.object({
   chunkId: z.string(), // Chunk.idへの参照
   analysisFile: z.string(), // R2: novels/{novelId}/analysis/chunk_{index}.json
   processedAt: z.date(),
-  summary: AnalysisSummarySchema
+  summary: AnalysisSummarySchema,
 })
 
 // NovelAnalysis schema - 統合された解析結果
@@ -78,7 +78,7 @@ export const NovelAnalysisSchema = z.object({
   analysisFile: z.string(), // R2: novels/{novelId}/analysis/integrated.json
   summary: IntegratedAnalysisSummarySchema,
   createdAt: z.date(),
-  updatedAt: z.date()
+  updatedAt: z.date(),
 })
 
 // TypeScript型定義
@@ -91,12 +91,12 @@ export type AnalysisSummary = z.infer<typeof AnalysisSummarySchema>
 export type IntegratedAnalysisSummary = z.infer<typeof IntegratedAnalysisSummarySchema>
 
 // R2ファイルパス生成ヘルパー
-type FileType = 
-  | 'original' 
-  | 'chunk' 
-  | 'chunk-analysis' 
-  | 'integrated-analysis' 
-  | 'layout' 
+type FileType =
+  | 'original'
+  | 'chunk'
+  | 'chunk-analysis'
+  | 'integrated-analysis'
+  | 'layout'
   | 'preview'
 
 interface FilePathOptions {
@@ -106,43 +106,43 @@ interface FilePathOptions {
 }
 
 export function getR2FilePath(
-  novelId: string, 
-  fileType: FileType, 
-  options: FilePathOptions = {}
+  novelId: string,
+  fileType: FileType,
+  options: FilePathOptions = {},
 ): string {
   const basePath = `novels/${novelId}`
-  
+
   switch (fileType) {
     case 'original':
       return `${basePath}/original.txt`
-    
+
     case 'chunk':
       if (options.chunkIndex === undefined) {
         throw new Error('chunkIndex is required for chunk file type')
       }
       return `${basePath}/chunks/chunk_${options.chunkIndex}.txt`
-    
+
     case 'chunk-analysis':
       if (options.chunkIndex === undefined) {
         throw new Error('chunkIndex is required for chunk-analysis file type')
       }
       return `${basePath}/analysis/chunk_${options.chunkIndex}.json`
-    
+
     case 'integrated-analysis':
       return `${basePath}/analysis/integrated.json`
-    
+
     case 'layout':
       if (options.episodeNumber === undefined || options.pageNumber === undefined) {
         throw new Error('episodeNumber and pageNumber are required for layout file type')
       }
       return `${basePath}/episodes/${options.episodeNumber}/pages/${options.pageNumber}/layout.yaml`
-    
+
     case 'preview':
       if (options.episodeNumber === undefined || options.pageNumber === undefined) {
         throw new Error('episodeNumber and pageNumber are required for preview file type')
       }
       return `${basePath}/episodes/${options.episodeNumber}/pages/${options.pageNumber}/preview.png`
-    
+
     default:
       throw new Error(`Unknown file type: ${fileType}`)
   }
@@ -175,7 +175,7 @@ export function createNovel(
   totalLength: number,
   totalChunks: number,
   chunkSize: number,
-  overlapSize: number
+  overlapSize: number,
 ): Novel {
   const now = new Date()
   return {
@@ -188,7 +188,7 @@ export function createNovel(
     totalEpisodes: undefined,
     totalPages: undefined,
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
   }
 }
 
@@ -198,7 +198,7 @@ export function createJob(novelId: string, totalChunks: number): Omit<Job, 'id'>
     status: 'pending',
     progress: 0,
     totalChunks,
-    processedChunks: 0
+    processedChunks: 0,
   }
 }
 
@@ -206,7 +206,7 @@ export function createChunk(
   novelId: string,
   chunkIndex: number,
   startIndex: number,
-  endIndex: number
+  endIndex: number,
 ): Omit<Chunk, 'id'> {
   return {
     novelId,
@@ -214,7 +214,7 @@ export function createChunk(
     textFile: getR2FilePath(novelId, 'chunk', { chunkIndex }),
     startIndex,
     endIndex,
-    status: 'pending'
+    status: 'pending',
   }
 }
 

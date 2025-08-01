@@ -1,17 +1,17 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
-  EpisodeSchema,
-  MangaPageSchema,
-  PanelSchema,
-  PanelLayoutSchema,
-  ReadingOrderSchema,
   type Episode,
+  EpisodeSchema,
+  getJapaneseReadingOrder,
   type MangaPage,
+  MangaPageSchema,
   type Panel,
   type PanelLayout,
+  PanelLayoutSchema,
+  PanelSchema,
   type ReadingOrder,
-  getJapaneseReadingOrder,
-  sortPanelsByReadingOrder
+  ReadingOrderSchema,
+  sortPanelsByReadingOrder,
 } from '../manga-models'
 
 describe('Manga Models', () => {
@@ -27,9 +27,9 @@ describe('Manga Models', () => {
         startIndex: 0,
         endIndex: 3000,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       }
-      
+
       expect(() => EpisodeSchema.parse(validEpisode)).not.toThrow()
     })
 
@@ -43,9 +43,9 @@ describe('Manga Models', () => {
         startIndex: 3000,
         endIndex: 6000,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       }
-      
+
       expect(() => EpisodeSchema.parse(episodeWithoutClimax)).not.toThrow()
     })
 
@@ -59,9 +59,9 @@ describe('Manga Models', () => {
         startIndex: 0,
         endIndex: 100,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       }
-      
+
       expect(() => EpisodeSchema.parse(invalidEpisode)).toThrow()
     })
   })
@@ -77,18 +77,18 @@ describe('Manga Models', () => {
         content: {
           sceneId: 'scene_1',
           dialogueIds: ['dlg_1', 'dlg_2'],
-          situationId: 'sit_1'
+          situationId: 'sit_1',
         },
-        readingOrder: 1
+        readingOrder: 1,
       }
-      
+
       expect(() => PanelSchema.parse(validPanel)).not.toThrow()
     })
 
     it('should validate all panel types', () => {
       const panelTypes: Panel['panelType'][] = ['normal', 'action', 'emphasis']
-      
-      panelTypes.forEach(type => {
+
+      panelTypes.forEach((type) => {
         const panel: Panel = {
           id: 'panel_test',
           pageId: 'page_1',
@@ -96,9 +96,9 @@ describe('Manga Models', () => {
           size: { width: 150, height: 200 },
           panelType: type,
           content: {
-            sceneId: 'scene_1'
+            sceneId: 'scene_1',
           },
-          readingOrder: 1
+          readingOrder: 1,
         }
         expect(() => PanelSchema.parse(panel)).not.toThrow()
       })
@@ -112,9 +112,9 @@ describe('Manga Models', () => {
         size: { width: 190, height: 300 },
         panelType: 'normal',
         content: {}, // all fields optional
-        readingOrder: 2
+        readingOrder: 2,
       }
-      
+
       expect(() => PanelSchema.parse(minimalPanel)).not.toThrow()
     })
   })
@@ -126,22 +126,22 @@ describe('Manga Models', () => {
         columns: 2,
         rows: 3,
         gutterSize: 10,
-        margin: { top: 20, right: 15, bottom: 20, left: 15 }
+        margin: { top: 20, right: 15, bottom: 20, left: 15 },
       }
-      
+
       expect(() => PanelLayoutSchema.parse(validLayout)).not.toThrow()
     })
 
     it('should validate all layout types', () => {
       const layoutTypes: PanelLayout['type'][] = ['grid', 'free', 'vertical', 'horizontal']
-      
-      layoutTypes.forEach(type => {
+
+      layoutTypes.forEach((type) => {
         const layout: PanelLayout = {
           type,
           columns: type === 'grid' ? 2 : undefined,
           rows: type === 'grid' ? 2 : undefined,
           gutterSize: 5,
-          margin: { top: 10, right: 10, bottom: 10, left: 10 }
+          margin: { top: 10, right: 10, bottom: 10, left: 10 },
         }
         expect(() => PanelLayoutSchema.parse(layout)).not.toThrow()
       })
@@ -164,13 +164,13 @@ describe('Manga Models', () => {
             size: { width: 200, height: 150 },
             panelType: 'normal',
             content: { sceneId: 'scene_1' },
-            readingOrder: 1
-          }
+            readingOrder: 1,
+          },
         ],
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       }
-      
+
       expect(() => MangaPageSchema.parse(validPage)).not.toThrow()
     })
 
@@ -182,9 +182,9 @@ describe('Manga Models', () => {
         layoutFile: 'novels/novel_123/episodes/1/pages/2/layout.yaml',
         panels: [],
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       }
-      
+
       expect(() => MangaPageSchema.parse(pageWithoutPanels)).not.toThrow()
     })
   })
@@ -192,47 +192,127 @@ describe('Manga Models', () => {
   describe('Japanese Reading Order', () => {
     it('should calculate correct reading order for grid layout', () => {
       const panels: Panel[] = [
-        { id: 'p1', pageId: 'page', position: { x: 0, y: 0 }, size: { width: 100, height: 100 }, panelType: 'normal', content: {}, readingOrder: 0 },
-        { id: 'p2', pageId: 'page', position: { x: 200, y: 0 }, size: { width: 100, height: 100 }, panelType: 'normal', content: {}, readingOrder: 0 },
-        { id: 'p3', pageId: 'page', position: { x: 0, y: 150 }, size: { width: 100, height: 100 }, panelType: 'normal', content: {}, readingOrder: 0 },
-        { id: 'p4', pageId: 'page', position: { x: 200, y: 150 }, size: { width: 100, height: 100 }, panelType: 'normal', content: {}, readingOrder: 0 }
+        {
+          id: 'p1',
+          pageId: 'page',
+          position: { x: 0, y: 0 },
+          size: { width: 100, height: 100 },
+          panelType: 'normal',
+          content: {},
+          readingOrder: 0,
+        },
+        {
+          id: 'p2',
+          pageId: 'page',
+          position: { x: 200, y: 0 },
+          size: { width: 100, height: 100 },
+          panelType: 'normal',
+          content: {},
+          readingOrder: 0,
+        },
+        {
+          id: 'p3',
+          pageId: 'page',
+          position: { x: 0, y: 150 },
+          size: { width: 100, height: 100 },
+          panelType: 'normal',
+          content: {},
+          readingOrder: 0,
+        },
+        {
+          id: 'p4',
+          pageId: 'page',
+          position: { x: 200, y: 150 },
+          size: { width: 100, height: 100 },
+          panelType: 'normal',
+          content: {},
+          readingOrder: 0,
+        },
       ]
-      
+
       const order = getJapaneseReadingOrder(panels)
-      
+
       // 日本式: 右上(p2) → 左上(p1) → 右下(p3) → 左下(p4)
       expect(order).toEqual({
-        'p2': 1,
-        'p1': 2,
-        'p4': 3,
-        'p3': 4
+        p2: 1,
+        p1: 2,
+        p4: 3,
+        p3: 4,
       })
     })
 
     it('should handle panels at the same vertical position', () => {
       const panels: Panel[] = [
-        { id: 'p1', pageId: 'page', position: { x: 0, y: 100 }, size: { width: 100, height: 100 }, panelType: 'normal', content: {}, readingOrder: 0 },
-        { id: 'p2', pageId: 'page', position: { x: 150, y: 100 }, size: { width: 100, height: 100 }, panelType: 'normal', content: {}, readingOrder: 0 },
-        { id: 'p3', pageId: 'page', position: { x: 300, y: 100 }, size: { width: 100, height: 100 }, panelType: 'normal', content: {}, readingOrder: 0 }
+        {
+          id: 'p1',
+          pageId: 'page',
+          position: { x: 0, y: 100 },
+          size: { width: 100, height: 100 },
+          panelType: 'normal',
+          content: {},
+          readingOrder: 0,
+        },
+        {
+          id: 'p2',
+          pageId: 'page',
+          position: { x: 150, y: 100 },
+          size: { width: 100, height: 100 },
+          panelType: 'normal',
+          content: {},
+          readingOrder: 0,
+        },
+        {
+          id: 'p3',
+          pageId: 'page',
+          position: { x: 300, y: 100 },
+          size: { width: 100, height: 100 },
+          panelType: 'normal',
+          content: {},
+          readingOrder: 0,
+        },
       ]
-      
+
       const order = getJapaneseReadingOrder(panels)
-      
+
       // 同じ高さの場合: 右(p3) → 中(p2) → 左(p1)
-      expect(order['p3']).toBe(1)
-      expect(order['p2']).toBe(2)
-      expect(order['p1']).toBe(3)
+      expect(order.p3).toBe(1)
+      expect(order.p2).toBe(2)
+      expect(order.p1).toBe(3)
     })
 
     it('should sort panels by reading order', () => {
       const panels: Panel[] = [
-        { id: 'p1', pageId: 'page', position: { x: 0, y: 0 }, size: { width: 100, height: 100 }, panelType: 'normal', content: {}, readingOrder: 3 },
-        { id: 'p2', pageId: 'page', position: { x: 200, y: 0 }, size: { width: 100, height: 100 }, panelType: 'normal', content: {}, readingOrder: 1 },
-        { id: 'p3', pageId: 'page', position: { x: 100, y: 100 }, size: { width: 100, height: 100 }, panelType: 'normal', content: {}, readingOrder: 2 }
+        {
+          id: 'p1',
+          pageId: 'page',
+          position: { x: 0, y: 0 },
+          size: { width: 100, height: 100 },
+          panelType: 'normal',
+          content: {},
+          readingOrder: 3,
+        },
+        {
+          id: 'p2',
+          pageId: 'page',
+          position: { x: 200, y: 0 },
+          size: { width: 100, height: 100 },
+          panelType: 'normal',
+          content: {},
+          readingOrder: 1,
+        },
+        {
+          id: 'p3',
+          pageId: 'page',
+          position: { x: 100, y: 100 },
+          size: { width: 100, height: 100 },
+          panelType: 'normal',
+          content: {},
+          readingOrder: 2,
+        },
       ]
-      
+
       const sorted = sortPanelsByReadingOrder(panels)
-      
+
       expect(sorted[0].id).toBe('p2')
       expect(sorted[1].id).toBe('p3')
       expect(sorted[2].id).toBe('p1')
@@ -240,16 +320,40 @@ describe('Manga Models', () => {
 
     it('should apply Japanese reading order to panels', () => {
       const panels: Panel[] = [
-        { id: 'p1', pageId: 'page', position: { x: 0, y: 0 }, size: { width: 100, height: 100 }, panelType: 'normal', content: {}, readingOrder: 0 },
-        { id: 'p2', pageId: 'page', position: { x: 200, y: 0 }, size: { width: 100, height: 100 }, panelType: 'normal', content: {}, readingOrder: 0 },
-        { id: 'p3', pageId: 'page', position: { x: 100, y: 150 }, size: { width: 100, height: 100 }, panelType: 'normal', content: {}, readingOrder: 0 }
+        {
+          id: 'p1',
+          pageId: 'page',
+          position: { x: 0, y: 0 },
+          size: { width: 100, height: 100 },
+          panelType: 'normal',
+          content: {},
+          readingOrder: 0,
+        },
+        {
+          id: 'p2',
+          pageId: 'page',
+          position: { x: 200, y: 0 },
+          size: { width: 100, height: 100 },
+          panelType: 'normal',
+          content: {},
+          readingOrder: 0,
+        },
+        {
+          id: 'p3',
+          pageId: 'page',
+          position: { x: 100, y: 150 },
+          size: { width: 100, height: 100 },
+          panelType: 'normal',
+          content: {},
+          readingOrder: 0,
+        },
       ]
-      
+
       const order = getJapaneseReadingOrder(panels)
       const sorted = sortPanelsByReadingOrder(
-        panels.map(p => ({ ...p, readingOrder: order[p.id] }))
+        panels.map((p) => ({ ...p, readingOrder: order[p.id] })),
       )
-      
+
       expect(sorted[0].id).toBe('p2') // 右上
       expect(sorted[1].id).toBe('p1') // 左上
       expect(sorted[2].id).toBe('p3') // 下
@@ -259,20 +363,20 @@ describe('Manga Models', () => {
   describe('ReadingOrder Schema', () => {
     it('should validate reading order mapping', () => {
       const validOrder: ReadingOrder = {
-        'panel_1': 1,
-        'panel_2': 2,
-        'panel_3': 3
+        panel_1: 1,
+        panel_2: 2,
+        panel_3: 3,
       }
-      
+
       expect(() => ReadingOrderSchema.parse(validOrder)).not.toThrow()
     })
 
     it('should reject non-positive order numbers', () => {
       const invalidOrder = {
-        'panel_1': 0,
-        'panel_2': -1
+        panel_1: 0,
+        panel_2: -1,
       }
-      
+
       expect(() => ReadingOrderSchema.parse(invalidOrder)).toThrow()
     })
   })

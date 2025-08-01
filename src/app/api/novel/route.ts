@@ -47,11 +47,11 @@ export async function POST(request: NextRequest) {
     let dbResponse: Response | null = null
     let dbData: { error?: string; job?: { id: string; type: string; status: string } } = {}
     const maxRetries = 3
-    
+
     // デフォルトのチャンク設定を使用（実際のチャンク分割は後で行われる）
     const { getChunkingConfig } = await import('@/config')
     const chunkingConfig = getChunkingConfig()
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         dbResponse = await fetch(`${baseUrl}/api/novel/db`, {
@@ -73,22 +73,22 @@ export async function POST(request: NextRequest) {
           error?: string
           job?: { id: string; type: string; status: string }
         }
-        
+
         if (dbResponse.ok) {
           // 成功したらループを抜ける
           break
         }
-        
+
         // リトライ可能なエラーかチェック
         if (attempt < maxRetries) {
           console.warn(`DB保存エラー (試行 ${attempt}/${maxRetries}):`, {
             status: dbResponse.status,
             error: dbData.error,
             uuid: data.uuid,
-            fileName: data.fileName
+            fileName: data.fileName,
           })
           // 指数バックオフで待機
-          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt - 1) * 1000))
+          await new Promise((resolve) => setTimeout(resolve, 2 ** (attempt - 1) * 1000))
         }
       } catch (fetchError) {
         // ネットワークエラーなどの場合
@@ -96,15 +96,15 @@ export async function POST(request: NextRequest) {
           console.warn(`DB接続エラー (試行 ${attempt}/${maxRetries}):`, {
             error: fetchError instanceof Error ? fetchError.message : String(fetchError),
             uuid: data.uuid,
-            fileName: data.fileName
+            fileName: data.fileName,
           })
-          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt - 1) * 1000))
+          await new Promise((resolve) => setTimeout(resolve, 2 ** (attempt - 1) * 1000))
         } else {
           dbData.error = fetchError instanceof Error ? fetchError.message : 'ネットワークエラー'
         }
       }
     }
-    
+
     // 最終的に失敗した場合の詳細エラーログ
     if (!dbResponse || !dbResponse.ok) {
       console.error('DB保存失敗（全リトライ後）:', {
@@ -114,9 +114,9 @@ export async function POST(request: NextRequest) {
         requestData: {
           uuid: data.uuid,
           fileName: data.fileName,
-          length: data.length
+          length: data.length,
         },
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       })
       // DBエラーがあってもストレージには保存されているので、処理は続行
     }
@@ -131,18 +131,21 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('小説アップロードAPIエラー:', {
-      error: error instanceof Error ? {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      } : error,
-      timestamp: new Date().toISOString()
+      error:
+        error instanceof Error
+          ? {
+              message: error.message,
+              stack: error.stack,
+              name: error.name,
+            }
+          : error,
+      timestamp: new Date().toISOString(),
     })
-    
+
     return NextResponse.json(
-      { 
+      {
         error: 'サーバーエラーが発生しました',
-        details: error instanceof Error ? error.message : '不明なエラー'
+        details: error instanceof Error ? error.message : '不明なエラー',
       },
       { status: 500 },
     )

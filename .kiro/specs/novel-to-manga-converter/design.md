@@ -720,34 +720,83 @@ episodes/
 - バージョン管理されたマイグレーションファイル
 - インデックス戦略：project_id、episode_id、page_numberに複合インデックス
 
-## Error Handling
+## Storage and Database Abstraction
 
-### エラー処理戦略
+### ストレージ抽象化設計（2025-08-01追加）
 
 ```typescript
-// カスタムエラークラス
-class NovelToMangaError extends Error {
+// Storage Interface
+interface Storage {
+  put(key: string, value: string | Buffer, metadata?: Record<string, string>): Promise<void>;
+  get(key: string): Promise<{ text: string; metadata?: Record<string, string> } | null>;
+  delete(key: string): Promise<void>;
+  exists(key: string): Promise<boolean>;
+}
+
+// Database Adapter Interface
+interface DatabaseAdapter {
+  prepare(query: string): any;
+  run(query: string, params?: any[]): Promise<any>;
+  get(query: string, params?: any[]): Promise<any>;
+  all(query: string, params?: any[]): Promise<any[]>;
+  batch(statements: any[]): Promise<any[]>;
+  close(): Promise<void>;
+}
+
+// Environment-specific Implementations
+class LocalFileStorage implements Storage { /* ... */ }
+class R2Storage implements Storage { /* ... */ }
+class SQLiteAdapter implements DatabaseAdapter { /* ... */ }
+class D1Adapter implements DatabaseAdapter { /* ... */ }
+
+// Storage Factory
+class StorageFactory {
+  static async getNovelStorage(): Promise<Storage>;
+  static async getChunkStorage(): Promise<Storage>;
+  static async getAnalysisStorage(): Promise<Storage>;
+  static async getLayoutStorage(): Promise<Storage>;
+  static async getRenderStorage(): Promise<Storage>;
+  static async getDatabase(): Promise<DatabaseAdapter>;
+}
+```
+
+## Error Handling
+
+### エラー処理戦略（2025-08-01更新）
+
+```typescript
+// APIエラークラス
+export class ApiError extends Error {
   constructor(
     message: string,
-    public code: string,
     public statusCode: number,
+    public code?: string,
     public details?: any
   ) {
     super(message);
+    this.name = 'ApiError';
   }
 }
 
-// エラーハンドリングミドルウェア
-export function errorHandler(error: unknown): Response {
-  if (error instanceof NovelToMangaError) {
+// エラーレスポンス生成
+export function createErrorResponse(
+  error: unknown,
+  defaultMessage: string = 'Internal server error'
+): Response {
+  if (error instanceof ApiError) {
     return NextResponse.json(
-      { error: error.message, code: error.code, details: error.details },
+      {
+        error: error.message,
+        code: error.code,
+        details: error.details
+      },
       { status: error.statusCode }
     );
   }
-  // デフォルトエラー処理
+  
+  const message = error instanceof Error ? error.message : defaultMessage;
   return NextResponse.json(
-    { error: 'Internal Server Error' },
+    { error: message },
     { status: 500 }
   );
 }

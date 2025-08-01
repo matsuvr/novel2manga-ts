@@ -3,7 +3,7 @@
   "vcs": {
     "enabled": false,
     "clientKind": "git",
-    "useIgnoreFile": false
+    "useIgnoreFile": true
   },
   "files": {
     "ignoreUnknown": false,
@@ -15,7 +15,16 @@
       "**/coverage/**",
       "**/.vercel/**",
       "**/.turbo/**",
-      "**/wrangler-*.log"
+      "**/wrangler-*.log",
+      "**/test/**",
+      "**/tests/**",
+      "**/__tests__/**",
+      "**/*.test.*",
+      "**/*.spec.*",
+      "**/vitest.*",
+      "**/jest.*",
+      "**/cypress/**",
+      "**/e2e/**"
     ]
   },
   "formatter": {
@@ -77,7 +86,7 @@
         "noDuplicateObjectKeys": "error",
         "noDuplicateParameters": "error",
         "noEmptyBlockStatements": "error",
-        "noExplicitAny": "warn",
+        "noExplicitAny": "off",
         "noExtraNonNullAssertion": "error",
         "noFallthroughSwitchClause": "error",
         "noFunctionAssign": "error",

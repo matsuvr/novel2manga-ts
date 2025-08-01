@@ -1,14 +1,12 @@
 // Novel Models Types (上位階層)
-export * from './novel-models'
-
-// Text Analysis Types
-export * from './text-analysis'
-
-// Manga Models Types
-export * from './manga-models'
-
-// Job Types
-export * from './job'
 
 // Environment Types
 export * from './env'
+// Job Types
+export * from './job'
+
+// Manga Models Types
+export * from './manga-models'
+export * from './novel-models'
+// Text Analysis Types
+export * from './text-analysis'

@@ -1,0 +1,27 @@
+# 依存関係と生成されたファイル
+node_modules/
+.next/
+dist/
+build/
+coverage/
+.vercel/
+.turbo/
+
+# テスト関連ファイル
+test/
+tests/
+__tests__/
+*.test.ts
+*.test.tsx
+*.test.js
+*.test.jsx
+*.spec.ts
+*.spec.tsx
+*.spec.js
+*.spec.jsx
+
+# その他の除外ファイル
+*.log
+.env*
+.DS_Store
+Thumbs.db

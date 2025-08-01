@@ -1,7 +1,7 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { type Database, open } from 'sqlite'
 import sqlite3 from 'sqlite3'
-import { open, Database } from 'sqlite'
-import path from 'path'
-import fs from 'fs/promises'
 
 // 開発環境用のSQLiteデータベースパス
 const DB_PATH = path.join(process.cwd(), '.local-storage', 'novel2manga.db')
@@ -30,10 +30,10 @@ export async function getDevDatabase(): Promise<Database> {
   } catch {
     await fs.mkdir(dir, { recursive: true })
   }
-  
+
   return open({
     filename: DB_PATH,
-    driver: sqlite3.Database
+    driver: sqlite3.Database,
   })
 }
 
@@ -42,14 +42,14 @@ export async function getDatabase(): Promise<DBConnection> {
   if (process.env.NODE_ENV === 'development') {
     return getDevDatabase()
   }
-  
+
   // 本番環境：D1を使用
   // @ts-expect-error - D1バインディングはランタイムで利用可能
   if (globalThis.DB) {
     // @ts-expect-error - D1バインディングはランタイムで利用可能
     return globalThis.DB as D1Database
   }
-  
+
   throw new Error('データベースが設定されていません')
 }
 
@@ -59,11 +59,7 @@ export function isD1Database(db: DBConnection): db is D1Database {
 }
 
 // 統一されたクエリ実行関数
-export async function runQuery(
-  db: DBConnection,
-  query: string,
-  params: any[] = []
-): Promise<any> {
+export async function runQuery(db: DBConnection, query: string, params: any[] = []): Promise<any> {
   if (isD1Database(db)) {
     // D1の場合
     const stmt = db.prepare(query)
@@ -78,11 +74,7 @@ export async function runQuery(
 }
 
 // 統一された単一行取得関数
-export async function getOne(
-  db: DBConnection,
-  query: string,
-  params: any[] = []
-): Promise<any> {
+export async function getOne(db: DBConnection, query: string, params: any[] = []): Promise<any> {
   if (isD1Database(db)) {
     // D1の場合
     const stmt = db.prepare(query)
@@ -97,11 +89,7 @@ export async function getOne(
 }
 
 // 統一された複数行取得関数
-export async function getAll(
-  db: DBConnection,
-  query: string,
-  params: any[] = []
-): Promise<any[]> {
+export async function getAll(db: DBConnection, query: string, params: any[] = []): Promise<any[]> {
   if (isD1Database(db)) {
     // D1の場合
     const stmt = db.prepare(query)
@@ -121,25 +109,23 @@ export async function batchInsert(
   db: DBConnection,
   table: string,
   columns: string[],
-  values: any[][]
+  values: any[][],
 ): Promise<void> {
   if (values.length === 0) return
-  
+
   if (isD1Database(db)) {
     // D1の場合: バッチ操作を使用
-    const placeholders = values.map(() => 
-      `(${columns.map(() => '?').join(', ')})`
-    ).join(', ')
-    
+    const placeholders = values.map(() => `(${columns.map(() => '?').join(', ')})`).join(', ')
+
     const flatValues = values.flat()
     const query = `INSERT INTO ${table} (${columns.join(', ')}) VALUES ${placeholders}`
-    
+
     await runQuery(db, query, flatValues)
   } else {
     // SQLiteの場合: トランザクション内で実行
     const db2 = db as any
     await db2.exec('BEGIN TRANSACTION')
-    
+
     try {
       for (const row of values) {
         const placeholders = columns.map(() => '?').join(', ')
@@ -155,10 +141,7 @@ export async function batchInsert(
 }
 
 // クエリ最適化: LIMIT句を使用して読み取り行数を削減
-export async function getRecentAnalyses(
-  db: DBConnection,
-  limit: number = 100
-): Promise<any[]> {
+export async function getRecentAnalyses(db: DBConnection, limit: number = 100): Promise<any[]> {
   const query = `
     SELECT ca.*, c.novel_id, c.chunk_index
     FROM chunk_analyses ca
@@ -166,7 +149,7 @@ export async function getRecentAnalyses(
     ORDER BY ca.processed_at DESC
     LIMIT ?
   `
-  
+
   return getAll(db, query, [limit])
 }
 
@@ -177,7 +160,7 @@ export function getDatabaseForNovel(novelId: string): string {
   const hash = novelId.split('').reduce((acc, char) => {
     return acc + char.charCodeAt(0)
   }, 0)
-  
+
   const dbIndex = hash % 10 // 10個のデータベースに分散
   return `novel2manga-db-${dbIndex}`
 }
@@ -187,9 +170,9 @@ export async function initializeDatabase() {
   if (process.env.NODE_ENV !== 'development') {
     return // 本番環境では初期化しない
   }
-  
+
   const db = await getDevDatabase()
-  
+
   try {
     // novelsテーブルの作成
     await db.exec(`
@@ -201,7 +184,7 @@ export async function initializeDatabase() {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `)
-    
+
     // jobsテーブルの作成
     await db.exec(`
       CREATE TABLE IF NOT EXISTS jobs (
@@ -217,7 +200,7 @@ export async function initializeDatabase() {
         FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE
       )
     `)
-    
+
     // chunksテーブルの作成
     await db.exec(`
       CREATE TABLE IF NOT EXISTS chunks (
@@ -233,7 +216,7 @@ export async function initializeDatabase() {
         UNIQUE(novel_id, chunk_index)
       )
     `)
-    
+
     // chunk_analysesテーブルの作成
     await db.exec(`
       CREATE TABLE IF NOT EXISTS chunk_analyses (
@@ -249,7 +232,7 @@ export async function initializeDatabase() {
         FOREIGN KEY (chunk_id) REFERENCES chunks(id) ON DELETE CASCADE
       )
     `)
-    
+
     // novel_analysesテーブルの作成
     await db.exec(`
       CREATE TABLE IF NOT EXISTS novel_analyses (
@@ -266,7 +249,7 @@ export async function initializeDatabase() {
         FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE
       )
     `)
-    
+
     // episodesテーブルの作成
     await db.exec(`
       CREATE TABLE IF NOT EXISTS episodes (
@@ -284,7 +267,7 @@ export async function initializeDatabase() {
         UNIQUE(novel_id, episode_number)
       )
     `)
-    
+
     // manga_pagesテーブルの作成
     await db.exec(`
       CREATE TABLE IF NOT EXISTS manga_pages (
@@ -299,7 +282,7 @@ export async function initializeDatabase() {
         UNIQUE(episode_id, page_number)
       )
     `)
-    
+
     // panelsテーブルの作成
     await db.exec(`
       CREATE TABLE IF NOT EXISTS panels (
@@ -315,7 +298,7 @@ export async function initializeDatabase() {
         FOREIGN KEY (page_id) REFERENCES manga_pages(id) ON DELETE CASCADE
       )
     `)
-    
+
     // インデックスの作成（D1ベストプラクティス: パフォーマンス最適化）
     await db.exec(`
       -- 基本インデックス
@@ -333,7 +316,6 @@ export async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_episodes_novel_id_number ON episodes(novel_id, episode_number);
       CREATE INDEX IF NOT EXISTS idx_manga_pages_episode_page ON manga_pages(episode_id, page_number);
     `)
-    
   } finally {
     await db.close()
   }

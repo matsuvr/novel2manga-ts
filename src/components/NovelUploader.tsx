@@ -45,24 +45,24 @@ export default function NovelUploader() {
     <div className="w-full max-w-4xl mx-auto p-6">
       <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-2xl font-bold mb-4">小説テキストアップロード</h2>
-        
+
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="novel-text" className="block text-sm font-medium text-gray-700 mb-2">
             小説テキスト
           </label>
           <textarea
+            id="novel-text"
             value={novelText}
             onChange={(e) => setNovelText(e.target.value)}
             placeholder="ここに長文の小説テキストを入力してください..."
             className="w-full h-64 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             disabled={isSubmitting}
           />
-          <div className="mt-2 text-sm text-gray-600">
-            文字数: {novelText.length}
-          </div>
+          <div className="mt-2 text-sm text-gray-600">文字数: {novelText.length}</div>
         </div>
 
         <button
+          type="button"
           onClick={handleSubmit}
           disabled={isSubmitting || !novelText.trim()}
           className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${

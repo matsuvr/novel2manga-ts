@@ -1,115 +1,139 @@
 // 設定モジュールの統合エクスポート
-export { appConfig, type AppConfig } from './app.config'
-export { getConfig } from './config-loader'
-export { envConfigs } from './env.config'
 
+// アプリケーション固有設定
+export {
+  type AppConfig,
+  appConfig,
+  getAppConfigWithOverrides,
+} from './app.config'
+export {
+  type AIConfig,
+  type ApiConfig,
+  type Config,
+  type DatabaseConfig,
+  type EpisodeConfig,
+  type FeatureConfig,
+  getConfig,
+  getConfigManager,
+  initializeConfig,
+  type LogConfig,
+  type ProcessingConfig,
+  type SecurityConfig,
+  type StorageConfig,
+} from './config-loader'
+
+import { type AppConfig, getAppConfigWithOverrides } from './app.config'
+import type {
+  AIConfig,
+  ApiConfig,
+  DatabaseConfig,
+  EpisodeConfig,
+  FeatureConfig,
+  ProcessingConfig,
+  StorageConfig,
+} from './config-loader'
 // 便利なヘルパー関数
 import { getConfig } from './config-loader'
 
-// チャンク設定を取得
+// 初期化が必要な場合のヘルパー
+export async function ensureConfigLoaded() {
+  const config = getConfig()
+  try {
+    config.getAll()
+  } catch {
+    await config.loadConfig()
+  }
+}
+
+// アプリケーション設定を取得（環境変数オーバーライド適用済み）
+export function getAppConfig(): AppConfig {
+  return getAppConfigWithOverrides()
+}
+
+// チャンク分割設定を取得
 export function getChunkingConfig() {
-  return getConfig().get().chunking
+  return getAppConfig().chunking
 }
 
 // LLM設定を取得
 export function getLLMConfig() {
-  return getConfig().get().llm
+  return getAppConfig().llm
 }
 
-// 現在のLLMプロバイダーを取得
-export function getCurrentLLMProvider() {
-  return getConfig().get().llm.defaultProvider
+// 物語弧分析設定を取得
+export function getNarrativeAnalysisConfig() {
+  return getAppConfig().llm.narrativeArcAnalysis
 }
 
-// 特定のプロバイダー設定を取得
-export function getLLMProviderConfig(provider?: 'openai' | 'gemini' | 'groq' | 'openrouter' | 'local') {
-  const llmConfig = getConfig().get().llm
-  const targetProvider = provider || llmConfig.defaultProvider
-  return llmConfig.providers[targetProvider]
-}
-
-// テキスト分析用LLM設定を取得（プロバイダーも考慮）
+// テキスト分析設定を取得
 export function getTextAnalysisConfig() {
-  const config = getConfig().get()
-  const textAnalysisConfig = config.llm.textAnalysis
-  const provider = textAnalysisConfig.provider === 'default' 
-    ? config.llm.defaultProvider 
-    : textAnalysisConfig.provider
-  
-  const providerConfig = config.llm.providers[provider]
-  const modelOverride = textAnalysisConfig.modelOverrides?.[provider]
-  
-  return {
-    ...providerConfig,
-    ...textAnalysisConfig,
-    provider,
-    model: modelOverride || providerConfig.model,
-  }
+  return getAppConfig().llm.textAnalysis
 }
 
-// レイアウト生成用LLM設定を取得（プロバイダーも考慮）
+// レイアウト生成設定を取得
 export function getLayoutGenerationConfig() {
-  const config = getConfig().get()
-  const layoutConfig = config.llm.layoutGeneration
-  const provider = layoutConfig.provider === 'default' 
-    ? config.llm.defaultProvider 
-    : layoutConfig.provider
-  
-  const providerConfig = config.llm.providers[provider]
-  const modelOverride = layoutConfig.modelOverrides?.[provider]
-  
+  return getAppConfig().llm.layoutGeneration
+}
+
+// 現在のLLMプロバイダー設定を取得
+export function getCurrentLLMProvider() {
+  const config = getAppConfig()
+  const provider = config.llm.defaultProvider
   return {
-    ...providerConfig,
-    ...layoutConfig,
     provider,
-    model: modelOverride || providerConfig.model,
+    config: config.llm.providers[provider],
   }
 }
 
-// ストレージ設定を取得
-export function getStorageConfig() {
-  const config = getConfig()
-  return config.isDevelopment() 
-    ? config.get().storage.local 
-    : config.get().storage.r2
+// プロセッシング設定を取得
+export function getProcessingConfig(): ProcessingConfig {
+  return getConfig().get('processing') as ProcessingConfig
+}
+
+// AI設定を取得
+export function getAIConfig(): AIConfig {
+  return getConfig().get('ai') as AIConfig
+}
+
+// 現在のAIプロバイダーを取得
+export function getCurrentAIProvider(): string {
+  return getConfig().get('ai.provider', 'openai') as string
+}
+
+// エピソード設定を取得
+export function getEpisodeConfig(): EpisodeConfig {
+  return getConfig().get('episode') as EpisodeConfig
+}
+
+// フィーチャー設定を取得
+export function getFeatureConfig(): FeatureConfig {
+  return getConfig().get('features') as FeatureConfig
 }
 
 // API設定を取得
-export function getAPIConfig() {
-  return getConfig().get().api
+export function getApiConfig(): ApiConfig {
+  return getConfig().get('api') as ApiConfig
 }
 
-// 処理設定を取得
-export function getProcessingConfig() {
-  return getConfig().get().processing
+// ストレージ設定を取得（環境に応じて適切な設定を返す）
+export function getStorageConfig(): StorageConfig {
+  return getConfig().get('storage') as StorageConfig
 }
 
-// フィーチャーフラグを取得
-export function getFeatureFlags() {
-  return getConfig().get().features
+// データベース設定を取得
+export function getDatabaseConfig(): DatabaseConfig {
+  return getConfig().get('database') as DatabaseConfig
 }
 
-// 特定のフィーチャーが有効かチェック
-export function isFeatureEnabled(feature: keyof AppConfig['features']): boolean {
-  return getConfig().get().features[feature]
-}
-
-// 現在の環境を取得
-export function getCurrentEnvironment() {
-  return getConfig().getEnvironment()
-}
-
-// 開発環境かチェック
-export function isDevelopment() {
+// 環境判定
+export function isDevelopment(): boolean {
   return getConfig().isDevelopment()
 }
 
-// 本番環境かチェック
-export function isProduction() {
+export function isProduction(): boolean {
   return getConfig().isProduction()
 }
 
-// テスト環境かチェック
-export function isTest() {
-  return getConfig().isTest()
+export function isDebugMode(): boolean {
+  return getConfig().isDebugMode()
 }

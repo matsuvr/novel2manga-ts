@@ -1,41 +1,44 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8787';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8787'
 
 export interface AnalyzeRequest {
-  text: string;
+  text: string
 }
 
 export interface AnalyzeResponse {
-  jobId: string;
-  chunkCount: number;
-  message: string;
+  jobId: string
+  chunkCount: number
+  message: string
 }
 
 export interface Job {
-  id: string;
-  originalText: string;
-  chunkCount: number;
-  createdAt: string;
-  updatedAt: string;
+  id: string
+  originalText: string
+  chunkCount: number
+  createdAt: string
+  updatedAt: string
 }
 
 export interface Chunk {
-  id: string;
-  jobId: string;
-  chunkIndex: number;
-  content: string;
-  fileName: string;
-  createdAt: string;
+  id: string
+  jobId: string
+  chunkIndex: number
+  content: string
+  fileName: string
+  createdAt: string
 }
 
 export interface JobResponse {
-  job: Job;
-  chunks: Chunk[];
+  job: Job
+  chunks: Chunk[]
 }
 
 export class APIError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-    this.name = 'APIError';
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'APIError'
   }
 }
 
@@ -47,14 +50,16 @@ export const api = {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ text }),
-    });
+    })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Unknown error' })) as { error?: string };
-      throw new APIError(response.status, error.error || 'Failed to analyze text');
+      const error = (await response.json().catch(() => ({ error: 'Unknown error' }))) as {
+        error?: string
+      }
+      throw new APIError(response.status, error.error || 'Failed to analyze text')
     }
 
-    return response.json();
+    return response.json()
   },
 
   async getJob(jobId: string): Promise<JobResponse> {
@@ -63,13 +68,15 @@ export const api = {
       headers: {
         'Content-Type': 'application/json',
       },
-    });
+    })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Unknown error' })) as { error?: string };
-      throw new APIError(response.status, error.error || 'Failed to get job');
+      const error = (await response.json().catch(() => ({ error: 'Unknown error' }))) as {
+        error?: string
+      }
+      throw new APIError(response.status, error.error || 'Failed to get job')
     }
 
-    return response.json();
+    return response.json()
   },
-};
+}
