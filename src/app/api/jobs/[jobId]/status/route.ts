@@ -1,10 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { DatabaseService } from '@/services/database'
-import { getD1Database } from '@/utils/cloudflare-env'
+import { StorageFactory } from '@/utils/storage'
 
 export async function GET(_request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
-    const db = getD1Database()
+    const db = await StorageFactory.getDatabase()
     const dbService = new DatabaseService(db)
 
     const job = await dbService.getExtendedJob(params.jobId)
@@ -16,11 +16,15 @@ export async function GET(_request: NextRequest, { params }: { params: { jobId: 
     return NextResponse.json({
       id: job.id,
       status: job.status,
+      currentStep: job.currentStep,
       progress: job.progress,
       processedChunks: job.processedChunks,
-      totalChunks: job.chunkCount,
+      totalChunks: job.totalChunks || job.chunkCount,
       totalEpisodes: job.totalEpisodes,
-      errorMessage: job.errorMessage,
+      episodeCompleted: job.episodeCompleted,
+      lastError: job.lastError,
+      lastErrorStep: job.lastErrorStep,
+      retryCount: job.retryCount,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
     })

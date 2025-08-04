@@ -48,37 +48,57 @@ export class JobNarrativeProcessor {
     jobId: string,
     onProgress?: (progress: JobProgress) => void,
   ): Promise<JobProgress> {
-    const job = await this.dbService.getExtendedJob(jobId)
-    if (!job) {
-      throw new Error(`Job ${jobId} not found`)
-    }
-
-    // 既存の進捗を取得、または新規作成
-    let progress = job.progress || this.createInitialProgress(job.totalChunks)
-
-    // ステータスを処理中に更新
-    await this.dbService.updateJobStatus(jobId, 'processing')
-
+    console.log(`[JobNarrativeProcessor] Starting episode analysis for job ${jobId}`)
+    
     try {
+      // ジョブの開始をログ
+      await this.dbService.updateJobStep(jobId, 'episode_analysis_started')
+      
+      const job = await this.dbService.getExtendedJob(jobId)
+      if (!job) {
+        throw new Error(`Job ${jobId} not found`)
+      }
+
+      console.log(`[JobNarrativeProcessor] Job found: ${job.id}, total chunks: ${job.totalChunks}`)
+
+      // 既存の進捗を取得、または新規作成
+      let progress = job.progress || this.createInitialProgress(job.totalChunks)
+
+      // ステータスを処理中に更新
+      await this.dbService.updateJobStatus(jobId, 'processing')
+      await this.dbService.updateJobStep(jobId, 'processing_chunks', 0, job.totalChunks)
       while (!progress.isCompleted) {
         // 次のバッチ範囲を計算
         const startIndex = progress.processedChunks
         const endIndex = Math.min(startIndex + this.config.chunksPerBatch, progress.totalChunks)
 
-        console.log(`Processing chunks ${startIndex} to ${endIndex} for job ${jobId}`)
+        console.log(`[JobNarrativeProcessor] Processing chunks ${startIndex} to ${endIndex} for job ${jobId}`)
+        await this.dbService.updateJobStep(jobId, `processing_batch_${startIndex}_${endIndex}`, startIndex, progress.totalChunks)
 
         // チャンクデータを取得
         const chunkTexts: string[] = []
         for (let i = startIndex; i < endIndex; i++) {
-          const chunkData = await getChunkData(jobId, i)
-          if (!chunkData) {
-            throw new Error(`Chunk ${i} not found for job ${jobId}`)
+          console.log(`[JobNarrativeProcessor] Loading chunk ${i}`)
+          try {
+            const chunkData = await getChunkData(jobId, i)
+            if (!chunkData) {
+              const error = `Chunk ${i} not found for job ${jobId}`
+              console.error(`[JobNarrativeProcessor] ${error}`)
+              await this.dbService.updateJobError(jobId, error, `loading_chunk_${i}`)
+              throw new Error(error)
+            }
+            chunkTexts.push(chunkData.text)
+            console.log(`[JobNarrativeProcessor] Chunk ${i} loaded successfully (${chunkData.text.length} chars)`)
+          } catch (error) {
+            const errorMsg = `Failed to load chunk ${i}: ${error instanceof Error ? error.message : String(error)}`
+            console.error(`[JobNarrativeProcessor] ${errorMsg}`)
+            await this.dbService.updateJobError(jobId, errorMsg, `loading_chunk_${i}`)
+            throw new Error(errorMsg)
           }
-          chunkTexts.push(chunkData.text)
         }
 
         const narrativeInput = await prepareNarrativeAnalysisInput({
-          novelId: jobId,
+          jobId: jobId,
           startChunkIndex: startIndex,
           targetChars: this.config.targetCharsPerEpisode,
           minChars: this.config.minCharsPerEpisode,
@@ -121,8 +141,16 @@ export class JobNarrativeProcessor {
     } catch (error) {
       // エラー時の処理
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
-      await this.dbService.updateJobStatus(jobId, 'failed', errorMessage)
+      console.error(`[JobNarrativeProcessor] Fatal error in job ${jobId}:`, {
+        error: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined,
+        jobId
+      })
+      
+      await this.dbService.updateJobError(jobId, errorMessage, 'episode_analysis_failed')
       throw error
+    } finally {
+      console.log(`[JobNarrativeProcessor] Episode analysis completed for job ${jobId}`)
     }
   }
 

@@ -475,40 +475,41 @@ export async function saveChunkData(
   // チャンク情報はDBに保存されている
 }
 
-export async function getChunkData(novelId: string, chunkIndex: number): Promise<ChunkData | null> {
+export async function getChunkData(jobId: string, chunkIndex: number): Promise<ChunkData | null> {
   try {
-    // 小説データから動的にチャンクを生成
-    const novelPath = getNovelPath(novelId)
-    const novelData = JSON.parse(await fs.readFile(novelPath, 'utf-8'))
-
-    if (!novelData.text) {
+    // StorageFactoryを使って実際に保存されたチャンクファイルを読み込む
+    const chunkStorage = await StorageFactory.getChunkStorage()
+    const chunkPath = `chunks/${jobId}/chunk_${chunkIndex}.txt`
+    
+    const chunkFile = await chunkStorage.get(chunkPath)
+    if (!chunkFile) {
+      console.error(`Chunk file not found: ${chunkPath}`)
       return null
     }
 
-    // チャンク設定を取得
-    const { getChunkingConfig } = await import('@/config')
-    const chunkingConfig = getChunkingConfig()
-    const chunkSize = chunkingConfig.defaultChunkSize
-    const overlapSize = chunkingConfig.defaultOverlapSize
-
-    // チャンク位置の計算
-    const startPosition = chunkIndex * (chunkSize - overlapSize)
-    const endPosition = Math.min(startPosition + chunkSize, novelData.text.length)
-
-    if (startPosition >= novelData.text.length) {
-      return null
+    // JSONファイルから内容を取得
+    let chunkContent: string
+    try {
+      const parsedData = JSON.parse(chunkFile.text)
+      chunkContent = parsedData.content
+    } catch {
+      // JSONパースに失敗した場合は直接テキストとして使用
+      chunkContent = chunkFile.text
     }
 
-    const text = novelData.text.substring(startPosition, endPosition)
+    if (!chunkContent) {
+      console.error(`Empty chunk content: ${chunkPath}`)
+      return null
+    }
 
     return {
       chunkIndex,
-      text,
-      startPosition,
-      endPosition,
+      text: chunkContent,
+      startPosition: 0, // 実際の位置情報が必要な場合はDBから取得
+      endPosition: chunkContent.length,
     }
   } catch (error) {
-    console.error(`Failed to get chunk data: ${error}`)
+    console.error(`Failed to get chunk data for ${jobId}:${chunkIndex}:`, error)
     return null
   }
 }
@@ -533,12 +534,20 @@ export async function saveChunkAnalysis(
 }
 
 export async function getChunkAnalysis(
-  novelId: string,
+  jobId: string,
   chunkIndex: number,
 ): Promise<ChunkAnalysisResult | null> {
   try {
-    const analysisPath = getAnalysisPath(novelId, chunkIndex)
-    const data = JSON.parse(await fs.readFile(analysisPath, 'utf-8'))
+    const analysisStorage = await StorageFactory.getAnalysisStorage()
+    const analysisPath = `analyses/${jobId}/chunk_${chunkIndex}.json`
+    const analysisFile = await analysisStorage.get(analysisPath)
+    
+    if (!analysisFile) {
+      console.error(`Analysis file not found: ${analysisPath}`)
+      return null
+    }
+    
+    const data = JSON.parse(analysisFile.text)
     return data.analysis || null
   } catch (error) {
     console.error(`Failed to get chunk analysis: ${error}`)

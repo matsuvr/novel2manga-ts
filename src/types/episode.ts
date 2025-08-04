@@ -11,6 +11,7 @@ export interface EpisodeBoundary {
 }
 
 export interface NarrativeAnalysisInput {
+  jobId: string // チャンク分析結果の取得に必要
   chunks: {
     chunkIndex: number
     text: string

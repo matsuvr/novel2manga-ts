@@ -26,9 +26,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // uuidとファイル名をそれぞれD1に保存
-    // レスポンスからデータを取得
-
     const data = (await response.json()) as {
       error?: string
       uuid?: string
@@ -36,6 +33,7 @@ export async function POST(request: NextRequest) {
       length?: number
       preview?: string
     }
+    
     if (!response.ok) {
       return NextResponse.json(
         { error: data.error || '小説の保存に失敗しました' },
@@ -43,81 +41,35 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // DBに小説情報を保存（リトライ機能付き）
-    let dbResponse: Response | null = null
-    let dbData: { error?: string; job?: { id: string; type: string; status: string } } = {}
-    const maxRetries = 3
-
-    // デフォルトのチャンク設定を使用（実際のチャンク分割は後で行われる）
-    const { getChunkingConfig } = await import('@/config')
-    const chunkingConfig = getChunkingConfig()
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        dbResponse = await fetch(`${baseUrl}/api/novel/db`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            uuid: data.uuid,
-            fileName: data.fileName,
-            length: data.length,
-            totalChunks: 0, // チャンク分割前なので0
-            chunkSize: chunkingConfig.defaultChunkSize,
-            overlapSize: chunkingConfig.defaultOverlapSize,
-          }),
-        })
-
-        dbData = (await dbResponse.json()) as {
-          error?: string
-          job?: { id: string; type: string; status: string }
-        }
-
-        if (dbResponse.ok) {
-          // 成功したらループを抜ける
-          break
-        }
-
-        // リトライ可能なエラーかチェック
-        if (attempt < maxRetries) {
-          console.warn(`DB保存エラー (試行 ${attempt}/${maxRetries}):`, {
-            status: dbResponse.status,
-            error: dbData.error,
-            uuid: data.uuid,
-            fileName: data.fileName,
-          })
-          // 指数バックオフで待機
-          await new Promise((resolve) => setTimeout(resolve, 2 ** (attempt - 1) * 1000))
-        }
-      } catch (fetchError) {
-        // ネットワークエラーなどの場合
-        if (attempt < maxRetries) {
-          console.warn(`DB接続エラー (試行 ${attempt}/${maxRetries}):`, {
-            error: fetchError instanceof Error ? fetchError.message : String(fetchError),
-            uuid: data.uuid,
-            fileName: data.fileName,
-          })
-          await new Promise((resolve) => setTimeout(resolve, 2 ** (attempt - 1) * 1000))
-        } else {
-          dbData.error = fetchError instanceof Error ? fetchError.message : 'ネットワークエラー'
-        }
-      }
-    }
-
-    // 最終的に失敗した場合の詳細エラーログ
-    if (!dbResponse || !dbResponse.ok) {
-      console.error('DB保存失敗（全リトライ後）:', {
-        totalAttempts: maxRetries,
-        finalStatus: dbResponse?.status || 'no response',
-        error: dbData.error || 'Unknown error',
-        requestData: {
-          uuid: data.uuid,
-          fileName: data.fileName,
-          length: data.length,
-        },
-        timestamp: new Date().toISOString(),
-      })
+    // StorageFactoryのDatabaseServiceを使用してDBに保存
+    try {
+      const { StorageFactory } = await import('@/utils/storage')
+      const { DatabaseService } = await import('@/services/database')
+      
+      const db = await StorageFactory.getDatabase()
+      const dbService = new DatabaseService(db)
+      
+      // 小説情報をDBに保存（UUIDを指定）
+      const db2 = await StorageFactory.getDatabase()
+      const now = new Date()
+      await db2.run(
+        `INSERT INTO novels (id, title, author, original_text_path, text_length, language, created_at, updated_at) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          data.uuid,
+          `Novel ${data.uuid?.slice(0, 8) || 'Unknown'}`,
+          'Unknown',
+          data.fileName || '',
+          data.length || 0,
+          'ja',
+          now,
+          now,
+        ],
+      )
+      
+      console.log(`✓ 小説をDBに保存: ${data.uuid}`)
+    } catch (dbError) {
+      console.error('DB保存エラー:', dbError)
       // DBエラーがあってもストレージには保存されているので、処理は続行
     }
 
@@ -127,7 +79,6 @@ export async function POST(request: NextRequest) {
       fileName: data.fileName,
       uuid: data.uuid,
       message: '小説テキストを受信しました',
-      job: dbData.job || null,
     })
   } catch (error) {
     console.error('小説アップロードAPIエラー:', {

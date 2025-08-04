@@ -46,7 +46,7 @@ export const appConfig = {
       },
       openrouter: {
         apiKey: process.env.OPENROUTER_API_KEY,
-        model: 'openrouter/horizon-alpha',
+        model: 'openrouter/horizon-beta',
         baseUrl: 'https://openrouter.ai/api/v1',
         maxTokens: 8192,
         timeout: 30000,
@@ -63,7 +63,7 @@ export const appConfig = {
         claude: 'claude-sonnet-4-20250514',
         gemini: 'gemini-2.5-flash',
         groq: 'compound-beta',
-        openrouter: 'openrouter/horizon-alpha',
+        openrouter: 'openrouter/horizon-beta',
       },
       systemPrompt: `あなたは小説テキストを分析し、マンガ制作に必要な5要素（登場人物、シーン、対話、ハイライト、状況）を抽出する専門家です。
 
@@ -75,6 +75,18 @@ export const appConfig = {
   "highlights": [{"type": "種類", "description": "説明", "importance": 重要度, "startIndex": 開始位置, "endIndex": 終了位置}],
   "situations": [{"description": "状況説明", "index": 位置}]
 }`,
+      userPromptTemplate: `チャンク番号: {{chunkIndex}}
+
+【前のチャンク】
+{{previousChunkText}}
+
+【分析対象チャンク】
+{{chunkText}}
+
+【次のチャンク】
+{{nextChunkText}}
+
+上記のテキストチャンクを分析し、マンガ制作に必要な5要素を抽出してください。`,
     },
 
     // 物語弧分析用設定
@@ -87,7 +99,7 @@ export const appConfig = {
         claude: 'claude-sonnet-4-20250514',
         gemini: 'gemini-2.5-flash',
         groq: 'compound-beta',
-        openrouter: 'openrouter/horizon-alpha',
+        openrouter: 'openrouter/horizon-beta',
       },
       systemPrompt: `あなたは物語の構造を分析し、エピソードの境界を特定する専門家です。
 
@@ -155,7 +167,7 @@ export const appConfig = {
         claude: 'claude-sonnet-4-20250514',
         gemini: 'gemini-2.5-flash',
         groq: 'compound-beta',
-        openrouter: 'openrouter/horizon-alpha',
+        openrouter: 'openrouter/horizon-beta',
       },
       systemPrompt: `あなたはマンガのコマ割りレイアウトを設計する専門家です。
 日本式マンガのレイアウト（右から左、上から下の読み順）でYAML形式のレイアウトを生成してください。

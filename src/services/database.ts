@@ -131,6 +131,66 @@ export class DatabaseService {
     )
   }
 
+  async updateJobStep(
+    id: string, 
+    currentStep: string, 
+    processedChunks?: number,
+    totalChunks?: number,
+    error?: string,
+    errorStep?: string
+  ): Promise<void> {
+    const updates: string[] = ['current_step = ?', 'updated_at = CURRENT_TIMESTAMP']
+    const params: any[] = [currentStep]
+
+    if (processedChunks !== undefined) {
+      updates.push('processed_chunks = ?')
+      params.push(processedChunks)
+    }
+
+    if (totalChunks !== undefined) {
+      updates.push('total_chunks = ?')
+      params.push(totalChunks)
+    }
+
+    if (error) {
+      updates.push('last_error = ?', 'last_error_step = ?')
+      params.push(error, errorStep || currentStep)
+    }
+
+    const query = `UPDATE jobs SET ${updates.join(', ')} WHERE id = ?`
+    params.push(id)
+
+    await this.db.run(query, params)
+  }
+
+  async updateJobError(id: string, error: string, step: string, incrementRetry = true): Promise<void> {
+    const query = incrementRetry
+      ? 'UPDATE jobs SET last_error = ?, last_error_step = ?, retry_count = retry_count + 1, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+      : 'UPDATE jobs SET last_error = ?, last_error_step = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    
+    const params = incrementRetry 
+      ? [error, step, 'failed', id]
+      : [error, step, 'failed', id]
+
+    await this.db.run(query, params)
+  }
+
+  async markJobStepCompleted(id: string, stepType: 'split' | 'analyze' | 'episode' | 'layout' | 'render'): Promise<void> {
+    const columnMap = {
+      split: 'split_completed',
+      analyze: 'analyze_completed', 
+      episode: 'episode_completed',
+      layout: 'layout_completed',
+      render: 'render_completed'
+    }
+
+    const column = columnMap[stepType]
+    await this.db.run(
+      `UPDATE jobs SET ${column} = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [id]
+    )
+  }
+
   // Chunk関連メソッド
   async createChunk(chunk: Omit<Chunk, 'id' | 'createdAt'>): Promise<string> {
     const id = crypto.randomUUID()
