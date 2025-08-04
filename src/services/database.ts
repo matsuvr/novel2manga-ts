@@ -1,95 +1,70 @@
 import crypto from 'node:crypto'
-import type { Chunk, Episode, ExtendedJob, Job, JobProgress, JobStatus, Novel } from '@/types'
-import type { DatabaseAdapter } from '@/utils/storage'
+import { eq, asc } from 'drizzle-orm'
+import { getDatabase, type Novel, type Job, type Chunk, type Episode, type NewNovel, type NewJob, type NewChunk, type NewEpisode } from '@/db'
+import { novels, jobs, chunks, episodes } from '@/db/schema'
+import type { JobProgress, JobStatus, ExtendedJob } from '@/types/job'
 
 export class DatabaseService {
-  constructor(private db: DatabaseAdapter) {}
+  private db = getDatabase()
 
   // Novel関連メソッド
-  async createNovel(novel: Omit<Novel, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+  async createNovel(novel: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     const id = crypto.randomUUID()
-    const now = new Date()
-    await this.db.run(
-      `INSERT INTO novels (id, title, author, original_text_path, text_length, language, metadata_path, created_at, updated_at) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id,
-        novel.title || null,
-        novel.author || null,
-        novel.originalTextPath,
-        novel.textLength,
-        novel.language,
-        novel.metadataPath || null,
-        now,
-        now,
-      ],
-    )
+    const now = new Date().toISOString()
+    
+    await this.db.insert(novels).values({
+      id,
+      title: novel.title,
+      author: novel.author,
+      originalTextPath: novel.originalTextPath,
+      textLength: novel.textLength,
+      language: novel.language || 'ja',
+      metadataPath: novel.metadataPath,
+      createdAt: now,
+      updatedAt: now
+    })
+    
     return id
   }
 
+  async ensureNovel(
+    id: string,
+    novel: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<void> {
+    const now = new Date().toISOString()
+    
+    await this.db.insert(novels).values({
+      id,
+      title: novel.title,
+      author: novel.author,
+      originalTextPath: novel.originalTextPath,
+      textLength: novel.textLength,
+      language: novel.language || 'ja',
+      metadataPath: novel.metadataPath,
+      createdAt: now,
+      updatedAt: now
+    }).onConflictDoNothing()
+  }
+
   async getNovel(id: string): Promise<Novel | null> {
-    const result = await this.db.get('SELECT * FROM novels WHERE id = ?', [id])
-
-    if (!result) return null
-
-    return {
-      id: result.id,
-      title: result.title,
-      author: result.author,
-      originalTextPath: result.original_text_path,
-      textLength: result.text_length,
-      language: result.language,
-      metadataPath: result.metadata_path,
-      createdAt: new Date(result.created_at),
-      updatedAt: new Date(result.updated_at),
-    }
+    const result = await this.db.select().from(novels).where(eq(novels.id, id)).limit(1)
+    return result[0] || null
   }
 
   // Job関連メソッド
   async createJob(id: string, novelId: string, jobName?: string): Promise<void> {
-    await this.db.run(
-      'INSERT INTO jobs (id, novel_id, job_name, status, current_step) VALUES (?, ?, ?, ?, ?)',
-      [id, novelId, jobName || null, 'pending', 'initialized'],
-    )
+    await this.db.insert(jobs).values({
+      id,
+      novelId,
+      jobName,
+      status: 'pending',
+      currentStep: 'initialized'
+    })
   }
 
   async getJob(id: string): Promise<Job | null> {
-    const result = await this.db.get('SELECT * FROM jobs WHERE id = ?', [id])
-
-    if (!result) return null
-
-    // データベースの結果を型に変換
-    return {
-      id: result.id,
-      novelId: result.novel_id,
-      jobName: result.job_name,
-      status: result.status,
-      currentStep: result.current_step,
-      splitCompleted: result.split_completed,
-      analyzeCompleted: result.analyze_completed,
-      episodeCompleted: result.episode_completed,
-      layoutCompleted: result.layout_completed,
-      renderCompleted: result.render_completed,
-      chunksDirPath: result.chunks_dir_path,
-      analysesDirPath: result.analyses_dir_path,
-      episodesDataPath: result.episodes_data_path,
-      layoutsDirPath: result.layouts_dir_path,
-      rendersDirPath: result.renders_dir_path,
-      totalChunks: result.total_chunks,
-      processedChunks: result.processed_chunks,
-      totalEpisodes: result.total_episodes,
-      processedEpisodes: result.processed_episodes,
-      totalPages: result.total_pages,
-      renderedPages: result.rendered_pages,
-      lastError: result.last_error,
-      lastErrorStep: result.last_error_step,
-      retryCount: result.retry_count,
-      resumeDataPath: result.resume_data_path,
-      createdAt: new Date(result.created_at),
-      updatedAt: new Date(result.updated_at),
-      startedAt: result.started_at ? new Date(result.started_at) : undefined,
-      completedAt: result.completed_at ? new Date(result.completed_at) : undefined,
-    }
+    const result = await this.db.select().from(jobs).where(eq(jobs.id, id)).limit(1)
+    return result[0] || null
   }
 
   async getExtendedJob(id: string): Promise<ExtendedJob | null> {
@@ -105,206 +80,173 @@ export class DatabaseService {
 
     return {
       ...job,
-      progress,
+      status: job.status as JobStatus,
+      progress
     }
   }
 
   async updateJobStatus(id: string, status: JobStatus, error?: string): Promise<void> {
-    const query = error
-      ? 'UPDATE jobs SET status = ?, last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-      : 'UPDATE jobs SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    const updateData: Partial<Job> = {
+      status,
+      updatedAt: new Date().toISOString()
+    }
+    
+    if (error) {
+      updateData.lastError = error
+    }
 
-    const params = error ? [status, error, id] : [status, id]
-    await this.db.run(query, params)
+    await this.db.update(jobs).set(updateData).where(eq(jobs.id, id))
   }
 
   async updateJobProgress(id: string, progress: JobProgress): Promise<void> {
-    // progressはresume_data_pathに保存する必要がある場合の処理
-    await this.db.run(
-      `UPDATE jobs 
-       SET processed_chunks = ?, 
-           total_episodes = ?,
-           current_step = ?,
-           updated_at = CURRENT_TIMESTAMP 
-       WHERE id = ?`,
-      [progress.processedChunks, progress.episodes.length, progress.currentStep, id],
-    )
+    await this.db.update(jobs).set({
+      processedChunks: progress.processedChunks,
+      totalEpisodes: progress.episodes.length,
+      currentStep: progress.currentStep,
+      updatedAt: new Date().toISOString()
+    }).where(eq(jobs.id, id))
   }
 
   async updateJobStep(
-    id: string, 
-    currentStep: string, 
+    id: string,
+    currentStep: string,
     processedChunks?: number,
     totalChunks?: number,
     error?: string,
     errorStep?: string
   ): Promise<void> {
-    const updates: string[] = ['current_step = ?', 'updated_at = CURRENT_TIMESTAMP']
-    const params: any[] = [currentStep]
+    const updateData: Partial<Job> = {
+      currentStep,
+      updatedAt: new Date().toISOString()
+    }
 
     if (processedChunks !== undefined) {
-      updates.push('processed_chunks = ?')
-      params.push(processedChunks)
+      updateData.processedChunks = processedChunks
     }
 
     if (totalChunks !== undefined) {
-      updates.push('total_chunks = ?')
-      params.push(totalChunks)
+      updateData.totalChunks = totalChunks
     }
 
     if (error) {
-      updates.push('last_error = ?', 'last_error_step = ?')
-      params.push(error, errorStep || currentStep)
+      updateData.lastError = error
+      updateData.lastErrorStep = errorStep || currentStep
     }
 
-    const query = `UPDATE jobs SET ${updates.join(', ')} WHERE id = ?`
-    params.push(id)
-
-    await this.db.run(query, params)
+    await this.db.update(jobs).set(updateData).where(eq(jobs.id, id))
   }
 
   async updateJobError(id: string, error: string, step: string, incrementRetry = true): Promise<void> {
-    const query = incrementRetry
-      ? 'UPDATE jobs SET last_error = ?, last_error_step = ?, retry_count = retry_count + 1, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-      : 'UPDATE jobs SET last_error = ?, last_error_step = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-    
-    const params = incrementRetry 
-      ? [error, step, 'failed', id]
-      : [error, step, 'failed', id]
+    const updateData: Partial<Job> = {
+      lastError: error,
+      lastErrorStep: step,
+      status: 'failed',
+      updatedAt: new Date().toISOString()
+    }
 
-    await this.db.run(query, params)
+    if (incrementRetry) {
+      // Drizzleでretry_count + 1を行う
+      const currentJob = await this.getJob(id)
+      if (currentJob) {
+        updateData.retryCount = (currentJob.retryCount || 0) + 1
+      }
+    }
+
+    await this.db.update(jobs).set(updateData).where(eq(jobs.id, id))
   }
 
   async markJobStepCompleted(id: string, stepType: 'split' | 'analyze' | 'episode' | 'layout' | 'render'): Promise<void> {
-    const columnMap = {
-      split: 'split_completed',
-      analyze: 'analyze_completed', 
-      episode: 'episode_completed',
-      layout: 'layout_completed',
-      render: 'render_completed'
+    const updateData: Partial<Job> = {
+      updatedAt: new Date().toISOString()
     }
 
-    const column = columnMap[stepType]
-    await this.db.run(
-      `UPDATE jobs SET ${column} = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [id]
-    )
+    switch (stepType) {
+      case 'split':
+        updateData.splitCompleted = true
+        break
+      case 'analyze':
+        updateData.analyzeCompleted = true
+        break
+      case 'episode':
+        updateData.episodeCompleted = true
+        break
+      case 'layout':
+        updateData.layoutCompleted = true
+        break
+      case 'render':
+        updateData.renderCompleted = true
+        break
+    }
+
+    await this.db.update(jobs).set(updateData).where(eq(jobs.id, id))
   }
 
   // Chunk関連メソッド
-  async createChunk(chunk: Omit<Chunk, 'id' | 'createdAt'>): Promise<string> {
+  async createChunk(chunk: Omit<NewChunk, 'id' | 'createdAt'>): Promise<string> {
     const id = crypto.randomUUID()
-    await this.db.run(
-      'INSERT INTO chunks (id, novel_id, job_id, chunk_index, content_path, start_position, end_position, word_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [
-        id,
-        chunk.novelId,
-        chunk.jobId,
-        chunk.chunkIndex,
-        chunk.contentPath,
-        chunk.startPosition,
-        chunk.endPosition,
-        chunk.wordCount || null,
-      ],
-    )
+    
+    await this.db.insert(chunks).values({
+      id,
+      novelId: chunk.novelId,
+      jobId: chunk.jobId,
+      chunkIndex: chunk.chunkIndex,
+      contentPath: chunk.contentPath,
+      startPosition: chunk.startPosition,
+      endPosition: chunk.endPosition,
+      wordCount: chunk.wordCount
+    })
+    
     return id
   }
 
   async getChunksByJobId(jobId: string): Promise<Chunk[]> {
-    const results = await this.db.all(
-      'SELECT * FROM chunks WHERE job_id = ? ORDER BY chunk_index',
-      [jobId],
-    )
-
-    return results.map((row: Record<string, unknown>) => ({
-      id: row.id as string,
-      novelId: row.novel_id as string,
-      jobId: row.job_id as string,
-      chunkIndex: row.chunk_index as number,
-      contentPath: row.content_path as string,
-      startPosition: row.start_position as number,
-      endPosition: row.end_position as number,
-      wordCount: row.word_count as number | undefined,
-      createdAt: new Date(row.created_at as string),
-    }))
+    return await this.db.select().from(chunks)
+      .where(eq(chunks.jobId, jobId))
+      .orderBy(asc(chunks.chunkIndex))
   }
 
   // Episode関連メソッド
-  async createEpisode(episode: Episode): Promise<void> {
+  async createEpisode(episode: NewEpisode): Promise<void> {
     const id = `${episode.jobId}-ep${episode.episodeNumber}`
-    await this.db.run(
-      `INSERT INTO episodes (
-        id, novel_id, job_id, episode_number, title, summary,
-        start_chunk, start_char_index, end_chunk, end_char_index,
-        estimated_pages, confidence
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id,
-        episode.novelId,
-        episode.jobId,
-        episode.episodeNumber,
-        episode.title || null,
-        episode.summary || null,
-        episode.startChunk,
-        episode.startCharIndex,
-        episode.endChunk,
-        episode.endCharIndex,
-        episode.estimatedPages,
-        episode.confidence,
-      ],
-    )
+    
+    await this.db.insert(episodes).values({
+      id,
+      novelId: episode.novelId,
+      jobId: episode.jobId,
+      episodeNumber: episode.episodeNumber,
+      title: episode.title,
+      summary: episode.summary,
+      startChunk: episode.startChunk,
+      startCharIndex: episode.startCharIndex,
+      endChunk: episode.endChunk,
+      endCharIndex: episode.endCharIndex,
+      estimatedPages: episode.estimatedPages,
+      confidence: episode.confidence
+    })
   }
 
-  async createEpisodes(episodes: Episode[]): Promise<void> {
-    // トランザクション的な処理
-    const statements = episodes.map((episode) => {
-      const id = `${episode.jobId}-ep${episode.episodeNumber}`
-      return {
-        query: `INSERT INTO episodes (
-          id, novel_id, job_id, episode_number, title, summary,
-          start_chunk, start_char_index, end_chunk, end_char_index,
-          estimated_pages, confidence
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        params: [
-          id,
-          episode.novelId,
-          episode.jobId,
-          episode.episodeNumber,
-          episode.title || null,
-          episode.summary || null,
-          episode.startChunk,
-          episode.startCharIndex,
-          episode.endChunk,
-          episode.endCharIndex,
-          episode.estimatedPages,
-          episode.confidence,
-        ],
-      }
-    })
+  async createEpisodes(episodeList: NewEpisode[]): Promise<void> {
+    const episodesToInsert = episodeList.map((episode) => ({
+      id: `${episode.jobId}-ep${episode.episodeNumber}`,
+      novelId: episode.novelId,
+      jobId: episode.jobId,
+      episodeNumber: episode.episodeNumber,
+      title: episode.title,
+      summary: episode.summary,
+      startChunk: episode.startChunk,
+      startCharIndex: episode.startCharIndex,
+      endChunk: episode.endChunk,
+      endCharIndex: episode.endCharIndex,
+      estimatedPages: episode.estimatedPages,
+      confidence: episode.confidence
+    }))
 
-    await this.db.batch(statements)
+    await this.db.insert(episodes).values(episodesToInsert)
   }
 
   async getEpisodesByJobId(jobId: string): Promise<Episode[]> {
-    const results = await this.db.all(
-      'SELECT * FROM episodes WHERE job_id = ? ORDER BY episode_number',
-      [jobId],
-    )
-
-    return results.map((row: Record<string, unknown>) => ({
-      id: row.id as string,
-      novelId: row.novel_id as string,
-      jobId: row.job_id as string,
-      episodeNumber: row.episode_number as number,
-      title: row.title as string | undefined,
-      summary: row.summary as string | undefined,
-      startChunk: row.start_chunk as number,
-      startCharIndex: row.start_char_index as number,
-      endChunk: row.end_chunk as number,
-      endCharIndex: row.end_char_index as number,
-      estimatedPages: row.estimated_pages as number,
-      confidence: row.confidence as number,
-      createdAt: new Date(row.created_at as string),
-    }))
+    return await this.db.select().from(episodes)
+      .where(eq(episodes.jobId, jobId))
+      .orderBy(asc(episodes.episodeNumber))
   }
 }

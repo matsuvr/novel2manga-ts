@@ -362,52 +362,65 @@ erDiagram
 ### Data Model Definitions
 
 ```typescript
-// TypeScript インターフェース定義（新スキーマ対応）
+// TypeScript 型定義（Drizzle自動生成）
+// Drizzleが自動的に型を生成するため、手動定義は不要
 
-// Core Models
-interface Novel {
+// Core Models - Drizzle $inferSelect/$inferInsert使用
+type Novel = typeof novels.$inferSelect    // 自動生成された型
+type NewNovel = typeof novels.$inferInsert // Insert用の型
+
+// 実際のインターフェース構造（参考）：
+/*
+Novel {
   id: string;                    // UUID
-  title?: string;                // 小説タイトル
-  author?: string;               // 著者名
+  title: string | null;          // 小説タイトル（Drizzleはnull許可）
+  author: string | null;         // 著者名
   originalTextPath: string;      // ストレージ上のファイルパス
   textLength: number;            // 総文字数
-  language: string;              // 言語コード
-  metadataPath?: string;         // メタデータJSONパス
-  createdAt: Date;
-  updatedAt: Date;
+  language: string | null;       // 言語コード
+  metadataPath: string | null;   // メタデータJSONパス
+  createdAt: string | null;      // ISO文字列形式
+  updatedAt: string | null;      // ISO文字列形式
 }
+*/
 
-interface Job {
+type Job = typeof jobs.$inferSelect        // Drizzle自動生成
+type NewJob = typeof jobs.$inferInsert     // Insert用
+
+// 実際の構造（参考）：
+/*
+Job {
   id: string;
   novelId: string;
-  jobName?: string;              // ジョブ名
-  status: JobStatus;             // pending/processing/completed/failed/paused
-  currentStep: JobStep;          // initialized/split/analyze/episode/layout/render/complete
-  splitCompleted: boolean;
-  analyzeCompleted: boolean;
-  episodeCompleted: boolean;
-  layoutCompleted: boolean;
-  renderCompleted: boolean;
-  chunksDirPath?: string;        // チャンクファイルディレクトリ
-  analysesDirPath?: string;      // 分析結果ディレクトリ
-  episodesDataPath?: string;     // エピソード情報JSON
-  layoutsDirPath?: string;       // レイアウトディレクトリ
-  rendersDirPath?: string;       // 描画結果ディレクトリ
-  totalChunks: number;
-  processedChunks: number;
-  totalEpisodes: number;
-  processedEpisodes: number;
-  totalPages: number;
-  renderedPages: number;
-  lastError?: string;
-  lastErrorStep?: string;
-  retryCount: number;
-  resumeDataPath?: string;       // 再開用データJSON
-  createdAt: Date;
-  updatedAt: Date;
-  startedAt?: Date;
-  completedAt?: Date;
+  jobName: string | null;              // ジョブ名
+  status: string;                      // 'pending'|'processing'|'completed'|'failed'|'paused'
+  currentStep: string;                 // 'initialized'|'split'|'analyze'|'episode'|'layout'|'render'|'complete'
+  splitCompleted: boolean | null;      // Drizzleのbooleanモード
+  analyzeCompleted: boolean | null;
+  episodeCompleted: boolean | null;
+  layoutCompleted: boolean | null;
+  renderCompleted: boolean | null;
+  chunksDirPath: string | null;        // チャンクファイルディレクトリ
+  analysesDirPath: string | null;      // 分析結果ディレクトリ
+  episodesDataPath: string | null;     // エピソード情報JSON
+  layoutsDirPath: string | null;       // レイアウトディレクトリ
+  rendersDirPath: string | null;       // 描画結果ディレクトリ
+  totalChunks: number | null;
+  processedChunks: number | null;
+  totalEpisodes: number | null;
+  processedEpisodes: number | null;
+  totalPages: number | null;
+  renderedPages: number | null;
+  lastError: string | null;
+  lastErrorStep: string | null;
+  retryCount: number | null;
+  resumeDataPath: string | null;       // 再開用データJSON
+  createdAt: string | null;            // ISO文字列
+  updatedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
 }
+*/
 
 interface Chunk {
   id: string;
@@ -508,16 +521,23 @@ interface Output {
   createdAt: Date;
 }
 
-interface StorageFile {
+type StorageFile = typeof storageFiles.$inferSelect
+type NewStorageFile = typeof storageFiles.$inferInsert
+
+// 実際の構造（参考）：
+/*
+StorageFile {
   id: string;
   novelId: string;
-  jobId?: string;
-  filePath: string;
-  fileCategory: 'original' | 'chunk' | 'analysis' | 'episode' | 'layout' | 'render' | 'output' | 'metadata';
-  fileType: 'txt' | 'json' | 'yaml' | 'png' | 'jpg' | 'pdf' | 'zip';
-  fileSize?: number;
-  createdAt: Date;
+  jobId: string | null;           // optional reference
+  filePath: string;               // unique constraint
+  fileCategory: string;           // 'original'|'chunk'|'analysis'|'episode'|'layout'|'render'|'output'|'metadata'
+  fileType: string;               // 'txt'|'json'|'yaml'|'png'|'jpg'|'pdf'|'zip'
+  mimeType: string | null;        // 追加: 実際のMIMEタイプ (例: 'image/png')
+  fileSize: number | null;
+  createdAt: string | null;       // ISO文字列
 }
+*/
 
 // 5要素の詳細（R2に保存）
 interface TextAnalysis {
@@ -584,74 +604,89 @@ interface Situation {
 }
 ```
 
-### Database Schema
+### Database Schema (Drizzle ORM)
 
-```sql
--- Cloudflare D1 スキーマ (SQLite)
--- Novel最上位版: Novel → Job → 各処理ステップ
--- 大容量データはR2に保存し、D1には参照のみ保存
+現在のデータベーススキーマはDrizzle ORMを使用して定義されています。
 
--- 小説テーブル（最上位エンティティ）
-CREATE TABLE novels (
-  id TEXT PRIMARY KEY,
-  title TEXT,
-  author TEXT,
-  original_text_path TEXT NOT NULL, -- ストレージ上の小説ファイルパス
-  text_length INTEGER NOT NULL,
-  language TEXT DEFAULT 'ja',
-  metadata_path TEXT, -- ストレージ上のメタデータJSONファイルパス
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
+```typescript
+// src/db/schema.ts - Drizzle Schema Definition
 
--- 変換ジョブテーブル（小説に対する変換処理）
-CREATE TABLE jobs (
-  id TEXT PRIMARY KEY,
-  novel_id TEXT NOT NULL,
-  job_name TEXT, -- ジョブの名前や説明
-  
-  -- ステータス管理
-  status TEXT NOT NULL DEFAULT 'pending', -- pending/processing/completed/failed/paused
-  current_step TEXT NOT NULL DEFAULT 'initialized', -- initialized/split/analyze/episode/layout/render/complete
-  
-  -- 各ステップの完了状態
-  split_completed BOOLEAN DEFAULT FALSE,
-  analyze_completed BOOLEAN DEFAULT FALSE,
-  episode_completed BOOLEAN DEFAULT FALSE,
-  layout_completed BOOLEAN DEFAULT FALSE,
-  render_completed BOOLEAN DEFAULT FALSE,
-  
-  -- 各ステップの成果物パス（ディレクトリ）
-  chunks_dir_path TEXT, -- チャンクファイルのディレクトリ
-  analyses_dir_path TEXT, -- 分析結果のディレクトリ
-  episodes_data_path TEXT, -- エピソード情報のJSONファイル
-  layouts_dir_path TEXT, -- レイアウトファイルのディレクトリ
-  renders_dir_path TEXT, -- 描画結果のディレクトリ
-  
-  -- 進捗詳細
-  total_chunks INTEGER DEFAULT 0,
-  processed_chunks INTEGER DEFAULT 0,
-  total_episodes INTEGER DEFAULT 0,
-  processed_episodes INTEGER DEFAULT 0,
-  total_pages INTEGER DEFAULT 0,
-  rendered_pages INTEGER DEFAULT 0,
-  
-  -- エラー管理
-  last_error TEXT,
-  last_error_step TEXT,
-  retry_count INTEGER DEFAULT 0,
-  
-  -- 再開用の状態保存
-  resume_data_path TEXT, -- 中断時の詳細状態JSONファイル
-  
-  -- タイムスタンプ
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  started_at DATETIME,
-  completed_at DATETIME,
-  
-  FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE
-);
+// 小説テーブル（最上位エンティティ）
+export const novels = sqliteTable(
+  'novels',
+  {
+    id: text('id').primaryKey(),
+    title: text('title'),
+    author: text('author'),
+    originalTextPath: text('original_text_path').notNull(), // ストレージ上の小説ファイルパス
+    textLength: integer('text_length').notNull(),
+    language: text('language').default('ja'),
+    metadataPath: text('metadata_path'), // ストレージ上のメタデータJSONファイルパス
+    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    createdAtIdx: index('idx_novels_created_at').on(table.createdAt),
+  }),
+)
+
+// 変換ジョブテーブル（小説に対する変換処理）
+export const jobs = sqliteTable(
+  'jobs',
+  {
+    id: text('id').primaryKey(),
+    novelId: text('novel_id')
+      .notNull()
+      .references(() => novels.id, { onDelete: 'cascade' }),
+    jobName: text('job_name'),
+
+    // ステータス管理
+    status: text('status').notNull().default('pending'), // pending/processing/completed/failed/paused
+    currentStep: text('current_step').notNull().default('initialized'), // initialized/split/analyze/episode/layout/render/complete
+
+    // 各ステップの完了状態
+    splitCompleted: integer('split_completed', { mode: 'boolean' }).default(false),
+    analyzeCompleted: integer('analyze_completed', { mode: 'boolean' }).default(false),
+    episodeCompleted: integer('episode_completed', { mode: 'boolean' }).default(false),
+    layoutCompleted: integer('layout_completed', { mode: 'boolean' }).default(false),
+    renderCompleted: integer('render_completed', { mode: 'boolean' }).default(false),
+
+    // 各ステップの成果物パス（ディレクトリ）
+    chunksDirPath: text('chunks_dir_path'),
+    analysesDirPath: text('analyses_dir_path'),
+    episodesDataPath: text('episodes_data_path'),
+    layoutsDirPath: text('layouts_dir_path'),
+    rendersDirPath: text('renders_dir_path'),
+
+    // 進捗詳細
+    totalChunks: integer('total_chunks').default(0),
+    processedChunks: integer('processed_chunks').default(0),
+    totalEpisodes: integer('total_episodes').default(0),
+    processedEpisodes: integer('processed_episodes').default(0),
+    totalPages: integer('total_pages').default(0),
+    renderedPages: integer('rendered_pages').default(0),
+
+    // エラー管理
+    lastError: text('last_error'),
+    lastErrorStep: text('last_error_step'),
+    retryCount: integer('retry_count').default(0),
+
+    // 再開用の状態保存
+    resumeDataPath: text('resume_data_path'),
+
+    // タイムスタンプ
+    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+    startedAt: text('started_at'),
+    completedAt: text('completed_at'),
+  },
+  (table) => ({
+    novelIdIdx: index('idx_jobs_novel_id').on(table.novelId),
+    statusIdx: index('idx_jobs_status').on(table.status),
+    novelIdStatusIdx: index('idx_jobs_novel_id_status').on(table.novelId, table.status),
+    currentStepIdx: index('idx_jobs_current_step').on(table.currentStep),
+  }),
+)
 
 -- ジョブステップ履歴テーブル（各ステップの実行記録）
 CREATE TABLE job_step_history (
@@ -788,39 +823,49 @@ CREATE TABLE storage_files (
   UNIQUE(file_path)
 );
 
--- インデックス
-CREATE INDEX idx_novels_created_at ON novels(created_at);
-CREATE INDEX idx_jobs_novel_id ON jobs(novel_id);
-CREATE INDEX idx_jobs_status ON jobs(status);
-CREATE INDEX idx_jobs_current_step ON jobs(current_step);
-CREATE INDEX idx_job_step_history_job_id ON job_step_history(job_id);
-CREATE INDEX idx_chunks_novel_id ON chunks(novel_id);
-CREATE INDEX idx_chunks_job_id ON chunks(job_id);
-CREATE INDEX idx_chunk_analysis_status_job_id ON chunk_analysis_status(job_id);
-CREATE INDEX idx_episodes_novel_id ON episodes(novel_id);
-CREATE INDEX idx_episodes_job_id ON episodes(job_id);
-CREATE INDEX idx_layout_status_job_id ON layout_status(job_id);
-CREATE INDEX idx_render_status_job_id ON render_status(job_id);
-CREATE INDEX idx_outputs_novel_id ON outputs(novel_id);
-CREATE INDEX idx_outputs_job_id ON outputs(job_id);
-CREATE INDEX idx_storage_files_novel_id ON storage_files(novel_id);
+// インデックスはDrizzleテーブル定義内で管理：
+// - novels: createdAtIdx
+// - jobs: novelIdIdx, statusIdx, novelIdStatusIdx, currentStepIdx  
+// - jobStepHistory: jobIdIdx
+// - chunks: novelIdIdx, jobIdIdx, uniqueJobChunk
+// - chunkAnalysisStatus: jobIdIdx, uniqueJobChunkAnalysis
+// - episodes: novelIdIdx, jobIdIdx, uniqueJobEpisode
+// - layoutStatus: jobIdIdx, uniqueJobEpisodeLayout
+// - renderStatus: jobIdIdx, uniqueJobEpisodePage
+// - outputs: novelIdIdx, jobIdIdx
+// - storageFiles: novelIdIdx
 
--- 小説の変換状況ビュー
-CREATE VIEW novel_status_view AS
-SELECT 
-  n.id,
-  n.title,
-  n.author,
-  COUNT(DISTINCT j.id) as total_jobs,
-  COUNT(DISTINCT CASE WHEN j.status = 'completed' THEN j.id END) as completed_jobs,
-  COUNT(DISTINCT CASE WHEN j.status = 'processing' THEN j.id END) as active_jobs,
-  COUNT(DISTINCT o.id) as total_outputs,
-  n.created_at,
-  MAX(j.created_at) as last_job_created_at
-FROM novels n
-LEFT JOIN jobs j ON n.id = j.novel_id
-LEFT JOIN outputs o ON n.id = o.novel_id
-GROUP BY n.id;
+// 型エクスポート（Drizzle自動生成）
+export type Novel = typeof novels.$inferSelect
+export type NewNovel = typeof novels.$inferInsert
+export type Job = typeof jobs.$inferSelect
+export type NewJob = typeof jobs.$inferInsert
+export type Episode = typeof episodes.$inferSelect
+export type NewEpisode = typeof episodes.$inferInsert
+// その他すべてのテーブル型も同様に自動生成
+
+// データベースビューはDrizzleでは直接サポートされていないため、
+// 必要に応じてクエリビルダーで複雑な集計を実装
+
+// 小説の変換状況取得例：
+/*
+const novelStatusQuery = db
+  .select({
+    id: novels.id,
+    title: novels.title,
+    author: novels.author,
+    totalJobs: count(jobs.id),
+    completedJobs: count(case(when(eq(jobs.status, 'completed'), jobs.id), else(null))),
+    activeJobs: count(case(when(eq(jobs.status, 'processing'), jobs.id), else(null))),
+    totalOutputs: count(outputs.id),
+    createdAt: novels.createdAt,
+    lastJobCreatedAt: max(jobs.createdAt),
+  })
+  .from(novels)
+  .leftJoin(jobs, eq(novels.id, jobs.novelId))
+  .leftJoin(outputs, eq(novels.id, outputs.novelId))
+  .groupBy(novels.id);
+*/
 
 -- ジョブ進捗ビュー
 CREATE VIEW job_progress_view AS
@@ -935,12 +980,24 @@ novels/
                 └── resume_data.json    # 再開用データ
 ```
 
-### Migration Strategy
+### Migration Strategy (Drizzle)
 
-- Wranglerのマイグレーション機能を使用 (D1)
-- 後方互換性のためJSONフィールドでスキーマ進化に対応
-- バージョン管理されたマイグレーションファイル
-- インデックス戦略：project_id、episode_id、page_numberに複合インデックス
+- **Drizzle Kit**: スキーマから自動マイグレーション生成
+- **環境別マイグレーション**: 開発環境（SQLite）、本番環境（D1）
+- **型安全性**: TypeScriptによるスキーマとクエリの型チェック
+- **バージョン管理**: `drizzle/migrations/`ディレクトリで管理
+- **マイグレーションコマンド**:
+  ```bash
+  # スキーマ変更からマイグレーション生成
+  npx drizzle-kit generate
+  
+  # 開発環境適用
+  npx drizzle-kit migrate
+  
+  # 本番環境適用（D1）
+  npx wrangler d1 migrations apply novel2manga
+  ```
+- **インデックス戦略**: Drizzleテーブル定義内で複合インデックス管理
 
 ## Storage and Database Abstraction
 
@@ -955,21 +1012,34 @@ interface Storage {
   exists(key: string): Promise<boolean>;
 }
 
-// Database Adapter Interface
-interface DatabaseAdapter {
-  prepare(query: string): any;
-  run(query: string, params?: any[]): Promise<any>;
-  get(query: string, params?: any[]): Promise<any>;
-  all(query: string, params?: any[]): Promise<any[]>;
-  batch(statements: any[]): Promise<any[]>;
-  close(): Promise<void>;
+// Drizzle Database Connection
+interface DrizzleDatabase {
+  select(): SelectQueryBuilder;
+  insert(table: SQLiteTable): InsertQueryBuilder;
+  update(table: SQLiteTable): UpdateQueryBuilder;
+  delete(table: SQLiteTable): DeleteQueryBuilder;
+  batch(queries: any[]): Promise<any[]>;
 }
 
 // Environment-specific Implementations
 class LocalFileStorage implements Storage { /* ... */ }
 class R2Storage implements Storage { /* ... */ }
-class SQLiteAdapter implements DatabaseAdapter { /* ... */ }
-class D1Adapter implements DatabaseAdapter { /* ... */ }
+
+// Drizzle統合データベース接続
+class DatabaseService {
+  private db: DrizzleDatabase
+  
+  constructor() {
+    if (process.env.NODE_ENV === 'development') {
+      // SQLite + Drizzle
+      const sqliteDb = new Database(dbConfig.path)
+      this.db = drizzle(sqliteDb, { schema })
+    } else {
+      // D1 + Drizzle
+      this.db = drizzle(globalThis.DB, { schema })
+    }
+  }
+}
 
 // Storage Factory
 class StorageFactory {

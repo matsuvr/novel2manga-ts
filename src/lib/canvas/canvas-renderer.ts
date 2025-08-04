@@ -1,4 +1,4 @@
-import { MangaLayout, Panel } from '@/types/panel-layout'
+import type { MangaLayout, Panel } from '@/types/panel-layout'
 
 export interface CanvasRenderConfig {
   width: number
@@ -43,7 +43,7 @@ export class CanvasRenderer {
   constructor(canvas: HTMLCanvasElement, config: CanvasRenderConfig) {
     this.canvas = canvas
     this.config = config
-    
+
     const ctx = canvas.getContext('2d')
     if (!ctx) {
       throw new Error('Failed to get 2D rendering context')
@@ -56,7 +56,7 @@ export class CanvasRenderer {
   private initializeCanvas(): void {
     this.canvas.width = this.config.width
     this.canvas.height = this.config.height
-    
+
     // 背景を塗りつぶし
     if (this.config.backgroundColor) {
       this.ctx.fillStyle = this.config.backgroundColor
@@ -87,11 +87,11 @@ export class CanvasRenderer {
       fontFamily = this.config.fontFamily || 'Arial, sans-serif',
       color = '#000000',
       align = 'left',
-      verticalAlign = 'top'
+      verticalAlign = 'top',
     } = options
 
     this.ctx.save()
-    
+
     this.ctx.font = `${fontSize}px ${fontFamily}`
     this.ctx.fillStyle = color
     this.ctx.textAlign = align
@@ -112,18 +112,19 @@ export class CanvasRenderer {
     y: number,
     maxWidth: number,
     maxHeight: number,
-    fontSize: number
+    fontSize: number,
   ): void {
     const lines = this.wrapText(text, maxWidth)
     const lineHeight = fontSize * 1.2
     const totalHeight = lines.length * lineHeight
-    
+
     if (totalHeight > maxHeight) {
       // テキストが高さ制限を超える場合は省略
       const maxLines = Math.floor(maxHeight / lineHeight)
       lines.splice(maxLines - 1)
       if (lines.length > 0) {
-        lines[lines.length - 1] = lines[lines.length - 1].substring(0, lines[lines.length - 1].length - 3) + '...'
+        lines[lines.length - 1] =
+          lines[lines.length - 1].substring(0, lines[lines.length - 1].length - 3) + '...'
       }
     }
 
@@ -142,7 +143,7 @@ export class CanvasRenderer {
     for (const char of words) {
       const testLine = currentLine + char
       const metrics = this.ctx.measureText(testLine)
-      
+
       if (metrics.width > maxWidth && currentLine !== '') {
         lines.push(currentLine)
         currentLine = char
@@ -150,11 +151,11 @@ export class CanvasRenderer {
         currentLine = testLine
       }
     }
-    
+
     if (currentLine) {
       lines.push(currentLine)
     }
-    
+
     return lines
   }
 
@@ -169,18 +170,18 @@ export class CanvasRenderer {
       borderColor = '#000000',
       backgroundColor = '#ffffff',
       borderWidth = 2,
-      borderRadius = 8
+      borderRadius = 8,
     } = options
 
     this.ctx.save()
-    
+
     this.ctx.strokeStyle = borderColor
     this.ctx.fillStyle = backgroundColor
     this.ctx.lineWidth = borderWidth
 
     // 角丸矩形を描画
     this.drawRoundedRect(x, y, width, height, borderRadius)
-    
+
     // しっぽがある場合は描画
     if (tailX !== undefined && tailY !== undefined) {
       this.drawBubbleTail(x, y, width, height, tailX, tailY)
@@ -194,7 +195,7 @@ export class CanvasRenderer {
     y: number,
     width: number,
     height: number,
-    radius: number
+    radius: number,
   ): void {
     this.ctx.beginPath()
     this.ctx.moveTo(x + radius, y)
@@ -207,7 +208,7 @@ export class CanvasRenderer {
     this.ctx.lineTo(x, y + radius)
     this.ctx.quadraticCurveTo(x, y, x + radius, y)
     this.ctx.closePath()
-    
+
     this.ctx.fill()
     this.ctx.stroke()
   }
@@ -218,12 +219,12 @@ export class CanvasRenderer {
     bubbleWidth: number,
     bubbleHeight: number,
     tailX: number,
-    tailY: number
+    tailY: number,
   ): void {
     // バブルの中心から一番近い辺上の点を計算
     const centerX = bubbleX + bubbleWidth / 2
     const centerY = bubbleY + bubbleHeight / 2
-    
+
     let attachX: number, attachY: number
 
     // しっぽの接続点を決定
@@ -258,10 +259,10 @@ export class CanvasRenderer {
   renderMangaLayout(layout: MangaLayout): void {
     // 背景をクリア
     this.initializeCanvas()
-    
+
     // 全体のフレームを描画
     this.drawFrame(0, 0, this.config.width, this.config.height)
-    
+
     // 各パネルを描画
     for (const panel of layout.panels) {
       this.drawPanel(panel)

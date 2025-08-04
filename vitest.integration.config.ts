@@ -10,12 +10,8 @@ export default defineConfig({
     setupFiles: './vitest.setup.ts',
     testTimeout: 600000, // 10分
     hookTimeout: 60000, // 1分
-    exclude: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/tests/integration/**', // 統合テストを除外
-      '**/.{idea,git,cache,output,temp}/**',
-      '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*'
+    include: [
+      '**/tests/integration/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
     ],
   },
   resolve: {

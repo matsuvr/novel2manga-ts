@@ -23,8 +23,7 @@ export async function POST(request: NextRequest) {
     const validatedData = requestSchema.parse(body)
     const { jobId, config } = validatedData
 
-    const db = getD1Database()
-    const dbService = new DatabaseService(db)
+    const dbService = new DatabaseService()
     const processor = new JobNarrativeProcessor(dbService, config)
 
     // ジョブの存在確認

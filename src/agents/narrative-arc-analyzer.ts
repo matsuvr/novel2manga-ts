@@ -17,7 +17,7 @@ const narrativeArcAnalyzer = new Agent({
     const llm = await getNarrativeAnalysisLLM()
     console.log(`[narrativeArcAnalyzer] Using provider: ${llm.providerName}`)
     console.log(`[narrativeArcAnalyzer] Using model: ${llm.model}`)
-    
+
     // モデルを返す
     return llm.provider(llm.model) as any // Mastraの型互換性のための一時的な回避策
   },
@@ -48,26 +48,26 @@ export async function analyzeNarrativeArc(
   // まず、チャンクの束を統合分析
   console.log('Performing bundle analysis first...')
   console.log(`Loading analysis results for job ${input.jobId}...`)
-  
+
   const { getChunkAnalysis } = await import('@/utils/storage')
-  
+
   const chunksWithAnalyses = []
   for (const chunk of input.chunks) {
     console.log(`Loading analysis for chunk ${chunk.chunkIndex}...`)
     const analysisResult = await getChunkAnalysis(input.jobId, chunk.chunkIndex)
-    
+
     if (!analysisResult) {
       const error = `Chunk analysis not found for job ${input.jobId}, chunk ${chunk.chunkIndex}`
       console.error(error)
       throw new Error(error)
     }
-    
+
     chunksWithAnalyses.push({
       text: chunk.text,
       analysis: analysisResult,
     })
   }
-  
+
   console.log(`Successfully loaded ${chunksWithAnalyses.length} chunk analyses`)
 
   let bundleAnalysis: BundleAnalysisResult

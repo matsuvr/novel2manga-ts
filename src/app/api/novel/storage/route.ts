@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
       },
     }
 
-    await storage.put(`${uuid}.json`, JSON.stringify(fileData), {
+    await storage.put(key, JSON.stringify(fileData), {
       uploadedAt: new Date().toISOString(),
       originalLength: text.length.toString(),
     })
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
 
     // ストレージから取得
     const storage = await StorageFactory.getNovelStorage()
-    const result = await storage.get(`${uuid}.json`)
+    const result = await storage.get(key)
 
     if (!result) {
       return NextResponse.json({ error: 'ファイルが見つかりません' }, { status: 404 })

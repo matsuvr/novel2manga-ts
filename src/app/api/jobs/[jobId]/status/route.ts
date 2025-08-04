@@ -4,8 +4,7 @@ import { StorageFactory } from '@/utils/storage'
 
 export async function GET(_request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
-    const db = await StorageFactory.getDatabase()
-    const dbService = new DatabaseService(db)
+    const dbService = new DatabaseService()
 
     const job = await dbService.getExtendedJob(params.jobId)
 

@@ -16,8 +16,11 @@ const postRequestSchema = z.object({
 
 export async function GET(_request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
-    const db = await StorageFactory.getDatabase()
-    const dbService = new DatabaseService(db)
+    // jobId が未定義または "undefined" の場合は無効とみなす
+    if (!params.jobId || params.jobId === 'undefined') {
+      return NextResponse.json({ error: 'Invalid jobId' }, { status: 400 })
+    }
+    const dbService = new DatabaseService()
 
     // ジョブの存在確認
     const job = await dbService.getExtendedJob(params.jobId)
@@ -49,12 +52,16 @@ export async function GET(_request: NextRequest, { params }: { params: { jobId: 
 
 export async function POST(request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
+    // jobId が未定義または "undefined" の場合は無効とみなす
+    if (!params.jobId || params.jobId === 'undefined') {
+      return NextResponse.json({ error: 'Invalid jobId' }, { status: 400 })
+    }
+
     const body = await request.json()
     const validatedData = postRequestSchema.parse(body)
     const { config } = validatedData
 
-    const db = await StorageFactory.getDatabase()
-    const dbService = new DatabaseService(db)
+    const dbService = new DatabaseService()
     const processor = new JobNarrativeProcessor(dbService, config)
 
     // ジョブの存在確認

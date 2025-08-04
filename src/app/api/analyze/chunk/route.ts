@@ -2,8 +2,8 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { chunkAnalyzerAgent } from '@/agents/chunk-analyzer'
 import { getTextAnalysisConfig } from '@/config'
-import { StorageFactory } from '@/utils/storage'
 import type { ChunkAnalysisResult } from '@/types/chunk'
+import { StorageFactory } from '@/utils/storage'
 
 // リクエストボディのバリデーションスキーマ
 const analyzeChunkRequestSchema = z.object({
@@ -67,11 +67,11 @@ export async function POST(request: NextRequest) {
     // ストレージから必要なデータを取得
     const chunkStorage = await StorageFactory.getChunkStorage()
     const analysisStorage = await StorageFactory.getAnalysisStorage()
-    
+
     // 既に分析済みかチェック
     const analysisPath = `analyses/${jobId}/chunk_${chunkIndex}.json`
     const existingAnalysis = await analysisStorage.get(analysisPath)
-    
+
     if (existingAnalysis) {
       console.log(`[/api/analyze/chunk] Analysis already exists for chunk ${chunkIndex}`)
       const analysisData = JSON.parse(existingAnalysis.text)
@@ -85,14 +85,14 @@ export async function POST(request: NextRequest) {
     // チャンクテキストを取得
     const chunkPath = `chunks/${jobId}/chunk_${chunkIndex}.txt`
     const chunkFile = await chunkStorage.get(chunkPath)
-    
+
     if (!chunkFile) {
       return NextResponse.json(
         {
           success: false,
           error: `Chunk file not found: ${chunkPath}`,
         },
-        { status: 404 }
+        { status: 404 },
       )
     }
 
@@ -142,7 +142,6 @@ export async function POST(request: NextRequest) {
       data: result.object,
       cached: false,
     })
-    
   } catch (error) {
     console.error('[/api/analyze/chunk] Error:', error)
 
@@ -153,7 +152,7 @@ export async function POST(request: NextRequest) {
           error: 'Invalid request data',
           details: error.errors,
         },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
@@ -163,7 +162,7 @@ export async function POST(request: NextRequest) {
         error: 'Failed to analyze chunk',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

@@ -2,6 +2,7 @@ import path from 'node:path'
 import { type NextRequest, NextResponse } from 'next/server'
 import { open } from 'sqlite'
 import sqlite3 from 'sqlite3'
+import { isDevelopment } from '@/config'
 
 // 開発環境用のSQLiteデータベースパス
 const DB_PATH = path.join(process.cwd(), '.local-storage', 'novel2manga.db')
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 開発環境の場合
-    if (process.env.NODE_ENV === 'development') {
+    if (isDevelopment()) {
       await initializeDatabase()
       const db = await getDatabase()
 
@@ -196,8 +197,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
 
-    // 開発環境の場合
-    if (process.env.NODE_ENV === 'development') {
+    // 開発/テスト環境の場合
+    if (isDevelopment()) {
       await initializeDatabase()
       const db = await getDatabase()
 

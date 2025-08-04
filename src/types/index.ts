@@ -1,12 +1,16 @@
-// Novel Models Types (上位階層)
+// Re-export Drizzle types as primary types
+export type { Novel, NewNovel, Job, NewJob, Chunk, NewChunk, Episode, NewEpisode } from '@/db/schema'
 
 // Environment Types
 export * from './env'
-// Job Types
-export * from './job'
+// Extended Job Types (keeping custom types)
+export type { JobProgress, JobStatus, ExtendedJob, RetryableError } from './job'
+
+// Analysis Types
+export * from './chunk'
+export * from './episode'
 
 // Manga Models Types
 export * from './manga-models'
-export * from './novel-models'
 // Text Analysis Types
 export * from './text-analysis'

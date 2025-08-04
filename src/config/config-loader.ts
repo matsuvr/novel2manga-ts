@@ -229,7 +229,7 @@ const ConfigSchema = z.object({
     .object({
       name: z.string().default('Novel2Manga'),
       version: z.string().default('1.0.0'),
-      environment: z.enum(['development', 'staging', 'production']).default('development'),
+      environment: z.enum(['development', 'staging', 'production', 'test']).default('development'),
       baseUrl: z.string().url().default('http://localhost:3000'),
       port: z.number().int().positive().default(3000),
       debug: z.boolean().default(false),
@@ -693,7 +693,8 @@ export class ConfigManager {
 
   // 開発環境判定
   isDevelopment(): boolean {
-    return this.getEnvironmentConfig() === 'development'
+    const env = this.getEnvironmentConfig()
+    return env === 'development' || env === 'test'
   }
 
   // 本番環境判定
