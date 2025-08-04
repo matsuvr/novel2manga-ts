@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { type NextRequest, NextResponse } from 'next/server'
 import { getChunkingConfig } from '@/config'
 import { splitTextIntoChunks } from '@/utils/chunk-splitter'
@@ -83,7 +84,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       const chunkIds: string[] = []
 
       for (const chunk of chunks) {
-        const chunkId = crypto.randomUUID()
+        const chunkId = randomUUID()
         chunkIds.push(chunkId)
 
         // チャンクテキストをストレージに保存
@@ -95,10 +96,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           endPosition: chunk.endPosition,
         }
 
-        await chunkStorage.put(
-          StorageKeys.chunk(chunkId).replace('chunks/', ''),
-          JSON.stringify(chunkData),
-        )
+        await chunkStorage.put(StorageKeys.chunk(chunkId), JSON.stringify(chunkData))
 
         // チャンク情報をDBに保存
         await db.run(

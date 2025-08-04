@@ -34,8 +34,7 @@ export async function POST(request: NextRequest) {
     const validatedData = requestSchema.parse(body)
     const { jobId, episodeNumber, config } = validatedData
 
-    const db = getD1Database()
-    const dbService = new DatabaseService(db)
+    const dbService = new DatabaseService()
 
     // ジョブとエピソード情報を取得
     const job = await dbService.getExtendedJob(jobId)

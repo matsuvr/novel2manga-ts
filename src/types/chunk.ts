@@ -1,40 +1,46 @@
-export interface ChunkData {
-  chunkIndex: number
-  text: string
-  startPosition: number
-  endPosition: number
-}
+// Chunk analysis and processing types
 
 export interface ChunkAnalysisResult {
-  summary: string
+  chunkIndex: number
   characters: Array<{
     name: string
-    description: string
-    firstAppearance: number
+    role: 'protagonist' | 'antagonist' | 'supporting' | 'minor'
+    description?: string
   }>
   scenes: Array<{
     location: string
-    time?: string
-    description: string
-    startIndex: number
-    endIndex: number
+    timeOfDay?: string
+    atmosphere?: string
+    description?: string
   }>
   dialogues: Array<{
-    speakerId: string
-    text: string
+    speaker: string
+    content: string
     emotion?: string
-    index: number
+    importance: 'high' | 'medium' | 'low'
   }>
   highlights: Array<{
-    type: 'climax' | 'turning_point' | 'emotional_peak' | 'action_sequence'
-    description: string
-    importance: number
-    startIndex: number
-    endIndex: number
-    text?: string
+    type: 'action' | 'emotion' | 'plot' | 'description'
+    content: string
+    intensity: number
+    relevance: number
   }>
   situations: Array<{
+    type: 'conflict' | 'resolution' | 'transition' | 'development'
     description: string
-    index: number
+    significance: number
   }>
+  narrativeElements: {
+    tension: number
+    pacing: 'slow' | 'medium' | 'fast'
+    emotionalTone: string
+    plotRelevance: number
+  }
+}
+
+export interface ChunkData {
+  chunkIndex: number
+  content: string
+  text: string
+  analysis?: ChunkAnalysisResult
 }

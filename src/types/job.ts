@@ -8,51 +8,40 @@ export type JobStep =
   | 'render'
   | 'complete'
 
-export interface Novel {
-  id: string
-  title?: string
-  author?: string
-  originalTextPath: string
-  textLength: number
-  language: string
-  metadataPath?: string
-  createdAt: Date
-  updatedAt: Date
-}
+// Drizzle types are now the primary types, imported from @/db/schema
+// Keep only custom types that extend or are unique to this domain
 
-export interface Job {
+export interface ExtendedJob {
+  // Using Drizzle Job type + progress extension
   id: string
   novelId: string
-  jobName?: string
+  jobName?: string | null
   status: JobStatus
-  currentStep: JobStep
-  splitCompleted: boolean
-  analyzeCompleted: boolean
-  episodeCompleted: boolean
-  layoutCompleted: boolean
-  renderCompleted: boolean
-  chunksDirPath?: string
-  analysesDirPath?: string
-  episodesDataPath?: string
-  layoutsDirPath?: string
-  rendersDirPath?: string
-  totalChunks: number
-  processedChunks: number
-  totalEpisodes: number
-  processedEpisodes: number
-  totalPages: number
-  renderedPages: number
-  lastError?: string
-  lastErrorStep?: string
-  retryCount: number
-  resumeDataPath?: string
-  createdAt: Date
-  updatedAt: Date
-  startedAt?: Date
-  completedAt?: Date
-}
-
-export interface ExtendedJob extends Job {
+  currentStep: string
+  splitCompleted: boolean | null
+  analyzeCompleted: boolean | null
+  episodeCompleted: boolean | null
+  layoutCompleted: boolean | null
+  renderCompleted: boolean | null
+  chunksDirPath?: string | null
+  analysesDirPath?: string | null
+  episodesDataPath?: string | null
+  layoutsDirPath?: string | null
+  rendersDirPath?: string | null
+  totalChunks: number | null
+  processedChunks: number | null
+  totalEpisodes: number | null
+  processedEpisodes: number | null
+  totalPages: number | null
+  renderedPages: number | null
+  lastError?: string | null
+  lastErrorStep?: string | null
+  retryCount: number | null
+  resumeDataPath?: string | null
+  createdAt: string | null
+  updatedAt: string | null
+  startedAt?: string | null
+  completedAt?: string | null
   progress: JobProgress | null
 }
 
@@ -75,34 +64,16 @@ export interface EpisodeBoundary {
   startChunk: number
   endChunk: number
   confidence: number
-}
-
-export interface Episode {
-  id: string
-  novelId: string
-  jobId: string
-  episodeNumber: number
   title?: string
   summary?: string
-  startChunk: number
   startCharIndex: number
-  endChunk: number
   endCharIndex: number
   estimatedPages: number
-  confidence: number
-  createdAt: Date
 }
 
-export interface Chunk {
-  id: string
-  novelId: string
-  jobId: string
-  chunkIndex: number
-  contentPath: string
-  startPosition: number
-  endPosition: number
-  wordCount?: number
-  createdAt: Date
+export interface RetryableError extends Error {
+  retryable: boolean
+  retryAfter?: number
 }
 
 export interface AnalyzeRequest {
@@ -116,6 +87,26 @@ export interface AnalyzeResponse {
 }
 
 export interface JobResponse {
-  job: Job
-  chunks: Chunk[]
+  job: {
+    id: string
+    novelId: string
+    jobName?: string | null
+    status: JobStatus
+    currentStep: string
+    totalChunks: number | null
+    processedChunks: number | null
+    createdAt: string | null
+    updatedAt: string | null
+  }
+  chunks: Array<{
+    id: string
+    novelId: string
+    jobId: string
+    chunkIndex: number
+    contentPath: string
+    startPosition: number
+    endPosition: number
+    wordCount?: number | null
+    createdAt: string | null
+  }>
 }

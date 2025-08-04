@@ -16,8 +16,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     const isProduction = process.env.NODE_ENV === 'production'
 
     if (isProduction) {
-      const db = getD1Database()
-      const dbService = new DatabaseService(db)
+      const dbService = new DatabaseService()
 
       const job = await dbService.getJob(jobId)
       if (!job) {

@@ -17,7 +17,7 @@ const chunkBundleAnalyzer = new Agent({
     const llm = await getTextAnalysisLLM()
     console.log(`[chunkBundleAnalyzer] Using provider: ${llm.providerName}`)
     console.log(`[chunkBundleAnalyzer] Using model: ${llm.model}`)
-    
+
     // モデルを返す
     return llm.provider(llm.model) as any // Mastraの型互換性のための一時的な回避策
   },
@@ -84,74 +84,76 @@ interface ChunkWithAnalysis {
 export async function analyzeChunkBundle(
   chunksWithAnalyses: ChunkWithAnalysis[],
 ): Promise<BundleAnalysisResult> {
-  console.log('[analyzeChunkBundle] Starting bundle analysis with chunks:', chunksWithAnalyses.length)
-  
+  console.log(
+    '[analyzeChunkBundle] Starting bundle analysis with chunks:',
+    chunksWithAnalyses.length,
+  )
+
   try {
+    // 各チャンクの分析結果を構造化して整理
+    const charactersMap = new Map<string, { descriptions: string[]; appearances: number }>()
+    const allScenes: string[] = []
+    const allDialogues: Array<{ speaker: string; text: string; emotion?: string }> = []
+    const allHighlights: Array<{
+      type: string
+      description: string
+      importance: number
+      text?: string
+    }> = []
+    const allSituations: string[] = []
 
-  // 各チャンクの分析結果を構造化して整理
-  const charactersMap = new Map<string, { descriptions: string[]; appearances: number }>()
-  const allScenes: string[] = []
-  const allDialogues: Array<{ speaker: string; text: string; emotion?: string }> = []
-  const allHighlights: Array<{
-    type: string
-    description: string
-    importance: number
-    text?: string
-  }> = []
-  const allSituations: string[] = []
+    // 各チャンクの分析結果を集約
+    chunksWithAnalyses.forEach((chunk, _index) => {
+      const analysis = chunk.analysis
 
-  // 各チャンクの分析結果を集約
-  chunksWithAnalyses.forEach((chunk, _index) => {
-    const analysis = chunk.analysis
+      // キャラクター情報の集約
+      analysis.characters.forEach((char) => {
+        if (!charactersMap.has(char.name)) {
+          charactersMap.set(char.name, { descriptions: [], appearances: 0 })
+        }
+        const charData = charactersMap.get(char.name)
+        if (!charData) return // 見つからない場合はスキップ
+        charData.descriptions.push(char.description)
+        charData.appearances++
+      })
 
-    // キャラクター情報の集約
-    analysis.characters.forEach((char) => {
-      if (!charactersMap.has(char.name)) {
-        charactersMap.set(char.name, { descriptions: [], appearances: 0 })
-      }
-      const charData = charactersMap.get(char.name)
-      if (!charData) return // 見つからない場合はスキップ
-      charData.descriptions.push(char.description)
-      charData.appearances++
-    })
+      // シーン情報の集約
+      analysis.scenes.forEach((scene) => {
+        const sceneDesc = `${scene.location}${scene.time ? ` (${scene.time})` : ''}: ${scene.description}`
+        allScenes.push(sceneDesc)
+      })
 
-    // シーン情報の集約
-    analysis.scenes.forEach((scene) => {
-      const sceneDesc = `${scene.location}${scene.time ? ` (${scene.time})` : ''}: ${scene.description}`
-      allScenes.push(sceneDesc)
-    })
+      // 対話の集約
+      analysis.dialogues.forEach((dialogue) => {
+        allDialogues.push({
+          speaker: dialogue.speakerId,
+          text: dialogue.text,
+          emotion: dialogue.emotion,
+        })
+      })
 
-    // 対話の集約
-    analysis.dialogues.forEach((dialogue) => {
-      allDialogues.push({
-        speaker: dialogue.speakerId,
-        text: dialogue.text,
-        emotion: dialogue.emotion,
+      // ハイライトの集約（テキストの一部を含める）
+      analysis.highlights.forEach((highlight) => {
+        const highlightText = chunk.text.substring(
+          highlight.startIndex,
+          Math.min(highlight.endIndex, highlight.startIndex + 100),
+        )
+        allHighlights.push({
+          type: highlight.type,
+          description: highlight.description,
+          importance: highlight.importance,
+          text: highlightText,
+        })
+      })
+
+      // 状況説明の集約
+      analysis.situations.forEach((situation) => {
+        allSituations.push(situation.description)
       })
     })
 
-    // ハイライトの集約（テキストの一部を含める）
-    analysis.highlights.forEach((highlight) => {
-      const highlightText = chunk.text.substring(
-        highlight.startIndex,
-        Math.min(highlight.endIndex, highlight.startIndex + 100),
-      )
-      allHighlights.push({
-        type: highlight.type,
-        description: highlight.description,
-        importance: highlight.importance,
-        text: highlightText,
-      })
-    })
-
-    // 状況説明の集約
-    analysis.situations.forEach((situation) => {
-      allSituations.push(situation.description)
-    })
-  })
-
-  // プロンプト作成
-  const userPrompt = `以下の分析結果を統合し、物語全体の要素を抽出してください。
+    // プロンプト作成
+    const userPrompt = `以下の分析結果を統合し、物語全体の要素を抽出してください。
 
 【登場人物情報】
 ${Array.from(charactersMap.entries())
@@ -192,29 +194,28 @@ ${allSituations
 
 注意：個別のチャンク番号や分析の痕跡を残さず、一つの連続した物語として扱ってください。`
 
-  try {
-    console.log('Sending to LLM for bundle analysis...')
+    try {
+      console.log('Sending to LLM for bundle analysis...')
 
-    const result = await chunkBundleAnalyzer.generate([{ role: 'user', content: userPrompt }], {
-      output: bundleAnalysisSchema,
-    })
+      const result = await chunkBundleAnalyzer.generate([{ role: 'user', content: userPrompt }], {
+        output: bundleAnalysisSchema,
+      })
 
-    if (!result.object) {
-      throw new Error('Failed to generate bundle analysis')
+      if (!result.object) {
+        throw new Error('Failed to generate bundle analysis')
+      }
+
+      console.log('Bundle analysis successful')
+      console.log('Summary length:', result.object.summary.length)
+      console.log('Characters found:', result.object.mainCharacters.length)
+      console.log('Highlights found:', result.object.highlights.length)
+      console.log('Key dialogues found:', result.object.keyDialogues.length)
+
+      return result.object
+    } catch (error) {
+      console.error('[analyzeChunkBundle] Bundle analysis LLM error:', error)
+      throw error
     }
-
-    console.log('Bundle analysis successful')
-    console.log('Summary length:', result.object.summary.length)
-    console.log('Characters found:', result.object.mainCharacters.length)
-    console.log('Highlights found:', result.object.highlights.length)
-    console.log('Key dialogues found:', result.object.keyDialogues.length)
-
-    return result.object
-  } catch (error) {
-    console.error('[analyzeChunkBundle] Bundle analysis LLM error:', error)
-    throw error
-  }
-  
   } catch (error) {
     console.error('[analyzeChunkBundle] Fatal error in bundle analysis:', error)
     throw error

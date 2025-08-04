@@ -1,19 +1,12 @@
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
-import { type Database, open } from 'sqlite'
+import type { Database } from 'sqlite'
+import { open } from 'sqlite'
 import sqlite3 from 'sqlite3'
 import { isDevelopment } from '@/config'
-import type { ChunkAnalysisResult, ChunkData } from '@/types/chunk'
-import type { EpisodeBoundary } from '@/types/episode'
-
-// CloudflareランタイムのglobalThis拡張
-declare global {
-  var NOVEL_STORAGE: any
-  var DB: any
-}
 
 // ========================================
-// Storage Interfaces
+// Storage Interfaces (設計書対応)
 // ========================================
 
 export interface Storage {
@@ -25,20 +18,30 @@ export interface Storage {
 }
 
 export interface DatabaseAdapter {
-  prepare(query: string): any
-  run(query: string, params?: any[]): Promise<any>
-  get(query: string, params?: any[]): Promise<any>
-  all(query: string, params?: any[]): Promise<any[]>
-  batch(statements: any[]): Promise<any[]>
+  prepare(query: string): PreparedStatement
+  run(query: string, params?: unknown[]): Promise<QueryResult>
+  get(query: string, params?: unknown[]): Promise<Record<string, unknown> | null>
+  all(query: string, params?: unknown[]): Promise<Record<string, unknown>[]>
+  batch(statements: PreparedStatement[]): Promise<QueryResult[]>
   close(): Promise<void>
+}
+
+export interface PreparedStatement {
+  query: string
+  params?: unknown[]
+  d1Statement?: D1PreparedStatement
+}
+
+export interface QueryResult {
+  changes?: number
+  lastInsertRowid?: number
+  success?: boolean
+  meta?: Record<string, unknown>
 }
 
 // ========================================
 // Environment Detection
 // ========================================
-
-// ベースストレージパス
-const STORAGE_BASE = '.local-storage'
 
 // 開発環境用のローカルストレージパス
 const getStorageBase = () => {
@@ -50,45 +53,18 @@ const getStorageBase = () => {
 }
 
 const LOCAL_STORAGE_BASE = getStorageBase()
-const NOVELS_DIR = path.join(LOCAL_STORAGE_BASE, 'novels')
-const CHUNKS_DIR = path.join(LOCAL_STORAGE_BASE, 'chunks')
-const ANALYSES_DIR = path.join(LOCAL_STORAGE_BASE, 'analyses')
-const LAYOUTS_DIR = path.join(LOCAL_STORAGE_BASE, 'layouts')
-const RENDERS_DIR = path.join(LOCAL_STORAGE_BASE, 'renders')
 const DB_PATH = path.join(LOCAL_STORAGE_BASE, 'database.sqlite')
-
-// ========================================
-// Legacy Helper Functions (後方互換性)
-// ========================================
-
-function _getChunkKey(novelId: string, chunkIndex: number): string {
-  return `${novelId}:${chunkIndex}`
-}
-
-function _getEpisodeKey(novelId: string): string {
-  return novelId
-}
-
-// ストレージパスヘルパー
-function getNovelPath(novelId: string): string {
-  return path.join(STORAGE_BASE, 'novels', `${novelId}.json`)
-}
-
-function getAnalysisPath(novelId: string, chunkIndex: number): string {
-  return path.join(STORAGE_BASE, 'analysis', novelId, `chunk_${chunkIndex}.json`)
-}
-
-function getEpisodePath(novelId: string): string {
-  return path.join(STORAGE_BASE, 'episodes', `${novelId}.json`)
-}
 
 // ディレクトリ作成ヘルパー
 async function ensureDir(dirPath: string): Promise<void> {
   await fs.mkdir(dirPath, { recursive: true })
 }
 
-// ローカルファイルストレージ実装
-class LocalFileStorage implements Storage {
+// ========================================
+// Local File Storage Implementation
+// ========================================
+
+export class LocalFileStorage implements Storage {
   constructor(private baseDir: string) {}
 
   async put(key: string, value: string | Buffer, metadata?: Record<string, string>): Promise<void> {
@@ -143,14 +119,54 @@ class LocalFileStorage implements Storage {
       return false
     }
   }
+
+  async list(prefix?: string): Promise<string[]> {
+    const baseDir = prefix ? path.join(this.baseDir, prefix) : this.baseDir
+    try {
+      const files = await fs.readdir(baseDir, { recursive: true })
+      return files
+        .filter((file) => typeof file === 'string')
+        .map((file) => (prefix ? path.join(prefix, file as string) : (file as string)))
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return []
+      }
+      throw error
+    }
+  }
 }
 
-// R2ストレージ実装
-class R2Storage implements Storage {
-  constructor(private bucket: any) {}
+// ========================================
+// R2 Storage Implementation
+// ========================================
+
+// Cloudflare R2 Bucket型定義
+interface R2Bucket {
+  put(
+    key: string,
+    value: string | ArrayBuffer | ReadableStream,
+    options?: {
+      httpMetadata?: { contentType?: string }
+      customMetadata?: Record<string, string>
+    },
+  ): Promise<unknown>
+  get(key: string): Promise<{
+    text(): Promise<string>
+    customMetadata?: Record<string, string>
+  } | null>
+  delete(key: string): Promise<void>
+  head(key: string): Promise<{ customMetadata?: Record<string, string> } | null>
+  list(options?: { prefix?: string }): Promise<{
+    objects: Array<{ key: string }>
+  }>
+}
+
+export class R2Storage implements Storage {
+  constructor(private bucket: R2Bucket) {}
 
   async put(key: string, value: string | Buffer, metadata?: Record<string, string>): Promise<void> {
-    await this.bucket.put(key, value, {
+    const valueToStore = typeof value === 'string' ? value : value.toString()
+    await this.bucket.put(key, valueToStore, {
       httpMetadata: {
         contentType: 'application/json; charset=utf-8',
       },
@@ -177,14 +193,23 @@ class R2Storage implements Storage {
     const object = await this.bucket.head(key)
     return !!object
   }
+
+  async list(prefix?: string): Promise<string[]> {
+    const result = await this.bucket.list(prefix ? { prefix } : undefined)
+    return result.objects.map((obj) => obj.key)
+  }
 }
 
-// SQLiteアダプター（開発環境用）
-class SQLiteAdapter implements DatabaseAdapter {
+// ========================================
+// SQLite Adapter Implementation (Development)
+// ========================================
+
+export class SQLiteAdapter implements DatabaseAdapter {
   private db: Database | null = null
 
   async getDb(): Promise<Database> {
     if (!this.db) {
+      await ensureDir(path.dirname(DB_PATH))
       this.db = await open({
         filename: DB_PATH,
         driver: sqlite3.Database,
@@ -199,8 +224,9 @@ class SQLiteAdapter implements DatabaseAdapter {
   private async initializeSchema(): Promise<void> {
     if (!this.db) return
 
-    // Novelテーブル
+    // 設計書通りのスキーマを実装
     await this.db.exec(`
+      -- Novel テーブル
       CREATE TABLE IF NOT EXISTS novels (
         id TEXT PRIMARY KEY,
         title TEXT,
@@ -211,11 +237,9 @@ class SQLiteAdapter implements DatabaseAdapter {
         metadata_path TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `)
+      );
 
-    // Jobテーブル
-    await this.db.exec(`
+      -- Job テーブル
       CREATE TABLE IF NOT EXISTS jobs (
         id TEXT PRIMARY KEY,
         novel_id TEXT NOT NULL,
@@ -247,11 +271,26 @@ class SQLiteAdapter implements DatabaseAdapter {
         started_at DATETIME,
         completed_at DATETIME,
         FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE
-      )
-    `)
+      );
 
-    // Chunkテーブル
-    await this.db.exec(`
+      -- JobStepHistory テーブル
+      CREATE TABLE IF NOT EXISTS job_step_history (
+        id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL,
+        step_name TEXT NOT NULL,
+        status TEXT NOT NULL,
+        started_at DATETIME NOT NULL,
+        completed_at DATETIME,
+        duration_seconds INTEGER,
+        input_path TEXT,
+        output_path TEXT,
+        error_message TEXT,
+        metadata TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+      );
+
+      -- Chunk テーブル
       CREATE TABLE IF NOT EXISTS chunks (
         id TEXT PRIMARY KEY,
         novel_id TEXT NOT NULL,
@@ -265,11 +304,24 @@ class SQLiteAdapter implements DatabaseAdapter {
         FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE,
         FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
         UNIQUE(job_id, chunk_index)
-      )
-    `)
+      );
 
-    // Episodeテーブル
-    await this.db.exec(`
+      -- ChunkAnalysisStatus テーブル
+      CREATE TABLE IF NOT EXISTS chunk_analysis_status (
+        id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL,
+        chunk_index INTEGER NOT NULL,
+        is_analyzed BOOLEAN DEFAULT FALSE,
+        analysis_path TEXT,
+        analyzed_at DATETIME,
+        retry_count INTEGER DEFAULT 0,
+        last_error TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+        UNIQUE(job_id, chunk_index)
+      );
+
+      -- Episode テーブル
       CREATE TABLE IF NOT EXISTS episodes (
         id TEXT PRIMARY KEY,
         novel_id TEXT NOT NULL,
@@ -287,46 +339,138 @@ class SQLiteAdapter implements DatabaseAdapter {
         FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE,
         FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
         UNIQUE(job_id, episode_number)
-      )
+      );
+
+      -- LayoutStatus テーブル
+      CREATE TABLE IF NOT EXISTS layout_status (
+        id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL,
+        episode_number INTEGER NOT NULL,
+        is_generated BOOLEAN DEFAULT FALSE,
+        layout_path TEXT,
+        total_pages INTEGER,
+        total_panels INTEGER,
+        generated_at DATETIME,
+        retry_count INTEGER DEFAULT 0,
+        last_error TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+        UNIQUE(job_id, episode_number)
+      );
+
+      -- RenderStatus テーブル
+      CREATE TABLE IF NOT EXISTS render_status (
+        id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL,
+        episode_number INTEGER NOT NULL,
+        page_number INTEGER NOT NULL,
+        is_rendered BOOLEAN DEFAULT FALSE,
+        image_path TEXT,
+        thumbnail_path TEXT,
+        width INTEGER,
+        height INTEGER,
+        file_size INTEGER,
+        rendered_at DATETIME,
+        retry_count INTEGER DEFAULT 0,
+        last_error TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+        UNIQUE(job_id, episode_number, page_number)
+      );
+
+      -- Output テーブル
+      CREATE TABLE IF NOT EXISTS outputs (
+        id TEXT PRIMARY KEY,
+        novel_id TEXT NOT NULL,
+        job_id TEXT NOT NULL,
+        output_type TEXT NOT NULL,
+        output_path TEXT NOT NULL,
+        file_size INTEGER,
+        page_count INTEGER,
+        metadata_path TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE,
+        FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+      );
+
+      -- StorageFiles テーブル
+      CREATE TABLE IF NOT EXISTS storage_files (
+        id TEXT PRIMARY KEY,
+        novel_id TEXT NOT NULL,
+        job_id TEXT,
+        file_path TEXT NOT NULL,
+        file_category TEXT NOT NULL,
+        file_type TEXT NOT NULL,
+        mime_type TEXT,
+        file_size INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE,
+        FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+        UNIQUE(file_path)
+      );
+
+      -- インデックス作成
+      CREATE INDEX IF NOT EXISTS idx_jobs_novel_id ON jobs(novel_id);
+      CREATE INDEX IF NOT EXISTS idx_chunks_novel_id ON chunks(novel_id);
+      CREATE INDEX IF NOT EXISTS idx_chunks_job_id ON chunks(job_id);
+      CREATE INDEX IF NOT EXISTS idx_episodes_novel_id ON episodes(novel_id);
+      CREATE INDEX IF NOT EXISTS idx_episodes_job_id ON episodes(job_id);
+      CREATE INDEX IF NOT EXISTS idx_chunk_analysis_job_id ON chunk_analysis_status(job_id);
+      CREATE INDEX IF NOT EXISTS idx_layout_status_job_id ON layout_status(job_id);
+      CREATE INDEX IF NOT EXISTS idx_render_status_job_id ON render_status(job_id);
+      CREATE INDEX IF NOT EXISTS idx_storage_files_novel_id ON storage_files(novel_id);
+      CREATE INDEX IF NOT EXISTS idx_storage_files_job_id ON storage_files(job_id);
     `)
   }
 
-  prepare(query: string) {
-    // SQLiteのprepareは同期的な操作のため、runやgetメソッド内で処理
-    return { query, bind: (params: any[]) => ({ query, params }) }
+  prepare(query: string): PreparedStatement {
+    return { query }
   }
 
-  async run(query: string, params?: any[]): Promise<any> {
+  async run(query: string, params?: unknown[]): Promise<QueryResult> {
     const db = await this.getDb()
-    return db.run(query, params)
+    const result = await db.run(query, params)
+    return {
+      changes: result.changes,
+      lastInsertRowid: result.lastID,
+      success: true,
+    }
   }
 
-  async get(query: string, params?: any[]): Promise<any> {
+  async get(query: string, params?: unknown[]): Promise<Record<string, unknown> | null> {
     const db = await this.getDb()
-    return db.get(query, params)
+    const result = await db.get(query, params)
+    return result || null
   }
 
-  async all(query: string, params?: any[]): Promise<any[]> {
+  async all(query: string, params?: unknown[]): Promise<Record<string, unknown>[]> {
     const db = await this.getDb()
     return db.all(query, params)
   }
 
-  async batch(statements: any[]): Promise<any[]> {
+  async batch(statements: PreparedStatement[]): Promise<QueryResult[]> {
     const db = await this.getDb()
-    const results = []
+    const results: QueryResult[] = []
+
     // トランザクション開始
     await db.run('BEGIN TRANSACTION')
+
     try {
       for (const stmt of statements) {
         const result = await db.run(stmt.query, stmt.params)
-        results.push(result)
+        results.push({
+          changes: result.changes,
+          lastInsertRowid: result.lastID,
+          success: true,
+        })
       }
       await db.run('COMMIT')
-      return results
     } catch (error) {
       await db.run('ROLLBACK')
       throw error
     }
+
+    return results
   }
 
   async close(): Promise<void> {
@@ -337,345 +481,224 @@ class SQLiteAdapter implements DatabaseAdapter {
   }
 }
 
-// D1アダプター（本番環境用）
-class D1Adapter implements DatabaseAdapter {
-  constructor(private d1: any) {}
+// ========================================
+// D1 Adapter Implementation (Production)
+// ========================================
 
-  prepare(query: string) {
-    return this.d1.prepare(query)
-  }
+// Cloudflare D1 Database型定義
+interface D1Database {
+  prepare(query: string): D1PreparedStatement
+  batch(statements: D1PreparedStatement[]): Promise<D1Result[]>
+  exec(query: string): Promise<D1ExecResult>
+}
 
-  async run(query: string, params?: any[]): Promise<any> {
-    const stmt = this.prepare(query)
-    if (params && params.length > 0) {
-      return stmt.bind(...params).run()
+interface D1PreparedStatement {
+  bind(...values: unknown[]): D1PreparedStatement
+  first<T = Record<string, unknown>>(): Promise<T | null>
+  all<T = Record<string, unknown>>(): Promise<{ results: T[]; success: boolean }>
+  run(): Promise<D1Result>
+}
+
+interface D1Result {
+  changes: number
+  duration: number
+  last_row_id: number
+  served_by: string
+  success: boolean
+  meta: Record<string, unknown>
+}
+
+interface D1ExecResult {
+  count: number
+  duration: number
+}
+
+export class D1Adapter implements DatabaseAdapter {
+  constructor(private db: D1Database) {}
+
+  prepare(query: string): PreparedStatement {
+    const stmt = this.db.prepare(query)
+    return {
+      query,
+      d1Statement: stmt,
     }
-    return stmt.run()
   }
 
-  async get(query: string, params?: any[]): Promise<any> {
-    const stmt = this.prepare(query)
-    if (params && params.length > 0) {
-      return stmt.bind(...params).first()
+  async run(query: string, params?: unknown[]): Promise<QueryResult> {
+    const stmt = this.db.prepare(query)
+    const boundStmt = params ? stmt.bind(...params) : stmt
+    const result = await boundStmt.run()
+
+    return {
+      changes: result.changes,
+      lastInsertRowid: result.last_row_id,
+      success: result.success,
+      meta: result.meta,
     }
-    return stmt.first()
   }
 
-  async all(query: string, params?: unknown[]): Promise<unknown[]> {
-    const stmt = this.prepare(query)
-    let result: unknown
-    if (params && params.length > 0) {
-      result = await stmt.bind(...params).all()
-    } else {
-      result = await stmt.all()
-    }
-    return (result as any).results || []
+  async get(query: string, params?: unknown[]): Promise<Record<string, unknown> | null> {
+    const stmt = this.db.prepare(query)
+    const boundStmt = params ? stmt.bind(...params) : stmt
+    return boundStmt.first()
   }
 
-  async batch(statements: any[]): Promise<any[]> {
-    const preparedStatements = statements.map((stmt) => {
-      const prepared = this.prepare(stmt.query)
-      if (stmt.params && stmt.params.length > 0) {
-        return prepared.bind(...stmt.params)
-      }
-      return prepared
+  async all(query: string, params?: unknown[]): Promise<Record<string, unknown>[]> {
+    const stmt = this.db.prepare(query)
+    const boundStmt = params ? stmt.bind(...params) : stmt
+    const result = await boundStmt.all()
+    return result.results
+  }
+
+  async batch(statements: PreparedStatement[]): Promise<QueryResult[]> {
+    const d1Statements = statements.map((stmt) => {
+      const prepared = this.db.prepare(stmt.query)
+      return stmt.params ? prepared.bind(...stmt.params) : prepared
     })
-    return this.d1.batch(preparedStatements)
+
+    const results = await this.db.batch(d1Statements)
+
+    return results.map((result) => ({
+      changes: result.changes,
+      lastInsertRowid: result.last_row_id,
+      success: result.success,
+      meta: result.meta,
+    }))
   }
 
   async close(): Promise<void> {
-    // D1は接続管理が不要
+    // D1は自動的にクリーンアップされるため、特別な処理は不要
   }
 }
 
-// ストレージファクトリー
-export namespace StorageFactory {
-  export async function getNovelStorage(): Promise<Storage> {
-    if (isDevelopment()) {
-      return new LocalFileStorage(NOVELS_DIR)
-    }
-    if (globalThis.NOVEL_STORAGE) {
-      return new R2Storage(globalThis.NOVEL_STORAGE)
-    }
-    throw new Error('Novel storage not configured')
-  }
+// ========================================
+// Storage Factory (設計書対応)
+// ========================================
 
-  export async function getChunkStorage(): Promise<Storage> {
-    if (isDevelopment()) {
-      return new LocalFileStorage(CHUNKS_DIR)
-    }
-    if (globalThis.NOVEL_STORAGE) {
-      return new R2Storage(globalThis.NOVEL_STORAGE)
-    }
-    throw new Error('Chunk storage not configured')
-  }
-
-  export async function getAnalysisStorage(): Promise<Storage> {
-    if (isDevelopment()) {
-      return new LocalFileStorage(ANALYSES_DIR)
-    }
-    if (globalThis.NOVEL_STORAGE) {
-      return new R2Storage(globalThis.NOVEL_STORAGE)
-    }
-    throw new Error('Analysis storage not configured')
-  }
-
-  export async function getLayoutStorage(): Promise<Storage> {
-    if (isDevelopment()) {
-      return new LocalFileStorage(LAYOUTS_DIR)
-    }
-    if (globalThis.NOVEL_STORAGE) {
-      return new R2Storage(globalThis.NOVEL_STORAGE)
-    }
-    throw new Error('Layout storage not configured')
-  }
-
-  export async function getRenderStorage(): Promise<Storage> {
-    if (isDevelopment()) {
-      return new LocalFileStorage(RENDERS_DIR)
-    }
-    if (globalThis.NOVEL_STORAGE) {
-      return new R2Storage(globalThis.NOVEL_STORAGE)
-    }
-    throw new Error('Render storage not configured')
-  }
-
-  export async function getDatabase(): Promise<DatabaseAdapter> {
-    if (isDevelopment()) {
-      await ensureDir(LOCAL_STORAGE_BASE)
-      return new SQLiteAdapter()
-    }
-    if (globalThis.DB) {
-      return new D1Adapter(globalThis.DB)
-    }
-    throw new Error('Database not configured')
+// Novel Storage
+export async function getNovelStorage(): Promise<Storage> {
+  if (isDevelopment()) {
+    return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'novels'))
+  } else {
+    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    return new R2Storage(globalThis.NOVEL_STORAGE)
   }
 }
 
-// ストレージキー生成ヘルパー
+// Chunk Storage
+export async function getChunkStorage(): Promise<Storage> {
+  if (isDevelopment()) {
+    return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'chunks'))
+  } else {
+    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    return new R2Storage(globalThis.CHUNKS_STORAGE)
+  }
+}
+
+// Analysis Storage
+export async function getAnalysisStorage(): Promise<Storage> {
+  if (isDevelopment()) {
+    return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'analysis'))
+  } else {
+    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    return new R2Storage(globalThis.ANALYSIS_STORAGE)
+  }
+}
+
+// Layout Storage
+export async function getLayoutStorage(): Promise<Storage> {
+  if (isDevelopment()) {
+    return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'layouts'))
+  } else {
+    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    return new R2Storage(globalThis.ANALYSIS_STORAGE) // 同じバケットを使用
+  }
+}
+
+// Render Storage
+export async function getRenderStorage(): Promise<Storage> {
+  if (isDevelopment()) {
+    return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'renders'))
+  } else {
+    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    return new R2Storage(globalThis.ANALYSIS_STORAGE) // 同じバケットを使用
+  }
+}
+
+// Database
+export async function getDatabase(): Promise<DatabaseAdapter> {
+  if (isDevelopment()) {
+    return new SQLiteAdapter()
+  } else {
+    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    return new D1Adapter(globalThis.DB)
+  }
+}
+
+// ========================================
+// Legacy Functions (後方互換性)
+// ========================================
+
+// 既存のコードとの互換性を保つためのヘルパー関数
+export function getChunkKey(novelId: string, chunkIndex: number): string {
+  return `${novelId}:${chunkIndex}`
+}
+
+export function getEpisodeKey(novelId: string): string {
+  return novelId
+}
+
+export function getNovelPath(novelId: string): string {
+  return path.join('novels', `${novelId}.json`)
+}
+
+export function getAnalysisPath(novelId: string, chunkIndex: number): string {
+  return path.join('analysis', novelId, `chunk_${chunkIndex}.json`)
+}
+
+export function getEpisodePath(novelId: string): string {
+  return path.join('episodes', `${novelId}.json`)
+}
+
+// 既存の関数のエクスポート（レガシーサポート用）
+export async function saveChunkData(
+  novelId: string,
+  chunkIndex: number,
+  data: unknown,
+): Promise<void> {
+  const storage = await getChunkStorage()
+  const key = `${novelId}/chunk_${chunkIndex}.json`
+  await storage.put(key, JSON.stringify(data, null, 2))
+}
+
+export async function getChunkData(novelId: string, chunkIndex: number): Promise<unknown | null> {
+  const storage = await getChunkStorage()
+  const key = `${novelId}/chunk_${chunkIndex}.json`
+  const result = await storage.get(key)
+  return result ? JSON.parse(result.text) : null
+}
+
+// ========================================
+// Storage Keys & Factory (Public API)
+// ========================================
+
 export const StorageKeys = {
   novel: (uuid: string) => `novels/${uuid}.json`,
   chunk: (chunkId: string) => `chunks/${chunkId}.json`,
-  chunkAnalysis: (jobId: string, chunkIndex: number) =>
-    `analyses/${jobId}/chunk_${chunkIndex}.json`,
+  chunkAnalysis: (jobId: string, index: number) => `analyses/${jobId}/chunk_${index}.json`,
   integratedAnalysis: (jobId: string) => `analyses/${jobId}/integrated.json`,
   narrativeAnalysis: (jobId: string) => `analyses/${jobId}/narrative.json`,
   episodeLayout: (jobId: string, episodeNumber: number) =>
     `layouts/${jobId}/episode_${episodeNumber}.yaml`,
   pageRender: (jobId: string, episodeNumber: number, pageNumber: number) =>
     `renders/${jobId}/episode_${episodeNumber}/page_${pageNumber}.png`,
-}
+} as const
 
-export async function saveChunkData(
-  _novelId: string,
-  _chunkIndex: number,
-  _data: ChunkData,
-): Promise<void> {
-  // メモリストレージは使用せず、小説データから動的に生成
-  // チャンク情報はDBに保存されている
-}
-
-export async function getChunkData(jobId: string, chunkIndex: number): Promise<ChunkData | null> {
-  try {
-    // StorageFactoryを使って実際に保存されたチャンクファイルを読み込む
-    const chunkStorage = await StorageFactory.getChunkStorage()
-    const chunkPath = `chunks/${jobId}/chunk_${chunkIndex}.txt`
-    
-    const chunkFile = await chunkStorage.get(chunkPath)
-    if (!chunkFile) {
-      console.error(`Chunk file not found: ${chunkPath}`)
-      return null
-    }
-
-    // JSONファイルから内容を取得
-    let chunkContent: string
-    try {
-      const parsedData = JSON.parse(chunkFile.text)
-      chunkContent = parsedData.content
-    } catch {
-      // JSONパースに失敗した場合は直接テキストとして使用
-      chunkContent = chunkFile.text
-    }
-
-    if (!chunkContent) {
-      console.error(`Empty chunk content: ${chunkPath}`)
-      return null
-    }
-
-    return {
-      chunkIndex,
-      text: chunkContent,
-      startPosition: 0, // 実際の位置情報が必要な場合はDBから取得
-      endPosition: chunkContent.length,
-    }
-  } catch (error) {
-    console.error(`Failed to get chunk data for ${jobId}:${chunkIndex}:`, error)
-    return null
-  }
-}
-
-export async function saveChunkAnalysis(
-  novelId: string,
-  chunkIndex: number,
-  analysis: ChunkAnalysisResult,
-): Promise<void> {
-  const analysisPath = getAnalysisPath(novelId, chunkIndex)
-  const dir = path.dirname(analysisPath)
-  await ensureDir(dir)
-
-  const data = {
-    novelId,
-    chunkIndex,
-    analysis,
-    savedAt: new Date().toISOString(),
-  }
-
-  await fs.writeFile(analysisPath, JSON.stringify(data, null, 2))
-}
-
-export async function getChunkAnalysis(
-  jobId: string,
-  chunkIndex: number,
-): Promise<ChunkAnalysisResult | null> {
-  try {
-    const analysisStorage = await StorageFactory.getAnalysisStorage()
-    const analysisPath = `analyses/${jobId}/chunk_${chunkIndex}.json`
-    const analysisFile = await analysisStorage.get(analysisPath)
-    
-    if (!analysisFile) {
-      console.error(`Analysis file not found: ${analysisPath}`)
-      return null
-    }
-    
-    const data = JSON.parse(analysisFile.text)
-    return data.analysis || null
-  } catch (error) {
-    console.error(`Failed to get chunk analysis: ${error}`)
-    return null
-  }
-}
-
-export async function saveEpisodeBoundaries(
-  novelId: string,
-  boundaries: EpisodeBoundary[],
-): Promise<void> {
-  const episodePath = getEpisodePath(novelId)
-  const dir = path.dirname(episodePath)
-  await ensureDir(dir)
-
-  // 既存のデータを読み込む
-  let existingData: { novelId: string; boundaries: EpisodeBoundary[]; savedAt: string } | null =
-    null
-  try {
-    const fileContent = await fs.readFile(episodePath, 'utf-8')
-    existingData = JSON.parse(fileContent)
-  } catch (_error) {
-    // ファイルが存在しない場合は新規作成
-  }
-
-  // 既存のboundariesと新しいboundariesをマージ
-  let mergedBoundaries: EpisodeBoundary[] = []
-
-  if (existingData?.boundaries) {
-    // 既存のエピソードと新しいエピソードをマージ
-    const existingMap = new Map<string, EpisodeBoundary>()
-
-    // 既存のエピソードをMapに格納（startChunk-endChunkをキーとして）
-    existingData.boundaries.forEach((boundary) => {
-      const key = `${boundary.startChunk}-${boundary.endChunk}`
-      existingMap.set(key, boundary)
-    })
-
-    // 新しいエピソードを追加（重複する場合は上書き）
-    boundaries.forEach((boundary) => {
-      const key = `${boundary.startChunk}-${boundary.endChunk}`
-      existingMap.set(key, boundary)
-    })
-
-    // Mapから配列に変換し、startChunkでソート
-    mergedBoundaries = Array.from(existingMap.values()).sort((a, b) => a.startChunk - b.startChunk)
-
-    // エピソード番号を再割り当て
-    mergedBoundaries.forEach((boundary, index) => {
-      boundary.episodeNumber = index + 1
-    })
-  } else {
-    mergedBoundaries = boundaries
-  }
-
-  const data = {
-    novelId,
-    boundaries: mergedBoundaries,
-    savedAt: new Date().toISOString(),
-  }
-
-  await fs.writeFile(episodePath, JSON.stringify(data, null, 2))
-}
-
-export async function getEpisodeBoundaries(novelId: string): Promise<EpisodeBoundary[] | null> {
-  try {
-    const episodePath = getEpisodePath(novelId)
-    const data = JSON.parse(await fs.readFile(episodePath, 'utf-8'))
-    return data.boundaries || null
-  } catch (error) {
-    console.error(`Failed to get episode boundaries: ${error}`)
-    return null
-  }
-}
-
-export async function getAllChunksForNovel(novelId: string): Promise<ChunkData[]> {
-  const chunks: ChunkData[] = []
-
-  try {
-    // 小説データから全チャンクを生成
-    const novelPath = getNovelPath(novelId)
-    const novelData = JSON.parse(await fs.readFile(novelPath, 'utf-8'))
-
-    if (!novelData.text) {
-      return []
-    }
-
-    // チャンク設定を取得
-    const { getChunkingConfig } = await import('@/config')
-    const chunkingConfig = getChunkingConfig()
-    const chunkSize = chunkingConfig.defaultChunkSize
-    const overlapSize = chunkingConfig.defaultOverlapSize
-    const stepSize = chunkSize - overlapSize
-    const totalChunks = Math.ceil(novelData.text.length / stepSize)
-
-    for (let i = 0; i < totalChunks; i++) {
-      const chunk = await getChunkData(novelId, i)
-      if (chunk) {
-        chunks.push(chunk)
-      }
-    }
-  } catch (error) {
-    console.error(`Failed to get all chunks: ${error}`)
-  }
-
-  return chunks
-}
-
-export async function clearNovelData(novelId: string): Promise<void> {
-  try {
-    // 小説データの削除
-    const novelPath = getNovelPath(novelId)
-    await fs.unlink(novelPath).catch(() => {
-      // ファイルが存在しない場合は無視
-    })
-
-    // 分析データの削除
-    const analysisDir = path.dirname(getAnalysisPath(novelId, 0))
-    await fs.rm(analysisDir, { recursive: true, force: true }).catch(() => {
-      // ディレクトリが存在しない場合は無視
-    })
-
-    // エピソードデータの削除
-    const episodePath = getEpisodePath(novelId)
-    await fs.unlink(episodePath).catch(() => {
-      // ファイルが存在しない場合は無視
-    })
-  } catch (error) {
-    console.error(`Failed to clear novel data: ${error}`)
-  }
-}
+export const StorageFactory = {
+  getNovelStorage,
+  getChunkStorage,
+  getAnalysisStorage,
+  getLayoutStorage,
+  getRenderStorage,
+  getDatabase,
+} as const

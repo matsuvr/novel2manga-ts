@@ -1,4 +1,6 @@
+import crypto from 'node:crypto'
 import { type NextRequest, NextResponse } from 'next/server'
+import { getApiConfig } from '@/config'
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,13 +12,34 @@ export async function POST(request: NextRequest) {
 
     // nove/storageのエンドポイントを利用して保存。エンドポイントが渡してきたファイル名を返す
     const baseUrl = request.nextUrl.origin
-    const response = await fetch(`${baseUrl}/api/novel/storage`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ text }),
-    })
+
+    // タイムアウト付きでfetchを実行（10秒）
+    const controller = new AbortController()
+    const uploadTimeout = getApiConfig().timeout?.upload ?? 10000
+    const timeoutId = setTimeout(() => controller.abort(), uploadTimeout)
+
+    let response: Response
+    try {
+      response = await fetch(`${baseUrl}/api/novel/storage`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+        signal: controller.signal,
+      })
+    } catch (fetchError) {
+      clearTimeout(timeoutId)
+      console.error('小説storageエンドポイント呼び出しエラー:', fetchError)
+      return NextResponse.json(
+        {
+          error: '小説の保存に失敗しました',
+          details: fetchError instanceof Error ? fetchError.message : 'Unknown error',
+        },
+        { status: 500 },
+      )
+    }
+    clearTimeout(timeoutId)
     // レスポンスのチェック
     if (!response.ok) {
       const errorData = (await response.json()) as { error?: string }
@@ -33,7 +56,7 @@ export async function POST(request: NextRequest) {
       length?: number
       preview?: string
     }
-    
+
     if (!response.ok) {
       return NextResponse.json(
         { error: data.error || '小説の保存に失敗しました' },
@@ -45,28 +68,18 @@ export async function POST(request: NextRequest) {
     try {
       const { StorageFactory } = await import('@/utils/storage')
       const { DatabaseService } = await import('@/services/database')
-      
-      const db = await StorageFactory.getDatabase()
-      const dbService = new DatabaseService(db)
-      
+
+      const dbService = new DatabaseService()
+
       // 小説情報をDBに保存（UUIDを指定）
-      const db2 = await StorageFactory.getDatabase()
-      const now = new Date()
-      await db2.run(
-        `INSERT INTO novels (id, title, author, original_text_path, text_length, language, created_at, updated_at) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          data.uuid,
-          `Novel ${data.uuid?.slice(0, 8) || 'Unknown'}`,
-          'Unknown',
-          data.fileName || '',
-          data.length || 0,
-          'ja',
-          now,
-          now,
-        ],
-      )
-      
+      await dbService.ensureNovel(data.uuid ?? crypto.randomUUID(), {
+        title: `Novel ${(data.uuid ?? '').slice(0, 8) || 'Unknown'}`,
+        author: 'Unknown',
+        originalTextPath: data.fileName || '',
+        textLength: data.length || 0,
+        language: 'ja',
+      })
+
       console.log(`✓ 小説をDBに保存: ${data.uuid}`)
     } catch (dbError) {
       console.error('DB保存エラー:', dbError)

@@ -15,7 +15,7 @@ export const chunkAnalyzerAgent = new Agent({
     const llm = await getTextAnalysisLLM()
     console.log(`[chunkAnalyzerAgent] Using provider: ${llm.providerName}`)
     console.log(`[chunkAnalyzerAgent] Using model: ${llm.model}`)
-    
+
     // モデルを返す
     return llm.provider(llm.model) as any // Mastraの型互換性のための一時的な回避策
   },

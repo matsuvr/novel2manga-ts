@@ -49,11 +49,11 @@ export class JobNarrativeProcessor {
     onProgress?: (progress: JobProgress) => void,
   ): Promise<JobProgress> {
     console.log(`[JobNarrativeProcessor] Starting episode analysis for job ${jobId}`)
-    
+
     try {
       // ジョブの開始をログ
       await this.dbService.updateJobStep(jobId, 'episode_analysis_started')
-      
+
       const job = await this.dbService.getExtendedJob(jobId)
       if (!job) {
         throw new Error(`Job ${jobId} not found`)
@@ -72,8 +72,15 @@ export class JobNarrativeProcessor {
         const startIndex = progress.processedChunks
         const endIndex = Math.min(startIndex + this.config.chunksPerBatch, progress.totalChunks)
 
-        console.log(`[JobNarrativeProcessor] Processing chunks ${startIndex} to ${endIndex} for job ${jobId}`)
-        await this.dbService.updateJobStep(jobId, `processing_batch_${startIndex}_${endIndex}`, startIndex, progress.totalChunks)
+        console.log(
+          `[JobNarrativeProcessor] Processing chunks ${startIndex} to ${endIndex} for job ${jobId}`,
+        )
+        await this.dbService.updateJobStep(
+          jobId,
+          `processing_batch_${startIndex}_${endIndex}`,
+          startIndex,
+          progress.totalChunks,
+        )
 
         // チャンクデータを取得
         const chunkTexts: string[] = []
@@ -88,7 +95,9 @@ export class JobNarrativeProcessor {
               throw new Error(error)
             }
             chunkTexts.push(chunkData.text)
-            console.log(`[JobNarrativeProcessor] Chunk ${i} loaded successfully (${chunkData.text.length} chars)`)
+            console.log(
+              `[JobNarrativeProcessor] Chunk ${i} loaded successfully (${chunkData.text.length} chars)`,
+            )
           } catch (error) {
             const errorMsg = `Failed to load chunk ${i}: ${error instanceof Error ? error.message : String(error)}`
             console.error(`[JobNarrativeProcessor] ${errorMsg}`)
@@ -144,9 +153,9 @@ export class JobNarrativeProcessor {
       console.error(`[JobNarrativeProcessor] Fatal error in job ${jobId}:`, {
         error: errorMessage,
         stack: error instanceof Error ? error.stack : undefined,
-        jobId
+        jobId,
       })
-      
+
       await this.dbService.updateJobError(jobId, errorMessage, 'episode_analysis_failed')
       throw error
     } finally {

@@ -5,8 +5,7 @@ import { getD1Database } from '@/utils/cloudflare-env'
 
 export async function POST(_request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
-    const db = getD1Database()
-    const dbService = new DatabaseService(db)
+    const dbService = new DatabaseService()
     const processor = new JobNarrativeProcessor(dbService)
 
     // ジョブが再開可能かチェック
