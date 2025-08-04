@@ -1,25 +1,14 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { chunkAnalyzerAgent } from '@/agents/chunk-analyzer'
-import { getConfig } from '@/config/config-loader'
-import {
-  getAnalysisCacheKey,
-  getCachedData,
-  getCacheTTL,
-  isCacheEnabled,
-  setCachedData,
-} from '@/lib/cache/kv'
-import { closeDatabase, getDatabase, getOne, initializeDatabase, runQuery } from '@/lib/db'
-import { getChunkAnalysisPath, getChunkTextPath, loadJson, saveJson } from '@/lib/storage/r2'
+import { getTextAnalysisConfig } from '@/config'
+import { StorageFactory } from '@/utils/storage'
+import type { ChunkAnalysisResult } from '@/types/chunk'
 
 // リクエストボディのバリデーションスキーマ
-const analyzeChunkSchema = z.object({
-  chunkId: z.string(),
-  chunkText: z.string(),
+const analyzeChunkRequestSchema = z.object({
+  jobId: z.string(),
   chunkIndex: z.number(),
-  novelId: z.string(),
-  previousChunkText: z.string().optional(),
-  nextChunkText: z.string().optional(),
 })
 
 // 5要素の出力スキーマ
@@ -67,215 +56,95 @@ const textAnalysisOutputSchema = z.object({
   ),
 })
 
-// キャッシュされる分析結果の型
-type CachedAnalysisResult = {
-  chunkId: string
-  chunkIndex: number
-  novelId: string
-  analysisId: string
-  analysisPath: string
-  analysis: z.infer<typeof textAnalysisOutputSchema>
-  summary: {
-    textSummary: string
-    characterCount: number
-    sceneCount: number
-    dialogueCount: number
-    highlightCount: number
-    situationCount: number
-  }
-}
-
 export async function POST(request: NextRequest) {
-  let db = null
-
   try {
-    // データベースの初期化（開発環境用）
-    if (process.env.NODE_ENV === 'development') {
-      await initializeDatabase()
-    }
-
     // リクエストボディの取得とバリデーション
     const body = await request.json()
-    const validatedData = analyzeChunkSchema.parse(body)
+    const { jobId, chunkIndex } = analyzeChunkRequestSchema.parse(body)
 
-    const { chunkId, chunkText, chunkIndex, novelId, previousChunkText, nextChunkText } =
-      validatedData
+    console.log(`[/api/analyze/chunk] Analyzing chunk ${chunkIndex} for job ${jobId}`)
 
-    // データベース接続を取得
-    db = await getDatabase()
-
-    // 前後のチャンクテキストを取得（渡されていない場合）
-    let prevChunkText = previousChunkText
-    let nextChunkText_ = nextChunkText
-
-    if (!prevChunkText || !nextChunkText_) {
-      // 前のチャンクを取得
-      if (!prevChunkText) {
-        if (chunkIndex > 0) {
-          const prevChunkMeta = await getOne(
-            db,
-            `SELECT id FROM chunks WHERE novel_id = ? AND chunk_index = ?`,
-            [novelId, chunkIndex - 1],
-          )
-          if (prevChunkMeta?.id) {
-            // チャンクテキストをストレージから読み込む
-            const chunkData = await loadJson(getChunkTextPath(prevChunkMeta.id), 'CHUNKS_STORAGE')
-            prevChunkText = chunkData?.text || '（開始点）'
-          } else {
-            prevChunkText = '（開始点）'
-          }
-        } else {
-          prevChunkText = '（開始点）'
-        }
-      }
-
-      // 次のチャンクを取得
-      if (!nextChunkText_) {
-        const nextChunkMeta = await getOne(
-          db,
-          `SELECT id FROM chunks WHERE novel_id = ? AND chunk_index = ?`,
-          [novelId, chunkIndex + 1],
-        )
-
-        if (nextChunkMeta?.id) {
-          // チャンクテキストをストレージから読み込む
-          const chunkData = await loadJson(getChunkTextPath(nextChunkMeta.id), 'CHUNKS_STORAGE')
-          nextChunkText_ = chunkData?.text || ''
-        } else {
-          // 最後のチャンクかどうか確認
-          const maxChunkIndex = await getOne(
-            db,
-            `SELECT MAX(chunk_index) as max_index FROM chunks WHERE novel_id = ?`,
-            [novelId],
-          )
-          nextChunkText_ = maxChunkIndex?.max_index === chunkIndex ? '（終了）' : ''
-        }
-      }
+    // ストレージから必要なデータを取得
+    const chunkStorage = await StorageFactory.getChunkStorage()
+    const analysisStorage = await StorageFactory.getAnalysisStorage()
+    
+    // 既に分析済みかチェック
+    const analysisPath = `analyses/${jobId}/chunk_${chunkIndex}.json`
+    const existingAnalysis = await analysisStorage.get(analysisPath)
+    
+    if (existingAnalysis) {
+      console.log(`[/api/analyze/chunk] Analysis already exists for chunk ${chunkIndex}`)
+      const analysisData = JSON.parse(existingAnalysis.text)
+      return NextResponse.json({
+        success: true,
+        data: analysisData.analysis,
+        cached: true,
+      })
     }
 
-    // キャッシュが有効か確認
-    const cacheEnabled = await isCacheEnabled('analysis')
-
-    // キャッシュから取得を試みる
-    if (cacheEnabled) {
-      const cacheKey = getAnalysisCacheKey(novelId, chunkIndex)
-      const cachedResult = await getCachedData<CachedAnalysisResult>(cacheKey)
-
-      if (cachedResult) {
-        console.log(`Cache hit for chunk analysis: ${cacheKey}`)
-        return NextResponse.json({
-          success: true,
-          data: cachedResult,
-          cached: true,
-        })
-      }
-    }
-
-    // 設定を取得
-    const config = getConfig()
-
-    // プロンプトテンプレートを設定から取得
-    let promptTemplate: string
-    try {
-      promptTemplate = config.getPath<string>('llm.textAnalysis.userPromptTemplate')
-    } catch {
-      // 設定が見つからない場合はデフォルトを使用
-      promptTemplate = `以下の小説テキストを分析して、5つの要素（キャラクター、場面、対話、ハイライト、状況）を抽出してください。
-
-チャンク番号: {{chunkIndex}}
-テキスト:
-{{chunkText}}`
-    }
-
-    // プロンプトを生成
-    const prompt = promptTemplate
-      .replace('{{chunkIndex}}', chunkIndex.toString())
-      .replace('{{chunkText}}', chunkText)
-      .replace('{{previousChunkText}}', prevChunkText || '（開始点）')
-      .replace('{{nextChunkText}}', nextChunkText_ || '（終了）')
-
-    // Mastraエージェントを使用してチャンクを分析（構造化出力）
-    const result = await chunkAnalyzerAgent.generate(prompt, {
-      output: textAnalysisOutputSchema,
-    })
-
-    // チャンクが存在するか確認
-    const chunk = await getOne(db, `SELECT id FROM chunks WHERE id = ?`, [chunkId])
-
-    if (!chunk) {
+    // チャンクテキストを取得
+    const chunkPath = `chunks/${jobId}/chunk_${chunkIndex}.txt`
+    const chunkFile = await chunkStorage.get(chunkPath)
+    
+    if (!chunkFile) {
       return NextResponse.json(
         {
           success: false,
-          error: '指定されたチャンクが見つかりません',
+          error: `Chunk file not found: ${chunkPath}`,
         },
-        { status: 404 },
+        { status: 404 }
       )
     }
 
-    // 分析結果をR2に保存
-    const analysisPath = getChunkAnalysisPath(novelId, chunkIndex)
+    const chunkText = chunkFile.text
+    console.log(`[/api/analyze/chunk] Loaded chunk text (${chunkText.length} chars)`)
+
+    // 設定を取得してプロンプトを生成
+    const config = getTextAnalysisConfig()
+    const prompt = config.userPromptTemplate
+      .replace('{{chunkIndex}}', chunkIndex.toString())
+      .replace('{{chunkText}}', chunkText)
+      .replace('{{previousChunkText}}', '') // 簡易版では前後のテキストは省略
+      .replace('{{nextChunkText}}', '')
+
+    console.log(`[/api/analyze/chunk] Sending to LLM for analysis...`)
+
+    // Mastraエージェントを使用してチャンクを分析
+    const result = await chunkAnalyzerAgent.generate([{ role: 'user', content: prompt }], {
+      output: textAnalysisOutputSchema,
+    })
+
+    if (!result.object) {
+      throw new Error('Failed to generate analysis result')
+    }
+
+    console.log(`[/api/analyze/chunk] Analysis complete:`)
+    console.log(`  - Characters: ${result.object.characters.length}`)
+    console.log(`  - Scenes: ${result.object.scenes.length}`)
+    console.log(`  - Dialogues: ${result.object.dialogues.length}`)
+    console.log(`  - Highlights: ${result.object.highlights.length}`)
+    console.log(`  - Situations: ${result.object.situations.length}`)
+
+    // 分析結果をストレージに保存
     const analysisData = {
-      chunkId,
       chunkIndex,
-      novelId,
+      jobId,
       analysis: result.object,
-      processedAt: new Date().toISOString(),
+      analyzedAt: new Date().toISOString(),
     }
 
-    await saveJson(analysisPath, analysisData, 'ANALYSIS_STORAGE')
+    await analysisStorage.put(analysisPath, JSON.stringify(analysisData, null, 2))
+    console.log(`[/api/analyze/chunk] Saved analysis to ${analysisPath}`)
 
-    // チャンク分析をデータベースに記録
-    const analysisId = crypto.randomUUID()
-    await runQuery(
-      db,
-      `INSERT INTO chunk_analyses (id, chunk_id, analysis_file, character_count, scene_count, dialogue_count, highlight_count, situation_count) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        analysisId,
-        chunkId,
-        analysisPath,
-        result.object.characters.length,
-        result.object.scenes.length,
-        result.object.dialogues.length,
-        result.object.highlights.length,
-        result.object.situations.length,
-      ],
-    )
-
-    // レスポンスデータを構築
-    const responseData = {
-      chunkId,
-      chunkIndex,
-      novelId,
-      analysisId,
-      analysisPath,
-      analysis: result.object,
-      summary: {
-        textSummary: result.object.summary,
-        characterCount: result.object.characters.length,
-        sceneCount: result.object.scenes.length,
-        dialogueCount: result.object.dialogues.length,
-        highlightCount: result.object.highlights.length,
-        situationCount: result.object.situations.length,
-      },
-    }
-
-    // キャッシュに保存
-    if (cacheEnabled) {
-      const cacheKey = getAnalysisCacheKey(novelId, chunkIndex)
-      const cacheTTL = getCacheTTL('analysis')
-      await setCachedData(cacheKey, responseData, cacheTTL)
-      console.log(`Cached chunk analysis: ${cacheKey} with TTL: ${cacheTTL}s`)
-    }
-
-    // レスポンスの返却
+    // レスポンスを返却
     return NextResponse.json({
       success: true,
-      data: responseData,
+      data: result.object,
       cached: false,
     })
+    
   } catch (error) {
-    console.error('Chunk analysis error:', error)
+    console.error('[/api/analyze/chunk] Error:', error)
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -284,7 +153,7 @@ export async function POST(request: NextRequest) {
           error: 'Invalid request data',
           details: error.errors,
         },
-        { status: 400 },
+        { status: 400 }
       )
     }
 
@@ -294,12 +163,7 @@ export async function POST(request: NextRequest) {
         error: 'Failed to analyze chunk',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
-      { status: 500 },
+      { status: 500 }
     )
-  } finally {
-    // データベース接続をクローズ
-    if (db) {
-      await closeDatabase(db)
-    }
   }
 }

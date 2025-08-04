@@ -4,7 +4,7 @@ import type { NarrativeAnalysisInput } from '@/types/episode'
 import { getChunkAnalysis, getChunkData } from '@/utils/storage'
 
 export interface PrepareNarrativeInputOptions {
-  novelId: string
+  jobId: string
   startChunkIndex: number
   targetChars?: number
   minChars?: number
@@ -16,7 +16,7 @@ export async function prepareNarrativeAnalysisInput(
 ): Promise<NarrativeAnalysisInput | null> {
   const episodeConfig = getEpisodeConfig()
   const {
-    novelId,
+    jobId,
     startChunkIndex,
     targetChars = episodeConfig.targetCharsPerEpisode,
     minChars = episodeConfig.minCharsPerEpisode,
@@ -28,12 +28,12 @@ export async function prepareNarrativeAnalysisInput(
   let currentChunkIndex = startChunkIndex
 
   while (totalChars < targetChars && chunks.length < 20) {
-    const chunkData = await getChunkData(novelId, currentChunkIndex)
+    const chunkData = await getChunkData(jobId, currentChunkIndex)
     if (!chunkData) {
       break
     }
 
-    const analysisResult = await getChunkAnalysis(novelId, currentChunkIndex)
+    const analysisResult = await getChunkAnalysis(jobId, currentChunkIndex)
 
     const chunkInput: NarrativeAnalysisInput['chunks'][0] = {
       chunkIndex: currentChunkIndex,
@@ -53,7 +53,7 @@ export async function prepareNarrativeAnalysisInput(
     currentChunkIndex++
 
     if (totalChars >= minChars && totalChars <= maxChars) {
-      const nextChunk = await getChunkData(novelId, currentChunkIndex)
+      const nextChunk = await getChunkData(jobId, currentChunkIndex)
       if (!nextChunk) break
 
       const potentialTotal = totalChars + nextChunk.text.length
@@ -72,6 +72,7 @@ export async function prepareNarrativeAnalysisInput(
   // （呼び出し側で前のエピソードと結合するかどうかを判断）
 
   return {
+    jobId,
     chunks,
     targetCharsPerEpisode: targetChars,
     minCharsPerEpisode: minChars,

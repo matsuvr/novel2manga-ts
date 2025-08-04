@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
       "mcp__cloudflare__search_cloudflare_documentation",
@@ -26,11 +27,21 @@
       "mcp__serena__activate_project",
       "Bash(cat:*)",
       "mcp__serena__search_for_pattern",
-      "mcp__serena__list_dir"
+      "mcp__serena__list_dir",
+      "mcp__serena__check_onboarding_performed",
+      "mcp__serena__onboarding",
+      "mcp__serena__find_file",
+      "mcp__serena__get_symbols_overview",
+      "mcp__serena__write_memory"
     ]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": ["cloudflare", "mastra", "serena", "deepwiki"],
+  "enabledMcpjsonServers": [
+    "cloudflare",
+    "mastra",
+    "serena",
+    "deepwiki"
+  ],
   "hooks": {
     "Notification": [
       {
@@ -43,6 +54,5 @@
         ]
       }
     ]
-  },
-  "$schema": "https://json.schemastore.org/claude-code-settings.json"
+  }
 }

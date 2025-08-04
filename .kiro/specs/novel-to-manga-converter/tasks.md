@@ -180,6 +180,30 @@
   - [x] 包括的なユニットテスト・統合テスト実装
   - _Requirements: REQ-6 - データ管理、環境対応_
 
+- [x] 13. LLMフォールバックチェーン実装（2025-08-04追加）
+  - [x] app.config.tsでのフォールバックチェーン設定（openrouter → gemini → claude）
+  - [x] LLMFactoryによる動的プロバイダー選択機能実装
+  - [x] chunk-analyzer、chunk-bundle-analyzer、narrative-arc-analyzerのフォールバック対応
+  - [x] OpenRouterモデル更新（horizon-alpha → horizon-beta）
+  - [x] getTextAnalysisLLM、getNarrativeAnalysisLLMの統一化
+  - _Requirements: REQ-1 - テキスト解析の可用性向上_
+
+- [x] 14. エンドツーエンド分析フロー完全実装（2025-08-04追加）
+  - [x] 小説登録 → チャンク分割 → 分析 → エピソード分析の完全フロー実装
+  - [x] jobIdベースのストレージ整合性修正（getChunkAnalysisなど）
+  - [x] textAnalysisConfigのuserPromptTemplate追加
+  - [x] 統合テストによる動作確認（宮本武蔵長編小説での検証）
+  - [x] エラーハンドリングとログ出力の詳細化
+  - _Requirements: REQ-1, REQ-3 - 分析フロー完成_
+
+- [ ] 15. Canvas描画とマンガレンダリング実装
+  - [x] Canvas描画基盤実装（src/lib/canvas/）
+  - [ ] MangaPageRendererの実装（5要素からマンガページ生成）
+  - [ ] /api/renderエンドポイントの実装
+  - [ ] PanelLayoutEngineの実装（コマ割り計算）
+  - [ ] SpeechBubblePlacerの実装（吹き出し配置）
+  - _Requirements: REQ-3 - マンガレイアウト生成_
+
 - [ ] 8.2 E2Eテストの実装
   - [ ] Playwrightによる完全なユーザーフローテスト
   - [ ] テキスト投稿→解析→レイアウト生成→編集→エクスポートのフロー

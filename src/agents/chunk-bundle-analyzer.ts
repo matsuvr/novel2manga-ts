@@ -1,46 +1,7 @@
-import { anthropic } from '@ai-sdk/anthropic'
-import { openai } from '@ai-sdk/openai'
 import { Agent } from '@mastra/core'
 import { z } from 'zod'
-import { getCurrentLLMProvider } from '@/config'
 import type { ChunkAnalysisResult } from '@/types/chunk'
-
-function getModel() {
-  const { provider, config: providerConfig } = getCurrentLLMProvider()
-
-  switch (provider) {
-    case 'openai': {
-      const openaiKey = providerConfig.apiKey
-      const openaiModel = providerConfig.model
-      if (!openaiKey) throw new Error('OpenAI API key not configured')
-      return openai(openaiModel)
-    }
-    case 'claude': {
-      const claudeKey = providerConfig.apiKey
-      const claudeModel = providerConfig.model
-      if (!claudeKey) throw new Error('Claude API key not configured')
-
-      // 環境変数を設定してantropic関数を使用
-      process.env.ANTHROPIC_API_KEY = claudeKey
-      return anthropic(claudeModel)
-    }
-    case 'gemini': {
-      // Geminiサポートは将来的に追加
-      throw new Error('Gemini provider is not yet supported')
-    }
-    case 'groq': {
-      // Groqサポートは将来的に追加
-      throw new Error('Groq provider is not yet supported')
-    }
-    default: {
-      // デフォルトはOpenAIにフォールバック
-      const { config: fallbackConfig } = getCurrentLLMProvider()
-      const openaiKey = fallbackConfig.apiKey
-      if (!openaiKey) throw new Error('Default provider API key not configured')
-      return openai(fallbackConfig.model)
-    }
-  }
-}
+import { getTextAnalysisLLM } from '@/utils/llm-factory'
 
 const chunkBundleAnalyzer = new Agent({
   name: 'Chunk Bundle Analyzer',
@@ -51,10 +12,14 @@ const chunkBundleAnalyzer = new Agent({
 - 物語の連続性と流れを重視してください
 - 重複する情報は統合し、最も重要な要素を選別してください
 - チャンク番号への言及は避け、物語の内容に焦点を当ててください`,
-  model: ({ runtimeContext: _runtimeContext }) => {
-    // プロバイダー設定を取得してモデルを返す
-    const model = getModel()
-    return model as any // Mastraの型互換性のための一時的な回避策
+  model: async ({ runtimeContext: _runtimeContext }) => {
+    // フォールバック機能付きでLLMを取得
+    const llm = await getTextAnalysisLLM()
+    console.log(`[chunkBundleAnalyzer] Using provider: ${llm.providerName}`)
+    console.log(`[chunkBundleAnalyzer] Using model: ${llm.model}`)
+    
+    // モデルを返す
+    return llm.provider(llm.model) as any // Mastraの型互換性のための一時的な回避策
   },
 })
 
@@ -119,7 +84,9 @@ interface ChunkWithAnalysis {
 export async function analyzeChunkBundle(
   chunksWithAnalyses: ChunkWithAnalysis[],
 ): Promise<BundleAnalysisResult> {
-  console.log('analyzeChunkBundle called with chunks:', chunksWithAnalyses.length)
+  console.log('[analyzeChunkBundle] Starting bundle analysis with chunks:', chunksWithAnalyses.length)
+  
+  try {
 
   // 各チャンクの分析結果を構造化して整理
   const charactersMap = new Map<string, { descriptions: string[]; appearances: number }>()
@@ -244,7 +211,12 @@ ${allSituations
 
     return result.object
   } catch (error) {
-    console.error('Bundle analysis error:', error)
+    console.error('[analyzeChunkBundle] Bundle analysis LLM error:', error)
+    throw error
+  }
+  
+  } catch (error) {
+    console.error('[analyzeChunkBundle] Fatal error in bundle analysis:', error)
     throw error
   }
 }

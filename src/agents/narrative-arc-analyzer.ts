@@ -1,48 +1,10 @@
-import { anthropic } from '@ai-sdk/anthropic'
-import { openai } from '@ai-sdk/openai'
 import { Agent } from '@mastra/core'
 import { z } from 'zod'
 import { analyzeChunkBundle, type BundleAnalysisResult } from '@/agents/chunk-bundle-analyzer'
-import { getCurrentLLMProvider, getEpisodeConfig, getNarrativeAnalysisConfig } from '@/config'
+import { getEpisodeConfig, getNarrativeAnalysisConfig } from '@/config'
 import type { ChunkAnalysisResult } from '@/types/chunk'
 import type { EpisodeBoundary, NarrativeAnalysisInput } from '@/types/episode'
-
-function getModel() {
-  const { provider, config: providerConfig } = getCurrentLLMProvider()
-
-  switch (provider) {
-    case 'openai': {
-      const openaiKey = providerConfig.apiKey
-      const openaiModel = providerConfig.model
-      if (!openaiKey) throw new Error('OpenAI API key not configured')
-      return openai(openaiModel)
-    }
-    case 'claude': {
-      const claudeKey = providerConfig.apiKey
-      const claudeModel = providerConfig.model
-      if (!claudeKey) throw new Error('Claude API key not configured')
-
-      // 環境変数を設定してantropic関数を使用
-      process.env.ANTHROPIC_API_KEY = claudeKey
-      return anthropic(claudeModel)
-    }
-    case 'gemini': {
-      // Geminiサポートは将来的に追加
-      throw new Error('Gemini provider is not yet supported')
-    }
-    case 'groq': {
-      // Groqサポートは将来的に追加
-      throw new Error('Groq provider is not yet supported')
-    }
-    default: {
-      // デフォルトはOpenAIにフォールバック
-      const { config: fallbackConfig } = getCurrentLLMProvider()
-      const openaiKey = fallbackConfig.apiKey
-      if (!openaiKey) throw new Error('Default provider API key not configured')
-      return openai(fallbackConfig.model)
-    }
-  }
-}
+import { getNarrativeAnalysisLLM } from '@/utils/llm-factory'
 
 const narrativeArcAnalyzer = new Agent({
   name: 'Narrative Arc Analyzer',
@@ -50,10 +12,14 @@ const narrativeArcAnalyzer = new Agent({
     const config = getNarrativeAnalysisConfig()
     return config.systemPrompt
   },
-  model: ({ runtimeContext: _runtimeContext }) => {
-    // プロバイダー設定を取得してモデルを返す
-    const model = getModel()
-    return model as any // Mastraの型互換性のための一時的な回避策
+  model: async ({ runtimeContext: _runtimeContext }) => {
+    // フォールバック機能付きでLLMを取得
+    const llm = await getNarrativeAnalysisLLM()
+    console.log(`[narrativeArcAnalyzer] Using provider: ${llm.providerName}`)
+    console.log(`[narrativeArcAnalyzer] Using model: ${llm.model}`)
+    
+    // モデルを返す
+    return llm.provider(llm.model) as any // Mastraの型互換性のための一時的な回避策
   },
 })
 
@@ -81,25 +47,28 @@ export async function analyzeNarrativeArc(
 
   // まず、チャンクの束を統合分析
   console.log('Performing bundle analysis first...')
-  const chunksWithAnalyses = input.chunks.map((chunk) => ({
-    text: chunk.text,
-    analysis: {
-      characters:
-        chunk.characters?.map((name) => ({ name, description: '', firstAppearance: 0 })) || [],
-      scenes: [],
-      dialogues: [],
-      highlights: (chunk.highlights || []).map((h) => ({
-        type: 'emotional_peak' as const,
-        description: h.text,
-        importance: h.importance,
-        startIndex: 0,
-        endIndex: h.text.length,
-        text: h.text,
-      })),
-      situations: [],
-      summary: chunk.summary || '',
-    } as ChunkAnalysisResult,
-  }))
+  console.log(`Loading analysis results for job ${input.jobId}...`)
+  
+  const { getChunkAnalysis } = await import('@/utils/storage')
+  
+  const chunksWithAnalyses = []
+  for (const chunk of input.chunks) {
+    console.log(`Loading analysis for chunk ${chunk.chunkIndex}...`)
+    const analysisResult = await getChunkAnalysis(input.jobId, chunk.chunkIndex)
+    
+    if (!analysisResult) {
+      const error = `Chunk analysis not found for job ${input.jobId}, chunk ${chunk.chunkIndex}`
+      console.error(error)
+      throw new Error(error)
+    }
+    
+    chunksWithAnalyses.push({
+      text: chunk.text,
+      analysis: analysisResult,
+    })
+  }
+  
+  console.log(`Successfully loaded ${chunksWithAnalyses.length} chunk analyses`)
 
   let bundleAnalysis: BundleAnalysisResult
   try {
