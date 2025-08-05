@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       return validationError('有効なpageNumberが必要です')
     }
 
-    if (!body.layoutYaml || typeof body.layoutYaml !== 'string') {
+    if (!body.layoutYaml) {
       return validationError('layoutYamlが必要です')
     }
 

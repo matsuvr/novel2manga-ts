@@ -2,36 +2,9 @@ import { Agent } from '@mastra/core'
 import { z } from 'zod'
 import { analyzeChunkBundle, type BundleAnalysisResult } from '@/agents/chunk-bundle-analyzer'
 import { getEpisodeConfig, getNarrativeAnalysisConfig } from '@/config'
-import type { ChunkData, ChunkAnalysisResult } from '@/types/chunk'
+import type { ChunkAnalysisResult } from '@/types/chunk'
 import type { EpisodeBoundary } from '@/types/episode'
 import { getNarrativeAnalysisLLM } from '@/utils/llm-factory'
-
-interface NarrativeAnalysisParams {
-  jobId: string
-  chunks: Array<{
-    chunkIndex: number
-    text: string
-    analysis: {
-      summary: string
-      characters: { name: string; role: string }[]
-      dialogues: ChunkAnalysisResult['dialogues']
-      scenes: ChunkAnalysisResult['scenes']
-      highlights: { 
-        text: string
-        importance: number
-        description: string
-        startIndex: number
-        endIndex: number
-      }[]
-    }
-  }>
-  targetCharsPerEpisode: number
-  minCharsPerEpisode: number
-  maxCharsPerEpisode: number
-  startingEpisodeNumber?: number
-  isMiddleOfNovel?: boolean
-  previousEpisodeEndText?: string
-}
 
 const narrativeArcAnalyzer = new Agent({
   name: 'Narrative Arc Analyzer',
@@ -326,51 +299,4 @@ function convertPositionsToBoundaries(
   })
 }
 
-function findOptimalBreakpoints(
-  text: string,
-  _chunkIndex: number,
-  targetPosition: number,
-): { position: number; context: string } {
-  const searchRange = 500
-  const start = Math.max(0, targetPosition - searchRange)
-  const end = Math.min(text.length, targetPosition + searchRange)
-  const searchText = text.substring(start, end)
 
-  const breakIndicators = [
-    /[。！？」』】\n]+\s*$/gm,
-    /第[一二三四五六七八九十\d]+[章話節]/g,
-    /\n\s*[＊※◇◆■□●○★☆×]\s*\n/g,
-    /\n\s*\d+\s*\n/g,
-  ]
-
-  let bestBreak = targetPosition
-  let bestScore = 0
-
-  for (const pattern of breakIndicators) {
-    pattern.lastIndex = 0 // Reset regex state
-    let match: RegExpExecArray | null = pattern.exec(searchText)
-    while (match !== null) {
-      const absolutePos = start + match.index + match[0].length
-      const distance = Math.abs(absolutePos - targetPosition)
-      const score = 1 - distance / searchRange
-
-      if (score > bestScore) {
-        bestScore = score
-        bestBreak = absolutePos
-      }
-
-      // Prevent infinite loop for global regex
-      if (!pattern.global) break
-      match = pattern.exec(searchText)
-    }
-  }
-
-  const contextStart = Math.max(0, bestBreak - 100)
-  const contextEnd = Math.min(text.length, bestBreak + 100)
-  const context = text.substring(contextStart, contextEnd)
-
-  return {
-    position: bestBreak,
-    context: context,
-  }
-}

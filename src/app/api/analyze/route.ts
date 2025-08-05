@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { novelId, jobName } = validationResult.data
+    const { novelId} = validationResult.data
     console.log('[/api/analyze] Novel ID:', novelId)
 
     // StorageFactoryを使って小説テキストを取得

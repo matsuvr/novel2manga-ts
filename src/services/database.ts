@@ -254,16 +254,6 @@ export class DatabaseService {
 
   async updateRenderStatus(
     jobId: string,
-    episodeNumber: number,
-    pageNumber: number,
-    status: {
-      isRendered: boolean
-      imagePath?: string
-      thumbnailPath?: string
-      width?: number
-      height?: number
-      fileSize?: number
-    }
   ): Promise<void> {
     const now = new Date().toISOString()
     
