@@ -1,8 +1,6 @@
 import crypto from 'node:crypto'
 import { type NextRequest, NextResponse } from 'next/server'
-import { eq, desc } from 'drizzle-orm'
 import { DatabaseService } from '@/services/database'
-import { novels, jobs } from '@/db/schema'
 
 // Novel要素を保存
 export async function POST(request: NextRequest) {

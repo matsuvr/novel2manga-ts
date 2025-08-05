@@ -288,47 +288,71 @@ export class CanvasRenderer {
 
   async toBlob(type: string = 'image/png', quality?: number): Promise<Blob> {
     if (isServer) {
-      // node-canvasの場合
+      // node-canvas の場合
       const nodeCanvas = this.canvas as NodeCanvas
-      return new Promise<Blob>((resolve, reject) => {
-        try {
-          // 直接Bufferを取得する方法を試す
-          if ('toBuffer' in nodeCanvas) {
-            try {
-              // 非コールバック形式のtoBufferを試みる
-              const buffer = nodeCanvas.toBuffer(type.replace('image/', ''), { quality });
-              const blob = new Blob([buffer], { type });
-              resolve(blob);
-              return;
-            } catch {
-              // コールバック形式にフォールバック
+      
+      // toDataURL を優先的に使用（より安定している）
+      try {
+        console.log('Using toDataURL method for server-side rendering');
+        const dataUrl = nodeCanvas.toDataURL(type, quality);
+        
+        if (!dataUrl || dataUrl === 'data:,' || !dataUrl.includes(',')) {
+          throw new Error('toDataURL returned empty or invalid data');
+        }
+        
+        // data URLからBlobに変換
+        const base64Data = dataUrl.split(',')[1];
+        if (!base64Data) {
+          throw new Error('Invalid data URL format - no base64 data found');
+        }
+        
+        const binaryBuffer = Buffer.from(base64Data, 'base64');
+        console.log('Buffer created from dataURL:', binaryBuffer.length, 'bytes');
+        
+        // PNG署名を確認
+        const pngSignature = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+        const hasPngSignature = binaryBuffer.subarray(0, 8).equals(pngSignature);
+        console.log('PNG signature valid:', hasPngSignature);
+        
+        const blob = new Blob([binaryBuffer], { type });
+        console.log('Blob created successfully:', blob.size, 'bytes');
+        return blob;
+        
+      } catch (dataUrlError) {
+        console.error('toDataURL failed:', dataUrlError.message);
+        
+        // フォールバック: toBuffer を試行
+        return new Promise<Blob>((resolve, reject) => {
+          try {
+            if ('toBuffer' in nodeCanvas && typeof nodeCanvas.toBuffer === 'function') {
+              console.log('Falling back to toBuffer method');
               nodeCanvas.toBuffer((err: Error | null, buffer: Buffer) => {
                 if (err) {
+                  console.error('toBuffer callback error:', err);
                   reject(err);
+                } else if (!buffer) {
+                  console.error('toBuffer returned null/undefined buffer');
+                  reject(new Error('Buffer is null or undefined'));
                 } else {
+                  console.log('Buffer created via toBuffer callback:', buffer.length, 'bytes');
                   const blob = new Blob([buffer], { type });
                   resolve(blob);
                 }
-              }, type.replace('image/', ''), { quality });
-              return;
+              }, type.replace('image/', ''), quality ? { quality } : undefined);
+            } else {
+              reject(new Error('Neither toDataURL nor toBuffer are working'));
             }
+          } catch (bufferError) {
+            console.error('toBuffer setup failed:', bufferError);
+            reject(bufferError);
           }
-
-          // toBufferがない場合はtoDataURLを使用
-          const dataUrl = (nodeCanvas as NodeCanvas).toDataURL(type, quality);
-          fetch(dataUrl)
-            .then(res => res.blob())
-            .then(resolve)
-            .catch(reject);
-        } catch (err) {
-          reject(new Error(`Failed to create blob in Node.js: ${err}`));
-        }
-      });
+        });
+      }
     } else {
       // ブラウザの場合
       const htmlCanvas = this.canvas as HTMLCanvasElement;
       return new Promise<Blob>((resolve, reject) => {
-        if ('toBlob' in htmlCanvas) {
+        if ('toBlob' in htmlCanvas && typeof htmlCanvas.toBlob === 'function') {
           htmlCanvas.toBlob((blob: Blob | null) => {
             if (blob) {
               resolve(blob);
@@ -339,7 +363,7 @@ export class CanvasRenderer {
         } else {
           // toBlob未サポートの場合はtoDataURLから変換
           try {
-            const dataUrl = (htmlCanvas as HTMLCanvasElement).toDataURL(type, quality);
+            const dataUrl = htmlCanvas.toDataURL(type, quality);
             fetch(dataUrl)
               .then(res => res.blob())
               .then(resolve)

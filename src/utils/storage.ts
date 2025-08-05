@@ -196,7 +196,6 @@ export class LocalFileStorage implements Storage {
     try {
       const files = await fs.readdir(baseDir, { recursive: true })
       return files
-        .filter((file) => typeof file === 'string')
         .filter((file) => !file.endsWith('.meta.json')) // メタデータファイルは除外
         .map((file) => (prefix ? path.join(prefix, file as string) : (file as string)))
     } catch (error) {
@@ -726,7 +725,7 @@ export async function getNovelStorage(): Promise<Storage> {
   if (isDevelopment()) {
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'novels'))
   } else {
-    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    // @ts-expect-error: Cloudflare Workers環境でのみ利用可能
     return new R2Storage(globalThis.NOVEL_STORAGE)
   }
 }
@@ -736,7 +735,7 @@ export async function getChunkStorage(): Promise<Storage> {
   if (isDevelopment()) {
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'chunks'))
   } else {
-    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    // @ts-expect-error: Cloudflare Workers環境でのみ利用可能
     return new R2Storage(globalThis.CHUNKS_STORAGE)
   }
 }
@@ -746,7 +745,7 @@ export async function getAnalysisStorage(): Promise<Storage> {
   if (isDevelopment()) {
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'analysis'))
   } else {
-    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    // @ts-expect-error: Cloudflare Workers環境でのみ利用可能
     return new R2Storage(globalThis.ANALYSIS_STORAGE)
   }
 }
@@ -756,7 +755,7 @@ export async function getLayoutStorage(): Promise<Storage> {
   if (isDevelopment()) {
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'layouts'))
   } else {
-    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    // @ts-expect-error: Cloudflare Workers環境でのみ利用可能
     return new R2Storage(globalThis.ANALYSIS_STORAGE) // 同じバケットを使用
   }
 }
@@ -766,7 +765,7 @@ export async function getRenderStorage(): Promise<Storage> {
   if (isDevelopment()) {
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'renders'))
   } else {
-    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    // @ts-expect-error: Cloudflare Workers環境でのみ利用可能
     return new R2Storage(globalThis.ANALYSIS_STORAGE) // 同じバケットを使用
   }
 }
@@ -776,46 +775,11 @@ export async function getDatabase(): Promise<DatabaseAdapter> {
   if (isDevelopment()) {
     return new SQLiteAdapter()
   } else {
-    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    // @ts-expect-error: Cloudflare Workers環境でのみ利用可能
     return new D1Adapter(globalThis.DB)
   }
 }
 
-// ========================================
-// Legacy Functions (後方互換性)
-// ========================================
-
-// 既存のコードとの互換性を保つためのヘルパー関数
-export function getChunkKey(novelId: string, chunkIndex: number): string {
-  return `${novelId}:${chunkIndex}`
-}
-
-export function getEpisodeKey(novelId: string): string {
-  return novelId
-}
-
-export function getNovelPath(novelId: string): string {
-  return path.join('novels', `${novelId}.json`)
-}
-
-export function getAnalysisPath(novelId: string, chunkIndex: number): string {
-  return path.join('analysis', novelId, `chunk_${chunkIndex}.json`)
-}
-
-export function getEpisodePath(novelId: string): string {
-  return path.join('episodes', `${novelId}.json`)
-}
-
-// 既存の関数のエクスポート（レガシーサポート用）
-export async function saveChunkData(
-  novelId: string,
-  chunkIndex: number,
-  data: unknown,
-): Promise<void> {
-  const storage = await getChunkStorage()
-  const key = `${novelId}/chunk_${chunkIndex}.json`
-  await storage.put(key, JSON.stringify(data, null, 2))
-}
 
 export async function getChunkData(jobId: string, chunkIndex: number): Promise<{ text: string } | null> {
   const storage = await getChunkStorage()

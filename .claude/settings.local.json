@@ -45,7 +45,8 @@
       "Bash(npm run lint:*)",
       "Bash(npm test:*)",
       "mcp__ide__getDiagnostics",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(xxd:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

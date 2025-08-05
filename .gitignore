@@ -81,6 +81,7 @@ Thumbs.db
 # Project specific
 output.txt
 .local-storage/
+tmp_test/
 
 # log files
 *.log
