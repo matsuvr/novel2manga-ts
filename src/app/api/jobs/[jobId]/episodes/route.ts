@@ -23,7 +23,7 @@ export async function GET(_request: NextRequest, { params }: { params: { jobId: 
     const dbService = new DatabaseService()
 
     // ジョブの存在確認
-    const job = await dbService.getExtendedJob(params.jobId)
+    const job = await dbService.getJobWithProgress(params.jobId)
     if (!job) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest, { params }: { params: { jobId: 
     const processor = new JobNarrativeProcessor(dbService, config)
 
     // ジョブの存在確認
-    const job = await dbService.getExtendedJob(params.jobId)
+    const job = await dbService.getJobWithProgress(params.jobId)
     if (!job) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }

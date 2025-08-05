@@ -1,9 +1,9 @@
-import fs from 'node:fs/promises'
-import path from 'node:path'
+import { readFile, readdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import { type NextRequest, NextResponse } from 'next/server'
 import { DatabaseService } from '@/services/database'
-import type { Chunk, Job, JobResponse } from '@/types/job'
-import { getD1Database } from '@/utils/cloudflare-env'
+import type { Chunk, Job } from '@/db'
+import type { JobResponse, JobStatus } from '@/types/job'
 
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -26,24 +26,27 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       const chunks = await dbService.getChunksByJobId(jobId)
 
       const response: JobResponse = {
-        job,
+        job: {
+          ...job,
+          status: job.status as JobStatus,
+        },
         chunks,
       }
 
       return NextResponse.json(response)
     } else {
       // 開発環境: ローカルファイルシステムから読み込み
-      const baseDir = path.join(process.cwd(), '.local-storage')
+      const baseDir = join(process.cwd(), '.local-storage')
 
       // ジョブ情報を読み込み
-      const jobPath = path.join(baseDir, 'jobs', `${jobId}.json`)
+      const jobPath = join(baseDir, 'jobs', `${jobId}.json`)
       try {
-        const jobData = await fs.readFile(jobPath, 'utf-8')
+        const jobData = await readFile(jobPath, 'utf-8')
         const job: Job = JSON.parse(jobData)
 
         // チャンクを読み込み
-        const chunksDir = path.join(baseDir, 'chunks', jobId)
-        const chunkFiles = await fs.readdir(chunksDir)
+        const chunksDir = join(baseDir, 'chunks', jobId)
+        const chunkFiles = await readdir(chunksDir)
         const chunks: Chunk[] = await Promise.all(
           chunkFiles
             .filter((f) => f.startsWith('chunk_'))
@@ -53,20 +56,26 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
               return aIndex - bIndex
             })
             .map(async (file, index) => {
-              const content = await fs.readFile(path.join(chunksDir, file), 'utf-8')
+              const content = await readFile(join(chunksDir, file), 'utf-8')
               return {
                 id: `${jobId}-chunk-${index}`,
+                novelId: jobId,
                 jobId,
                 chunkIndex: index,
-                content,
-                fileName: file,
+                contentPath: join(chunksDir, file),
+                startPosition: 0,
+                endPosition: content.length,
+                wordCount: content.split(/\s+/).length,
                 createdAt: new Date().toISOString(),
               }
             }),
         )
 
         const response: JobResponse = {
-          job,
+          job: {
+            ...job,
+            status: job.status as JobStatus,
+          },
           chunks,
         }
 

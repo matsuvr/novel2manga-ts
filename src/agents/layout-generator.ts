@@ -20,7 +20,7 @@ function getLayoutModel() {
       const openaiKey = providerConfig.apiKey
       const openaiModel = providerConfig.model
       if (!openaiKey) throw new Error('OpenAI API key not configured')
-      return openai(openaiModel)
+      return openai(openaiModel) as any // 型キャストで互換性を確保
     }
     case 'claude': {
       const claudeKey = providerConfig.apiKey
@@ -29,7 +29,7 @@ function getLayoutModel() {
 
       // 環境変数を設定してantropic関数を使用
       process.env.ANTHROPIC_API_KEY = claudeKey
-      return anthropic(claudeModel)
+      return anthropic(claudeModel) as any // 型キャストで互換性を確保
     }
     case 'gemini': {
       // Geminiサポートは将来的に追加
@@ -44,35 +44,35 @@ function getLayoutModel() {
       const { config: fallbackConfig } = getCurrentLLMProvider()
       const openaiKey = fallbackConfig.apiKey
       if (!openaiKey) throw new Error('Default provider API key not configured')
-      return openai(fallbackConfig.model)
+      return openai(fallbackConfig.model) as any // 型キャストで互換性を確保
     }
   }
 }
 
-// LLMへの入力スキーマ
-const _layoutGenerationInputSchema = z.object({
-  episodeData: z.object({
-    episodeNumber: z.number(),
-    episodeTitle: z.string().optional(),
-    chunks: z.array(
-      z.object({
-        chunkIndex: z.number(),
-        summary: z.string(),
-        hasHighlight: z.boolean(),
-        highlightImportance: z.number().optional(),
-        dialogueCount: z.number(),
-        sceneDescription: z.string(),
-        characters: z.array(z.string()),
-      }),
-    ),
-  }),
-  targetPages: z.number(),
-  layoutConstraints: z.object({
-    avoidEqualGrid: z.boolean(),
-    preferVariedSizes: z.boolean(),
-    ensureReadingFlow: z.boolean(),
-  }),
-})
+// LLMへの入力スキーマは現在使用していないが、将来のバリデーション用に保持
+// const layoutGenerationInputSchema = z.object({
+//   episodeData: z.object({
+//     episodeNumber: z.number(),
+//     episodeTitle: z.string().optional(),
+//     chunks: z.array(
+//       z.object({
+//         chunkIndex: z.number(),
+//         summary: z.string(),
+//         hasHighlight: z.boolean(),
+//         highlightImportance: z.number().optional(),
+//         dialogueCount: z.number(),
+//         sceneDescription: z.string(),
+//         characters: z.array(z.string()),
+//       }),
+//     ),
+//   }),
+//   targetPages: z.number(),
+//   layoutConstraints: z.object({
+//     avoidEqualGrid: z.boolean(),
+//     preferVariedSizes: z.boolean(),
+//     ensureReadingFlow: z.boolean(),
+//   }),
+// })
 
 // LLMからの出力スキーマ
 const layoutGenerationOutputSchema = z.object({
@@ -107,16 +107,13 @@ export class LayoutGeneratorAgent extends Agent {
         const config = getLayoutGenerationConfig()
         return config.systemPrompt
       },
-      model: ({ runtimeContext: _runtimeContext }) => {
-        // プロバイダー設定を取得してモデルを返す
-        const model = getLayoutModel()
-        return model as any // Mastraの型互換性のための一時的な回避策
-      },
+      model: getLayoutModel,
     })
   }
 
   async generateLayout(
     episodeData: EpisodeData,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _config: LayoutGenerationConfig,
   ): Promise<MangaLayout> {
     // エピソードデータをLLM用に簡略化
@@ -175,7 +172,14 @@ export class LayoutGeneratorAgent extends Agent {
       const template = selectLayoutTemplate(panelCount, hasHighlight, isClimax, hasDialogue)
 
       // パネルを生成
-      const panels: Panel[] = pageData.panels.map((panelData, index) => {
+      type PanelData = {
+        content: string;
+        dialogues?: { speaker: string; text: string }[];
+        sourceChunkIndex: number;
+        importance: number;
+        suggestedSize: 'small' | 'medium' | 'large' | 'extra-large';
+      };
+      const panels: Panel[] = pageData.panels.map((panelData: PanelData, index: number) => {
         const templatePanel = template.panels[index] || template.panels[0]
 
         // 重要度に応じてサイズを調整
@@ -230,8 +234,8 @@ export class LayoutGeneratorAgent extends Agent {
 
 // レイアウト生成関数
 export async function generateMangaLayout(
-  episodeData: EpisodeData,
-  config?: Partial<LayoutGenerationConfig>,
+    episodeData: EpisodeData,
+    config?: LayoutGenerationConfig,
 ): Promise<MangaLayout> {
   const fullConfig: LayoutGenerationConfig = {
     panelsPerPage: {

@@ -2,9 +2,36 @@ import { Agent } from '@mastra/core'
 import { z } from 'zod'
 import { analyzeChunkBundle, type BundleAnalysisResult } from '@/agents/chunk-bundle-analyzer'
 import { getEpisodeConfig, getNarrativeAnalysisConfig } from '@/config'
-import type { ChunkAnalysisResult } from '@/types/chunk'
-import type { EpisodeBoundary, NarrativeAnalysisInput } from '@/types/episode'
+import type { ChunkData, ChunkAnalysisResult } from '@/types/chunk'
+import type { EpisodeBoundary } from '@/types/episode'
 import { getNarrativeAnalysisLLM } from '@/utils/llm-factory'
+
+interface NarrativeAnalysisParams {
+  jobId: string
+  chunks: Array<{
+    chunkIndex: number
+    text: string
+    analysis: {
+      summary: string
+      characters: { name: string; role: string }[]
+      dialogues: ChunkAnalysisResult['dialogues']
+      scenes: ChunkAnalysisResult['scenes']
+      highlights: { 
+        text: string
+        importance: number
+        description: string
+        startIndex: number
+        endIndex: number
+      }[]
+    }
+  }>
+  targetCharsPerEpisode: number
+  minCharsPerEpisode: number
+  maxCharsPerEpisode: number
+  startingEpisodeNumber?: number
+  isMiddleOfNovel?: boolean
+  previousEpisodeEndText?: string
+}
 
 const narrativeArcAnalyzer = new Agent({
   name: 'Narrative Arc Analyzer',
@@ -12,19 +39,38 @@ const narrativeArcAnalyzer = new Agent({
     const config = getNarrativeAnalysisConfig()
     return config.systemPrompt
   },
-  model: async ({ runtimeContext: _runtimeContext }) => {
+  model: async () => {
     // フォールバック機能付きでLLMを取得
     const llm = await getNarrativeAnalysisLLM()
     console.log(`[narrativeArcAnalyzer] Using provider: ${llm.providerName}`)
     console.log(`[narrativeArcAnalyzer] Using model: ${llm.model}`)
 
     // モデルを返す
-    return llm.provider(llm.model) as any // Mastraの型互換性のための一時的な回避策
+    return llm.provider(llm.model)
   },
 })
 
 export async function analyzeNarrativeArc(
-  input: NarrativeAnalysisInput,
+    input: {
+      jobId: string;
+      chunks: {
+        chunkIndex: number;
+        text: string;
+        analysis: {
+          summary: string;
+          characters: { name: string; role: string }[];
+          dialogues: ChunkAnalysisResult['dialogues'];
+          scenes: ChunkAnalysisResult['scenes'];
+          highlights: { text: string; importance: number; description: string; startIndex: number; endIndex: number }[]
+        }
+      }[];
+      targetCharsPerEpisode: number;
+      minCharsPerEpisode: number;
+      maxCharsPerEpisode: number;
+      startingEpisodeNumber?: number;
+      isMiddleOfNovel: boolean;
+      previousEpisodeEndText?: string;
+    },
 ): Promise<EpisodeBoundary[]> {
   console.log('analyzeNarrativeArc called with:', {
     chunks: input.chunks.length,
@@ -49,7 +95,20 @@ export async function analyzeNarrativeArc(
   console.log('Performing bundle analysis first...')
   console.log(`Loading analysis results for job ${input.jobId}...`)
 
-  const { getChunkAnalysis } = await import('@/utils/storage')
+  const { StorageFactory } = await import('@/utils/storage')
+  
+  async function getChunkAnalysis(jobId: string, chunkIndex: number) {
+    const analysisStorage = await StorageFactory.getAnalysisStorage()
+    const analysisPath = `analyses/${jobId}/chunk_${chunkIndex}.json`
+    const existingAnalysis = await analysisStorage.get(analysisPath)
+    
+    if (existingAnalysis) {
+      const analysisData = JSON.parse(existingAnalysis.text)
+      return analysisData.analysis
+    }
+    
+    return null
+  }
 
   const chunksWithAnalyses = []
   for (const chunk of input.chunks) {
@@ -199,7 +258,17 @@ function convertPositionsToBoundaries(
     confidence: number
     reasoning: string
   }>,
-  chunks: NarrativeAnalysisInput['chunks'],
+  chunks: Array<{
+    chunkIndex: number
+    text: string
+    analysis: {
+      summary: string
+      characters: { name: string; role: string }[]
+      dialogues: ChunkAnalysisResult['dialogues']
+      scenes: ChunkAnalysisResult['scenes']
+      highlights: { text: string; importance: number; description: string; startIndex: number; endIndex: number }[]
+    }
+  }>,
   previousTextLength: number = 0,
 ): EpisodeBoundary[] {
   // 各チャンクの開始位置を計算
@@ -257,7 +326,7 @@ function convertPositionsToBoundaries(
   })
 }
 
-export function findOptimalBreakpoints(
+function findOptimalBreakpoints(
   text: string,
   _chunkIndex: number,
   targetPosition: number,

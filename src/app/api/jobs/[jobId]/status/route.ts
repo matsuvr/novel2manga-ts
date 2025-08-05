@@ -6,7 +6,7 @@ export async function GET(_request: NextRequest, { params }: { params: { jobId: 
   try {
     const dbService = new DatabaseService()
 
-    const job = await dbService.getExtendedJob(params.jobId)
+    const job = await dbService.getJobWithProgress(params.jobId)
 
     if (!job) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
@@ -18,7 +18,7 @@ export async function GET(_request: NextRequest, { params }: { params: { jobId: 
       currentStep: job.currentStep,
       progress: job.progress,
       processedChunks: job.processedChunks,
-      totalChunks: job.totalChunks || job.chunkCount,
+      totalChunks: job.totalChunks,
       totalEpisodes: job.totalEpisodes,
       episodeCompleted: job.episodeCompleted,
       lastError: job.lastError,

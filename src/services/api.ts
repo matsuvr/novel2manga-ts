@@ -22,7 +22,7 @@ export interface Chunk {
   id: string
   jobId: string
   chunkIndex: number
-  content: string
+  text: string
   fileName: string
   createdAt: string
 }

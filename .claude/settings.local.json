@@ -36,7 +36,16 @@
       "mcp__serena__replace_regex",
       "Bash(npm run check:*)",
       "mcp__serena__replace_symbol_body",
-      "mcp__serena__find_referencing_symbols"
+      "mcp__serena__find_referencing_symbols",
+      "mcp__serena__think_about_collected_information",
+      "mcp__serena__think_about_task_adherence",
+      "mcp__serena__insert_after_symbol",
+      "mcp__serena__think_about_whether_you_are_done",
+      "mcp__serena__read_memory",
+      "Bash(npm run lint:*)",
+      "Bash(npm test:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(npx tsc:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

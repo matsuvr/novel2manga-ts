@@ -1,6 +1,10 @@
 import type { NextRequest } from 'next/server'
 import { handleApiError, successResponse, validationError } from '@/utils/api-error'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
+import { DatabaseService } from '@/services/database'
+import type { MangaLayout } from '@/types/panel-layout'
+import { parse as parseYaml } from 'yaml'
 
 interface RenderRequest {
   jobId: string
@@ -30,39 +34,100 @@ export async function POST(request: NextRequest) {
       return validationError('layoutYamlが必要です')
     }
 
-    // TODO: Canvas APIによるレンダリング実装
-    // 1. YAMLをパース
-    // 2. Canvas要素を作成
-    // 3. パネルの枠線を描画
-    // 4. 吹き出しを配置
-    // 5. テキストを描画
-    // 6. 画像をPNGとして保存
+    // YAMLをパース
+    let mangaLayout: MangaLayout
+    try {
+      mangaLayout = parseYaml(body.layoutYaml) as MangaLayout
+    } catch (_error) {
+      return validationError('無効なYAML形式です')
+    }
 
-    // 仮の実装
+    // マンガレイアウトの検証
+    if (!mangaLayout.pages || !Array.isArray(mangaLayout.pages)) {
+      return validationError('レイアウトにpages配列が必要です')
+    }
+
+    const targetPage = mangaLayout.pages.find(p => p.page_number === body.pageNumber)
+    if (!targetPage) {
+      return validationError(`ページ ${body.pageNumber} が見つかりません`)
+    }
+
+    // データベースサービスの初期化
+    const dbService = new DatabaseService()
+
+    // ジョブの存在確認
+    const job = await dbService.getJob(body.jobId)
+    if (!job) {
+      return validationError('指定されたジョブが見つかりません')
+    }
+
+    // エピソードの存在確認
+    const episodes = await dbService.getEpisodesByJobId(body.jobId)
+    const targetEpisode = episodes.find(e => e.episodeNumber === body.episodeNumber)
+    if (!targetEpisode) {
+      return validationError(`エピソード ${body.episodeNumber} が見つかりません`)
+    }
+
+    // Canvas描画の実行
+    const renderer = new MangaPageRenderer({
+      pageWidth: 842, // A4横
+      pageHeight: 595, // A4横
+      margin: 20,
+      panelSpacing: 10,
+      defaultFont: 'sans-serif',
+      fontSize: 14,
+    })
+
+    // 指定ページをレンダリング
+    const imageBlob = await renderer.renderToImage(mangaLayout, body.pageNumber, 'png')
+
+    // Blobをバッファに変換
+    const arrayBuffer = await imageBlob.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    // ストレージに保存
     const renderStorage = await StorageFactory.getRenderStorage()
     const renderKey = StorageKeys.pageRender(body.jobId, body.episodeNumber, body.pageNumber)
 
-    // TODO: 実際のCanvas描画結果を保存
-    const mockImageData = Buffer.from('mock-image-data')
-    await renderStorage.put(renderKey, mockImageData, {
+    await renderStorage.put(renderKey, buffer, {
       contentType: 'image/png',
       jobId: body.jobId,
       episodeNumber: body.episodeNumber.toString(),
       pageNumber: body.pageNumber.toString(),
     })
 
+    // レンダリング状態の更新
+    await dbService.updateRenderStatus(
+      body.jobId,
+      body.episodeNumber,
+      body.pageNumber,
+      {
+        isRendered: true,
+        imagePath: renderKey,
+        width: 842,
+        height: 595,
+        fileSize: buffer.length,
+      }
+    )
+
+    // サムネイル生成（後で実装可能）
+    const thumbnailKey = StorageKeys.pageThumbnail(body.jobId, body.episodeNumber, body.pageNumber)
+
     return successResponse(
       {
         success: true,
         renderKey,
-        message: 'レンダリング機能は未実装です',
+        thumbnailKey,
+        message: 'ページのレンダリングが完了しました',
         jobId: body.jobId,
         episodeNumber: body.episodeNumber,
         pageNumber: body.pageNumber,
+        fileSize: buffer.length,
       },
       201,
     )
   } catch (error) {
+    console.error('Render API error:', error)
     return handleApiError(error)
   }
 }

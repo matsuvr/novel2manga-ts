@@ -1,12 +1,31 @@
 // Episode analysis and boundary detection types
+import type { ChunkAnalysisResult } from './chunk'
 
 export interface NarrativeAnalysisInput {
   jobId: string
-  chunkTexts: string[]
-  startChunkIndex: number
-  targetChars: number
-  minChars: number
-  maxChars: number
+  chunks: {
+    chunkIndex: number
+    text: string
+    analysis: {
+      summary: string
+      characters: { name: string; role: string }[]
+      dialogues: ChunkAnalysisResult['dialogues']
+      scenes: ChunkAnalysisResult['scenes']
+      highlights: { 
+        text: string
+        importance: number
+        description: string
+        startIndex: number
+        endIndex: number
+      }[]
+    }
+  }[]
+  targetCharsPerEpisode: number
+  minCharsPerEpisode: number
+  maxCharsPerEpisode: number
+  startingEpisodeNumber: number
+  isMiddleOfNovel: boolean
+  previousEpisodeEndText?: string
   previousContext?: {
     lastEpisodeNumber: number
     lastCharacterPosition: number

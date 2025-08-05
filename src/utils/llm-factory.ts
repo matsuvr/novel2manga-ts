@@ -10,6 +10,25 @@ import {
 } from '@/config'
 import { appConfig } from '@/config/app.config'
 
+// 型定義
+type LLMProvider = 'openai' | 'gemini' | 'groq' | 'openrouter' | 'claude'
+
+interface ProviderConfig {
+  apiKey?: string
+  model: string
+  maxTokens: number
+  timeout: number
+  baseUrl?: string
+}
+
+interface LLMConfig {
+  provider: 'default' | LLMProvider
+  maxTokens: number
+  modelOverrides?: Partial<Record<LLMProvider, string>>
+  systemPrompt: string
+  userPromptTemplate?: string
+}
+
 // プロバイダーインスタンスのキャッシュ
 const providerCache = {
   openai: null as ReturnType<typeof createOpenAI> | null,
@@ -20,7 +39,7 @@ const providerCache = {
 }
 
 // プロバイダーインスタンスを取得
-function getProviderInstance(provider: 'openai' | 'gemini' | 'groq' | 'openrouter' | 'claude') {
+function getProviderInstance(provider: LLMProvider) {
   const config = getLLMProviderConfig(provider)
 
   // デバッグ情報
@@ -62,7 +81,7 @@ function getProviderInstance(provider: 'openai' | 'gemini' | 'groq' | 'openroute
       if (!providerCache.openrouter) {
         providerCache.openrouter = createOpenAI({
           apiKey: config.apiKey,
-          baseURL: (config as any).baseUrl || 'https://openrouter.ai/api/v1',
+          baseURL: (config as ProviderConfig).baseUrl || 'https://openrouter.ai/api/v1',
         })
       }
       return providerCache.openrouter
@@ -84,7 +103,7 @@ function getProviderInstance(provider: 'openai' | 'gemini' | 'groq' | 'openroute
 
 // フォールバック機能付きでプロバイダーを取得
 export async function getProviderWithFallback(
-  preferredProvider?: 'openai' | 'gemini' | 'groq' | 'openrouter' | 'claude',
+  preferredProvider?: LLMProvider,
 ) {
   const fallbackChain = getLLMFallbackChain()
   const providersToTry = preferredProvider
@@ -118,11 +137,11 @@ export async function getProviderWithFallback(
 
 // テキスト分析用のLLMを取得（フォールバック対応）
 export async function getTextAnalysisLLM() {
-  const config = getTextAnalysisConfig()
+  const config = getTextAnalysisConfig() as LLMConfig
 
   // デフォルトプロバイダーを使用するか、指定されたプロバイダーを使用
-  const preferredProvider =
-    config.provider === 'default' ? appConfig.llm.defaultProvider : (config.provider as any)
+  const preferredProvider: LLMProvider =
+    config.provider === 'default' ? appConfig.llm.defaultProvider : config.provider
 
   const llmInstance = await getProviderWithFallback(preferredProvider)
 
@@ -142,11 +161,11 @@ export async function getTextAnalysisLLM() {
 
 // 物語弧分析用のLLMを取得（フォールバック対応）
 export async function getNarrativeAnalysisLLM() {
-  const config = getNarrativeAnalysisConfig()
+  const config = getNarrativeAnalysisConfig() as LLMConfig
 
   // デフォルトプロバイダーを使用するか、指定されたプロバイダーを使用
-  const preferredProvider =
-    config.provider === 'default' ? appConfig.llm.defaultProvider : (config.provider as any)
+  const preferredProvider: LLMProvider =
+    config.provider === 'default' ? appConfig.llm.defaultProvider : config.provider
 
   const llmInstance = await getProviderWithFallback(preferredProvider)
 
@@ -167,11 +186,11 @@ export async function getNarrativeAnalysisLLM() {
 
 // レイアウト生成用のLLMを取得（フォールバック対応）
 export async function getLayoutGenerationLLM() {
-  const config = getLayoutGenerationConfig()
+  const config = getLayoutGenerationConfig() as LLMConfig
 
   // デフォルトプロバイダーを使用するか、指定されたプロバイダーを使用
-  const preferredProvider =
-    config.provider === 'default' ? appConfig.llm.defaultProvider : (config.provider as any)
+  const preferredProvider: LLMProvider =
+    config.provider === 'default' ? appConfig.llm.defaultProvider : config.provider
 
   const llmInstance = await getProviderWithFallback(preferredProvider)
 
@@ -193,7 +212,7 @@ export async function getLayoutGenerationLLM() {
 export async function getLLM(
   useCase: 'textAnalysis' | 'narrativeAnalysis' | 'layoutGeneration' | 'custom' = 'custom',
   overrides?: {
-    provider?: 'openai' | 'gemini' | 'groq' | 'openrouter' | 'claude'
+    provider?: LLMProvider
     model?: string
     maxTokens?: number
     systemPrompt?: string
