@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     const processor = new JobNarrativeProcessor(dbService, config)
 
     // ジョブの存在確認
-    const job = await dbService.getExtendedJob(jobId)
+    const job = await dbService.getJobWithProgress(jobId)
     if (!job) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }

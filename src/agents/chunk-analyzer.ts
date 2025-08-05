@@ -17,6 +17,6 @@ export const chunkAnalyzerAgent = new Agent({
     console.log(`[chunkAnalyzerAgent] Using model: ${llm.model}`)
 
     // モデルを返す
-    return llm.provider(llm.model) as any // Mastraの型互換性のための一時的な回避策
+    return llm.provider(llm.model)
   },
 })

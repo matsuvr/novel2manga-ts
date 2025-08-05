@@ -1,50 +1,75 @@
 import type { MangaLayout, Panel } from '@/types/panel-layout'
 
-export interface CanvasRenderConfig {
+// Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
+const isServer = typeof window === 'undefined'
+let createCanvas: ((width: number, height: number) => HTMLCanvasElement | NodeCanvas) | undefined
+
+// node-canvas用の型定義
+interface NodeCanvasImpl {
+  width: number;
+  height: number;
+  getContext(contextId: '2d'): CanvasRenderingContext2D;
+  toDataURL(type?: string, quality?: number): string;
+  toBuffer(callback: (err: Error | null, buffer: Buffer) => void, mimeType?: string, config?: unknown): void;
+  toBuffer(mimeType?: string, config?: unknown): Buffer;
+}
+
+export type NodeCanvas = NodeCanvasImpl
+
+if (isServer) {
+  // サーバーサイドではnode-canvasを使用
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const canvasModule = require('canvas')
+    createCanvas = canvasModule.createCanvas
+  } catch {
+    console.warn('node-canvas not available, Canvas functionality will be limited')
+  }
+}
+
+export interface CanvasConfig {
   width: number
   height: number
+  font?: string
+  defaultFontSize?: number
   backgroundColor?: string
   fontFamily?: string
   fontSize?: number
   lineColor?: string
   lineWidth?: number
-}
-
-export interface TextRenderOptions {
-  x: number
-  y: number
-  maxWidth?: number
-  maxHeight?: number
-  fontSize?: number
-  fontFamily?: string
-  color?: string
-  align?: 'left' | 'center' | 'right'
-  verticalAlign?: 'top' | 'middle' | 'bottom'
-}
-
-export interface SpeechBubbleOptions {
-  x: number
-  y: number
-  width: number
-  height: number
-  tailX?: number
-  tailY?: number
-  borderColor?: string
-  backgroundColor?: string
-  borderWidth?: number
-  borderRadius?: number
+  textColor?: string
 }
 
 export class CanvasRenderer {
-  private canvas: HTMLCanvasElement
+  canvas: HTMLCanvasElement | NodeCanvas
   private ctx: CanvasRenderingContext2D
-  private config: CanvasRenderConfig
+  private config: CanvasConfig
 
-  constructor(canvas: HTMLCanvasElement, config: CanvasRenderConfig) {
-    this.canvas = canvas
-    this.config = config
+  constructor(config: CanvasConfig) {
+    this.config = {
+      backgroundColor: '#ffffff',
+      fontFamily: 'Arial, sans-serif',
+      fontSize: 16,
+      lineColor: '#000000',
+      lineWidth: 2,
+      textColor: '#000000',
+      font: 'Arial, sans-serif',
+      defaultFontSize: 16,
+      ...config
+    }
 
-    const ctx = canvas.getContext('2d')
+    // サーバーサイドとクライアントサイドの両方で動作するようにCanvas作成
+    if (isServer && createCanvas) {
+      this.canvas = createCanvas(this.config.width, this.config.height)
+    } else if (typeof document !== 'undefined') {
+      this.canvas = document.createElement('canvas')
+      this.canvas.width = this.config.width
+      this.canvas.height = this.config.height
+    } else {
+      throw new Error('Canvas is not available in this environment')
+    }
+
+    const ctx = this.canvas.getContext('2d')
     if (!ctx) {
       throw new Error('Failed to get 2D rendering context')
     }
@@ -74,33 +99,62 @@ export class CanvasRenderer {
   }
 
   drawPanel(panel: Panel): void {
-    this.drawFrame(panel.x, panel.y, panel.width, panel.height)
+    // パネルの位置とサイズを実際のピクセル値に変換
+    const x = panel.position.x * this.config.width
+    const y = panel.position.y * this.config.height
+    const width = panel.size.width * this.config.width
+    const height = panel.size.height * this.config.height
+    
+    // パネルのフレームを描画
+    this.drawFrame(x, y, width, height)
+    
+    // パネル内のコンテンツを描画
+    if (panel.content) {
+      // 状況説明テキストを描画
+      this.drawText(panel.content, x + 10, y + 20, {
+        maxWidth: width - 20,
+        font: `${this.config.defaultFontSize}px ${this.config.font}`,
+        color: this.config.textColor,
+      })
+    }
+    
+    // パネル内の対話を吹き出しとして描画
+    if (panel.dialogues && panel.dialogues.length > 0) {
+      let bubbleY = y + height * 0.3 // 吹き出しの開始Y位置
+      for (const dialogue of panel.dialogues) {
+        this.drawSpeechBubble(
+          dialogue.text,
+          x + width * 0.7, // 右側に配置（日本式）
+          bubbleY,
+          {
+            maxWidth: width * 0.4,
+            style: dialogue.emotion === 'shout' ? 'shout' : 'normal',
+          }
+        )
+        bubbleY += 80 // 次の吹き出し位置
+      }
+    }
   }
 
-  drawText(text: string, options: TextRenderOptions): void {
+  drawText(text: string, x: number, y: number, options?: { maxWidth?: number; font?: string; color?: string }): void {
     const {
-      x,
-      y,
       maxWidth,
-      maxHeight,
-      fontSize = this.config.fontSize || 16,
-      fontFamily = this.config.fontFamily || 'Arial, sans-serif',
-      color = '#000000',
-      align = 'left',
-      verticalAlign = 'top',
-    } = options
+      font = `${this.config.fontSize || 16}px ${this.config.fontFamily || 'Arial, sans-serif'}`,
+      color = this.config.textColor || '#000000',
+    } = options || {}
 
     this.ctx.save()
 
-    this.ctx.font = `${fontSize}px ${fontFamily}`
+    this.ctx.font = font
     this.ctx.fillStyle = color
-    this.ctx.textAlign = align
-    this.ctx.textBaseline = verticalAlign
+    this.ctx.textAlign = 'left'
+    this.ctx.textBaseline = 'top'
 
-    if (maxWidth && maxHeight) {
-      this.drawMultilineText(text, x, y, maxWidth, maxHeight, fontSize)
+    if (maxWidth) {
+      const fontSize = parseInt(font.split('px')[0]) || 16
+      this.drawMultilineText(text, x, y, maxWidth, 1000, fontSize)
     } else {
-      this.ctx.fillText(text, x, y, maxWidth)
+      this.ctx.fillText(text, x, y)
     }
 
     this.ctx.restore()
@@ -159,32 +213,35 @@ export class CanvasRenderer {
     return lines
   }
 
-  drawSpeechBubble(options: SpeechBubbleOptions): void {
+  drawSpeechBubble(text: string, x: number, y: number, options?: { maxWidth?: number; style?: string }): void {
     const {
-      x,
-      y,
-      width,
-      height,
-      tailX,
-      tailY,
-      borderColor = '#000000',
-      backgroundColor = '#ffffff',
-      borderWidth = 2,
-      borderRadius = 8,
-    } = options
+      maxWidth = 200,
+      style = 'normal',
+    } = options || {}
+
+    // テキストサイズを測定して吹き出しサイズを決定
+    const fontSize = this.config.fontSize || 16
+    const lines = this.wrapText(text, maxWidth - 20)
+    const lineHeight = fontSize * 1.2
+    const width = Math.min(maxWidth, Math.max(...lines.map(line => this.ctx.measureText(line).width)) + 20)
+    const height = lines.length * lineHeight + 20
 
     this.ctx.save()
 
-    this.ctx.strokeStyle = borderColor
-    this.ctx.fillStyle = backgroundColor
-    this.ctx.lineWidth = borderWidth
+    this.ctx.strokeStyle = '#000000'
+    this.ctx.fillStyle = '#ffffff'
+    this.ctx.lineWidth = style === 'shout' ? 3 : 2
 
     // 角丸矩形を描画
-    this.drawRoundedRect(x, y, width, height, borderRadius)
+    this.drawRoundedRect(x, y, width, height, 8)
 
-    // しっぽがある場合は描画
-    if (tailX !== undefined && tailY !== undefined) {
-      this.drawBubbleTail(x, y, width, height, tailX, tailY)
+    // テキストを描画
+    this.ctx.fillStyle = '#000000'
+    this.ctx.font = `${fontSize}px ${this.config.fontFamily || 'Arial, sans-serif'}`
+    let textY = y + 15
+    for (const line of lines) {
+      this.ctx.fillText(line, x + 10, textY)
+      textY += lineHeight
     }
 
     this.ctx.restore()
@@ -213,49 +270,6 @@ export class CanvasRenderer {
     this.ctx.stroke()
   }
 
-  private drawBubbleTail(
-    bubbleX: number,
-    bubbleY: number,
-    bubbleWidth: number,
-    bubbleHeight: number,
-    tailX: number,
-    tailY: number,
-  ): void {
-    // バブルの中心から一番近い辺上の点を計算
-    const centerX = bubbleX + bubbleWidth / 2
-    const centerY = bubbleY + bubbleHeight / 2
-
-    let attachX: number, attachY: number
-
-    // しっぽの接続点を決定
-    if (tailX < bubbleX) {
-      // 左側
-      attachX = bubbleX
-      attachY = Math.max(bubbleY, Math.min(bubbleY + bubbleHeight, tailY))
-    } else if (tailX > bubbleX + bubbleWidth) {
-      // 右側
-      attachX = bubbleX + bubbleWidth
-      attachY = Math.max(bubbleY, Math.min(bubbleY + bubbleHeight, tailY))
-    } else if (tailY < bubbleY) {
-      // 上側
-      attachX = Math.max(bubbleX, Math.min(bubbleX + bubbleWidth, tailX))
-      attachY = bubbleY
-    } else {
-      // 下側
-      attachX = Math.max(bubbleX, Math.min(bubbleX + bubbleWidth, tailX))
-      attachY = bubbleY + bubbleHeight
-    }
-
-    // しっぽを描画
-    this.ctx.beginPath()
-    this.ctx.moveTo(attachX, attachY)
-    this.ctx.lineTo(tailX, tailY)
-    this.ctx.lineTo(attachX + (centerX - attachX) * 0.3, attachY + (centerY - attachY) * 0.3)
-    this.ctx.closePath()
-    this.ctx.fill()
-    this.ctx.stroke()
-  }
-
   renderMangaLayout(layout: MangaLayout): void {
     // 背景をクリア
     this.initializeCanvas()
@@ -263,26 +277,78 @@ export class CanvasRenderer {
     // 全体のフレームを描画
     this.drawFrame(0, 0, this.config.width, this.config.height)
 
-    // 各パネルを描画
-    for (const panel of layout.panels) {
-      this.drawPanel(panel)
+    // 各ページのパネルを描画（現在は最初のページのみ対応）
+    if (layout.pages.length > 0) {
+      const firstPage = layout.pages[0]
+      for (const panel of firstPage.panels) {
+        this.drawPanel(panel)
+      }
     }
   }
 
-  clear(): void {
-    this.ctx.clearRect(0, 0, this.config.width, this.config.height)
-    this.initializeCanvas()
-  }
+  async toBlob(type: string = 'image/png', quality?: number): Promise<Blob> {
+    if (isServer) {
+      // node-canvasの場合
+      const nodeCanvas = this.canvas as NodeCanvas
+      return new Promise<Blob>((resolve, reject) => {
+        try {
+          // 直接Bufferを取得する方法を試す
+          if ('toBuffer' in nodeCanvas) {
+            try {
+              // 非コールバック形式のtoBufferを試みる
+              const buffer = nodeCanvas.toBuffer(type.replace('image/', ''), { quality });
+              const blob = new Blob([buffer], { type });
+              resolve(blob);
+              return;
+            } catch {
+              // コールバック形式にフォールバック
+              nodeCanvas.toBuffer((err: Error | null, buffer: Buffer) => {
+                if (err) {
+                  reject(err);
+                } else {
+                  const blob = new Blob([buffer], { type });
+                  resolve(blob);
+                }
+              }, type.replace('image/', ''), { quality });
+              return;
+            }
+          }
 
-  getImageData(): ImageData {
-    return this.ctx.getImageData(0, 0, this.config.width, this.config.height)
-  }
-
-  toDataURL(type?: string, quality?: number): string {
-    return this.canvas.toDataURL(type, quality)
-  }
-
-  toBlob(callback: BlobCallback, type?: string, quality?: number): void {
-    this.canvas.toBlob(callback, type, quality)
+          // toBufferがない場合はtoDataURLを使用
+          const dataUrl = (nodeCanvas as NodeCanvas).toDataURL(type, quality);
+          fetch(dataUrl)
+            .then(res => res.blob())
+            .then(resolve)
+            .catch(reject);
+        } catch (err) {
+          reject(new Error(`Failed to create blob in Node.js: ${err}`));
+        }
+      });
+    } else {
+      // ブラウザの場合
+      const htmlCanvas = this.canvas as HTMLCanvasElement;
+      return new Promise<Blob>((resolve, reject) => {
+        if ('toBlob' in htmlCanvas) {
+          htmlCanvas.toBlob((blob: Blob | null) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Failed to create blob'));
+            }
+          }, type, quality);
+        } else {
+          // toBlob未サポートの場合はtoDataURLから変換
+          try {
+            const dataUrl = (htmlCanvas as HTMLCanvasElement).toDataURL(type, quality);
+            fetch(dataUrl)
+              .then(res => res.blob())
+              .then(resolve)
+              .catch(reject);
+          } catch (err) {
+            reject(new Error(`Failed to create blob from dataURL: ${err}`));
+          }
+        }
+      });
+    }
   }
 }

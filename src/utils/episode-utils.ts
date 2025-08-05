@@ -1,5 +1,5 @@
 import { getEpisodeConfig } from '@/config'
-import type { ChunkData } from '@/types/chunk'
+import type { ChunkData, ChunkAnalysisResult } from '@/types/chunk'
 import type { NarrativeAnalysisInput } from '@/types/episode'
 import { getChunkAnalysis, getChunkData } from '@/utils/storage'
 
@@ -38,14 +38,19 @@ export async function prepareNarrativeAnalysisInput(
     const chunkInput: NarrativeAnalysisInput['chunks'][0] = {
       chunkIndex: currentChunkIndex,
       text: chunkData.text,
-      summary: analysisResult?.summary,
-      characters: analysisResult?.characters?.map((c) => c.name) || [],
-      highlights:
-        analysisResult?.highlights?.map((h) => ({
+      analysis: {
+        summary: analysisResult?.summary || '',
+        characters: analysisResult?.characters?.map((c: { name: string; role: string }) => ({ name: c.name, role: c.role })) || [],
+        dialogues: (analysisResult?.dialogues as ChunkAnalysisResult['dialogues']) || [],
+        scenes: (analysisResult?.scenes as ChunkAnalysisResult['scenes']) || [],
+        highlights: analysisResult?.highlights?.map((h: { text?: string; description: string; importance: number; startIndex?: number; endIndex?: number }) => ({
           text: h.text || h.description,
           importance: h.importance,
-          context: h.description,
+          description: h.description,
+          startIndex: h.startIndex || 0,
+          endIndex: h.endIndex || 0,
         })) || [],
+      },
     }
 
     chunks.push(chunkInput)
@@ -77,6 +82,9 @@ export async function prepareNarrativeAnalysisInput(
     targetCharsPerEpisode: targetChars,
     minCharsPerEpisode: minChars,
     maxCharsPerEpisode: maxChars,
+    startingEpisodeNumber: 1,
+    isMiddleOfNovel: false,
+    previousEpisodeEndText: undefined,
   }
 }
 

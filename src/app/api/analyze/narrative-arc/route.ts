@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const validatedData = requestSchema.parse(body)
 
     const input = await prepareNarrativeAnalysisInput({
-      novelId: validatedData.novelId,
+      jobId: validatedData.novelId, // novelIdをjobIdとして使用
       startChunkIndex: validatedData.startChunkIndex,
       targetChars: validatedData.targetChars,
       minChars: validatedData.minChars,

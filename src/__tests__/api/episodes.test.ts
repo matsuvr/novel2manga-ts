@@ -1,15 +1,36 @@
 import { NextRequest } from 'next/server'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GET, POST } from '@/app/api/jobs/[jobId]/episodes/route'
 import { DatabaseService } from '@/services/database'
-import { StorageFactory } from '@/utils/storage'
+
+// モック設定
+vi.mock('@/utils/storage', () => ({
+  StorageFactory: {
+    getDatabase: vi.fn(),
+  },
+}))
+
+vi.mock('@/services/database', () => ({
+  DatabaseService: vi.fn().mockImplementation(() => ({
+    createNovel: vi.fn(),
+    createJob: vi.fn(),
+    getJob: vi.fn(),
+  })),
+}))
 
 describe('/api/jobs/[jobId]/episodes', () => {
-  let dbService: DatabaseService
+  let mockDbService: any
 
   beforeEach(async () => {
-    const db = await StorageFactory.getDatabase()
-    dbService = new DatabaseService(db)
+    vi.clearAllMocks()
+    
+    mockDbService = {
+      createNovel: vi.fn().mockResolvedValue('test-novel-id'),
+      createJob: vi.fn(),
+      getJob: vi.fn(),
+    }
+
+    vi.mocked(DatabaseService).mockReturnValue(mockDbService)
   })
 
   afterEach(async () => {
@@ -18,6 +39,9 @@ describe('/api/jobs/[jobId]/episodes', () => {
 
   describe('GET /api/jobs/[jobId]/episodes', () => {
     it('存在しないジョブIDの場合は404を返す', async () => {
+      // 存在しないジョブのモック設定
+      mockDbService.getJob.mockResolvedValue(null)
+
       const request = new NextRequest('http://localhost:3000/api/jobs/nonexistent/episodes')
       const params = { jobId: 'nonexistent' }
 
@@ -31,16 +55,15 @@ describe('/api/jobs/[jobId]/episodes', () => {
 
   describe('POST /api/jobs/[jobId]/episodes', () => {
     it('有効なリクエストでエピソード分析を開始する', async () => {
-      // まず、テスト用のnovelとjobを作成
-      const novelId = await dbService.createNovel({
-        title: 'テスト小説',
-        originalTextPath: 'test-novel.txt',
-        textLength: 1000,
-        language: 'ja',
-      })
-
       const jobId = 'test-job-episodes'
-      await dbService.createJob(jobId, novelId, 'テストジョブ')
+      
+      // 既存ジョブのモック設定
+      mockDbService.getJob.mockResolvedValue({
+        id: jobId,
+        novelId: 'test-novel-id',
+        status: 'pending',
+        currentStep: 'initialized',
+      })
 
       const requestBody = {
         config: {
@@ -69,6 +92,9 @@ describe('/api/jobs/[jobId]/episodes', () => {
     })
 
     it('存在しないジョブIDの場合は404を返す', async () => {
+      // 存在しないジョブのモック設定
+      mockDbService.getJob.mockResolvedValue(null)
+
       const requestBody = { config: {} }
 
       const request = new NextRequest('http://localhost:3000/api/jobs/nonexistent/episodes', {
@@ -88,16 +114,15 @@ describe('/api/jobs/[jobId]/episodes', () => {
     })
 
     it('無効なリクエストボディの場合は400を返す', async () => {
-      // まず、テスト用のnovelとjobを作成
-      const novelId = await dbService.createNovel({
-        title: 'テスト小説',
-        originalTextPath: 'test-novel.txt',
-        textLength: 1000,
-        language: 'ja',
-      })
-
       const jobId = 'test-job-episodes-invalid'
-      await dbService.createJob(jobId, novelId, 'テストジョブ')
+      
+      // 既存ジョブのモック設定
+      mockDbService.getJob.mockResolvedValue({
+        id: jobId,
+        novelId: 'test-novel-id',
+        status: 'pending',
+        currentStep: 'initialized',
+      })
 
       const invalidRequestBody = {
         config: {

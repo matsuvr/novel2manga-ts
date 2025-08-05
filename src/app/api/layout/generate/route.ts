@@ -6,7 +6,6 @@ import { z } from 'zod'
 import { generateMangaLayout } from '@/agents/layout-generator'
 import { DatabaseService } from '@/services/database'
 import type { ChunkData, EpisodeData } from '@/types/panel-layout'
-import { getD1Database } from '@/utils/cloudflare-env'
 import { getChunkData } from '@/utils/storage'
 
 const requestSchema = z.object({
@@ -24,6 +23,7 @@ const requestSchema = z.object({
       dialogueDensity: z.number().min(0).max(1).optional(),
       visualComplexity: z.number().min(0).max(1).optional(),
       highlightPanelSizeMultiplier: z.number().min(1).max(3).optional(),
+      readingDirection: z.literal('right-to-left').optional(),
     })
     .optional(),
 })
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     const dbService = new DatabaseService()
 
     // ジョブとエピソード情報を取得
-    const job = await dbService.getExtendedJob(jobId)
+    const job = await dbService.getJobWithProgress(jobId)
     if (!job) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }
@@ -54,7 +54,9 @@ export async function POST(request: NextRequest) {
 
     for (let i = episode.startChunk; i <= episode.endChunk; i++) {
       const chunkContent = await getChunkData(jobId, i)
-      if (!chunkContent) continue
+      if (!chunkContent) {
+        throw new Error(`Chunk ${i} not found for job ${jobId}. Cannot proceed with layout generation.`)
+      }
 
       // チャンク解析結果を取得
       const analysisPath = path.join(
@@ -73,11 +75,11 @@ export async function POST(request: NextRequest) {
         const isPartial = i === episode.startChunk || i === episode.endChunk
         const startOffset = i === episode.startChunk ? episode.startCharIndex : 0
         const endOffset =
-          i === episode.endChunk ? episode.endCharIndex : chunkContent.content.length
+          i === episode.endChunk ? episode.endCharIndex : chunkContent.text.length
 
         chunkDataArray.push({
           chunkIndex: i,
-          content: chunkContent.content.substring(startOffset, endOffset),
+          text: chunkContent.text.substring(startOffset, endOffset),
           analysis: analysis,
           isPartial,
           startOffset,
@@ -97,9 +99,12 @@ export async function POST(request: NextRequest) {
 
     // エピソードデータを構築
     const episodeData: EpisodeData = {
+      chunkAnalyses: chunkDataArray.map(chunk => chunk.analysis),
+      author: job.jobName || 'Unknown Author',
+      title: `Episode ${episode.episodeNumber}` as const,
       episodeNumber: episode.episodeNumber,
-      episodeTitle: episode.title,
-      episodeSummary: episode.summary,
+      episodeTitle: episode.title || undefined,
+      episodeSummary: episode.summary || undefined,
       startChunk: episode.startChunk,
       startCharIndex: episode.startCharIndex,
       endChunk: episode.endChunk,
@@ -109,7 +114,19 @@ export async function POST(request: NextRequest) {
     }
 
     // レイアウトを生成
-    const layout = await generateMangaLayout(episodeData, config)
+    // デフォルト値を設定してLayoutGenerationConfigを満たす
+    const fullConfig = {
+      panelsPerPage: {
+        min: config?.panelsPerPage?.min ?? 3,
+        max: config?.panelsPerPage?.max ?? 6,
+        average: config?.panelsPerPage?.average ?? 4.5,
+      },
+      dialogueDensity: config?.dialogueDensity ?? 0.6,
+      visualComplexity: config?.visualComplexity ?? 0.7,
+      highlightPanelSizeMultiplier: config?.highlightPanelSizeMultiplier ?? 2.0,
+      readingDirection: config?.readingDirection ?? 'right-to-left' as const,
+    }
+    const layout = await generateMangaLayout(episodeData, fullConfig)
 
     // YAMLファイルとして保存
     const yamlContent = yaml.dump(layout, {

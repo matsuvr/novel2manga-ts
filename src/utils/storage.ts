@@ -67,29 +67,91 @@ async function ensureDir(dirPath: string): Promise<void> {
 export class LocalFileStorage implements Storage {
   constructor(private baseDir: string) {}
 
+  private getMetadataPath(key: string): string {
+    return `${key}.meta.json`
+  }
+
+  private isBinaryData(value: string | Buffer): boolean {
+    return Buffer.isBuffer(value)
+  }
+
   async put(key: string, value: string | Buffer, metadata?: Record<string, string>): Promise<void> {
     await ensureDir(this.baseDir)
     const filePath = path.join(this.baseDir, key)
     const dir = path.dirname(filePath)
     await ensureDir(dir)
 
-    const data = {
-      content: value.toString(),
-      metadata: metadata || {},
-      createdAt: new Date().toISOString(),
+    if (this.isBinaryData(value)) {
+      // バイナリデータの場合：直接ファイルに保存
+      await fs.writeFile(filePath, value as Buffer)
+      
+      // メタデータは別ファイルに保存
+      if (metadata) {
+        const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
+        const metadataDir = path.dirname(metadataPath)
+        await ensureDir(metadataDir)
+        
+        const metadataContent = {
+          ...metadata,
+          createdAt: new Date().toISOString(),
+          isBinary: true,
+        }
+        await fs.writeFile(metadataPath, JSON.stringify(metadataContent, null, 2), 'utf-8')
+      }
+    } else {
+      // テキストデータの場合：従来通りJSONで保存
+      const data = {
+        content: value.toString(),
+        metadata: metadata || {},
+        createdAt: new Date().toISOString(),
+        isBinary: false,
+      }
+      await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8')
     }
-
-    await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8')
   }
 
   async get(key: string): Promise<{ text: string; metadata?: Record<string, string> } | null> {
     const filePath = path.join(this.baseDir, key)
+    const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
+    
     try {
-      const content = await fs.readFile(filePath, 'utf-8')
-      const data = JSON.parse(content)
-      return {
-        text: data.content,
-        metadata: data.metadata,
+      // メタデータファイルの存在をチェック（バイナリファイルかどうかの判定）
+      let isBinary = false
+      let metadata: Record<string, string> = {}
+      
+      try {
+        const metadataContent = await fs.readFile(metadataPath, 'utf-8')
+        const metadataData = JSON.parse(metadataContent)
+        isBinary = metadataData.isBinary || false
+        metadata = metadataData
+      } catch {
+        // メタデータファイルがない場合は、ファイル内容から判定
+        const fileContent = await fs.readFile(filePath, 'utf-8')
+        try {
+          const data = JSON.parse(fileContent)
+          isBinary = data.isBinary || false
+          metadata = data.metadata || {}
+        } catch {
+          // JSON解析に失敗した場合はバイナリとして扱う
+          isBinary = true
+        }
+      }
+
+      if (isBinary) {
+        // バイナリファイルの場合：Base64エンコードして返す
+        const buffer = await fs.readFile(filePath)
+        return {
+          text: buffer.toString('base64'),
+          metadata,
+        }
+      } else {
+        // テキストファイルの場合：従来通り
+        const content = await fs.readFile(filePath, 'utf-8')
+        const data = JSON.parse(content)
+        return {
+          text: data.content,
+          metadata: data.metadata,
+        }
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -101,12 +163,21 @@ export class LocalFileStorage implements Storage {
 
   async delete(key: string): Promise<void> {
     const filePath = path.join(this.baseDir, key)
+    const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
+    
     try {
       await fs.unlink(filePath)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         throw error
       }
+    }
+
+    // メタデータファイルも削除（存在する場合）
+    try {
+      await fs.unlink(metadataPath)
+    } catch {
+      // メタデータファイルがなくてもエラーにしない
     }
   }
 
@@ -126,6 +197,7 @@ export class LocalFileStorage implements Storage {
       const files = await fs.readdir(baseDir, { recursive: true })
       return files
         .filter((file) => typeof file === 'string')
+        .filter((file) => !file.endsWith('.meta.json')) // メタデータファイルは除外
         .map((file) => (prefix ? path.join(prefix, file as string) : (file as string)))
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -164,39 +236,113 @@ interface R2Bucket {
 export class R2Storage implements Storage {
   constructor(private bucket: R2Bucket) {}
 
+  // リトライロジック付きの操作
+  private async retryableOperation<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+  ): Promise<T> {
+    let lastError: Error | null = null
+
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        return await operation()
+      } catch (error) {
+        lastError = error as Error
+
+        // R2特有のエラーをチェック
+        if (error instanceof Error) {
+          // レート制限エラーの場合は指数バックオフ
+          if (error.message.includes('rate limit')) {
+            const backoffMs = 2 ** i * 1000
+            await new Promise((resolve) => setTimeout(resolve, backoffMs))
+            continue
+          }
+
+          // その他の一時的なエラー
+          if (error.message.includes('timeout') || error.message.includes('network')) {
+            continue
+          }
+        }
+
+        // リトライ不可能なエラーは即座にthrow
+        throw error
+      }
+    }
+
+    throw lastError
+  }
+
+  // キャッシュヘッダーを取得
+  private getCacheHeaders(key: string): Record<string, string> {
+    if (key.includes('/analysis/')) {
+      // 分析結果は長期間キャッシュ可能
+      return {
+        'Cache-Control': 'public, max-age=86400, s-maxage=604800', // 1日、CDNは7日
+        'CDN-Cache-Control': 'max-age=604800', // Cloudflare CDN専用
+      }
+    } else if (key.includes('/novels/')) {
+      // 元データは変更されないため永続的にキャッシュ
+      return {
+        'Cache-Control': 'public, max-age=31536000, immutable', // 1年
+      }
+    } else if (key.includes('/layouts/') || key.includes('/renders/')) {
+      // レイアウト・レンダリングデータは更新される可能性があるため短めに
+      return {
+        'Cache-Control': 'public, max-age=3600, s-maxage=86400', // 1時間、CDNは1日
+      }
+    } else {
+      return {
+        'Cache-Control': 'public, max-age=3600', // デフォルト1時間
+      }
+    }
+  }
+
   async put(key: string, value: string | Buffer, metadata?: Record<string, string>): Promise<void> {
     const valueToStore = typeof value === 'string' ? value : value.toString()
-    await this.bucket.put(key, valueToStore, {
-      httpMetadata: {
-        contentType: 'application/json; charset=utf-8',
-      },
-      customMetadata: metadata,
+    const cacheHeaders = this.getCacheHeaders(key)
+    
+    await this.retryableOperation(async () => {
+      await this.bucket.put(key, valueToStore, {
+        httpMetadata: {
+          contentType: 'application/json; charset=utf-8',
+          ...cacheHeaders,
+        },
+        customMetadata: metadata,
+      })
     })
   }
 
   async get(key: string): Promise<{ text: string; metadata?: Record<string, string> } | null> {
-    const object = await this.bucket.get(key)
-    if (!object) return null
+    return await this.retryableOperation(async () => {
+      const object = await this.bucket.get(key)
+      if (!object) return null
 
-    const text = await object.text()
-    return {
-      text,
-      metadata: object.customMetadata || {},
-    }
+      const text = await object.text()
+      return {
+        text,
+        metadata: object.customMetadata || {},
+      }
+    })
   }
 
   async delete(key: string): Promise<void> {
-    await this.bucket.delete(key)
+    await this.retryableOperation(async () => {
+      await this.bucket.delete(key)
+    })
   }
 
   async exists(key: string): Promise<boolean> {
-    const object = await this.bucket.head(key)
-    return !!object
+    return await this.retryableOperation(async () => {
+      const object = await this.bucket.head(key)
+      return !!object
+    })
   }
 
   async list(prefix?: string): Promise<string[]> {
-    const result = await this.bucket.list(prefix ? { prefix } : undefined)
-    return result.objects.map((obj) => obj.key)
+    return await this.retryableOperation(async () => {
+      const result = await this.bucket.list(prefix ? { prefix } : undefined)
+      return result.objects.map((obj) => obj.key)
+    })
   }
 }
 
@@ -671,11 +817,11 @@ export async function saveChunkData(
   await storage.put(key, JSON.stringify(data, null, 2))
 }
 
-export async function getChunkData(novelId: string, chunkIndex: number): Promise<unknown | null> {
+export async function getChunkData(jobId: string, chunkIndex: number): Promise<{ text: string } | null> {
   const storage = await getChunkStorage()
-  const key = `${novelId}/chunk_${chunkIndex}.json`
+  const key = `chunks/${jobId}/chunk_${chunkIndex}.txt`
   const result = await storage.get(key)
-  return result ? JSON.parse(result.text) : null
+  return result ? { text: result.text } : null
 }
 
 // ========================================
@@ -692,7 +838,47 @@ export const StorageKeys = {
     `layouts/${jobId}/episode_${episodeNumber}.yaml`,
   pageRender: (jobId: string, episodeNumber: number, pageNumber: number) =>
     `renders/${jobId}/episode_${episodeNumber}/page_${pageNumber}.png`,
+  pageThumbnail: (jobId: string, episodeNumber: number, pageNumber: number) =>
+    `renders/${jobId}/episode_${episodeNumber}/thumbnails/page_${pageNumber}_thumb.png`,
 } as const
+
+// エピソード境界保存関数
+export async function saveEpisodeBoundaries(
+  jobId: string,
+  episodes: Array<{
+    episodeNumber: number
+    title?: string
+    summary?: string
+    startChunk: number
+    startCharIndex: number
+    endChunk: number
+    endCharIndex: number
+    estimatedPages: number
+    confidence: number
+  }>
+): Promise<void> {
+  const storage = await getAnalysisStorage()
+  const key = StorageKeys.narrativeAnalysis(jobId)
+  const data = {
+    episodes,
+    metadata: {
+      createdAt: new Date().toISOString(),
+      totalEpisodes: episodes.length,
+    }
+  }
+  await storage.put(key, JSON.stringify(data, null, 2))
+}
+
+// チャンク分析取得関数
+export async function getChunkAnalysis(
+  jobId: string,
+  chunkIndex: number
+): Promise<{ summary?: string; characters?: { name: string; role: string }[]; dialogues?: unknown[]; scenes?: unknown[]; highlights?: { text?: string; description: string; importance: number; startIndex?: number; endIndex?: number }[] } | null> {
+  const storage = await getAnalysisStorage()
+  const key = StorageKeys.chunkAnalysis(jobId, chunkIndex)
+  const result = await storage.get(key)
+  return result ? JSON.parse(result.text) : null
+}
 
 export const StorageFactory = {
   getNovelStorage,

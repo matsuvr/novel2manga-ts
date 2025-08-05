@@ -8,6 +8,14 @@ import { StorageFactory } from '../../utils/storage'
 // モック設定
 vi.mock('@/config', () => ({
   isDevelopment: vi.fn(() => true),
+  getConfig: vi.fn(() => ({
+    get: vi.fn((key: string) => {
+      if (key === 'database') {
+        return { path: '.test-storage/database.sqlite' }
+      }
+      return {}
+    }),
+  })),
 }))
 
 describe('Storage and Database Integration', () => {
@@ -29,8 +37,7 @@ describe('Storage and Database Integration', () => {
     }
 
     // データベースサービスのインスタンス化
-    const db = await StorageFactory.getDatabase()
-    databaseService = new DatabaseService(db)
+    databaseService = new DatabaseService()
   })
 
   afterEach(async () => {
@@ -62,7 +69,8 @@ describe('Storage and Database Integration', () => {
       const retrieved = await novelStorage.get(`${novelId}.json`)
 
       expect(retrieved).not.toBeNull()
-      expect(JSON.parse(retrieved?.text)).toEqual(novelData)
+      expect(retrieved?.text).toBeDefined()
+      expect(JSON.parse(retrieved!.text)).toEqual(novelData)
     })
   })
 
@@ -85,7 +93,8 @@ describe('Storage and Database Integration', () => {
       const retrieved = await chunkStorage.get(`${chunkId}.json`)
 
       expect(retrieved).not.toBeNull()
-      expect(JSON.parse(retrieved?.text)).toEqual(chunkData)
+      expect(retrieved?.text).toBeDefined()
+      expect(JSON.parse(retrieved!.text)).toEqual(chunkData)
     })
   })
 
@@ -120,7 +129,8 @@ describe('Storage and Database Integration', () => {
       const retrieved = await analysisStorage.get(key)
 
       expect(retrieved).not.toBeNull()
-      expect(JSON.parse(retrieved?.text)).toEqual(analysisData)
+      expect(retrieved?.text).toBeDefined()
+      expect(JSON.parse(retrieved!.text)).toEqual(analysisData)
     })
   })
 
@@ -191,7 +201,7 @@ describe('Storage and Database Integration', () => {
       await databaseService.updateJobStatus(jobId, 'processing')
 
       // 拡張ジョブ情報を取得
-      const extendedJob = await databaseService.getExtendedJob(jobId)
+      const extendedJob = await databaseService.getJobWithProgress(jobId)
 
       expect(extendedJob).not.toBeNull()
       expect(extendedJob?.status).toBe('processing')

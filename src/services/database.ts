@@ -1,8 +1,8 @@
 import crypto from 'node:crypto'
-import { eq, asc } from 'drizzle-orm'
-import { getDatabase, type Novel, type Job, type Chunk, type Episode, type NewNovel, type NewJob, type NewChunk, type NewEpisode } from '@/db'
+import { eq, asc, desc } from 'drizzle-orm'
+import { getDatabase, type Novel, type Job, type Chunk, type Episode, type NewNovel, type NewChunk, type NewEpisode } from '@/db'
 import { novels, jobs, chunks, episodes } from '@/db/schema'
-import type { JobProgress, JobStatus, ExtendedJob } from '@/types/job'
+import type { JobProgress, JobStatus } from '@/types/job'
 
 export class DatabaseService {
   private db = getDatabase()
@@ -51,6 +51,10 @@ export class DatabaseService {
     return result[0] || null
   }
 
+  async getAllNovels(): Promise<Novel[]> {
+    return await this.db.select().from(novels).orderBy(desc(novels.createdAt))
+  }
+
   // Job関連メソッド
   async createJob(id: string, novelId: string, jobName?: string): Promise<void> {
     await this.db.insert(jobs).values({
@@ -67,20 +71,18 @@ export class DatabaseService {
     return result[0] || null
   }
 
-  async getExtendedJob(id: string): Promise<ExtendedJob | null> {
+  async getJobWithProgress(id: string): Promise<(Job & { progress: JobProgress | null }) | null> {
     const job = await this.getJob(id)
     if (!job) return null
 
     // resume_data_pathからprogressを読み込む（実装が必要な場合）
-    let progress: JobProgress | null = null
+    const progress: JobProgress | null = null
     if (job.resumeDataPath) {
       // TODO: ストレージからprogressを読み込む
-      progress = null
     }
 
     return {
       ...job,
-      status: job.status as JobStatus,
       progress
     }
   }
@@ -248,5 +250,56 @@ export class DatabaseService {
     return await this.db.select().from(episodes)
       .where(eq(episodes.jobId, jobId))
       .orderBy(asc(episodes.episodeNumber))
+  }
+
+  async updateRenderStatus(
+    jobId: string,
+    episodeNumber: number,
+    pageNumber: number,
+    status: {
+      isRendered: boolean
+      imagePath?: string
+      thumbnailPath?: string
+      width?: number
+      height?: number
+      fileSize?: number
+    }
+  ): Promise<void> {
+    const now = new Date().toISOString()
+    
+    // render_statusテーブルが存在しない場合は、jobsテーブルのrenderCompletedフラグを更新
+    const currentJob = await this.getJob(jobId)
+    if (currentJob) {
+      await this.db.update(jobs)
+        .set({ 
+          renderedPages: (currentJob.renderedPages || 0) + 1,
+          updatedAt: now 
+        })
+        .where(eq(jobs.id, jobId))
+    }
+    
+    // TODO: render_statusテーブルが実装されたら、以下のコードに置き換える
+    // await this.db.update(renderStatus)
+    //   .set({
+    //     isRendered: status.isRendered,
+    //     imagePath: status.imagePath,
+    //     thumbnailPath: status.thumbnailPath,
+    //     width: status.width,
+    //     height: status.height,
+    //     fileSize: status.fileSize,
+    //     renderedAt: now,
+    //   })
+    //   .where(
+    //     and(
+    //       eq(renderStatus.jobId, jobId),
+    //       eq(renderStatus.episodeNumber, episodeNumber),
+    //       eq(renderStatus.pageNumber, pageNumber)
+    //     )
+    //   )
+    //   .execute()
+  }
+
+  async getJobsByNovelId(novelId: string): Promise<Job[]> {
+    return await this.db.select().from(jobs).where(eq(jobs.novelId, novelId)).orderBy(desc(jobs.createdAt))
   }
 }

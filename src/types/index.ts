@@ -4,7 +4,7 @@ export type { Novel, NewNovel, Job, NewJob, Chunk, NewChunk, Episode, NewEpisode
 // Environment Types
 export * from './env'
 // Extended Job Types (keeping custom types)
-export type { JobProgress, JobStatus, ExtendedJob, RetryableError } from './job'
+export type { JobProgress, JobStatus, RetryableError } from './job'
 
 // Analysis Types
 export * from './chunk'

@@ -58,7 +58,7 @@ export default function Home() {
 
       // チャンク情報をログに表示
       jobDetails.chunks.forEach((chunk, index) => {
-        addLog('debug', `チャンク${index + 1}: ${chunk.fileName} (${chunk.content.length}文字)`)
+        addLog('debug', `チャンク${index + 1}: ${chunk.fileName} (${chunk.text.length}文字)`)
       })
 
       addLog('info', '処理が完了しました！')
@@ -130,8 +130,8 @@ export default function Home() {
                   >
                     <h4 className="font-medium text-sm mb-2">チャンク {index + 1}</h4>
                     <p className="text-xs text-gray-600 mb-2">{chunk.fileName}</p>
-                    <p className="text-xs text-gray-700 line-clamp-3">{chunk.content}</p>
-                    <p className="text-xs text-gray-500 mt-2">{chunk.content.length}文字</p>
+                    <p className="text-xs text-gray-700 line-clamp-3">{chunk.text}</p>
+                    <p className="text-xs text-gray-500 mt-2">{chunk.text.length}文字</p>
                   </div>
                 ))}
               </div>

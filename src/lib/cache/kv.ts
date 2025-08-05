@@ -1,8 +1,8 @@
-import { getConfig } from '@/config/config-loader'
+import { getConfig } from '@/config'
 
 // KVのバインディング型定義
 interface KVNamespace {
-  get(key: string, options?: { type?: 'text' | 'json' | 'arrayBuffer' | 'stream' }): Promise<any>
+  get(key: string, options?: { type?: 'text' | 'json' | 'arrayBuffer' | 'stream' }): Promise<string | ArrayBuffer | ReadableStream | null>
   put(
     key: string,
     value: string | ArrayBuffer | ArrayBufferView | ReadableStream,
@@ -15,20 +15,20 @@ interface KVNamespace {
 interface KVPutOptions {
   expiration?: number
   expirationTtl?: number
-  metadata?: Record<string, any>
+  metadata?: Record<string, string>
 }
 
 interface KVListResult {
-  keys: Array<{ name: string; expiration?: number; metadata?: Record<string, any> }>
+  keys: Array<{ name: string; expiration?: number; metadata?: Record<string, string> }>
   list_complete: boolean
   cursor?: string
 }
 
 // メモリキャッシュ（開発環境用）
 class MemoryCache {
-  private cache: Map<string, { value: any; expiration?: number }> = new Map()
+  private cache: Map<string, { value: string | ArrayBuffer | ReadableStream; expiration?: number }> = new Map()
 
-  async get(key: string, _options?: { type?: string }): Promise<any> {
+  async get(key: string, _options?: { type?: string }): Promise<string | ArrayBuffer | ReadableStream | null> {
     const item = this.cache.get(key)
     if (!item) return null
 
@@ -40,7 +40,7 @@ class MemoryCache {
     return item.value
   }
 
-  async put(key: string, value: any, options?: KVPutOptions): Promise<void> {
+  async put(key: string, value: string | ArrayBuffer | ReadableStream, options?: KVPutOptions): Promise<void> {
     let expiration: number | undefined
 
     if (options?.expirationTtl) {
@@ -107,7 +107,7 @@ export function getLayoutCacheKey(episodeId: string, pageNumber: number): string
 // キャッシュの設定を取得（ベストプラクティス: 最小60秒）
 export function getCacheTTL(type: 'analysis' | 'layout'): number {
   const config = getConfig()
-  const baseTTL = config.getPath<number>('processing.cache.ttl')
+  const baseTTL = config.get<number>('processing.cache.ttl')
 
   // KVのベストプラクティス: 最小60秒のTTL
   const minTTL = 60
@@ -124,8 +124,8 @@ export function getCacheTTL(type: 'analysis' | 'layout'): number {
 // キャッシュの有効性チェック
 export async function isCacheEnabled(type: 'analysis' | 'layout'): Promise<boolean> {
   const config = getConfig()
-  const features = config.getPath<any>('features')
-  const processingCache = config.getPath<any>('processing.cache')
+  const features = config.get<{ enableCaching: boolean }>('features')
+  const processingCache = config.get<{ analysisCache?: boolean; layoutCache?: boolean }>('processing.cache')
 
   // 全体的なキャッシュ機能が無効の場合
   if (!features.enableCaching) {

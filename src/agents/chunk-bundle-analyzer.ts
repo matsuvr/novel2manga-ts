@@ -18,8 +18,8 @@ const chunkBundleAnalyzer = new Agent({
     console.log(`[chunkBundleAnalyzer] Using provider: ${llm.providerName}`)
     console.log(`[chunkBundleAnalyzer] Using model: ${llm.model}`)
 
-    // モデルを返す
-    return llm.provider(llm.model) as any // Mastraの型互換性のための一時的な回避策
+    // モデルを返す（適切な型で）
+    return llm.provider(llm.model)
   },
 })
 
@@ -113,7 +113,9 @@ export async function analyzeChunkBundle(
         }
         const charData = charactersMap.get(char.name)
         if (!charData) return // 見つからない場合はスキップ
-        charData.descriptions.push(char.description)
+        if (char.description != null) {
+          charData.descriptions.push(char.description)
+        }
         charData.appearances++
       })
 

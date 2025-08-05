@@ -3,28 +3,51 @@ import { z } from 'zod'
 import { chunkAnalyzerAgent } from '@/agents/chunk-analyzer'
 import { getTextAnalysisConfig } from '@/config'
 import { DatabaseService } from '@/services/database'
-import type { ChunkAnalysisResult } from '@/types/chunk'
-import type { AnalyzeRequest, AnalyzeResponse } from '@/types/job'
+import type { AnalyzeResponse } from '@/types/job'
 import { splitTextIntoChunks } from '@/utils/text-splitter'
 import { generateUUID } from '@/utils/uuid'
+
+// リクエストボディのスキーマ定義
+const analyzeRequestSchema = z.object({
+  novelId: z.string().min(1, 'novelIdは必須です'),
+  jobName: z.string().optional(),
+})
 
 export async function POST(request: NextRequest) {
   try {
     console.log('[/api/analyze] Request received')
-    const body = await request.json()
-    console.log('[/api/analyze] Body:', body)
-
-    // novelIdが必須
-    if (!body.novelId || typeof body.novelId !== 'string') {
+    
+    // JSONパースエラーハンドリング
+    let rawBody: unknown
+    try {
+      rawBody = await request.json()
+    } catch (error) {
+      console.error('[/api/analyze] JSON parse error:', error)
       return NextResponse.json(
-        {
-          error: 'novelIdが必要です。先に/api/novelエンドポイントで小説を登録してください。',
-        },
-        { status: 400 },
+        { error: '無効なJSONが送信されました' },
+        { status: 400 }
       )
     }
 
-    const novelId = body.novelId
+    console.log('[/api/analyze] Raw body:', rawBody)
+
+    // スキーマ検証
+    const validationResult = analyzeRequestSchema.safeParse(rawBody)
+    if (!validationResult.success) {
+      console.error('[/api/analyze] Validation error:', validationResult.error)
+      return NextResponse.json(
+        {
+          error: 'リクエストボディが無効です',
+          details: validationResult.error.issues.map(issue => ({
+            field: issue.path.join('.'),
+            message: issue.message,
+          })),
+        },
+        { status: 400 }
+      )
+    }
+
+    const { novelId, jobName } = validationResult.data
     console.log('[/api/analyze] Novel ID:', novelId)
 
     // StorageFactoryを使って小説テキストを取得
@@ -209,12 +232,19 @@ export async function POST(request: NextRequest) {
     console.log(`[/api/analyze] All ${chunks.length} chunks analyzed successfully`)
 
     const response: AnalyzeResponse = {
-      jobId,
-      chunkCount: chunks.length,
+      success: true,
+      id: jobId,
       message: `テキストを${chunks.length}個のチャンクに分割し、分析を完了しました`,
+      data: {
+        jobId,
+        chunkCount: chunks.length,
+      },
+      metadata: {
+        timestamp: new Date().toISOString(),
+      },
     }
 
-    return NextResponse.json(response)
+    return NextResponse.json(response, { status: 201 })
   } catch (error) {
     console.error('[/api/analyze] Error details:', error)
     console.error(

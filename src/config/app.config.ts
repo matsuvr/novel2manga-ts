@@ -185,6 +185,8 @@ export const appConfig = {
       analysisDir: 'analysis',
       layoutsDir: 'layouts',
       jobsDir: 'jobs',
+      rendersDir: 'renders',
+      thumbnailsDir: 'thumbnails',
     },
 
     // R2設定（本番環境）
@@ -194,6 +196,8 @@ export const appConfig = {
       analysisBucket: 'ANALYSIS_STORAGE',
       layoutsBucket: 'LAYOUTS_STORAGE',
       jobsBucket: 'JOBS_STORAGE',
+      rendersBucket: 'RENDERS_STORAGE',
+      thumbnailsBucket: 'THUMBNAILS_STORAGE',
     },
   },
 
@@ -217,6 +221,10 @@ export const appConfig = {
         requests: 50,
         window: 60 * 1000,
       },
+      pageRender: {
+        requests: 100,
+        window: 60 * 1000,
+      },
     },
 
     // タイムアウト設定
@@ -226,6 +234,7 @@ export const appConfig = {
       narrativeAnalysis: 90000, // 物語弧分析タイムアウト
       layoutGeneration: 45000, // レイアウト生成タイムアウト
       imageGeneration: 120000, // 画像生成タイムアウト
+      pageRender: 60000, // ページレンダリングタイムアウト
     },
 
     // ペイロード制限

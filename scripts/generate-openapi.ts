@@ -2,6 +2,7 @@
 
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
+import { z } from 'zod'
 import { OpenAPIGenerator, OpenAPIRegistry } from '@asteasolutions/zod-to-openapi'
 
 async function main() {
@@ -13,14 +14,13 @@ async function main() {
     method: 'get',
     path: '/health',
     responses: {
-      200: {
-        description: 'ヘルスチェック OK',
-      },
+      200: z.void(),
     },
   })
 
-  const generator = new OpenAPIGenerator(registry.definitions, '3.1.0')
+  const generator = new OpenAPIGenerator(registry.definitions)
   const document = generator.generateDocument({
+    openapi: '3.1.0',
     info: {
       title: 'Novel2Manga API',
       version: '1.0.0',

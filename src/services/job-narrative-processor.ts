@@ -2,7 +2,8 @@ import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
 import { getEpisodeConfig } from '@/config'
 import type { DatabaseService } from '@/services/database'
 import type { EpisodeBoundary } from '@/types/episode'
-import type { Episode, JobProgress } from '@/types/job'
+import type { JobProgress } from '@/types/job'
+import type { Episode } from '@/db'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { getChunkData } from '@/utils/storage'
 
@@ -54,7 +55,7 @@ export class JobNarrativeProcessor {
       // ジョブの開始をログ
       await this.dbService.updateJobStep(jobId, 'episode_analysis_started')
 
-      const job = await this.dbService.getExtendedJob(jobId)
+      const job = await this.dbService.getJobWithProgress(jobId)
       if (!job) {
         throw new Error(`Job ${jobId} not found`)
       }
@@ -62,11 +63,11 @@ export class JobNarrativeProcessor {
       console.log(`[JobNarrativeProcessor] Job found: ${job.id}, total chunks: ${job.totalChunks}`)
 
       // 既存の進捗を取得、または新規作成
-      let progress = job.progress || this.createInitialProgress(job.totalChunks)
+      let progress = job.progress || this.createInitialProgress(job.totalChunks || 0)
 
       // ステータスを処理中に更新
       await this.dbService.updateJobStatus(jobId, 'processing')
-      await this.dbService.updateJobStep(jobId, 'processing_chunks', 0, job.totalChunks)
+      await this.dbService.updateJobStep(jobId, 'processing_chunks', 0, job.totalChunks || 0)
       while (!progress.isCompleted) {
         // 次のバッチ範囲を計算
         const startIndex = progress.processedChunks
@@ -82,10 +83,9 @@ export class JobNarrativeProcessor {
           progress.totalChunks,
         )
 
-        // チャンクデータを取得
-        const chunkTexts: string[] = []
+        // チャンクの存在確認のみ実行（実際のデータ読み込みはprepareNarrativeAnalysisInputで行う）
         for (let i = startIndex; i < endIndex; i++) {
-          console.log(`[JobNarrativeProcessor] Loading chunk ${i}`)
+          console.log(`[JobNarrativeProcessor] Verifying chunk ${i}`)
           try {
             const chunkData = await getChunkData(jobId, i)
             if (!chunkData) {
@@ -94,12 +94,11 @@ export class JobNarrativeProcessor {
               await this.dbService.updateJobError(jobId, error, `loading_chunk_${i}`)
               throw new Error(error)
             }
-            chunkTexts.push(chunkData.text)
             console.log(
-              `[JobNarrativeProcessor] Chunk ${i} loaded successfully (${chunkData.text.length} chars)`,
+              `[JobNarrativeProcessor] Chunk ${i} verified successfully (${chunkData.text.length} chars)`,
             )
           } catch (error) {
-            const errorMsg = `Failed to load chunk ${i}: ${error instanceof Error ? error.message : String(error)}`
+            const errorMsg = `Failed to verify chunk ${i}: ${error instanceof Error ? error.message : String(error)}`
             console.error(`[JobNarrativeProcessor] ${errorMsg}`)
             await this.dbService.updateJobError(jobId, errorMsg, `loading_chunk_${i}`)
             throw new Error(errorMsg)
@@ -120,9 +119,25 @@ export class JobNarrativeProcessor {
           )
         }
 
+        // NarrativeAnalysisInputをNarrativeAnalysisParamsに変換
+        const analysisParams = {
+          jobId: narrativeInput.jobId,
+          chunks: (narrativeInput.chunks || []).map(chunk => ({
+            chunkIndex: chunk.chunkIndex,
+            text: chunk.text,
+            analysis: chunk.analysis,
+          })),
+          targetCharsPerEpisode: narrativeInput.targetCharsPerEpisode || this.config.targetCharsPerEpisode,
+          minCharsPerEpisode: narrativeInput.minCharsPerEpisode || this.config.minCharsPerEpisode,
+          maxCharsPerEpisode: narrativeInput.maxCharsPerEpisode || this.config.maxCharsPerEpisode,
+          startingEpisodeNumber: undefined,
+          isMiddleOfNovel: startIndex > 0,
+          previousEpisodeEndText: undefined,
+        }
+
         // リトライ付きでナラティブアーク分析を実行
         const analysisResult = await this.executeWithRetry(
-          () => analyzeNarrativeArc(narrativeInput),
+          () => analyzeNarrativeArc(analysisParams),
           `Narrative arc analysis for chunks ${startIndex}-${endIndex}`,
         )
 
@@ -190,15 +205,15 @@ export class JobNarrativeProcessor {
         novelId: jobId,
         jobId,
         episodeNumber: boundary.episodeNumber,
-        title: boundary.title,
-        summary: boundary.summary,
+        title: boundary.title || null,
+        summary: boundary.summary || null,
         startChunk: boundary.startChunk,
         startCharIndex: boundary.startCharIndex,
         endChunk: boundary.endChunk,
         endCharIndex: boundary.endCharIndex,
         estimatedPages: boundary.estimatedPages,
         confidence: boundary.confidence,
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
       })
     }
 
@@ -218,7 +233,17 @@ export class JobNarrativeProcessor {
     return {
       ...progress,
       processedChunks: newChunkIndex,
-      episodes: [...progress.episodes, ...newEpisodes],
+      episodes: [...progress.episodes, ...newEpisodes.map(ep => ({
+        episodeNumber: ep.episodeNumber,
+        startChunk: ep.startChunk,
+        endChunk: ep.endChunk,
+        confidence: ep.confidence,
+        title: ep.title || undefined,
+        summary: ep.summary || undefined,
+        startCharIndex: ep.startCharIndex,
+        endCharIndex: ep.endCharIndex,
+        estimatedPages: ep.estimatedPages,
+      }))],
       lastEpisodeEndPosition: lastEpisode
         ? {
             chunkIndex: lastEpisode.endChunk,
@@ -234,7 +259,7 @@ export class JobNarrativeProcessor {
    * ジョブの処理を再開可能かチェック
    */
   async canResumeJob(jobId: string): Promise<boolean> {
-    const job = await this.dbService.getExtendedJob(jobId)
+    const job = await this.dbService.getJobWithProgress(jobId)
     return (
       job !== null &&
       job.status !== 'completed' &&

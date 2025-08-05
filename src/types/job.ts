@@ -11,40 +11,6 @@ export type JobStep =
 // Drizzle types are now the primary types, imported from @/db/schema
 // Keep only custom types that extend or are unique to this domain
 
-export interface ExtendedJob {
-  // Using Drizzle Job type + progress extension
-  id: string
-  novelId: string
-  jobName?: string | null
-  status: JobStatus
-  currentStep: string
-  splitCompleted: boolean | null
-  analyzeCompleted: boolean | null
-  episodeCompleted: boolean | null
-  layoutCompleted: boolean | null
-  renderCompleted: boolean | null
-  chunksDirPath?: string | null
-  analysesDirPath?: string | null
-  episodesDataPath?: string | null
-  layoutsDirPath?: string | null
-  rendersDirPath?: string | null
-  totalChunks: number | null
-  processedChunks: number | null
-  totalEpisodes: number | null
-  processedEpisodes: number | null
-  totalPages: number | null
-  renderedPages: number | null
-  lastError?: string | null
-  lastErrorStep?: string | null
-  retryCount: number | null
-  resumeDataPath?: string | null
-  createdAt: string | null
-  updatedAt: string | null
-  startedAt?: string | null
-  completedAt?: string | null
-  progress: JobProgress | null
-}
-
 export interface JobProgress {
   currentStep: JobStep
   processedChunks: number
@@ -81,9 +47,16 @@ export interface AnalyzeRequest {
 }
 
 export interface AnalyzeResponse {
-  jobId: string
-  chunkCount: number
+  success: true
+  id: string
   message: string
+  data: {
+    jobId: string
+    chunkCount: number
+  }
+  metadata: {
+    timestamp: string
+  }
 }
 
 export interface JobResponse {
@@ -95,8 +68,28 @@ export interface JobResponse {
     currentStep: string
     totalChunks: number | null
     processedChunks: number | null
+    totalEpisodes: number | null
+    processedEpisodes: number | null
+    totalPages: number | null
+    renderedPages: number | null
+    splitCompleted: boolean | null
+    analyzeCompleted: boolean | null
+    episodeCompleted: boolean | null
+    layoutCompleted: boolean | null
+    renderCompleted: boolean | null
+    lastError: string | null
+    lastErrorStep: string | null
+    retryCount: number | null
     createdAt: string | null
     updatedAt: string | null
+    startedAt: string | null
+    completedAt: string | null
+    chunksDirPath: string | null
+    analysesDirPath: string | null
+    episodesDataPath: string | null
+    layoutsDirPath: string | null
+    rendersDirPath: string | null
+    resumeDataPath: string | null
   }
   chunks: Array<{
     id: string
