@@ -212,3 +212,4 @@ The `/kiro:steering` command manages these files automatically. Manual updates t
 ## Project Memories
 - DeepWikiのMCPが使えるようになったので、積極的に使うように
 - any禁止
+- OpenAIのo3モデルが存在し、利用可能です。勝手にgpt-4oなどに変更しないこと

@@ -1,20 +1,18 @@
 import { Agent } from '@mastra/core'
 import { z } from 'zod'
+import { getChunkBundleAnalysisConfig } from '@/config'
 import type { ChunkAnalysisResult } from '@/types/chunk'
-import { getTextAnalysisLLM } from '@/utils/llm-factory'
+import { getChunkBundleAnalysisLLM } from '@/utils/llm-factory'
 
 const chunkBundleAnalyzer = new Agent({
   name: 'Chunk Bundle Analyzer',
-  instructions: `あなたは優秀な文学分析の専門家です。複数のチャンク分析結果を統合し、物語全体の要素を抽出してください。
-
-以下の点に注意してください：
-- 各チャンクの分析結果を総合的に評価してください
-- 物語の連続性と流れを重視してください
-- 重複する情報は統合し、最も重要な要素を選別してください
-- チャンク番号への言及は避け、物語の内容に焦点を当ててください`,
+  instructions: () => {
+    const config = getChunkBundleAnalysisConfig()
+    return config.systemPrompt
+  },
   model: async ({ runtimeContext: _runtimeContext }) => {
     // フォールバック機能付きでLLMを取得
-    const llm = await getTextAnalysisLLM()
+    const llm = await getChunkBundleAnalysisLLM()
     console.log(`[chunkBundleAnalyzer] Using provider: ${llm.providerName}`)
     console.log(`[chunkBundleAnalyzer] Using model: ${llm.model}`)
 
@@ -154,47 +152,43 @@ export async function analyzeChunkBundle(
       })
     })
 
-    // プロンプト作成
-    const userPrompt = `以下の分析結果を統合し、物語全体の要素を抽出してください。
+    // 設定からプロンプトテンプレートを取得
+    const config = getChunkBundleAnalysisConfig()
+    let userPrompt: string = config.userPromptTemplate || ''
 
-【登場人物情報】
-${Array.from(charactersMap.entries())
-  .map(
-    ([name, data]) =>
-      `- ${name} (登場回数: ${data.appearances}回)\n  ${data.descriptions.join('\n  ')}`,
-  )
-  .join('\n')}
+    // プロンプトのプレースホルダーを置換
+    const characterList = Array.from(charactersMap.entries())
+      .map(
+        ([name, data]) =>
+          `- ${name} (登場回数: ${data.appearances}回)\n  ${data.descriptions.join('\n  ')}`,
+      )
+      .join('\n')
 
-【場面情報】
-${allScenes.map((scene) => `- ${scene}`).join('\n')}
+    const sceneList = allScenes.map((scene) => `- ${scene}`).join('\n')
 
-【重要な対話】
-${allDialogues
-  .slice(0, 20)
-  .map((d) => `- ${d.speaker}: 「${d.text}」${d.emotion ? ` (${d.emotion})` : ''}`)
-  .join('\n')}
+    const dialogueList = allDialogues
+      .slice(0, 20)
+      .map((d) => `- ${d.speaker}: 「${d.text}」${d.emotion ? ` (${d.emotion})` : ''}`)
+      .join('\n')
 
-【ハイライトシーン】
-${allHighlights
-  .sort((a, b) => b.importance - a.importance)
-  .slice(0, 15)
-  .map((h) => `- [${h.type}] ${h.description} (重要度: ${h.importance})\n  "${h.text}..."`)
-  .join('\n')}
+    const highlightList = allHighlights
+      .sort((a, b) => b.importance - a.importance)
+      .slice(0, 15)
+      .map((h) => `- [${h.type}] ${h.description} (重要度: ${h.importance})\n  "${h.text}..."`)
+      .join('\n')
 
-【状況説明】
-${allSituations
-  .slice(0, 10)
-  .map((s) => `- ${s}`)
-  .join('\n')}
+    const situationList = allSituations
+      .slice(0, 10)
+      .map((s) => `- ${s}`)
+      .join('\n')
 
-【統合指示】
-1. 上記の情報を基に、物語全体の要約を作成してください
-2. 主要な登場人物を選別し、その役割と特徴をまとめてください（最大10名）
-3. 最も重要な見所シーンを選別してください（重要度は1-10で再評価）
-4. 物語の鍵となる会話を選別してください（最大10個）
-5. 物語の流れ（導入・展開・現在の状態）を分析してください
-
-注意：個別のチャンク番号や分析の痕跡を残さず、一つの連続した物語として扱ってください。`
+    // テンプレートの置換
+    userPrompt = userPrompt
+      .replace('{{characterList}}', characterList || 'なし')
+      .replace('{{sceneList}}', sceneList || 'なし')
+      .replace('{{dialogueList}}', dialogueList || 'なし')
+      .replace('{{highlightList}}', highlightList || 'なし')
+      .replace('{{situationList}}', situationList || 'なし')
 
     try {
       console.log('Sending to LLM for bundle analysis...')
