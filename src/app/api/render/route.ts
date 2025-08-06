@@ -125,10 +125,7 @@ export async function POST(request: NextRequest) {
     console.log(`サムネイル保存完了: ${thumbnailKey}`)
 
     // レンダリング状態の更新
-    await dbService.updateRenderStatus({
-      jobId: body.jobId,
-      episodeNumber: body.episodeNumber,
-      pageNumber: body.pageNumber,
+    await dbService.updateRenderStatus(body.jobId, body.episodeNumber, body.pageNumber, {
       isRendered: true,
       imagePath: renderKey,
       thumbnailPath: thumbnailKey,

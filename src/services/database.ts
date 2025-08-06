@@ -279,67 +279,6 @@ export class DatabaseService {
       .orderBy(asc(episodes.episodeNumber))
   }
 
-  async updateRenderStatus(status: {
-    jobId: string
-    episodeNumber: number
-    pageNumber: number
-    isRendered: boolean
-    imagePath?: string
-    thumbnailPath?: string
-    width?: number
-    height?: number
-    fileSize?: number
-  }): Promise<void> {
-    const now = new Date().toISOString()
-
-    // render_statusテーブルに状態を挿入または更新
-    await this.db
-      .insert(renderStatus)
-      .values({
-        id: crypto.randomUUID(),
-        jobId: status.jobId,
-        episodeNumber: status.episodeNumber,
-        pageNumber: status.pageNumber,
-        isRendered: status.isRendered,
-        imagePath: status.imagePath,
-        thumbnailPath: status.thumbnailPath,
-        width: status.width,
-        height: status.height,
-        fileSize: status.fileSize,
-        renderedAt: status.isRendered ? now : null,
-        retryCount: 0,
-        lastError: null,
-        createdAt: now,
-      })
-      .onConflictDoUpdate({
-        target: [renderStatus.jobId, renderStatus.episodeNumber, renderStatus.pageNumber],
-        set: {
-          isRendered: status.isRendered,
-          imagePath: status.imagePath,
-          thumbnailPath: status.thumbnailPath,
-          width: status.width,
-          height: status.height,
-          fileSize: status.fileSize,
-          renderedAt: status.isRendered ? now : null,
-          lastError: null,
-        },
-      })
-
-    // jobs テーブルの rendered_pages カウンターを更新
-    if (status.isRendered) {
-      const currentJob = await this.getJob(status.jobId)
-      if (currentJob) {
-        await this.db
-          .update(jobs)
-          .set({
-            renderedPages: (currentJob.renderedPages || 0) + 1,
-            updatedAt: now,
-          })
-          .where(eq(jobs.id, status.jobId))
-      }
-    }
-  }
-
   async createOutput(output: Omit<typeof outputs.$inferInsert, 'createdAt'>): Promise<string> {
     const result = await this.db.insert(outputs).values(output).returning({ id: outputs.id })
     return result[0].id
@@ -380,6 +319,54 @@ export class DatabaseService {
       .from(renderStatus)
       .where(eq(renderStatus.jobId, jobId))
       .orderBy(renderStatus.episodeNumber, renderStatus.pageNumber)
+  }
+
+  async updateRenderStatus(
+    jobId: string,
+    episodeNumber: number,
+    pageNumber: number,
+    status: {
+      isRendered: boolean
+      imagePath?: string
+      thumbnailPath?: string
+      width?: number
+      height?: number
+      fileSize?: number
+    },
+  ): Promise<void> {
+    const now = new Date().toISOString()
+
+    // render_statusテーブルが存在しない場合は、jobsテーブルのrenderCompletedフラグを更新
+    const currentJob = await this.getJob(jobId)
+    if (currentJob) {
+      await this.db
+        .update(jobs)
+        .set({
+          renderedPages: (currentJob.renderedPages || 0) + 1,
+          updatedAt: now,
+        })
+        .where(eq(jobs.id, jobId))
+    }
+
+    // TODO: render_statusテーブルが実装されたら、以下のコードに置き換える
+    // await this.db.update(renderStatus)
+    //   .set({
+    //     isRendered: status.isRendered,
+    //     imagePath: status.imagePath,
+    //     thumbnailPath: status.thumbnailPath,
+    //     width: status.width,
+    //     height: status.height,
+    //     fileSize: status.fileSize,
+    //     renderedAt: now,
+    //   })
+    //   .where(
+    //     and(
+    //       eq(renderStatus.jobId, jobId),
+    //       eq(renderStatus.episodeNumber, episodeNumber),
+    //       eq(renderStatus.pageNumber, pageNumber)
+    //     )
+    //   )
+    //   .execute()
   }
 
   async getJobsByNovelId(novelId: string): Promise<Job[]> {
