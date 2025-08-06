@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { DatabaseService } from '@/services/database'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
-import { getD1Database } from '@/utils/cloudflare-env'
 
 export async function POST(_request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
