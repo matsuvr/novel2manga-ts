@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
+import { appConfig } from '@/config/app.config'
 import { DatabaseService } from '@/services/database'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
-import { appConfig } from '@/config/app.config'
 
 export async function GET(request: NextRequest, { params }: { params: { jobId: string } }) {
   try {

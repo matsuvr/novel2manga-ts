@@ -1,7 +1,7 @@
 /**
  * テスト実行前のサーバー起動スクリプト
  */
-import { type ChildProcess, spawn } from 'child_process'
+import { type ChildProcess, spawn } from 'node:child_process'
 import fetch from 'node-fetch'
 
 let serverProcess: ChildProcess | null = null

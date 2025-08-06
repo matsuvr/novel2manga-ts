@@ -1,7 +1,5 @@
 import crypto from 'node:crypto'
-import { desc, eq } from 'drizzle-orm'
 import { type NextRequest, NextResponse } from 'next/server'
-import { jobs, novels } from '@/db/schema'
 import { DatabaseService } from '@/services/database'
 
 // Novel要素を保存

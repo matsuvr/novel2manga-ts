@@ -236,7 +236,9 @@ describe('LLM Fallback Chain Tests', () => {
 
   describe('フォールバックエラーハンドリング', () => {
     it('APIキーが無効な場合、適切なエラーメッセージを出力する', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {
+        // コンソール出力を抑制
+      })
 
       mockGetLLMProviderConfig.mockImplementation((provider: string) => {
         if (provider === 'openai') {

@@ -27,7 +27,7 @@ const mockRenderer = {
   renderToImage: vi.fn(),
 }
 
-const mockThumbnailGenerator = {
+const _mockThumbnailGenerator = {
   generateThumbnail: vi.fn(),
 }
 

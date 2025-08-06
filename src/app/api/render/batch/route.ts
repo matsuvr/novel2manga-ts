@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
         await renderStorage.put(renderKey, buffer, {
           contentType: 'image/png',
           jobId: body.jobId!,
-          episodeNumber: body.episodeNumber!.toString(),
+          episodeNumber: body.episodeNumber?.toString(),
           pageNumber: pageNumber.toString(),
         })
 
@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
         await renderStorage.put(thumbnailKey, thumbnailBuffer, {
           contentType: 'image/jpeg',
           jobId: body.jobId!,
-          episodeNumber: body.episodeNumber!.toString(),
+          episodeNumber: body.episodeNumber?.toString(),
           pageNumber: pageNumber.toString(),
           type: 'thumbnail',
         })
