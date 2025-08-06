@@ -11,7 +11,7 @@ export interface NarrativeAnalysisInput {
       characters: { name: string; role: string }[]
       dialogues: ChunkAnalysisResult['dialogues']
       scenes: ChunkAnalysisResult['scenes']
-      highlights: { 
+      highlights: {
         text: string
         importance: number
         description: string

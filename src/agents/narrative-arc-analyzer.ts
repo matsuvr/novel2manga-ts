@@ -2,7 +2,7 @@ import { Agent } from '@mastra/core'
 import { z } from 'zod'
 import { analyzeChunkBundle, type BundleAnalysisResult } from '@/agents/chunk-bundle-analyzer'
 import { getEpisodeConfig, getNarrativeAnalysisConfig } from '@/config'
-import type { ChunkData, ChunkAnalysisResult } from '@/types/chunk'
+import type { ChunkAnalysisResult, ChunkData } from '@/types/chunk'
 import type { EpisodeBoundary } from '@/types/episode'
 import { getNarrativeAnalysisLLM } from '@/utils/llm-factory'
 
@@ -16,7 +16,7 @@ interface NarrativeAnalysisParams {
       characters: { name: string; role: string }[]
       dialogues: ChunkAnalysisResult['dialogues']
       scenes: ChunkAnalysisResult['scenes']
-      highlights: { 
+      highlights: {
         text: string
         importance: number
         description: string
@@ -50,28 +50,32 @@ const narrativeArcAnalyzer = new Agent({
   },
 })
 
-export async function analyzeNarrativeArc(
-    input: {
-      jobId: string;
-      chunks: {
-        chunkIndex: number;
-        text: string;
-        analysis: {
-          summary: string;
-          characters: { name: string; role: string }[];
-          dialogues: ChunkAnalysisResult['dialogues'];
-          scenes: ChunkAnalysisResult['scenes'];
-          highlights: { text: string; importance: number; description: string; startIndex: number; endIndex: number }[]
-        }
-      }[];
-      targetCharsPerEpisode: number;
-      minCharsPerEpisode: number;
-      maxCharsPerEpisode: number;
-      startingEpisodeNumber?: number;
-      isMiddleOfNovel: boolean;
-      previousEpisodeEndText?: string;
-    },
-): Promise<EpisodeBoundary[]> {
+export async function analyzeNarrativeArc(input: {
+  jobId: string
+  chunks: {
+    chunkIndex: number
+    text: string
+    analysis: {
+      summary: string
+      characters: { name: string; role: string }[]
+      dialogues: ChunkAnalysisResult['dialogues']
+      scenes: ChunkAnalysisResult['scenes']
+      highlights: {
+        text: string
+        importance: number
+        description: string
+        startIndex: number
+        endIndex: number
+      }[]
+    }
+  }[]
+  targetCharsPerEpisode: number
+  minCharsPerEpisode: number
+  maxCharsPerEpisode: number
+  startingEpisodeNumber?: number
+  isMiddleOfNovel: boolean
+  previousEpisodeEndText?: string
+}): Promise<EpisodeBoundary[]> {
   console.log('analyzeNarrativeArc called with:', {
     chunks: input.chunks.length,
     targetChars: input.targetCharsPerEpisode,
@@ -96,17 +100,17 @@ export async function analyzeNarrativeArc(
   console.log(`Loading analysis results for job ${input.jobId}...`)
 
   const { StorageFactory } = await import('@/utils/storage')
-  
+
   async function getChunkAnalysis(jobId: string, chunkIndex: number) {
     const analysisStorage = await StorageFactory.getAnalysisStorage()
     const analysisPath = `analyses/${jobId}/chunk_${chunkIndex}.json`
     const existingAnalysis = await analysisStorage.get(analysisPath)
-    
+
     if (existingAnalysis) {
       const analysisData = JSON.parse(existingAnalysis.text)
       return analysisData.analysis
     }
-    
+
     return null
   }
 
@@ -266,7 +270,13 @@ function convertPositionsToBoundaries(
       characters: { name: string; role: string }[]
       dialogues: ChunkAnalysisResult['dialogues']
       scenes: ChunkAnalysisResult['scenes']
-      highlights: { text: string; importance: number; description: string; startIndex: number; endIndex: number }[]
+      highlights: {
+        text: string
+        importance: number
+        description: string
+        startIndex: number
+        endIndex: number
+      }[]
     }
   }>,
   previousTextLength: number = 0,

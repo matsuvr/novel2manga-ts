@@ -1,10 +1,10 @@
 import type { NextRequest } from 'next/server'
-import { handleApiError, successResponse, validationError } from '@/utils/api-error'
-import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { parse as parseYaml } from 'yaml'
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import { DatabaseService } from '@/services/database'
 import type { MangaLayout } from '@/types/panel-layout'
-import { parse as parseYaml } from 'yaml'
+import { handleApiError, successResponse, validationError } from '@/utils/api-error'
+import { StorageFactory, StorageKeys } from '@/utils/storage'
 
 interface RenderRequest {
   jobId: string
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       return validationError('レイアウトにpages配列が必要です')
     }
 
-    const targetPage = mangaLayout.pages.find(p => p.page_number === body.pageNumber)
+    const targetPage = mangaLayout.pages.find((p) => p.page_number === body.pageNumber)
     if (!targetPage) {
       return validationError(`ページ ${body.pageNumber} が見つかりません`)
     }
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
 
     // エピソードの存在確認
     const episodes = await dbService.getEpisodesByJobId(body.jobId)
-    const targetEpisode = episodes.find(e => e.episodeNumber === body.episodeNumber)
+    const targetEpisode = episodes.find((e) => e.episodeNumber === body.episodeNumber)
     if (!targetEpisode) {
       return validationError(`エピソード ${body.episodeNumber} が見つかりません`)
     }
@@ -97,18 +97,13 @@ export async function POST(request: NextRequest) {
     })
 
     // レンダリング状態の更新
-    await dbService.updateRenderStatus(
-      body.jobId,
-      body.episodeNumber,
-      body.pageNumber,
-      {
-        isRendered: true,
-        imagePath: renderKey,
-        width: 842,
-        height: 595,
-        fileSize: buffer.length,
-      }
-    )
+    await dbService.updateRenderStatus(body.jobId, body.episodeNumber, body.pageNumber, {
+      isRendered: true,
+      imagePath: renderKey,
+      width: 842,
+      height: 595,
+      fileSize: buffer.length,
+    })
 
     // サムネイル生成（後で実装可能）
     const thumbnailKey = StorageKeys.pageThumbnail(body.jobId, body.episodeNumber, body.pageNumber)

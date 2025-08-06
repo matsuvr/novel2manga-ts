@@ -1,5 +1,5 @@
 import { getEpisodeConfig } from '@/config'
-import type { ChunkData, ChunkAnalysisResult } from '@/types/chunk'
+import type { ChunkAnalysisResult, ChunkData } from '@/types/chunk'
 import type { NarrativeAnalysisInput } from '@/types/episode'
 import { getChunkAnalysis, getChunkData } from '@/utils/storage'
 
@@ -40,16 +40,29 @@ export async function prepareNarrativeAnalysisInput(
       text: chunkData.text,
       analysis: {
         summary: analysisResult?.summary || '',
-        characters: analysisResult?.characters?.map((c: { name: string; role: string }) => ({ name: c.name, role: c.role })) || [],
+        characters:
+          analysisResult?.characters?.map((c: { name: string; role: string }) => ({
+            name: c.name,
+            role: c.role,
+          })) || [],
         dialogues: (analysisResult?.dialogues as ChunkAnalysisResult['dialogues']) || [],
         scenes: (analysisResult?.scenes as ChunkAnalysisResult['scenes']) || [],
-        highlights: analysisResult?.highlights?.map((h: { text?: string; description: string; importance: number; startIndex?: number; endIndex?: number }) => ({
-          text: h.text || h.description,
-          importance: h.importance,
-          description: h.description,
-          startIndex: h.startIndex || 0,
-          endIndex: h.endIndex || 0,
-        })) || [],
+        highlights:
+          analysisResult?.highlights?.map(
+            (h: {
+              text?: string
+              description: string
+              importance: number
+              startIndex?: number
+              endIndex?: number
+            }) => ({
+              text: h.text || h.description,
+              importance: h.importance,
+              description: h.description,
+              startIndex: h.startIndex || 0,
+              endIndex: h.endIndex || 0,
+            }),
+          ) || [],
       },
     }
 
