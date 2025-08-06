@@ -8,6 +8,7 @@
     "**/__tests__/**/*",
     "vitest.config.ts",
     "workers/**/*",
-    "tmp_test/**/*"
+    "tmp_test/**/*",
+    ".next/**/*"
   ]
 }

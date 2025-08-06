@@ -1,7 +1,16 @@
 import crypto from 'node:crypto'
-import { eq, asc, desc } from 'drizzle-orm'
-import { getDatabase, type Novel, type Job, type Chunk, type Episode, type NewNovel, type NewChunk, type NewEpisode } from '@/db'
-import { novels, jobs, chunks, episodes } from '@/db/schema'
+import { and, asc, desc, eq } from 'drizzle-orm'
+import {
+  type Chunk,
+  type Episode,
+  getDatabase,
+  type Job,
+  type NewChunk,
+  type NewEpisode,
+  type NewNovel,
+  type Novel,
+} from '@/db'
+import { chunks, episodes, jobs, novels, outputs, renderStatus } from '@/db/schema'
 import type { JobProgress, JobStatus } from '@/types/job'
 
 export class DatabaseService {
@@ -11,7 +20,7 @@ export class DatabaseService {
   async createNovel(novel: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
-    
+
     await this.db.insert(novels).values({
       id,
       title: novel.title,
@@ -21,29 +30,32 @@ export class DatabaseService {
       language: novel.language || 'ja',
       metadataPath: novel.metadataPath,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     })
-    
+
     return id
   }
 
   async ensureNovel(
     id: string,
-    novel: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'>
+    novel: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'>,
   ): Promise<void> {
     const now = new Date().toISOString()
-    
-    await this.db.insert(novels).values({
-      id,
-      title: novel.title,
-      author: novel.author,
-      originalTextPath: novel.originalTextPath,
-      textLength: novel.textLength,
-      language: novel.language || 'ja',
-      metadataPath: novel.metadataPath,
-      createdAt: now,
-      updatedAt: now
-    }).onConflictDoNothing()
+
+    await this.db
+      .insert(novels)
+      .values({
+        id,
+        title: novel.title,
+        author: novel.author,
+        originalTextPath: novel.originalTextPath,
+        textLength: novel.textLength,
+        language: novel.language || 'ja',
+        metadataPath: novel.metadataPath,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing()
   }
 
   async getNovel(id: string): Promise<Novel | null> {
@@ -62,7 +74,7 @@ export class DatabaseService {
       novelId,
       jobName,
       status: 'pending',
-      currentStep: 'initialized'
+      currentStep: 'initialized',
     })
   }
 
@@ -83,16 +95,16 @@ export class DatabaseService {
 
     return {
       ...job,
-      progress
+      progress,
     }
   }
 
   async updateJobStatus(id: string, status: JobStatus, error?: string): Promise<void> {
     const updateData: Partial<Job> = {
       status,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     }
-    
+
     if (error) {
       updateData.lastError = error
     }
@@ -101,12 +113,15 @@ export class DatabaseService {
   }
 
   async updateJobProgress(id: string, progress: JobProgress): Promise<void> {
-    await this.db.update(jobs).set({
-      processedChunks: progress.processedChunks,
-      totalEpisodes: progress.episodes.length,
-      currentStep: progress.currentStep,
-      updatedAt: new Date().toISOString()
-    }).where(eq(jobs.id, id))
+    await this.db
+      .update(jobs)
+      .set({
+        processedChunks: progress.processedChunks,
+        totalEpisodes: progress.episodes.length,
+        currentStep: progress.currentStep,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(jobs.id, id))
   }
 
   async updateJobStep(
@@ -115,11 +130,11 @@ export class DatabaseService {
     processedChunks?: number,
     totalChunks?: number,
     error?: string,
-    errorStep?: string
+    errorStep?: string,
   ): Promise<void> {
     const updateData: Partial<Job> = {
       currentStep,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     }
 
     if (processedChunks !== undefined) {
@@ -138,12 +153,17 @@ export class DatabaseService {
     await this.db.update(jobs).set(updateData).where(eq(jobs.id, id))
   }
 
-  async updateJobError(id: string, error: string, step: string, incrementRetry = true): Promise<void> {
+  async updateJobError(
+    id: string,
+    error: string,
+    step: string,
+    incrementRetry = true,
+  ): Promise<void> {
     const updateData: Partial<Job> = {
       lastError: error,
       lastErrorStep: step,
       status: 'failed',
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     }
 
     if (incrementRetry) {
@@ -157,9 +177,12 @@ export class DatabaseService {
     await this.db.update(jobs).set(updateData).where(eq(jobs.id, id))
   }
 
-  async markJobStepCompleted(id: string, stepType: 'split' | 'analyze' | 'episode' | 'layout' | 'render'): Promise<void> {
+  async markJobStepCompleted(
+    id: string,
+    stepType: 'split' | 'analyze' | 'episode' | 'layout' | 'render',
+  ): Promise<void> {
     const updateData: Partial<Job> = {
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     }
 
     switch (stepType) {
@@ -186,7 +209,7 @@ export class DatabaseService {
   // Chunk関連メソッド
   async createChunk(chunk: Omit<NewChunk, 'id' | 'createdAt'>): Promise<string> {
     const id = crypto.randomUUID()
-    
+
     await this.db.insert(chunks).values({
       id,
       novelId: chunk.novelId,
@@ -195,14 +218,16 @@ export class DatabaseService {
       contentPath: chunk.contentPath,
       startPosition: chunk.startPosition,
       endPosition: chunk.endPosition,
-      wordCount: chunk.wordCount
+      wordCount: chunk.wordCount,
     })
-    
+
     return id
   }
 
   async getChunksByJobId(jobId: string): Promise<Chunk[]> {
-    return await this.db.select().from(chunks)
+    return await this.db
+      .select()
+      .from(chunks)
       .where(eq(chunks.jobId, jobId))
       .orderBy(asc(chunks.chunkIndex))
   }
@@ -210,7 +235,7 @@ export class DatabaseService {
   // Episode関連メソッド
   async createEpisode(episode: NewEpisode): Promise<void> {
     const id = `${episode.jobId}-ep${episode.episodeNumber}`
-    
+
     await this.db.insert(episodes).values({
       id,
       novelId: episode.novelId,
@@ -223,7 +248,7 @@ export class DatabaseService {
       endChunk: episode.endChunk,
       endCharIndex: episode.endCharIndex,
       estimatedPages: episode.estimatedPages,
-      confidence: episode.confidence
+      confidence: episode.confidence,
     })
   }
 
@@ -240,56 +265,128 @@ export class DatabaseService {
       endChunk: episode.endChunk,
       endCharIndex: episode.endCharIndex,
       estimatedPages: episode.estimatedPages,
-      confidence: episode.confidence
+      confidence: episode.confidence,
     }))
 
     await this.db.insert(episodes).values(episodesToInsert)
   }
 
   async getEpisodesByJobId(jobId: string): Promise<Episode[]> {
-    return await this.db.select().from(episodes)
+    return await this.db
+      .select()
+      .from(episodes)
       .where(eq(episodes.jobId, jobId))
       .orderBy(asc(episodes.episodeNumber))
   }
 
-  async updateRenderStatus(
-    jobId: string,
-  ): Promise<void> {
+  async updateRenderStatus(status: {
+    jobId: string
+    episodeNumber: number
+    pageNumber: number
+    isRendered: boolean
+    imagePath?: string
+    thumbnailPath?: string
+    width?: number
+    height?: number
+    fileSize?: number
+  }): Promise<void> {
     const now = new Date().toISOString()
-    
-    // render_statusテーブルが存在しない場合は、jobsテーブルのrenderCompletedフラグを更新
-    const currentJob = await this.getJob(jobId)
-    if (currentJob) {
-      await this.db.update(jobs)
-        .set({ 
-          renderedPages: (currentJob.renderedPages || 0) + 1,
-          updatedAt: now 
-        })
-        .where(eq(jobs.id, jobId))
+
+    // render_statusテーブルに状態を挿入または更新
+    await this.db
+      .insert(renderStatus)
+      .values({
+        id: crypto.randomUUID(),
+        jobId: status.jobId,
+        episodeNumber: status.episodeNumber,
+        pageNumber: status.pageNumber,
+        isRendered: status.isRendered,
+        imagePath: status.imagePath,
+        thumbnailPath: status.thumbnailPath,
+        width: status.width,
+        height: status.height,
+        fileSize: status.fileSize,
+        renderedAt: status.isRendered ? now : null,
+        retryCount: 0,
+        lastError: null,
+        createdAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [renderStatus.jobId, renderStatus.episodeNumber, renderStatus.pageNumber],
+        set: {
+          isRendered: status.isRendered,
+          imagePath: status.imagePath,
+          thumbnailPath: status.thumbnailPath,
+          width: status.width,
+          height: status.height,
+          fileSize: status.fileSize,
+          renderedAt: status.isRendered ? now : null,
+          lastError: null,
+        },
+      })
+
+    // jobs テーブルの rendered_pages カウンターを更新
+    if (status.isRendered) {
+      const currentJob = await this.getJob(status.jobId)
+      if (currentJob) {
+        await this.db
+          .update(jobs)
+          .set({
+            renderedPages: (currentJob.renderedPages || 0) + 1,
+            updatedAt: now,
+          })
+          .where(eq(jobs.id, status.jobId))
+      }
     }
-    
-    // TODO: render_statusテーブルが実装されたら、以下のコードに置き換える
-    // await this.db.update(renderStatus)
-    //   .set({
-    //     isRendered: status.isRendered,
-    //     imagePath: status.imagePath,
-    //     thumbnailPath: status.thumbnailPath,
-    //     width: status.width,
-    //     height: status.height,
-    //     fileSize: status.fileSize,
-    //     renderedAt: now,
-    //   })
-    //   .where(
-    //     and(
-    //       eq(renderStatus.jobId, jobId),
-    //       eq(renderStatus.episodeNumber, episodeNumber),
-    //       eq(renderStatus.pageNumber, pageNumber)
-    //     )
-    //   )
-    //   .execute()
+  }
+
+  async createOutput(output: Omit<typeof outputs.$inferInsert, 'createdAt'>): Promise<string> {
+    const result = await this.db.insert(outputs).values(output).returning({ id: outputs.id })
+    return result[0].id
+  }
+
+  // レンダリング状態取得メソッド
+  async getRenderStatus(
+    jobId: string,
+    episodeNumber: number,
+    pageNumber: number,
+  ): Promise<any | null> {
+    const result = await this.db
+      .select()
+      .from(renderStatus)
+      .where(
+        and(
+          eq(renderStatus.jobId, jobId),
+          eq(renderStatus.episodeNumber, episodeNumber),
+          eq(renderStatus.pageNumber, pageNumber),
+        ),
+      )
+      .limit(1)
+
+    return result[0] || null
+  }
+
+  async getRenderStatusByEpisode(jobId: string, episodeNumber: number): Promise<any[]> {
+    return await this.db
+      .select()
+      .from(renderStatus)
+      .where(and(eq(renderStatus.jobId, jobId), eq(renderStatus.episodeNumber, episodeNumber)))
+      .orderBy(renderStatus.pageNumber)
+  }
+
+  async getAllRenderStatusByJob(jobId: string): Promise<any[]> {
+    return await this.db
+      .select()
+      .from(renderStatus)
+      .where(eq(renderStatus.jobId, jobId))
+      .orderBy(renderStatus.episodeNumber, renderStatus.pageNumber)
   }
 
   async getJobsByNovelId(novelId: string): Promise<Job[]> {
-    return await this.db.select().from(jobs).where(eq(jobs.novelId, novelId)).orderBy(desc(jobs.createdAt))
+    return await this.db
+      .select()
+      .from(jobs)
+      .where(eq(jobs.novelId, novelId))
+      .orderBy(desc(jobs.createdAt))
   }
 }
