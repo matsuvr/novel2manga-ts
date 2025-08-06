@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { DatabaseService } from '@/services/database'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { appConfig } from '@/config/app.config'
 
 export async function GET(request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
@@ -70,8 +71,8 @@ export async function GET(request: NextRequest, { params }: { params: { jobId: s
         }>,
       }
 
-      // ページ数は仮に10ページとして処理（実際のレイアウトから取得すべき）
-      const totalPages = 10
+      // エピソードから実際のページ数を取得、なければ設定値をフォールバックとして使用
+      const totalPages = episode.estimatedPages || appConfig.processing.episode.maxPagesPerEpisode
 
       for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
         // ページ番号でフィルタリング
