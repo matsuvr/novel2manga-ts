@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { DatabaseService } from '@/services/database'
-import { StorageFactory } from '@/utils/storage'
 
 export async function GET(_request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
