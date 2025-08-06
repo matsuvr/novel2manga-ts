@@ -15,6 +15,7 @@ export interface Storage {
   delete(key: string): Promise<void>
   exists(key: string): Promise<boolean>
   list?(prefix?: string): Promise<string[]>
+  head?(key: string): Promise<{ size?: number; metadata?: Record<string, string> } | null>
 }
 
 export interface DatabaseAdapter {
@@ -205,6 +206,35 @@ export class LocalFileStorage implements Storage {
       throw error
     }
   }
+
+  async head(key: string): Promise<{ size?: number; metadata?: Record<string, string> } | null> {
+    const filePath = path.join(this.baseDir, key)
+    const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
+
+    try {
+      const stats = await fs.stat(filePath)
+      let metadata: Record<string, string> = {}
+
+      // メタデータファイルが存在する場合は読み込む
+      try {
+        const metadataContent = await fs.readFile(metadataPath, 'utf8')
+        const metadataData = JSON.parse(metadataContent)
+        metadata = metadataData.metadata || {}
+      } catch {
+        // メタデータファイルがなくてもエラーにしない
+      }
+
+      return {
+        size: stats.size,
+        metadata,
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return null
+      }
+      throw error
+    }
+  }
 }
 
 // ========================================
@@ -226,7 +256,11 @@ interface R2Bucket {
     customMetadata?: Record<string, string>
   } | null>
   delete(key: string): Promise<void>
-  head(key: string): Promise<{ customMetadata?: Record<string, string> } | null>
+  head(key: string): Promise<{
+    customMetadata?: Record<string, string>
+    size?: number
+    httpMetadata?: { contentType?: string }
+  } | null>
   list(options?: { prefix?: string }): Promise<{
     objects: Array<{ key: string }>
   }>
@@ -341,6 +375,21 @@ export class R2Storage implements Storage {
     return await this.retryableOperation(async () => {
       const result = await this.bucket.list(prefix ? { prefix } : undefined)
       return result.objects.map((obj) => obj.key)
+    })
+  }
+
+  async head(key: string): Promise<{ size?: number; metadata?: Record<string, string> } | null> {
+    return await this.retryableOperation(async () => {
+      const object = await this.bucket.head(key)
+      if (!object) return null
+
+      // R2のheadレスポンスからサイズを取得（プロパティ名はR2の実装による）
+      const size = (object as any).contentLength || (object as any).size
+
+      return {
+        size: size ? Number(size) : undefined,
+        metadata: object.customMetadata || {},
+      }
     })
   }
 }
