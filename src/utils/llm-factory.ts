@@ -102,9 +102,7 @@ function getProviderInstance(provider: LLMProvider) {
 }
 
 // フォールバック機能付きでプロバイダーを取得
-export async function getProviderWithFallback(
-  preferredProvider?: LLMProvider,
-) {
+export async function getProviderWithFallback(preferredProvider?: LLMProvider) {
   const fallbackChain = getLLMFallbackChain()
   const providersToTry = preferredProvider
     ? [preferredProvider, ...fallbackChain.filter((p) => p !== preferredProvider)]

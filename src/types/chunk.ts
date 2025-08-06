@@ -8,25 +8,25 @@ export interface ChunkAnalysisResult {
     description?: string
   }>
   scenes: Array<{
-    time?: string;
+    time?: string
     location: string
     timeOfDay?: string
     atmosphere?: string
     description?: string
   }>
   dialogues: Array<{
-    text: string;
-    speakerId: string;
+    text: string
+    speakerId: string
     speaker: string
     content: string
     emotion?: string
     importance: 'high' | 'medium' | 'low'
   }>
   highlights: Array<{
-    importance: number;
-    description: string;
-    endIndex: number;
-    startIndex: number;
+    importance: number
+    description: string
+    endIndex: number
+    startIndex: number
     type: 'action' | 'emotion' | 'plot' | 'description'
     content: string
     intensity: number

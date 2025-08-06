@@ -2,8 +2,8 @@
 
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
-import { z } from 'zod'
 import { OpenAPIGenerator, OpenAPIRegistry } from '@asteasolutions/zod-to-openapi'
+import { z } from 'zod'
 
 async function main() {
   // TODO: 各ルートモジュールが export する Registry を集約する仕組みを整備する

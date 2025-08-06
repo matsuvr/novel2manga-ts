@@ -84,13 +84,13 @@ export class LocalFileStorage implements Storage {
     if (this.isBinaryData(value)) {
       // バイナリデータの場合：直接ファイルに保存
       await fs.writeFile(filePath, value as Buffer)
-      
+
       // メタデータは別ファイルに保存
       if (metadata) {
         const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
         const metadataDir = path.dirname(metadataPath)
         await ensureDir(metadataDir)
-        
+
         const metadataContent = {
           ...metadata,
           createdAt: new Date().toISOString(),
@@ -113,12 +113,12 @@ export class LocalFileStorage implements Storage {
   async get(key: string): Promise<{ text: string; metadata?: Record<string, string> } | null> {
     const filePath = path.join(this.baseDir, key)
     const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
-    
+
     try {
       // メタデータファイルの存在をチェック（バイナリファイルかどうかの判定）
       let isBinary = false
       let metadata: Record<string, string> = {}
-      
+
       try {
         const metadataContent = await fs.readFile(metadataPath, 'utf-8')
         const metadataData = JSON.parse(metadataContent)
@@ -164,7 +164,7 @@ export class LocalFileStorage implements Storage {
   async delete(key: string): Promise<void> {
     const filePath = path.join(this.baseDir, key)
     const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
-    
+
     try {
       await fs.unlink(filePath)
     } catch (error) {
@@ -300,7 +300,7 @@ export class R2Storage implements Storage {
   async put(key: string, value: string | Buffer, metadata?: Record<string, string>): Promise<void> {
     const valueToStore = typeof value === 'string' ? value : value.toString()
     const cacheHeaders = this.getCacheHeaders(key)
-    
+
     await this.retryableOperation(async () => {
       await this.bucket.put(key, valueToStore, {
         httpMetadata: {
@@ -817,7 +817,10 @@ export async function saveChunkData(
   await storage.put(key, JSON.stringify(data, null, 2))
 }
 
-export async function getChunkData(jobId: string, chunkIndex: number): Promise<{ text: string } | null> {
+export async function getChunkData(
+  jobId: string,
+  chunkIndex: number,
+): Promise<{ text: string } | null> {
   const storage = await getChunkStorage()
   const key = `chunks/${jobId}/chunk_${chunkIndex}.txt`
   const result = await storage.get(key)
@@ -855,7 +858,7 @@ export async function saveEpisodeBoundaries(
     endCharIndex: number
     estimatedPages: number
     confidence: number
-  }>
+  }>,
 ): Promise<void> {
   const storage = await getAnalysisStorage()
   const key = StorageKeys.narrativeAnalysis(jobId)
@@ -864,7 +867,7 @@ export async function saveEpisodeBoundaries(
     metadata: {
       createdAt: new Date().toISOString(),
       totalEpisodes: episodes.length,
-    }
+    },
   }
   await storage.put(key, JSON.stringify(data, null, 2))
 }
@@ -872,8 +875,20 @@ export async function saveEpisodeBoundaries(
 // チャンク分析取得関数
 export async function getChunkAnalysis(
   jobId: string,
-  chunkIndex: number
-): Promise<{ summary?: string; characters?: { name: string; role: string }[]; dialogues?: unknown[]; scenes?: unknown[]; highlights?: { text?: string; description: string; importance: number; startIndex?: number; endIndex?: number }[] } | null> {
+  chunkIndex: number,
+): Promise<{
+  summary?: string
+  characters?: { name: string; role: string }[]
+  dialogues?: unknown[]
+  scenes?: unknown[]
+  highlights?: {
+    text?: string
+    description: string
+    importance: number
+    startIndex?: number
+    endIndex?: number
+  }[]
+} | null> {
   const storage = await getAnalysisStorage()
   const key = StorageKeys.chunkAnalysis(jobId, chunkIndex)
   const result = await storage.get(key)

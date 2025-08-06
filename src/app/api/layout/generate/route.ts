@@ -55,7 +55,9 @@ export async function POST(request: NextRequest) {
     for (let i = episode.startChunk; i <= episode.endChunk; i++) {
       const chunkContent = await getChunkData(jobId, i)
       if (!chunkContent) {
-        throw new Error(`Chunk ${i} not found for job ${jobId}. Cannot proceed with layout generation.`)
+        throw new Error(
+          `Chunk ${i} not found for job ${jobId}. Cannot proceed with layout generation.`,
+        )
       }
 
       // チャンク解析結果を取得
@@ -74,8 +76,7 @@ export async function POST(request: NextRequest) {
         // エピソード境界を考慮した部分チャンクの処理
         const isPartial = i === episode.startChunk || i === episode.endChunk
         const startOffset = i === episode.startChunk ? episode.startCharIndex : 0
-        const endOffset =
-          i === episode.endChunk ? episode.endCharIndex : chunkContent.text.length
+        const endOffset = i === episode.endChunk ? episode.endCharIndex : chunkContent.text.length
 
         chunkDataArray.push({
           chunkIndex: i,
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
 
     // エピソードデータを構築
     const episodeData: EpisodeData = {
-      chunkAnalyses: chunkDataArray.map(chunk => chunk.analysis),
+      chunkAnalyses: chunkDataArray.map((chunk) => chunk.analysis),
       author: job.jobName || 'Unknown Author',
       title: `Episode ${episode.episodeNumber}` as const,
       episodeNumber: episode.episodeNumber,
@@ -124,7 +125,7 @@ export async function POST(request: NextRequest) {
       dialogueDensity: config?.dialogueDensity ?? 0.6,
       visualComplexity: config?.visualComplexity ?? 0.7,
       highlightPanelSizeMultiplier: config?.highlightPanelSizeMultiplier ?? 2.0,
-      readingDirection: config?.readingDirection ?? 'right-to-left' as const,
+      readingDirection: config?.readingDirection ?? ('right-to-left' as const),
     }
     const layout = await generateMangaLayout(episodeData, fullConfig)
 
