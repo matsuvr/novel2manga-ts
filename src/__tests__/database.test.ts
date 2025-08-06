@@ -6,7 +6,7 @@ vi.mock('@/db', () => ({
   getDatabase: vi.fn(() => ({
     insert: vi.fn(() => ({
       values: vi.fn(),
-      onConflictDoNothing: vi.fn()
+      onConflictDoNothing: vi.fn(),
     })),
     select: vi.fn(() => ({
       from: vi.fn(() => ({
@@ -17,10 +17,10 @@ vi.mock('@/db', () => ({
     })),
     update: vi.fn(() => ({
       set: vi.fn(() => ({
-        where: vi.fn()
-      }))
-    }))
-  }))
+        where: vi.fn(),
+      })),
+    })),
+  })),
 }))
 
 describe('DatabaseService', () => {
@@ -63,7 +63,7 @@ describe('DatabaseService', () => {
   describe('getJob', () => {
     it('should get a job by id', async () => {
       const result = await service.getJob('job-123')
-      
+
       // Since we're using mocked database, this should return null or empty array
       expect(result).toBeDefined()
     })
@@ -72,10 +72,9 @@ describe('DatabaseService', () => {
   describe('updateJobStatus', () => {
     it('should update job status', async () => {
       await service.updateJobStatus('job-123', 'completed')
-      
+
       // Test passes if no error is thrown
       expect(service.updateJobStatus).toBeDefined()
     })
   })
-
 })
