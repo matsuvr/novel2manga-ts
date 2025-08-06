@@ -6,12 +6,16 @@ let createCanvas: ((width: number, height: number) => HTMLCanvasElement | NodeCa
 
 // node-canvas用の型定義
 interface NodeCanvasImpl {
-  width: number;
-  height: number;
-  getContext(contextId: '2d'): CanvasRenderingContext2D;
-  toDataURL(type?: string, quality?: number): string;
-  toBuffer(callback: (err: Error | null, buffer: Buffer) => void, mimeType?: string, config?: unknown): void;
-  toBuffer(mimeType?: string, config?: unknown): Buffer;
+  width: number
+  height: number
+  getContext(contextId: '2d'): CanvasRenderingContext2D
+  toDataURL(type?: string, quality?: number): string
+  toBuffer(
+    callback: (err: Error | null, buffer: Buffer) => void,
+    mimeType?: string,
+    config?: unknown,
+  ): void
+  toBuffer(mimeType?: string, config?: unknown): Buffer
 }
 
 export type NodeCanvas = NodeCanvasImpl
@@ -55,7 +59,7 @@ export class CanvasRenderer {
       textColor: '#000000',
       font: 'Arial, sans-serif',
       defaultFontSize: 16,
-      ...config
+      ...config,
     }
 
     // サーバーサイドとクライアントサイドの両方で動作するようにCanvas作成
@@ -104,10 +108,10 @@ export class CanvasRenderer {
     const y = panel.position.y * this.config.height
     const width = panel.size.width * this.config.width
     const height = panel.size.height * this.config.height
-    
+
     // パネルのフレームを描画
     this.drawFrame(x, y, width, height)
-    
+
     // パネル内のコンテンツを描画
     if (panel.content) {
       // 状況説明テキストを描画
@@ -117,9 +121,9 @@ export class CanvasRenderer {
         color: this.config.textColor,
       })
     }
-    
+
     // パネル内の対話を吹き出しとして描画
-    if (panel.dialogues && panel.dialogues.length > 0) {
+    if (panel.dialogues?.length > 0) {
       let bubbleY = y + height * 0.3 // 吹き出しの開始Y位置
       for (const dialogue of panel.dialogues) {
         this.drawSpeechBubble(
@@ -129,14 +133,19 @@ export class CanvasRenderer {
           {
             maxWidth: width * 0.4,
             style: dialogue.emotion === 'shout' ? 'shout' : 'normal',
-          }
+          },
         )
         bubbleY += 80 // 次の吹き出し位置
       }
     }
   }
 
-  drawText(text: string, x: number, y: number, options?: { maxWidth?: number; font?: string; color?: string }): void {
+  drawText(
+    text: string,
+    x: number,
+    y: number,
+    options?: { maxWidth?: number; font?: string; color?: string },
+  ): void {
     const {
       maxWidth,
       font = `${this.config.fontSize || 16}px ${this.config.fontFamily || 'Arial, sans-serif'}`,
@@ -178,7 +187,7 @@ export class CanvasRenderer {
       lines.splice(maxLines - 1)
       if (lines.length > 0) {
         lines[lines.length - 1] =
-          lines[lines.length - 1].substring(0, lines[lines.length - 1].length - 3) + '...'
+          `${lines[lines.length - 1].substring(0, lines[lines.length - 1].length - 3)}...`
       }
     }
 
@@ -213,17 +222,22 @@ export class CanvasRenderer {
     return lines
   }
 
-  drawSpeechBubble(text: string, x: number, y: number, options?: { maxWidth?: number; style?: string }): void {
-    const {
-      maxWidth = 200,
-      style = 'normal',
-    } = options || {}
+  drawSpeechBubble(
+    text: string,
+    x: number,
+    y: number,
+    options?: { maxWidth?: number; style?: string },
+  ): void {
+    const { maxWidth = 200, style = 'normal' } = options || {}
 
     // テキストサイズを測定して吹き出しサイズを決定
     const fontSize = this.config.fontSize || 16
     const lines = this.wrapText(text, maxWidth - 20)
     const lineHeight = fontSize * 1.2
-    const width = Math.min(maxWidth, Math.max(...lines.map(line => this.ctx.measureText(line).width)) + 20)
+    const width = Math.min(
+      maxWidth,
+      Math.max(...lines.map((line) => this.ctx.measureText(line).width)) + 20,
+    )
     const height = lines.length * lineHeight + 20
 
     this.ctx.save()
@@ -296,59 +310,67 @@ export class CanvasRenderer {
           if ('toBuffer' in nodeCanvas) {
             try {
               // 非コールバック形式のtoBufferを試みる
-              const buffer = nodeCanvas.toBuffer(type.replace('image/', ''), { quality });
-              const blob = new Blob([buffer], { type });
-              resolve(blob);
-              return;
+              const buffer = nodeCanvas.toBuffer(type.replace('image/', ''), { quality })
+              const blob = new Blob([buffer], { type })
+              resolve(blob)
+              return
             } catch {
               // コールバック形式にフォールバック
-              nodeCanvas.toBuffer((err: Error | null, buffer: Buffer) => {
-                if (err) {
-                  reject(err);
-                } else {
-                  const blob = new Blob([buffer], { type });
-                  resolve(blob);
-                }
-              }, type.replace('image/', ''), { quality });
-              return;
+              nodeCanvas.toBuffer(
+                (err: Error | null, buffer: Buffer) => {
+                  if (err) {
+                    reject(err)
+                  } else {
+                    const blob = new Blob([buffer], { type })
+                    resolve(blob)
+                  }
+                },
+                type.replace('image/', ''),
+                { quality },
+              )
+              return
             }
           }
 
           // toBufferがない場合はtoDataURLを使用
-          const dataUrl = (nodeCanvas as NodeCanvas).toDataURL(type, quality);
+          const dataUrl = (nodeCanvas as NodeCanvas).toDataURL(type, quality)
           fetch(dataUrl)
-            .then(res => res.blob())
+            .then((res) => res.blob())
             .then(resolve)
-            .catch(reject);
+            .catch(reject)
         } catch (err) {
-          reject(new Error(`Failed to create blob in Node.js: ${err}`));
+          reject(new Error(`Failed to create blob in Node.js: ${err}`))
         }
-      });
+      })
     } else {
       // ブラウザの場合
-      const htmlCanvas = this.canvas as HTMLCanvasElement;
+      const htmlCanvas = this.canvas as HTMLCanvasElement
       return new Promise<Blob>((resolve, reject) => {
         if ('toBlob' in htmlCanvas) {
-          htmlCanvas.toBlob((blob: Blob | null) => {
-            if (blob) {
-              resolve(blob);
-            } else {
-              reject(new Error('Failed to create blob'));
-            }
-          }, type, quality);
+          htmlCanvas.toBlob(
+            (blob: Blob | null) => {
+              if (blob) {
+                resolve(blob)
+              } else {
+                reject(new Error('Failed to create blob'))
+              }
+            },
+            type,
+            quality,
+          )
         } else {
           // toBlob未サポートの場合はtoDataURLから変換
           try {
-            const dataUrl = (htmlCanvas as HTMLCanvasElement).toDataURL(type, quality);
+            const dataUrl = (htmlCanvas as HTMLCanvasElement).toDataURL(type, quality)
             fetch(dataUrl)
-              .then(res => res.blob())
+              .then((res) => res.blob())
               .then(resolve)
-              .catch(reject);
+              .catch(reject)
           } catch (err) {
-            reject(new Error(`Failed to create blob from dataURL: ${err}`));
+            reject(new Error(`Failed to create blob from dataURL: ${err}`))
           }
         }
-      });
+      })
     }
   }
 }
