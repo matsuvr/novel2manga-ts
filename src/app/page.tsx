@@ -1,150 +1,223 @@
 'use client'
 
 import { useState } from 'react'
-import Logger from '@/components/Logger'
-import { api, type JobResponse } from '@/services/api'
+import ProcessingProgress from '@/components/ProcessingProgress'
+import ResultsDisplay from '@/components/ResultsDisplay'
+import TextInputArea from '@/components/TextInputArea'
+import type { Episode } from '@/types/episode'
 
-interface LogEntry {
-  timestamp: Date
-  level: 'info' | 'warn' | 'error' | 'debug'
-  message: string
-}
+type ViewMode = 'input' | 'processing' | 'results'
 
 export default function Home() {
-  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [viewMode, setViewMode] = useState<ViewMode>('input')
   const [novelText, setNovelText] = useState('')
+  const [jobId, setJobId] = useState<string | null>(null)
+  const [episodes, setEpisodes] = useState<Episode[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
-  const [_currentJobId, setCurrentJobId] = useState<string | null>(null)
-  const [jobData, setJobData] = useState<JobResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  const addLog = (level: LogEntry['level'], message: string) => {
-    setLogs((prev) => [
-      ...prev,
-      {
-        timestamp: new Date(),
-        level,
-        message,
-      },
-    ])
-  }
-
-  const handleProcess = async () => {
-    if (!novelText.trim()) {
-      addLog('warn', 'テキストが入力されていません')
-      return
-    }
+  const handleSubmit = async () => {
+    if (!novelText.trim()) return
 
     setIsProcessing(true)
-    addLog('info', '処理を開始します...')
-    addLog('info', `入力文字数: ${novelText.length}文字`)
+    setError(null)
+    setViewMode('processing')
 
     try {
-      // Workers APIにテキストを送信
-      addLog('debug', 'テキスト解析APIを呼び出しています...')
-      const analyzeResult = await api.analyzeText(novelText)
+      // Create a Blob from the text
+      const blob = new Blob([novelText], { type: 'text/plain' })
+      const file = new File([blob], 'novel.txt', { type: 'text/plain' })
 
-      setCurrentJobId(analyzeResult.jobId)
-      addLog('info', `テキスト解析完了: ${analyzeResult.message}`)
-      addLog('info', `ジョブID: ${analyzeResult.jobId}`)
-      addLog('info', `チャンク数: ${analyzeResult.chunkCount}`)
+      // Upload the novel
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('title', 'Untitled Novel')
 
-      // ジョブ詳細を取得
-      addLog('debug', 'ジョブ詳細を取得しています...')
-      const jobDetails = await api.getJob(analyzeResult.jobId)
-      setJobData(jobDetails)
-
-      addLog('info', 'ジョブ詳細の取得完了')
-      addLog('info', `作成日時: ${new Date(jobDetails.job.createdAt).toLocaleString('ja-JP')}`)
-
-      // チャンク情報をログに表示
-      jobDetails.chunks.forEach((chunk, index) => {
-        addLog('debug', `チャンク${index + 1}: ${chunk.fileName} (${chunk.text.length}文字)`)
+      const uploadResponse = await fetch('/api/novel', {
+        method: 'POST',
+        body: formData,
       })
 
-      addLog('info', '処理が完了しました！')
-    } catch (error) {
-      addLog(
-        'error',
-        `エラーが発生しました: ${error instanceof Error ? error.message : String(error)}`,
-      )
-    } finally {
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json()
+        throw new Error(errorData.error || 'アップロードに失敗しました')
+      }
+
+      const uploadData = await uploadResponse.json()
+      const novelId = uploadData.novelId
+
+      // Start analysis job
+      const analyzeResponse = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          novelId,
+          chunkSize: 5000,
+          overlapSize: 500,
+        }),
+      })
+
+      if (!analyzeResponse.ok) {
+        const errorData = await analyzeResponse.json()
+        throw new Error(errorData.error || '分析の開始に失敗しました')
+      }
+
+      const analyzeData = await analyzeResponse.json()
+      setJobId(analyzeData.jobId)
+    } catch (err) {
+      console.error('Process error:', err)
+      setError(err instanceof Error ? err.message : 'エラーが発生しました')
+      setViewMode('input')
       setIsProcessing(false)
     }
   }
 
+  const handleProcessComplete = async () => {
+    if (!jobId) return
+
+    try {
+      // Fetch episodes for the completed job
+      const response = await fetch(`/api/jobs/${jobId}/episodes`)
+      if (!response.ok) throw new Error('Failed to fetch episodes')
+
+      const data = await response.json()
+      setEpisodes(data.episodes || [])
+      setViewMode('results')
+      setIsProcessing(false)
+    } catch (err) {
+      console.error('Error fetching results:', err)
+      setError('結果の取得に失敗しました')
+      setIsProcessing(false)
+    }
+  }
+
+  const handleReset = () => {
+    setViewMode('input')
+    setNovelText('')
+    setJobId(null)
+    setEpisodes([])
+    setError(null)
+    setIsProcessing(false)
+  }
+
   return (
-    <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow-sm border-b">
-        <div className="px-4 py-3">
-          <h1 className="text-2xl font-bold text-gray-800">
-            Novel to Manga Converter - テスト用UI
-          </h1>
+    <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+      {/* Header */}
+      <header className="modern-header">
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="text-3xl">📚</div>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">Novel to Manga Converter</h1>
+                <p className="text-sm text-gray-600">小説をマンガの絵コンテに自動変換</p>
+              </div>
+            </div>
+            {viewMode !== 'input' && (
+              <button
+                type="button"
+                onClick={handleReset}
+                className="px-6 py-3 bg-gray-100 text-gray-700 border border-gray-200 rounded-2xl font-medium shadow-sm shadow-gray-500/10 transition-all duration-300 ease-out hover:bg-gray-50 hover:shadow-md hover:-translate-y-0.5 active:scale-95"
+              >
+                🔄 最初から
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
-      <main className="container mx-auto p-4">
-        <div className="grid grid-cols-2 gap-4 h-[calc(100vh-8rem)]">
-          {/* 左側: ロガー */}
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <Logger logs={logs} />
+      {/* Main Content */}
+      <main className="container mx-auto px-6 py-8">
+        {/* Error Alert */}
+        {error && (
+          <div className="mb-6 bg-white rounded-3xl shadow-2xl border border-gray-100/50 border-l-4 border-red-500">
+            <div className="p-4">
+              <div className="flex items-center">
+                <span className="text-red-500 text-xl mr-3">⚠️</span>
+                <div>
+                  <p className="font-medium text-red-700">エラーが発生しました</p>
+                  <p className="text-sm text-gray-600 mt-1">{error}</p>
+                </div>
+              </div>
+            </div>
           </div>
+        )}
 
-          {/* 右側: テキスト入力エリア */}
-          <div className="bg-white rounded-lg shadow-md p-4 flex flex-col">
-            <h2 className="text-lg font-semibold mb-2">小説テキスト入力</h2>
-            <textarea
-              value={novelText}
-              onChange={(e) => setNovelText(e.target.value)}
-              placeholder="ここに小説のテキストを入力してください..."
-              className="flex-1 w-full p-3 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={isProcessing}
-            />
-            <div className="mt-4 flex justify-between items-center">
-              <span className="text-sm text-gray-600">文字数: {novelText.length} / 10,000</span>
+        {/* View Modes */}
+        {viewMode === 'input' && (
+          <div className="max-w-6xl mx-auto">
+            <div className="bg-white rounded-3xl shadow-2xl border border-gray-100/50 p-6 min-h-[600px] transition-all duration-500 ease-out hover:shadow-3xl hover:-translate-y-1">
+              <TextInputArea
+                value={novelText}
+                onChange={setNovelText}
+                onSubmit={handleSubmit}
+                isProcessing={isProcessing}
+                maxLength={100000}
+              />
+            </div>
+
+            {/* Sample Text Button */}
+            <div className="mt-6 text-center">
               <button
                 type="button"
-                onClick={handleProcess}
-                disabled={isProcessing || !novelText.trim()}
-                className={`px-6 py-2 rounded-md font-medium transition-colors ${
-                  isProcessing || !novelText.trim()
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                }`}
+                onClick={() => {
+                  setNovelText(`吾輩は猫である。名前はまだ無い。
+どこで生れたかとんと見当がつかぬ。何でも薄暗いじめじめした所でニャーニャー泣いていた事だけは記憶している。吾輩はここで始めて人間というものを見た。しかもあとで聞くとそれは書生という人間中で一番獰悪な種族であったそうだ。この書生というのは時々我々を捕えて煮て食うという話である。しかしその当時は何という考もなかったから別段恐しいとも思わなかった。ただ彼の掌に載せられてスーと持ち上げられた時何だかフワフワした感じがあったばかりである。
+
+掌の上で少し落ちついて書生の顔を見たのがいわゆる人間というものの見始であろう。この時妙なものだと思った感じが今でも残っている。第一毛をもって装飾されべきはずの顔がつるつるしてまるで薬缶だ。その後猫にもだいぶ逢ったがこんな片輪には一度も出会わした事がない。のみならず顔の真中があまりに突起している。そうしてその穴の中から時々ぷうぷうと煙を吹く。どうも咽せぽくて実に弱った。これが人間の飲む煙草というものである事はようやくこの頃知った。`)
+                }}
+                className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-2xl font-semibold shadow-lg shadow-blue-500/25 transition-all duration-300 ease-out hover:shadow-xl hover:shadow-blue-500/40 hover:-translate-y-0.5 hover:scale-105 active:scale-95"
               >
-                {isProcessing ? '処理中...' : '処理開始'}
+                📝 サンプルテキストを使用
               </button>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* 下半分: チャンク表示エリア */}
-        <div className="mt-4 bg-white rounded-lg shadow-md p-6 min-h-[300px]">
-          {jobData ? (
-            <div>
-              <h3 className="text-lg font-semibold mb-4">分割結果</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {jobData.chunks.map((chunk, index) => (
-                  <div
-                    key={chunk.id}
-                    className="border rounded-lg p-4 hover:shadow-md transition-shadow"
-                  >
-                    <h4 className="font-medium text-sm mb-2">チャンク {index + 1}</h4>
-                    <p className="text-xs text-gray-600 mb-2">{chunk.fileName}</p>
-                    <p className="text-xs text-gray-700 line-clamp-3">{chunk.text}</p>
-                    <p className="text-xs text-gray-500 mt-2">{chunk.text.length}文字</p>
-                  </div>
-                ))}
+        {viewMode === 'processing' && (
+          <div className="max-w-2xl mx-auto">
+            <ProcessingProgress jobId={jobId} onComplete={handleProcessComplete} />
+
+            {/* Processing Animation */}
+            <div className="mt-8 text-center">
+              <div className="inline-flex items-center justify-center w-32 h-32 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 animate-pulse">
+                <span className="text-5xl">✨</span>
               </div>
+              <p className="mt-4 text-lg text-gray-600">AIが小説を分析しています...</p>
             </div>
-          ) : (
-            <div className="h-full flex items-center justify-center">
-              <p className="text-gray-500 text-center">
-                テキストを処理すると、分割されたチャンクがここに表示されます
-              </p>
+          </div>
+        )}
+
+        {viewMode === 'results' && jobId && (
+          <div className="max-w-7xl mx-auto">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent mb-2">変換結果</h2>
+              <p className="text-gray-600">{episodes.length} 個のエピソードが生成されました</p>
             </div>
-          )}
-        </div>
+            <ResultsDisplay jobId={jobId} episodes={episodes} />
+          </div>
+        )}
       </main>
+
+      {/* Footer */}
+      <footer className="modern-header border-t mt-auto">
+        <div className="container mx-auto px-6 py-6">
+          <div className="flex items-center justify-between text-sm text-gray-600">
+            <p>© 2025 Novel to Manga Converter</p>
+            <div className="flex items-center space-x-6">
+              <a href="#" className="hover:text-blue-600 transition-colors">
+                ヘルプ
+              </a>
+              <a href="#" className="hover:text-blue-600 transition-colors">
+                プライバシー
+              </a>
+              <a href="#" className="hover:text-blue-600 transition-colors">
+                利用規約
+              </a>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

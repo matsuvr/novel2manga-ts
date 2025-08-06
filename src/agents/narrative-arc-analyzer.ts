@@ -1,10 +1,12 @@
 import { Agent } from '@mastra/core'
 import { z } from 'zod'
+
 import { analyzeChunkBundle, type BundleAnalysisResult } from '@/agents/chunk-bundle-analyzer'
 import { getEpisodeConfig, getNarrativeAnalysisConfig } from '@/config'
 import type { ChunkAnalysisResult } from '@/types/chunk'
 import type { EpisodeBoundary } from '@/types/episode'
 import { getNarrativeAnalysisLLM } from '@/utils/llm-factory'
+
 const narrativeArcAnalyzer = new Agent({
   name: 'Narrative Arc Analyzer',
   instructions: () => {

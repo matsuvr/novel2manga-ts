@@ -50,11 +50,20 @@
       "Bash(npx biome lint:*)",
       "Bash(npx biome check:*)",
       "Bash(npx biome migrate:*)",
-      "Bash(gh issue create:*)"
+      "Bash(gh issue create:*)",
+      "WebFetch(domain:developer.apple.com)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_snapshot"
     ]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": ["cloudflare", "mastra", "serena", "deepwiki"],
+  "enabledMcpjsonServers": [
+    "cloudflare",
+    "mastra",
+    "serena",
+    "deepwiki"
+  ],
   "hooks": {
     "Notification": [
       {

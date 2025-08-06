@@ -2,6 +2,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createGroq } from '@ai-sdk/groq'
 import { createOpenAI } from '@ai-sdk/openai'
 import {
+  getChunkBundleAnalysisConfig,
   getLayoutGenerationConfig,
   getLLMFallbackChain,
   getLLMProviderConfig,
@@ -206,9 +207,39 @@ export async function getLayoutGenerationLLM() {
   }
 }
 
+// チャンクバンドル統合分析用のLLMを取得（フォールバック対応）
+export async function getChunkBundleAnalysisLLM() {
+  const config = getChunkBundleAnalysisConfig() as LLMConfig
+
+  // デフォルトプロバイダーを使用するか、指定されたプロバイダーを使用
+  const preferredProvider: LLMProvider =
+    config.provider === 'default' ? appConfig.llm.defaultProvider : config.provider
+
+  const llmInstance = await getProviderWithFallback(preferredProvider)
+
+  // モデルオーバーライドがあれば適用
+  const model = config.modelOverrides?.[llmInstance.providerName] || llmInstance.model
+
+  return {
+    provider: llmInstance.provider,
+    providerName: llmInstance.providerName,
+    model,
+    settings: {
+      maxTokens: config.maxTokens,
+    },
+    systemPrompt: config.systemPrompt,
+    userPromptTemplate: config.userPromptTemplate,
+  }
+}
+
 // 汎用LLMを取得（カスタム設定用）
 export async function getLLM(
-  useCase: 'textAnalysis' | 'narrativeAnalysis' | 'layoutGeneration' | 'custom' = 'custom',
+  useCase:
+    | 'textAnalysis'
+    | 'narrativeAnalysis'
+    | 'layoutGeneration'
+    | 'chunkBundleAnalysis'
+    | 'custom' = 'custom',
   overrides?: {
     provider?: LLMProvider
     model?: string
@@ -226,6 +257,10 @@ export async function getLLM(
 
   if (useCase === 'layoutGeneration') {
     return getLayoutGenerationLLM()
+  }
+
+  if (useCase === 'chunkBundleAnalysis') {
+    return getChunkBundleAnalysisLLM()
   }
 
   // カスタム設定

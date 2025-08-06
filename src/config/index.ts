@@ -75,6 +75,11 @@ export function getLayoutGenerationConfig() {
   return getAppConfig().llm.layoutGeneration
 }
 
+// チャンクバンドル統合分析設定を取得
+export function getChunkBundleAnalysisConfig() {
+  return getAppConfig().llm.chunkBundleAnalysis
+}
+
 // 現在のLLMプロバイダー設定を取得
 export function getCurrentLLMProvider() {
   const config = getAppConfig()
