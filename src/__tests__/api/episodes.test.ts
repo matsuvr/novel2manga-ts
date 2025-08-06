@@ -23,7 +23,7 @@ describe('/api/jobs/[jobId]/episodes', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
-    
+
     mockDbService = {
       createNovel: vi.fn().mockResolvedValue('test-novel-id'),
       createJob: vi.fn(),
@@ -56,7 +56,7 @@ describe('/api/jobs/[jobId]/episodes', () => {
   describe('POST /api/jobs/[jobId]/episodes', () => {
     it('有効なリクエストでエピソード分析を開始する', async () => {
       const jobId = 'test-job-episodes'
-      
+
       // 既存ジョブのモック設定
       mockDbService.getJob.mockResolvedValue({
         id: jobId,
@@ -115,7 +115,7 @@ describe('/api/jobs/[jobId]/episodes', () => {
 
     it('無効なリクエストボディの場合は400を返す', async () => {
       const jobId = 'test-job-episodes-invalid'
-      
+
       // 既存ジョブのモック設定
       mockDbService.getJob.mockResolvedValue({
         id: jobId,
