@@ -2,7 +2,6 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { chunkAnalyzerAgent } from '@/agents/chunk-analyzer'
 import { getTextAnalysisConfig } from '@/config'
-import type { ChunkAnalysisResult } from '@/types/chunk'
 import { StorageFactory } from '@/utils/storage'
 
 // リクエストボディのバリデーションスキーマ
