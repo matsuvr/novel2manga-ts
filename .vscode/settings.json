@@ -30,6 +30,22 @@
   "typescript.preferences.includePackageJsonAutoImports": "auto",
   "typescript.updateImportsOnFileMove.enabled": "always",
 
+  // TypeScript除外設定（一時ファイルを除外）
+  "typescript.exclude": [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/coverage/**",
+    "**/test/**",
+    "**/tests/**",
+    "**/__tests__/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/AppData/Local/Temp/**",
+    "C:/Users/*/AppData/Local/Temp/**"
+  ],
+
   // ファイル除外設定（エクスプローラーとウォッチャー）
   "files.exclude": {
     "**/.git": true,
@@ -60,7 +76,9 @@
     "**/tests": true,
     "**/__tests__": true,
     "**/*.test.*": true,
-    "**/*.spec.*": true
+    "**/*.spec.*": true,
+    "**/AppData/Local/Temp/**": true,
+    "C:/Users/*/AppData/Local/Temp/**": true
   },
 
   // ウォッチャー除外設定
@@ -73,9 +91,19 @@
     "**/build/**": true,
     "**/coverage/**": true,
     "**/.turbo/**": true,
-    "**/.vercel/**": true
+    "**/.vercel/**": true,
+    "**/AppData/Local/Temp/**": true,
+    "C:/Users/*/AppData/Local/Temp/**": true
   },
 
   // Biome診断設定
-  "biome.enable": true
+  "biome.enable": true,
+
+  // TypeScript Language Server設定
+  "typescript.disableAutomaticTypeAcquisition": false,
+  "typescript.preferences.includeProjectWidePath": false,
+
+  // 問題レポート除外設定
+  "problems.decorations.enabled": true,
+  "problems.showCurrentInStatus": true
 }

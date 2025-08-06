@@ -87,8 +87,17 @@ export async function GET(request: NextRequest, { params }: { params: { jobId: s
         )
 
         try {
-          const renderInfo = await renderStorage.head(renderKey)
-          const isRendered = !!renderInfo
+          // headメソッドが利用可能かチェック
+          let renderInfo: { size?: number; metadata?: Record<string, string> } | null = null
+          let isRendered = false
+
+          if (renderStorage.head) {
+            renderInfo = await renderStorage.head(renderKey)
+            isRendered = !!renderInfo
+          } else {
+            // headメソッドが利用できない場合はexistsを使用
+            isRendered = await renderStorage.exists(renderKey)
+          }
 
           episodeStatus.pages.push({
             pageNumber,

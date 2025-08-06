@@ -39,6 +39,8 @@
     "**/*.spec.tsx",
     "**/__tests__/**/*",
     "**/test/**/*",
-    "**/tests/**/*"
+    "**/tests/**/*",
+    "**/AppData/Local/Temp/**/*",
+    "C:/Users/*/AppData/Local/Temp/**/*"
   ]
 }

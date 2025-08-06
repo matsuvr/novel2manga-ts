@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getProviderWithFallback, getTextAnalysisLLM } from '@/utils/llm-factory'
+import { getProviderWithFallback, getTextAnalysisLLM } from '../../utils/llm-factory'
 
 // モック設定
 vi.mock('@ai-sdk/openai', () => ({
