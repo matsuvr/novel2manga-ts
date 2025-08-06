@@ -148,7 +148,7 @@ describe('/api/jobs/[jobId]/resume', () => {
 
     it('プログレスコールバックが正しく呼ばれることを確認する', async () => {
       // processJobの実装をより詳細にモック
-      mockProcessJob.mockImplementation((jobId, progressCallback) => {
+      mockProcessJob.mockImplementation((_jobId, progressCallback) => {
         // プログレス報告をシミュレート
         progressCallback({
           processedChunks: 5,

@@ -323,9 +323,9 @@ export class DatabaseService {
 
   async updateRenderStatus(
     jobId: string,
-    episodeNumber: number,
-    pageNumber: number,
-    status: {
+    _episodeNumber: number,
+    _pageNumber: number,
+    _status: {
       isRendered: boolean
       imagePath?: string
       thumbnailPath?: string

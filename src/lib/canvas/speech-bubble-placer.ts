@@ -25,7 +25,7 @@ export class SpeechBubblePlacer {
 
     for (let i = 0; i < dialogues.length; i++) {
       const dialogue = dialogues[i]
-      const placement = this.calculateBubblePlacement(
+      const _placement = this.calculateBubblePlacement(
         dialogue,
         i,
         dialogues.length,

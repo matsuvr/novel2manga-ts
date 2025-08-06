@@ -2,36 +2,9 @@ import { Agent } from '@mastra/core'
 import { z } from 'zod'
 import { analyzeChunkBundle, type BundleAnalysisResult } from '@/agents/chunk-bundle-analyzer'
 import { getEpisodeConfig, getNarrativeAnalysisConfig } from '@/config'
-import type { ChunkAnalysisResult, ChunkData } from '@/types/chunk'
+import type { ChunkAnalysisResult } from '@/types/chunk'
 import type { EpisodeBoundary } from '@/types/episode'
 import { getNarrativeAnalysisLLM } from '@/utils/llm-factory'
-
-interface NarrativeAnalysisParams {
-  jobId: string
-  chunks: Array<{
-    chunkIndex: number
-    text: string
-    analysis: {
-      summary: string
-      characters: { name: string; role: string }[]
-      dialogues: ChunkAnalysisResult['dialogues']
-      scenes: ChunkAnalysisResult['scenes']
-      highlights: {
-        text: string
-        importance: number
-        description: string
-        startIndex: number
-        endIndex: number
-      }[]
-    }
-  }>
-  targetCharsPerEpisode: number
-  minCharsPerEpisode: number
-  maxCharsPerEpisode: number
-  startingEpisodeNumber?: number
-  isMiddleOfNovel?: boolean
-  previousEpisodeEndText?: string
-}
 const narrativeArcAnalyzer = new Agent({
   name: 'Narrative Arc Analyzer',
   instructions: () => {

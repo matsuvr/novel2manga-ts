@@ -64,9 +64,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // StorageFactoryのDatabaseServiceを使用してDBに保存
+    // DatabaseServiceを使用してDBに保存
     try {
-      const { StorageFactory } = await import('@/utils/storage')
       const { DatabaseService } = await import('@/services/database')
 
       const dbService = new DatabaseService()

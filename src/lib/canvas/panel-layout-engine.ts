@@ -38,7 +38,7 @@ export class PanelLayoutEngine {
 
     for (const chunk of chunks) {
       // ハイライトシーンは単独ページにする可能性を考慮
-      const isHighlight = chunk.highlights && chunk.highlights.some((h) => h.importance >= 8)
+      const isHighlight = chunk.highlights?.some((h) => h.importance >= 8)
 
       if (isHighlight && currentPage.length > 0) {
         // 現在のページを確定
@@ -106,9 +106,7 @@ export class PanelLayoutEngine {
     const spacing = this.config.panelSpacing / 1000
 
     // 重要度に応じて縦分割か横分割を決定
-    const verticalSplit = chunks.some(
-      (c) => c.highlights && c.highlights.some((h) => h.importance >= 7),
-    )
+    const verticalSplit = chunks.some((c) => c.highlights?.some((h) => h.importance >= 7))
 
     if (verticalSplit) {
       // 縦分割（右から左へ）
@@ -147,8 +145,7 @@ export class PanelLayoutEngine {
     const spacing = this.config.panelSpacing / 1000
 
     // 最初のパネルが重要な場合は大きくする
-    const firstImportant =
-      chunks[0].highlights && chunks[0].highlights.some((h) => h.importance >= 7)
+    const firstImportant = chunks[0].highlights?.some((h) => h.importance >= 7)
 
     if (firstImportant) {
       // 右上に大きなパネル、左側に2つの小さなパネル
@@ -189,7 +186,7 @@ export class PanelLayoutEngine {
   /**
    * 4パネルレイアウト（田の字型）
    */
-  private fourPanelLayout(chunks: ChunkAnalysisResult[]): PanelLayout[] {
+  private fourPanelLayout(_chunks: ChunkAnalysisResult[]): PanelLayout[] {
     const margin = this.config.margin / 1000
     const spacing = this.config.panelSpacing / 1000
     const width = (1 - 2 * margin - spacing) / 2
@@ -228,9 +225,7 @@ export class PanelLayoutEngine {
     const layouts: PanelLayout[] = []
 
     // 重要なシーンがある場合は変形レイアウト
-    const importantIndex = chunks.findIndex(
-      (c) => c.highlights && c.highlights.some((h) => h.importance >= 8),
-    )
+    const importantIndex = chunks.findIndex((c) => c.highlights?.some((h) => h.importance >= 8))
 
     if (importantIndex !== -1 && importantIndex < 3) {
       // 上部に大きなパネルを配置
