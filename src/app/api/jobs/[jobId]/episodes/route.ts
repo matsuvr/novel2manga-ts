@@ -2,7 +2,6 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { DatabaseService } from '@/services/database'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
-import { StorageFactory } from '@/utils/storage'
 
 const postRequestSchema = z.object({
   config: z
