@@ -187,7 +187,7 @@ export class CanvasRenderer {
       lines.splice(maxLines - 1)
       if (lines.length > 0) {
         lines[lines.length - 1] =
-          lines[lines.length - 1].substring(0, lines[lines.length - 1].length - 3) + '...'
+          `${lines[lines.length - 1].substring(0, lines[lines.length - 1].length - 3)}...`
       }
     }
 
