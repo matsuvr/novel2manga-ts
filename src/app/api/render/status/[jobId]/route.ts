@@ -1,139 +1,126 @@
-import type { NextRequest } from 'next/server'
+import { type NextRequest, NextResponse } from 'next/server'
 import { DatabaseService } from '@/services/database'
-import { handleApiError, successResponse, validationError } from '@/utils/api-error'
+import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { appConfig } from '@/config/app.config'
 
-interface RenderStatusParams {
-  jobId: string
-}
-
-interface RenderStatusQuery {
-  episodeNumber?: string
-  pageNumber?: string
-}
-
-export async function GET(request: NextRequest, { params }: { params: RenderStatusParams }) {
+export async function GET(request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
-    const { jobId } = params
     const { searchParams } = new URL(request.url)
-
-    if (!jobId) {
-      return validationError('jobIdが必要です')
-    }
-
-    const episodeNumber = searchParams.get('episodeNumber')
-    const pageNumber = searchParams.get('pageNumber')
+    const episodeParam = searchParams.get('episode')
+    const pageParam = searchParams.get('page')
 
     const dbService = new DatabaseService()
 
     // ジョブの存在確認
-    const job = await dbService.getJob(jobId)
+    const job = await dbService.getJob(params.jobId)
     if (!job) {
-      return validationError('指定されたジョブが見つかりません')
+      return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }
 
-    // 特定のページの状態を取得
-    if (episodeNumber && pageNumber) {
-      const episodeNum = parseInt(episodeNumber, 10)
-      const pageNum = parseInt(pageNumber, 10)
-
-      if (isNaN(episodeNum) || isNaN(pageNum)) {
-        return validationError('無効なエピソード番号またはページ番号です')
+    // エピソード番号のバリデーション
+    let episodeNum: number | undefined
+    if (episodeParam) {
+      episodeNum = Number(episodeParam)
+      if (Number.isNaN(episodeNum) || episodeNum < 1) {
+        return NextResponse.json({ error: 'Invalid episode number' }, { status: 400 })
       }
+    }
 
-      const status = await dbService.getRenderStatus(jobId, episodeNum, pageNum)
+    // ページ番号のバリデーション
+    let pageNum: number | undefined
+    if (pageParam) {
+      pageNum = Number(pageParam)
+      if (Number.isNaN(pageNum) || pageNum < 1) {
+        return NextResponse.json({ error: 'Invalid page number' }, { status: 400 })
+      }
+    }
 
-      return successResponse({
-        jobId,
-        episodeNumber: episodeNum,
-        pageNumber: pageNum,
-        status: status || {
-          isRendered: false,
-          message: 'レンダリング状態が見つかりません',
-        },
+    // エピソード一覧を取得
+    const episodes = await dbService.getEpisodesByJobId(params.jobId)
+    if (episodes.length === 0) {
+      return NextResponse.json({
+        jobId: params.jobId,
+        status: 'no_episodes',
+        renderStatus: [],
+        message: 'No episodes found for this job',
       })
     }
 
-    // エピソード全体の状態を取得
-    if (episodeNumber) {
-      const episodeNum = parseInt(episodeNumber, 10)
+    // 指定されたエピソードのレンダリング状態を確認
+    const renderStorage = await StorageFactory.getRenderStorage()
+    const renderStatus = []
 
-      if (isNaN(episodeNum)) {
-        return validationError('無効なエピソード番号です')
+    for (const episode of episodes) {
+      // エピソード番号でフィルタリング
+      if (episodeNum && episode.episodeNumber !== episodeNum) {
+        continue
       }
 
-      const statuses = await dbService.getRenderStatusByEpisode(jobId, episodeNum)
-      const summary = {
-        totalPages: statuses.length,
-        renderedPages: statuses.filter((s) => s.isRendered).length,
-        failedPages: statuses.filter((s) => s.lastError).length,
-        completionRate:
-          statuses.length > 0
-            ? Math.round((statuses.filter((s) => s.isRendered).length / statuses.length) * 100)
-            : 0,
-      }
-
-      return successResponse({
-        jobId,
-        episodeNumber: episodeNum,
-        summary,
-        pages: statuses.map((status) => ({
-          pageNumber: status.pageNumber,
-          isRendered: status.isRendered,
-          imagePath: status.imagePath,
-          thumbnailPath: status.thumbnailPath,
-          fileSize: status.fileSize,
-          renderedAt: status.renderedAt,
-          error: status.lastError,
-        })),
-      })
-    }
-
-    // ジョブ全体の統計を取得
-    const allStatuses = await dbService.getAllRenderStatusByJob(jobId)
-    const episodes = await dbService.getEpisodesByJobId(jobId)
-
-    const episodeSummaries = episodes.map((episode) => {
-      const episodeStatuses = allStatuses.filter((s) => s.episodeNumber === episode.episodeNumber)
-      return {
+      const episodeStatus = {
         episodeNumber: episode.episodeNumber,
-        episodeTitle: episode.title,
-        totalPages: episodeStatuses.length,
-        renderedPages: episodeStatuses.filter((s) => s.isRendered).length,
-        failedPages: episodeStatuses.filter((s) => s.lastError).length,
-        completionRate:
-          episodeStatuses.length > 0
-            ? Math.round(
-                (episodeStatuses.filter((s) => s.isRendered).length / episodeStatuses.length) * 100,
-              )
-            : 0,
+        title: episode.title,
+        pages: [] as Array<{
+          pageNumber: number
+          isRendered: boolean
+          imagePath?: string
+          thumbnailPath?: string
+          width?: number
+          height?: number
+          fileSize?: number
+        }>,
       }
-    })
 
-    const overallSummary = {
-      totalEpisodes: episodes.length,
-      totalPages: allStatuses.length,
-      renderedPages: allStatuses.filter((s) => s.isRendered).length,
-      failedPages: allStatuses.filter((s) => s.lastError).length,
-      completionRate:
-        allStatuses.length > 0
-          ? Math.round((allStatuses.filter((s) => s.isRendered).length / allStatuses.length) * 100)
-          : 0,
+      // エピソードから実際のページ数を取得、なければ設定値をフォールバックとして使用
+      const totalPages = episode.estimatedPages || appConfig.processing.episode.maxPagesPerEpisode
+
+      for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
+        // ページ番号でフィルタリング
+        if (pageNum && pageNumber !== pageNum) {
+          continue
+        }
+
+        const renderKey = StorageKeys.pageRender(params.jobId, episode.episodeNumber, pageNumber)
+        const thumbnailKey = StorageKeys.pageThumbnail(
+          params.jobId,
+          episode.episodeNumber,
+          pageNumber,
+        )
+
+        try {
+          const renderInfo = await renderStorage.head(renderKey)
+          const isRendered = !!renderInfo
+
+          episodeStatus.pages.push({
+            pageNumber,
+            isRendered,
+            imagePath: isRendered ? renderKey : undefined,
+            thumbnailPath: isRendered ? thumbnailKey : undefined,
+            width: isRendered ? 842 : undefined,
+            height: isRendered ? 595 : undefined,
+            fileSize: isRendered ? renderInfo?.size : undefined,
+          })
+        } catch {
+          // ファイルが存在しない場合
+          episodeStatus.pages.push({
+            pageNumber,
+            isRendered: false,
+          })
+        }
+      }
+
+      renderStatus.push(episodeStatus)
     }
 
-    return successResponse({
-      jobId,
-      job: {
-        id: job.id,
-        jobName: job.jobName,
-        status: job.status,
-        renderCompleted: job.renderCompleted,
-        updatedAt: job.updatedAt,
-      },
-      summary: overallSummary,
-      episodes: episodeSummaries,
+    return NextResponse.json({
+      jobId: params.jobId,
+      status: 'success',
+      renderStatus,
+      totalEpisodes: episodes.length,
+      filteredEpisodes: renderStatus.length,
+      filteredPages: renderStatus.reduce((total, episode) => total + episode.pages.length, 0),
     })
   } catch (error) {
-    console.error('Render status API error:', error)
-    return handleApiError(error)
+    console.error('Error fetching render status:', error)
+    return NextResponse.json({ error: 'Failed to fetch render status' }, { status: 500 })
   }
 }
