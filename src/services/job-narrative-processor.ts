@@ -1,9 +1,9 @@
 import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
 import { getEpisodeConfig } from '@/config'
+import type { Episode } from '@/db'
 import type { DatabaseService } from '@/services/database'
 import type { EpisodeBoundary } from '@/types/episode'
 import type { JobProgress } from '@/types/job'
-import type { Episode } from '@/db'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { getChunkData } from '@/utils/storage'
 
@@ -122,12 +122,13 @@ export class JobNarrativeProcessor {
         // NarrativeAnalysisInputをNarrativeAnalysisParamsに変換
         const analysisParams = {
           jobId: narrativeInput.jobId,
-          chunks: (narrativeInput.chunks || []).map(chunk => ({
+          chunks: (narrativeInput.chunks || []).map((chunk) => ({
             chunkIndex: chunk.chunkIndex,
             text: chunk.text,
             analysis: chunk.analysis,
           })),
-          targetCharsPerEpisode: narrativeInput.targetCharsPerEpisode || this.config.targetCharsPerEpisode,
+          targetCharsPerEpisode:
+            narrativeInput.targetCharsPerEpisode || this.config.targetCharsPerEpisode,
           minCharsPerEpisode: narrativeInput.minCharsPerEpisode || this.config.minCharsPerEpisode,
           maxCharsPerEpisode: narrativeInput.maxCharsPerEpisode || this.config.maxCharsPerEpisode,
           startingEpisodeNumber: undefined,
@@ -233,17 +234,20 @@ export class JobNarrativeProcessor {
     return {
       ...progress,
       processedChunks: newChunkIndex,
-      episodes: [...progress.episodes, ...newEpisodes.map(ep => ({
-        episodeNumber: ep.episodeNumber,
-        startChunk: ep.startChunk,
-        endChunk: ep.endChunk,
-        confidence: ep.confidence,
-        title: ep.title || undefined,
-        summary: ep.summary || undefined,
-        startCharIndex: ep.startCharIndex,
-        endCharIndex: ep.endCharIndex,
-        estimatedPages: ep.estimatedPages,
-      }))],
+      episodes: [
+        ...progress.episodes,
+        ...newEpisodes.map((ep) => ({
+          episodeNumber: ep.episodeNumber,
+          startChunk: ep.startChunk,
+          endChunk: ep.endChunk,
+          confidence: ep.confidence,
+          title: ep.title || undefined,
+          summary: ep.summary || undefined,
+          startCharIndex: ep.startCharIndex,
+          endCharIndex: ep.endCharIndex,
+          estimatedPages: ep.estimatedPages,
+        })),
+      ],
       lastEpisodeEndPosition: lastEpisode
         ? {
             chunkIndex: lastEpisode.endChunk,
