@@ -1,8 +1,8 @@
-import { readFile, readdir } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { type NextRequest, NextResponse } from 'next/server'
-import { DatabaseService } from '@/services/database'
 import type { Chunk, Job } from '@/db'
+import { DatabaseService } from '@/services/database'
 import type { JobResponse, JobStatus } from '@/types/job'
 
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {

@@ -173,12 +173,12 @@ export class LayoutGeneratorAgent extends Agent {
 
       // パネルを生成
       type PanelData = {
-        content: string;
-        dialogues?: { speaker: string; text: string }[];
-        sourceChunkIndex: number;
-        importance: number;
-        suggestedSize: 'small' | 'medium' | 'large' | 'extra-large';
-      };
+        content: string
+        dialogues?: { speaker: string; text: string }[]
+        sourceChunkIndex: number
+        importance: number
+        suggestedSize: 'small' | 'medium' | 'large' | 'extra-large'
+      }
       const panels: Panel[] = pageData.panels.map((panelData: PanelData, index: number) => {
         const templatePanel = template.panels[index] || template.panels[0]
 
@@ -234,8 +234,8 @@ export class LayoutGeneratorAgent extends Agent {
 
 // レイアウト生成関数
 export async function generateMangaLayout(
-    episodeData: EpisodeData,
-    config?: LayoutGenerationConfig,
+  episodeData: EpisodeData,
+  config?: LayoutGenerationConfig,
 ): Promise<MangaLayout> {
   const fullConfig: LayoutGenerationConfig = {
     panelsPerPage: {

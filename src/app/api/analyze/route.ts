@@ -16,17 +16,14 @@ const analyzeRequestSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     console.log('[/api/analyze] Request received')
-    
+
     // JSONパースエラーハンドリング
     let rawBody: unknown
     try {
       rawBody = await request.json()
     } catch (error) {
       console.error('[/api/analyze] JSON parse error:', error)
-      return NextResponse.json(
-        { error: '無効なJSONが送信されました' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: '無効なJSONが送信されました' }, { status: 400 })
     }
 
     console.log('[/api/analyze] Raw body:', rawBody)
@@ -38,12 +35,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: 'リクエストボディが無効です',
-          details: validationResult.error.issues.map(issue => ({
+          details: validationResult.error.issues.map((issue) => ({
             field: issue.path.join('.'),
             message: issue.message,
           })),
         },
-        { status: 400 }
+        { status: 400 },
       )
     }
 

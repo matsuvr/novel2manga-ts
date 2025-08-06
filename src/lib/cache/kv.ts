@@ -2,7 +2,10 @@ import { getConfig } from '@/config'
 
 // KVのバインディング型定義
 interface KVNamespace {
-  get(key: string, options?: { type?: 'text' | 'json' | 'arrayBuffer' | 'stream' }): Promise<string | ArrayBuffer | ReadableStream | null>
+  get(
+    key: string,
+    options?: { type?: 'text' | 'json' | 'arrayBuffer' | 'stream' },
+  ): Promise<string | ArrayBuffer | ReadableStream | null>
   put(
     key: string,
     value: string | ArrayBuffer | ArrayBufferView | ReadableStream,
@@ -26,9 +29,15 @@ interface KVListResult {
 
 // メモリキャッシュ（開発環境用）
 class MemoryCache {
-  private cache: Map<string, { value: string | ArrayBuffer | ReadableStream; expiration?: number }> = new Map()
+  private cache: Map<
+    string,
+    { value: string | ArrayBuffer | ReadableStream; expiration?: number }
+  > = new Map()
 
-  async get(key: string, _options?: { type?: string }): Promise<string | ArrayBuffer | ReadableStream | null> {
+  async get(
+    key: string,
+    _options?: { type?: string },
+  ): Promise<string | ArrayBuffer | ReadableStream | null> {
     const item = this.cache.get(key)
     if (!item) return null
 
@@ -40,7 +49,11 @@ class MemoryCache {
     return item.value
   }
 
-  async put(key: string, value: string | ArrayBuffer | ReadableStream, options?: KVPutOptions): Promise<void> {
+  async put(
+    key: string,
+    value: string | ArrayBuffer | ReadableStream,
+    options?: KVPutOptions,
+  ): Promise<void> {
     let expiration: number | undefined
 
     if (options?.expirationTtl) {
@@ -125,7 +138,9 @@ export function getCacheTTL(type: 'analysis' | 'layout'): number {
 export async function isCacheEnabled(type: 'analysis' | 'layout'): Promise<boolean> {
   const config = getConfig()
   const features = config.get<{ enableCaching: boolean }>('features')
-  const processingCache = config.get<{ analysisCache?: boolean; layoutCache?: boolean }>('processing.cache')
+  const processingCache = config.get<{ analysisCache?: boolean; layoutCache?: boolean }>(
+    'processing.cache',
+  )
 
   // 全体的なキャッシュ機能が無効の場合
   if (!features.enableCaching) {
