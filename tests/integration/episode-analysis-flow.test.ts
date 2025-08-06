@@ -9,7 +9,7 @@
  * 5. 結果の検証
  */
 
-import fs from 'fs/promises'
+import fs from 'node:fs/promises'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { DatabaseService } from '../../src/services/database'
 import { StorageFactory } from '../../src/utils/storage'
@@ -20,7 +20,7 @@ describe('エピソード分析フロー統合テスト', () => {
   let novelId: string
   let jobId: string
   let dbService: DatabaseService
-  let chunks: any[]
+  let _chunks: any[]
 
   beforeAll(async () => {
     console.log('=== 宮本武蔵エピソード分析フローテスト初期化 ===')
@@ -29,7 +29,7 @@ describe('エピソード分析フロー統合テスト', () => {
     try {
       novelContent = await fs.readFile(testNovelPath, 'utf-8')
       console.log(`✓ 小説ファイル読み込み完了: ${novelContent.length}文字`)
-    } catch (error) {
+    } catch (_error) {
       throw new Error(`小説ファイルが見つかりません: ${testNovelPath}`)
     }
 
@@ -127,7 +127,7 @@ describe('エピソード分析フロー統合テスト', () => {
       useOpenRouter: true, // OpenRouterを明示的に使用
     }
 
-    console.log('POST /api/jobs/' + jobId + '/episodes を呼び出し中...')
+    console.log(`POST /api/jobs/${jobId}/episodes を呼び出し中...`)
     console.log('設定:', episodeConfig)
 
     const startTime = Date.now()

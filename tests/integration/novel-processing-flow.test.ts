@@ -10,7 +10,7 @@
  * 6. コマ割りYAML生成
  */
 
-import fs from 'fs/promises'
+import fs from 'node:fs/promises'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { getProviderWithFallback } from '../../src/utils/llm-factory'
 

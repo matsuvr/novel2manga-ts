@@ -54,7 +54,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     let targetEpisodes = allEpisodes
     if (body.episodeNumbers && body.episodeNumbers.length > 0) {
       targetEpisodes = allEpisodes.filter((episode) =>
-        body.episodeNumbers!.includes(episode.episodeNumber),
+        body.episodeNumbers?.includes(episode.episodeNumber),
       )
     }
 
@@ -135,7 +135,9 @@ async function exportToPDF(
 
   const chunks: Buffer[] = []
   doc.on('data', (chunk) => chunks.push(chunk))
-  doc.on('end', () => {})
+  doc.on('end', () => {
+    // PDF生成完了
+  })
 
   let totalPages = 0
 
@@ -169,7 +171,7 @@ async function exportToPDF(
           )
           const imageData = await renderStorage.get(pageImageKey)
 
-          if (imageData && imageData.text) {
+          if (imageData?.text) {
             // Base64データをBufferに変換
             const imageBuffer = Buffer.from(imageData.text, 'base64')
 
@@ -263,7 +265,7 @@ async function exportToZIP(
               )
               const imageData = await renderStorage.get(pageImageKey)
 
-              if (imageData && imageData.text) {
+              if (imageData?.text) {
                 const imageBuffer = Buffer.from(imageData.text, 'base64')
                 const fileName = `page_${page.page_number.toString().padStart(3, '0')}.png`
                 episodeFolder.file(fileName, imageBuffer)

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { DatabaseService } from '@/services/database'
 
 describe('Render Status API', () => {
@@ -7,21 +7,21 @@ describe('Render Status API', () => {
 
   beforeAll(async () => {
     dbService = new DatabaseService()
-    
+
     // Create test novel and job
     const novelId = await dbService.createNovel({
       title: 'Test Novel for Render Status',
       author: 'Test Author',
       originalTextPath: 'test/novel.txt',
       textLength: 1000,
-      language: 'ja'
+      language: 'ja',
     })
 
     testJobId = await dbService.createJob({
       novelId,
       title: 'Test Render Job',
       totalChunks: 5,
-      status: 'completed'
+      status: 'completed',
     })
 
     // Create test episode
@@ -31,7 +31,7 @@ describe('Render Status API', () => {
       title: 'Test Episode 1',
       contentPath: 'test/episode1.txt',
       characterCount: 500,
-      status: 'completed'
+      status: 'completed',
     })
   })
 
@@ -45,25 +45,31 @@ describe('Render Status API', () => {
   it('should validate episode number using Number.isNaN (not unsafe isNaN)', async () => {
     // This test verifies that the endpoint correctly uses Number.isNaN for validation
     // The implementation on lines 23 and 35 uses Number.isNaN which is type-safe
-    
-    const response = await fetch(`http://localhost:3000/api/render/status/${testJobId}?episode=invalid`)
-    
+
+    const response = await fetch(
+      `http://localhost:3000/api/render/status/${testJobId}?episode=invalid`,
+    )
+
     expect(response.status).toBe(400)
     const data = await response.json()
     expect(data.error).toBe('Invalid episode number')
   })
 
   it('should validate page number using Number.isNaN (not unsafe isNaN)', async () => {
-    const response = await fetch(`http://localhost:3000/api/render/status/${testJobId}?page=invalid`)
-    
+    const response = await fetch(
+      `http://localhost:3000/api/render/status/${testJobId}?page=invalid`,
+    )
+
     expect(response.status).toBe(400)
     const data = await response.json()
     expect(data.error).toBe('Invalid page number')
   })
 
   it('should handle valid episode and page parameters', async () => {
-    const response = await fetch(`http://localhost:3000/api/render/status/${testJobId}?episode=1&page=1`)
-    
+    const response = await fetch(
+      `http://localhost:3000/api/render/status/${testJobId}?episode=1&page=1`,
+    )
+
     expect(response.status).toBe(200)
     const data = await response.json()
     expect(data.jobId).toBe(testJobId)
@@ -76,7 +82,7 @@ describe('Render Status API', () => {
 
   it('should return 404 for non-existent job', async () => {
     const response = await fetch('http://localhost:3000/api/render/status/non-existent-job')
-    
+
     expect(response.status).toBe(404)
     const data = await response.json()
     expect(data.error).toBe('Job not found')

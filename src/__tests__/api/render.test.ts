@@ -75,7 +75,7 @@ describe('/api/render', () => {
   let mockDbService: any
 
   // テスト用のマンガレイアウト
-  const mockMangaLayout: MangaLayout = {
+  const _mockMangaLayout: MangaLayout = {
     title: 'テストマンガ',
     author: 'テスト作者',
     created_at: '2024-01-01T00:00:00.000Z',

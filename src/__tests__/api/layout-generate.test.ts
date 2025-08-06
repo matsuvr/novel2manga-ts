@@ -4,7 +4,6 @@ import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST } from '@/app/api/layout/generate/route'
 import { DatabaseService } from '@/services/database'
-import { StorageFactory } from '@/utils/storage'
 
 // モック設定
 vi.mock('@/agents/layout-generator', () => ({
