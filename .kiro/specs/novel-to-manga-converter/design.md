@@ -310,8 +310,10 @@ export class DatabaseService {
 | GET | /api/jobs/[jobId]/episodes | エピソード一覧取得 | Implemented | 200, 404, 500 |
 | POST | /api/jobs/[jobId]/resume | ジョブ再開 | Implemented | 200, 400, 404, 500 |
 | POST | /api/layout/generate | レイアウトYAML生成 | Implemented | 200, 400, 500 |
-| POST | /api/render | Canvasレンダリング | Not Implemented | 201, 400, 500 |
-| POST | /api/export | マンガエクスポート | Not Implemented | 201, 400, 500 |
+| POST | /api/render | Canvasレンダリング | Implemented | 201, 400, 500 |
+| POST | /api/render/batch | バッチレンダリング | Implemented | 201, 400, 500 |
+| GET | /api/render/status/[jobId] | レンダリング状況確認 | Implemented | 200, 400, 500 |
+| POST | /api/export | マンガエクスポート（PDF・ZIP） | Not Implemented | 201, 400, 500 |
 | POST | /api/share | 共有リンク生成 | Not Implemented | 201, 401, 500 |
 
 ## Data Models
@@ -823,7 +825,7 @@ export const outputs = sqliteTable(
     jobId: text('job_id')
       .notNull()
       .references(() => jobs.id, { onDelete: 'cascade' }),
-    outputType: text('output_type').notNull(), // pdf/cbz/images_zip/epub
+    outputType: text('output_type').notNull(), // pdf/images_zip
     outputPath: text('output_path').notNull(),
     fileSize: integer('file_size'),
     pageCount: integer('page_count'),
@@ -943,8 +945,8 @@ novels/
             │           └── ...
             │
             ├── outputs/
-            │   ├── manga.pdf           # 最終成果物
-            │   ├── manga.cbz
+            │   ├── manga.pdf           # PDF形式（ページ順JPEG統合）
+            │   ├── manga_images.zip    # ZIP形式（JPEG画像＋YAML設定）
             │   └── metadata.json       # 成果物メタデータ
             │
             └── state/
@@ -1334,7 +1336,8 @@ sequenceDiagram
    - SpeechBubblePlacer実装
 
 2. **エクスポート機能** (優先度: 中)
-   - PDF/CBZ/画像zip出力機能
+   - PDF出力機能（ページ順JPEG統合）
+   - ZIP出力機能（JPEG画像＋YAML設定ファイル）
    - 共有リンク生成機能
 
 ### アーキテクチャ改善点

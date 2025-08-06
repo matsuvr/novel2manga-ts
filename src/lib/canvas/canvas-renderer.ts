@@ -6,12 +6,16 @@ let createCanvas: ((width: number, height: number) => HTMLCanvasElement | NodeCa
 
 // node-canvas用の型定義
 interface NodeCanvasImpl {
-  width: number;
-  height: number;
-  getContext(contextId: '2d'): CanvasRenderingContext2D;
-  toDataURL(type?: string, quality?: number): string;
-  toBuffer(callback: (err: Error | null, buffer: Buffer) => void, mimeType?: string, config?: unknown): void;
-  toBuffer(mimeType?: string, config?: unknown): Buffer;
+  width: number
+  height: number
+  getContext(contextId: '2d'): CanvasRenderingContext2D
+  toDataURL(type?: string, quality?: number): string
+  toBuffer(
+    callback: (err: Error | null, buffer: Buffer) => void,
+    mimeType?: string,
+    config?: unknown,
+  ): void
+  toBuffer(mimeType?: string, config?: unknown): Buffer
 }
 
 export type NodeCanvas = NodeCanvasImpl
@@ -55,7 +59,7 @@ export class CanvasRenderer {
       textColor: '#000000',
       font: 'Arial, sans-serif',
       defaultFontSize: 16,
-      ...config
+      ...config,
     }
 
     // サーバーサイドとクライアントサイドの両方で動作するようにCanvas作成
@@ -104,10 +108,10 @@ export class CanvasRenderer {
     const y = panel.position.y * this.config.height
     const width = panel.size.width * this.config.width
     const height = panel.size.height * this.config.height
-    
+
     // パネルのフレームを描画
     this.drawFrame(x, y, width, height)
-    
+
     // パネル内のコンテンツを描画
     if (panel.content) {
       // 状況説明テキストを描画
@@ -117,7 +121,7 @@ export class CanvasRenderer {
         color: this.config.textColor,
       })
     }
-    
+
     // パネル内の対話を吹き出しとして描画
     if (panel.dialogues && panel.dialogues.length > 0) {
       let bubbleY = y + height * 0.3 // 吹き出しの開始Y位置
@@ -129,14 +133,19 @@ export class CanvasRenderer {
           {
             maxWidth: width * 0.4,
             style: dialogue.emotion === 'shout' ? 'shout' : 'normal',
-          }
+          },
         )
         bubbleY += 80 // 次の吹き出し位置
       }
     }
   }
 
-  drawText(text: string, x: number, y: number, options?: { maxWidth?: number; font?: string; color?: string }): void {
+  drawText(
+    text: string,
+    x: number,
+    y: number,
+    options?: { maxWidth?: number; font?: string; color?: string },
+  ): void {
     const {
       maxWidth,
       font = `${this.config.fontSize || 16}px ${this.config.fontFamily || 'Arial, sans-serif'}`,
@@ -213,17 +222,22 @@ export class CanvasRenderer {
     return lines
   }
 
-  drawSpeechBubble(text: string, x: number, y: number, options?: { maxWidth?: number; style?: string }): void {
-    const {
-      maxWidth = 200,
-      style = 'normal',
-    } = options || {}
+  drawSpeechBubble(
+    text: string,
+    x: number,
+    y: number,
+    options?: { maxWidth?: number; style?: string },
+  ): void {
+    const { maxWidth = 200, style = 'normal' } = options || {}
 
     // テキストサイズを測定して吹き出しサイズを決定
     const fontSize = this.config.fontSize || 16
     const lines = this.wrapText(text, maxWidth - 20)
     const lineHeight = fontSize * 1.2
-    const width = Math.min(maxWidth, Math.max(...lines.map(line => this.ctx.measureText(line).width)) + 20)
+    const width = Math.min(
+      maxWidth,
+      Math.max(...lines.map((line) => this.ctx.measureText(line).width)) + 20,
+    )
     const height = lines.length * lineHeight + 20
 
     this.ctx.save()
@@ -290,89 +304,99 @@ export class CanvasRenderer {
     if (isServer) {
       // node-canvas の場合
       const nodeCanvas = this.canvas as NodeCanvas
-      
+
       // toDataURL を優先的に使用（より安定している）
       try {
-        console.log('Using toDataURL method for server-side rendering');
-        const dataUrl = nodeCanvas.toDataURL(type, quality);
-        
+        console.log('Using toDataURL method for server-side rendering')
+        const dataUrl = nodeCanvas.toDataURL(type, quality)
+
         if (!dataUrl || dataUrl === 'data:,' || !dataUrl.includes(',')) {
-          throw new Error('toDataURL returned empty or invalid data');
+          throw new Error('toDataURL returned empty or invalid data')
         }
-        
+
         // data URLからBlobに変換
-        const base64Data = dataUrl.split(',')[1];
+        const base64Data = dataUrl.split(',')[1]
         if (!base64Data) {
-          throw new Error('Invalid data URL format - no base64 data found');
+          throw new Error('Invalid data URL format - no base64 data found')
         }
-        
-        const binaryBuffer = Buffer.from(base64Data, 'base64');
-        console.log('Buffer created from dataURL:', binaryBuffer.length, 'bytes');
-        
+
+        const binaryBuffer = Buffer.from(base64Data, 'base64')
+        console.log('Buffer created from dataURL:', binaryBuffer.length, 'bytes')
+
         // PNG署名を確認
-        const pngSignature = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
-        const hasPngSignature = binaryBuffer.subarray(0, 8).equals(pngSignature);
-        console.log('PNG signature valid:', hasPngSignature);
-        
-        const blob = new Blob([binaryBuffer], { type });
-        console.log('Blob created successfully:', blob.size, 'bytes');
-        return blob;
-        
+        const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+        const hasPngSignature = binaryBuffer.subarray(0, 8).equals(pngSignature)
+        console.log('PNG signature valid:', hasPngSignature)
+
+        const blob = new Blob([binaryBuffer], { type })
+        console.log('Blob created successfully:', blob.size, 'bytes')
+        return blob
       } catch (dataUrlError) {
-        console.error('toDataURL failed:', dataUrlError.message);
-        
+        console.error(
+          'toDataURL failed:',
+          dataUrlError instanceof Error ? dataUrlError.message : String(dataUrlError),
+        )
+
         // フォールバック: toBuffer を試行
         return new Promise<Blob>((resolve, reject) => {
           try {
             if ('toBuffer' in nodeCanvas && typeof nodeCanvas.toBuffer === 'function') {
-              console.log('Falling back to toBuffer method');
-              nodeCanvas.toBuffer((err: Error | null, buffer: Buffer) => {
-                if (err) {
-                  console.error('toBuffer callback error:', err);
-                  reject(err);
-                } else if (!buffer) {
-                  console.error('toBuffer returned null/undefined buffer');
-                  reject(new Error('Buffer is null or undefined'));
-                } else {
-                  console.log('Buffer created via toBuffer callback:', buffer.length, 'bytes');
-                  const blob = new Blob([buffer], { type });
-                  resolve(blob);
-                }
-              }, type.replace('image/', ''), quality ? { quality } : undefined);
+              console.log('Falling back to toBuffer method')
+              nodeCanvas.toBuffer(
+                (err: Error | null, buffer: Buffer) => {
+                  if (err) {
+                    console.error('toBuffer callback error:', err)
+                    reject(err)
+                  } else if (!buffer) {
+                    console.error('toBuffer returned null/undefined buffer')
+                    reject(new Error('Buffer is null or undefined'))
+                  } else {
+                    console.log('Buffer created via toBuffer callback:', buffer.length, 'bytes')
+                    const blob = new Blob([buffer], { type })
+                    resolve(blob)
+                  }
+                },
+                type.replace('image/', ''),
+                quality ? { quality } : undefined,
+              )
             } else {
-              reject(new Error('Neither toDataURL nor toBuffer are working'));
+              reject(new Error('Neither toDataURL nor toBuffer are working'))
             }
           } catch (bufferError) {
-            console.error('toBuffer setup failed:', bufferError);
-            reject(bufferError);
+            console.error('toBuffer setup failed:', bufferError)
+            reject(bufferError)
           }
-        });
+        })
       }
     } else {
       // ブラウザの場合
-      const htmlCanvas = this.canvas as HTMLCanvasElement;
+      const htmlCanvas = this.canvas as HTMLCanvasElement
       return new Promise<Blob>((resolve, reject) => {
         if ('toBlob' in htmlCanvas && typeof htmlCanvas.toBlob === 'function') {
-          htmlCanvas.toBlob((blob: Blob | null) => {
-            if (blob) {
-              resolve(blob);
-            } else {
-              reject(new Error('Failed to create blob'));
-            }
-          }, type, quality);
+          htmlCanvas.toBlob(
+            (blob: Blob | null) => {
+              if (blob) {
+                resolve(blob)
+              } else {
+                reject(new Error('Failed to create blob'))
+              }
+            },
+            type,
+            quality,
+          )
         } else {
           // toBlob未サポートの場合はtoDataURLから変換
           try {
-            const dataUrl = htmlCanvas.toDataURL(type, quality);
+            const dataUrl = htmlCanvas.toDataURL(type, quality)
             fetch(dataUrl)
-              .then(res => res.blob())
+              .then((res) => res.blob())
               .then(resolve)
-              .catch(reject);
+              .catch(reject)
           } catch (err) {
-            reject(new Error(`Failed to create blob from dataURL: ${err}`));
+            reject(new Error(`Failed to create blob from dataURL: ${err}`))
           }
         }
-      });
+      })
     }
   }
 }

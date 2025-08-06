@@ -1,10 +1,11 @@
 import type { NextRequest } from 'next/server'
-import { handleApiError, successResponse, validationError } from '@/utils/api-error'
-import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { parse as parseYaml } from 'yaml'
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
+import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
 import { DatabaseService } from '@/services/database'
 import type { MangaLayout } from '@/types/panel-layout'
-import { parse as parseYaml } from 'yaml'
+import { handleApiError, successResponse, validationError } from '@/utils/api-error'
+import { StorageFactory, StorageKeys } from '@/utils/storage'
 
 interface RenderRequest {
   jobId: string
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
       return validationError('レイアウトにpages配列が必要です')
     }
 
-    const targetPage = mangaLayout.pages.find(p => p.page_number === body.pageNumber)
+    const targetPage = mangaLayout.pages.find((p) => p.page_number === body.pageNumber)
     if (!targetPage) {
       return validationError(`ページ ${body.pageNumber} が見つかりません`)
     }
@@ -63,12 +64,16 @@ export async function POST(request: NextRequest) {
 
     // エピソードの存在確認
     const episodes = await dbService.getEpisodesByJobId(body.jobId)
-    const targetEpisode = episodes.find(e => e.episodeNumber === body.episodeNumber)
+    const targetEpisode = episodes.find((e) => e.episodeNumber === body.episodeNumber)
     if (!targetEpisode) {
       return validationError(`エピソード ${body.episodeNumber} が見つかりません`)
     }
 
     // Canvas描画の実行
+    console.log(
+      `レンダリング開始: Job ${body.jobId}, Episode ${body.episodeNumber}, Page ${body.pageNumber}`,
+    )
+
     const renderer = new MangaPageRenderer({
       pageWidth: 842, // A4横
       pageHeight: 595, // A4横
@@ -80,6 +85,7 @@ export async function POST(request: NextRequest) {
 
     // 指定ページをレンダリング
     const imageBlob = await renderer.renderToImage(mangaLayout, body.pageNumber, 'png')
+    console.log(`画像レンダリング完了: ${imageBlob.size} bytes`)
 
     // Blobをバッファに変換
     const arrayBuffer = await imageBlob.arrayBuffer()
@@ -95,23 +101,45 @@ export async function POST(request: NextRequest) {
       episodeNumber: body.episodeNumber.toString(),
       pageNumber: body.pageNumber.toString(),
     })
+    console.log(`画像保存完了: ${renderKey}`)
+
+    // サムネイル生成
+    console.log('サムネイル生成開始')
+    const thumbnailBlob = await ThumbnailGenerator.generateThumbnail(imageBlob, {
+      width: 200,
+      height: 280,
+      quality: 0.8,
+      format: 'jpeg',
+    })
+
+    const thumbnailBuffer = Buffer.from(await thumbnailBlob.arrayBuffer())
+    const thumbnailKey = StorageKeys.pageThumbnail(body.jobId, body.episodeNumber, body.pageNumber)
+
+    await renderStorage.put(thumbnailKey, thumbnailBuffer, {
+      contentType: 'image/jpeg',
+      jobId: body.jobId,
+      episodeNumber: body.episodeNumber.toString(),
+      pageNumber: body.pageNumber.toString(),
+      type: 'thumbnail',
+    })
+    console.log(`サムネイル保存完了: ${thumbnailKey}`)
 
     // レンダリング状態の更新
-    await dbService.updateRenderStatus(
-      body.jobId,
-      body.episodeNumber,
-      body.pageNumber,
-      {
-        isRendered: true,
-        imagePath: renderKey,
-        width: 842,
-        height: 595,
-        fileSize: buffer.length,
-      }
-    )
+    await dbService.updateRenderStatus({
+      jobId: body.jobId,
+      episodeNumber: body.episodeNumber,
+      pageNumber: body.pageNumber,
+      isRendered: true,
+      imagePath: renderKey,
+      thumbnailPath: thumbnailKey,
+      width: 842,
+      height: 595,
+      fileSize: buffer.length,
+    })
 
-    // サムネイル生成（後で実装可能）
-    const thumbnailKey = StorageKeys.pageThumbnail(body.jobId, body.episodeNumber, body.pageNumber)
+    console.log(
+      `レンダリング完了: Job ${body.jobId}, Episode ${body.episodeNumber}, Page ${body.pageNumber}`,
+    )
 
     return successResponse(
       {
@@ -123,11 +151,38 @@ export async function POST(request: NextRequest) {
         episodeNumber: body.episodeNumber,
         pageNumber: body.pageNumber,
         fileSize: buffer.length,
+        thumbnailSize: thumbnailBuffer.length,
+        dimensions: {
+          width: 842,
+          height: 595,
+        },
+        renderedAt: new Date().toISOString(),
       },
       201,
     )
   } catch (error) {
     console.error('Render API error:', error)
+
+    // エラー時はレンダリング状態を失敗として記録
+    try {
+      const requestBody = (await request.json()) as Partial<RenderRequest>
+      if (
+        requestBody?.jobId &&
+        typeof requestBody.episodeNumber === 'number' &&
+        typeof requestBody.pageNumber === 'number'
+      ) {
+        const dbService = new DatabaseService()
+        await dbService.updateRenderStatus({
+          jobId: requestBody.jobId,
+          episodeNumber: requestBody.episodeNumber,
+          pageNumber: requestBody.pageNumber,
+          isRendered: false,
+        })
+      }
+    } catch (dbError) {
+      console.error('Failed to update render status on error:', dbError)
+    }
+
     return handleApiError(error)
   }
 }

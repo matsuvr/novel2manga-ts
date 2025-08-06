@@ -8,7 +8,7 @@
   - [x] テスト環境のセットアップ（Vitest、Testing Library）
   - _Requirements: プロジェクト基盤_
 
-- [ ] 2. データモデルの実装（テスト駆動開発）
+- [x] 2. データモデルの実装（テスト駆動開発）（2025-08-05完了）
 - [x] 2.1 基本エンティティとバリデーション
   - [x] TextAnalysisモデルのテスト作成（5要素の構造検証）
   - [x] TextAnalysisインターフェース実装（characters、scenes、dialogues、highlights、situations）
@@ -28,7 +28,7 @@
   - [x] データベースサービスの拡張（src/services/database.ts）
   - _Requirements: REQ-6 - データ管理_
 
-- [x] 3. AI処理レイヤーの実装（Mastraエージェント）（部分実装）
+- [x] 3. AI処理レイヤーの実装（Mastraエージェント）（2025-08-05完了）
 - [x] 3.1 テキスト解析エージェント
   - [x] チャンク分割ユーティリティ実装（src/utils/chunk-splitter.ts）
   - [x] チャンクAPIエンドポイント実装（/api/novel/[uuid]/chunks）
@@ -52,41 +52,41 @@
   - [x] 均等分割回避ロジックの実装
   - _Requirements: REQ-3 - レイアウト設訨_
 
-- [ ] 4. ビジネスロジックレイヤーの実装
+- [x] 4. ビジネスロジックレイヤーの実装（2025-08-05完了）
 - [x] 4.1 エピソード構成サービス（部分実装）
   - [x] JobNarrativeProcessorの実装（src/services/job-narrative-processor.ts）
   - [x] チャプター分割とクライマックス検出（NarrativeArcAnalyzer統合）
   - [x] 連載形式のエピソード分割ロジック
   - _Requirements: REQ-3 - 連載エピソード構成_
 
-- [ ] 4.2 パネルレイアウトエンジン
-  - [ ] PanelLayoutEngineのテスト作成
-  - [ ] YAMLからのレイアウト解析
-  - [ ] 日本式マンガレイアウト（右から左、上から下）の実装
-  - [ ] コマサイズ自動調整アルゴリズム
+- [x] 4.2 パネルレイアウトエンジン（2025-08-05完了）
+  - [x] PanelLayoutEngineのテスト作成
+  - [x] YAMLからのレイアウト解析
+  - [x] 日本式マンガレイアウト（右から左、上から下）の実装
+  - [x] コマサイズ自動調整アルゴリズム
   - _Requirements: REQ-3 - コマ割り_
 
-- [ ] 4.3 吹き出し配置エンジン
-  - [ ] SpeechBubblePlacerのテスト作成
-  - [ ] 対話テキストの吹き出し自動配置
-  - [ ] スタイル判定（通常、叫び、思考）とデザイン適用
+- [x] 4.3 吹き出し配置エンジン（2025-08-05完了）
+  - [x] SpeechBubblePlacerのテスト作成
+  - [x] 対話テキストの吹き出し自動配置
+  - [x] スタイル判定（通常、叫び、思考）とデザイン適用
   - _Requirements: REQ-3 - 吹き出し配置_
 
-- [ ] 5. Canvas APIによるレイアウト描画
-- [ ] 5.1 基本描画コンポーネント
-  - [ ] CanvasRendererのテスト作成
-  - [ ] Canvas APIを使用した枠線描画
-  - [ ] テキストレンダリング（状況説明、セリフ）
+- [x] 5. Canvas APIによるレイアウト描画（2025-08-05完了）
+- [x] 5.1 基本描画コンポーネント
+  - [x] CanvasRendererのテスト作成
+  - [x] Canvas APIを使用した枠線描画
+  - [x] テキストレンダリング（状況説明、セリフ）
   - _Requirements: レイアウト画像生成_
 
-- [ ] 5.2 マンガページレンダリング
-  - [ ] MangaPageRendererのテスト作成
-  - [ ] 複数パネルの配置と描画
-  - [ ] 吹き出しの描画（形状、テール方向）
-  - [ ] 絵コンテスタイルの仕上げ
+- [x] 5.2 マンガページレンダリング
+  - [x] MangaPageRendererのテスト作成
+  - [x] 複数パネルの配置と描画
+  - [x] 吹き出しの描画（形状、テール方向）
+  - [x] 絵コンテスタイルの仕上げ
   - _Requirements: Canvas描画_
 
-- [x] 6. APIエンドポイントの実装（部分実装）
+- [x] 6. APIエンドポイントの実装（2025-08-05ほぼ完了）
 - [x] 6.1 認証とプロジェクト管理API（基礎実装）
   - [ ] NextAuth.js v5のセットアップとテスト
   - [ ] /api/auth/*エンドポイント実装
@@ -102,7 +102,7 @@
   - [x] 前後チャンク参照機能とキャッシュ実装（2025-07-29）
   - [x] /api/jobs/[jobId]/episodesエンドポイント実装（2025-07-31）
   - [x] /api/layout/generateエンドポイント実装（2025-07-31）
-  - [ ] /api/generate-imagesエンドポイント（Canvas描画）
+  - [x] /api/renderエンドポイント実装（Canvas描画）（2025-08-05）
   - [x] エラーハンドリング基本実装
   - _Requirements: REQ-1, REQ-2, REQ-3_
 
@@ -116,7 +116,8 @@
 
 - [ ] 6.4 エクスポートと共有API
   - [ ] /api/exportエンドポイントのテスト作成
-  - [ ] PDF、PNG連番、CBZ形式のエクスポート実装
+  - [ ] PDF形式のエクスポート実装（JPEG画像をページ順統合）
+  - [ ] ZIP形式のエクスポート実装（JPEG画像＋YAML設定ファイル）
   - [ ] /api/shareエンドポイント（72時間有効リンク生成）
   - _Requirements: REQ-5 - エクスポート_
 
@@ -196,12 +197,17 @@
   - [x] エラーハンドリングとログ出力の詳細化
   - _Requirements: REQ-1, REQ-3 - 分析フロー完成_
 
-- [ ] 15. Canvas描画とマンガレンダリング実装
+- [x] 15. Canvas描画とマンガレンダリング実装（2025-08-05完了）
   - [x] Canvas描画基盤実装（src/lib/canvas/）
-  - [ ] MangaPageRendererの実装（5要素からマンガページ生成）
-  - [ ] /api/renderエンドポイントの実装
-  - [ ] PanelLayoutEngineの実装（コマ割り計算）
-  - [ ] SpeechBubblePlacerの実装（吹き出し配置）
+  - [x] MangaPageRendererの実装（YAMLからマンガページ生成）
+  - [x] /api/renderエンドポイントの実装（単一ページレンダリング）
+  - [x] /api/render/batchエンドポイントの実装（複数ページ並列レンダリング）
+  - [x] /api/render/status/[jobId]エンドポイントの実装（レンダリング状況確認）
+  - [x] PanelLayoutEngineの実装（コマ割り計算）
+  - [x] SpeechBubblePlacerの実装（吹き出し配置）
+  - [x] ThumbnailGeneratorの実装（サムネイル生成）
+  - [x] DatabaseService.updateRenderStatusの実装（render_statusテーブル管理）
+  - [x] 包括的なテスト作成（render-complete.test.ts）
   - _Requirements: REQ-3 - マンガレイアウト生成_
 
 - [ ] 8.2 E2Eテストの実装

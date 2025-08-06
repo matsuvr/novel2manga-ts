@@ -46,7 +46,11 @@
       "Bash(npm test:*)",
       "mcp__ide__getDiagnostics",
       "Bash(npx tsc:*)",
-      "Bash(xxd:*)"
+      "Bash(xxd:*)",
+      "Bash(npx biome lint:*)",
+      "Bash(npx biome check:*)",
+      "Bash(npx biome migrate:*)",
+      "Bash(gh issue create:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

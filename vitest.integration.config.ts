@@ -10,9 +10,7 @@ export default defineConfig({
     setupFiles: './vitest.setup.ts',
     testTimeout: 600000, // 10分
     hookTimeout: 60000, // 1分
-    include: [
-      '**/tests/integration/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
-    ],
+    include: ['**/tests/integration/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
   },
   resolve: {
     alias: {

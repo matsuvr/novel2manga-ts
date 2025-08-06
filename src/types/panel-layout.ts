@@ -35,16 +35,16 @@ export interface Size {
 }
 
 export interface Dialogue {
-  emotion: string;
+  emotion: string
   speaker: string
   text: string
 }
 
 // エピソードデータ（レイアウト生成の入力）
 export interface EpisodeData {
-  chunkAnalyses: ChunkAnalysisResult[];
-  author: string;
-    title: `Episode ${number}`;
+  chunkAnalyses: ChunkAnalysisResult[]
+  author: string
+  title: `Episode ${number}`
   episodeNumber: number
   episodeTitle?: string
   episodeSummary?: string
@@ -68,7 +68,7 @@ export interface ChunkData {
 
 // チャンクの5要素解析結果
 export interface ChunkAnalysisResult {
-  chunkIndex: number;
+  chunkIndex: number
   characters: Character[]
   scenes: Scene[]
   dialogues: DialogueElement[]
@@ -84,8 +84,8 @@ export interface Character {
 }
 
 export interface Scene {
-  time: boolean;
-  location: boolean;
+  time: boolean
+  location: boolean
   setting: string
   mood: string
   visualElements: string[]
@@ -99,8 +99,8 @@ export interface DialogueElement {
 }
 
 export interface Highlight {
-  description: string;
-  type: string;
+  description: string
+  type: string
   text: string
   importance: number // 1-10
   reason: string
