@@ -119,7 +119,7 @@ export class CanvasRenderer {
     }
     
     // パネル内の対話を吹き出しとして描画
-    if (panel.dialogues && panel.dialogues.length > 0) {
+    if (panel.dialogues?.length > 0) {
       let bubbleY = y + height * 0.3 // 吹き出しの開始Y位置
       for (const dialogue of panel.dialogues) {
         this.drawSpeechBubble(
