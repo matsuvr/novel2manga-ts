@@ -95,7 +95,7 @@ export const appConfig = {
       maxTokens: 4096,
       // プロバイダー別のモデルオーバーライド
       modelOverrides: {
-        openai: 'gpt-4o',
+        openai: 'o3',
         claude: 'claude-sonnet-4-20250514',
         gemini: 'gemini-2.5-flash',
         groq: 'compound-beta',
@@ -172,6 +172,52 @@ export const appConfig = {
       systemPrompt: `あなたはマンガのコマ割りレイアウトを設計する専門家です。
 日本式マンガのレイアウト（右から左、上から下の読み順）でYAML形式のレイアウトを生成してください。
 重要なシーンは大きなコマで、通常の会話は小さなコマで表現してください。`,
+    },
+
+    // チャンクバンドル統合分析用設定
+    chunkBundleAnalysis: {
+      provider: 'default', // 'default'の場合はdefaultProviderを使用
+      maxTokens: 8192,
+      // プロバイダー別のモデルオーバーライド
+      modelOverrides: {
+        openai: 'gpt-4o',
+        claude: 'claude-sonnet-4-20250514',
+        gemini: 'gemini-2.5-flash',
+        groq: 'compound-beta',
+        openrouter: 'openrouter/horizon-beta',
+      },
+      systemPrompt: `あなたは優秀な文学分析の専門家です。複数のチャンク分析結果を統合し、物語全体の要素を抽出してください。
+
+以下の点に注意してください：
+- 各チャンクの分析結果を総合的に評価してください
+- 物語の連続性と流れを重視してください
+- 重複する情報は統合し、最も重要な要素を選別してください
+- チャンク番号への言及は避け、物語の内容に焦点を当ててください`,
+      userPromptTemplate: `以下の分析結果を統合し、物語全体の要素を抽出してください。
+
+【登場人物情報】
+{{characterList}}
+
+【場面情報】
+{{sceneList}}
+
+【重要な対話】
+{{dialogueList}}
+
+【ハイライトシーン】
+{{highlightList}}
+
+【状況説明】
+{{situationList}}
+
+【統合指示】
+1. 上記の情報を基に、物語全体の要約を作成してください
+2. 主要な登場人物を選別し、その役割と特徴をまとめてください（最大10名）
+3. 最も重要な見所シーンを選別してください（重要度は1-10で再評価）
+4. 物語の鍵となる会話を選別してください（最大10個）
+5. 物語の流れ（導入・展開・現在の状態）を分析してください
+
+注意：個別のチャンク番号や分析の痕跡を残さず、一つの連続した物語として扱ってください。`,
     },
   },
 

@@ -174,7 +174,7 @@ const chunkAnalyzerAgent = new Agent({
 
 // NarrativeArcAnalyzerAgent - 物語構造分析エージェント
 const narrativeArcAnalyzerAgent = new Agent({
-  name: 'narrative-arc-analyzer', 
+  name: 'narrative-arc-analyzer',
   description: '小説全体の物語構造を分析してエピソード境界を検出するエージェント',
   instructions: () => getNarrativeAnalysisConfig().systemPrompt,
   model: async () => {
@@ -237,7 +237,7 @@ export class JobNarrativeProcessor {
   ): Promise<JobProgress> {
     // 分割→分析→エピソード分析の完全フロー実装済み
   }
-  
+
   async canResumeJob(jobId: string): Promise<boolean> {
     // ジョブ再開可能性チェック実装済み
   }
@@ -254,7 +254,7 @@ export class DatabaseService {
   async getNovel(id: string): Promise<Novel | null>
   async getAllNovels(): Promise<Novel[]>
   async ensureNovel(novel: Omit<Novel, 'id' | 'createdAt'>): Promise<string>
-  
+
   // Job管理 - 実装済み
   async createJob(job: Omit<Job, 'id' | 'createdAt'>): Promise<string>
   async getJob(id: string): Promise<Job | null>
@@ -265,16 +265,16 @@ export class DatabaseService {
   async updateJobError(id: string, error: string, step: string): Promise<void>
   async markJobStepCompleted(id: string, step: JobStep): Promise<void>
   async getJobsByNovelId(novelId: string): Promise<Job[]>
-  
+
   // Chunk管理 - 実装済み
   async createChunk(chunk: Omit<Chunk, 'id' | 'createdAt'>): Promise<string>
   async getChunksByJobId(jobId: string): Promise<Chunk[]>
-  
+
   // Episode管理 - 実装済み
   async createEpisode(episode: Omit<Episode, 'id' | 'createdAt'>): Promise<string>
   async createEpisodes(episodes: Episode[]): Promise<void>
   async getEpisodesByJobId(jobId: string): Promise<Episode[]>
-  
+
   // レンダリング状態管理 - 実装済み
   async updateRenderStatus(status: RenderStatusUpdate): Promise<void>
 }
@@ -344,7 +344,7 @@ erDiagram
     JOB ||--|{ RENDER_STATUS : "tracks render"
     JOB ||--|{ OUTPUT : "produces"
     NOVEL ||--|{ STORAGE_FILES : "has files"
-    
+
     NOVEL {
         string id PK
         string title
@@ -356,7 +356,7 @@ erDiagram
         datetime created_at
         datetime updated_at
     }
-    
+
     JOB {
         string id PK
         string novel_id FK
@@ -388,7 +388,7 @@ erDiagram
         datetime started_at
         datetime completed_at
     }
-    
+
     CHUNK {
         string id PK
         string novel_id FK
@@ -861,7 +861,7 @@ export const storageFiles = sqliteTable(
 
 // インデックスはDrizzleテーブル定義内で管理：
 // - novels: createdAtIdx
-// - jobs: novelIdIdx, statusIdx, novelIdStatusIdx, currentStepIdx  
+// - jobs: novelIdIdx, statusIdx, novelIdStatusIdx, currentStepIdx
 // - jobStepHistory: jobIdIdx
 // - chunks: novelIdIdx, jobIdIdx, uniqueJobChunk
 // - chunkAnalysisStatus: jobIdIdx, uniqueJobChunkAnalysis
@@ -964,10 +964,10 @@ novels/
   ```bash
   # スキーマ変更からマイグレーション生成
   npx drizzle-kit generate
-  
+
   # 開発環境適用
   npx drizzle-kit migrate
-  
+
   # 本番環境適用（D1）
   npx wrangler d1 migrations apply novel2manga
   ```
@@ -998,10 +998,10 @@ interface DrizzleDatabase {
 // Environment-specific Implementations（実装済み）
 // src/lib/storage/ で完全実装済み
 /*
-class LocalFileStorage implements NovelStorage { 
+class LocalFileStorage implements NovelStorage {
   // ローカルファイルシステムへの保存実装
 }
-class R2Storage implements NovelStorage { 
+class R2Storage implements NovelStorage {
   // Cloudflare R2への保存実装
 }
 */
@@ -1009,7 +1009,7 @@ class R2Storage implements NovelStorage {
 // Drizzle統合データベース接続
 class DatabaseService {
   private db: DrizzleDatabase
-  
+
   constructor() {
     if (process.env.NODE_ENV === 'development') {
       // SQLite + Drizzle
@@ -1069,7 +1069,7 @@ export function createErrorResponse(
       { status: error.statusCode }
     );
   }
-  
+
   const message = error instanceof Error ? error.message : defaultMessage;
   return NextResponse.json(
     { error: message },
@@ -1099,19 +1099,19 @@ export const appConfig = {
     minChunkSize: 1000,
     maxChunkSize: 10000,
   },
-  
+
   // LLMプロバイダー設定
   llm: {
     defaultProvider: 'openrouter', // 【ここを設定】
     providers: {
-      openai: { model: 'gpt-4-turbo', temperature: 0.7 },
-      gemini: { model: 'gemini-1.5-pro-002', temperature: 0.7 },
+      openai: { model: 'o3' }, // OpenAI o3 (reasoningモデル、temperatureパラメータなし)
+      gemini: { model: 'gemini-2.5-flash', temperature: 0.7 },
       groq: { model: 'compound-beta', maxTokens: 8192 },
-      local: { model: 'llama3.1:70b', baseUrl: 'http://localhost:11434' },
-      openrouter: { model: 'nvidia/llama-3.1-nemotron-70b-instruct', temperature: 0.7 },
+      local: { model: 'gpt-oss:20b', baseUrl: 'http://localhost:11434' },
+      openrouter: { model: 'openai/gpt-oss-120b', temperature: 0.7 },
     },
   },
-  
+
   // 処理設定
   processing: {
     maxConcurrentChunks: 3,        // 【ここを設定】
@@ -1120,7 +1120,7 @@ export const appConfig = {
     cacheEnabled: true,
     cacheTTL: 86400000, // 24時間
   },
-  
+
   // LLMフォールバックチェーン設定
   llmFallbackChain: ['openrouter', 'gemini', 'claude'], // 【ここを設定】
 };
@@ -1156,13 +1156,13 @@ APP_PROCESSING_MAX_CONCURRENT=5
 declare global {
   // R2 Bucket
   const NOVEL_STORAGE: R2Bucket;
-  
+
   // D1 Database
   const DB: D1Database;
-  
+
   // KV Namespace
   const CACHE: KVNamespace;
-  
+
   // Environment Variables
   interface CloudflareEnv {
     NOVEL_STORAGE: R2Bucket;
@@ -1268,21 +1268,21 @@ sequenceDiagram
 - **アプリケーションキャッシュ**: 2層構造
   - **L1 - MemoryCache**: インメモリキャッシュ、高速アクセス、TTL管理
   - **L2 - Cloudflare KV**: 永続化キャッシュ、グローバル分散、大容量対応
-  
+
   ```typescript
   // キャッシュ実装例
   async function getCachedData<T>(key: string): Promise<T | null> {
     // L1: MemoryCacheチェック
     const memCached = memoryCache.get<T>(key);
     if (memCached) return memCached;
-    
+
     // L2: Cloudflare KVチェック
     const kvCached = await CACHE.get(key, 'json');
     if (kvCached) {
       memoryCache.set(key, kvCached, 3600); // 1時間メモリキャッシュ
       return kvCached as T;
     }
-    
+
     return null;
   }
   ```
