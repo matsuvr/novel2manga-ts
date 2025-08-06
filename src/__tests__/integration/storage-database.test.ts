@@ -70,7 +70,7 @@ describe('Storage and Database Integration', () => {
 
       expect(retrieved).not.toBeNull()
       expect(retrieved?.text).toBeDefined()
-      expect(JSON.parse(retrieved!.text)).toEqual(novelData)
+      expect(JSON.parse(retrieved?.text)).toEqual(novelData)
     })
   })
 
@@ -94,7 +94,7 @@ describe('Storage and Database Integration', () => {
 
       expect(retrieved).not.toBeNull()
       expect(retrieved?.text).toBeDefined()
-      expect(JSON.parse(retrieved!.text)).toEqual(chunkData)
+      expect(JSON.parse(retrieved?.text)).toEqual(chunkData)
     })
   })
 
@@ -130,7 +130,7 @@ describe('Storage and Database Integration', () => {
 
       expect(retrieved).not.toBeNull()
       expect(retrieved?.text).toBeDefined()
-      expect(JSON.parse(retrieved!.text)).toEqual(analysisData)
+      expect(JSON.parse(retrieved?.text)).toEqual(analysisData)
     })
   })
 
