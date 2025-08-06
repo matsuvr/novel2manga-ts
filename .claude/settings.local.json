@@ -58,12 +58,7 @@
     ]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": [
-    "cloudflare",
-    "mastra",
-    "serena",
-    "deepwiki"
-  ],
+  "enabledMcpjsonServers": ["cloudflare", "mastra", "serena", "deepwiki"],
   "hooks": {
     "Notification": [
       {
@@ -71,7 +66,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/claude-notification-hook.js"
+            "command": "cmd /c node $CLAUDE_PROJECT_DIR/.claude/hooks/claude-notification-hook.js"
           }
         ]
       }
