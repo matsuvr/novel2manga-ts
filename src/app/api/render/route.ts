@@ -169,12 +169,14 @@ export async function POST(request: NextRequest) {
         typeof requestBody.pageNumber === 'number'
       ) {
         const dbService = new DatabaseService()
-        await dbService.updateRenderStatus({
-          jobId: requestBody.jobId,
-          episodeNumber: requestBody.episodeNumber,
-          pageNumber: requestBody.pageNumber,
-          isRendered: false,
-        })
+        await dbService.updateRenderStatus(
+          requestBody.jobId,
+          requestBody.episodeNumber,
+          requestBody.pageNumber,
+          {
+            isRendered: false,
+          }
+        )
       }
     } catch (dbError) {
       console.error('Failed to update render status on error:', dbError)

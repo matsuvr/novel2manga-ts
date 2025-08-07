@@ -65,7 +65,12 @@
       "mcp__playwright__browser_wait_for",
       "mcp__playwright__browser_press_key",
       "Bash(pkill:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(powershell:*)",
+      "Bash(sqlite3:*)",
+      "mcp__playwright__browser_close",
+      "mcp__playwright__browser_evaluate",
+      "Bash(npm run build:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

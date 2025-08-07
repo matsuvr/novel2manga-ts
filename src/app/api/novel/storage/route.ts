@@ -4,6 +4,9 @@ import { StorageFactory, StorageKeys } from '@/utils/storage'
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('[novel-storage] Starting storage operation')
+    const startTime = Date.now()
+    
     const { text } = (await request.json()) as { text: unknown }
 
     // 文字列かどうかを確認
@@ -19,25 +22,28 @@ export async function POST(request: NextRequest) {
     const uuid = randomUUID()
     const key = StorageKeys.novel(uuid)
 
-    // ストレージに保存
+    // ストレージに保存（軽量化）
     const storage = await StorageFactory.getNovelStorage()
 
-    // メタデータとテキストを保存
+    // シンプルなファイルデータ構造（軽量化）
     const fileData = {
       text,
       metadata: {
         uploadedAt: new Date().toISOString(),
         originalLength: text.length,
-        fileName: key,
         uuid,
       },
     }
 
+    // 軽量メタデータで保存
     await storage.put(key, JSON.stringify(fileData), {
-      uploadedAt: new Date().toISOString(),
-      originalLength: text.length.toString(),
+      uuid,
+      length: text.length.toString(),
     })
 
+    const duration = Date.now() - startTime
+    console.log(`[novel-storage] Storage completed in ${duration}ms`)
+    
     return NextResponse.json({
       success: true,
       fileName: key,

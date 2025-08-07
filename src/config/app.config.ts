@@ -46,7 +46,7 @@ export const appConfig = {
       },
       openrouter: {
         apiKey: process.env.OPENROUTER_API_KEY,
-        model: 'openrouter/horizon-beta',
+        model: 'qwen/qwen3-235b-a22b-thinking-2507',
         baseUrl: 'https://openrouter.ai/api/v1',
         maxTokens: 8192,
         timeout: 30000,
@@ -63,7 +63,7 @@ export const appConfig = {
         claude: 'claude-sonnet-4-20250514',
         gemini: 'gemini-2.5-flash',
         groq: 'compound-beta',
-        openrouter: 'openrouter/horizon-beta',
+        openrouter: 'qwen/qwen3-235b-a22b-thinking-2507',
       },
       systemPrompt: `あなたは小説テキストを分析し、マンガ制作に必要な5要素（登場人物、シーン、対話、ハイライト、状況）を抽出する専門家です。
 
@@ -99,7 +99,7 @@ export const appConfig = {
         claude: 'claude-sonnet-4-20250514',
         gemini: 'gemini-2.5-flash',
         groq: 'compound-beta',
-        openrouter: 'openrouter/horizon-beta',
+        openrouter: 'qwen/qwen3-235b-a22b-thinking-2507',
       },
       systemPrompt: `あなたは物語の構造を分析し、エピソードの境界を特定する専門家です。
 
@@ -167,7 +167,7 @@ export const appConfig = {
         claude: 'claude-sonnet-4-20250514',
         gemini: 'gemini-2.5-flash',
         groq: 'compound-beta',
-        openrouter: 'openrouter/horizon-beta',
+        openrouter: 'qwen/qwen3-235b-a22b-thinking-2507',
       },
       systemPrompt: `あなたはマンガのコマ割りレイアウトを設計する専門家です。
 日本式マンガのレイアウト（右から左、上から下の読み順）でYAML形式のレイアウトを生成してください。
@@ -184,7 +184,7 @@ export const appConfig = {
         claude: 'claude-sonnet-4-20250514',
         gemini: 'gemini-2.5-flash',
         groq: 'compound-beta',
-        openrouter: 'openrouter/horizon-beta',
+        openrouter: 'qwen/qwen3-235b-a22b-thinking-2507',
       },
       systemPrompt: `あなたは優秀な文学分析の専門家です。複数のチャンク分析結果を統合し、物語全体の要素を抽出してください。
 
@@ -360,18 +360,30 @@ export const appConfig = {
     mockExternalAPIs: false, // 外部API呼び出しをモック化
     enableTestMode: false, // テストモード
   },
-} as const
+}
 
 export type AppConfig = typeof appConfig
+
+// 環境変数オーバーライド用の変更可能な型
+type MutableAppConfig = {
+  [K in keyof AppConfig]: AppConfig[K] extends Record<string, any>
+    ? {
+        [P in keyof AppConfig[K]]: AppConfig[K][P]
+      }
+    : AppConfig[K]
+}
 
 // 環境変数オーバーライド機能
 export function getAppConfigWithOverrides(): AppConfig {
   // ディープコピーを作成して設定をオーバーライド
-  const config: any = JSON.parse(JSON.stringify(appConfig))
+  const config = JSON.parse(JSON.stringify(appConfig)) as MutableAppConfig
 
   // 環境変数による設定オーバーライド
   if (process.env.APP_LLM_DEFAULT_PROVIDER) {
-    config.llm.defaultProvider = process.env.APP_LLM_DEFAULT_PROVIDER
+    const provider = process.env.APP_LLM_DEFAULT_PROVIDER as 'openai' | 'gemini' | 'groq' | 'claude' | 'openrouter'
+    if (['openai', 'gemini', 'groq', 'claude', 'openrouter'].includes(provider)) {
+      config.llm.defaultProvider = provider
+    }
   }
 
   if (process.env.APP_CHUNKS_DEFAULT_SIZE) {
@@ -391,7 +403,10 @@ export function getAppConfigWithOverrides(): AppConfig {
   }
 
   if (process.env.APP_LOG_LEVEL) {
-    config.logging.level = process.env.APP_LOG_LEVEL
+    const level = process.env.APP_LOG_LEVEL as 'info' | 'error' | 'warn' | 'debug'
+    if (['info', 'error', 'warn', 'debug'].includes(level)) {
+      config.logging.level = level
+    }
   }
 
   if (process.env.NODE_ENV === 'development') {
@@ -399,5 +414,5 @@ export function getAppConfigWithOverrides(): AppConfig {
     config.development.enableErrorDetails = true
   }
 
-  return config as AppConfig
+  return config
 }

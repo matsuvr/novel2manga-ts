@@ -35,3 +35,16 @@ body {
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;
 }
+
+/* Component styles */
+.apple-card {
+  @apply bg-white rounded-3xl shadow-2xl border border-gray-100/50 transition-all duration-300;
+}
+
+.gradient-text {
+  @apply bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent;
+}
+
+.modern-header {
+  @apply bg-white/90 backdrop-blur-md border-b border-gray-200/50;
+}

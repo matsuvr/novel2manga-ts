@@ -200,12 +200,24 @@ export async function POST(request: NextRequest) {
           .replace('{{nextChunkText}}', '')
 
         // Mastraエージェントを使用して分析
-        const result = await chunkAnalyzerAgent.generate([{ role: 'user', content: prompt }], {
-          output: textAnalysisOutputSchema,
-        })
+        let result
+        try {
+          result = await chunkAnalyzerAgent.generate([{ role: 'user', content: prompt }], {
+            output: textAnalysisOutputSchema,
+          })
+        } catch (agentError) {
+          console.error(`[/api/analyze] Chunk ${i} agent error details:`, {
+            error: agentError,
+            message: agentError instanceof Error ? agentError.message : String(agentError),
+            stack: agentError instanceof Error ? agentError.stack : 'No stack',
+            name: agentError instanceof Error ? agentError.name : 'Unknown'
+          })
+          throw agentError
+        }
 
         if (!result.object) {
-          throw new Error('Failed to generate analysis result')
+          console.error(`[/api/analyze] Chunk ${i} result object is null/undefined:`, result)
+          throw new Error('Failed to generate analysis result - result.object is null')
         }
 
         // 分析結果をストレージに保存
@@ -229,8 +241,34 @@ export async function POST(request: NextRequest) {
 
     // 分析完了をマーク
     await dbService.markJobStepCompleted(jobId, 'analyze')
-    await dbService.updateJobStep(jobId, 'analysis_completed', chunks.length, chunks.length)
     console.log(`[/api/analyze] All ${chunks.length} chunks analyzed successfully`)
+    
+    // 自動的にエピソード分析を開始
+    console.log('[/api/analyze] Starting episode analysis...')
+    try {
+      const episodeResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/analyze/narrative-arc`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          novelId,
+          jobId,
+          startChunkIndex: 0,
+        }),
+      })
+
+      if (!episodeResponse.ok) {
+        const errorData = await episodeResponse.json().catch(() => ({})) as { error?: string }
+        throw new Error(`Episode analysis failed: ${errorData.error || episodeResponse.statusText}`)
+      }
+
+      console.log('[/api/analyze] Episode analysis completed')
+      await dbService.markJobStepCompleted(jobId, 'episode')
+      await dbService.updateJobStep(jobId, 'layout', chunks.length, chunks.length)
+    } catch (episodeError) {
+      console.error('[/api/analyze] Episode analysis failed:', episodeError)
+      await dbService.updateJobError(jobId, `Episode analysis failed: ${episodeError instanceof Error ? episodeError.message : String(episodeError)}`, 'episode')
+      throw episodeError
+    }
 
     const response: AnalyzeResponse = {
       success: true,

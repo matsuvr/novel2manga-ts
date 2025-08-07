@@ -7,6 +7,7 @@ import { saveEpisodeBoundaries } from '@/utils/storage'
 
 const requestSchema = z.object({
   novelId: z.string(),
+  jobId: z.string().optional(),
   startChunkIndex: z.number().int().min(0),
   targetChars: z.number().int().optional(),
   minChars: z.number().int().optional(),
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
     const validatedData = requestSchema.parse(body)
 
     const input = await prepareNarrativeAnalysisInput({
-      jobId: validatedData.novelId, // novelIdをjobIdとして使用
+      jobId: validatedData.jobId || validatedData.novelId, // jobIdが提供された場合はそれを使用、そうでなければnovelIdをフォールバック
       startChunkIndex: validatedData.startChunkIndex,
       targetChars: validatedData.targetChars,
       minChars: validatedData.minChars,
