@@ -213,3 +213,4 @@ The `/kiro:steering` command manages these files automatically. Manual updates t
 - DeepWikiのMCPが使えるようになったので、積極的に使うように
 - any禁止
 - OpenAIのo3モデルが存在し、利用可能です。勝手にgpt-4oなどに変更しないこと
+- mcpを使って、常に最新のドキュメントを参照してから更新すること。Claude は古い知識に基づいてコードを修正してしまうクセがあります。それを解消するのが目的です

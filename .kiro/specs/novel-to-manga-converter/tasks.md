@@ -114,25 +114,31 @@
   - [x] Cloudflare R2とローカルストレージの両対応
   - _Requirements: REQ-6 - データ管理_
 
-- [ ] 6.4 エクスポートと共有API
-  - [ ] /api/exportエンドポイントのテスト作成
-  - [ ] PDF形式のエクスポート実装（JPEG画像をページ順統合）
-  - [ ] ZIP形式のエクスポート実装（JPEG画像＋YAML設定ファイル）
-  - [ ] /api/shareエンドポイント（72時間有効リンク生成）
+- [x] 6.4 エクスポートと共有API（部分実装 2025-08-06）
+  - [x] /api/exportエンドポイントの骨格実装
+  - [x] PDF形式のエクスポート機能（PDFKit使用）
+  - [x] ZIP形式のエクスポート機能（JSZip使用）
+  - [x] /api/shareエンドポイントの骨格実装（トークン生成、有効期限設定）
+  - [ ] 共有ページの実装
+  - [ ] エクスポート機能の完全実装とテスト
   - _Requirements: REQ-5 - エクスポート_
 
 - [x] 7. フロントエンドコンポーネントの実装（基礎実装）
-- [x] 7.1 基盤UIコンポーネント
+- [x] 7.1 基盤UIコンポーネント（2025-08-07更新）
   - [x] Loggerコンポーネント実装（src/components/Logger.tsx）
-  - [x] Tailwind CSSによるスタイリング
-  - [x] ローディング状態とエラー表示の基本実装
+  - [x] Tailwind CSS v4によるスタイリング（@import "tailwindcss"）
+  - [x] ローディング状態とエラー表示の基本実装（loading.tsx、error.tsx）
+  - [x] RSC/Client Component分離（HomeClient.tsx）
+  - [x] Google Inter フォント統合
   - _Requirements: UI基盤_
 
-- [x] 7.2 テキスト入力とプレビュー（基本実装）
-  - [x] テキスト入力UI実装（src/app/page.tsx）
-  - [x] 文字数カウントと制限表示
+- [x] 7.2 テキスト入力とプレビュー（2025-08-07強化）
+  - [x] テキスト入力UI実装（src/components/HomeClient.tsx）
+  - [x] 文字数カウントと制限表示（200万文字対応）
   - [x] リアルタイムプレビュー機能
   - [x] プログレス表示（処理状況）
+  - [x] サンプル小説の即時読込機能（public/docs/配信）
+  - [x] 5作品のサンプル配置（空き家の冒険、怪人二十面相、モルグ街の殺人事件、宮本武蔵、最後の一葉）
   - _Requirements: REQ-1 - テキスト入力_
 
 - [ ] 7.3 マンガエディタコンポーネント
@@ -140,6 +146,7 @@
   - [ ] インタラクティブなコマ編集（ドラッグ&ドロップ）
   - [ ] 吹き出しテキスト編集機能
   - [ ] スタイルテンプレート選択
+  - [x] NovelUploader、ProcessingProgress、ResultsDisplayコンポーネントの準備（2025-08-06）
   - _Requirements: REQ-4 - カスタマイズ_
 
 - [x] 8. 統合とE2Eテスト（部分実装）
@@ -210,9 +217,17 @@
   - [x] 包括的なテスト作成（render-complete.test.ts）
   - _Requirements: REQ-3 - マンガレイアウト生成_
 
-- [ ] 8.2 E2Eテストの実装
+- [ ] 16. UI/UXの最終実装（次フェーズ）
+  - [ ] 共通UIプリミティブの整備（Button, Card, Spinner, Progress）
+  - [ ] API呼び出しの一元化（src/services/api.ts）
+  - [ ] マンガエディタコンポーネントの完全実装
+  - [ ] エクスポート・共有機能のUI実装
+  - [ ] 認証機能の実装（NextAuth.js v5）
+  - _Requirements: REQ-4, REQ-5, REQ-6_
+
+- [ ] 17. E2Eテストの実装
   - [ ] Playwrightによる完全なユーザーフローテスト
   - [ ] テキスト投稿→解析→レイアウト生成→編集→エクスポートのフロー
   - [ ] 日本式レイアウトの正確性検証
-  - [ ] パフォーマンステスト（10,000文字処理時間）
+  - [ ] パフォーマンステスト（200万文字処理時間）
   - _Requirements: 全要件の統合テスト_
