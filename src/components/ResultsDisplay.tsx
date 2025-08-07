@@ -110,22 +110,15 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
       {/* Episodes Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {episodes.map((episode) => (
-          <div
+          <button
             key={episode.id}
-            role="button"
-            tabIndex={0}
-            className={`apple-card p-6 cursor-pointer transition-all glow-effect ${
+            type="button"
+            className={`apple-card p-6 cursor-pointer transition-all glow-effect text-left w-full ${
               selectedEpisode?.id === episode.id
                 ? 'ring-2 ring-blue-500 scale-[1.02]'
                 : 'hover:scale-[1.02]'
             }`}
             onClick={() => setSelectedEpisode(episode)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                setSelectedEpisode(episode)
-              }
-            }}
           >
             {/* Episode Thumbnail */}
             <div className="aspect-[3/4] bg-gradient-to-br from-blue-100 to-purple-100 rounded-2xl mb-4 flex items-center justify-center">
@@ -198,7 +191,7 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
                 💾 個別エクスポート
               </button>
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
