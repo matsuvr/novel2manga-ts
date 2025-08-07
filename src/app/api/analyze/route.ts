@@ -70,7 +70,11 @@ export async function POST(request: NextRequest) {
     console.log('[/api/analyze] Novel found:', existingNovel.title)
 
     // ストレージから小説テキストを取得
-    const novelFile = await novelStorage.get(`${novelId}.json`)
+    console.log('[/api/analyze] Getting StorageKeys module...')
+    const { StorageKeys } = await import('@/utils/storage')
+    const novelKey = StorageKeys.novel(novelId)
+    console.log('[/api/analyze] Novel key:', novelKey)
+    const novelFile = await novelStorage.get(novelKey)
     if (!novelFile) {
       return NextResponse.json(
         {
@@ -248,6 +252,13 @@ export async function POST(request: NextRequest) {
       '[/api/analyze] Error stack:',
       error instanceof Error ? error.stack : 'No stack trace',
     )
+    
+    // デバッグ情報を追加
+    console.error('[/api/analyze] Environment variables check:')
+    console.error('[/api/analyze] OPENROUTER_API_KEY exists:', !!process.env.OPENROUTER_API_KEY)
+    console.error('[/api/analyze] OPENAI_API_KEY exists:', !!process.env.OPENAI_API_KEY)
+    console.error('[/api/analyze] NODE_ENV:', process.env.NODE_ENV)
+    
     return NextResponse.json(
       {
         error: 'テキストの分析中にエラーが発生しました',

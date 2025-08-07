@@ -64,25 +64,23 @@ export default function HomeClient() {
     setViewMode('processing')
 
     try {
-      const blob = new Blob([novelText], { type: 'text/plain' })
-      const file = new File([blob], 'novel.txt', { type: 'text/plain' })
-
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('title', 'Untitled Novel')
-
+      // JSONとしてテキストを送信
       const uploadResponse = await fetch('/api/novel', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: novelText }),
       })
 
       if (!uploadResponse.ok) {
         const errorData = (await uploadResponse.json().catch(() => ({}))) as { error?: string }
-        throw new Error(errorData.error || 'アップロードに失敗しました')
+        throw new Error(errorData.error || 'サーバーエラーが発生しました')
       }
 
-      const uploadData = (await uploadResponse.json().catch(() => ({}))) as { novelId?: string }
-      const novelId = uploadData.novelId
+      const uploadData = (await uploadResponse.json().catch(() => ({}))) as { 
+        uuid?: string
+        fileName?: string 
+      }
+      const novelId = uploadData.uuid
       if (!novelId) throw new Error('novelId を取得できませんでした')
 
       const analyzeResponse = await fetch('/api/analyze', {
@@ -100,9 +98,14 @@ export default function HomeClient() {
         throw new Error(errorData.error || '分析の開始に失敗しました')
       }
 
-      const analyzeData = (await analyzeResponse.json().catch(() => ({}))) as { jobId?: string }
-      if (!analyzeData.jobId) throw new Error('jobId を取得できませんでした')
-      setJobId(analyzeData.jobId)
+      const analyzeData = (await analyzeResponse.json().catch(() => ({}))) as { 
+        id?: string
+        data?: { jobId?: string }
+        jobId?: string 
+      }
+      const jobId = analyzeData.id || analyzeData.data?.jobId || analyzeData.jobId
+      if (!jobId) throw new Error('jobId を取得できませんでした')
+      setJobId(jobId)
     } catch (err) {
       console.error('Process error:', err)
       setError(err instanceof Error ? err.message : 'エラーが発生しました')

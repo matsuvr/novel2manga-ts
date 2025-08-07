@@ -54,11 +54,27 @@
       "WebFetch(domain:developer.apple.com)",
       "mcp__playwright__browser_navigate",
       "mcp__playwright__browser_take_screenshot",
-      "mcp__playwright__browser_snapshot"
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_handle_dialog",
+      "mcp__playwright__browser_network_requests",
+      "mcp__playwright__browser_console_messages",
+      "mcp__playwright__browser_navigate_back",
+      "mcp__playwright__browser_type",
+      "mcp__playwright__browser_tab_select",
+      "mcp__playwright__browser_wait_for",
+      "mcp__playwright__browser_press_key",
+      "Bash(pkill:*)",
+      "Bash(taskkill:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": ["cloudflare", "mastra", "serena", "deepwiki"],
+  "enabledMcpjsonServers": [
+    "cloudflare",
+    "mastra",
+    "serena",
+    "deepwiki"
+  ],
   "hooks": {
     "Notification": [
       {
