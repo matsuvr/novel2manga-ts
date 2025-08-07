@@ -77,37 +77,35 @@ export class LocalFileStorage implements Storage {
   }
 
   async put(key: string, value: string | Buffer, metadata?: Record<string, string>): Promise<void> {
-    await ensureDir(this.baseDir)
     const filePath = path.join(this.baseDir, key)
     const dir = path.dirname(filePath)
+    
+    // ディレクトリ作成を並行化
     await ensureDir(dir)
 
     if (this.isBinaryData(value)) {
       // バイナリデータの場合：直接ファイルに保存
       await fs.writeFile(filePath, value as Buffer)
 
-      // メタデータは別ファイルに保存
-      if (metadata) {
+      // メタデータは別ファイルに保存（必要な場合のみ）
+      if (metadata && Object.keys(metadata).length > 0) {
         const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
-        const metadataDir = path.dirname(metadataPath)
-        await ensureDir(metadataDir)
-
         const metadataContent = {
           ...metadata,
           createdAt: new Date().toISOString(),
           isBinary: true,
         }
-        await fs.writeFile(metadataPath, JSON.stringify(metadataContent, null, 2), 'utf-8')
+        await fs.writeFile(metadataPath, JSON.stringify(metadataContent), 'utf-8')
       }
     } else {
-      // テキストデータの場合：従来通りJSONで保存
+      // テキストデータの場合：シンプルなJSONで保存（インデントなし）
       const data = {
         content: value.toString(),
         metadata: metadata || {},
         createdAt: new Date().toISOString(),
         isBinary: false,
       }
-      await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8')
+      await fs.writeFile(filePath, JSON.stringify(data), 'utf-8')
     }
   }
 

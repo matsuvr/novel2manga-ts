@@ -5,9 +5,7 @@ This project implements Kiro-style Spec-Driven Development for Claude Code using
 ## Project Context
 
 ### Project Steering
-- Product overview: `.kiro/steering/product.md`
 - Technology stack: `.kiro/steering/tech.md`
-- Project structure: `.kiro/steering/structure.md`
 - Custom steering docs for specialized contexts
 
 ### Active Specifications
@@ -192,7 +190,7 @@ The `/kiro:steering` command manages these files automatically. Manual updates t
 
 ### Active Steering Files
 - `product.md`: Always included - Product context and business objectives
-- `tech.md`: Always included - Technology stack and architectural decisions  
+- `tech.md`: Always included - Technology stack and architectural decisions
 - `structure.md`: Always included - File organization and code patterns
 
 ### Custom Steering Files

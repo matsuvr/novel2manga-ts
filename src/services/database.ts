@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { and, asc, desc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq, sql } from 'drizzle-orm'
 import {
   type Chunk,
   type Episode,
@@ -11,7 +11,7 @@ import {
   type Novel,
 } from '@/db'
 import { chunks, episodes, jobs, novels, outputs, renderStatus } from '@/db/schema'
-import type { JobProgress, JobStatus } from '@/types/job'
+import type { JobProgress, JobStatus, JobStep } from '@/types/job'
 
 export class DatabaseService {
   private db = getDatabase()
@@ -79,23 +79,82 @@ export class DatabaseService {
   }
 
   async getJob(id: string): Promise<Job | null> {
-    const result = await this.db.select().from(jobs).where(eq(jobs.id, id)).limit(1)
-    return result[0] || null
+    try {
+      console.log('[DatabaseService] getJob called for id:', id)
+      
+      // データベース接続確認
+      const testQuery = await this.db.select({ count: sql`count(*)` }).from(jobs)
+      console.log('[DatabaseService] Total jobs in database:', testQuery[0]?.count)
+      
+      const result = await this.db.select().from(jobs).where(eq(jobs.id, id)).limit(1)
+      console.log('[DatabaseService] getJob result:', result.length > 0 ? 'found' : 'not found')
+      
+      if (result.length > 0) {
+        console.log('[DatabaseService] Job data:', {
+          id: result[0].id,
+          status: result[0].status,
+          currentStep: result[0].currentStep,
+          novelId: result[0].novelId
+        })
+      }
+      
+      return result[0] || null
+    } catch (error) {
+      console.error('[DatabaseService] getJob error:', error)
+      console.error('[DatabaseService] Error details:', {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack?.slice(0, 500) : undefined
+      })
+      throw error
+    }
   }
 
   async getJobWithProgress(id: string): Promise<(Job & { progress: JobProgress | null }) | null> {
-    const job = await this.getJob(id)
-    if (!job) return null
+    try {
+      console.log('[DatabaseService] getJobWithProgress called with id:', id)
+      
+      const job = await this.getJob(id)
+      console.log('[DatabaseService] getJob result:', job ? 'found' : 'not found')
+      
+      if (!job) {
+        console.log('[DatabaseService] Job not found, returning null')
+        return null
+      }
 
-    // resume_data_pathからprogressを読み込む（実装が必要な場合）
-    const progress: JobProgress | null = null
-    if (job.resumeDataPath) {
-      // TODO: ストレージからprogressを読み込む
-    }
+      // 厳密な型変換 - フォールバックなし
+      if (!job.currentStep) {
+        throw new Error(`Job ${job.id} has no currentStep set`)
+      }
 
-    return {
-      ...job,
-      progress,
+      const validSteps: JobStep[] = ['initialized', 'split', 'analyze', 'episode', 'layout', 'render', 'complete']
+      if (!validSteps.includes(job.currentStep as JobStep)) {
+        throw new Error(`Job ${job.id} has invalid currentStep: ${job.currentStep}. Valid steps: ${validSteps.join(', ')}`)
+      }
+
+      const currentStep = job.currentStep as JobStep
+
+      // シンプルなJobProgressオブジェクトを構築
+      const progress: JobProgress = {
+        currentStep,
+        processedChunks: job.processedChunks || 0,
+        totalChunks: job.totalChunks || 0,
+        episodes: [], // TODO: 実際のエピソードデータを取得
+      }
+
+      console.log('[DatabaseService] Progress object created:', progress)
+
+      const result = {
+        ...job,
+        progress,
+      }
+      
+      console.log('[DatabaseService] Returning job with progress')
+      return result
+    } catch (error) {
+      console.error('[DatabaseService] getJobWithProgress error:', error)
+      console.error('[DatabaseService] Error stack:', error instanceof Error ? error.stack : 'No stack')
+      return null
     }
   }
 

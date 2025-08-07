@@ -5,9 +5,9 @@ import { useState } from 'react'
 import ProcessingProgress from '@/components/ProcessingProgress'
 import ResultsDisplay from '@/components/ResultsDisplay'
 import TextInputArea from '@/components/TextInputArea'
-import type { Episode } from '@/types/manga-models'
+import type { Episode } from '@/types/database-models'
 
-type ViewMode = 'input' | 'processing' | 'results'
+type ViewMode = 'input' | 'processing' | 'progress' | 'results'
 
 async function loadSample(path: string): Promise<string> {
   // Next.jsでアプリ直下のdocsは静的配信されないため、API経由で返す
@@ -82,6 +82,9 @@ export default function HomeClient() {
       }
       const novelId = uploadData.uuid
       if (!novelId) throw new Error('novelId を取得できませんでした')
+
+      // アップロード完了後すぐに進捗表示に移行
+      setViewMode('progress')
 
       const analyzeResponse = await fetch('/api/analyze', {
         method: 'POST',
@@ -210,15 +213,42 @@ export default function HomeClient() {
           </div>
         )}
 
-        {viewMode === 'processing' && (
-          <div className="max-w-2xl mx-auto">
+        {(viewMode === 'processing' || viewMode === 'progress') && (
+          <div className="max-w-4xl mx-auto">
             <ProcessingProgress jobId={jobId} onComplete={handleProcessComplete} />
 
+            {/* 処理開始時の視覚的フィードバック */}
             <div className="mt-8 text-center">
-              <div className="inline-flex items-center justify-center w-32 h-32 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 animate-pulse">
-                <span className="text-5xl">✨</span>
+              <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 animate-pulse mb-4">
+                <span className="text-4xl">✨</span>
               </div>
-              <p className="mt-4 text-lg text-gray-600">AIが小説を分析しています...</p>
+              <h3 className="text-xl font-semibold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+                AI処理中
+              </h3>
+              <p className="text-gray-600">
+                小説をマンガ形式に変換中です。しばらくお待ちください...
+              </p>
+              
+              {/* 処理状態の説明 */}
+              <div className="mt-6 p-4 bg-blue-50 rounded-2xl border border-blue-100">
+                <div className="flex items-start space-x-3">
+                  <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-white text-sm">ℹ️</span>
+                  </div>
+                  <div className="text-left">
+                    <h4 className="font-medium text-blue-900 mb-1">処理について</h4>
+                    <p className="text-sm text-blue-700">
+                      長い小説の場合、処理に数分かかることがあります。
+                      上記の進捗表示で現在の状況をご確認いただけます。
+                    </p>
+                    {process.env.NODE_ENV === 'development' && (
+                      <p className="text-xs text-blue-600 mt-2">
+                        💡 開発環境: 詳細ログは進捗パネルで確認できます
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
