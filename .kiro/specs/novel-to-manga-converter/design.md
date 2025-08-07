@@ -74,7 +74,7 @@ graph TB
 
 調査結果に基づく技術選定：
 
-- **Frontend**: Next.js 15.3.3 (App Router) + TypeScript 5 + Tailwind CSS
+- **Frontend**: Next.js 15.3.3 (App Router) + TypeScript 5 + Tailwind CSS v4
 - **AI Framework**: Mastra (TypeScript agent framework)
 - **絵コンテ生成**: Canvas API（枠線・テキスト・吹き出しのみ、イラストは含まない）
 - **Backend**: Next.js API Routes + Mastra Agents
@@ -84,6 +84,7 @@ graph TB
 - **LLM Providers**: OpenRouter (primary), Gemini, Claude (フォールバックチェーン)
 - **LLM Factory**: 動的プロバイダー選択とフォールバック機能実装済み
 - **Configuration**: app.config.ts による集中管理 + 環境変数 (シークレットのみ)
+- **Font**: Google Inter (next/font/google)
 - **Authentication**: NextAuth.js v5 (未実装)
 - **Testing**: Vitest + Playwright + React Testing Library
 - **Deployment**: Cloudflare Workers (OpenNext adapter)
@@ -283,15 +284,19 @@ export class DatabaseService {
 
 ### Frontend Components
 
-| Component Name | Responsibility | Props/State Summary |
-|----------------|----------------|---------------------|
-| TextInputEditor | テキスト入力UI | text, onAnalyze, maxLength |
-| ProgressTracker | 処理進捗表示 | steps, currentStep, progress |
-| MangaPreview | マンガプレビュー表示 | layout, panels, editable |
-| PanelEditor | コマ編集インターフェース | panel, onResize, onMove |
-| SpeechBubbleEditor | 吹き出し編集 | bubble, text, style, onEdit |
-| ExportDialog | エクスポート設定 | formats, onExport |
-| ProjectManager | プロジェクト管理UI | projects, onSave, onLoad |
+| Component Name | Responsibility | Props/State Summary | Status |
+|----------------|----------------|---------------------|--------|
+| HomeClient | メインクライアント境界コンポーネント | sampleText, processing states | Implemented |
+| TextInputArea | テキスト入力UI | text, onChange, maxLength, characterCount | Implemented |
+| ProcessingProgress | 処理進捗表示 | currentStep, progress, message | Implemented |
+| ResultsDisplay | 結果表示コンポーネント | episodes, layouts, renders | Implemented |
+| Logger | ログ表示コンポーネント | logs, maxLogs | Implemented |
+| NovelUploader | 小説アップロードUI | onUpload, accepted formats | Partially |
+| MangaPreview | マンガプレビュー表示 | layout, panels, editable | Not Implemented |
+| PanelEditor | コマ編集インターフェース | panel, onResize, onMove | Not Implemented |
+| SpeechBubbleEditor | 吹き出し編集 | bubble, text, style, onEdit | Not Implemented |
+| ExportDialog | エクスポート設定 | formats, onExport | Not Implemented |
+| ProjectManager | プロジェクト管理UI | projects, onSave, onLoad | Not Implemented |
 
 ### API Endpoints
 
@@ -313,8 +318,8 @@ export class DatabaseService {
 | POST | /api/render | Canvasレンダリング | Implemented | 201, 400, 500 |
 | POST | /api/render/batch | バッチレンダリング | Implemented | 201, 400, 500 |
 | GET | /api/render/status/[jobId] | レンダリング状況確認 | Implemented | 200, 400, 500 |
-| POST | /api/export | マンガエクスポート（PDF・ZIP） | Not Implemented | 201, 400, 500 |
-| POST | /api/share | 共有リンク生成 | Not Implemented | 201, 401, 500 |
+| POST | /api/export | マンガエクスポート（PDF・ZIP） | Partially Implemented | 201, 400, 500 |
+| POST | /api/share | 共有リンク生成 | Partially Implemented | 201, 401, 500 |
 
 ## Data Models
 

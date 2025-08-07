@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import path from 'node:path'
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
@@ -10,9 +11,16 @@ let db: ReturnType<typeof drizzle<typeof schema>> | null = null
 export function getDatabase() {
   if (!db) {
     const config = getConfig()
-    const dbConfig = config.get('database') as { path: string }
+    const dbConfig = config.get('database') as { sqlite: { path: string } }
+    const dbPath = dbConfig.sqlite?.path || './database/novel2manga.db'
 
-    const sqliteDb = new Database(dbConfig.path)
+    // Ensure the directory exists
+    const dbDir = path.dirname(dbPath)
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true })
+    }
+
+    const sqliteDb = new Database(dbPath)
     db = drizzle(sqliteDb, { schema })
 
     // Run migrations automatically in development/test environments
