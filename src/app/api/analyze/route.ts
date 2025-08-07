@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
           .replace('{{nextChunkText}}', '')
 
         // Mastraエージェントを使用して分析
-        let result
+        let result: { object: z.infer<typeof textAnalysisOutputSchema> }
         try {
           result = await chunkAnalyzerAgent.generate([{ role: 'user', content: prompt }], {
             output: textAnalysisOutputSchema,

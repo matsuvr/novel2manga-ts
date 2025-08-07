@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, memo } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 
 interface ProcessStep {
   id: string
@@ -290,7 +290,7 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
       clearTimeout(initialTimeout)
       if (pollInterval) clearInterval(pollInterval)
     }
-  }, [jobId]) // addLogとupdateStepsFromJobDataを依存関係から削除
+  }, [jobId, addLog, updateStepsFromJobData])
 
   if (!jobId) {
     return null
@@ -427,9 +427,9 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
             {logs.length === 0 ? (
               <p className="text-gray-500 italic">ログはまだありません</p>
             ) : (
-              logs.map((log, index) => (
+              logs.map((log) => (
                 <div
-                  key={index}
+                  key={`${log.timestamp}-${log.message}`}
                   className={`flex items-start space-x-2 py-1 px-2 rounded ${
                     log.level === 'error'
                       ? 'bg-red-50 text-red-700'
