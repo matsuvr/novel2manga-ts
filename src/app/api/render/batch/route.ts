@@ -57,10 +57,13 @@ export async function POST(request: NextRequest) {
       return validationError('layoutYamlが必要です')
     }
 
+    // バリデーション後に型アサーション
+    const validatedBody = body as Required<Pick<BatchRenderRequest, 'jobId' | 'episodeNumber' | 'layoutYaml'>> & Partial<BatchRenderRequest>
+
     // YAMLをパース
     let mangaLayout: MangaLayout
     try {
-      mangaLayout = parseYaml(body.layoutYaml) as MangaLayout
+      mangaLayout = parseYaml(validatedBody.layoutYaml) as MangaLayout
     } catch (_error) {
       return validationError('無効なYAML形式です')
     }
@@ -74,20 +77,20 @@ export async function POST(request: NextRequest) {
     const dbService = new DatabaseService()
 
     // ジョブの存在確認
-    const job = await dbService.getJob(body.jobId)
+    const job = await dbService.getJob(validatedBody.jobId)
     if (!job) {
       return validationError('指定されたジョブが見つかりません')
     }
 
     // エピソードの存在確認
-    const episodes = await dbService.getEpisodesByJobId(body.jobId)
-    const targetEpisode = episodes.find((e) => e.episodeNumber === body.episodeNumber)
+    const episodes = await dbService.getEpisodesByJobId(validatedBody.jobId)
+    const targetEpisode = episodes.find((e) => e.episodeNumber === validatedBody.episodeNumber)
     if (!targetEpisode) {
-      return validationError(`エピソード ${body.episodeNumber} が見つかりません`)
+      return validationError(`エピソード ${validatedBody.episodeNumber} が見つかりません`)
     }
 
     // レンダリング対象ページの決定
-    const targetPages = body.pages || mangaLayout.pages.map((p) => p.page_number)
+    const targetPages = validatedBody.pages || mangaLayout.pages.map((p) => p.page_number)
     const validPages = targetPages.filter((pageNum) =>
       mangaLayout.pages.some((p) => p.page_number === pageNum),
     )
@@ -98,12 +101,12 @@ export async function POST(request: NextRequest) {
 
     // オプション設定
     const options = {
-      concurrency: Math.min(body.options?.concurrency || 3, 5), // 最大5並列
-      skipExisting: body.options?.skipExisting || false,
+      concurrency: Math.min(validatedBody.options?.concurrency || 3, 5), // 最大5並列
+      skipExisting: validatedBody.options?.skipExisting || false,
     }
 
     console.log(
-      `バッチレンダリング開始: Job ${body.jobId}, Episode ${body.episodeNumber}, Pages: ${validPages.join(', ')}`,
+      `バッチレンダリング開始: Job ${validatedBody.jobId}, Episode ${validatedBody.episodeNumber}, Pages: ${validPages.join(', ')}`,
     )
 
     // Canvas描画の準備
@@ -128,7 +131,7 @@ export async function POST(request: NextRequest) {
       try {
         // 既存チェック
         if (options.skipExisting) {
-          const renderKey = StorageKeys.pageRender(body.jobId!, body.episodeNumber!, pageNumber)
+          const renderKey = StorageKeys.pageRender(validatedBody.jobId, validatedBody.episodeNumber, pageNumber)
           const exists = await renderStorage.exists(renderKey)
           if (exists) {
             results.push({
@@ -148,11 +151,11 @@ export async function POST(request: NextRequest) {
         const buffer = Buffer.from(await imageBlob.arrayBuffer())
 
         // 画像保存
-        const renderKey = StorageKeys.pageRender(body.jobId!, body.episodeNumber!, pageNumber)
+        const renderKey = StorageKeys.pageRender(validatedBody.jobId, validatedBody.episodeNumber, pageNumber)
         await renderStorage.put(renderKey, buffer, {
           contentType: 'image/png',
-          jobId: body.jobId!,
-          episodeNumber: body.episodeNumber?.toString(),
+          jobId: validatedBody.jobId,
+          episodeNumber: validatedBody.episodeNumber.toString(),
           pageNumber: pageNumber.toString(),
         })
 
@@ -164,28 +167,30 @@ export async function POST(request: NextRequest) {
           format: 'jpeg',
         })
         const thumbnailBuffer = Buffer.from(await thumbnailBlob.arrayBuffer())
-        const thumbnailKey = StorageKeys.pageThumbnail(body.jobId!, body.episodeNumber!, pageNumber)
+        const thumbnailKey = StorageKeys.pageThumbnail(validatedBody.jobId, validatedBody.episodeNumber, pageNumber)
 
         await renderStorage.put(thumbnailKey, thumbnailBuffer, {
           contentType: 'image/jpeg',
-          jobId: body.jobId!,
-          episodeNumber: body.episodeNumber?.toString(),
+          jobId: validatedBody.jobId,
+          episodeNumber: validatedBody.episodeNumber.toString(),
           pageNumber: pageNumber.toString(),
           type: 'thumbnail',
         })
 
         // データベース更新
-        await dbService.updateRenderStatus({
-          jobId: body.jobId!,
-          episodeNumber: body.episodeNumber!,
+        await dbService.updateRenderStatus(
+          validatedBody.jobId,
+          validatedBody.episodeNumber,
           pageNumber,
-          isRendered: true,
-          imagePath: renderKey,
-          thumbnailPath: thumbnailKey,
-          width: 842,
-          height: 595,
-          fileSize: buffer.length,
-        })
+          {
+            isRendered: true,
+            imagePath: renderKey,
+            thumbnailPath: thumbnailKey,
+            width: 842,
+            height: 595,
+            fileSize: buffer.length,
+          }
+        )
 
         results.push({
           pageNumber,
@@ -211,12 +216,14 @@ export async function POST(request: NextRequest) {
 
         // エラー時のデータベース更新
         try {
-          await dbService.updateRenderStatus({
-            jobId: body.jobId!,
-            episodeNumber: body.episodeNumber!,
+          await dbService.updateRenderStatus(
+            validatedBody.jobId,
+            validatedBody.episodeNumber,
             pageNumber,
-            isRendered: false,
-          })
+            {
+              isRendered: false,
+            }
+          )
         } catch (dbError) {
           console.error(`ページ ${pageNumber} データベース更新エラー:`, dbError)
         }
@@ -243,8 +250,8 @@ export async function POST(request: NextRequest) {
 
     const response: BatchRenderResult = {
       success: true,
-      jobId: body.jobId!,
-      episodeNumber: body.episodeNumber!,
+      jobId: validatedBody.jobId,
+      episodeNumber: validatedBody.episodeNumber,
       totalPages: validPages.length,
       renderedPages: renderedCount,
       skippedPages: skippedCount,

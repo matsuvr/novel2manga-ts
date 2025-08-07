@@ -1,37 +1,6 @@
 import { z } from 'zod'
 
 // ========================================
-// Utility Functions
-// ========================================
-
-// Deep merge utility function (lodashライブラリの代替)
-function deepMerge(
-  target: Record<string, unknown>,
-  source: Record<string, unknown>,
-): Record<string, unknown> {
-  const output = Object.assign({}, target)
-  if (isObject(target) && isObject(source)) {
-    Object.keys(source).forEach((key) => {
-      if (isObject(source[key])) {
-        if (!(key in target)) Object.assign(output, { [key]: source[key] })
-        else
-          output[key] = deepMerge(
-            target[key] as Record<string, unknown>,
-            source[key] as Record<string, unknown>,
-          )
-      } else {
-        Object.assign(output, { [key]: source[key] })
-      }
-    })
-  }
-  return output
-}
-
-function isObject(item: unknown): boolean {
-  return item !== null && typeof item === 'object' && !Array.isArray(item)
-}
-
-// ========================================
 // Schema Definitions (設計書対応)
 // ========================================
 
@@ -277,7 +246,7 @@ export class ConfigManager {
   }
 
   // 設定の読み込み
-  async loadConfig(configPath?: string): Promise<Config> {
+  async loadConfig(_configPath?: string): Promise<Config> {
     if (this.config) {
       return this.config
     }
@@ -296,27 +265,11 @@ export class ConfigManager {
     this.isLoading = true
 
     try {
-      // ベース設定を準備
-      let baseConfig: Partial<Config> = {}
-
-      // ファイルから設定を読み込み（存在する場合）
-      if (configPath) {
-        try {
-          const configModule = await import(configPath)
-          baseConfig = configModule.default || configModule
-        } catch {
-          console.warn(`Configuration file not found: ${configPath}`)
-        }
-      }
-
-      // 環境変数オーバーライドを取得
+      // 環境変数ベースの設定を取得
       const envOverrides = this.getEnvOverrides()
 
-      // 設定をマージ
-      const mergedConfig = deepMerge(baseConfig as Record<string, unknown>, envOverrides)
-
-      // バリデーション
-      this.config = this.validateConfig(mergedConfig)
+      // バリデーション（環境変数のみで設定）
+      this.config = this.validateConfig(envOverrides)
 
       return this.config
     } catch (error) {

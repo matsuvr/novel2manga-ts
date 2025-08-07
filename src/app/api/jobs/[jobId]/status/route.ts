@@ -1,12 +1,17 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { DatabaseService } from '@/services/database'
 
-export async function GET(_request: NextRequest, { params }: { params: { jobId: string } }) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ jobId: string }> }) {
   try {
+    const params = await context.params
     console.log('[job-status] Fetching job status for:', params.jobId)
+    const startTime = Date.now()
+    
     const dbService = new DatabaseService()
-
     const job = await dbService.getJobWithProgress(params.jobId)
+    
+    const duration = Date.now() - startTime
+    console.log(`[job-status] Database query completed in ${duration}ms`)
     console.log('[job-status] Job found:', !!job)
     console.log('[job-status] Job details:', job ? { id: job.id, status: job.status } : 'null')
 

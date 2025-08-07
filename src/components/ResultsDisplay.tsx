@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { Episode } from '@/types/episode'
+import type { Episode } from '@/types/database-models'
 
 interface ResultsDisplayProps {
   jobId: string
@@ -32,7 +32,7 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
 
       if (!response.ok) throw new Error('Export failed')
 
-      const data = await response.json()
+      const data = await response.json() as { downloadUrl?: string }
 
       // Download the file
       if (data.downloadUrl) {
@@ -180,7 +180,7 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
 
                     if (!response.ok) throw new Error('Export failed')
 
-                    const data = await response.json()
+                    const data = await response.json() as { downloadUrl?: string }
 
                     if (data.downloadUrl) {
                       window.open(data.downloadUrl, '_blank')
