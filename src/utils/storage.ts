@@ -880,6 +880,7 @@ export async function saveEpisodeBoundaries(
     confidence: number
   }>,
 ): Promise<void> {
+  // ファイルシステムに保存
   const storage = await getAnalysisStorage()
   const key = StorageKeys.narrativeAnalysis(jobId)
   const data = {
@@ -890,6 +891,35 @@ export async function saveEpisodeBoundaries(
     },
   }
   await storage.put(key, JSON.stringify(data, null, 2))
+
+  // データベースに保存
+  const { DatabaseService } = await import('@/services/database')
+  const dbService = new DatabaseService()
+  
+  // jobからnovelIdを取得
+  const job = await dbService.getJob(jobId)
+  if (!job) {
+    throw new Error(`Job not found: ${jobId}`)
+  }
+
+  // エピソードをデータベースに保存
+  const episodesForDb = episodes.map(episode => ({
+    novelId: job.novelId,
+    jobId,
+    episodeNumber: episode.episodeNumber,
+    title: episode.title,
+    summary: episode.summary,
+    startChunk: episode.startChunk,
+    startCharIndex: episode.startCharIndex,
+    endChunk: episode.endChunk,
+    endCharIndex: episode.endCharIndex,
+    estimatedPages: episode.estimatedPages,
+    confidence: episode.confidence,
+  }))
+
+  await dbService.createEpisodes(episodesForDb)
+  
+  console.log(`Saved ${episodes.length} episodes to both database and file system`)
 }
 
 // チャンク分析取得関数

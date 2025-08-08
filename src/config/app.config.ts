@@ -11,7 +11,7 @@ export const appConfig = {
   // LLM設定
   llm: {
     // デフォルトプロバイダー
-    defaultProvider: 'openrouter' as 'openai' | 'gemini' | 'groq' | 'claude' | 'openrouter',
+    defaultProvider: 'gemini' as 'openai' | 'gemini' | 'groq' | 'claude' | 'openrouter',
 
     // フォールバック設定
     fallbackChain: ['openrouter', 'gemini', 'claude'] as Array<
@@ -34,7 +34,8 @@ export const appConfig = {
       },
       gemini: {
         apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY,
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.5-flash-lite',
+        baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
         maxTokens: 8192,
         timeout: 30000,
       },
@@ -62,7 +63,7 @@ export const appConfig = {
       modelOverrides: {
         openai: 'gpt-4o',
         claude: 'claude-sonnet-4-20250514',
-        gemini: 'gemini-2.5-flash',
+        gemini: 'gemini-2.5-flash-lite',
         groq: 'compound-beta',
         openrouter: 'openai/gpt-oss-120b', // Cerebras対応の場合は自動で cerebras/qwen-3-235b-a22b-thinking-2507 に変換
       },
@@ -381,7 +382,12 @@ export function getAppConfigWithOverrides(): AppConfig {
 
   // 環境変数による設定オーバーライド
   if (process.env.APP_LLM_DEFAULT_PROVIDER) {
-    const provider = process.env.APP_LLM_DEFAULT_PROVIDER as 'openai' | 'gemini' | 'groq' | 'claude' | 'openrouter'
+    const provider = process.env.APP_LLM_DEFAULT_PROVIDER as
+      | 'openai'
+      | 'gemini'
+      | 'groq'
+      | 'claude'
+      | 'openrouter'
     if (['openai', 'gemini', 'groq', 'claude', 'openrouter'].includes(provider)) {
       config.llm.defaultProvider = provider
     }

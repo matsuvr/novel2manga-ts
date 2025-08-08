@@ -64,7 +64,8 @@
       "mcp__playwright__browser_close",
       "mcp__playwright__browser_evaluate",
       "Bash(npm run build:*)",
-      "WebFetch(domain:openrouter.ai)"
+      "WebFetch(domain:openrouter.ai)",
+      "mcp__mastra__mastraExamples"
     ]
   },
   "enableAllProjectMcpServers": true,
