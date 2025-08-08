@@ -46,3 +46,5 @@ PR checklist (copy into your PR and tick all):
 
 If any item cannot be satisfied, stop and resolve it first. Do not proceed with implementation or merging until all conditions above are met.
 ```
+
+- テストを通すために処理のスキップをするのは禁止。問題を特定し解消するのがテストの目的。また、テストを通す目的のためだけにアプリ全体の設定を変更しようとしたりするのは絶対に絶対に厳禁。強い言葉で英語でルールに書いておいてください
