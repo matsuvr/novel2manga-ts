@@ -32,7 +32,7 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
 
       if (!response.ok) throw new Error('Export failed')
 
-      const data = await response.json() as { downloadUrl?: string }
+      const data = (await response.json()) as { downloadUrl?: string }
 
       // Download the file
       if (data.downloadUrl) {
@@ -75,7 +75,12 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
               <option value="pdf">PDF形式</option>
               <option value="images_zip">画像ZIP形式</option>
             </select>
-            <button type="button" onClick={handleExport} disabled={isExporting} className="btn-modern text-sm">
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={isExporting}
+              className="btn-modern text-sm"
+            >
               {isExporting ? (
                 <span className="flex items-center space-x-2">
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
@@ -173,7 +178,7 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
 
                     if (!response.ok) throw new Error('Export failed')
 
-                    const data = await response.json() as { downloadUrl?: string }
+                    const data = (await response.json()) as { downloadUrl?: string }
 
                     if (data.downloadUrl) {
                       window.open(data.downloadUrl, '_blank')

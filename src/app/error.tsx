@@ -10,7 +10,9 @@ export default function GlobalError({ error, reset }: { error: RouteError; reset
           <div className="text-2xl">⚠️</div>
           <div className="flex-1">
             <h2 className="text-lg font-semibold text-red-700">エラーが発生しました</h2>
-            <p className="mt-1 text-sm text-gray-600 break-words">{error.message || '不明なエラーです'}</p>
+            <p className="mt-1 text-sm text-gray-600 break-words">
+              {error.message || '不明なエラーです'}
+            </p>
             {error.digest && <p className="mt-1 text-xs text-gray-400">Digest: {error.digest}</p>}
             <div className="mt-4">
               <button

@@ -82,8 +82,8 @@ const INITIAL_STEPS: ProcessStep[] = [
 ]
 
 function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
-  const [steps, setSteps] = useState<ProcessStep[]>(() => 
-    INITIAL_STEPS.map(step => ({ ...step }))
+  const [steps, setSteps] = useState<ProcessStep[]>(() =>
+    INITIAL_STEPS.map((step) => ({ ...step })),
   )
   const [currentStepIndex, setCurrentStepIndex] = useState(-1)
   const [overallProgress, setOverallProgress] = useState(0)
@@ -96,158 +96,175 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
       timestamp: new Date().toLocaleTimeString(),
       level,
       message,
-      data
+      data,
     }
-    setLogs(prev => {
+    setLogs((prev) => {
       // 同じメッセージの連続追加を防ぐ
       const lastLog = prev[prev.length - 1]
       if (lastLog && lastLog.message === message && lastLog.level === level) {
         return prev
       }
       return [...prev.slice(-49), logEntry]
-    }) 
+    })
   }, [])
 
-  const updateStepsFromJobData = useCallback((data: JobData) => {
-    // データが変化していない場合は処理をスキップ
-    const jobDataString = JSON.stringify({
-      status: data.job.status,
-      currentStep: data.job.currentStep,
-      splitCompleted: data.job.splitCompleted,
-      analyzeCompleted: data.job.analyzeCompleted,
-      episodeCompleted: data.job.episodeCompleted,
-      layoutCompleted: data.job.layoutCompleted,
-      renderCompleted: data.job.renderCompleted,
-      processedChunks: data.job.processedChunks,
-      totalChunks: data.job.totalChunks,
-      processedEpisodes: data.job.processedEpisodes,
-      totalEpisodes: data.job.totalEpisodes,
-      renderedPages: data.job.renderedPages,
-      totalPages: data.job.totalPages,
-      lastError: data.job.lastError
-    })
+  const updateStepsFromJobData = useCallback(
+    (data: JobData) => {
+      // データが変化していない場合は処理をスキップ
+      const jobDataString = JSON.stringify({
+        status: data.job.status,
+        currentStep: data.job.currentStep,
+        splitCompleted: data.job.splitCompleted,
+        analyzeCompleted: data.job.analyzeCompleted,
+        episodeCompleted: data.job.episodeCompleted,
+        layoutCompleted: data.job.layoutCompleted,
+        renderCompleted: data.job.renderCompleted,
+        processedChunks: data.job.processedChunks,
+        totalChunks: data.job.totalChunks,
+        processedEpisodes: data.job.processedEpisodes,
+        totalEpisodes: data.job.totalEpisodes,
+        renderedPages: data.job.renderedPages,
+        totalPages: data.job.totalPages,
+        lastError: data.job.lastError,
+      })
 
-    if (jobDataString === lastJobData) {
-      return null // データに変化がない場合は更新しない
-    }
-
-    setLastJobData(jobDataString)
-    addLog('info', `Job状態更新: ${data.job.status} - ${data.job.currentStep}`)
-
-    // 状態を直接更新
-    setSteps(prevSteps => {
-      const updatedSteps = prevSteps.map(step => ({ ...step }))
-      let currentIndex = -1
-      let completedCount = 0
-
-      // Map job status to steps
-      if (data.job.status === 'completed') {
-        updatedSteps.forEach((step) => {
-          step.status = 'completed'
-          completedCount++
-        })
-        addLog('info', '全ての処理が完了しました')
-        if (onComplete) onComplete()
-        return updatedSteps
-      } else if (data.job.status === 'failed') {
-        const failedStepMap: Record<string, number> = {
-          split: 1,
-          analyze: 2,
-          episode: 3,
-          layout: 4,
-          render: 5,
-        }
-        const failedIndex = failedStepMap[data.job.currentStep] || 0
-
-        updatedSteps.forEach((step, index) => {
-          if (index < failedIndex) {
-            step.status = 'completed'
-            completedCount++
-          } else if (index === failedIndex) {
-            step.status = 'error'
-            step.error = data.job.lastError
-            currentIndex = index
-          } else {
-            step.status = 'pending'
-          }
-        })
-        addLog('error', `処理が失敗しました: ${data.job.lastError}`)
-        return updatedSteps
-      } else {
-        // Processing state
-        updatedSteps[0].status = 'completed' // Upload always complete if job exists
-        completedCount++
-
-        if (data.job.splitCompleted) {
-          updatedSteps[1].status = 'completed'
-          completedCount++
-        } else if (data.job.currentStep?.includes('split') || data.job.currentStep === 'chunks_created') {
-          updatedSteps[1].status = 'processing'
-          if (data.job.totalChunks && data.job.processedChunks !== undefined) {
-            updatedSteps[1].progress = Math.round((data.job.processedChunks / data.job.totalChunks) * 100)
-          }
-          currentIndex = 1
-        }
-
-        if (data.job.analyzeCompleted) {
-          updatedSteps[2].status = 'completed'
-          completedCount++
-        } else if (data.job.currentStep?.includes('analyz') || data.job.currentStep === 'analysis_completed') {
-          updatedSteps[2].status = 'processing'
-          if (data.job.totalChunks && data.job.processedChunks !== undefined) {
-            updatedSteps[2].progress = Math.round((data.job.processedChunks / data.job.totalChunks) * 100)
-          }
-          currentIndex = 2
-        }
-
-        if (data.job.episodeCompleted) {
-          updatedSteps[3].status = 'completed'
-          completedCount++
-        } else if (data.job.currentStep?.includes('episode')) {
-          updatedSteps[3].status = 'processing'
-          currentIndex = 3
-        }
-
-        if (data.job.layoutCompleted) {
-          updatedSteps[4].status = 'completed'
-          completedCount++
-        } else if (data.job.currentStep?.includes('layout')) {
-          updatedSteps[4].status = 'processing'
-          if (data.job.totalEpisodes && data.job.processedEpisodes !== undefined) {
-            updatedSteps[4].progress = Math.round((data.job.processedEpisodes / data.job.totalEpisodes) * 100)
-          }
-          currentIndex = 4
-        }
-
-        if (data.job.renderCompleted) {
-          updatedSteps[5].status = 'completed'
-          completedCount++
-        } else if (data.job.currentStep?.includes('render')) {
-          updatedSteps[5].status = 'processing'
-          if (data.job.totalPages && data.job.renderedPages !== undefined) {
-            updatedSteps[5].progress = Math.round((data.job.renderedPages / data.job.totalPages) * 100)
-          }
-          currentIndex = 5
-        }
+      if (jobDataString === lastJobData) {
+        return null // データに変化がない場合は更新しない
       }
 
-      // 現在のインデックスと進捗を設定
-      setCurrentStepIndex(currentIndex)
-      setOverallProgress(Math.round((completedCount / INITIAL_STEPS.length) * 100))
+      setLastJobData(jobDataString)
+      addLog('info', `Job状態更新: ${data.job.status} - ${data.job.currentStep}`)
 
-      return updatedSteps
-    })
+      // 状態を直接更新
+      setSteps((prevSteps) => {
+        const updatedSteps = prevSteps.map((step) => ({ ...step }))
+        let currentIndex = -1
+        let completedCount = 0
 
-    return data.job.status === 'completed' || data.job.status === 'failed' ? 'stop' : 'continue'
-  }, [lastJobData, addLog, onComplete])
+        // Map job status to steps
+        if (data.job.status === 'completed') {
+          updatedSteps.forEach((step) => {
+            step.status = 'completed'
+            completedCount++
+          })
+          addLog('info', '全ての処理が完了しました')
+          if (onComplete) onComplete()
+          return updatedSteps
+        } else if (data.job.status === 'failed') {
+          const failedStepMap: Record<string, number> = {
+            split: 1,
+            analyze: 2,
+            episode: 3,
+            layout: 4,
+            render: 5,
+          }
+          const failedIndex = failedStepMap[data.job.currentStep] || 0
+
+          updatedSteps.forEach((step, index) => {
+            if (index < failedIndex) {
+              step.status = 'completed'
+              completedCount++
+            } else if (index === failedIndex) {
+              step.status = 'error'
+              step.error = data.job.lastError
+              currentIndex = index
+            } else {
+              step.status = 'pending'
+            }
+          })
+          addLog('error', `処理が失敗しました: ${data.job.lastError}`)
+          return updatedSteps
+        } else {
+          // Processing state
+          updatedSteps[0].status = 'completed' // Upload always complete if job exists
+          completedCount++
+
+          if (data.job.splitCompleted) {
+            updatedSteps[1].status = 'completed'
+            completedCount++
+          } else if (
+            data.job.currentStep?.includes('split') ||
+            data.job.currentStep === 'chunks_created'
+          ) {
+            updatedSteps[1].status = 'processing'
+            if (data.job.totalChunks && data.job.processedChunks !== undefined) {
+              updatedSteps[1].progress = Math.round(
+                (data.job.processedChunks / data.job.totalChunks) * 100,
+              )
+            }
+            currentIndex = 1
+          }
+
+          if (data.job.analyzeCompleted) {
+            updatedSteps[2].status = 'completed'
+            completedCount++
+          } else if (
+            data.job.currentStep?.includes('analyz') ||
+            data.job.currentStep === 'analysis_completed'
+          ) {
+            updatedSteps[2].status = 'processing'
+            if (data.job.totalChunks && data.job.processedChunks !== undefined) {
+              updatedSteps[2].progress = Math.round(
+                (data.job.processedChunks / data.job.totalChunks) * 100,
+              )
+            }
+            currentIndex = 2
+          }
+
+          if (data.job.episodeCompleted) {
+            updatedSteps[3].status = 'completed'
+            completedCount++
+          } else if (data.job.currentStep?.includes('episode')) {
+            updatedSteps[3].status = 'processing'
+            currentIndex = 3
+          }
+
+          if (data.job.layoutCompleted) {
+            updatedSteps[4].status = 'completed'
+            completedCount++
+          } else if (data.job.currentStep?.includes('layout')) {
+            updatedSteps[4].status = 'processing'
+            if (data.job.totalEpisodes && data.job.processedEpisodes !== undefined) {
+              updatedSteps[4].progress = Math.round(
+                (data.job.processedEpisodes / data.job.totalEpisodes) * 100,
+              )
+            }
+            currentIndex = 4
+          }
+
+          if (data.job.renderCompleted) {
+            updatedSteps[5].status = 'completed'
+            completedCount++
+          } else if (data.job.currentStep?.includes('render')) {
+            updatedSteps[5].status = 'processing'
+            if (data.job.totalPages && data.job.renderedPages !== undefined) {
+              updatedSteps[5].progress = Math.round(
+                (data.job.renderedPages / data.job.totalPages) * 100,
+              )
+            }
+            currentIndex = 5
+          }
+        }
+
+        // 現在のインデックスと進捗を設定
+        setCurrentStepIndex(currentIndex)
+        setOverallProgress(Math.round((completedCount / INITIAL_STEPS.length) * 100))
+
+        return updatedSteps
+      })
+
+      return data.job.status === 'completed' || data.job.status === 'failed' ? 'stop' : 'continue'
+    },
+    [lastJobData, addLog, onComplete],
+  )
 
   useEffect(() => {
     if (!jobId) return
 
     // 初期状態を設定（一度だけ）
-    setSteps(prev => prev.map((step, index) => 
-      index === 0 ? { ...step, status: 'completed' as const } : step
-    ))
+    setSteps((prev) =>
+      prev.map((step, index) => (index === 0 ? { ...step, status: 'completed' as const } : step)),
+    )
     setOverallProgress(Math.round((1 / INITIAL_STEPS.length) * 100))
     addLog('info', `処理を開始しました。Job ID: ${jobId}`)
 
@@ -265,7 +282,7 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
 
         const data: JobData = await response.json()
         const result = updateStepsFromJobData(data)
-        
+
         if (result === 'stop') {
           isPolling = false
           clearInterval(pollInterval)
@@ -274,7 +291,10 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
           // データに変化がない場合はログ出力しない
         }
       } catch (error) {
-        addLog('error', `Job状態の取得に失敗: ${error instanceof Error ? error.message : String(error)}`)
+        addLog(
+          'error',
+          `Job状態の取得に失敗: ${error instanceof Error ? error.message : String(error)}`,
+        )
         console.error('Error fetching job status:', error)
       }
     }
@@ -438,9 +458,7 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
                         : 'bg-gray-50 text-gray-600'
                   }`}
                 >
-                  <span className="text-gray-400 font-mono whitespace-nowrap">
-                    {log.timestamp}
-                  </span>
+                  <span className="text-gray-400 font-mono whitespace-nowrap">{log.timestamp}</span>
                   <span
                     className={`uppercase text-xs font-bold ${
                       log.level === 'error'
