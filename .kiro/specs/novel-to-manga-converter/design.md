@@ -1321,14 +1321,14 @@ sequenceDiagram
 ### 🔴 発見された致命的問題
 
 #### 1. Job Status Endpoint完全停止
-**現象**: 
+**現象**:
 - UI上は「処理中」表示だが実際は何も処理されていない
 - `/api/jobs/[jobId]/status`が継続的に500エラー
 - データベースからJobデータが読み取れない
 
 **原因**: `DatabaseService.getJobWithProgress()`が例外をthrow
 
-#### 2. Mastraエージェント統合失敗  
+#### 2. Mastraエージェント統合失敗
 **現象**:
 - チャンク分析が開始されない
 - LLMプロバイダーとの接続が確立されない
@@ -1338,7 +1338,7 @@ sequenceDiagram
 
 #### 3. 分析パイプライン完全停止
 **現象**:
-- 小説アップロード後、表面的にはJobが作成されるが処理が進まない  
+- 小説アップロード後、表面的にはJobが作成されるが処理が進まない
 - チャンク分割・分析・エピソード構成等が一切実行されない
 
 ### 🚨 緊急修正が必要なタスク（優先順）
@@ -1351,7 +1351,7 @@ async getJobWithProgress(id: string) {
   try {
     const job = await this.db.select().from(jobs).where(eq(jobs.id, id)).limit(1)
     if (!job[0]) return null
-    
+
     return {
       ...job[0],
       progress: null // 一旦null固定で基本動作を確保
@@ -1369,7 +1369,7 @@ async getJobWithProgress(id: string) {
 // 修正必要: フォールバック機能と基本接続テスト
 export async function validateLLMConnection() {
   const providers = ['openai', 'openrouter', 'gemini']
-  
+
   for (const provider of providers) {
     const config = getLLMProviderConfig(provider)
     if (config.apiKey) {
@@ -1382,7 +1382,7 @@ export async function validateLLMConnection() {
 }
 ```
 
-#### Task 3: 分析パイプライン修正 [CRITICAL]  
+#### Task 3: 分析パイプライン修正 [CRITICAL]
 ```typescript
 // 問題: src/app/api/analyze/route.ts でMastraエージェント呼び出し失敗
 // 修正必要: エラーハンドリングと段階的処理
@@ -1395,10 +1395,10 @@ try {
     scenes: [],
     highlights: []
   }
-  
+
   // Mastra呼び出しは後回し、まずは固定値で動作確認
   await analysisStorage.put(analysisPath, JSON.stringify(simpleAnalysis))
-  
+
 } catch (error) {
   console.error('Analysis failed:', error)
   await dbService.updateJobError(jobId, error.message, 'analyze')
@@ -1410,7 +1410,7 @@ try {
 
 #### Week 1: 基盤修復
 - [ ] Job Status APIを最低限動作させる
-- [ ] データベース読み書きの基本動作確認  
+- [ ] データベース読み書きの基本動作確認
 - [ ] 簡単なテキスト処理で分析パイプラインを疎通させる
 
 #### Week 2: LLM統合
@@ -1443,8 +1443,8 @@ try {
 
 ### ⚠️ 推定修復時間
 
-**基本動作まで**: 最低2-3週間  
-**完全機能まで**: 2-3ヶ月  
+**基本動作まで**: 最低2-3週間
+**完全機能まで**: 2-3ヶ月
 
 現在の状態では「デモ画面」以上の価値は提供できない状況です。
 
@@ -1499,3 +1499,44 @@ graph LR
     H --> I[パフォーマンステスト]
     I --> J[Cloudflare Workers本番デプロイ]
 ```
+
+## 実装状況更新（2025-08-08）
+
+本日の変更と現在の実動状況を追補します。
+
+### 1) パイプラインの最低限復旧（splitOnly）
+- アップロード→ジョブ作成→チャンク分割→ステータス取得までの一連が安定動作
+- `/api/jobs/:jobId/status`: 正常応答・進捗マッピング強化（chunks_created / analysis_completed 等を許容）
+- `/api/jobs/:jobId/episodes`: 分割直後は404（仕様として明示）
+- `/api/render/status/:jobId`: エピソード未生成時は `no_episodes` を返却（仕様として明示）
+
+### 2) API契約の明確化
+- `/api/analyze` において、Mastra出力の型を zod スキーマに基づき明示（型安全性の向上）
+- Episodes取得の404を「未生成状態の正規レスポンス」としてUI/テストで扱う前提に変更
+- Job Statusの`currentStep`は以下をサポート: `initialized | split | analyze | episode | layout | render | complete`（互換ラベル: `chunks_created`, `analysis_completed` などの状態補助をUIで吸収）
+
+### 3) フロントエンドの堅牢化
+- ProcessingProgress:
+  - ポーリングの安定化（3s）、依存配列の是正、同一データ時の再レンダー抑制
+  - DEV限定のログパネル・重複抑止・キー重複回避
+  - ステップ別進捗%の丸め・安全計算、完成・失敗時の停止
+- ResultsDisplay:
+  - カードをbutton要素へ変更しアクセシビリティ向上
+  - 型参照の整合性（Episode型の参照先統一）
+
+### 4) 設定/LLM/構成
+- OpenRouterの既定モデルを `qwen/qwen3-235b-a22b-thinking-2507` へ変更
+- 環境変数オーバーライドの型安全化（プロバイダ/ログレベルのバリデーションを追加）
+- `config-loader` を環境変数ベースに簡素化（深いマージユーティリティの撤去）
+
+### 5) ストレージの最適化
+- JSON保存時はインデント無しでI/Oを軽量化
+- メタデータファイルは必要時のみ作成（不要なディレクトリ作成を削減）
+
+### 6) 既知の課題（継続）
+- LLM実行（analyze以降）の本稼働、Mastraエージェントの疎通確認
+- エピソード生成→レイアウト→レンダリングの本処理実装とAPI/DB契約の固定
+- `resumeDataPath`の実装と中断復旧（リトライ/再開）
+- PlaywrightによるE2E拡張（エピソード〜レンダリングまで）
+
+以上をもって、08-07時点の「致命的停止」から、08-08時点では「分割までの基盤」復旧を確認。
