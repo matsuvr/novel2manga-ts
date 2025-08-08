@@ -15,6 +15,15 @@ vi.mock('@/services/database', () => ({
     createNovel: vi.fn(),
     createJob: vi.fn(),
     getJob: vi.fn(),
+    getJobWithProgress: vi.fn(),
+    getEpisodesByJobId: vi.fn(),
+  })),
+}))
+
+// バックグラウンド処理の副作用を避けるためにプロセッサをモック
+vi.mock('@/services/job-narrative-processor', () => ({
+  JobNarrativeProcessor: vi.fn().mockImplementation(() => ({
+    processJob: vi.fn().mockResolvedValue(undefined),
   })),
 }))
 
@@ -28,6 +37,8 @@ describe('/api/jobs/[jobId]/episodes', () => {
       createNovel: vi.fn().mockResolvedValue('test-novel-id'),
       createJob: vi.fn(),
       getJob: vi.fn(),
+      getJobWithProgress: vi.fn(),
+      getEpisodesByJobId: vi.fn(),
     }
 
     vi.mocked(DatabaseService).mockReturnValue(mockDbService)
@@ -40,7 +51,7 @@ describe('/api/jobs/[jobId]/episodes', () => {
   describe('GET /api/jobs/[jobId]/episodes', () => {
     it('存在しないジョブIDの場合は404を返す', async () => {
       // 存在しないジョブのモック設定
-      mockDbService.getJob.mockResolvedValue(null)
+      mockDbService.getJobWithProgress.mockResolvedValue(null)
 
       const request = new NextRequest('http://localhost:3000/api/jobs/nonexistent/episodes')
       const params = { jobId: 'nonexistent' }
@@ -58,11 +69,18 @@ describe('/api/jobs/[jobId]/episodes', () => {
       const jobId = 'test-job-episodes'
 
       // 既存ジョブのモック設定
-      mockDbService.getJob.mockResolvedValue({
+      mockDbService.getJobWithProgress.mockResolvedValue({
         id: jobId,
         novelId: 'test-novel-id',
         status: 'pending',
         currentStep: 'initialized',
+        episodeCompleted: false,
+        progress: {
+          currentStep: 'initialized',
+          processedChunks: 0,
+          totalChunks: 0,
+          episodes: [],
+        },
       })
 
       const requestBody = {
@@ -93,7 +111,7 @@ describe('/api/jobs/[jobId]/episodes', () => {
 
     it('存在しないジョブIDの場合は404を返す', async () => {
       // 存在しないジョブのモック設定
-      mockDbService.getJob.mockResolvedValue(null)
+      mockDbService.getJobWithProgress.mockResolvedValue(null)
 
       const requestBody = { config: {} }
 

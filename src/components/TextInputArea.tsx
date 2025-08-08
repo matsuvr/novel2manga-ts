@@ -20,17 +20,17 @@ export default function TextInputArea({
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+  const handleDragOver = (e: DragEvent<HTMLTextAreaElement>) => {
     e.preventDefault()
     setIsDragging(true)
   }
 
-  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
+  const handleDragLeave = (e: DragEvent<HTMLTextAreaElement>) => {
     e.preventDefault()
     setIsDragging(false)
   }
 
-  const handleDrop = async (e: DragEvent<HTMLDivElement>) => {
+  const handleDrop = async (e: DragEvent<HTMLTextAreaElement>) => {
     e.preventDefault()
     setIsDragging(false)
 
@@ -59,7 +59,9 @@ export default function TextInputArea({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">小説テキスト入力</h2>
+          <h2 className="text-2xl font-semibold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
+            小説テキスト入力
+          </h2>
           <p className="text-sm text-gray-500 mt-1">
             テキストを貼り付けるか、ファイルをドラッグ＆ドロップしてください
           </p>
@@ -85,9 +87,6 @@ export default function TextInputArea({
         className={`flex-1 relative rounded-3xl transition-all duration-300 ${
           isDragging ? 'scale-[1.02] shadow-2xl' : ''
         }`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
       >
         <textarea
           value={value}
@@ -95,6 +94,9 @@ export default function TextInputArea({
           placeholder="ここに小説のテキストを入力してください..."
           className={`w-full p-6 rounded-2xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 ease-out placeholder:text-gray-400 text-gray-800 resize-none shadow-inner h-full ${isDragging ? 'opacity-50' : ''}`}
           disabled={isProcessing}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
         />
         {isDragging && (
           <div className="absolute inset-0 flex items-center justify-center rounded-3xl bg-blue-500/10 border-2 border-dashed border-blue-500 pointer-events-none">

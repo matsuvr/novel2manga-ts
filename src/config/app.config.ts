@@ -22,7 +22,7 @@ export const appConfig = {
     providers: {
       openai: {
         apiKey: process.env.OPENAI_API_KEY,
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-mini',
         maxTokens: 4096,
         timeout: 30000,
       },
@@ -46,10 +46,11 @@ export const appConfig = {
       },
       openrouter: {
         apiKey: process.env.OPENROUTER_API_KEY,
-        model: 'qwen/qwen3-235b-a22b-thinking-2507',
+        model: 'openai/gpt-oss-120b',
         baseUrl: 'https://openrouter.ai/api/v1',
         maxTokens: 8192,
         timeout: 30000,
+        preferCerebras: true, // Cerebrasプロバイダーを優先する（対応モデルの場合）
       },
     },
 
@@ -63,7 +64,7 @@ export const appConfig = {
         claude: 'claude-sonnet-4-20250514',
         gemini: 'gemini-2.5-flash',
         groq: 'compound-beta',
-        openrouter: 'qwen/qwen3-235b-a22b-thinking-2507',
+        openrouter: 'openai/gpt-oss-120b', // Cerebras対応の場合は自動で cerebras/qwen-3-235b-a22b-thinking-2507 に変換
       },
       systemPrompt: `あなたは小説テキストを分析し、マンガ制作に必要な5要素（登場人物、シーン、対話、ハイライト、状況）を抽出する専門家です。
 
@@ -99,7 +100,7 @@ export const appConfig = {
         claude: 'claude-sonnet-4-20250514',
         gemini: 'gemini-2.5-flash',
         groq: 'compound-beta',
-        openrouter: 'qwen/qwen3-235b-a22b-thinking-2507',
+        openrouter: 'openai/gpt-oss-120b', // Cerebras対応の場合は自動で cerebras/qwen-3-235b-a22b-thinking-2507 に変換
       },
       systemPrompt: `あなたは物語の構造を分析し、エピソードの境界を特定する専門家です。
 
@@ -163,11 +164,11 @@ export const appConfig = {
       maxTokens: 4096,
       // プロバイダー別のモデルオーバーライド
       modelOverrides: {
-        openai: 'gpt-4o-mini',
+        openai: 'gpt-5-mini',
         claude: 'claude-sonnet-4-20250514',
         gemini: 'gemini-2.5-flash',
         groq: 'compound-beta',
-        openrouter: 'qwen/qwen3-235b-a22b-thinking-2507',
+        openrouter: 'openai/gpt-oss-120b', // Cerebras対応の場合は自動で cerebras/qwen-3-235b-a22b-thinking-2507 に変換
       },
       systemPrompt: `あなたはマンガのコマ割りレイアウトを設計する専門家です。
 日本式マンガのレイアウト（右から左、上から下の読み順）でYAML形式のレイアウトを生成してください。
@@ -184,7 +185,7 @@ export const appConfig = {
         claude: 'claude-sonnet-4-20250514',
         gemini: 'gemini-2.5-flash',
         groq: 'compound-beta',
-        openrouter: 'qwen/qwen3-235b-a22b-thinking-2507',
+        openrouter: 'openai/gpt-oss-120b', // Cerebras対応の場合は自動で cerebras/qwen-3-235b-a22b-thinking-2507 に変換
       },
       systemPrompt: `あなたは優秀な文学分析の専門家です。複数のチャンク分析結果を統合し、物語全体の要素を抽出してください。
 

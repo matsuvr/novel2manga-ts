@@ -121,6 +121,7 @@ export function createErrorResponse(
   // ApiError系のエラー
   if (error instanceof ApiError) {
     const response = {
+      success: false as const,
       error: error.message,
       code: error.code,
       details: error.details,
@@ -145,6 +146,7 @@ export function createErrorResponse(
     if ('code' in error && error.code === 'ENOENT') {
       return NextResponse.json(
         {
+          success: false as const,
           error: 'リソースが見つかりません',
           code: 'NOT_FOUND',
         },
@@ -156,6 +158,7 @@ export function createErrorResponse(
     if ('code' in error && error.code === 'EACCES') {
       return NextResponse.json(
         {
+          success: false as const,
           error: 'ファイルアクセス権限がありません',
           code: 'FILE_ACCESS_DENIED',
         },
@@ -167,6 +170,7 @@ export function createErrorResponse(
     if ('code' in error && error.code === 'ENOSPC') {
       return NextResponse.json(
         {
+          success: false as const,
           error: 'ディスク容量が不足しています',
           code: 'INSUFFICIENT_STORAGE',
         },
@@ -178,6 +182,7 @@ export function createErrorResponse(
     if ('code' in error && error.code === 'ETIMEDOUT') {
       return NextResponse.json(
         {
+          success: false as const,
           error: 'リクエストがタイムアウトしました',
           code: 'TIMEOUT',
         },
@@ -188,6 +193,7 @@ export function createErrorResponse(
     // その他のエラー
     return NextResponse.json(
       {
+        success: false as const,
         error: error.message || defaultMessage,
         code: 'INTERNAL_ERROR',
       },
@@ -198,6 +204,7 @@ export function createErrorResponse(
   // 予期しないエラー
   return NextResponse.json(
     {
+      success: false as const,
       error: defaultMessage,
       code: 'UNKNOWN_ERROR',
     },

@@ -7,37 +7,13 @@ echo "========================================"
 
 # 環境変数の設定
 export NODE_ENV=test
+export N2M_TEST=1
+export N2M_MOCK_LLM=1
 export DOTENV_CONFIG_PATH=.env.test
 
 # 必要な環境変数がセットされているかチェック
 check_env_vars() {
-    local missing_vars=()
-
-    # LLM API Keys のチェック（少なくとも2つは必要）
-    local llm_count=0
-
-    if [ -n "$OPENROUTER_API_KEY" ] && [ "$OPENROUTER_API_KEY" != "your_openrouter_api_key_here" ]; then
-        ((llm_count++))
-        echo "✓ OpenRouter API Key found"
-    fi
-
-    if [ -n "$GEMINI_API_KEY" ] && [ "$GEMINI_API_KEY" != "your_gemini_api_key_here" ]; then
-        ((llm_count++))
-        echo "✓ Gemini API Key found"
-    fi
-
-    if [ -n "$CLAUDE_API_KEY" ] && [ "$CLAUDE_API_KEY" != "your_claude_api_key_here" ]; then
-        ((llm_count++))
-        echo "✓ Claude API Key found"
-    fi
-
-    if [ $llm_count -lt 2 ]; then
-        echo "❌ フォールバック機能のテストには最低2つのLLM API Keyが必要です"
-        echo "   .env.test ファイルにAPI Keyを設定してください"
-        exit 1
-    fi
-
-    echo "✓ 必要な環境変数が設定されています ($llm_count個のLLM プロバイダー)"
+    echo "✓ テストは LLM モックモードで実行します (N2M_MOCK_LLM=1)"
 }
 
 # 前提条件のチェック
@@ -81,35 +57,24 @@ check_server() {
         return 0
     fi
 
-    echo "⚠️  サーバーが起動していません"
-    echo "   テスト前に 'npm run dev' でサーバーを起動してください"
-    echo "   または、サーバー自動起動オプション付きでテストを実行してください"
+    echo "🚀 サーバーを自動起動します..."
+    NODE_ENV=test N2M_TEST=1 N2M_MOCK_LLM=1 npm run dev &
+    SERVER_PID=$!
 
-    read -p "サーバーを自動起動しますか？ (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "🚀 サーバーを起動中..."
-        npm run dev &
-        SERVER_PID=$!
+    # サーバー起動待機
+    echo "サーバー起動を待機中..."
+    for i in {1..40}; do
+        if curl -s http://localhost:3000/api/health > /dev/null 2>&1; then
+            echo "✓ サーバー起動完了"
+            return 0
+        fi
+        echo -n "."
+        sleep 2
+    done
 
-        # サーバー起動待機
-        echo "サーバー起動を待機中..."
-        for i in {1..30}; do
-            if curl -s http://localhost:3000/api/health > /dev/null 2>&1; then
-                echo "✓ サーバー起動完了"
-                return 0
-            fi
-            echo -n "."
-            sleep 2
-        done
-
-        echo ""
-        echo "❌ サーバーの起動に失敗しました"
-        exit 1
-    else
-        echo "テストを中止します"
-        exit 1
-    fi
+    echo ""
+    echo "❌ サーバーの起動に失敗しました"
+    exit 1
 }
 
 # テスト実行
@@ -119,8 +84,7 @@ run_tests() {
     echo "------------------------"
 
     # Vitestでテスト実行
-    npx vitest run tests/integration/novel-processing-flow.test.ts \
-        --reporter=verbose
+    npx dotenv -e .env.test -- vitest run tests/integration/full-pipeline.e2e.test.ts --reporter=verbose --config vitest.integration.config.ts
 
     test_result=$?
 

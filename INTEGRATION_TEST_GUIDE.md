@@ -1,65 +1,66 @@
-# 🚀 小説処理フロー統合テスト 実行ガイド
+# Integration Test Guide (fail-fast + splitOnly)
 
-## クイックスタート
+This guide describes the current E2E strategy: fast, deterministic smoke tests using /api/analyze splitOnly mode, and a fail-fast API surface with no internal fallbacks.
 
-### 1. 環境設定
+## Overview
 
-`.env.test` ファイルを作成し、API Keyを設定：
+- Split-only smoke path validates early pipeline pieces without invoking LLMs.
+- API does not provide fallback loops; errors surface immediately. This prevents 60s hangs.
+- Heavier, LLM-involved validations should be done with service/agent-layer mocks, not API flags.
 
-```env
-# 必須: LLMプロバイダー (最低2つ)
-OPENROUTER_API_KEY=sk-or-v1-xxx...
-GEMINI_API_KEY=AIzaSyxxx...
+## Prerequisites
 
-# オプション: 追加フォールバック
-CLAUDE_API_KEY=sk-ant-api03-xxx...
-OPENAI_API_KEY=sk-proj-xxx...
+- Node.js 20+
+- npm
+- Novel text at `docs/宮本武蔵地の巻.txt`
+- No LLM keys are required for splitOnly smoke.
 
-# その他設定
-NODE_ENV=test
-DATABASE_URL="file:./dev.db"
-```
+## Running
 
-### 2. テスト実行
+You can start the server manually or let the scripts handle it.
 
-**推奨: 完全自動実行**
+### Manual server then run tests
+
 ```bash
-# Windows
-npm run test:full-flow:win
-
-# Linux/Mac
-npm run test:full-flow
-```
-
-**手動実行**
-```bash
-# 1. サーバー起動
 npm run dev
-
-# 2. テスト実行 (別ターミナル)
+# In another terminal
 npm run test:integration
 ```
 
-## テスト内容
+### Orchestrated (recommended)
 
-1. ✅ **小説読み込み**: `宮本武蔵地の巻.txt` (約10万文字)
-2. ✅ **アップロード**: `/api/novel` エンドポイント
-3. ✅ **解析・分割**: `/api/analyze` エンドポイント
-4. ✅ **エピソード分析**: `/api/jobs/{jobId}/episodes` エンドポイント
-5. ✅ **レイアウト生成**: `/api/layout/generate` エンドポイント
-6. ✅ **LLMフォールバック**: OpenRouter → Gemini → Claude
-
-## 期待される結果
-
+```bash
+npm run test:full-flow        # Linux/Mac
+npm run test:full-flow:win    # Windows
 ```
-🚀 小説処理フロー統合テスト開始
-✓ LLMプロバイダー接続成功: openrouter
-✓ 小説読み込み成功: 123456文字
-✓ 小説アップロード成功: UUID=abc123...
-✓ チャンク分割は次のステップで実行されます
-✓ テキスト分析完了: 25チャンクを生成・分析
-✓ エピソード分析完了: 3個のエピソードを生成
-✓ コマ割りYAML生成完了: 8ページ分のレイアウト
+
+The scripts wait for `/api/health` on port 3001 and run the Vitest suite.
+
+## Scenarios (current)
+
+1) Split-only smoke
+- POST /api/novel → novelId
+- POST /api/analyze { splitOnly: true } → jobId, chunkCount
+- GET /api/jobs/:jobId/status → splitCompleted true
+- GET /api/jobs/:jobId/episodes → 404 (no episodes yet)
+- GET /api/render/status/:jobId → { status: "no_episodes" }
+
+2) Error paths (examples)
+- Invalid analyze payload → 400/422
+- Unknown jobId → 404
+- Storage read error → 500 with clear message (no retry/fallback hidden loops)
+
+## Extending Tests
+
+- Place new tests in `tests/integration/`.
+- Keep scenarios minimal and deterministic; avoid timing-based assertions.
+- For LLM-heavy flows, inject mocks at the agent/service layer in unit/integration tests, not via API test flags.
+
+## Troubleshooting
+
+- Port conflicts (3001): The orchestration attempts cleanup, but collisions can happen. Retry after a few seconds.
+- 60s timeouts: Remove any local retry loops; the API intentionally fails fast now.
+- Dynamic route params: Ensure Next.js App Router handlers await params before accessing `jobId`.
 ✓ 統合テスト完了: 小説→漫画レイアウトまでの全工程が正常に動作
 ```
 

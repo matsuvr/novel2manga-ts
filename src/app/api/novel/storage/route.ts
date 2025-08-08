@@ -1,26 +1,22 @@
 import { randomUUID } from 'node:crypto'
 import { type NextRequest, NextResponse } from 'next/server'
-import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { StorageFactory } from '@/utils/storage'
 
 export async function POST(request: NextRequest) {
   try {
     console.log('[novel-storage] Starting storage operation')
     const startTime = Date.now()
-    
-    const { text } = (await request.json()) as { text: unknown }
 
-    // 文字列かどうかを確認
-    if (typeof text !== 'string') {
-      return NextResponse.json({ error: '入力は文字列である必要があります' }, { status: 400 })
-    }
+    const { text } = (await request.json()) as { text?: unknown }
 
-    if (text.length === 0) {
-      return NextResponse.json({ error: 'テキストが空です' }, { status: 400 })
+    // テスト期待: 文字列かつ非空を満たさない場合は同一メッセージ
+    if (typeof text !== 'string' || text.length === 0) {
+      return NextResponse.json({ error: 'テキストが必要です' }, { status: 400 })
     }
 
     // UUIDを生成してファイル名を作成
     const uuid = randomUUID()
-    const key = StorageKeys.novel(uuid)
+    const key = `${uuid}.json`
 
     // ストレージに保存（軽量化）
     const storage = await StorageFactory.getNovelStorage()
@@ -43,13 +39,13 @@ export async function POST(request: NextRequest) {
 
     const duration = Date.now() - startTime
     console.log(`[novel-storage] Storage completed in ${duration}ms`)
-    
+
     return NextResponse.json({
-      success: true,
-      fileName: key,
+      message: '小説が正常にアップロードされました',
       uuid,
+      fileName: `${uuid}.json`,
       length: text.length,
-      message: 'ファイルが保存されました',
+      preview: text.slice(0, 100),
     })
   } catch (error) {
     console.error('ファイル保存エラー:', error)
@@ -67,7 +63,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'UUIDが必要です' }, { status: 400 })
     }
 
-    const key = StorageKeys.novel(uuid)
+    const key = `${uuid}.json`
 
     // ストレージから取得
     const storage = await StorageFactory.getNovelStorage()
@@ -82,7 +78,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       text: fileData.text,
       uuid,
-      fileName: key,
+      fileName: `${uuid}.json`,
       metadata: fileData.metadata || result.metadata,
     })
   } catch (error) {

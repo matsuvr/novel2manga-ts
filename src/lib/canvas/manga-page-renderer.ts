@@ -205,7 +205,7 @@ export class MangaPageRenderer {
   async renderToImage(
     layout: MangaLayout,
     pageNumber: number = 1,
-    format: 'png' | 'jpeg' = 'png',
+    format: 'png' | 'jpeg' | 'webp' = 'png',
   ): Promise<Blob> {
     await this.renderToCanvas(layout, pageNumber)
     return this.canvasRenderer.toBlob(format)
@@ -216,13 +216,13 @@ export class MangaPageRenderer {
    */
   async renderAllPages(
     layout: MangaLayout,
-    format: 'png' | 'jpeg' = 'png',
-  ): Promise<Map<number, Blob>> {
-    const renderedPages = new Map<number, Blob>()
+    format: 'png' | 'jpeg' | 'webp' = 'png',
+  ): Promise<Blob[]> {
+    const renderedPages: Blob[] = []
 
     for (const page of layout.pages) {
       const blob = await this.renderToImage(layout, page.page_number, format)
-      renderedPages.set(page.page_number, blob)
+      renderedPages.push(blob)
     }
 
     return renderedPages

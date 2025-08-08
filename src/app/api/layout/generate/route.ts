@@ -6,7 +6,9 @@ import { z } from 'zod'
 import { generateMangaLayout } from '@/agents/layout-generator'
 import { DatabaseService } from '@/services/database'
 import type { ChunkData, EpisodeData } from '@/types/panel-layout'
-import { getChunkData } from '@/utils/storage'
+import { toErrorResponse } from '@/utils/api-error-response'
+import { HttpError } from '@/utils/http-errors'
+import { getChunkData, StorageFactory } from '@/utils/storage'
 
 const requestSchema = z.object({
   jobId: z.string(),
@@ -39,20 +41,22 @@ export async function POST(request: NextRequest) {
     // ジョブとエピソード情報を取得
     const job = await dbService.getJobWithProgress(jobId)
     if (!job) {
-      return NextResponse.json({ error: 'Job not found' }, { status: 404 })
+      throw new HttpError('Job not found', 404)
     }
 
     const episodes = await dbService.getEpisodesByJobId(jobId)
     const episode = episodes.find((ep) => ep.episodeNumber === episodeNumber)
-
     if (!episode) {
-      return NextResponse.json({ error: 'Episode not found' }, { status: 404 })
+      throw new HttpError('Episode not found', 404)
     }
+
+    // ここまででepisodeは必ず存在
+    const ensuredEpisode = episode
 
     // エピソードに含まれるチャンクの解析結果を取得
     const chunkDataArray: ChunkData[] = []
 
-    for (let i = episode.startChunk; i <= episode.endChunk; i++) {
+    for (let i = ensuredEpisode.startChunk; i <= ensuredEpisode.endChunk; i++) {
       const chunkContent = await getChunkData(jobId, i)
       if (!chunkContent) {
         throw new Error(
@@ -60,23 +64,22 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // チャンク解析結果を取得
-      const analysisPath = path.join(
-        process.cwd(),
-        '.local-storage',
-        'chunk-analysis',
-        jobId,
-        `chunk_${i}_analysis.json`,
-      )
-
+      // チャンク解析結果を取得（Storage経由: analyses/{jobId}/chunk_{i}.json）
       try {
-        const analysisContent = await fs.readFile(analysisPath, 'utf-8')
-        const analysis = JSON.parse(analysisContent)
+        const analysisStorage = await StorageFactory.getAnalysisStorage()
+        const key = `analyses/${jobId}/chunk_${i}.json`
+        const obj = await analysisStorage.get(key)
+        if (!obj) {
+          throw new Error('analysis not found')
+        }
+        const parsed = JSON.parse(obj.text)
+        const analysis = parsed.analysis ?? parsed
 
         // エピソード境界を考慮した部分チャンクの処理
-        const isPartial = i === episode.startChunk || i === episode.endChunk
-        const startOffset = i === episode.startChunk ? episode.startCharIndex : 0
-        const endOffset = i === episode.endChunk ? episode.endCharIndex : chunkContent.text.length
+        const isPartial = i === ensuredEpisode.startChunk || i === ensuredEpisode.endChunk
+        const startOffset = i === ensuredEpisode.startChunk ? ensuredEpisode.startCharIndex : 0
+        const endOffset =
+          i === ensuredEpisode.endChunk ? ensuredEpisode.endCharIndex : chunkContent.text.length
 
         chunkDataArray.push({
           chunkIndex: i,
@@ -92,25 +95,22 @@ export async function POST(request: NextRequest) {
     }
 
     if (chunkDataArray.length === 0) {
-      return NextResponse.json(
-        { error: 'No chunk analysis data found for this episode' },
-        { status: 400 },
-      )
+      throw new HttpError('No chunk analysis data found for this episode', 400)
     }
 
     // エピソードデータを構築
     const episodeData: EpisodeData = {
       chunkAnalyses: chunkDataArray.map((chunk) => chunk.analysis),
       author: job.jobName || 'Unknown Author',
-      title: `Episode ${episode.episodeNumber}` as const,
-      episodeNumber: episode.episodeNumber,
-      episodeTitle: episode.title || undefined,
-      episodeSummary: episode.summary || undefined,
-      startChunk: episode.startChunk,
-      startCharIndex: episode.startCharIndex,
-      endChunk: episode.endChunk,
-      endCharIndex: episode.endCharIndex,
-      estimatedPages: episode.estimatedPages,
+      title: `Episode ${ensuredEpisode.episodeNumber}` as const,
+      episodeNumber: ensuredEpisode.episodeNumber,
+      episodeTitle: ensuredEpisode.title || undefined,
+      episodeSummary: ensuredEpisode.summary || undefined,
+      startChunk: ensuredEpisode.startChunk,
+      startCharIndex: ensuredEpisode.startCharIndex,
+      endChunk: ensuredEpisode.endChunk,
+      endCharIndex: ensuredEpisode.endCharIndex,
+      estimatedPages: ensuredEpisode.estimatedPages,
       chunks: chunkDataArray,
     }
 
@@ -151,14 +151,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error generating layout:', error)
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid request data', details: error.errors },
-        { status: 400 },
-      )
-    }
-
-    return NextResponse.json({ error: 'Failed to generate layout' }, { status: 500 })
+    return toErrorResponse(error, 'Failed to generate layout')
   }
 }

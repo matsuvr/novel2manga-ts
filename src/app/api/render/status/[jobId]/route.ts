@@ -1,10 +1,19 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { appConfig } from '@/config/app.config'
 import { DatabaseService } from '@/services/database'
+import { toErrorResponse } from '@/utils/api-error-response'
+import { HttpError } from '@/utils/http-errors'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
 
-export async function GET(request: NextRequest, { params }: { params: { jobId: string } }) {
+export async function GET(
+  request: NextRequest,
+  ctx: { params: { jobId: string } | Promise<{ jobId: string }> },
+) {
   try {
+    const params = await ctx.params
+    if (!params?.jobId || params.jobId === 'undefined') {
+      throw new HttpError('Invalid jobId', 400)
+    }
     const { searchParams } = new URL(request.url)
     const episodeParam = searchParams.get('episode')
     const pageParam = searchParams.get('page')
@@ -14,7 +23,7 @@ export async function GET(request: NextRequest, { params }: { params: { jobId: s
     // ジョブの存在確認
     const job = await dbService.getJob(params.jobId)
     if (!job) {
-      return NextResponse.json({ error: 'Job not found' }, { status: 404 })
+      throw new HttpError('Job not found', 404)
     }
 
     // エピソード番号のバリデーション
@@ -22,7 +31,7 @@ export async function GET(request: NextRequest, { params }: { params: { jobId: s
     if (episodeParam) {
       episodeNum = Number(episodeParam)
       if (Number.isNaN(episodeNum) || episodeNum < 1) {
-        return NextResponse.json({ error: 'Invalid episode number' }, { status: 400 })
+        throw new HttpError('Invalid episode number', 400)
       }
     }
 
@@ -31,7 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: { jobId: s
     if (pageParam) {
       pageNum = Number(pageParam)
       if (Number.isNaN(pageNum) || pageNum < 1) {
-        return NextResponse.json({ error: 'Invalid page number' }, { status: 400 })
+        throw new HttpError('Invalid page number', 400)
       }
     }
 
@@ -130,6 +139,6 @@ export async function GET(request: NextRequest, { params }: { params: { jobId: s
     })
   } catch (error) {
     console.error('Error fetching render status:', error)
-    return NextResponse.json({ error: 'Failed to fetch render status' }, { status: 500 })
+    return toErrorResponse(error, 'Failed to fetch render status')
   }
 }

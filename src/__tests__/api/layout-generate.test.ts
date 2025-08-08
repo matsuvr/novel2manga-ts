@@ -52,6 +52,8 @@ vi.mock('@/services/database', () => ({
     createNovel: vi.fn(),
     createJob: vi.fn(),
     createEpisode: vi.fn(),
+    getJobWithProgress: vi.fn(),
+    getEpisodesByJobId: vi.fn(),
   })),
 }))
 
@@ -76,12 +78,14 @@ describe('/api/layout/generate', () => {
       createNovel: vi.fn().mockResolvedValue(testNovelId),
       createJob: vi.fn(),
       createEpisode: vi.fn(),
+      getJobWithProgress: vi.fn(),
+      getEpisodesByJobId: vi.fn(),
     }
 
     vi.mocked(DatabaseService).mockReturnValue(mockDbService)
 
-    // テスト用チャンク分析ファイルを作成
-    const analysisDir = path.join(testDir, 'chunk-analysis', testJobId)
+    // ルート実装が参照する .local-storage 配下にチャンク分析ファイルを作成
+    const analysisDir = path.join(process.cwd(), '.local-storage', 'chunk-analysis', testJobId)
     await fs.mkdir(analysisDir, { recursive: true })
 
     const analysisData = {
@@ -131,6 +135,56 @@ describe('/api/layout/generate', () => {
         },
       }
 
+      // 正常系: 既存ジョブとエピソードをモック
+      mockDbService.getJobWithProgress.mockResolvedValue({
+        id: testJobId,
+        jobName: 'AuthorX',
+        status: 'processing',
+        currentStep: 'layout',
+        splitCompleted: true,
+        analyzeCompleted: true,
+        episodeCompleted: true,
+        layoutCompleted: false,
+        renderCompleted: false,
+        totalChunks: 2,
+        processedChunks: 0,
+        totalEpisodes: 1,
+        processedEpisodes: 0,
+        totalPages: 0,
+        renderedPages: 0,
+        lastError: null,
+        lastErrorStep: null,
+        retryCount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        startedAt: null,
+        completedAt: null,
+        chunksDirPath: null,
+        analysesDirPath: null,
+        episodesDataPath: null,
+        layoutsDirPath: null,
+        rendersDirPath: null,
+        resumeDataPath: null,
+        progress: { currentStep: 'layout', processedChunks: 0, totalChunks: 2, episodes: [] },
+      })
+      mockDbService.getEpisodesByJobId.mockResolvedValue([
+        {
+          id: `${testJobId}-ep1`,
+          novelId: testNovelId,
+          jobId: testJobId,
+          episodeNumber: 1,
+          title: 'Ep1',
+          summary: 'sum',
+          startChunk: 0,
+          startCharIndex: 0,
+          endChunk: 1,
+          endCharIndex: 100,
+          estimatedPages: 2,
+          confidence: 0.9,
+          createdAt: new Date().toISOString(),
+        },
+      ])
+
       const request = new NextRequest('http://localhost:3000/api/layout/generate', {
         method: 'POST',
         body: JSON.stringify(requestBody),
@@ -158,6 +212,56 @@ describe('/api/layout/generate', () => {
         episodeNumber: 1,
       }
 
+      // 正常系（設定なし）モック
+      mockDbService.getJobWithProgress.mockResolvedValue({
+        id: testJobId,
+        jobName: 'AuthorX',
+        status: 'processing',
+        currentStep: 'layout',
+        splitCompleted: true,
+        analyzeCompleted: true,
+        episodeCompleted: true,
+        layoutCompleted: false,
+        renderCompleted: false,
+        totalChunks: 2,
+        processedChunks: 0,
+        totalEpisodes: 1,
+        processedEpisodes: 0,
+        totalPages: 0,
+        renderedPages: 0,
+        lastError: null,
+        lastErrorStep: null,
+        retryCount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        startedAt: null,
+        completedAt: null,
+        chunksDirPath: null,
+        analysesDirPath: null,
+        episodesDataPath: null,
+        layoutsDirPath: null,
+        rendersDirPath: null,
+        resumeDataPath: null,
+        progress: { currentStep: 'layout', processedChunks: 0, totalChunks: 2, episodes: [] },
+      })
+      mockDbService.getEpisodesByJobId.mockResolvedValue([
+        {
+          id: `${testJobId}-ep1`,
+          novelId: testNovelId,
+          jobId: testJobId,
+          episodeNumber: 1,
+          title: 'Ep1',
+          summary: 'sum',
+          startChunk: 0,
+          startCharIndex: 0,
+          endChunk: 1,
+          endCharIndex: 100,
+          estimatedPages: 2,
+          confidence: 0.9,
+          createdAt: new Date().toISOString(),
+        },
+      ])
+
       const request = new NextRequest('http://localhost:3000/api/layout/generate', {
         method: 'POST',
         body: JSON.stringify(requestBody),
@@ -179,6 +283,9 @@ describe('/api/layout/generate', () => {
         episodeNumber: 1,
       }
 
+      // ジョブなし
+      mockDbService.getJobWithProgress.mockResolvedValue(null)
+
       const request = new NextRequest('http://localhost:3000/api/layout/generate', {
         method: 'POST',
         body: JSON.stringify(requestBody),
@@ -199,6 +306,40 @@ describe('/api/layout/generate', () => {
       const requestBody = {
         jobId: testJobId,
       }
+
+      // エピソードなし
+      mockDbService.getJobWithProgress.mockResolvedValue({
+        id: testJobId,
+        jobName: 'AuthorX',
+        status: 'processing',
+        currentStep: 'layout',
+        splitCompleted: true,
+        analyzeCompleted: true,
+        episodeCompleted: true,
+        layoutCompleted: false,
+        renderCompleted: false,
+        totalChunks: 2,
+        processedChunks: 0,
+        totalEpisodes: 1,
+        processedEpisodes: 0,
+        totalPages: 0,
+        renderedPages: 0,
+        lastError: null,
+        lastErrorStep: null,
+        retryCount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        startedAt: null,
+        completedAt: null,
+        chunksDirPath: null,
+        analysesDirPath: null,
+        episodesDataPath: null,
+        layoutsDirPath: null,
+        rendersDirPath: null,
+        resumeDataPath: null,
+        progress: { currentStep: 'layout', processedChunks: 0, totalChunks: 2, episodes: [] },
+      })
+      mockDbService.getEpisodesByJobId.mockResolvedValue([])
 
       const request = new NextRequest('http://localhost:3000/api/layout/generate', {
         method: 'POST',
@@ -263,6 +404,56 @@ describe('/api/layout/generate', () => {
         episodeNumber: 999, // 存在しないエピソード
       }
 
+      // ジョブは存在、エピソードは存在しない状況をモック
+      mockDbService.getJobWithProgress.mockResolvedValue({
+        id: testJobId,
+        jobName: 'AuthorX',
+        status: 'processing',
+        currentStep: 'layout',
+        splitCompleted: true,
+        analyzeCompleted: true,
+        episodeCompleted: true,
+        layoutCompleted: false,
+        renderCompleted: false,
+        totalChunks: 2,
+        processedChunks: 0,
+        totalEpisodes: 1,
+        processedEpisodes: 0,
+        totalPages: 0,
+        renderedPages: 0,
+        lastError: null,
+        lastErrorStep: null,
+        retryCount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        startedAt: null,
+        completedAt: null,
+        chunksDirPath: null,
+        analysesDirPath: null,
+        episodesDataPath: null,
+        layoutsDirPath: null,
+        rendersDirPath: null,
+        resumeDataPath: null,
+        progress: { currentStep: 'layout', processedChunks: 0, totalChunks: 2, episodes: [] },
+      })
+      mockDbService.getEpisodesByJobId.mockResolvedValue([
+        {
+          id: `${testJobId}-ep1`,
+          novelId: testNovelId,
+          jobId: testJobId,
+          episodeNumber: 1,
+          title: 'Ep1',
+          summary: 'sum',
+          startChunk: 0,
+          startCharIndex: 0,
+          endChunk: 1,
+          endCharIndex: 100,
+          estimatedPages: 2,
+          confidence: 0.9,
+          createdAt: new Date().toISOString(),
+        },
+      ])
+
       const request = new NextRequest('http://localhost:3000/api/layout/generate', {
         method: 'POST',
         body: JSON.stringify(requestBody),
@@ -280,12 +471,65 @@ describe('/api/layout/generate', () => {
 
     it('チャンク分析データが存在しない場合は400エラーを返す', async () => {
       // 分析データファイルを削除
-      await fs.rm(path.join(testDir, 'chunk-analysis'), { recursive: true, force: true })
+      await fs.rm(path.join(process.cwd(), '.local-storage', 'chunk-analysis'), {
+        recursive: true,
+        force: true,
+      })
 
       const requestBody = {
         jobId: testJobId,
         episodeNumber: 1,
       }
+
+      // 正常なジョブ・エピソードはあるが分析データが読み込めない
+      mockDbService.getJobWithProgress.mockResolvedValue({
+        id: testJobId,
+        jobName: 'AuthorX',
+        status: 'processing',
+        currentStep: 'layout',
+        splitCompleted: true,
+        analyzeCompleted: true,
+        episodeCompleted: true,
+        layoutCompleted: false,
+        renderCompleted: false,
+        totalChunks: 2,
+        processedChunks: 0,
+        totalEpisodes: 1,
+        processedEpisodes: 0,
+        totalPages: 0,
+        renderedPages: 0,
+        lastError: null,
+        lastErrorStep: null,
+        retryCount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        startedAt: null,
+        completedAt: null,
+        chunksDirPath: null,
+        analysesDirPath: null,
+        episodesDataPath: null,
+        layoutsDirPath: null,
+        rendersDirPath: null,
+        resumeDataPath: null,
+        progress: { currentStep: 'layout', processedChunks: 0, totalChunks: 2, episodes: [] },
+      })
+      mockDbService.getEpisodesByJobId.mockResolvedValue([
+        {
+          id: `${testJobId}-ep1`,
+          novelId: testNovelId,
+          jobId: testJobId,
+          episodeNumber: 1,
+          title: 'Ep1',
+          summary: 'sum',
+          startChunk: 0,
+          startCharIndex: 0,
+          endChunk: 1,
+          endCharIndex: 100,
+          estimatedPages: 2,
+          confidence: 0.9,
+          createdAt: new Date().toISOString(),
+        },
+      ])
 
       const request = new NextRequest('http://localhost:3000/api/layout/generate', {
         method: 'POST',
@@ -312,6 +556,56 @@ describe('/api/layout/generate', () => {
           highlightPanelSizeMultiplier: 3.0, // 最大値
         },
       }
+
+      // 正常なジョブ・エピソードのモック
+      mockDbService.getJobWithProgress.mockResolvedValue({
+        id: testJobId,
+        jobName: 'AuthorX',
+        status: 'processing',
+        currentStep: 'layout',
+        splitCompleted: true,
+        analyzeCompleted: true,
+        episodeCompleted: true,
+        layoutCompleted: false,
+        renderCompleted: false,
+        totalChunks: 2,
+        processedChunks: 0,
+        totalEpisodes: 1,
+        processedEpisodes: 0,
+        totalPages: 0,
+        renderedPages: 0,
+        lastError: null,
+        lastErrorStep: null,
+        retryCount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        startedAt: null,
+        completedAt: null,
+        chunksDirPath: null,
+        analysesDirPath: null,
+        episodesDataPath: null,
+        layoutsDirPath: null,
+        rendersDirPath: null,
+        resumeDataPath: null,
+        progress: { currentStep: 'layout', processedChunks: 0, totalChunks: 2, episodes: [] },
+      })
+      mockDbService.getEpisodesByJobId.mockResolvedValue([
+        {
+          id: `${testJobId}-ep1`,
+          novelId: testNovelId,
+          jobId: testJobId,
+          episodeNumber: 1,
+          title: 'Ep1',
+          summary: 'sum',
+          startChunk: 0,
+          startCharIndex: 0,
+          endChunk: 1,
+          endCharIndex: 100,
+          estimatedPages: 2,
+          confidence: 0.9,
+          createdAt: new Date().toISOString(),
+        },
+      ])
 
       const request = new NextRequest('http://localhost:3000/api/layout/generate', {
         method: 'POST',

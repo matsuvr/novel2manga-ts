@@ -4,8 +4,9 @@ REM 小説処理フロー統合テストの実行スクリプト（Windows版）
 echo 🚀 小説処理フロー統合テスト開始
 echo ========================================
 
-REM 環境変数の設定
+REM 環境変数の設定（dotenv-cli を使用して .env.test を読み込む）
 set NODE_ENV=test
+set N2M_TEST=1
 set DOTENV_CONFIG_PATH=.env.test
 
 echo.
@@ -36,53 +37,42 @@ if not exist "node_modules" (
 echo ✓ 前提条件チェック完了
 
 echo.
-echo 🔌 サーバー接続確認
+echo 🔌 テスト用サーバー起動 (ポート3001)
 echo ------------------------
 
-REM サーバーの接続確認
-curl -s http://localhost:3000/api/health >nul 2>&1
-if %errorlevel% == 0 (
-    echo ✓ サーバーは既に起動しています
-    goto :run_tests
+REM 既存のポート3001使用プロセスを終了
+for /f "tokens=5" %%p in ('netstat -aon ^| findstr :3001 ^| findstr LISTENING') do (
+    echo 既存プロセスを終了: PID=%%p
+    taskkill /F /PID %%p >nul 2>&1
 )
 
-echo ⚠️  サーバーが起動していません
-echo    テスト前に 'npm run dev' でサーバーを起動してください
-echo    または、サーバー自動起動オプション付きでテストを実行してください
+REM 既存サーバー有無に関わらず、テスト専用ポートで起動
+echo 🚀 サーバーを自動起動します (http://localhost:3001)
+start /b cmd /c "set NODE_ENV=test && set N2M_TEST=1 && set PORT=3001 && npx next dev -p 3001"
 
-set /p AUTO_START="サーバーを自動起動しますか？ (y/N): "
-if /i "%AUTO_START%" == "y" (
-    echo 🚀 サーバーを起動中...
-    start /b npm run dev
-
-    echo サーバー起動を待機中...
-    for /l %%i in (1,1,30) do (
-        ping 127.0.0.1 -n 3 >nul
-        curl -s http://localhost:3000/api/health >nul 2>&1
-        if not errorlevel 1 (
-            echo ✓ サーバー起動完了
-            goto :run_tests
-        )
-        echo|set /p="."
+echo サーバー起動を待機中...
+for /l %%i in (1,1,40) do (
+    ping 127.0.0.1 -n 3 >nul
+    curl -s http://localhost:3001/api/health >nul 2>&1
+    if not errorlevel 1 (
+        echo ✓ サーバー起動完了 (http://localhost:3001)
+        goto :run_tests
     )
-
-    echo.
-    echo ❌ サーバーの起動に失敗しました
-    pause
-    exit /b 1
-) else (
-    echo テストを中止します
-    pause
-    exit /b 1
+    echo|set /p="."
 )
+
+echo.
+echo ❌ サーバーの起動に失敗しました
+exit /b 1
 
 :run_tests
 echo.
 echo 🧪 統合テスト実行
 echo ------------------------
 
-REM Vitestでテスト実行
-npx vitest run tests/integration/novel-processing-flow.test.ts --reporter=verbose
+REM Vitestでテスト実行（BASE_URLをテストサーバーに固定）
+set NEXTAUTH_URL=http://localhost:3001
+"node_modules/.bin/dotenv" -e .env.test -- npx vitest run tests/integration/full-pipeline.e2e.test.ts --reporter=verbose --config vitest.integration.config.ts
 
 if %errorlevel% == 0 (
     echo.
@@ -104,5 +94,4 @@ if %errorlevel% == 0 (
 )
 
 echo.
-echo テスト完了。何かキーを押して終了してください...
-pause >nul
+echo テスト完了
