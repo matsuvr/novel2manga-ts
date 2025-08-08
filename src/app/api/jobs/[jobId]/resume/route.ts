@@ -1,19 +1,21 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { DatabaseService } from '@/services/database'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
+import { toErrorResponse } from '@/utils/api-error-response'
+import { HttpError } from '@/utils/http-errors'
 
 export async function POST(_request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
+    if (!params.jobId || params.jobId === 'undefined') {
+      throw new HttpError('Invalid jobId', 400)
+    }
     const dbService = new DatabaseService()
     const processor = new JobNarrativeProcessor(dbService)
 
     // ジョブが再開可能かチェック
     const canResume = await processor.canResumeJob(params.jobId)
     if (!canResume) {
-      return NextResponse.json(
-        { error: 'Job cannot be resumed. It may be completed or not found.' },
-        { status: 400 },
-      )
+      throw new HttpError('Job cannot be resumed. It may be completed or not found.', 400)
     }
 
     // バックグラウンドで処理を再開
@@ -36,6 +38,6 @@ export async function POST(_request: NextRequest, { params }: { params: { jobId:
     })
   } catch (error) {
     console.error('Error resuming job:', error)
-    return NextResponse.json({ error: 'Failed to resume job' }, { status: 500 })
+    return toErrorResponse(error, 'Failed to resume job')
   }
 }

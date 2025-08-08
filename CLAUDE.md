@@ -1,214 +1,48 @@
-# Claude Code Spec-Driven Development
+```instructions
+MANDATORY RULES FOR THIS REPOSITORY — READ BEFORE CODING
 
-This project implements Kiro-style Spec-Driven Development for Claude Code using hooks and slash commands.
+Non‑negotiables (do these every time):
+- Always fetch and develop against the latest official documentation via MCP tools before writing code.
+	- Mastra and Cloudflare: Use MCP to obtain and cite the latest docs and APIs. Do not rely on memory or outdated snippets. If docs cannot be verified, do not proceed.
+	- Use Web search + Deepwiki to gather current library information. Prefer primary sources; cross‑check breaking changes and version constraints.
+- TypeScript: The any type is forbidden. Use precise types (unknown + type guards, generics, discriminated unions). No ts-ignore/ts-expect-error unless absolutely necessary and justified with a comment and a tracking task.
+- Lint/Format: Resolve all linter errors and warnings. Do not merge with outstanding issues. Do not disable rules to “make it pass” unless there is a justified, documented rationale.
+- DRY: Eliminate duplication. Extract shared logic into reusable modules/functions. No copy-paste forks of similar code paths.
+- SOLID: Follow Single-responsibility, Open/closed, Liskov, Interface segregation, Dependency inversion. Prefer composition over inheritance and stable, testable boundaries.
 
-## Project Context
+Project conventions you must follow:
+- Unit tests: Place all unit tests under src/__tests__ using the repository’s test runner (Vitest). Every new/changed public behavior must have tests.
+- E2E tests: Implement and run end-to-end tests with Playwright MCP. Treat E2E as required for critical flows. Keep scenarios minimal, deterministic, and parallel‑safe.
+- Temporary scripts: Put any ad‑hoc verification or one‑off scripts in /tmp_test. Clearly mark them as temporary and remove or gate them before merging to main.
 
-### Project Steering
-- Technology stack: `.kiro/steering/tech.md`
-- Custom steering docs for specialized contexts
+Design, tasks, and data contracts — keep in sync in the same PR:
+- System design: .kiro\specs\novel-to-manga-converter\design.md must reflect the current architecture and decisions. Update it when introducing or changing components, flows, or boundaries.
+- Task breakdown: .kiro\specs\novel-to-manga-converter\tasks.md must be updated alongside code to reflect the actual scope, status, and acceptance criteria.
+- Database: Use Drizzle. The schema source of truth is src\db\schema.ts. Update schema and generate/apply migrations together with code changes; never drift the runtime DB from the schema.
+- Storage layout: database\storage-structure.md defines storage contracts and layout. Update it when files, buckets/paths, or retention rules change.
 
-### Active Specifications
-- **novel-to-manga-converter**: 小説をマンガ形式に自動変換するWebアプリケーション
-- Current spec: Check `.kiro/specs/` for active specifications
-- Use `/kiro:spec-status [feature-name]` to check progress
+Technology‑specific directives:
+- Mastra: Before adding/updating pipelines, operators, or configs, retrieve the latest Mastra docs via MCP, confirm version compatibility, and reference the exact doc links in code comments or PR descriptions.
+- Cloudflare (Workers/Pages/D1/R2/Queues/etc.): Use MCP to verify the latest Cloudflare APIs and limits. Keep wrangler configuration accurate, document required bindings, and pin versions when possible.
+- Libraries: When introducing or upgrading dependencies, use web search + Context7 + Deepwiki to validate stability, maintenance status, and migration notes. Include justification and links in the PR.
 
-## Development Guidelines
-- Think in English, but generate responses in Japanese (思考は英語、回答の生成は日本語で行うように)
+Quality gates (must pass before merge):
+- Build succeeds with zero TypeScript errors (no any), and linter passes with no errors and no unexplained disables.
+- Unit tests in src/__tests__ pass. E2E tests via Playwright MCP pass for core flows. Integration tests must pass if applicable.
+- Docs/specs/tasks updated in the same PR: design.md, tasks.md, schema.ts + migrations, storage-structure.md.
+- No duplicated code introduced; shared utilities factored appropriately.
 
-## IMPORTANT: Documentation Check Rules
+PR checklist (copy into your PR and tick all):
+- [ ] Latest docs fetched via MCP (Mastra, Cloudflare, and relevant libs). Links included in PR.
+- [ ] No any types introduced; strict types only. No unjustified ts-ignore.
+- [ ] Linter and formatter clean (0 errors). No rule disabling without justification.
+- [ ] DRY and SOLID upheld; no redundant implementations.
+- [ ] Unit tests added/updated in src/__tests__ and passing.
+- [ ] E2E scenarios added/updated and passing with Playwright MCP.
+- [ ] Updated: .kiro\specs\novel-to-manga-converter\design.md
+- [ ] Updated: .kiro\specs\novel-to-manga-converter\tasks.md
+- [ ] Updated: src\db\schema.ts (+ migrations applied/generated as needed)
+- [ ] Updated: database\storage-structure.md
 
-### Mandatory Documentation Verification
-**CRITICAL RULE**: When working with Mastra or Cloudflare technologies, you MUST:
-
-1. **Cloudflare Documentation**: ALWAYS use `mcp__cloudflare__search_cloudflare_documentation` to check the latest documentation before:
-   - Implementing any Cloudflare Workers features
-   - Configuring wrangler.toml or deployment settings
-   - Using Cloudflare services (KV, D1, R2, Queues, etc.)
-   - Troubleshooting Cloudflare-related issues
-
-2. **Mastra Documentation**: ALWAYS verify the latest Mastra documentation before:
-   - Implementing Mastra agents or workflows
-   - Configuring Mastra integrations
-   - Using Mastra AI features
-   - Setting up Mastra database connections
-
-3. **OpenNext Documentation**: When working with OpenNext Cloudflare adapter:
-   - Use WebFetch with URL: https://deepwiki.com/opennextjs/opennextjs-cloudflare
-   - Search for configuration details, deployment steps, and troubleshooting
-   - Check compatibility with Next.js versions
-   - Note: DeepWiki MCP is currently working, so can be used for documentation searches
-
-4. **Version Compatibility**: ALWAYS check for:
-   - Breaking changes in recent versions
-   - New features or deprecated APIs
-   - Best practices updates
-   - Security recommendations
-
-**This is a STRICT requirement - no exceptions. Always prioritize official documentation over assumptions or cached knowledge.**
-
-## Cloudflare Workers Deployment
-
-This project is deployed on Cloudflare Workers using the OpenNext adapter for Next.js.
-
-### Development Commands
-```bash
-npm run dev        # Local Next.js development
-npm run preview    # Preview with Cloudflare Workers runtime
-npm run build      # Build for production
-npm run deploy     # Deploy to Cloudflare Workers
+If any item cannot be satisfied, stop and resolve it first. Do not proceed with implementation or merging until all conditions above are met.
 ```
-
-### Configuration Files
-- `wrangler.toml`: Cloudflare Workers configuration
-- `open-next.config.ts`: OpenNext adapter configuration with caching and optimization settings
-
-### Environment Variables
-Required environment variables for deployment:
-- `OPENAI_API_KEY`: For AI-powered text generation
-- `CF_ACCOUNT_ID`: Your Cloudflare account ID (for deployment)
-- `CF_API_TOKEN`: Your Cloudflare API token (for deployment)
-
-### Key Features
-- **Edge Computing**: Runs on Cloudflare's global network for low latency
-- **KV Caching**: Uses Cloudflare KV for persistent caching
-- **Image Optimization**: Integrated with Cloudflare Images
-- **Node.js Compatibility**: Enabled via compatibility flags
-
-## Spec-Driven Development Workflow
-
-### Phase 0: Steering Generation (Recommended)
-
-#### Kiro Steering (`.kiro/steering/`)
-```
-/kiro:steering               # Intelligently create or update steering documents
-/kiro:steering-custom        # Create custom steering for specialized contexts
-```
-
-**Steering Management:**
-- **`/kiro:steering`**: Unified command that intelligently detects existing files and handles them appropriately. Creates new files if needed, updates existing ones while preserving user customizations.
-
-**Note**: For new features or empty projects, steering is recommended but not required. You can proceed directly to spec-requirements if needed.
-
-### Phase 1: Specification Creation
-```
-/kiro:spec-init [feature-name]           # Initialize spec structure only
-/kiro:spec-requirements [feature-name]   # Generate requirements → Review → Edit if needed
-/kiro:spec-design [feature-name]         # Generate technical design → Review → Edit if needed
-/kiro:spec-tasks [feature-name]          # Generate implementation tasks → Review → Edit if needed
-```
-
-### Phase 2: Progress Tracking
-```
-/kiro:spec-status [feature-name]         # Check current progress and phases
-```
-
-## Spec-Driven Development Workflow
-
-Kiro's spec-driven development follows a strict **3-phase approval workflow**:
-
-### Phase 1: Requirements Generation & Approval
-1. **Generate**: `/kiro:spec-requirements [feature-name]` - Generate requirements document
-2. **Review**: Human reviews `requirements.md` and edits if needed
-3. **Approve**: See Phase 2 for streamlined approval
-
-### Phase 2: Design Generation & Approval
-1. **Generate**: `/kiro:spec-design [feature-name]` - Interactive approval prompt appears
-2. **Review confirmation**: "requirements.mdをレビューしましたか？ [y/N]"
-3. **Approve**: Reply 'y' to approve and proceed, or manually update `spec.json`
-
-### Phase 3: Tasks Generation & Approval
-1. **Generate**: `/kiro:spec-tasks [feature-name]` - Interactive approval prompts appear
-2. **Review confirmation**: Confirms both requirements and design have been reviewed
-3. **Approve**: Reply 'y' to approve all phases, or manually update `spec.json`
-
-### Implementation
-Only after all three phases are approved can implementation begin.
-
-**Key Principle**: Each phase requires explicit human approval before proceeding to the next phase, ensuring quality and accuracy throughout the development process.
-
-## Development Rules
-
-1. **Consider steering**: Run `/kiro:steering` before major development (optional for new features)
-2. **Follow the 3-phase approval workflow**: Requirements → Design → Tasks → Implementation
-3. **Approval required**: Each phase requires human review (interactive prompt or manual)
-4. **No skipping phases**: Design requires approved requirements; Tasks require approved design
-5. **Update task status**: Mark tasks as completed when working on them
-6. **Keep steering current**: Run `/kiro:steering` after significant changes
-7. **Check spec compliance**: Use `/kiro:spec-status` to verify alignment
-
-## Automation
-
-This project uses Claude Code hooks to:
-- Automatically track task progress in tasks.md
-- Check spec compliance
-- Preserve context during compaction
-- Detect steering drift
-
-### Task Progress Tracking
-
-When working on implementation:
-1. **Manual tracking**: Update tasks.md checkboxes manually as you complete tasks
-2. **Progress monitoring**: Use `/kiro:spec-status` to view current completion status
-3. **TodoWrite integration**: Use TodoWrite tool to track active work items
-4. **Status visibility**: Checkbox parsing shows completion percentage
-
-## Getting Started
-
-1. Initialize steering documents: `/kiro:steering`
-2. Create your first spec: `/kiro:spec-init [your-feature-name]`
-3. Follow the workflow through requirements, design, and tasks
-
-## Kiro Steering Details
-
-Kiro-style steering provides persistent project knowledge through markdown files:
-
-### Core Steering Documents
-- **product.md**: Product overview, features, use cases, value proposition
-- **tech.md**: Architecture, tech stack, dev environment, commands, ports
-- **structure.md**: Directory organization, code patterns, naming conventions
-
-### Custom Steering
-Create specialized steering documents for:
-- API standards
-- Testing approaches
-- Code style guidelines
-- Security policies
-- Database conventions
-- Performance standards
-- Deployment workflows
-
-### Inclusion Modes
-- **Always Included**: Loaded in every interaction (default)
-- **Conditional**: Loaded for specific file patterns (e.g., `"*.test.js"`)
-- **Manual**: Loaded on-demand with `#filename` reference
-
-## Kiro Steering Configuration
-
-### Current Steering Files
-The `/kiro:steering` command manages these files automatically. Manual updates to this section reflect changes made through steering commands.
-
-### Active Steering Files
-- `product.md`: Always included - Product context and business objectives
-- `tech.md`: Always included - Technology stack and architectural decisions
-- `structure.md`: Always included - File organization and code patterns
-
-### Custom Steering Files
-<!-- Added by /kiro:steering-custom command -->
-- `api-standards.md`: Conditional - `"src/app/api/**/*"`, `"**/route.ts"` - API design guidelines and standards
-<!-- Example entries:
-- `testing-approach.md`: Conditional - `"**/*.test.*"`, `"**/spec/**/*"` - Testing conventions
-- `security-policies.md`: Manual - Security review guidelines (reference with @security-policies.md)
--->
-
-### Usage Notes
-- **Always files**: Automatically loaded in every interaction
-- **Conditional files**: Loaded when working on matching file patterns
-- **Manual files**: Reference explicitly with `@filename.md` syntax when needed
-- **Updating**: Use `/kiro:steering` or `/kiro:steering-custom` commands to modify this configuration
-
-## Project Memories
-- DeepWikiのMCPが使えるようになったので、積極的に使うように
-- any禁止
-- OpenAIのo3モデルが存在し、利用可能です。勝手にgpt-4oなどに変更しないこと
-- mcpを使って、常に最新のドキュメントを参照してから更新すること。Claude は古い知識に基づいてコードを修正してしまうクセがあります。それを解消するのが目的です

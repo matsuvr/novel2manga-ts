@@ -88,6 +88,36 @@ export async function analyzeChunkBundle(
   )
 
   try {
+    // LLMモック: 解析をスキップして定型の集約を返す
+    if (String(process.env.N2M_MOCK_LLM) === '1') {
+      const textLen = chunksWithAnalyses.reduce((s, c) => s + c.text.length, 0)
+      const sample = chunksWithAnalyses[0]
+      return {
+        summary: `モック要約: ${chunksWithAnalyses.length}チャンク、合計${textLen}文字`,
+        mainCharacters: [
+          { name: '主人公', role: '主人公', description: '中心人物（モック）' },
+          { name: '相棒', role: '相棒', description: 'サポート役（モック）' },
+        ],
+        highlights: [
+          {
+            text: sample?.text.slice(0, 40) || 'テキストなし',
+            type: 'climax',
+            importance: 7,
+            context: '物語の転換点（モック）',
+          },
+        ],
+        keyDialogues: [
+          { speaker: '主人公', text: 'ここが山場だ。', significance: '決意を示す（モック）' },
+        ],
+        narrativeFlow: {
+          opening: '導入（モック）',
+          development: '展開（モック）',
+          currentState: '現在の状況（モック）',
+          tension: 6,
+        },
+      }
+    }
+
     // 各チャンクの分析結果を構造化して整理
     const charactersMap = new Map<string, { descriptions: string[]; appearances: number }>()
     const allScenes: string[] = []

@@ -15,7 +15,7 @@ export interface Page {
 }
 
 export interface Panel {
-  id: number
+  id: number | string
   position: Position
   size: Size
   content: string
@@ -35,7 +35,7 @@ export interface Size {
 }
 
 export interface Dialogue {
-  emotion: string
+  emotion?: string
   speaker: string
   text: string
 }

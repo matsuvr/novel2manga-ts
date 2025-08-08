@@ -79,7 +79,7 @@ export class LocalFileStorage implements Storage {
   async put(key: string, value: string | Buffer, metadata?: Record<string, string>): Promise<void> {
     const filePath = path.join(this.baseDir, key)
     const dir = path.dirname(filePath)
-    
+
     // ディレクトリ作成を並行化
     await ensureDir(dir)
 
@@ -772,7 +772,7 @@ export async function getNovelStorage(): Promise<Storage> {
   if (isDevelopment()) {
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'novels'))
   } else {
-    // @ts-expect-error: Cloudflare Workers環境でのみ利用可能
+    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
     return new R2Storage(globalThis.NOVEL_STORAGE)
   }
 }
@@ -782,7 +782,7 @@ export async function getChunkStorage(): Promise<Storage> {
   if (isDevelopment()) {
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'chunks'))
   } else {
-    // @ts-expect-error: Cloudflare Workers環境でのみ利用可能
+    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
     return new R2Storage(globalThis.CHUNKS_STORAGE)
   }
 }
@@ -792,7 +792,7 @@ export async function getAnalysisStorage(): Promise<Storage> {
   if (isDevelopment()) {
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'analysis'))
   } else {
-    // @ts-expect-error: Cloudflare Workers環境でのみ利用可能
+    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
     return new R2Storage(globalThis.ANALYSIS_STORAGE)
   }
 }
@@ -802,7 +802,7 @@ export async function getLayoutStorage(): Promise<Storage> {
   if (isDevelopment()) {
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'layouts'))
   } else {
-    // @ts-expect-error: Cloudflare Workers環境でのみ利用可能
+    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
     return new R2Storage(globalThis.ANALYSIS_STORAGE) // 同じバケットを使用
   }
 }
@@ -812,7 +812,7 @@ export async function getRenderStorage(): Promise<Storage> {
   if (isDevelopment()) {
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'renders'))
   } else {
-    // @ts-expect-error: Cloudflare Workers環境でのみ利用可能
+    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
     return new R2Storage(globalThis.ANALYSIS_STORAGE) // 同じバケットを使用
   }
 }
@@ -821,7 +821,7 @@ export async function getOutputStorage(): Promise<Storage> {
   if (isDevelopment()) {
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'outputs'))
   } else {
-    // @ts-expect-error: Cloudflare Workers環境でのみ利用可能
+    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
     return new R2Storage(globalThis.ANALYSIS_STORAGE) // 同じバケットを使用
   }
 }
@@ -831,7 +831,7 @@ export async function getDatabase(): Promise<DatabaseAdapter> {
   if (isDevelopment()) {
     return new SQLiteAdapter()
   } else {
-    // @ts-expect-error: Cloudflare Workers環境でのみ利用可能
+    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
     return new D1Adapter(globalThis.DB)
   }
 }

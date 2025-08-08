@@ -33,13 +33,10 @@
       "mcp__serena__find_file",
       "mcp__serena__get_symbols_overview",
       "mcp__serena__write_memory",
-      "mcp__serena__replace_regex",
       "Bash(npm run check:*)",
-      "mcp__serena__replace_symbol_body",
       "mcp__serena__find_referencing_symbols",
       "mcp__serena__think_about_collected_information",
       "mcp__serena__think_about_task_adherence",
-      "mcp__serena__insert_after_symbol",
       "mcp__serena__think_about_whether_you_are_done",
       "mcp__serena__read_memory",
       "Bash(npm run lint:*)",
@@ -64,13 +61,10 @@
       "mcp__playwright__browser_tab_select",
       "mcp__playwright__browser_wait_for",
       "mcp__playwright__browser_press_key",
-      "Bash(pkill:*)",
-      "Bash(taskkill:*)",
-      "Bash(powershell:*)",
-      "Bash(sqlite3:*)",
       "mcp__playwright__browser_close",
       "mcp__playwright__browser_evaluate",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "WebFetch(domain:openrouter.ai)"
     ]
   },
   "enableAllProjectMcpServers": true,
@@ -80,17 +74,5 @@
     "serena",
     "deepwiki"
   ],
-  "hooks": {
-    "Notification": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "cmd /c node $CLAUDE_PROJECT_DIR/.claude/hooks/claude-notification-hook.js"
-          }
-        ]
-      }
-    ]
-  }
+  "hooks": {}
 }

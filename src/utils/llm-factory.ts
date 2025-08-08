@@ -20,6 +20,7 @@ interface ProviderConfig {
   maxTokens: number
   timeout: number
   baseUrl?: string
+  preferCerebras?: boolean // OpenRouter特有：Cerebrasプロバイダーを優先するかどうか
 }
 
 interface LLMConfig {
@@ -28,6 +29,24 @@ interface LLMConfig {
   modelOverrides?: Partial<Record<LLMProvider, string>>
   systemPrompt: string
   userPromptTemplate?: string
+}
+
+// OpenRouterモデルのCerebras対応マップ
+const CEREBRAS_MODEL_MAP: Record<string, string> = {
+  'qwen/qwen3-235b-a22b-thinking-2507': 'cerebras/qwen-3-235b-a22b-thinking-2507',
+  'qwen/qwen-3-235b-a22b-thinking-2507': 'cerebras/qwen-3-235b-a22b-thinking-2507',
+  'qwen/qwen3-235b-a22b-instruct-2507': 'cerebras/qwen-3-235b-a22b-instruct-2507',
+  'qwen/qwen-3-235b-a22b-instruct-2507': 'cerebras/qwen-3-235b-a22b-instruct-2507',
+  'qwen/qwen-3-32b': 'cerebras/qwen-3-32b',
+  'qwen/qwen-3-coder-480b': 'cerebras/qwen-3-coder-480b',
+  'meta-llama/llama-3.3-70b': 'cerebras/llama-3.3-70b',
+  'meta-llama/llama-3.1-8b': 'cerebras/llama3.1-8b',
+  'openai/o1': 'cerebras/gpt-oss-120b',
+} as const
+
+// Cerebras対応モデルを取得する関数
+function getCerebrasModel(originalModel: string): string | null {
+  return CEREBRAS_MODEL_MAP[originalModel] || null
 }
 
 // プロバイダーインスタンスのキャッシュ
@@ -80,10 +99,35 @@ function getProviderInstance(provider: LLMProvider) {
 
     case 'openrouter':
       if (!providerCache.openrouter) {
-        providerCache.openrouter = createOpenAI({
+        const providerConfig = config as ProviderConfig
+        const baseURL = providerConfig.baseUrl || 'https://openrouter.ai/api/v1'
+        
+        // Cerebras対応の場合はextraBodyでプロバイダールーティングを設定
+        const cerebrasModel = getCerebrasModel(providerConfig.model)
+        const shouldUseCerebras = providerConfig.preferCerebras && cerebrasModel
+        
+        const openrouterConfig: any = {
           apiKey: config.apiKey,
-          baseURL: (config as ProviderConfig).baseUrl || 'https://openrouter.ai/api/v1',
-        })
+          baseURL,
+        }
+
+        // Cerebrasを優先する場合は、extraBodyでプロバイダールーティングを指定
+        if (shouldUseCerebras) {
+          console.log(`[DEBUG] Cerebras routing enabled for model: ${providerConfig.model} -> ${cerebrasModel}`)
+          openrouterConfig.fetch = async (url: string, options: any) => {
+            // リクエストボディにprovider routingを追加
+            if (options?.body) {
+              const body = JSON.parse(options.body)
+              body.provider = {
+                order: ['cerebras']
+              }
+              options.body = JSON.stringify(body)
+            }
+            return fetch(url, options)
+          }
+        }
+
+        providerCache.openrouter = createOpenAI(openrouterConfig)
       }
       return providerCache.openrouter
 
@@ -145,7 +189,16 @@ export async function getTextAnalysisLLM() {
   const llmInstance = await getProviderWithFallback(preferredProvider)
 
   // モデルオーバーライドがあれば適用
-  const model = config.modelOverrides?.[llmInstance.providerName] || llmInstance.model
+  let model = config.modelOverrides?.[llmInstance.providerName] || llmInstance.model
+
+  // OpenRouterでCerebras対応が有効な場合、Cerebrasモデルを使用
+  if (llmInstance.providerName === 'openrouter' && (llmInstance.config as any).preferCerebras) {
+    const cerebrasModel = getCerebrasModel(model)
+    if (cerebrasModel) {
+      console.log(`[DEBUG] Switching to Cerebras model for text analysis: ${model} -> ${cerebrasModel}`)
+      model = cerebrasModel
+    }
+  }
 
   return {
     provider: llmInstance.provider,
@@ -169,7 +222,16 @@ export async function getNarrativeAnalysisLLM() {
   const llmInstance = await getProviderWithFallback(preferredProvider)
 
   // モデルオーバーライドがあれば適用
-  const model = config.modelOverrides?.[llmInstance.providerName] || llmInstance.model
+  let model = config.modelOverrides?.[llmInstance.providerName] || llmInstance.model
+
+  // OpenRouterでCerebras対応が有効な場合、Cerebrasモデルを使用
+  if (llmInstance.providerName === 'openrouter' && (llmInstance.config as any).preferCerebras) {
+    const cerebrasModel = getCerebrasModel(model)
+    if (cerebrasModel) {
+      console.log(`[DEBUG] Switching to Cerebras model for narrative analysis: ${model} -> ${cerebrasModel}`)
+      model = cerebrasModel
+    }
+  }
 
   return {
     provider: llmInstance.provider,
@@ -194,7 +256,16 @@ export async function getLayoutGenerationLLM() {
   const llmInstance = await getProviderWithFallback(preferredProvider)
 
   // モデルオーバーライドがあれば適用
-  const model = config.modelOverrides?.[llmInstance.providerName] || llmInstance.model
+  let model = config.modelOverrides?.[llmInstance.providerName] || llmInstance.model
+
+  // OpenRouterでCerebras対応が有効な場合、Cerebrasモデルを使用
+  if (llmInstance.providerName === 'openrouter' && (llmInstance.config as any).preferCerebras) {
+    const cerebrasModel = getCerebrasModel(model)
+    if (cerebrasModel) {
+      console.log(`[DEBUG] Switching to Cerebras model for layout generation: ${model} -> ${cerebrasModel}`)
+      model = cerebrasModel
+    }
+  }
 
   return {
     provider: llmInstance.provider,
@@ -218,7 +289,16 @@ export async function getChunkBundleAnalysisLLM() {
   const llmInstance = await getProviderWithFallback(preferredProvider)
 
   // モデルオーバーライドがあれば適用
-  const model = config.modelOverrides?.[llmInstance.providerName] || llmInstance.model
+  let model = config.modelOverrides?.[llmInstance.providerName] || llmInstance.model
+
+  // OpenRouterでCerebras対応が有効な場合、Cerebrasモデルを使用
+  if (llmInstance.providerName === 'openrouter' && (llmInstance.config as any).preferCerebras) {
+    const cerebrasModel = getCerebrasModel(model)
+    if (cerebrasModel) {
+      console.log(`[DEBUG] Switching to Cerebras model for chunk bundle analysis: ${model} -> ${cerebrasModel}`)
+      model = cerebrasModel
+    }
+  }
 
   return {
     provider: llmInstance.provider,

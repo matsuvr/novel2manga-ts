@@ -1,15 +1,25 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { DatabaseService } from '@/services/database'
+import { toErrorResponse } from '@/utils/api-error-response'
+import { HttpError } from '@/utils/http-errors'
 
-export async function GET(_request: NextRequest, context: { params: Promise<{ jobId: string }> }) {
+export async function GET(
+  _request: NextRequest,
+  ctx: { params: { jobId: string } | Promise<{ jobId: string }> },
+) {
   try {
-    const params = await context.params
+    const params = await ctx.params
+    // jobId validation
+    if (!params.jobId || params.jobId === 'undefined') {
+      throw new HttpError('Invalid jobId', 400)
+    }
+
     console.log('[job-status] Fetching job status for:', params.jobId)
     const startTime = Date.now()
-    
+
     const dbService = new DatabaseService()
     const job = await dbService.getJobWithProgress(params.jobId)
-    
+
     const duration = Date.now() - startTime
     console.log(`[job-status] Database query completed in ${duration}ms`)
     console.log('[job-status] Job found:', !!job)
@@ -17,7 +27,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ jo
 
     if (!job) {
       console.log('[job-status] Job not found in database')
-      return NextResponse.json({ error: 'Job not found' }, { status: 404 })
+      throw new HttpError('Job not found', 404)
     }
 
     return NextResponse.json({
@@ -40,17 +50,10 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ jo
         progress: job.progress,
         createdAt: job.createdAt,
         updatedAt: job.updatedAt,
-      }
+      },
     })
   } catch (error) {
     console.error('[job-status] Error fetching job status:', error)
-    console.error('[job-status] Error details:', {
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : 'No stack trace'
-    })
-    return NextResponse.json({ 
-      error: 'Failed to fetch job status',
-      details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 })
+    return toErrorResponse(error, 'Failed to fetch job status')
   }
 }

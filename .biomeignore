@@ -1,28 +1,34 @@
 # 依存関係と生成されたファイル
-node_modules/
-.next/
-dist/
-build/
-coverage/
-.vercel/
-.turbo/
+**/node_modules/**
+**/.next/**
+**/dist/**
+**/build/**
+**/coverage/**
+**/.vercel/**
+**/.turbo/**
+**/.local-storage/**
+**/logs/**
+**/*.log
 
-# テスト関連ファイル
-test/
-tests/
-__tests__/
-tmp_test/
-*.test.ts
-*.test.tsx
-*.test.js
-*.test.jsx
-*.spec.ts
-*.spec.tsx
-*.spec.js
-*.spec.jsx
+# テスト関連ファイル（再帰）
+**/test/**
+**/tests/**
+**/__tests__/**
+**/tmp_test/**
+**/*.test.ts
+**/*.test.tsx
+**/*.test.js
+**/*.test.jsx
+**/*.spec.ts
+**/*.spec.tsx
+**/*.spec.js
+**/*.spec.jsx
+
+# ツール関連
+**/.claude/**
+biome-report.json
 
 # その他の除外ファイル
-*.log
 .env*
 .DS_Store
 Thumbs.db
