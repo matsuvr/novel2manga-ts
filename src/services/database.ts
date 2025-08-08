@@ -68,73 +68,112 @@ export class DatabaseService {
   }
 
   // Job関連メソッド
-  async createJob(id: string, novelId: string, jobName?: string): Promise<void> {
+  async createJob(id: string, novelId: string, jobName?: string): Promise<string>
+  async createJob(payload: {
+    novelId: string
+    title?: string
+    totalChunks?: number
+    status?: string
+  }): Promise<string>
+  async createJob(
+    arg1: string | { novelId: string; title?: string; totalChunks?: number; status?: string },
+    novelId?: string,
+    jobName?: string,
+  ): Promise<string> {
+    if (typeof arg1 === 'string') {
+      // 既存の署名: (id, novelId, jobName)
+      if (!novelId) {
+        throw new Error('novelId is required')
+      }
+      await this.db.insert(jobs).values({
+        id: arg1,
+        novelId: novelId,
+        jobName,
+        status: 'pending',
+        currentStep: 'initialized',
+      })
+      return arg1
+    }
+
+    // オーバーロード: ({ novelId, ... }) → id を生成して返す
+    const id = crypto.randomUUID()
     await this.db.insert(jobs).values({
       id,
-      novelId,
-      jobName,
-      status: 'pending',
+      novelId: arg1.novelId,
+      jobName: arg1.title,
+      status: (arg1.status as Job['status']) || 'pending',
       currentStep: 'initialized',
+      totalChunks: arg1.totalChunks || 0,
     })
+    return id
   }
 
   async getJob(id: string): Promise<Job | null> {
     try {
       console.log('[DatabaseService] getJob called for id:', id)
-      
+
       // データベース接続確認
       const testQuery = await this.db.select({ count: sql`count(*)` }).from(jobs)
       console.log('[DatabaseService] Total jobs in database:', testQuery[0]?.count)
-      
+
       const result = await this.db.select().from(jobs).where(eq(jobs.id, id)).limit(1)
       console.log('[DatabaseService] getJob result:', result.length > 0 ? 'found' : 'not found')
-      
+
       if (result.length > 0) {
         console.log('[DatabaseService] Job data:', {
           id: result[0].id,
           status: result[0].status,
           currentStep: result[0].currentStep,
-          novelId: result[0].novelId
+          novelId: result[0].novelId,
         })
       }
-      
+
       return result[0] || null
     } catch (error) {
       console.error('[DatabaseService] getJob error:', error)
       console.error('[DatabaseService] Error details:', {
         name: error instanceof Error ? error.name : 'Unknown',
         message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack?.slice(0, 500) : undefined
+        stack: error instanceof Error ? error.stack?.slice(0, 500) : undefined,
       })
       throw error
     }
   }
 
   async getJobWithProgress(id: string): Promise<(Job & { progress: JobProgress | null }) | null> {
+    console.log('[DatabaseService] getJobWithProgress called with id:', id)
+
     try {
-      console.log('[DatabaseService] getJobWithProgress called with id:', id)
-      
       const job = await this.getJob(id)
       console.log('[DatabaseService] getJob result:', job ? 'found' : 'not found')
-      
+
       if (!job) {
         console.log('[DatabaseService] Job not found, returning null')
         return null
       }
 
-      // 厳密な型変換 - フォールバックなし
+      // 厳密な型検証（無効値は例外にする）
       if (!job.currentStep) {
         throw new Error(`Job ${job.id} has no currentStep set`)
       }
 
-      const validSteps: JobStep[] = ['initialized', 'split', 'analyze', 'episode', 'layout', 'render', 'complete']
+      const validSteps: JobStep[] = [
+        'initialized',
+        'split',
+        'analyze',
+        'episode',
+        'layout',
+        'render',
+        'complete',
+      ]
       if (!validSteps.includes(job.currentStep as JobStep)) {
-        throw new Error(`Job ${job.id} has invalid currentStep: ${job.currentStep}. Valid steps: ${validSteps.join(', ')}`)
+        throw new Error(
+          `Job ${job.id} has invalid currentStep: ${job.currentStep}. Valid steps: ${validSteps.join(', ')}`,
+        )
       }
 
       const currentStep = job.currentStep as JobStep
 
-      // シンプルなJobProgressオブジェクトを構築
       const progress: JobProgress = {
         currentStep,
         processedChunks: job.processedChunks || 0,
@@ -148,13 +187,18 @@ export class DatabaseService {
         ...job,
         progress,
       }
-      
+
       console.log('[DatabaseService] Returning job with progress')
       return result
     } catch (error) {
+      // ここで捕捉して詳細ログを出しつつ、例外を再スローして上位で適切に分類させる
       console.error('[DatabaseService] getJobWithProgress error:', error)
-      console.error('[DatabaseService] Error stack:', error instanceof Error ? error.stack : 'No stack')
-      return null
+      console.error('[DatabaseService] Error context:', { jobId: id })
+      console.error(
+        '[DatabaseService] Error stack (head):',
+        error instanceof Error ? error.stack?.slice(0, 1000) : 'No stack',
+      )
+      throw error
     }
   }
 
@@ -292,7 +336,62 @@ export class DatabaseService {
   }
 
   // Episode関連メソッド
-  async createEpisode(episode: NewEpisode): Promise<void> {
+  // テスト/開発用の簡易入力もサポート
+  async createEpisode(episode: NewEpisode & Record<string, unknown>): Promise<void>
+  async createEpisode(episode: {
+    jobId: string
+    episodeNumber: number
+    title?: string
+    contentPath?: string
+    characterCount?: number
+    status?: string
+  }): Promise<void>
+  async createEpisode(episode: any): Promise<void> {
+    // 簡易入力かどうかを判定
+    const isMinimal =
+      episode &&
+      typeof episode.jobId === 'string' &&
+      typeof episode.episodeNumber === 'number' &&
+      (episode.startChunk === undefined || episode.startCharIndex === undefined)
+
+    if (isMinimal) {
+      const job = await this.getJob(episode.jobId)
+      if (!job) throw new Error(`Job not found for episode creation: ${episode.jobId}`)
+
+      const fullEpisode: NewEpisode = {
+        id: `${episode.jobId}-ep${episode.episodeNumber}`,
+        novelId: job.novelId,
+        jobId: episode.jobId,
+        episodeNumber: episode.episodeNumber,
+        title: episode.title,
+        summary: undefined,
+        startChunk: 1,
+        startCharIndex: 0,
+        endChunk: 1,
+        endCharIndex: 0,
+        estimatedPages: 1,
+        confidence: 0.5 as unknown as number,
+        createdAt: new Date().toISOString(),
+      }
+
+      const id = fullEpisode.id
+      await this.db.insert(episodes).values({
+        id,
+        novelId: fullEpisode.novelId,
+        jobId: fullEpisode.jobId,
+        episodeNumber: fullEpisode.episodeNumber,
+        title: fullEpisode.title,
+        summary: fullEpisode.summary,
+        startChunk: fullEpisode.startChunk,
+        startCharIndex: fullEpisode.startCharIndex,
+        endChunk: fullEpisode.endChunk,
+        endCharIndex: fullEpisode.endCharIndex,
+        estimatedPages: fullEpisode.estimatedPages,
+        confidence: fullEpisode.confidence as number,
+      })
+      return
+    }
+
     const id = `${episode.jobId}-ep${episode.episodeNumber}`
 
     await this.db.insert(episodes).values({
@@ -309,6 +408,11 @@ export class DatabaseService {
       estimatedPages: episode.estimatedPages,
       confidence: episode.confidence,
     })
+  }
+
+  // 便宜メソッド（テスト用クリーンアップ）
+  async deleteJob(id: string): Promise<void> {
+    await this.db.delete(jobs).where(eq(jobs.id, id))
   }
 
   async createEpisodes(episodeList: NewEpisode[]): Promise<void> {

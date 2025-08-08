@@ -1,12 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server'
-import fs from 'fs/promises'
-import path from 'path'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { type NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const filePath = searchParams.get('path')
-    
+
     if (!filePath) {
       return NextResponse.json({ error: 'Path parameter is required' }, { status: 400 })
     }
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     // プロジェクトルートからの相対パスでファイルを読み込む
     const fullPath = path.join(process.cwd(), normalizedPath)
-    
+
     try {
       const content = await fs.readFile(fullPath, 'utf-8')
       return new NextResponse(content, {
