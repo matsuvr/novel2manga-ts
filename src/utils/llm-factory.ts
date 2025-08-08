@@ -101,11 +101,11 @@ function getProviderInstance(provider: LLMProvider) {
       if (!providerCache.openrouter) {
         const providerConfig = config as ProviderConfig
         const baseURL = providerConfig.baseUrl || 'https://openrouter.ai/api/v1'
-        
+
         // Cerebras対応の場合はextraBodyでプロバイダールーティングを設定
         const cerebrasModel = getCerebrasModel(providerConfig.model)
         const shouldUseCerebras = providerConfig.preferCerebras && cerebrasModel
-        
+
         const openrouterConfig: any = {
           apiKey: config.apiKey,
           baseURL,
@@ -113,13 +113,15 @@ function getProviderInstance(provider: LLMProvider) {
 
         // Cerebrasを優先する場合は、extraBodyでプロバイダールーティングを指定
         if (shouldUseCerebras) {
-          console.log(`[DEBUG] Cerebras routing enabled for model: ${providerConfig.model} -> ${cerebrasModel}`)
+          console.log(
+            `[DEBUG] Cerebras routing enabled for model: ${providerConfig.model} -> ${cerebrasModel}`,
+          )
           openrouterConfig.fetch = async (url: string, options: any) => {
             // リクエストボディにprovider routingを追加
             if (options?.body) {
               const body = JSON.parse(options.body)
               body.provider = {
-                order: ['cerebras']
+                order: ['cerebras'],
               }
               options.body = JSON.stringify(body)
             }
@@ -195,7 +197,9 @@ export async function getTextAnalysisLLM() {
   if (llmInstance.providerName === 'openrouter' && (llmInstance.config as any).preferCerebras) {
     const cerebrasModel = getCerebrasModel(model)
     if (cerebrasModel) {
-      console.log(`[DEBUG] Switching to Cerebras model for text analysis: ${model} -> ${cerebrasModel}`)
+      console.log(
+        `[DEBUG] Switching to Cerebras model for text analysis: ${model} -> ${cerebrasModel}`,
+      )
       model = cerebrasModel
     }
   }
@@ -228,7 +232,9 @@ export async function getNarrativeAnalysisLLM() {
   if (llmInstance.providerName === 'openrouter' && (llmInstance.config as any).preferCerebras) {
     const cerebrasModel = getCerebrasModel(model)
     if (cerebrasModel) {
-      console.log(`[DEBUG] Switching to Cerebras model for narrative analysis: ${model} -> ${cerebrasModel}`)
+      console.log(
+        `[DEBUG] Switching to Cerebras model for narrative analysis: ${model} -> ${cerebrasModel}`,
+      )
       model = cerebrasModel
     }
   }
@@ -262,7 +268,9 @@ export async function getLayoutGenerationLLM() {
   if (llmInstance.providerName === 'openrouter' && (llmInstance.config as any).preferCerebras) {
     const cerebrasModel = getCerebrasModel(model)
     if (cerebrasModel) {
-      console.log(`[DEBUG] Switching to Cerebras model for layout generation: ${model} -> ${cerebrasModel}`)
+      console.log(
+        `[DEBUG] Switching to Cerebras model for layout generation: ${model} -> ${cerebrasModel}`,
+      )
       model = cerebrasModel
     }
   }
@@ -295,7 +303,9 @@ export async function getChunkBundleAnalysisLLM() {
   if (llmInstance.providerName === 'openrouter' && (llmInstance.config as any).preferCerebras) {
     const cerebrasModel = getCerebrasModel(model)
     if (cerebrasModel) {
-      console.log(`[DEBUG] Switching to Cerebras model for chunk bundle analysis: ${model} -> ${cerebrasModel}`)
+      console.log(
+        `[DEBUG] Switching to Cerebras model for chunk bundle analysis: ${model} -> ${cerebrasModel}`,
+      )
       model = cerebrasModel
     }
   }

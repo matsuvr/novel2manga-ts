@@ -12,6 +12,7 @@ import {
 } from '@/db'
 import { chunks, episodes, jobs, novels, outputs, renderStatus } from '@/db/schema'
 import type { JobProgress, JobStatus, JobStep } from '@/types/job'
+import { makeEpisodeId } from '@/utils/ids'
 
 export class DatabaseService {
   private db = getDatabase()
@@ -359,7 +360,7 @@ export class DatabaseService {
       if (!job) throw new Error(`Job not found for episode creation: ${episode.jobId}`)
 
       const fullEpisode: NewEpisode = {
-        id: `${episode.jobId}-ep${episode.episodeNumber}`,
+        id: makeEpisodeId(episode.jobId, episode.episodeNumber),
         novelId: job.novelId,
         jobId: episode.jobId,
         episodeNumber: episode.episodeNumber,
@@ -392,7 +393,7 @@ export class DatabaseService {
       return
     }
 
-    const id = `${episode.jobId}-ep${episode.episodeNumber}`
+    const id = makeEpisodeId(episode.jobId, episode.episodeNumber)
 
     await this.db.insert(episodes).values({
       id,
@@ -415,9 +416,13 @@ export class DatabaseService {
     await this.db.delete(jobs).where(eq(jobs.id, id))
   }
 
-  async createEpisodes(episodeList: NewEpisode[]): Promise<void> {
+  async createEpisodes(episodeList: Array<Omit<NewEpisode, 'id' | 'createdAt'>>): Promise<void> {
+    if (episodeList.length === 0) {
+      return
+    }
+
     const episodesToInsert = episodeList.map((episode) => ({
-      id: `${episode.jobId}-ep${episode.episodeNumber}`,
+      id: makeEpisodeId(episode.jobId, episode.episodeNumber),
       novelId: episode.novelId,
       jobId: episode.jobId,
       episodeNumber: episode.episodeNumber,
@@ -431,7 +436,39 @@ export class DatabaseService {
       confidence: episode.confidence,
     }))
 
-    await this.db.insert(episodes).values(episodesToInsert)
+    // UPSERT: (jobId, episodeNumber) が重複した場合は更新
+    await this.db
+      .insert(episodes)
+      .values(episodesToInsert)
+      .onConflictDoUpdate({
+        target: [episodes.jobId, episodes.episodeNumber],
+        set: {
+          title: sql`excluded.title`,
+          summary: sql`excluded.summary`,
+          startChunk: sql`excluded.start_chunk`,
+          startCharIndex: sql`excluded.start_char_index`,
+          endChunk: sql`excluded.end_chunk`,
+          endCharIndex: sql`excluded.end_char_index`,
+          estimatedPages: sql`excluded.estimated_pages`,
+          confidence: sql`excluded.confidence`,
+        },
+      })
+
+    // jobのtotalEpisodesを更新
+    const jobId = episodeList[0].jobId
+    // jobのtotalEpisodesを再計算（重複更新も考慮）
+    const total = await this.db
+      .select({ count: sql`count(*)` })
+      .from(episodes)
+      .where(eq(episodes.jobId, jobId))
+    const totalEpisodes = Number(total[0]?.count ?? 0)
+    await this.db
+      .update(jobs)
+      .set({
+        totalEpisodes,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(jobs.id, jobId))
   }
 
   async getEpisodesByJobId(jobId: string): Promise<Episode[]> {

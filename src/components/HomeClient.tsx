@@ -76,9 +76,9 @@ export default function HomeClient() {
         throw new Error(errorData.error || 'サーバーエラーが発生しました')
       }
 
-      const uploadData = (await uploadResponse.json().catch(() => ({}))) as { 
+      const uploadData = (await uploadResponse.json().catch(() => ({}))) as {
         uuid?: string
-        fileName?: string 
+        fileName?: string
       }
       const novelId = uploadData.uuid
       if (!novelId) throw new Error('novelId を取得できませんでした')
@@ -101,10 +101,10 @@ export default function HomeClient() {
         throw new Error(errorData.error || '分析の開始に失敗しました')
       }
 
-      const analyzeData = (await analyzeResponse.json().catch(() => ({}))) as { 
+      const analyzeData = (await analyzeResponse.json().catch(() => ({}))) as {
         id?: string
         data?: { jobId?: string }
-        jobId?: string 
+        jobId?: string
       }
       const jobId = analyzeData.id || analyzeData.data?.jobId || analyzeData.jobId
       if (!jobId) throw new Error('jobId を取得できませんでした')
@@ -203,11 +203,31 @@ export default function HomeClient() {
 
             <div className="mt-6 text-center">
               <div className="inline-flex flex-wrap items-center justify-center gap-3">
-                <SampleButton label="空き家の冒険" path="/docs/空き家の冒険.txt" onLoad={setNovelText} />
-                <SampleButton label="怪人二十面相" path="/docs/怪人二十面相.txt" onLoad={setNovelText} />
-                <SampleButton label="モルグ街の殺人事件" path="/docs/モルグ街の殺人事件.txt" onLoad={setNovelText} />
-                <SampleButton label="宮本武蔵 地の巻" path="/docs/宮本武蔵地の巻.txt" onLoad={setNovelText} />
-                <SampleButton label="最後の一葉" path="/docs/最後の一葉.txt" onLoad={setNovelText} />
+                <SampleButton
+                  label="空き家の冒険"
+                  path="/docs/空き家の冒険.txt"
+                  onLoad={setNovelText}
+                />
+                <SampleButton
+                  label="怪人二十面相"
+                  path="/docs/怪人二十面相.txt"
+                  onLoad={setNovelText}
+                />
+                <SampleButton
+                  label="モルグ街の殺人事件"
+                  path="/docs/モルグ街の殺人事件.txt"
+                  onLoad={setNovelText}
+                />
+                <SampleButton
+                  label="宮本武蔵 地の巻"
+                  path="/docs/宮本武蔵地の巻.txt"
+                  onLoad={setNovelText}
+                />
+                <SampleButton
+                  label="最後の一葉"
+                  path="/docs/最後の一葉.txt"
+                  onLoad={setNovelText}
+                />
               </div>
             </div>
           </div>
@@ -228,7 +248,7 @@ export default function HomeClient() {
               <p className="text-gray-600">
                 小説をマンガ形式に変換中です。しばらくお待ちください...
               </p>
-              
+
               {/* 処理状態の説明 */}
               <div className="mt-6 p-4 bg-blue-50 rounded-2xl border border-blue-100">
                 <div className="flex items-start space-x-3">

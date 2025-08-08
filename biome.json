@@ -126,13 +126,7 @@
   },
   "overrides": [
     {
-      "includes": [
-        "**/__tests__/**",
-        "**/tests/**",
-        "**/*.test.*",
-        "**/*.spec.*",
-        "**/.claude/**"
-      ],
+      "includes": ["**/__tests__/**", "**/tests/**", "**/*.test.*", "**/*.spec.*", "**/.claude/**"],
       "linter": {
         "enabled": false
       },
@@ -141,23 +135,13 @@
       }
     },
     {
-      "includes": [
-        "*.ts",
-        "*.tsx",
-        "*.js",
-        "*.jsx"
-      ],
+      "includes": ["*.ts", "*.tsx", "*.js", "*.jsx"],
       "linter": {
         "rules": {}
       }
     },
     {
-      "includes": [
-        "*.test.ts",
-        "*.test.tsx",
-        "*.spec.ts",
-        "*.spec.tsx"
-      ],
+      "includes": ["*.test.ts", "*.test.tsx", "*.spec.ts", "*.spec.tsx"],
       "linter": {
         "rules": {
           "suspicious": {

@@ -1,0 +1,149 @@
+{
+  "summary": {
+    "changed": 0,
+    "unchanged": 138,
+    "matches": 0,
+    "duration": { "secs": 0, "nanos": 45218900 },
+    "scannerDuration": { "secs": 0, "nanos": 14148600 },
+    "errors": 4,
+    "warnings": 0,
+    "skipped": 0,
+    "suggestedFixesSkipped": 0,
+    "diagnosticsNotPrinted": 0
+  },
+  "diagnostics": [
+    {
+      "category": "parse",
+      "severity": "error",
+      "description": "Expected an array, an object, or a literal but instead found the end of the file.",
+      "message": [
+        {
+          "elements": [],
+          "content": "Expected an array, an object, or a literal but instead found the end of the file."
+        }
+      ],
+      "advices": {
+        "advices": [
+          {
+            "log": [
+              "info",
+              [{ "elements": [], "content": "Expected an array, an object, or a literal here." }]
+            ]
+          },
+          { "frame": { "path": null, "span": [0, 0], "sourceCode": "" } }
+        ]
+      },
+      "verboseAdvices": { "advices": [] },
+      "location": { "path": { "file": "biome-report.json" }, "span": [0, 0], "sourceCode": "" },
+      "tags": [],
+      "source": null
+    },
+    {
+      "category": "parse",
+      "severity": "error",
+      "description": "Expected an array, an object, or a literal but instead found the end of the file.",
+      "message": [
+        {
+          "elements": [],
+          "content": "Expected an array, an object, or a literal but instead found the end of the file."
+        }
+      ],
+      "advices": {
+        "advices": [
+          {
+            "log": [
+              "info",
+              [{ "elements": [], "content": "Expected an array, an object, or a literal here." }]
+            ]
+          },
+          { "frame": { "path": null, "span": [0, 0], "sourceCode": "" } }
+        ]
+      },
+      "verboseAdvices": { "advices": [] },
+      "location": { "path": { "file": "biome-report.json" }, "span": [0, 0], "sourceCode": "" },
+      "tags": [],
+      "source": null
+    },
+    {
+      "category": "format",
+      "severity": "error",
+      "description": "Code formatting aborted due to parsing errors. To format code with errors, enable the 'formatter.formatWithErrors' option.",
+      "message": [
+        {
+          "elements": [],
+          "content": "Code formatting aborted due to parsing errors. To format code with errors, enable the 'formatter.formatWithErrors' option."
+        }
+      ],
+      "advices": { "advices": [] },
+      "verboseAdvices": { "advices": [] },
+      "location": { "path": { "file": "biome-report.json" }, "span": null, "sourceCode": null },
+      "tags": [],
+      "source": null
+    },
+    {
+      "category": "format",
+      "severity": "error",
+      "description": "Formatter would have printed the following content:",
+      "message": [
+        { "elements": [], "content": "Formatter would have printed the following content:" }
+      ],
+      "advices": {
+        "advices": [
+          {
+            "diff": {
+              "dictionary": "/**\n * サムネイル生成ユーティリティ\n */\n  if (typeof window === 'undefined') {\n    return await generateServerSideThumbnail(\n      sourceImageBlob, width,height,quality,format,\n    )\n  }\n\n  return await generateClientSideThumbnail()\n}\n  generateThumbnail,\n}\n",
+              "ops": [
+                { "diffOp": { "equal": { "range": [0, 53] } } },
+                { "equalLines": { "line_count": 25 } },
+                { "diffOp": { "equal": { "range": [53, 138] } } },
+                { "diffOp": { "delete": { "range": [138, 145] } } },
+                { "diffOp": { "equal": { "range": [145, 161] } } },
+                { "diffOp": { "delete": { "range": [138, 145] } } },
+                { "diffOp": { "insert": { "range": [161, 162] } } },
+                { "diffOp": { "equal": { "range": [162, 168] } } },
+                { "diffOp": { "delete": { "range": [138, 145] } } },
+                { "diffOp": { "insert": { "range": [161, 162] } } },
+                { "diffOp": { "equal": { "range": [168, 175] } } },
+                { "diffOp": { "delete": { "range": [138, 145] } } },
+                { "diffOp": { "insert": { "range": [161, 162] } } },
+                { "diffOp": { "equal": { "range": [175, 183] } } },
+                { "diffOp": { "delete": { "range": [138, 145] } } },
+                { "diffOp": { "insert": { "range": [161, 162] } } },
+                { "diffOp": { "equal": { "range": [183, 189] } } },
+                { "diffOp": { "delete": { "range": [189, 195] } } },
+                { "diffOp": { "equal": { "range": [195, 245] } } },
+                { "diffOp": { "delete": { "range": [138, 143] } } },
+                { "diffOp": { "equal": { "range": [145, 161] } } },
+                { "diffOp": { "delete": { "range": [138, 143] } } },
+                { "diffOp": { "insert": { "range": [161, 162] } } },
+                { "diffOp": { "equal": { "range": [162, 168] } } },
+                { "diffOp": { "delete": { "range": [138, 143] } } },
+                { "diffOp": { "insert": { "range": [161, 162] } } },
+                { "diffOp": { "equal": { "range": [168, 175] } } },
+                { "diffOp": { "delete": { "range": [138, 143] } } },
+                { "diffOp": { "insert": { "range": [161, 162] } } },
+                { "diffOp": { "equal": { "range": [175, 183] } } },
+                { "diffOp": { "delete": { "range": [138, 143] } } },
+                { "diffOp": { "insert": { "range": [161, 162] } } },
+                { "diffOp": { "equal": { "range": [183, 189] } } },
+                { "diffOp": { "delete": { "range": [189, 193] } } },
+                { "diffOp": { "equal": { "range": [245, 249] } } },
+                { "equalLines": { "line_count": 132 } },
+                { "diffOp": { "equal": { "range": [249, 272] } } }
+              ]
+            }
+          }
+        ]
+      },
+      "verboseAdvices": { "advices": [] },
+      "location": {
+        "path": { "file": "src\\lib\\canvas\\thumbnail-generator.ts" },
+        "span": null,
+        "sourceCode": "/**\n * サムネイル生成ユーティリティ\n */\n\nexport interface ThumbnailOptions {\n  width?: number\n  height?: number\n  quality?: number\n  format?: 'png' | 'jpeg' | 'webp'\n}\n\nconst DEFAULT_WIDTH = 200\nconst DEFAULT_HEIGHT = 280 // A4比率を維持\nconst DEFAULT_QUALITY = 0.8\n\n/**\n * 元画像からサムネイルを生成\n */\nexport async function generateThumbnail(\n  sourceImageBlob: Blob,\n  options: ThumbnailOptions = {},\n): Promise<Blob> {\n  const {\n    width = DEFAULT_WIDTH,\n    height = DEFAULT_HEIGHT,\n    quality = DEFAULT_QUALITY,\n    format = 'jpeg',\n  } = options\n\n  if (typeof window === 'undefined') {\n    return await generateServerSideThumbnail(\n      sourceImageBlob,\n      width,\n      height,\n      quality,\n      format,\n    )\n  }\n\n  return await generateClientSideThumbnail(\n    sourceImageBlob,\n    width,\n    height,\n    quality,\n    format,\n  )\n}\n\n/**\n * サーバーサイドでのサムネイル生成（node-canvas使用）\n */\nasync function generateServerSideThumbnail(\n  sourceBlob: Blob,\n  width: number,\n  height: number,\n  quality: number,\n  format: string,\n): Promise<Blob> {\n  try {\n    // eslint-disable-next-line @typescript-eslint/no-require-imports\n    const { createCanvas, loadImage } = require('canvas')\n\n    const arrayBuffer = await sourceBlob.arrayBuffer()\n    const buffer = Buffer.from(arrayBuffer)\n\n    const image = await loadImage(buffer)\n\n    const canvas = createCanvas(width, height)\n    const ctx = canvas.getContext('2d')\n\n    ctx.fillStyle = '#ffffff'\n    ctx.fillRect(0, 0, width, height)\n\n    const aspectRatio = image.width / image.height\n    const targetAspectRatio = width / height\n\n    let drawWidth: number\n    let drawHeight: number\n    let offsetX = 0\n    let offsetY = 0\n\n    if (aspectRatio > targetAspectRatio) {\n      drawWidth = width\n      drawHeight = width / aspectRatio\n      offsetY = (height - drawHeight) / 2\n    } else {\n      drawHeight = height\n      drawWidth = height * aspectRatio\n      offsetX = (width - drawWidth) / 2\n    }\n\n    ctx.drawImage(image, offsetX, offsetY, drawWidth, drawHeight)\n\n    const outputBuffer = canvas.toBuffer(`image/${format}`, { quality })\n    return new Blob([outputBuffer], { type: `image/${format}` })\n  } catch (error) {\n    console.error('Server-side thumbnail generation failed:', error)\n    throw new Error('サムネイル生成に失敗しました')\n  }\n}\n\n/**\n * クライアントサイドでのサムネイル生成（Canvas API使用）\n */\nasync function generateClientSideThumbnail(\n  sourceBlob: Blob,\n  width: number,\n  height: number,\n  quality: number,\n  format: string,\n): Promise<Blob> {\n  return new Promise((resolve, reject) => {\n    try {\n      const img = new Image()\n\n      img.onload = () => {\n        const canvas = document.createElement('canvas')\n        canvas.width = width\n        canvas.height = height\n        const ctx = canvas.getContext('2d')\n\n        if (!ctx) {\n          reject(new Error('Canvas 2D context not available'))\n          return\n        }\n\n        ctx.fillStyle = '#ffffff'\n        ctx.fillRect(0, 0, width, height)\n\n        const aspectRatio = img.width / img.height\n        const targetAspectRatio = width / height\n\n        let drawWidth: number\n        let drawHeight: number\n        let offsetX = 0\n        let offsetY = 0\n\n        if (aspectRatio > targetAspectRatio) {\n          drawWidth = width\n          drawHeight = width / aspectRatio\n          offsetY = (height - drawHeight) / 2\n        } else {\n          drawHeight = height\n          drawWidth = height * aspectRatio\n          offsetX = (width - drawWidth) / 2\n        }\n\n        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight)\n\n        canvas.toBlob(\n          (blob) => {\n            if (blob) {\n              resolve(blob)\n            } else {\n              reject(new Error('Failed to generate thumbnail blob'))\n            }\n          },\n          `image/${format}`,\n          quality,\n        )\n      }\n\n      img.onerror = () => {\n        reject(new Error('Failed to load source image'))\n      }\n\n      const objectUrl = URL.createObjectURL(sourceBlob)\n      img.src = objectUrl\n\n      img.onload = () => {\n        URL.revokeObjectURL(objectUrl)\n      }\n    } catch (error) {\n      reject(error)\n    }\n  })\n}\n\n// 従来のクラス風APIとの互換を維持\nexport const ThumbnailGenerator = {\n  generateThumbnail,\n}\n"
+      },
+      "tags": [],
+      "source": null
+    }
+  ],
+  "command": "check"
+}

@@ -1,0 +1,65 @@
+name: PR Checklist Guard
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR checklist and required links
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = (context.payload.pull_request && context.payload.pull_request.body) || '';
+
+            function escapeRegExp(s) {
+              return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            }
+
+            function isChecked(itemText) {
+              const escaped = escapeRegExp(itemText);
+              const pattern = new RegExp(`(^|\n)\s*[-*]\s*\[[xX]\]\s+${escaped}(\s|$)`, 'm');
+              return pattern.test(body);
+            }
+
+            const requiredItems = [
+              'Latest docs fetched via MCP (Mastra, Cloudflare, and relevant libs). Links included in PR.',
+              'No `any` types introduced; strict types only. No unjustified `ts-ignore`/`ts-expect-error`.',
+              'Linter and formatter clean (0 errors). No rule disabling without justification.',
+              'DRY and SOLID upheld; no redundant implementations.',
+              'Unit tests added/updated in `src/__tests__` and passing.',
+              'E2E scenarios added/updated and passing with Playwright MCP.',
+              'Updated: `.kiro\\specs\\novel-to-manga-converter\\design.md`',
+              'Updated: `.kiro\\specs\\novel-to-manga-converter\\tasks.md`',
+              'Updated: `src\\db\\schema.ts` (+ migrations applied/generated as needed)',
+              'Updated: `database\\storage-structure.md`',
+            ];
+
+            const missingChecks = requiredItems.filter(item => !isChecked(item));
+
+            // Require Mastra and Cloudflare links near their checklist sections
+            const mastraLinkOk = /Mastra docs fetched[\s\S]{0,600}https?:\/\//i.test(body);
+            const cloudflareLinkOk = /Cloudflare docs fetched[\s\S]{0,600}https?:\/\//i.test(body);
+            const missingLinks = [];
+            if (!mastraLinkOk) missingLinks.push('Mastra MCP docs link is missing');
+            if (!cloudflareLinkOk) missingLinks.push('Cloudflare MCP docs link is missing');
+
+            const problems = [];
+            if (missingChecks.length) {
+              problems.push(`Unchecked required items:\n- ${missingChecks.join('\n- ')}`);
+            }
+            if (missingLinks.length) {
+              problems.push(`Missing required links:\n- ${missingLinks.join('\n- ')}`);
+            }
+
+            if (problems.length) {
+              core.setFailed(`PR checklist validation failed.\n\n${problems.join('\n\n')}`);
+            } else {
+              core.info('PR checklist validation passed.');
+            }
