@@ -30,6 +30,7 @@ build/
 # Misc
 .DS_Store
 *.pem
+.serena
 
 # Debug
 npm-debug.log*

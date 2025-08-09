@@ -110,17 +110,19 @@ describe('/api/render エンドポイント', () => {
       expect(data.thumbnailKey).toBeDefined()
 
       // データベース更新が呼ばれたことを確認
-      expect(mockDbService.updateRenderStatus).toHaveBeenCalledWith({
-        jobId: 'test-job-1',
-        episodeNumber: 1,
-        pageNumber: 1,
-        isRendered: true,
-        imagePath: expect.any(String),
-        thumbnailPath: expect.any(String),
-        width: 842,
-        height: 595,
-        fileSize: expect.any(Number),
-      })
+      expect(mockDbService.updateRenderStatus).toHaveBeenCalledWith(
+        'test-job-1',
+        1,
+        1,
+        {
+          isRendered: true,
+          imagePath: expect.any(String),
+          thumbnailPath: expect.any(String),
+          width: 842,
+          height: 595,
+          fileSize: expect.any(Number),
+        }
+      )
 
       // ストレージ保存が呼ばれたことを確認（画像 + サムネイル）
       expect(mockStorage.put).toHaveBeenCalledTimes(2)

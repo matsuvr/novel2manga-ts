@@ -277,6 +277,16 @@
 - [ ] 27. Episodes未生成時のUIメッセージ最適化（404理由の明確化、次アクション誘導）
 - [ ] 28. LLMモデル設定の検証ユーティリティ（`getAppConfigWithOverrides()`の自己診断ログ強化）
 
+### 08-09 型適合タスク（新規）
+
+- [ ] TASK-LLM-ADAPTER-001: Mastra Agent が要求する LanguageModelV1 と Vercel AI SDK v5 の LanguageModelV2 の型差異を吸収する軽量アダプタの導入
+  - 背景: 現状 `src/agents/layout-generator.ts` で `as any` による一時回避を実施
+  - 受け入れ条件:
+    - `as any` を除去し、strict typesでビルド通過
+    - Agent.model に渡す関数の戻り型がMastra側の期待に完全一致
+    - 単体テスト: 既存のレイアウト生成テストがグリーンのまま
+  - 参考: Mastra Agents / Vercel AI SDK 最新ドキュメント（MCPで検証済み）
+
 ## 既存タスク（延期）
 
 - [ ] **22. UI/UXの最終実装**（Phase 4以降）

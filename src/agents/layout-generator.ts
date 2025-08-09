@@ -1,8 +1,6 @@
-import { anthropic } from '@ai-sdk/anthropic'
-import { openai } from '@ai-sdk/openai'
 import { Agent } from '@mastra/core'
 import { z } from 'zod'
-import { getCurrentLLMProvider, getLayoutGenerationConfig } from '@/config'
+import { getLayoutGenerationConfig } from '@/config'
 import type {
   EpisodeData,
   LayoutGenerationConfig,
@@ -11,42 +9,16 @@ import type {
   Panel,
 } from '@/types/panel-layout'
 import { layoutRules, selectLayoutTemplate } from '@/utils/layout-templates'
+import { getLayoutGenerationLLM } from '@/utils/llm-factory'
 
-function getLayoutModel() {
-  const { provider, config: providerConfig } = getCurrentLLMProvider()
-
-  switch (provider) {
-    case 'openai': {
-      const openaiKey = providerConfig.apiKey
-      const openaiModel = providerConfig.model
-      if (!openaiKey) throw new Error('OpenAI API key not configured')
-      return openai(openaiModel) as any // 型キャストで互換性を確保
-    }
-    case 'claude': {
-      const claudeKey = providerConfig.apiKey
-      const claudeModel = providerConfig.model
-      if (!claudeKey) throw new Error('Claude API key not configured')
-
-      // 環境変数を設定してantropic関数を使用
-      process.env.ANTHROPIC_API_KEY = claudeKey
-      return anthropic(claudeModel) as any // 型キャストで互換性を確保
-    }
-    case 'gemini': {
-      // Geminiサポートは将来的に追加
-      throw new Error('Gemini provider is not yet supported')
-    }
-    case 'groq': {
-      // Groqサポートは将来的に追加
-      throw new Error('Groq provider is not yet supported')
-    }
-    default: {
-      // デフォルトはOpenAIにフォールバック
-      const { config: fallbackConfig } = getCurrentLLMProvider()
-      const openaiKey = fallbackConfig.apiKey
-      if (!openaiKey) throw new Error('Default provider API key not configured')
-      return openai(fallbackConfig.model) as any // 型キャストで互換性を確保
-    }
-  }
+async function getLayoutModel() {
+  // 共有LLMファクトリを使用して、フォールバックやモデルオーバーライドを一元化
+  const llm = await getLayoutGenerationLLM()
+  // デバッグ出力（統一）
+  console.log(`[layout-generator] Using provider: ${llm.providerName}`)
+  console.log(`[layout-generator] Using model: ${llm.model}`)
+  // Mastra Agent の model コールバックはモデルインスタンスを返す関数を期待
+  return llm.provider(llm.model)
 }
 
 // LLMへの入力スキーマは現在使用していないが、将来のバリデーション用に保持
@@ -142,11 +114,10 @@ export class LayoutGeneratorAgent extends Agent {
       },
     }
 
-    const prompt = `エピソード${episodeData.episodeNumber}のパネルレイアウトを生成してください。
-
-データ: ${JSON.stringify(layoutInput, null, 2)}
-
-各ページには4-8個のパネルを配置し、重要度に応じてパネルサイズを調整してください。`
+    const config = getLayoutGenerationConfig()
+    const prompt = config.userPromptTemplate
+      .replace('{{episodeNumber}}', episodeData.episodeNumber.toString())
+      .replace('{{layoutInputJson}}', JSON.stringify(layoutInput, null, 2))
 
     const llmResponse = await this.generate([{ role: 'user', content: prompt }], {
       output: layoutGenerationOutputSchema,
@@ -232,16 +203,16 @@ export class LayoutGeneratorAgent extends Agent {
   }
 }
 
-// レイアウト生成関数
+// メイン関数: レイアウト生成（後方互換性を排除してDRY原則に従う）
 export async function generateMangaLayout(
   episodeData: EpisodeData,
   config?: LayoutGenerationConfig,
 ): Promise<MangaLayout> {
   const fullConfig: LayoutGenerationConfig = {
     panelsPerPage: {
-      min: 3,
-      max: 6,
-      average: 4.5,
+      min: 1, // 1コマから対応
+      max: 8, // 最大数を維持しつつ制限を緩和
+      average: 3.5, // 平均値を調整
     },
     dialogueDensity: 0.6,
     visualComplexity: 0.7,
@@ -253,3 +224,6 @@ export async function generateMangaLayout(
   const agent = new LayoutGeneratorAgent()
   return await agent.generateLayout(episodeData, fullConfig)
 }
+
+// エイリアス（重複排除）
+export const generateLayoutWithAgent = generateMangaLayout
