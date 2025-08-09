@@ -65,7 +65,7 @@ describe('Novel to manga full flow', () => {
           break
         }
       }
-      await new Promise((r) => setTimeout(r, 5000))
+      await new Promise((r) => setTimeout(r, POLLING_INTERVAL_MS))
     }
 
     const epRes = await fetch(`${baseUrl}/api/jobs/${jobId}/episodes`)
