@@ -1,4 +1,5 @@
 import { anthropic } from '@ai-sdk/anthropic'
+import { google } from '@ai-sdk/google'
 import { openai } from '@ai-sdk/openai'
 import { Agent } from '@mastra/core'
 import { z } from 'zod'
@@ -32,8 +33,13 @@ function getLayoutModel() {
       return anthropic(claudeModel) as any // 型キャストで互換性を確保
     }
     case 'gemini': {
-      // Geminiサポートは将来的に追加
-      throw new Error('Gemini provider is not yet supported')
+      const geminiKey = providerConfig.apiKey
+      const geminiModel = providerConfig.model
+      if (!geminiKey) throw new Error('Gemini API key not configured')
+
+      // 環境変数を設定してgoogle関数を使用
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY = geminiKey
+      return google(geminiModel) as any // 型キャストで互換性を確保
     }
     case 'groq': {
       // Groqサポートは将来的に追加
@@ -232,8 +238,8 @@ export class LayoutGeneratorAgent extends Agent {
   }
 }
 
-// レイアウト生成関数
-export async function generateMangaLayout(
+// レイアウト生成関数（Mastraエージェント使用）
+export async function generateLayoutWithAgent(
   episodeData: EpisodeData,
   config?: LayoutGenerationConfig,
 ): Promise<MangaLayout> {
@@ -252,4 +258,12 @@ export async function generateMangaLayout(
 
   const agent = new LayoutGeneratorAgent()
   return await agent.generateLayout(episodeData, fullConfig)
+}
+
+// 後方互換性のためのエイリアス
+export async function generateMangaLayout(
+  episodeData: EpisodeData,
+  config?: LayoutGenerationConfig,
+): Promise<MangaLayout> {
+  return await generateLayoutWithAgent(episodeData, config)
 }
