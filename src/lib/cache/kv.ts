@@ -1,4 +1,4 @@
-import { getConfig } from '@/config'
+import { getAppConfig } from '@/config'
 
 // KVのバインディング型定義
 interface KVNamespace {
@@ -119,8 +119,8 @@ export function getLayoutCacheKey(episodeId: string, pageNumber: number): string
 
 // キャッシュの設定を取得（ベストプラクティス: 最小60秒）
 export function getCacheTTL(type: 'analysis' | 'layout'): number {
-  const config = getConfig()
-  const baseTTL = config.get<number>('processing.cache.ttl')
+  const app = getAppConfig()
+  const baseTTL = app.processing.cache.ttl
 
   // KVのベストプラクティス: 最小60秒のTTL
   const minTTL = 60
@@ -136,11 +136,9 @@ export function getCacheTTL(type: 'analysis' | 'layout'): number {
 
 // キャッシュの有効性チェック
 export async function isCacheEnabled(type: 'analysis' | 'layout'): Promise<boolean> {
-  const config = getConfig()
-  const features = config.get<{ enableCaching: boolean }>('features')
-  const processingCache = config.get<{ analysisCache?: boolean; layoutCache?: boolean }>(
-    'processing.cache',
-  )
+  const app = getAppConfig()
+  const features = app.features
+  const processingCache = app.processing.cache
 
   // 全体的なキャッシュ機能が無効の場合
   if (!features.enableCaching) {
