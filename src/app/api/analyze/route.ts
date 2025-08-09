@@ -1,10 +1,13 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { chunkAnalyzerAgent } from '@/agents/chunk-analyzer'
+import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
 import { getTextAnalysisConfig } from '@/config'
 import { DatabaseService } from '@/services/database'
 import type { AnalyzeResponse } from '@/types/job'
 import { splitTextIntoChunks } from '@/utils/text-splitter'
+import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
+import { saveEpisodeBoundaries } from '@/utils/storage'
 import { generateUUID } from '@/utils/uuid'
 
 // リクエストボディのスキーマ定義（互換のため、novelId か text のいずれかを許容）
@@ -301,44 +304,36 @@ export async function POST(request: NextRequest) {
     await dbService.markJobStepCompleted(jobId, 'analyze')
     console.log(`[/api/analyze] All ${chunks.length} chunks analyzed successfully`)
 
-    // 自動的にエピソード分析を開始（テスト環境ではスキップ）
-    if (String(process.env.NODE_ENV) !== 'test') {
-      console.log('[/api/analyze] Starting episode analysis...')
-      try {
-        const episodeResponse = await fetch(
-          `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/analyze/narrative-arc`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              novelId,
-              jobId,
-              startChunkIndex: 0,
-            }),
-          },
-        )
+    // エピソード分析を内部処理として実行
+    console.log('[/api/analyze] Starting episode analysis...')
+    try {
+      const input = await prepareNarrativeAnalysisInput({
+        jobId,
+        startChunkIndex: 0,
+      })
 
-        if (!episodeResponse.ok) {
-          const errorData = (await episodeResponse.json().catch(() => ({}))) as { error?: string }
-          throw new Error(
-            `Episode analysis failed: ${errorData.error || episodeResponse.statusText}`,
-          )
-        }
+      if (!input) {
+        throw new Error('Failed to prepare narrative analysis input')
+      }
 
-        console.log('[/api/analyze] Episode analysis completed')
-        await dbService.markJobStepCompleted(jobId, 'episode')
-        await dbService.updateJobStep(jobId, 'layout', chunks.length, chunks.length)
-      } catch (episodeError) {
-        console.error('[/api/analyze] Episode analysis failed:', episodeError)
-        await dbService.updateJobError(
-          jobId,
-          `Episode analysis failed: ${episodeError instanceof Error ? episodeError.message : String(episodeError)}`,
-          'episode',
-        )
-        // テストでは落とさず継続
-        if (String(process.env.NODE_ENV) !== 'test') {
-          throw episodeError
-        }
+      const boundaries = await analyzeNarrativeArc(input)
+
+      if (boundaries.length > 0) {
+        await saveEpisodeBoundaries(novelId, boundaries)
+      }
+
+      console.log('[/api/analyze] Episode analysis completed')
+      await dbService.markJobStepCompleted(jobId, 'episode')
+      await dbService.updateJobStep(jobId, 'layout', chunks.length, chunks.length)
+    } catch (episodeError) {
+      console.error('[/api/analyze] Episode analysis failed:', episodeError)
+      await dbService.updateJobError(
+        jobId,
+        `Episode analysis failed: ${episodeError instanceof Error ? episodeError.message : String(episodeError)}`,
+        'episode',
+      )
+      if (String(process.env.NODE_ENV) !== 'test') {
+        throw episodeError
       }
     }
 
