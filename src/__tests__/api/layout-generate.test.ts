@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST } from '@/app/api/layout/generate/route'
 import { DatabaseService } from '@/services/database'
+import { StorageFactory } from '@/utils/storage'
 
 // モック設定
 vi.mock('@/agents/layout-generator', () => ({
@@ -41,7 +42,29 @@ vi.mock('@/agents/layout-generator', () => ({
 vi.mock('@/utils/storage', () => ({
   StorageFactory: {
     getDatabase: vi.fn(),
+    getAnalysisStorage: vi.fn().mockResolvedValue({
+      get: vi.fn().mockResolvedValue({
+        text: JSON.stringify({
+          characters: [{ id: '1', name: 'テスト太郎', description: 'テストキャラクター' }],
+          scenes: [{ id: '1', location: 'テスト場所', description: 'テスト場面' }],
+          dialogues: [{ id: '1', speakerId: 'テスト太郎', text: 'こんにちは', index: 0 }],
+          highlights: [],
+          situations: [],
+        }),
+      }),
+    }),
   },
+  getAnalysisStorage: vi.fn().mockResolvedValue({
+    get: vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        characters: [{ id: '1', name: 'テスト太郎', description: 'テストキャラクター' }],
+        scenes: [{ id: '1', location: 'テスト場所', description: 'テスト場面' }],
+        dialogues: [{ id: '1', speakerId: 'テスト太郎', text: 'こんにちは', index: 0 }],
+        highlights: [],
+        situations: [],
+      }),
+    }),
+  }),
   getChunkData: vi.fn().mockResolvedValue({
     text: 'チャンクのテキスト内容です',
   }),
@@ -470,12 +493,14 @@ describe('/api/layout/generate', () => {
     })
 
     it('チャンク分析データが存在しない場合は400エラーを返す', async () => {
-      // 分析データファイルを削除
-      await fs.rm(path.join(process.cwd(), '.local-storage', 'chunk-analysis'), {
-        recursive: true,
-        force: true,
-      })
-
+      // この特定のテストだけでgetAnalysisStorageのモックを変更
+      const mockStorage = {
+        get: vi.fn().mockResolvedValue(null), // No data found for all chunks
+      }
+      const { StorageFactory, getAnalysisStorage } = await import('@/utils/storage')
+      vi.mocked(StorageFactory.getAnalysisStorage).mockResolvedValue(mockStorage as any)
+      vi.mocked(getAnalysisStorage).mockResolvedValue(mockStorage as any)
+      
       const requestBody = {
         jobId: testJobId,
         episodeNumber: 1,
@@ -544,6 +569,31 @@ describe('/api/layout/generate', () => {
 
       expect(response.status).toBe(400)
       expect(data.error).toBe('No chunk analysis data found for this episode')
+      
+      // Reset the mock back to the original for subsequent tests
+      const { StorageFactory, getAnalysisStorage } = await import('@/utils/storage')
+      vi.mocked(StorageFactory.getAnalysisStorage).mockResolvedValue({
+        get: vi.fn().mockResolvedValue({
+          text: JSON.stringify({
+            characters: [{ id: '1', name: 'テスト太郎', description: 'テストキャラクター' }],
+            scenes: [{ id: '1', location: 'テスト場所', description: 'テスト場面' }],
+            dialogues: [{ id: '1', speakerId: 'テスト太郎', text: 'こんにちは', index: 0 }],
+            highlights: [],
+            situations: [],
+          }),
+        }),
+      } as any)
+      vi.mocked(getAnalysisStorage).mockResolvedValue({
+        get: vi.fn().mockResolvedValue({
+          text: JSON.stringify({
+            characters: [{ id: '1', name: 'テスト太郎', description: 'テストキャラクター' }],
+            scenes: [{ id: '1', location: 'テスト場所', description: 'テスト場面' }],
+            dialogues: [{ id: '1', speakerId: 'テスト太郎', text: 'こんにちは', index: 0 }],
+            highlights: [],
+            situations: [],
+          }),
+        }),
+      } as any)
     })
 
     it('設定値の境界値テスト', async () => {
