@@ -319,7 +319,7 @@ export async function POST(request: NextRequest) {
       const boundaries = await analyzeNarrativeArc(input)
 
       if (boundaries.length > 0) {
-        await saveEpisodeBoundaries(novelId, boundaries)
+        await saveEpisodeBoundaries(jobId, boundaries)
       }
 
       console.log('[/api/analyze] Episode analysis completed')
