@@ -2,6 +2,34 @@ import { randomUUID } from 'node:crypto'
 import { type NextRequest, NextResponse } from 'next/server'
 import { StorageFactory } from '@/utils/storage'
 
+export async function saveNovelToStorage(text: string) {
+  const uuid = randomUUID()
+  const key = `${uuid}.json`
+
+  const storage = await StorageFactory.getNovelStorage()
+
+  const fileData = {
+    text,
+    metadata: {
+      uploadedAt: new Date().toISOString(),
+      originalLength: text.length,
+      uuid,
+    },
+  }
+
+  await storage.put(key, JSON.stringify(fileData), {
+    uuid,
+    length: text.length.toString(),
+  })
+
+  return {
+    uuid,
+    fileName: `${uuid}.json`,
+    length: text.length,
+    preview: text.slice(0, 100),
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log('[novel-storage] Starting storage operation')
@@ -14,38 +42,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'テキストが必要です' }, { status: 400 })
     }
 
-    // UUIDを生成してファイル名を作成
-    const uuid = randomUUID()
-    const key = `${uuid}.json`
-
-    // ストレージに保存（軽量化）
-    const storage = await StorageFactory.getNovelStorage()
-
-    // シンプルなファイルデータ構造（軽量化）
-    const fileData = {
-      text,
-      metadata: {
-        uploadedAt: new Date().toISOString(),
-        originalLength: text.length,
-        uuid,
-      },
-    }
-
-    // 軽量メタデータで保存
-    await storage.put(key, JSON.stringify(fileData), {
-      uuid,
-      length: text.length.toString(),
-    })
+    const result = await saveNovelToStorage(text)
 
     const duration = Date.now() - startTime
     console.log(`[novel-storage] Storage completed in ${duration}ms`)
 
     return NextResponse.json({
       message: '小説が正常にアップロードされました',
-      uuid,
-      fileName: `${uuid}.json`,
-      length: text.length,
-      preview: text.slice(0, 100),
+      ...result,
     })
   } catch (error) {
     console.error('ファイル保存エラー:', error)
