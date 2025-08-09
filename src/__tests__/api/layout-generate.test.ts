@@ -54,6 +54,17 @@ vi.mock('@/utils/storage', () => ({
       }),
     }),
   },
+  getAnalysisStorage: vi.fn().mockResolvedValue({
+    get: vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        characters: [{ id: '1', name: 'テスト太郎', description: 'テストキャラクター' }],
+        scenes: [{ id: '1', location: 'テスト場所', description: 'テスト場面' }],
+        dialogues: [{ id: '1', speakerId: 'テスト太郎', text: 'こんにちは', index: 0 }],
+        highlights: [],
+        situations: [],
+      }),
+    }),
+  }),
   getChunkData: vi.fn().mockResolvedValue({
     text: 'チャンクのテキスト内容です',
   }),
@@ -486,7 +497,9 @@ describe('/api/layout/generate', () => {
       const mockStorage = {
         get: vi.fn().mockResolvedValue(null), // No data found for all chunks
       }
+      const { StorageFactory, getAnalysisStorage } = await import('@/utils/storage')
       vi.mocked(StorageFactory.getAnalysisStorage).mockResolvedValue(mockStorage as any)
+      vi.mocked(getAnalysisStorage).mockResolvedValue(mockStorage as any)
       
       const requestBody = {
         jobId: testJobId,
@@ -558,7 +571,19 @@ describe('/api/layout/generate', () => {
       expect(data.error).toBe('No chunk analysis data found for this episode')
       
       // Reset the mock back to the original for subsequent tests
+      const { StorageFactory, getAnalysisStorage } = await import('@/utils/storage')
       vi.mocked(StorageFactory.getAnalysisStorage).mockResolvedValue({
+        get: vi.fn().mockResolvedValue({
+          text: JSON.stringify({
+            characters: [{ id: '1', name: 'テスト太郎', description: 'テストキャラクター' }],
+            scenes: [{ id: '1', location: 'テスト場所', description: 'テスト場面' }],
+            dialogues: [{ id: '1', speakerId: 'テスト太郎', text: 'こんにちは', index: 0 }],
+            highlights: [],
+            situations: [],
+          }),
+        }),
+      } as any)
+      vi.mocked(getAnalysisStorage).mockResolvedValue({
         get: vi.fn().mockResolvedValue({
           text: JSON.stringify({
             characters: [{ id: '1', name: 'テスト太郎', description: 'テストキャラクター' }],
