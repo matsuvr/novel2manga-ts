@@ -1,7 +1,6 @@
 import { Agent } from '@mastra/core'
 import { z } from 'zod'
 import { getLayoutGenerationConfig } from '@/config'
-import { getLayoutGenerationLLM } from '@/utils/llm-factory'
 import type {
   EpisodeData,
   LayoutGenerationConfig,
@@ -10,6 +9,7 @@ import type {
   Panel,
 } from '@/types/panel-layout'
 import { layoutRules, selectLayoutTemplate } from '@/utils/layout-templates'
+import { getLayoutGenerationLLM } from '@/utils/llm-factory'
 
 async function getLayoutModel() {
   // 共有LLMファクトリを使用して、フォールバックやモデルオーバーライドを一元化
@@ -79,7 +79,7 @@ export class LayoutGeneratorAgent extends Agent {
         const config = getLayoutGenerationConfig()
         return config.systemPrompt
       },
-  model: getLayoutModel,
+      model: getLayoutModel,
     })
   }
 
