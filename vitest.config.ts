@@ -13,7 +13,7 @@ export default defineConfig({
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
-      '**/tests/integration/**', // 統合テストを除外
+      // '**/tests/integration/**', // 統合テストを除外 (temporarily enabled for testing)
       '**/tmp_test/**', // 一時テストファイルを除外
       '**/.{idea,git,cache,output,temp}/**',
       '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*',

@@ -11,7 +11,7 @@ export const appConfig = {
   // LLM設定
   llm: {
     // デフォルトプロバイダー
-    defaultProvider: 'gemini' as 'openai' | 'gemini' | 'groq' | 'claude' | 'openrouter',
+    defaultProvider: 'openai' as 'openai' | 'gemini' | 'groq' | 'claude' | 'openrouter',
 
     // フォールバック設定
     fallbackChain: ['openrouter', 'gemini', 'claude'] as Array<
@@ -24,7 +24,7 @@ export const appConfig = {
         apiKey: process.env.OPENAI_API_KEY,
         model: 'gpt-5-mini',
         maxTokens: 4096,
-        timeout: 30000,
+        timeout: 60000,
       },
       claude: {
         apiKey: process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY,
@@ -61,7 +61,7 @@ export const appConfig = {
       maxTokens: 8192,
       // プロバイダー別のモデルオーバーライド
       modelOverrides: {
-        openai: 'gpt-4o',
+        openai: 'gpt-5-mini',
         claude: 'claude-sonnet-4-20250514',
         gemini: 'gemini-2.5-flash-lite',
         groq: 'compound-beta',
@@ -97,7 +97,7 @@ export const appConfig = {
       maxTokens: 4096,
       // プロバイダー別のモデルオーバーライド
       modelOverrides: {
-        openai: 'o3',
+        openai: 'gpt-5-mini',
         claude: 'claude-sonnet-4-20250514',
         gemini: 'gemini-2.5-flash',
         groq: 'compound-beta',
@@ -200,7 +200,7 @@ export const appConfig = {
       maxTokens: 8192,
       // プロバイダー別のモデルオーバーライド
       modelOverrides: {
-        openai: 'gpt-4o',
+        openai: 'gpt-5-mini',
         claude: 'claude-sonnet-4-20250514',
         gemini: 'gemini-2.5-flash',
         groq: 'compound-beta',
@@ -296,11 +296,19 @@ export const appConfig = {
     // タイムアウト設定
     timeout: {
       default: 30000, // デフォルトタイムアウト（ミリ秒）
-      textAnalysis: 60000, // テキスト分析タイムアウト
+      textAnalysis: 180000, // テキスト分析タイムアウト（gpt-5-mini-2025-08-07用に3分に増加）
       narrativeAnalysis: 90000, // 物語弧分析タイムアウト
       layoutGeneration: 45000, // レイアウト生成タイムアウト
       imageGeneration: 120000, // 画像生成タイムアウト
       pageRender: 60000, // ページレンダリングタイムアウト
+    },
+
+    // ポーリング設定（APIステータス監視など）
+    polling: {
+      jobStatus: {
+        intervalMs: 5000, // ステータスチェック間隔（ミリ秒）
+        maxAttempts: 120, // 最大ポーリング回数
+      },
     },
 
     // ペイロード制限

@@ -68,7 +68,8 @@
       "mcp__mastra__mastraExamples",
       "Bash(gh pr list:*)",
       "Bash(npx vitest:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(gh pr view:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

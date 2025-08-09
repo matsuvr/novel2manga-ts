@@ -6,42 +6,29 @@ export {
   appConfig,
   getAppConfigWithOverrides,
 } from './app.config'
-export {
-  type AIConfig,
-  type ApiConfig,
-  type Config,
-  type DatabaseConfig,
-  type EpisodeConfig,
-  type FeatureConfig,
-  getConfig,
-  getConfigManager,
-  initializeConfig,
-  type LogConfig,
-  type ProcessingConfig,
-  type SecurityConfig,
-  type StorageConfig,
-} from './config-loader'
-
-import { type AppConfig, getAppConfigWithOverrides } from './app.config'
-import type {
+// config-loaderの型定義のみをインポート（実装は使用しない）
+export type {
   AIConfig,
   ApiConfig,
+  Config,
   DatabaseConfig,
   EpisodeConfig,
   FeatureConfig,
+  LogConfig,
   ProcessingConfig,
+  SecurityConfig,
   StorageConfig,
 } from './config-loader'
-// 便利なヘルパー関数
-import { getConfig } from './config-loader'
 
-// 初期化が必要な場合のヘルパー
+import { type AppConfig, getAppConfigWithOverrides } from './app.config'
+
+// 初期化が必要な場合のヘルパー - app.config.tsベース
 export async function ensureConfigLoaded() {
-  const config = getConfig()
   try {
-    config.getAll()
-  } catch {
-    await config.loadConfig()
+    // app.config.tsの設定を検証
+    getAppConfigWithOverrides()
+  } catch (error) {
+    throw new Error(`Configuration loading failed: ${error instanceof Error ? error.message : 'Unknown error'}. Check app.config.ts syntax and structure.`)
   }
 }
 
@@ -103,55 +90,122 @@ export function getLLMFallbackChain() {
   return getAppConfig().llm.fallbackChain
 }
 
-// プロセッシング設定を取得
-export function getProcessingConfig(): ProcessingConfig {
-  return getConfig().get('processing') as ProcessingConfig
+// プロセッシング設定を取得 - app.config.tsから直接取得
+export function getProcessingConfig() {
+  const config = getAppConfig()
+  return {
+    maxConcurrentChunks: config.processing.maxConcurrentChunks,
+    batchSize: config.processing.batchSize.chunks,
+    enableParallelProcessing: config.features.enableParallelProcessing,
+    chunkSize: config.chunking.defaultChunkSize,
+    overlapSize: config.chunking.defaultOverlapSize,
+    maxChunkSize: config.chunking.maxChunkSize,
+    minChunkSize: config.chunking.minChunkSize,
+    maxOverlapRatio: config.chunking.maxOverlapRatio,
+  }
 }
 
-// AI設定を取得
-export function getAIConfig(): AIConfig {
-  return getConfig().get('ai') as AIConfig
+// AI設定を取得 - app.config.tsから直接取得
+export function getAIConfig() {
+  const config = getAppConfig()
+  return {
+    provider: config.llm.defaultProvider,
+    openai: config.llm.providers.openai,
+    claude: config.llm.providers.claude,
+    fallbackProvider: config.llm.fallbackChain[0],
+    maxConcurrentRequests: config.processing.maxConcurrentChunks,
+    requestQueueSize: 100, // 固定値
+  }
 }
 
-// 現在のAIプロバイダーを取得
+// 現在のAIプロバイダーを取得 - app.config.tsから直接取得
 export function getCurrentAIProvider(): string {
-  return getConfig().get('ai.provider', 'openai') as string
+  return getAppConfig().llm.defaultProvider
 }
 
-// エピソード設定を取得
-export function getEpisodeConfig(): EpisodeConfig {
-  return getConfig().get('episode') as EpisodeConfig
+// エピソード設定を取得 - app.config.tsから直接取得
+export function getEpisodeConfig() {
+  const config = getAppConfig()
+  return {
+    targetCharsPerEpisode: config.processing.episode.targetCharsPerEpisode,
+    minCharsPerEpisode: config.processing.episode.minCharsPerEpisode,
+    maxCharsPerEpisode: config.processing.episode.maxCharsPerEpisode,
+    charsPerPage: config.processing.episode.charsPerPage,
+  }
 }
 
-// フィーチャー設定を取得
-export function getFeatureConfig(): FeatureConfig {
-  return getConfig().get('features') as FeatureConfig
+// フィーチャー設定を取得 - app.config.tsから直接取得
+export function getFeatureConfig() {
+  const config = getAppConfig()
+  return {
+    enableCaching: config.features.enableCaching,
+    enableTextAnalysis: config.features.enableTextAnalysis,
+    enableBatchProcessing: true, // 固定値
+  }
 }
 
-// API設定を取得
-export function getApiConfig(): ApiConfig {
-  return getConfig().get('api') as ApiConfig
+// API設定を取得 - app.config.tsから直接取得
+export function getApiConfig() {
+  const config = getAppConfig()
+  return {
+    timeout: {
+      default: config.api.timeout.default,
+      upload: 60000, // 固定値
+      analysis: config.api.timeout.textAnalysis,
+    },
+    retries: {
+      default: config.processing.retry.maxAttempts,
+      upload: 2, // 固定値
+      analysis: 2, // 固定値
+    },
+  }
 }
 
-// ストレージ設定を取得（環境に応じて適切な設定を返す）
-export function getStorageConfig(): StorageConfig {
-  return getConfig().get('storage') as StorageConfig
+// ストレージ設定を取得 - app.config.tsから直接取得
+export function getStorageConfig() {
+  const config = getAppConfig()
+  return {
+    type: 'local' as const, // 現在はローカルのみサポート
+    local: {
+      basePath: config.storage.local.basePath,
+      novelsDir: config.storage.local.novelsDir,
+      chunksDir: config.storage.local.chunksDir,
+      analysisDir: config.storage.local.analysisDir,
+      layoutsDir: config.storage.local.layoutsDir,
+      jobsDir: config.storage.local.jobsDir,
+      rendersDir: config.storage.local.rendersDir,
+      thumbnailsDir: config.storage.local.thumbnailsDir,
+    },
+  }
 }
 
-// データベース設定を取得
-export function getDatabaseConfig(): DatabaseConfig {
-  return getConfig().get('database') as DatabaseConfig
+// データベース設定を取得 - 固定値（SQLite使用）
+export function getDatabaseConfig() {
+  return {
+    type: 'sqlite' as const,
+    sqlite: {
+      path: './database/novel2manga.db',
+      timeout: 5000,
+      maxConnections: 1,
+    },
+    migrations: {
+      enabled: true,
+      migrationsPath: './database/migrations',
+    },
+  }
 }
 
-// 環境判定
+// 環境判定 - 環境変数から直接取得
 export function isDevelopment(): boolean {
-  return getConfig().isDevelopment()
+  const env = process.env.NODE_ENV || 'development'
+  return env === 'development' || env === 'test'
 }
 
 export function isProduction(): boolean {
-  return getConfig().isProduction()
+  const env = process.env.NODE_ENV || 'development'
+  return env === 'production'
 }
 
 export function isDebugMode(): boolean {
-  return getConfig().isDebugMode()
+  return process.env.DEBUG === 'true'
 }
