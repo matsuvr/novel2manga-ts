@@ -136,8 +136,9 @@ describe('Storage and Database Integration', () => {
 
   describe('Database and Storage Combined Operations', () => {
     it('should create job and store related files', async () => {
-      const novelId = 'novel-integrated-test'
-      const jobId = 'job-integrated-test'
+      const timestamp = Date.now()
+      const novelId = `novel-integrated-test-${timestamp}`
+      const jobId = `job-integrated-test-${timestamp}`
       const originalText = 'これは統合テスト用の小説テキストです。'
 
       // 1. Novel情報をストレージに保存
@@ -174,8 +175,9 @@ describe('Storage and Database Integration', () => {
     })
 
     it('should update job progress and status', async () => {
-      const novelId = 'novel-progress-test'
-      const jobId = 'job-progress-test'
+      const timestamp = Date.now() + 1 // Ensure different timestamp
+      const novelId = `novel-progress-test-${timestamp}`
+      const jobId = `job-progress-test-${timestamp}`
       const originalText = 'プログレステスト用テキスト'
 
       // Novelを作成

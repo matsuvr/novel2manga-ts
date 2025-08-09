@@ -895,7 +895,7 @@ export async function saveEpisodeBoundaries(
   // データベースに保存
   const { DatabaseService } = await import('@/services/database')
   const dbService = new DatabaseService()
-  
+
   // jobからnovelIdを取得
   const job = await dbService.getJob(jobId)
   if (!job) {
@@ -903,7 +903,7 @@ export async function saveEpisodeBoundaries(
   }
 
   // エピソードをデータベースに保存
-  const episodesForDb = episodes.map(episode => ({
+  const episodesForDb = episodes.map((episode) => ({
     novelId: job.novelId,
     jobId,
     episodeNumber: episode.episodeNumber,
@@ -918,7 +918,7 @@ export async function saveEpisodeBoundaries(
   }))
 
   await dbService.createEpisodes(episodesForDb)
-  
+
   console.log(`Saved ${episodes.length} episodes to both database and file system`)
 }
 
