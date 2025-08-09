@@ -8,65 +8,10 @@ export const appConfig = {
     maxOverlapRatio: 0.5, // チャンクサイズに対する最大オーバーラップ比率
   },
 
-  // LLM設定
+  // LLM設定（モデル・パラメータは llm.config.ts に集約。ここではプロンプトのみ保持）
   llm: {
-    // デフォルトプロバイダー
-    defaultProvider: 'openai' as 'openai' | 'gemini' | 'groq' | 'claude' | 'openrouter',
-
-    // フォールバック設定
-    fallbackChain: ['openrouter', 'gemini', 'claude'] as Array<
-      'openai' | 'gemini' | 'groq' | 'claude' | 'openrouter'
-    >,
-
-    // プロバイダー別設定
-    providers: {
-      openai: {
-        apiKey: process.env.OPENAI_API_KEY,
-        model: 'gpt-5-mini',
-        maxTokens: 4096,
-        timeout: 60000,
-      },
-      claude: {
-        apiKey: process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY,
-        model: 'claude-sonnet-4-20250514',
-        maxTokens: 8192,
-        timeout: 30000,
-      },
-      gemini: {
-        apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY,
-        model: 'gemini-2.5-flash-lite',
-        baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-        maxTokens: 8192,
-        timeout: 30000,
-      },
-      groq: {
-        apiKey: process.env.GROQ_API_KEY,
-        model: 'compound-beta',
-        maxTokens: 8192,
-        timeout: 30000,
-      },
-      openrouter: {
-        apiKey: process.env.OPENROUTER_API_KEY,
-        model: 'openai/gpt-oss-120b',
-        baseUrl: 'https://openrouter.ai/api/v1',
-        maxTokens: 8192,
-        timeout: 30000,
-        preferCerebras: true, // Cerebrasプロバイダーを優先する（対応モデルの場合）
-      },
-    },
-
-    // テキスト分析用設定
+    // テキスト分析用設定（プロンプトのみ）
     textAnalysis: {
-      provider: 'default', // 'default'の場合はdefaultProviderを使用
-      maxTokens: 8192,
-      // プロバイダー別のモデルオーバーライド
-      modelOverrides: {
-        openai: 'gpt-5-mini',
-        claude: 'claude-sonnet-4-20250514',
-        gemini: 'gemini-2.5-flash-lite',
-        groq: 'compound-beta',
-        openrouter: 'openai/gpt-oss-120b', // Cerebras対応の場合は自動で cerebras/qwen-3-235b-a22b-thinking-2507 に変換
-      },
       systemPrompt: `あなたは小説テキストを分析し、マンガ制作に必要な5要素（登場人物、シーン、対話、ハイライト、状況）を抽出する専門家です。
 
 以下の形式でJSON出力してください：
@@ -91,18 +36,8 @@ export const appConfig = {
 上記のテキストチャンクを分析し、マンガ制作に必要な5要素を抽出してください。`,
     },
 
-    // 物語弧分析用設定
+    // 物語弧分析用設定（プロンプトのみ）
     narrativeArcAnalysis: {
-      provider: 'default', // 'default'の場合はdefaultProviderを使用
-      maxTokens: 4096,
-      // プロバイダー別のモデルオーバーライド
-      modelOverrides: {
-        openai: 'gpt-5-mini',
-        claude: 'claude-sonnet-4-20250514',
-        gemini: 'gemini-2.5-flash',
-        groq: 'compound-beta',
-        openrouter: 'openai/gpt-oss-120b', // Cerebras対応の場合は自動で cerebras/qwen-3-235b-a22b-thinking-2507 に変換
-      },
       systemPrompt: `あなたは物語の構造を分析し、エピソードの境界を特定する専門家です。
 
 入力された物語のセグメントを分析し、以下の点を考慮してエピソードの境界を決定してください：
@@ -159,18 +94,8 @@ export const appConfig = {
 各エピソードは物語的に意味のある単位で、読者が満足できる区切りになるようにしてください。`,
     },
 
-    // レイアウト生成用設定
+    // レイアウト生成用設定（プロンプトのみ）
     layoutGeneration: {
-      provider: 'default', // 'default'の場合はdefaultProviderを使用
-      maxTokens: 4096,
-      // プロバイダー別のモデルオーバーライド
-      modelOverrides: {
-        openai: 'gpt-5-mini',
-        claude: 'claude-sonnet-4-20250514',
-        gemini: 'gemini-2.5-flash',
-        groq: 'compound-beta',
-        openrouter: 'openai/gpt-oss-120b', // Cerebras対応の場合は自動で cerebras/qwen-3-235b-a22b-thinking-2507 に変換
-      },
       systemPrompt: `あなたはマンガのパネルレイアウトを生成する専門家です。
 
 重要な指針:
@@ -194,18 +119,8 @@ export const appConfig = {
 各パネルの重要度（1-10）と推奨サイズ（small/medium/large/extra-large）を指定してください。`,
     },
 
-    // チャンクバンドル統合分析用設定
+    // チャンクバンドル統合分析用設定（プロンプトのみ）
     chunkBundleAnalysis: {
-      provider: 'default', // 'default'の場合はdefaultProviderを使用
-      maxTokens: 8192,
-      // プロバイダー別のモデルオーバーライド
-      modelOverrides: {
-        openai: 'gpt-5-mini',
-        claude: 'claude-sonnet-4-20250514',
-        gemini: 'gemini-2.5-flash',
-        groq: 'compound-beta',
-        openrouter: 'openai/gpt-oss-120b', // Cerebras対応の場合は自動で cerebras/qwen-3-235b-a22b-thinking-2507 に変換
-      },
       systemPrompt: `あなたは優秀な文学分析の専門家です。複数のチャンク分析結果を統合し、物語全体の要素を抽出してください。
 
 以下の点に注意してください：
@@ -407,17 +322,7 @@ export function getAppConfigWithOverrides(): AppConfig {
   const config = JSON.parse(JSON.stringify(appConfig)) as MutableAppConfig
 
   // 環境変数による設定オーバーライド
-  if (process.env.APP_LLM_DEFAULT_PROVIDER) {
-    const provider = process.env.APP_LLM_DEFAULT_PROVIDER as
-      | 'openai'
-      | 'gemini'
-      | 'groq'
-      | 'claude'
-      | 'openrouter'
-    if (['openai', 'gemini', 'groq', 'claude', 'openrouter'].includes(provider)) {
-      config.llm.defaultProvider = provider
-    }
-  }
+  // LLM のデフォルトプロバイダーやモデル設定は llm.config.ts で扱います
 
   if (process.env.APP_CHUNKS_DEFAULT_SIZE) {
     config.chunking.defaultChunkSize = parseInt(process.env.APP_CHUNKS_DEFAULT_SIZE, 10)
