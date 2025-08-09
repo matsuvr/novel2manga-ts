@@ -6,6 +6,29 @@ import sqlite3 from 'sqlite3'
 import { isDevelopment } from '@/config'
 
 // ========================================
+// Cloudflare Workers Global Bindings (types)
+// - 実行時はWorkersで提供されるが、型は手動で補完する
+// ========================================
+declare global {
+  // R2 Buckets
+  // Provided via wrangler.toml bindings in Cloudflare Workers runtime
+  // See: https://developers.cloudflare.com/r2/runtime-apis/
+  // These are optional at type level because dev mode doesn't set them.
+  // They are validated at runtime in factory functions below.
+  // eslint-disable-next-line no-var
+  var NOVEL_STORAGE: R2Bucket | undefined
+  // eslint-disable-next-line no-var
+  var CHUNKS_STORAGE: R2Bucket | undefined
+  // eslint-disable-next-line no-var
+  var ANALYSIS_STORAGE: R2Bucket | undefined
+
+  // D1 Database binding
+  // https://developers.cloudflare.com/d1/platform/client-api/
+  // eslint-disable-next-line no-var
+  var DB: D1Database | undefined
+}
+
+// ========================================
 // Storage Interfaces (設計書対応)
 // ========================================
 
@@ -772,7 +795,9 @@ export async function getNovelStorage(): Promise<Storage> {
   if (isDevelopment()) {
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'novels'))
   } else {
-    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    if (!globalThis.NOVEL_STORAGE) {
+      throw new Error('Novel storage not configured')
+    }
     return new R2Storage(globalThis.NOVEL_STORAGE)
   }
 }
@@ -782,7 +807,9 @@ export async function getChunkStorage(): Promise<Storage> {
   if (isDevelopment()) {
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'chunks'))
   } else {
-    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    if (!globalThis.CHUNKS_STORAGE) {
+      throw new Error('Chunk storage not configured')
+    }
     return new R2Storage(globalThis.CHUNKS_STORAGE)
   }
 }
@@ -792,7 +819,9 @@ export async function getAnalysisStorage(): Promise<Storage> {
   if (isDevelopment()) {
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'analysis'))
   } else {
-    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    if (!globalThis.ANALYSIS_STORAGE) {
+      throw new Error('Analysis storage not configured')
+    }
     return new R2Storage(globalThis.ANALYSIS_STORAGE)
   }
 }
@@ -802,7 +831,9 @@ export async function getLayoutStorage(): Promise<Storage> {
   if (isDevelopment()) {
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'layouts'))
   } else {
-    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    if (!globalThis.ANALYSIS_STORAGE) {
+      throw new Error('Layout storage not configured')
+    }
     return new R2Storage(globalThis.ANALYSIS_STORAGE) // 同じバケットを使用
   }
 }
@@ -812,7 +843,9 @@ export async function getRenderStorage(): Promise<Storage> {
   if (isDevelopment()) {
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'renders'))
   } else {
-    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    if (!globalThis.ANALYSIS_STORAGE) {
+      throw new Error('Render storage not configured')
+    }
     return new R2Storage(globalThis.ANALYSIS_STORAGE) // 同じバケットを使用
   }
 }
@@ -821,7 +854,9 @@ export async function getOutputStorage(): Promise<Storage> {
   if (isDevelopment()) {
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'outputs'))
   } else {
-    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    if (!globalThis.ANALYSIS_STORAGE) {
+      throw new Error('Output storage not configured')
+    }
     return new R2Storage(globalThis.ANALYSIS_STORAGE) // 同じバケットを使用
   }
 }
@@ -831,7 +866,9 @@ export async function getDatabase(): Promise<DatabaseAdapter> {
   if (isDevelopment()) {
     return new SQLiteAdapter()
   } else {
-    // @ts-ignore: Cloudflare Workers環境でのみ利用可能
+    if (!globalThis.DB) {
+      throw new Error('Database not configured')
+    }
     return new D1Adapter(globalThis.DB)
   }
 }
@@ -895,7 +932,7 @@ export async function saveEpisodeBoundaries(
   // データベースに保存
   const { DatabaseService } = await import('@/services/database')
   const dbService = new DatabaseService()
-  
+
   // jobからnovelIdを取得
   const job = await dbService.getJob(jobId)
   if (!job) {
@@ -903,7 +940,7 @@ export async function saveEpisodeBoundaries(
   }
 
   // エピソードをデータベースに保存
-  const episodesForDb = episodes.map(episode => ({
+  const episodesForDb = episodes.map((episode) => ({
     novelId: job.novelId,
     jobId,
     episodeNumber: episode.episodeNumber,
@@ -918,7 +955,7 @@ export async function saveEpisodeBoundaries(
   }))
 
   await dbService.createEpisodes(episodesForDb)
-  
+
   console.log(`Saved ${episodes.length} episodes to both database and file system`)
 }
 
