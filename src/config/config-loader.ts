@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { getAppConfigWithOverrides } from './app.config'
+import { providers as llmProviders, getLLMDefaultProvider } from './llm.config'
 
 // ========================================
 // Schema Definitions (設計書対応)
@@ -589,22 +590,22 @@ export class ConfigManager {
         debug: process.env.DEBUG === 'true',
       },
       ai: {
-        provider: appConfig.llm?.defaultProvider || 'openai',
+        provider: getLLMDefaultProvider(),
         openai: {
           apiKey: process.env.OPENAI_API_KEY,
-          model: appConfig.llm?.providers?.openai?.model || 'gpt-5-mini',
-          maxTokens: appConfig.llm?.providers?.openai?.maxTokens || 4096,
+          model: llmProviders.openai.model,
+          maxTokens: llmProviders.openai.maxTokens,
           temperature: 0.7,
           retryAttempts: 3,
-          timeoutMs: appConfig.llm?.providers?.openai?.timeout || 60000,
+          timeoutMs: llmProviders.openai.timeout,
         },
         claude: {
           apiKey: process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY,
-          model: appConfig.llm?.providers?.claude?.model || 'claude-sonnet-4-20250514',
-          maxTokens: appConfig.llm?.providers?.claude?.maxTokens || 8192,
+          model: llmProviders.claude.model,
+          maxTokens: llmProviders.claude.maxTokens,
           temperature: 0.7,
           retryAttempts: 3,
-          timeoutMs: appConfig.llm?.providers?.claude?.timeout || 30000,
+          timeoutMs: llmProviders.claude.timeout,
         },
         maxConcurrentRequests: 5,
         requestQueueSize: 100,

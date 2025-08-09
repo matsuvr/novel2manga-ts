@@ -8,8 +8,8 @@ import {
   getLLMProviderConfig,
   getNarrativeAnalysisConfig,
   getTextAnalysisConfig,
+  getLLMDefaultProvider,
 } from '@/config'
-import { appConfig } from '@/config/app.config'
 
 // 型定義
 type LLMProvider = 'openai' | 'gemini' | 'groq' | 'openrouter' | 'claude'
@@ -197,7 +197,7 @@ export async function getTextAnalysisLLM() {
 
   // デフォルトプロバイダーを使用するか、指定されたプロバイダーを使用
   const preferredProvider: LLMProvider =
-    config.provider === 'default' ? appConfig.llm.defaultProvider : config.provider
+    config.provider === 'default' ? getLLMDefaultProvider() : config.provider
 
   const llmInstance = await getProviderWithFallback(preferredProvider)
 
@@ -232,7 +232,7 @@ export async function getNarrativeAnalysisLLM() {
 
   // デフォルトプロバイダーを使用するか、指定されたプロバイダーを使用
   const preferredProvider: LLMProvider =
-    config.provider === 'default' ? appConfig.llm.defaultProvider : config.provider
+    config.provider === 'default' ? getLLMDefaultProvider() : config.provider
 
   const llmInstance = await getProviderWithFallback(preferredProvider)
 
@@ -268,7 +268,7 @@ export async function getLayoutGenerationLLM() {
 
   // デフォルトプロバイダーを使用するか、指定されたプロバイダーを使用
   const preferredProvider: LLMProvider =
-    config.provider === 'default' ? appConfig.llm.defaultProvider : config.provider
+    config.provider === 'default' ? getLLMDefaultProvider() : config.provider
 
   const llmInstance = await getProviderWithFallback(preferredProvider)
 
@@ -303,7 +303,7 @@ export async function getChunkBundleAnalysisLLM() {
 
   // デフォルトプロバイダーを使用するか、指定されたプロバイダーを使用
   const preferredProvider: LLMProvider =
-    config.provider === 'default' ? appConfig.llm.defaultProvider : config.provider
+    config.provider === 'default' ? getLLMDefaultProvider() : config.provider
 
   const llmInstance = await getProviderWithFallback(preferredProvider)
 
@@ -365,7 +365,7 @@ export async function getLLM(
   }
 
   // カスタム設定
-  const preferredProvider = overrides?.provider || appConfig.llm.defaultProvider
+  const preferredProvider = overrides?.provider || getLLMDefaultProvider()
   const llmInstance = await getProviderWithFallback(preferredProvider)
 
   return {
