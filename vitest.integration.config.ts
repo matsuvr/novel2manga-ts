@@ -5,7 +5,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   plugins: [react()],
   test: {
-    environment: 'happy-dom',
+    environment: 'node',
     globals: true,
     setupFiles: './vitest.setup.ts',
     testTimeout: 600000, // 10分
