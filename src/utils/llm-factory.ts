@@ -62,13 +62,24 @@ const providerCache = {
 function getProviderInstance(provider: LLMProvider) {
   const config = getLLMProviderConfig(provider)
 
+  // テスト環境では API key がなくても動作するように
+  const isTestEnv = process.env.NODE_ENV === 'test' || process.env.VITEST
+
   // デバッグ情報
   console.log(`[DEBUG] Provider: ${provider}`)
   console.log(`[DEBUG] Config:`, config)
   console.log(`[DEBUG] API Key exists:`, !!config.apiKey)
   console.log(`[DEBUG] API Key length:`, config.apiKey?.length || 0)
+  console.log(`[DEBUG] Test environment:`, isTestEnv)
 
-  if (!config.apiKey) {
+  if (!config.apiKey && !isTestEnv) {
+    throw new Error(`API key not found for provider: ${provider}`)
+  }
+
+  // テスト環境では dummy API key を使用
+  const apiKey = config.apiKey || (isTestEnv ? 'test-api-key' : undefined)
+
+  if (!apiKey) {
     throw new Error(`API key not found for provider: ${provider}`)
   }
 
@@ -76,7 +87,7 @@ function getProviderInstance(provider: LLMProvider) {
     case 'openai':
       if (!providerCache.openai) {
         providerCache.openai = createOpenAI({
-          apiKey: config.apiKey,
+          apiKey,
         })
       }
       return providerCache.openai
@@ -84,7 +95,7 @@ function getProviderInstance(provider: LLMProvider) {
     case 'gemini':
       if (!providerCache.gemini) {
         providerCache.gemini = createGoogleGenerativeAI({
-          apiKey: config.apiKey,
+          apiKey,
         })
       }
       return providerCache.gemini
@@ -92,7 +103,7 @@ function getProviderInstance(provider: LLMProvider) {
     case 'groq':
       if (!providerCache.groq) {
         providerCache.groq = createGroq({
-          apiKey: config.apiKey,
+          apiKey,
         })
       }
       return providerCache.groq
@@ -107,7 +118,7 @@ function getProviderInstance(provider: LLMProvider) {
         const shouldUseCerebras = providerConfig.preferCerebras && cerebrasModel
 
         const openrouterConfig: any = {
-          apiKey: config.apiKey,
+          apiKey,
           baseURL,
         }
 
@@ -137,7 +148,7 @@ function getProviderInstance(provider: LLMProvider) {
       if (!providerCache.claude) {
         // ClaudeはAnthropicのAPIを使用
         providerCache.claude = createOpenAI({
-          apiKey: config.apiKey,
+          apiKey,
           baseURL: 'https://api.anthropic.com/v1',
         })
       }

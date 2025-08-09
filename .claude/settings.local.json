@@ -66,7 +66,9 @@
       "Bash(npm run build:*)",
       "WebFetch(domain:openrouter.ai)",
       "mcp__mastra__mastraExamples",
-      "Bash(gh pr list:*)"
+      "Bash(gh pr list:*)",
+      "Bash(npx vitest:*)",
+      "Bash(git add:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
