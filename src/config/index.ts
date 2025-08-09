@@ -1,11 +1,7 @@
 // 設定モジュールの統合エクスポート
 
-// アプリケーション固有設定
-export {
-  type AppConfig,
-  appConfig,
-  getAppConfigWithOverrides,
-} from './app.config'
+// アプリケーション固有設定（プロンプト等）
+export { type AppConfig, appConfig, getAppConfigWithOverrides } from './app.config'
 // config-loaderの型定義のみをインポート（実装は使用しない）
 export type {
   AIConfig,
@@ -21,6 +17,13 @@ export type {
 } from './config-loader'
 
 import { type AppConfig, getAppConfigWithOverrides } from './app.config'
+import {
+  getLLMDefaultProvider as getDefaultProvider,
+  getLLMFallbackChain as getFallbackChain,
+  getLLMProviderConfig as getProviderConfig,
+  getUseCaseParams,
+  type LLMProvider,
+} from './llm.config'
 
 // 初期化が必要な場合のヘルパー - app.config.tsベース
 export async function ensureConfigLoaded() {
@@ -49,31 +52,62 @@ export function getLLMConfig() {
 
 // 物語弧分析設定を取得
 export function getNarrativeAnalysisConfig() {
-  return getAppConfig().llm.narrativeArcAnalysis
+  const prompts = getAppConfig().llm.narrativeArcAnalysis
+  const params = getUseCaseParams('narrativeArcAnalysis')
+  return {
+    provider: params.provider,
+    maxTokens: params.maxTokens,
+    modelOverrides: params.modelOverrides,
+    systemPrompt: prompts.systemPrompt,
+    userPromptTemplate: prompts.userPromptTemplate,
+  }
 }
 
 // テキスト分析設定を取得
 export function getTextAnalysisConfig() {
-  return getAppConfig().llm.textAnalysis
+  const prompts = getAppConfig().llm.textAnalysis
+  const params = getUseCaseParams('textAnalysis')
+  return {
+    provider: params.provider,
+    maxTokens: params.maxTokens,
+    modelOverrides: params.modelOverrides,
+    systemPrompt: prompts.systemPrompt,
+    userPromptTemplate: prompts.userPromptTemplate,
+  }
 }
 
 // レイアウト生成設定を取得
 export function getLayoutGenerationConfig() {
-  return getAppConfig().llm.layoutGeneration
+  const prompts = getAppConfig().llm.layoutGeneration
+  const params = getUseCaseParams('layoutGeneration')
+  return {
+    provider: params.provider,
+    maxTokens: params.maxTokens,
+    modelOverrides: params.modelOverrides,
+    systemPrompt: prompts.systemPrompt,
+    userPromptTemplate: prompts.userPromptTemplate,
+  }
 }
 
 // チャンクバンドル統合分析設定を取得
 export function getChunkBundleAnalysisConfig() {
-  return getAppConfig().llm.chunkBundleAnalysis
+  const prompts = getAppConfig().llm.chunkBundleAnalysis
+  const params = getUseCaseParams('chunkBundleAnalysis')
+  return {
+    provider: params.provider,
+    maxTokens: params.maxTokens,
+    modelOverrides: params.modelOverrides,
+    systemPrompt: prompts.systemPrompt,
+    userPromptTemplate: prompts.userPromptTemplate,
+  }
 }
 
 // 現在のLLMプロバイダー設定を取得
 export function getCurrentLLMProvider() {
-  const config = getAppConfig()
-  const provider = config.llm.defaultProvider
+  const provider = getDefaultProvider()
   return {
     provider,
-    config: config.llm.providers[provider],
+    config: getProviderConfig(provider as any),
   }
 }
 
@@ -81,13 +115,17 @@ export function getCurrentLLMProvider() {
 export function getLLMProviderConfig(
   provider: 'openai' | 'gemini' | 'groq' | 'claude' | 'openrouter',
 ) {
-  const config = getAppConfig()
-  return config.llm.providers[provider]
+  return getProviderConfig(provider)
 }
 
 // フォールバックチェーンを取得
 export function getLLMFallbackChain() {
-  return getAppConfig().llm.fallbackChain
+  return getFallbackChain()
+}
+
+// デフォルトLLMプロバイダーを取得
+export function getLLMDefaultProvider(): LLMProvider {
+  return getDefaultProvider()
 }
 
 // プロセッシング設定を取得 - app.config.tsから直接取得
@@ -107,20 +145,19 @@ export function getProcessingConfig() {
 
 // AI設定を取得 - app.config.tsから直接取得
 export function getAIConfig() {
-  const config = getAppConfig()
   return {
-    provider: config.llm.defaultProvider,
-    openai: config.llm.providers.openai,
-    claude: config.llm.providers.claude,
-    fallbackProvider: config.llm.fallbackChain[0],
-    maxConcurrentRequests: config.processing.maxConcurrentChunks,
+    provider: getDefaultProvider(),
+    openai: getProviderConfig('openai' as LLMProvider),
+    claude: getProviderConfig('claude' as LLMProvider),
+    fallbackProvider: getFallbackChain()[0],
+    maxConcurrentRequests: getAppConfig().processing.maxConcurrentChunks,
     requestQueueSize: 100, // 固定値
   }
 }
 
 // 現在のAIプロバイダーを取得 - app.config.tsから直接取得
 export function getCurrentAIProvider(): string {
-  return getAppConfig().llm.defaultProvider
+  return getDefaultProvider()
 }
 
 // エピソード設定を取得 - app.config.tsから直接取得
