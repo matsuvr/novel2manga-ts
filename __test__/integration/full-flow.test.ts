@@ -57,7 +57,7 @@ describe('Novel to manga full flow', () => {
     expect(startRes.ok).toBe(true)
 
     // poll job status until episodes completed or timeout
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
       const statusRes = await fetch(`${baseUrl}/api/jobs/${jobId}/status`)
       if (statusRes.ok) {
         const statusJson = await statusRes.json()
