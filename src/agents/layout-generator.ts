@@ -148,11 +148,10 @@ export class LayoutGeneratorAgent extends Agent {
       },
     }
 
-    const prompt = `エピソード${episodeData.episodeNumber}のパネルレイアウトを生成してください。
-
-データ: ${JSON.stringify(layoutInput, null, 2)}
-
-各ページには4-8個のパネルを配置し、重要度に応じてパネルサイズを調整してください。`
+    const config = getLayoutGenerationConfig()
+    const prompt = config.userPromptTemplate
+      .replace('{{episodeNumber}}', episodeData.episodeNumber.toString())
+      .replace('{{layoutInputJson}}', JSON.stringify(layoutInput, null, 2))
 
     const llmResponse = await this.generate([{ role: 'user', content: prompt }], {
       output: layoutGenerationOutputSchema,
@@ -238,16 +237,16 @@ export class LayoutGeneratorAgent extends Agent {
   }
 }
 
-// レイアウト生成関数（Mastraエージェント使用）
-export async function generateLayoutWithAgent(
+// メイン関数: レイアウト生成（後方互換性を排除してDRY原則に従う）
+export async function generateMangaLayout(
   episodeData: EpisodeData,
   config?: LayoutGenerationConfig,
 ): Promise<MangaLayout> {
   const fullConfig: LayoutGenerationConfig = {
     panelsPerPage: {
-      min: 3,
-      max: 6,
-      average: 4.5,
+      min: 1, // 1コマから対応
+      max: 8, // 最大数を維持しつつ制限を緩和
+      average: 3.5, // 平均値を調整
     },
     dialogueDensity: 0.6,
     visualComplexity: 0.7,
@@ -260,10 +259,5 @@ export async function generateLayoutWithAgent(
   return await agent.generateLayout(episodeData, fullConfig)
 }
 
-// 後方互換性のためのエイリアス
-export async function generateMangaLayout(
-  episodeData: EpisodeData,
-  config?: LayoutGenerationConfig,
-): Promise<MangaLayout> {
-  return await generateLayoutWithAgent(episodeData, config)
-}
+// エイリアス（重複排除）
+export const generateLayoutWithAgent = generateMangaLayout
