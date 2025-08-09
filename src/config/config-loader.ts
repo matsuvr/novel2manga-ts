@@ -1,42 +1,43 @@
 import { z } from 'zod'
+import { getAppConfigWithOverrides } from './app.config'
 
 // ========================================
 // Schema Definitions (設計書対応)
 // ========================================
 
-// OpenAI設定
+// OpenAI設定 - デフォルト値はapp.config.tsから取得
 const OpenAIConfigSchema = z.object({
   apiKey: z.string().min(1, 'OpenAI API key is required'),
-  model: z.string().default('gpt-4-turbo'),
-  maxTokens: z.number().int().positive().default(4000),
-  temperature: z.number().min(0).max(2).default(0.7),
-  retryAttempts: z.number().int().min(0).default(3),
-  timeoutMs: z.number().int().positive().default(30000),
+  model: z.string(), // デフォルト値なし - app.config.tsから取得
+  maxTokens: z.number().int().positive(),
+  temperature: z.number().min(0).max(2),
+  retryAttempts: z.number().int().min(0),
+  timeoutMs: z.number().int().positive(),
 })
 
-// Claude設定
+// Claude設定 - デフォルト値はapp.config.tsから取得
 const ClaudeConfigSchema = z.object({
   apiKey: z.string().min(1, 'Claude API key is required'),
-  model: z.string().default('claude-3-sonnet-20240229'),
-  maxTokens: z.number().int().positive().default(4000),
-  temperature: z.number().min(0).max(1).default(0.7),
-  retryAttempts: z.number().int().min(0).default(3),
-  timeoutMs: z.number().int().positive().default(30000),
+  model: z.string(), // デフォルト値なし - app.config.tsから取得
+  maxTokens: z.number().int().positive(),
+  temperature: z.number().min(0).max(1),
+  retryAttempts: z.number().int().min(0),
+  timeoutMs: z.number().int().positive(),
 })
 
-// AI設定
+// AI設定 - デフォルト値はapp.config.tsから取得
 const AIConfigSchema = z.object({
-  provider: z.enum(['openai', 'claude']).default('openai'),
+  provider: z.enum(['openai', 'claude']),
   openai: OpenAIConfigSchema.partial().optional(),
   claude: ClaudeConfigSchema.partial().optional(),
   fallbackProvider: z.enum(['openai', 'claude']).optional(),
-  maxConcurrentRequests: z.number().int().positive().default(5),
-  requestQueueSize: z.number().int().positive().default(100),
+  maxConcurrentRequests: z.number().int().positive(),
+  requestQueueSize: z.number().int().positive(),
 })
 
-// ストレージ設定
+// ストレージ設定 - デフォルト値はapp.config.tsから取得
 const StorageConfigSchema = z.object({
-  type: z.enum(['local', 'cloudflare']).default('local'),
+  type: z.enum(['local', 'cloudflare']),
   local: z
     .object({
       baseDir: z.string().default('./storage'),
@@ -554,10 +555,19 @@ export class ConfigManager {
     return overrides
   }
 
-  // 設定のバリデーション
-  private validateConfig(config: unknown): Config {
+  // 設定のバリデーションとapp.config.tsとのマージ
+  private validateConfig(envOverrides: unknown): Config {
     try {
-      return ConfigSchema.parse(config)
+      // app.config.tsから基底設定を取得
+      const appConfig = getAppConfigWithOverrides()
+      
+      // 環境変数オーバーライドをapp.config.tsの設定とマージ
+      const mergedConfig = this.deepMerge(appConfig, envOverrides as Record<string, unknown>)
+      
+      // app.config.tsの形式をconfig-loaderの形式に変換
+      const convertedConfig = this.convertAppConfigToLoaderFormat(mergedConfig)
+      
+      return ConfigSchema.parse(convertedConfig)
     } catch (error) {
       if (error instanceof z.ZodError) {
         const issues = error.errors.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ')
@@ -567,17 +577,145 @@ export class ConfigManager {
     }
   }
 
+  // app.config.tsの形式をconfig-loaderの形式に変換
+  private convertAppConfigToLoaderFormat(appConfig: any): any {
+    return {
+      app: {
+        name: 'Novel2Manga',
+        version: '1.0.0',
+        environment: process.env.NODE_ENV || 'development',
+        baseUrl: process.env.APP_URL || 'http://localhost:3000',
+        port: parseInt(process.env.PORT || '3000', 10),
+        debug: process.env.DEBUG === 'true',
+      },
+      ai: {
+        provider: appConfig.llm?.defaultProvider || 'openai',
+        openai: {
+          apiKey: process.env.OPENAI_API_KEY,
+          model: appConfig.llm?.providers?.openai?.model || 'gpt-5-mini',
+          maxTokens: appConfig.llm?.providers?.openai?.maxTokens || 4096,
+          temperature: 0.7,
+          retryAttempts: 3,
+          timeoutMs: appConfig.llm?.providers?.openai?.timeout || 60000,
+        },
+        claude: {
+          apiKey: process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY,
+          model: appConfig.llm?.providers?.claude?.model || 'claude-sonnet-4-20250514',
+          maxTokens: appConfig.llm?.providers?.claude?.maxTokens || 8192,
+          temperature: 0.7,
+          retryAttempts: 3,
+          timeoutMs: appConfig.llm?.providers?.claude?.timeout || 30000,
+        },
+        maxConcurrentRequests: 5,
+        requestQueueSize: 100,
+      },
+      storage: {
+        type: 'local',
+        local: {
+          baseDir: appConfig.storage?.local?.basePath || './storage',
+          maxFileSize: 10 * 1024 * 1024,
+          allowedExtensions: ['.txt', '.json', '.yaml', '.md'],
+        },
+      },
+      database: {
+        type: 'sqlite',
+        sqlite: {
+          path: './database/novel2manga.db',
+          timeout: 5000,
+          maxConnections: 1,
+        },
+        migrations: {
+          enabled: true,
+          migrationsPath: './database/migrations',
+        },
+      },
+      security: {
+        cors: {
+          origin: '*',
+          credentials: true,
+          methods: ['GET', 'POST', 'PUT', 'DELETE'],
+          allowedHeaders: ['Content-Type', 'Authorization'],
+        },
+        rateLimit: {
+          windowMs: 15 * 60 * 1000,
+          maxRequests: 100,
+          skipSuccessfulRequests: false,
+        },
+        authentication: {
+          required: false,
+          jwtExpiresIn: '1d',
+          sessionTimeout: 24 * 60 * 60 * 1000,
+        },
+      },
+      logging: {
+        level: 'info',
+        format: 'text',
+        outputs: ['console'],
+      },
+      processing: {
+        maxConcurrentChunks: appConfig.processing?.maxConcurrentChunks || 5,
+        batchSize: appConfig.processing?.batchSize?.chunks || 10,
+        enableParallelProcessing: appConfig.features?.enableParallelProcessing !== false,
+        chunkSize: appConfig.chunking?.defaultChunkSize || 5000,
+        overlapSize: appConfig.chunking?.defaultOverlapSize || 500,
+        maxChunkSize: appConfig.chunking?.maxChunkSize || 10000,
+        minChunkSize: appConfig.chunking?.minChunkSize || 100,
+        maxOverlapRatio: appConfig.chunking?.maxOverlapRatio || 0.5,
+      },
+      episode: {
+        targetCharsPerEpisode: appConfig.processing?.episode?.targetCharsPerEpisode || 8000,
+        minCharsPerEpisode: appConfig.processing?.episode?.minCharsPerEpisode || 6000,
+        maxCharsPerEpisode: appConfig.processing?.episode?.maxCharsPerEpisode || 12000,
+        charsPerPage: appConfig.processing?.episode?.charsPerPage || 400,
+      },
+      features: {
+        enableCaching: appConfig.features?.enableCaching !== false,
+        enableTextAnalysis: appConfig.features?.enableTextAnalysis !== false,
+        enableBatchProcessing: true,
+      },
+      api: {
+        timeout: {
+          default: appConfig.api?.timeout?.default || 30000,
+          upload: 60000,
+          analysis: appConfig.api?.timeout?.textAnalysis || 180000,
+        },
+        retries: {
+          default: 3,
+          upload: 2,
+          analysis: 2,
+        },
+      },
+    }
+  }
+
+  // 深いマージ関数
+  private deepMerge(target: any, source: any): any {
+    if (source === null || source === undefined) return target
+    if (target === null || target === undefined) return source
+    if (typeof target !== 'object' || typeof source !== 'object') return source
+
+    const result = { ...target }
+    for (const key in source) {
+      if (source.hasOwnProperty(key)) {
+        if (typeof source[key] === 'object' && source[key] !== null && !Array.isArray(source[key])) {
+          result[key] = this.deepMerge(target[key], source[key])
+        } else {
+          result[key] = source[key]
+        }
+      }
+    }
+    return result
+  }
+
   // 設定取得（自動初期化対応）
   get<T = unknown>(path: string, defaultValue?: T): T {
     if (!this.config) {
-      // 同期的に初期化を試行（環境変数のみ）
+      // app.config.tsから設定を初期化（フォールバックなし）
       try {
         const envOverrides = this.getEnvOverrides()
         this.config = this.validateConfig(envOverrides)
       } catch (error) {
-        console.warn('Auto-initialization failed, using defaults:', error)
-        // デフォルト設定でフォールバック
-        this.config = this.validateConfig({})
+        throw new Error(`Configuration initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}. Check app.config.ts syntax and structure.`)
       }
     }
 
@@ -626,14 +764,12 @@ export class ConfigManager {
   // 全設定取得（自動初期化対応）
   getAll(): Config {
     if (!this.config) {
-      // 同期的に初期化を試行（環境変数のみ）
+      // app.config.tsから設定を初期化（フォールバックなし）
       try {
         const envOverrides = this.getEnvOverrides()
         this.config = this.validateConfig(envOverrides)
       } catch (error) {
-        console.warn('Auto-initialization failed, using defaults:', error)
-        // デフォルト設定でフォールバック
-        this.config = this.validateConfig({})
+        throw new Error(`Configuration initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}. Check app.config.ts syntax and structure.`)
       }
     }
     return this.config
