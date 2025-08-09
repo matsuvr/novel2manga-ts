@@ -2,19 +2,7 @@
 
 // アプリケーション固有設定（プロンプト等）
 export { type AppConfig, appConfig, getAppConfigWithOverrides } from './app.config'
-// config-loaderの型定義のみをインポート（実装は使用しない）
-export type {
-  AIConfig,
-  ApiConfig,
-  Config,
-  DatabaseConfig,
-  EpisodeConfig,
-  FeatureConfig,
-  LogConfig,
-  ProcessingConfig,
-  SecurityConfig,
-  StorageConfig,
-} from './config-loader'
+// 旧config-loader依存は廃止（DRYに基づきapp.config/llm.configへ集約）
 
 import { type AppConfig, getAppConfigWithOverrides } from './app.config'
 import {
