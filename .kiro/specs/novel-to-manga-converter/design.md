@@ -70,7 +70,7 @@ graph TB
     Q --> W
 ```
 
-### Technology Stack
+### Technology Stack (2025-08-09 更新)
 
 調査結果に基づく技術選定：
 
@@ -81,8 +81,8 @@ graph TB
 - **Database**: Cloudflare D1 (SQLite ベース) / SQLite (開発環境)
 - **Cache**: Cloudflare KV (APIレスポンスキャッシュ)
 - **File Storage**: Cloudflare R2 (プロダクション) / Local Storage (開発)
-- **LLM Providers**: OpenRouter (primary), Gemini, Claude (フォールバックチェーン)
-- **LLM Factory**: 動的プロバイダー選択とフォールバック機能実装済み
+- **LLM Providers**: OpenRouter (primary), Gemini, Claude（フォールバックチェーン。Gemini対応を追加）
+- **LLM Factory**: 動的プロバイダー選択とフォールバック機能実装済み（AI SDK v5との型差異により、一部一時的な型キャストでMastra Agentへ適合させています。後述のタスク参照）
 - **Configuration**: app.config.ts による集中管理 + 環境変数 (シークレットのみ)
 - **Font**: Google Inter (next/font/google)
 - **Authentication**: NextAuth.js v5 (未実装)
@@ -97,7 +97,11 @@ graph TB
 - **Cloudflare R2**: S3互換API、エッジ配信、コスト効率
 - **Cloudflare Workers**: グローバルエッジ配信、低レイテンシー、自動スケーリング、KVキャッシュ統合
 - **設定管理**: app.config.ts による一元管理、環境変数オーバーライド、チューニング用コメント付き
-- **LLMフォールバックチェーン**: openrouter → gemini → claude の自動フォールバック、可用性向上
+- **LLMフォールバックチェーン**: openrouter → gemini → claude の自動フォールバック、可用性向上（Gemini追加）
+
+### 型互換性に関する注記（Mastra × Vercel AI SDK）
+- 現状、Vercel AI SDK v5 の LanguageModelV2 と Mastra Agent 側の期待型（LanguageModelV1）に差異があり、`src/agents/layout-generator.ts` では一時的に `as any` キャストで適合させています。
+- 恒久対策としては、Mastra側の更新または軽量アダプタ層（V1→V2ブリッジ）の導入を検討中（tasks.md: TASK-LLM-ADAPTER-001）。
 - **StorageFactory Pattern**: 環境別ストレージ抽象化、開発・本番環境の自動切り替え
 
 ## Data Flow
