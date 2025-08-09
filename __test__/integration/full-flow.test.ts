@@ -11,7 +11,7 @@ import { describe, it, expect } from 'vitest'
  */
 
 describe('Novel to manga full flow', () => {
-  const baseUrl = 'http://localhost:3000'
+  const baseUrl = process.env.API_BASE_URL || 'http://localhost:3000'
   const novelFile = path.join(process.cwd(), 'docs', '宮本武蔵地の巻.txt')
   let novelId = ''
   let jobId = ''
