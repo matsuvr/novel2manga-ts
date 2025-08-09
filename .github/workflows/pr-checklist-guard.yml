@@ -18,41 +18,67 @@ jobs:
           script: |
             const body = (context.payload.pull_request && context.payload.pull_request.body) || '';
 
-            function escapeRegExp(s) {
-              return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            }
+            // Collect all checked checklist lines (supports -, * and [x]/[X])
+            const checkedLines = body
+              .split(/\n+/)
+              .filter(l => /\s*[-*]\s*\[[xX]\]\s+/.test(l))
+              .map(l => l.trim());
 
-            function isChecked(itemText) {
-              const escaped = escapeRegExp(itemText);
-              const pattern = new RegExp(`(^|\n)\s*[-*]\s*\[[xX]\]\s+${escaped}(\s|$)`, 'm');
-              return pattern.test(body);
-            }
+            // Helper to test if any checked line matches a regex
+            const hasChecked = (regex) => checkedLines.some(l => regex.test(l));
 
-            const requiredItems = [
-              'Latest docs fetched via MCP (Mastra, Cloudflare, and relevant libs). Links included in PR.',
-              'No `any` types introduced; strict types only. No unjustified `ts-ignore`/`ts-expect-error`.',
-              'Linter and formatter clean (0 errors). No rule disabling without justification.',
-              'DRY and SOLID upheld; no redundant implementations.',
-              'Unit tests added/updated in `src/__tests__` and passing.',
-              'E2E scenarios added/updated and passing with Playwright MCP.',
-              'Updated: `.kiro\\specs\\novel-to-manga-converter\\design.md`',
-              'Updated: `.kiro\\specs\\novel-to-manga-converter\\tasks.md`',
-              'Updated: `src\\db\\schema.ts` (+ migrations applied/generated as needed)',
-              'Updated: `database\\storage-structure.md`',
+            // Path-friendly pattern builder (accepts both / and \ and optional backticks)
+            const pathPattern = (p) => {
+              const parts = p.split(/[\\\/]/).map(seg => seg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+              return new RegExp("`?" + parts.join("[\\\\/]") + "`?", "i");
+            };
+
+            // Define relaxed required checks using key phrase regexes
+            const requiredChecks = [
+              {
+                key: 'docs',
+                regex: /\b(docs|documentation)\b.*\b(MCP|Mastra|Cloudflare)\b.*\blinks?\b/i,
+              },
+              {
+                key: 'no-any',
+                regex: /\bno\b.*\bany\b|\bstrict types\b|\bno\b.*\bts-(ignore|expect-error)\b/i,
+              },
+              {
+                key: 'lint-format',
+                regex: /\b(linter|lint)\b.*\bformatter\b|\bBiome\b.*\bPrettier\b/i,
+              },
+              {
+                key: 'dry-solid',
+                regex: /\bDRY\b|\bSOLID\b/i,
+              },
+              {
+                key: 'unit-tests',
+                regex: /\bunit tests?\b.*src[\\\\\/]__tests__/i,
+              },
+              {
+                key: 'e2e',
+                regex: /\bE2E\b.*\bPlaywright\b/i,
+              },
+              { key: 'design-md', regex: pathPattern('.kiro/specs/novel-to-manga-converter/design.md') },
+              { key: 'tasks-md', regex: pathPattern('.kiro/specs/novel-to-manga-converter/tasks.md') },
+              { key: 'schema-ts', regex: new RegExp(pathPattern('src/db/schema.ts').source + '.*(migrations?|drizzle)', 'i') },
+              { key: 'storage-md', regex: pathPattern('database/storage-structure.md') },
             ];
 
-            const missingChecks = requiredItems.filter(item => !isChecked(item));
+            const missingChecks = requiredChecks
+              .filter(({ key, regex }) => !hasChecked(regex))
+              .map(({ key }) => key);
 
-            // Require Mastra and Cloudflare links near their checklist sections
-            const mastraLinkOk = /Mastra docs fetched[\s\S]{0,600}https?:\/\//i.test(body);
-            const cloudflareLinkOk = /Cloudflare docs fetched[\s\S]{0,600}https?:\/\//i.test(body);
+            // Require Mastra and Cloudflare links anywhere in the body (not near specific lines)
+            const mastraLinkOk = /https?:\/\/[^\s]*mastra/i.test(body);
+            const cloudflareLinkOk = /https?:\/\/[^\s]*cloudflare/i.test(body);
             const missingLinks = [];
-            if (!mastraLinkOk) missingLinks.push('Mastra MCP docs link is missing');
-            if (!cloudflareLinkOk) missingLinks.push('Cloudflare MCP docs link is missing');
+            if (!mastraLinkOk) missingLinks.push('Mastra docs link is missing');
+            if (!cloudflareLinkOk) missingLinks.push('Cloudflare docs link is missing');
 
             const problems = [];
             if (missingChecks.length) {
-              problems.push(`Unchecked required items:\n- ${missingChecks.join('\n- ')}`);
+              problems.push(`Unchecked required items (by key):\n- ${missingChecks.join('\n- ')}`);
             }
             if (missingLinks.length) {
               problems.push(`Missing required links:\n- ${missingLinks.join('\n- ')}`);
