@@ -41,8 +41,11 @@ describe('Novel to manga full flow', () => {
 
     expect(res.ok).toBe(true)
     const json = await res.json()
-    jobId = json.data?.jobId || json.jobId || json.id
-    expect(jobId).toBeDefined()
+    // Expect API response to have { data: { jobId: string } }
+    expect(json.data).toBeDefined()
+    expect(typeof json.data).toBe('object')
+    expect(json.data.jobId).toBeDefined()
+    jobId = json.data.jobId
   }, 300000)
 
   it('generates episodes', async () => {
