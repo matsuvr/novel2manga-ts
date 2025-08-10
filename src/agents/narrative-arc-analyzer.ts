@@ -190,7 +190,8 @@ export async function analyzeNarrativeArc(
 
   // 統合分析結果を使用してプロンプトを作成
   const characterList = bundleAnalysis.mainCharacters
-    .map((char) => `${char.name}（${char.role}）`)
+    // レポート指摘: 'char' が implicitly any。型を明示（BundleAnalysisResultのmainCharacters要素型）。
+    .map((char: BundleAnalysisResult['mainCharacters'][number]) => `${char.name}（${char.role}）`)
     .join('、')
 
   const highlightsInfo = bundleAnalysis.highlights
