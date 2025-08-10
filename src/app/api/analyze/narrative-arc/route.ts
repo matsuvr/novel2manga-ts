@@ -4,6 +4,7 @@ import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
 import type { EpisodeBoundary } from '@/types/episode'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { saveEpisodeBoundaries } from '@/utils/storage'
+import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repository'
 
 const requestSchema = z.object({
   novelId: z.string(),
@@ -47,7 +48,8 @@ export async function POST(request: NextRequest) {
 
     let boundaries: EpisodeBoundary[]
     try {
-      boundaries = await analyzeNarrativeArc(input)
+      const chunkRepository = new StorageChunkRepository()
+      boundaries = await analyzeNarrativeArc(input, chunkRepository)
     } catch (analysisError) {
       console.error('=== Narrative arc analysis failed ===')
       console.error('Novel ID:', validatedData.novelId)

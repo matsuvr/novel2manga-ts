@@ -6,6 +6,7 @@ import type { EpisodeBoundary } from '@/types/episode'
 import type { JobProgress } from '@/types/job'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { getChunkData } from '@/utils/storage'
+import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repository'
 
 export interface RetryableError extends Error {
   retryable: boolean
@@ -50,6 +51,8 @@ export class JobNarrativeProcessor {
     onProgress?: (progress: JobProgress) => void,
   ): Promise<JobProgress> {
     console.log(`[JobNarrativeProcessor] Starting episode analysis for job ${jobId}`)
+
+    const chunkRepository = new StorageChunkRepository()
 
     try {
       // ジョブの開始をログ
@@ -138,7 +141,7 @@ export class JobNarrativeProcessor {
 
         // リトライ付きでナラティブアーク分析を実行
         const analysisResult = await this.executeWithRetry(
-          () => analyzeNarrativeArc(analysisParams),
+          () => analyzeNarrativeArc(analysisParams, chunkRepository),
           `Narrative arc analysis for chunks ${startIndex}-${endIndex}`,
         )
 
