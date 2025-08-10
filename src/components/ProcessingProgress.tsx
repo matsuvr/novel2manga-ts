@@ -198,7 +198,7 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
           if (data.job.analyzeCompleted) {
             updatedSteps[2].status = 'completed'
             completedCount++
-          } else if (data.job.currentStep?.includes('analy')) {
+          } else if (data.job.currentStep?.includes('analyze')) {
             updatedSteps[2].status = 'processing'
             if (data.job.totalChunks && data.job.processedChunks !== undefined) {
               updatedSteps[2].progress = Math.round(
