@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { DatabaseService } from '@/services/database'
+import { getDatabaseService } from '@/services/db-factory'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
+import { validateJobId } from '@/utils/validators'
 
 const requestSchema = z.object({
   jobId: z.string(),
@@ -20,9 +21,10 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const validatedData = requestSchema.parse(body)
-    const { jobId, config } = validatedData
+  const { jobId, config } = validatedData
+  validateJobId(jobId)
 
-    const dbService = new DatabaseService()
+  const dbService = getDatabaseService()
     const processor = new JobNarrativeProcessor(dbService, config)
 
     // ジョブの存在確認

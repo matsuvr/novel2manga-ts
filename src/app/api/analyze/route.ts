@@ -4,7 +4,7 @@ import { chunkAnalyzerAgent } from '@/agents/chunk-analyzer'
 import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
 import { getTextAnalysisConfig } from '@/config'
 import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repository'
-import { DatabaseService } from '@/services/database'
+import { getDatabaseService } from '@/services/db-factory'
 import type { AnalyzeResponse } from '@/types/job'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { saveEpisodeBoundaries } from '@/utils/storage'
@@ -64,8 +64,8 @@ export async function POST(request: NextRequest) {
 
     // StorageFactoryとDBを初期化
     const { StorageFactory } = await import('@/utils/storage')
-    const novelStorage = await StorageFactory.getNovelStorage()
-    const dbService = new DatabaseService()
+  const novelStorage = await StorageFactory.getNovelStorage()
+  const dbService = getDatabaseService()
 
     let novelId = inputNovelId
     let novelText: string
@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
           originalTextPath: fileName,
           textLength: novelText.length,
           language: 'ja',
+          metadataPath: null,
         })
       } catch (e) {
         console.warn('[/api/analyze] ensureNovel failed (non-fatal):', e)
