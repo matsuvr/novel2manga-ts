@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getDatabaseService } from '@/services/db-factory'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
-import { ApiError, createErrorResponse, ValidationError } from '@/utils/api-error'
+import { ApiError, createErrorResponse } from '@/utils/api-error'
 import { validateJobId } from '@/utils/validators'
 import { JobRepository } from '@/repositories/job-repository'
 
