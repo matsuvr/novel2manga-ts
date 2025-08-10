@@ -21,6 +21,10 @@ declare global {
   var CHUNKS_STORAGE: R2Bucket | undefined
   // eslint-disable-next-line no-var
   var ANALYSIS_STORAGE: R2Bucket | undefined
+  // eslint-disable-next-line no-var
+  var LAYOUTS_STORAGE: R2Bucket | undefined
+  // eslint-disable-next-line no-var
+  var RENDERS_STORAGE: R2Bucket | undefined
 
   // D1 Database binding
   // https://developers.cloudflare.com/d1/platform/client-api/
@@ -790,75 +794,57 @@ export class D1Adapter implements DatabaseAdapter {
 // Storage Factory (設計書対応)
 // ========================================
 
+type R2BindingName =
+  | 'NOVEL_STORAGE'
+  | 'CHUNKS_STORAGE'
+  | 'ANALYSIS_STORAGE'
+  | 'LAYOUTS_STORAGE'
+  | 'RENDERS_STORAGE'
+
+async function resolveStorage(
+  localDir: string,
+  binding: R2BindingName,
+  errorMessage: string,
+): Promise<Storage> {
+  if (isDevelopment()) {
+    return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, localDir))
+  }
+
+  const bucket = (globalThis as any)[binding] as R2Bucket | undefined
+  if (!bucket) {
+    throw new Error(errorMessage)
+  }
+  return new R2Storage(bucket)
+}
+
 // Novel Storage
 export async function getNovelStorage(): Promise<Storage> {
-  if (isDevelopment()) {
-    return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'novels'))
-  } else {
-    if (!globalThis.NOVEL_STORAGE) {
-      throw new Error('Novel storage not configured')
-    }
-    return new R2Storage(globalThis.NOVEL_STORAGE)
-  }
+  return resolveStorage('novels', 'NOVEL_STORAGE', 'Novel storage not configured')
 }
 
 // Chunk Storage
 export async function getChunkStorage(): Promise<Storage> {
-  if (isDevelopment()) {
-    return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'chunks'))
-  } else {
-    if (!globalThis.CHUNKS_STORAGE) {
-      throw new Error('Chunk storage not configured')
-    }
-    return new R2Storage(globalThis.CHUNKS_STORAGE)
-  }
+  return resolveStorage('chunks', 'CHUNKS_STORAGE', 'Chunk storage not configured')
 }
 
 // Analysis Storage
 export async function getAnalysisStorage(): Promise<Storage> {
-  if (isDevelopment()) {
-    return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'analysis'))
-  } else {
-    if (!globalThis.ANALYSIS_STORAGE) {
-      throw new Error('Analysis storage not configured')
-    }
-    return new R2Storage(globalThis.ANALYSIS_STORAGE)
-  }
+  return resolveStorage('analysis', 'ANALYSIS_STORAGE', 'Analysis storage not configured')
 }
 
 // Layout Storage
 export async function getLayoutStorage(): Promise<Storage> {
-  if (isDevelopment()) {
-    return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'layouts'))
-  } else {
-    if (!globalThis.ANALYSIS_STORAGE) {
-      throw new Error('Layout storage not configured')
-    }
-    return new R2Storage(globalThis.ANALYSIS_STORAGE) // 同じバケットを使用
-  }
+  return resolveStorage('layouts', 'LAYOUTS_STORAGE', 'Layout storage not configured')
 }
 
 // Render Storage
 export async function getRenderStorage(): Promise<Storage> {
-  if (isDevelopment()) {
-    return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'renders'))
-  } else {
-    if (!globalThis.ANALYSIS_STORAGE) {
-      throw new Error('Render storage not configured')
-    }
-    return new R2Storage(globalThis.ANALYSIS_STORAGE) // 同じバケットを使用
-  }
+  return resolveStorage('renders', 'RENDERS_STORAGE', 'Render storage not configured')
 }
 
+// Output Storage
 export async function getOutputStorage(): Promise<Storage> {
-  if (isDevelopment()) {
-    return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, 'outputs'))
-  } else {
-    if (!globalThis.ANALYSIS_STORAGE) {
-      throw new Error('Output storage not configured')
-    }
-    return new R2Storage(globalThis.ANALYSIS_STORAGE) // 同じバケットを使用
-  }
+  return resolveStorage('outputs', 'RENDERS_STORAGE', 'Output storage not configured')
 }
 
 // Database
