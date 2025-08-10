@@ -4,7 +4,7 @@ import yaml from 'js-yaml'
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { generateMangaLayout } from '@/agents/layout-generator'
-import { DatabaseService } from '@/services/database'
+import { getDatabaseService } from '@/services/db-factory'
 import type { ChunkData, EpisodeData } from '@/types/panel-layout'
 import { ApiError, createErrorResponse } from '@/utils/api-error'
 import { getChunkData, StorageFactory } from '@/utils/storage'
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     const validatedData = requestSchema.parse(body)
     const { jobId, episodeNumber, config } = validatedData
 
-    const dbService = new DatabaseService()
+    const dbService = getDatabaseService()
 
     // ジョブとエピソード情報を取得
     const job = await dbService.getJobWithProgress(jobId)
