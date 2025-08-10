@@ -30,6 +30,10 @@ describe('Storage', () => {
     it('should throw error when storage is not configured in production', async () => {
       vi.mocked(isDevelopment).mockReturnValue(false)
       delete globalThis.NOVEL_STORAGE
+      delete globalThis.CHUNKS_STORAGE
+      delete globalThis.ANALYSIS_STORAGE
+      delete globalThis.LAYOUTS_STORAGE
+      delete globalThis.RENDERS_STORAGE
 
       await expect(StorageFactory.getNovelStorage()).rejects.toThrow('Novel storage not configured')
       await expect(StorageFactory.getChunkStorage()).rejects.toThrow('Chunk storage not configured')

@@ -7,11 +7,15 @@ import { DatabaseService } from '@/services/database'
 import type { MangaLayout } from '@/types/panel-layout'
 
 // ストレージとデータベースのモック
-vi.mock('@/utils/storage', () => ({
-  StorageFactory: {
-    getDatabase: vi.fn(),
-  },
-}))
+vi.mock('@/utils/storage', () => {
+  const mockRenderStorage = { put: vi.fn() }
+  return {
+    StorageFactory: {
+      getDatabase: vi.fn(),
+      getRenderStorage: vi.fn().mockResolvedValue(mockRenderStorage),
+    },
+  }
+})
 
 vi.mock('@/services/database', () => ({
   DatabaseService: vi.fn().mockImplementation(() => ({
