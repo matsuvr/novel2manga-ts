@@ -183,7 +183,7 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
             updatedSteps[1].status = 'completed'
             completedCount++
           } else if (
-            data.job.currentStep?.includes('split') ||
+            data.job.currentStep === 'split' ||
             data.job.currentStep === 'chunks_created'
           ) {
             updatedSteps[1].status = 'processing'
@@ -199,8 +199,8 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
             updatedSteps[2].status = 'completed'
             completedCount++
           } else if (
-            data.job.currentStep?.includes('analyz') ||
-            data.job.currentStep === 'analysis_completed'
+            data.job.currentStep === 'analyze' ||
+            data.job.currentStep?.startsWith('analyze_')
           ) {
             updatedSteps[2].status = 'processing'
             if (data.job.totalChunks && data.job.processedChunks !== undefined) {
@@ -214,7 +214,10 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
           if (data.job.episodeCompleted) {
             updatedSteps[3].status = 'completed'
             completedCount++
-          } else if (data.job.currentStep?.includes('episode')) {
+          } else if (
+            data.job.currentStep === 'episode' ||
+            data.job.currentStep?.startsWith('episode_')
+          ) {
             updatedSteps[3].status = 'processing'
             currentIndex = 3
           }
@@ -222,7 +225,10 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
           if (data.job.layoutCompleted) {
             updatedSteps[4].status = 'completed'
             completedCount++
-          } else if (data.job.currentStep?.includes('layout')) {
+          } else if (
+            data.job.currentStep === 'layout' ||
+            data.job.currentStep?.startsWith('layout_')
+          ) {
             updatedSteps[4].status = 'processing'
             if (data.job.totalEpisodes && data.job.processedEpisodes !== undefined) {
               updatedSteps[4].progress = Math.round(
@@ -235,7 +241,10 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
           if (data.job.renderCompleted) {
             updatedSteps[5].status = 'completed'
             completedCount++
-          } else if (data.job.currentStep?.includes('render')) {
+          } else if (
+            data.job.currentStep === 'render' ||
+            data.job.currentStep?.startsWith('render_')
+          ) {
             updatedSteps[5].status = 'processing'
             if (data.job.totalPages && data.job.renderedPages !== undefined) {
               updatedSteps[5].progress = Math.round(

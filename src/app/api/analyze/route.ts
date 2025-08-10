@@ -241,7 +241,7 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < chunks.length; i++) {
       try {
         console.log(`[/api/analyze] Analyzing chunk ${i}/${chunks.length}...`)
-        await dbService.updateJobStep(jobId, `analyzing_chunk_${i}`, i, chunks.length)
+        await dbService.updateJobStep(jobId, `analyze_chunk_${i}`, i, chunks.length)
 
         // チャンクテキストを取得
         const chunkText = chunks[i]

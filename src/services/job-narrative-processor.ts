@@ -53,7 +53,7 @@ export class JobNarrativeProcessor {
 
     try {
       // ジョブの開始をログ
-      await this.dbService.updateJobStep(jobId, 'episode_analysis_started')
+      await this.dbService.updateJobStep(jobId, 'episode_started')
 
       const job = await this.dbService.getJobWithProgress(jobId)
       if (!job) {
@@ -172,7 +172,7 @@ export class JobNarrativeProcessor {
         jobId,
       })
 
-      await this.dbService.updateJobError(jobId, errorMessage, 'episode_analysis_failed')
+      await this.dbService.updateJobError(jobId, errorMessage, 'episode_failed')
       throw error
     } finally {
       console.log(`[JobNarrativeProcessor] Episode analysis completed for job ${jobId}`)
