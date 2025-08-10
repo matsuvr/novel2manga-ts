@@ -1,9 +1,9 @@
-import { randomUUID } from 'node:crypto'
 import { type NextRequest, NextResponse } from 'next/server'
 import { StorageFactory } from '@/utils/storage'
+import { generateUUID } from '@/utils/uuid'
 
 export async function saveNovelToStorage(text: string) {
-  const uuid = randomUUID()
+  const uuid = generateUUID()
   const key = `${uuid}.json`
 
   const storage = await StorageFactory.getNovelStorage()

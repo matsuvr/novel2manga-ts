@@ -287,6 +287,24 @@
     - 単体テスト: 既存のレイアウト生成テストがグリーンのまま
   - 参考: Mastra Agents / Vercel AI SDK 最新ドキュメント（MCPで検証済み）
 
+### 08-10 エラーハンドリング移行の締め（新規）
+
+- [x] 29. 旧互換レイヤーの撤去（スタブ化）
+  - [x] `src/utils/api-error-response.ts` は非推奨スタブ化（新規参照禁止、後日削除）
+  - [x] 参照の横断確認（toErrorResponse/api-error-response の除去）
+  - [x] 非推奨スタブの削除を実施（2025-08-10）
+- [x] 30. ルート全体の統一適用の棚卸し
+  - [x] 全APIルートで `createErrorResponse` を使用
+  - [x] ルート内 throw は `ApiError` 階層に統一（ZodErrorはそのまま）
+- [x] 31. 共通レスポンダの強化とテスト整合
+  - [x] ZodError/HttpError/RetryableError/RateLimitError対応
+  - [x] Generic Error時は `defaultMessage` をerrorに、元messageはdetailsへ
+- [x] 32. 設計文書の更新
+  - [x] `design.md` に統一エラーモデルとレスポンス形を明文化
+- [ ] 33. 追加フォローアップ（軽微）
+  - [ ] ルート内の `HttpError` 新規使用のlintガード検討（禁止 or 自動変換）
+  - [x] 失敗時レスポンスの `code` 値の体系化（定数/enum化） — `ERROR_CODES` と `ErrorCode` ユニオン導入済み（2025-08-10）
+
 ## 既存タスク（延期）
 
 - [ ] **22. UI/UXの最終実装**（Phase 4以降）

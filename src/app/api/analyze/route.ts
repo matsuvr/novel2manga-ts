@@ -3,12 +3,12 @@ import { z } from 'zod'
 import { chunkAnalyzerAgent } from '@/agents/chunk-analyzer'
 import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
 import { getTextAnalysisConfig } from '@/config'
+import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repository'
 import { DatabaseService } from '@/services/database'
 import type { AnalyzeResponse } from '@/types/job'
-import { splitTextIntoChunks } from '@/utils/text-splitter'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { saveEpisodeBoundaries } from '@/utils/storage'
-import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repository'
+import { splitTextIntoChunks } from '@/utils/text-splitter'
 import { generateUUID } from '@/utils/uuid'
 
 // リクエストボディのスキーマ定義（互換のため、novelId か text のいずれかを許容）
@@ -94,7 +94,18 @@ export async function POST(request: NextRequest) {
         console.warn('[/api/analyze] ensureNovel failed (non-fatal):', e)
       }
     } else if (inputNovelId) {
-      // novelIdが指定された場合はストレージから取り出す
+      // novelId が指定された場合はまずDB存在確認 → 次にストレージ確認（テスト期待に合わせた順序）
+      const existingNovel = await dbService.getNovel(inputNovelId)
+      if (!existingNovel) {
+        return NextResponse.json(
+          {
+            error: `小説ID "${inputNovelId}" がデータベースに見つかりません。先に/api/novelエンドポイントで小説を登録してください。`,
+          },
+          { status: 404 },
+        )
+      }
+
+      // ストレージからテキストを取得
       const novelKey = `${inputNovelId}.json`
       const novelFile = await novelStorage.get(novelKey)
       if (!novelFile) {
@@ -106,17 +117,6 @@ export async function POST(request: NextRequest) {
       const novelData = JSON.parse(novelFile.text)
       novelText = novelData.text
       novelId = inputNovelId
-
-      // DBに存在しない場合はエラー（/api/novelでの登録を促す）
-      const existingNovel = await dbService.getNovel(novelId)
-      if (!existingNovel) {
-        return NextResponse.json(
-          {
-            error: `小説ID "${novelId}" がデータベースに見つかりません。先に/api/novelエンドポイントで小説を登録してください。`,
-          },
-          { status: 404 },
-        )
-      }
     } else {
       // 型上ありえないがガード
       return NextResponse.json({ error: 'novelId か text が必要です' }, { status: 400 })

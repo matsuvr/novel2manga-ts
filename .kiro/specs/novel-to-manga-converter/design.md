@@ -1047,45 +1047,65 @@ export class StorageFactory {
 
 ## Error Handling
 
-### エラー処理戦略（2025-08-01更新）
+### エラー処理戦略（2025-08-10更新）
 
-```typescript
-// APIエラークラス
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    public statusCode: number,
-    public code?: string,
-    public details?: any
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
+本プロジェクトのAPIエラーハンドリングは `src/utils/api-error.ts` に集約し、全ルートは `createErrorResponse` を用いて単一の形でJSONエラーを返します。ルート実装では原則として `ApiError` 階層を throw し、その他の例外は共通レスポンダが安全に変換します。
 
-// エラーレスポンス生成
-export function createErrorResponse(
-  error: unknown,
-  defaultMessage: string = 'Internal server error'
-): Response {
-  if (error instanceof ApiError) {
-    return NextResponse.json(
-      {
-        error: error.message,
-        code: error.code,
-        details: error.details
-      },
-      { status: error.statusCode }
-    );
-  }
+- 主要クラスと型
+  - ApiError（基底）/ ValidationError / NotFoundError / ForbiddenError / AuthenticationError / ExternalApiError / DatabaseError / StorageError
+  - RetryableError / RateLimitError（再試行系）と型ガード（isRetryableError 等）
+- カノニカルレスポンダ: `createErrorResponse(error, defaultMessage)`
+  - ApiError: statusCode を尊重し、`{ error, code, details }` を返却
+  - ZodError: 400 + `details` に zod の issues を格納
+  - Legacy HttpError: status + code/details をマップ（後方互換のみ）
+  - 再試行系（RetryableError/RateLimitError）: 429/503 + `Retry-After` 等のヘッダ
+  - システムエラー（ENOENT/EACCES/ENOSPC/ETIMEDOUT など）: 安全な 503/500 へ変換
+  - 汎用 Error/unknown: `error` は `defaultMessage`、`details` に元の message を格納（テスト互換のため）
 
-  const message = error instanceof Error ? error.message : defaultMessage;
-  return NextResponse.json(
-    { error: message },
-    { status: 500 }
-  );
+- エラーコード体系: すべてのエラーコードは typed const `ERROR_CODES` に集約し、`ErrorCode` ユニオン型として利用します。コードのばらつきを防ぎ、型で漏れを検出します。
+
+```ts
+// src/utils/api-error.ts 抜粋
+export const ERROR_CODES = {
+  VALIDATION_ERROR: "VALIDATION_ERROR",
+  NOT_FOUND: "NOT_FOUND",
+  FORBIDDEN: "FORBIDDEN",
+  AUTH_REQUIRED: "AUTH_REQUIRED",
+  EXTERNAL_API_ERROR: "EXTERNAL_API_ERROR",
+  DATABASE_ERROR: "DATABASE_ERROR",
+  STORAGE_ERROR: "STORAGE_ERROR",
+  INVALID_STATE: "INVALID_STATE",
+  RATE_LIMIT: "RATE_LIMIT",
+  RETRYABLE_ERROR: "RETRYABLE_ERROR",
+  FILE_ACCESS_DENIED: "FILE_ACCESS_DENIED",
+  INSUFFICIENT_STORAGE: "INSUFFICIENT_STORAGE",
+  TIMEOUT: "TIMEOUT",
+  INTERNAL_ERROR: "INTERNAL_ERROR",
+  UNKNOWN_ERROR: "UNKNOWN_ERROR",
+} as const;
+export type ErrorCode = typeof ERROR_CODES[keyof typeof ERROR_CODES];
+```
+
+運用ガイド:
+- ルート内で新たに識別したい状態（例: 再開不能など）は `ERROR_CODES` にコードを追加してから `ApiError` に付与します（例: INVALID_STATE）。
+- `HttpError` は新規使用禁止（将来的にlintガード予定）。既存分は responder で互換処理されます。
+
+レスポンスの標準形:
+
+```json
+{
+  "error": "Human-friendly message",
+  "code": "optional_code",
+  "details": { "...optional structured info..." }
 }
 ```
+
+実装上のガイド:
+- ルートでは `throw new ValidationError('...')` などのドメイン例外を使用する。
+- 例外は最上位の try/catch で `return createErrorResponse(err, 'Route specific fallback')` に渡す。
+- 旧 `toErrorResponse` / `api-error-response.ts` は廃止。互換層は削除済みで、`HttpError` は新実装によりブリッジされるが新規使用は非推奨。
+
+注: ルート毎のデフォルトメッセージはテスト仕様に合わせて選定し、`details` に内部メッセージを残すことでデバッグ可能性とユーザー向けメッセージの両立を図る。
 
 ### エラーシナリオ
 
