@@ -53,7 +53,7 @@ export class ValidationError extends ApiError {
     public field?: string,
     details?: Record<string, unknown>
   ) {
-    super(message, 400, ERROR_CODES.VALIDATION_ERROR, details);
+    super(message, 400, ERROR_CODES.VALIDATION_ERROR, { ...details, field });
     this.name = "ValidationError";
   }
 }
