@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { saveNovelToStorage } from './storage/route'
+import { getDatabaseService } from '@/services/db-factory'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,9 +14,7 @@ export async function POST(request: NextRequest) {
 
     // DatabaseServiceを使用してDBに保存
     try {
-      const { DatabaseService } = await import('@/services/database')
-
-      const dbService = new DatabaseService()
+      const dbService = getDatabaseService()
 
       // 小説情報をDBに保存（UUIDを指定）
       await dbService.ensureNovel(data.uuid, {
@@ -24,6 +23,7 @@ export async function POST(request: NextRequest) {
         originalTextPath: data.fileName,
         textLength: data.length,
         language: 'ja',
+        metadataPath: null,
       })
 
       console.log(`✓ 小説をDBに保存: ${data.uuid}`)
