@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { promises as fs } from 'node:fs'
+import path from 'node:path'
 import { isDevelopment } from '@/config'
-import { StorageFactory, StorageKeys } from '../utils/storage'
+import { LocalFileStorage, StorageFactory, StorageKeys } from '../utils/storage'
 
 // モック設定
 vi.mock('@/config', () => ({
@@ -104,6 +106,35 @@ describe('Storage', () => {
       // クリーンアップ
       delete globalThis.NOVEL_STORAGE
       delete globalThis.DB
+    })
+  })
+
+  describe('LocalFileStorage', () => {
+    const baseDir = path.join(process.cwd(), '.test-storage', 'local-file-storage')
+
+    beforeEach(async () => {
+      await fs.rm(baseDir, { recursive: true, force: true })
+    })
+
+    it('should exclude internal metadata fields for binary files', async () => {
+      const storage = new LocalFileStorage(baseDir)
+      const key = 'binary/test.bin'
+      const data = Buffer.from('hello world')
+      const userMetadata = { foo: 'bar' }
+
+      await storage.put(key, data, userMetadata)
+
+      const result = await storage.get(key)
+
+      expect(result).not.toBeNull()
+      expect(result?.text).toBe(data.toString('base64'))
+      expect(result?.metadata).toEqual(userMetadata)
+      expect(result?.metadata).not.toHaveProperty('isBinary')
+      expect(result?.metadata).not.toHaveProperty('createdAt')
+    })
+
+    afterAll(async () => {
+      await fs.rm(baseDir, { recursive: true, force: true })
     })
   })
 })
