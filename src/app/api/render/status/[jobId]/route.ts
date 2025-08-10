@@ -22,7 +22,7 @@ export async function GET(
     // ジョブの存在確認
     const job = await dbService.getJob(params.jobId)
     if (!job) {
-      throw new ApiError('Job', 404)
+      throw new ApiError('Job not found', 404, 'NOT_FOUND')
     }
 
     // エピソード番号のバリデーション
