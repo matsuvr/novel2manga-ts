@@ -1,10 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
+import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repository'
 import type { EpisodeBoundary } from '@/types/episode'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { saveEpisodeBoundaries } from '@/utils/storage'
-import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repository'
 
 const requestSchema = z.object({
   novelId: z.string(),
