@@ -1,31 +1,25 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { DatabaseService } from "@/services/database";
-import { JobNarrativeProcessor } from "@/services/job-narrative-processor";
-import {
-  ApiError,
-  createErrorResponse,
-  ValidationError,
-} from "@/utils/api-error";
+import { type NextRequest, NextResponse } from 'next/server'
+import { DatabaseService } from '@/services/database'
+import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
+import { ApiError, createErrorResponse, ValidationError } from '@/utils/api-error'
 
-export async function POST(
-  _request: NextRequest,
-  { params }: { params: { jobId: string } }
-) {
+export async function POST(_request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
-    if (!params.jobId || params.jobId === "undefined") {
-      throw new ValidationError("Invalid jobId");
+    if (!params.jobId || params.jobId === 'undefined') {
+      throw new ValidationError('Invalid jobId')
     }
-    const dbService = new DatabaseService();
-    const processor = new JobNarrativeProcessor(dbService);
+    const dbService = new DatabaseService()
+    const processor = new JobNarrativeProcessor(dbService)
 
     // ジョブが再開可能かチェック
-    const canResume = await processor.canResumeJob(params.jobId);
+    const canResume = await processor.canResumeJob(params.jobId)
     if (!canResume) {
+      // Match test expectation exactly
       throw new ApiError(
-        "Job cannot be resumed. It may be completed or not found.",
+        'Job cannot be resumed. It may be completed or not found.',
         400,
-        "INVALID_STATE"
-      );
+        'INVALID_STATE',
+      )
     }
 
     // バックグラウンドで処理を再開
@@ -36,18 +30,25 @@ export async function POST(
           processedChunks: progress.processedChunks,
           totalChunks: progress.totalChunks,
           episodes: progress.episodes.length,
-        });
+        })
       })
       .catch((error) => {
-        console.error(`Error processing job ${params.jobId}:`, error);
-      });
+        console.error(`Error processing job ${params.jobId}:`, error)
+      })
 
     return NextResponse.json({
-      message: "Job resumed successfully",
+      message: 'Job resumed successfully',
       jobId: params.jobId,
-    });
+    })
   } catch (error) {
-    console.error("Error resuming job:", error);
-    return createErrorResponse(error, "Failed to resume job");
+    console.error('Error resuming job:', error)
+    // Normalize error message for 500 case to match tests while preserving details
+    const normalized =
+      error instanceof ApiError
+        ? error
+        : new ApiError('Failed to resume job', 500, 'INTERNAL_ERROR', {
+            cause: error instanceof Error ? error.message : String(error),
+          })
+    return createErrorResponse(normalized, 'Failed to resume job')
   }
 }

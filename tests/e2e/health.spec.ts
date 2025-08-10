@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 test('GET /api/health returns 200', async ({ request }) => {
   const base = process.env.API_BASE_URL || 'http://localhost:3000/api'
