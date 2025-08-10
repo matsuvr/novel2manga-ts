@@ -87,7 +87,8 @@ const memoryCache = new MemoryCache()
 
 // 環境に応じたキャッシュを取得
 export function getCache(): KVNamespace | MemoryCache {
-  if (process.env.NODE_ENV === 'development') {
+  const env = process.env.NODE_ENV
+  if (env === 'development' || env === 'test') {
     return memoryCache
   }
 
@@ -98,8 +99,8 @@ export function getCache(): KVNamespace | MemoryCache {
     return globalThis.CACHE as KVNamespace
   }
 
-  // フォールバック
-  return memoryCache
+  // CACHE バインディングが未設定の場合は明示的にエラー
+  throw new Error('CACHE binding is not configured')
 }
 
 // キャッシュキーの生成ヘルパー
@@ -169,7 +170,7 @@ export async function getCachedData<T>(
     return data as T
   } catch (error) {
     console.error(`Failed to get cached data for key ${key}:`, error)
-    return null
+    throw error
   }
 }
 
@@ -195,6 +196,7 @@ export async function setCachedData<T>(key: string, data: T, ttl?: number): Prom
     await cache.put(key, serialized, options)
   } catch (error) {
     console.error(`Failed to set cached data for key ${key}:`, error)
+    throw error
   }
 }
 
@@ -205,6 +207,7 @@ export async function deleteCachedData(key: string): Promise<void> {
     await cache.delete(key)
   } catch (error) {
     console.error(`Failed to delete cached data for key ${key}:`, error)
+    throw error
   }
 }
 
@@ -218,5 +221,6 @@ export async function deleteCachedDataByPrefix(prefix: string): Promise<void> {
     }
   } catch (error) {
     console.error(`Failed to delete cached data with prefix ${prefix}:`, error)
+    throw error
   }
 }
