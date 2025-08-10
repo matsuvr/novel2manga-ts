@@ -1,28 +1,21 @@
-import { Agent } from '@mastra/core'
 import { z } from 'zod'
-
+import { BaseAgent } from './base-agent'
 import { analyzeChunkBundle, type BundleAnalysisResult } from '@/agents/chunk-bundle-analyzer'
 import { getEpisodeConfig, getNarrativeAnalysisConfig } from '@/config'
 import type { ChunkAnalysisResult } from '@/types/chunk'
 import type { EpisodeBoundary } from '@/types/episode'
-import { getNarrativeAnalysisLLM } from '@/utils/llm-factory'
 
-const narrativeArcAnalyzer = new Agent({
-  name: 'Narrative Arc Analyzer',
-  instructions: () => {
-    const config = getNarrativeAnalysisConfig()
-    return config.systemPrompt
-  },
-  model: async () => {
-    // フォールバック機能付きでLLMを取得
-    const llm = await getNarrativeAnalysisLLM()
-    console.log(`[narrativeArcAnalyzer] Using provider: ${llm.providerName}`)
-    console.log(`[narrativeArcAnalyzer] Using model: ${llm.model}`)
+export class NarrativeArcAnalyzerAgent extends BaseAgent {
+  constructor() {
+    super(
+      'narrative-arc-analyzer',
+      () => getNarrativeAnalysisConfig().systemPrompt,
+      'narrativeAnalysis',
+    )
+  }
+}
 
-    // モデルを返す
-    return llm.provider(llm.model)
-  },
-})
+export const narrativeArcAnalyzerAgent = new NarrativeArcAnalyzerAgent()
 
 export async function analyzeNarrativeArc(input: {
   jobId: string
@@ -182,9 +175,12 @@ export async function analyzeNarrativeArc(input: {
     console.log('Text length:', fullText.length)
     console.log('Target pages:', targetPages)
 
-    const result = await narrativeArcAnalyzer.generate([{ role: 'user', content: userPrompt }], {
-      output: responseSchema,
-    })
+    const result = await narrativeArcAnalyzerAgent.generate(
+      [{ role: 'user', content: userPrompt }],
+      {
+        output: responseSchema,
+      },
+    )
 
     if (!result.object) {
       const errorMsg = 'Failed to generate narrative analysis - LLM returned no object'

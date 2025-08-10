@@ -1,25 +1,19 @@
-import { Agent } from '@mastra/core'
 import { z } from 'zod'
+import { BaseAgent } from './base-agent'
 import { getChunkBundleAnalysisConfig } from '@/config'
 import type { ChunkAnalysisResult } from '@/types/chunk'
-import { getChunkBundleAnalysisLLM } from '@/utils/llm-factory'
 
-const chunkBundleAnalyzer = new Agent({
-  name: 'Chunk Bundle Analyzer',
-  instructions: () => {
-    const config = getChunkBundleAnalysisConfig()
-    return config.systemPrompt
-  },
-  model: async ({ runtimeContext: _runtimeContext }) => {
-    // フォールバック機能付きでLLMを取得
-    const llm = await getChunkBundleAnalysisLLM()
-    console.log(`[chunkBundleAnalyzer] Using provider: ${llm.providerName}`)
-    console.log(`[chunkBundleAnalyzer] Using model: ${llm.model}`)
+export class ChunkBundleAnalyzerAgent extends BaseAgent {
+  constructor() {
+    super(
+      'chunk-bundle-analyzer',
+      () => getChunkBundleAnalysisConfig().systemPrompt,
+      'chunkBundleAnalysis',
+    )
+  }
+}
 
-    // モデルを返す（適切な型で）
-    return llm.provider(llm.model)
-  },
-})
+export const chunkBundleAnalyzerAgent = new ChunkBundleAnalyzerAgent()
 
 // 統合分析の結果スキーマ
 export const bundleAnalysisSchema = z.object({
@@ -223,9 +217,12 @@ export async function analyzeChunkBundle(
     try {
       console.log('Sending to LLM for bundle analysis...')
 
-      const result = await chunkBundleAnalyzer.generate([{ role: 'user', content: userPrompt }], {
-        output: bundleAnalysisSchema,
-      })
+      const result = await chunkBundleAnalyzerAgent.generate(
+        [{ role: 'user', content: userPrompt }],
+        {
+          output: bundleAnalysisSchema,
+        },
+      )
 
       if (!result.object) {
         throw new Error('Failed to generate bundle analysis')

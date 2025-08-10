@@ -17,7 +17,12 @@ async function main() {
   console.log('✓ ensureNovel ok:', novelId)
 
   // 2) Create a job for the novel
-  const jobId = await db.createJob({ novelId, title: 'Smoke Job', totalChunks: 1, status: 'pending' })
+  const jobId = await db.createJob({
+    novelId,
+    title: 'Smoke Job',
+    totalChunks: 1,
+    status: 'pending',
+  })
   console.log('✓ createJob ok:', jobId)
 
   // 3) Insert a chunk (unique constraint on (job_id, chunk_index) must hold)
@@ -44,7 +49,7 @@ async function main() {
       endPosition: 100,
       wordCount: 100,
     })
-  } catch (e) {
+  } catch (_e) {
     duplicateEnforced = true
     console.log('✓ unique (job_id, chunk_index) enforced for chunks')
   }
@@ -60,7 +65,7 @@ async function main() {
   let epDuplicateEnforced = false
   try {
     await db.createEpisode({ jobId, episodeNumber: 1, title: 'Ep1-dup' })
-  } catch (e) {
+  } catch (_e) {
     epDuplicateEnforced = true
     console.log('✓ unique (job_id, episode_number) enforced for episodes')
   }

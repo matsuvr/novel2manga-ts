@@ -1,5 +1,5 @@
-import { Agent } from '@mastra/core'
 import { z } from 'zod'
+import { BaseAgent } from './base-agent'
 import { getLayoutGenerationConfig } from '@/config'
 import type {
   EpisodeData,
@@ -9,42 +9,6 @@ import type {
   Panel,
 } from '@/types/panel-layout'
 import { layoutRules, selectLayoutTemplate } from '@/utils/layout-templates'
-import { getLayoutGenerationLLM } from '@/utils/llm-factory'
-
-async function getLayoutModel() {
-  // 共有LLMファクトリを使用して、フォールバックやモデルオーバーライドを一元化
-  const llm = await getLayoutGenerationLLM()
-  // デバッグ出力（統一）
-  console.log(`[layout-generator] Using provider: ${llm.providerName}`)
-  console.log(`[layout-generator] Using model: ${llm.model}`)
-  // Mastra Agent の model コールバックはモデルインスタンスを返す関数を期待
-  return llm.provider(llm.model)
-}
-
-// LLMへの入力スキーマは現在使用していないが、将来のバリデーション用に保持
-// const layoutGenerationInputSchema = z.object({
-//   episodeData: z.object({
-//     episodeNumber: z.number(),
-//     episodeTitle: z.string().optional(),
-//     chunks: z.array(
-//       z.object({
-//         chunkIndex: z.number(),
-//         summary: z.string(),
-//         hasHighlight: z.boolean(),
-//         highlightImportance: z.number().optional(),
-//         dialogueCount: z.number(),
-//         sceneDescription: z.string(),
-//         characters: z.array(z.string()),
-//       }),
-//     ),
-//   }),
-//   targetPages: z.number(),
-//   layoutConstraints: z.object({
-//     avoidEqualGrid: z.boolean(),
-//     preferVariedSizes: z.boolean(),
-//     ensureReadingFlow: z.boolean(),
-//   }),
-// })
 
 // LLMからの出力スキーマ
 const layoutGenerationOutputSchema = z.object({
@@ -71,16 +35,16 @@ const layoutGenerationOutputSchema = z.object({
   ),
 })
 
-export class LayoutGeneratorAgent extends Agent {
+export class LayoutGeneratorAgent extends BaseAgent {
   constructor() {
-    super({
-      name: 'layout-generator',
-      instructions: () => {
+    super(
+      'layout-generator',
+      () => {
         const config = getLayoutGenerationConfig()
         return config.systemPrompt
       },
-      model: getLayoutModel,
-    })
+      'layoutGeneration',
+    )
   }
 
   async generateLayout(
