@@ -1,9 +1,9 @@
-import { Agent } from '@mastra/core'
 import { z } from 'zod'
+import { BaseAgent } from '@/agents/base-agent'
 import { getLayoutGenerationConfig } from '@/config'
+import { Page } from '@/domain/models/page'
 import type { EpisodeData, LayoutGenerationConfig, MangaLayout, Panel } from '@/types/panel-layout'
 import { selectLayoutTemplate } from '@/utils/layout-templates'
-import { Page } from '@/domain/models/page'
 import { getLayoutGenerationLLM } from '@/utils/llm-factory'
 
 async function getLayoutModel() {
@@ -66,7 +66,7 @@ const layoutGenerationOutputSchema = z.object({
   ),
 })
 
-export class LayoutGeneratorAgent extends Agent {
+export class LayoutGeneratorAgent extends BaseAgent {
   constructor() {
     super({
       name: 'layout-generator',
@@ -84,48 +84,26 @@ export class LayoutGeneratorAgent extends Agent {
     _config: LayoutGenerationConfig,
   ): Promise<MangaLayout> {
     // エピソードデータをLLM用に簡略化
-    const simplifiedChunks = episodeData.chunks.map((chunk) => ({
-      chunkIndex: chunk.chunkIndex,
-      summary: chunk.analysis.summary,
-      hasHighlight: chunk.analysis.highlights.length > 0,
-      highlightImportance: Math.max(...chunk.analysis.highlights.map((h) => h.importance), 0),
-      dialogueCount: chunk.analysis.dialogues.length,
-      sceneDescription: chunk.analysis.scenes.map((s) => s.setting).join(', '),
-      characters: chunk.analysis.characters.map((c) => c.name),
-    }))
+    // 入力アダプタを使用してLLM入力データを構築
+    const { buildLayoutLLMInput } = await import('@/agents/layout/input-adapter')
 
     // LLMでパネル内容を生成
-    const layoutInput = {
-      episodeData: {
-        episodeNumber: episodeData.episodeNumber,
-        episodeTitle: episodeData.episodeTitle,
-        chunks: simplifiedChunks,
-      },
-      targetPages: episodeData.estimatedPages,
-      layoutConstraints: {
-        avoidEqualGrid: true,
-        preferVariedSizes: true,
-        ensureReadingFlow: true,
-      },
-    }
+    const layoutInput = buildLayoutLLMInput(episodeData)
 
     const config = getLayoutGenerationConfig()
     const prompt = config.userPromptTemplate
       .replace('{{episodeNumber}}', episodeData.episodeNumber.toString())
       .replace('{{layoutInputJson}}', JSON.stringify(layoutInput, null, 2))
 
-    const llmResponse = await this.generate([{ role: 'user', content: prompt }], {
-      output: layoutGenerationOutputSchema,
-    })
-
-    if (!llmResponse.object) {
-      throw new Error('Failed to generate layout - LLM returned no object')
-    }
+    const llmResponseObject = await this.generateObject(
+      [{ role: 'user', content: prompt }],
+      layoutGenerationOutputSchema,
+    )
 
     // LLMの出力を実際のレイアウトに変換
     const pages: { page_number: number; panels: Panel[] }[] = []
 
-    for (const pageData of llmResponse.object.pages) {
+    for (const pageData of llmResponseObject.pages) {
       const panelCount = pageData.panels.length
       type PanelType = { importance: number; dialogues?: { speaker: string; text: string }[] }
       const hasHighlight = pageData.panels.some((p: PanelType) => p.importance >= 7)

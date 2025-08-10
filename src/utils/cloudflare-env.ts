@@ -1,14 +1,13 @@
-import type { D1Database } from '@cloudflare/workers-types'
-
-declare global {
-  var DB: D1Database | undefined
-}
+import type { D1Database } from "@cloudflare/workers-types";
 
 export function getD1Database(): D1Database {
-  if (!global.DB) {
+  const db = (globalThis as Record<string, unknown>).DB as
+    | D1Database
+    | undefined;
+  if (!db) {
     throw new Error(
-      'D1 Database not available. Make sure you are running in Cloudflare Workers environment.',
-    )
+      "D1 Database not available. Make sure you are running in Cloudflare Workers environment."
+    );
   }
-  return global.DB
+  return db;
 }
