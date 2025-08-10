@@ -37,10 +37,7 @@ export interface EpisodeBoundary {
   estimatedPages: number
 }
 
-export interface RetryableError extends Error {
-  retryable: boolean
-  retryAfter?: number
-}
+// RetryableError は '@/errors/retryable-error' のクラスを使用します
 
 export interface AnalyzeRequest {
   text: string
