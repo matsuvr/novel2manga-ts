@@ -199,8 +199,8 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
             updatedSteps[2].status = 'completed'
             completedCount++
           } else if (
-            data.job.currentStep?.includes('analyz') ||
-            data.job.currentStep === 'analysis_completed'
+            data.job.currentStep?.includes('analyze') ||
+            data.job.currentStep?.includes('analysis')
           ) {
             updatedSteps[2].status = 'processing'
             if (data.job.totalChunks && data.job.processedChunks !== undefined) {
