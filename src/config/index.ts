@@ -19,7 +19,9 @@ export async function ensureConfigLoaded() {
     // app.config.tsの設定を検証
     getAppConfigWithOverrides()
   } catch (error) {
-    throw new Error(`Configuration loading failed: ${error instanceof Error ? error.message : 'Unknown error'}. Check app.config.ts syntax and structure.`)
+    throw new Error(
+      `Configuration loading failed: ${error instanceof Error ? error.message : 'Unknown error'}. Check app.config.ts syntax and structure.`,
+    )
   }
 }
 
@@ -48,6 +50,7 @@ export function getNarrativeAnalysisConfig() {
     modelOverrides: params.modelOverrides,
     systemPrompt: prompts.systemPrompt,
     userPromptTemplate: prompts.userPromptTemplate,
+    middleSegmentContextTemplate: prompts.middleSegmentContextTemplate,
   }
 }
 

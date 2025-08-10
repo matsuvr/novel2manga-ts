@@ -8,8 +8,11 @@ import type {
   Page,
   Panel,
 } from '@/types/panel-layout'
-import { layoutRules, selectLayoutTemplate } from '@/utils/layout-templates'
+import { selectLayoutTemplate } from '@/utils/layout-templates'
 import { getLayoutGenerationLLM } from '@/utils/llm-factory'
+import { LayoutInputAdapter } from './layout-input-adapter'
+import { LayoutPanelSizer } from './layout-panel-sizer'
+import { LayoutRuleEnforcer } from './layout-rule-enforcer'
 
 async function getLayoutModel() {
   // 共有LLMファクトリを使用して、フォールバックやモデルオーバーライドを一元化
@@ -88,31 +91,8 @@ export class LayoutGeneratorAgent extends Agent {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _config: LayoutGenerationConfig,
   ): Promise<MangaLayout> {
-    // エピソードデータをLLM用に簡略化
-    const simplifiedChunks = episodeData.chunks.map((chunk) => ({
-      chunkIndex: chunk.chunkIndex,
-      summary: chunk.analysis.summary,
-      hasHighlight: chunk.analysis.highlights.length > 0,
-      highlightImportance: Math.max(...chunk.analysis.highlights.map((h) => h.importance), 0),
-      dialogueCount: chunk.analysis.dialogues.length,
-      sceneDescription: chunk.analysis.scenes.map((s) => s.setting).join(', '),
-      characters: chunk.analysis.characters.map((c) => c.name),
-    }))
-
-    // LLMでパネル内容を生成
-    const layoutInput = {
-      episodeData: {
-        episodeNumber: episodeData.episodeNumber,
-        episodeTitle: episodeData.episodeTitle,
-        chunks: simplifiedChunks,
-      },
-      targetPages: episodeData.estimatedPages,
-      layoutConstraints: {
-        avoidEqualGrid: true,
-        preferVariedSizes: true,
-        ensureReadingFlow: true,
-      },
-    }
+    const inputAdapter = new LayoutInputAdapter()
+    const layoutInput = inputAdapter.adapt(episodeData)
 
     const config = getLayoutGenerationConfig()
     const prompt = config.userPromptTemplate
@@ -129,6 +109,9 @@ export class LayoutGeneratorAgent extends Agent {
 
     // LLMの出力を実際のレイアウトに変換
     const pages: Page[] = []
+
+    const sizer = new LayoutPanelSizer()
+    const ruleEnforcer = new LayoutRuleEnforcer()
 
     for (const pageData of llmResponse.object.pages) {
       const panelCount = pageData.panels.length
@@ -152,19 +135,7 @@ export class LayoutGeneratorAgent extends Agent {
       }
       const panels: Panel[] = pageData.panels.map((panelData: PanelData, index: number) => {
         const templatePanel = template.panels[index] || template.panels[0]
-
-        // 重要度に応じてサイズを調整
-        let sizeMultiplier = 1.0
-        if (panelData.suggestedSize === 'extra-large') sizeMultiplier = 1.5
-        else if (panelData.suggestedSize === 'large') sizeMultiplier = 1.2
-        else if (panelData.suggestedSize === 'small') sizeMultiplier = 0.8
-
-        // サイズ調整（ページからはみ出さないように）
-        const adjustedSize = {
-          width: Math.min(templatePanel.size.width * sizeMultiplier, 1.0),
-          height: Math.min(templatePanel.size.height * sizeMultiplier, 1.0),
-        }
-
+        const adjustedSize = sizer.calculate(templatePanel, panelData.suggestedSize)
         return {
           id: index + 1,
           position: templatePanel.position,
@@ -176,16 +147,7 @@ export class LayoutGeneratorAgent extends Agent {
         }
       })
 
-      // レイアウトルールをチェック
-      if (layoutRules.forbidden.isEqualGrid(panels)) {
-        console.warn(`Page ${pageData.pageNumber} has equal grid layout, adjusting...`)
-        // サイズを微調整して均等分割を避ける
-        panels.forEach((panel, i) => {
-          const adjustment = 0.05 + i * 0.02
-          panel.size.width += i % 2 === 0 ? adjustment : -adjustment
-          panel.size.height += i % 2 === 1 ? adjustment : -adjustment
-        })
-      }
+      ruleEnforcer.enforce(panels)
 
       pages.push({
         page_number: pageData.pageNumber,
