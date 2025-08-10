@@ -4,6 +4,7 @@ import PDFDocument from 'pdfkit'
 import { load as yamlLoad } from 'js-yaml'
 import type { Episode } from '@/db'
 import { getDatabaseService } from '@/services/db-factory'
+import { validateJobId } from '@/utils/validators'
 import type { MangaLayout } from '@/types/panel-layout'
 import { handleApiError, successResponse, validationError } from '@/utils/api-error'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
@@ -30,9 +31,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     const body = (await request.json()) as Partial<ExportRequest>
 
     // バリデーション
-    if (!body.jobId) {
-      return validationError('jobIdが必要です')
-    }
+    validateJobId(body.jobId)
 
     const validFormats = ['pdf', 'images_zip']
     if (!body.format || !validFormats.includes(body.format)) {

@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { type NextRequest, NextResponse } from 'next/server'
 import type { Job } from '@/db'
-import { DatabaseService } from '@/services/database'
+import { getDatabaseService } from '@/services/db-factory'
 import { ApiError, createErrorResponse, ValidationError } from '@/utils/api-error'
 
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
@@ -14,7 +14,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
     // 本番（想定）: DB から取得
     if (process.env.NODE_ENV === 'production') {
-      const db = new DatabaseService()
+      const db = getDatabaseService()
       const job: Job | null = await db.getJob(id)
 
       if (!job) throw new ApiError('ジョブが見つかりません', 404, 'NOT_FOUND')

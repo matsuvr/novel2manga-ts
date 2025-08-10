@@ -898,8 +898,8 @@ export async function saveEpisodeBoundaries(
   await storage.put(key, JSON.stringify(data, null, 2))
 
   // データベースに保存
-  const { DatabaseService } = await import('@/services/database')
-  const dbService = new DatabaseService()
+  const { getDatabaseService } = await import('@/services/db-factory')
+  const dbService = getDatabaseService()
 
   // jobからnovelIdを取得
   const job = await dbService.getJob(jobId)
