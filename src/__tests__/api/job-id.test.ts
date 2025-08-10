@@ -17,6 +17,7 @@ vi.mock('@/services/database', () => ({
     createNovel: vi.fn(),
     createJob: vi.fn(),
     createChunk: vi.fn(),
+    getJob: vi.fn(),
   })),
 }))
 
@@ -48,6 +49,17 @@ describe('/api/job/[id]', () => {
       createNovel: vi.fn().mockResolvedValue(testNovelId),
       createJob: vi.fn(),
       createChunk: vi.fn(),
+      getJob: vi.fn().mockImplementation((id: string) => {
+        if (id === testJobId) {
+          return Promise.resolve({
+            id: testJobId,
+            novelId: testNovelId,
+            status: 'completed',
+            currentStep: 'complete',
+          })
+        }
+        return Promise.resolve(null)
+      }),
     }
 
     vi.mocked(DatabaseService).mockReturnValue(mockDbService)

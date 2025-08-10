@@ -15,7 +15,7 @@ export * from './chunk'
 export * from './env'
 export * from './episode'
 // Extended Job Types (keeping custom types)
-export type { JobProgress, JobStatus, RetryableError } from './job'
+export type { JobProgress, JobStatus } from './job'
 
 // Manga Models Types
 export * from './manga-models'
