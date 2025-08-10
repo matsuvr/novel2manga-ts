@@ -1,9 +1,12 @@
-import { type NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
-import { DatabaseService } from '@/services/database'
-import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
-import { toErrorResponse } from '@/utils/api-error-response'
-import { HttpError } from '@/utils/http-errors'
+import { type NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { DatabaseService } from "@/services/database";
+import { JobNarrativeProcessor } from "@/services/job-narrative-processor";
+import {
+  ApiError,
+  createErrorResponse,
+  ValidationError,
+} from "@/utils/api-error";
 
 // 入力互換: 既存のconfig形式と、testsが送る { targetPages, minPages, maxPages } のいずれか
 const postRequestSchema = z
@@ -20,36 +23,36 @@ const postRequestSchema = z
     maxPages: z.number().int().optional(),
   })
   .refine((d) => !!d.config || !!d.targetPages, {
-    message: 'config か targetPages を指定してください',
-    path: ['config'],
-  })
+    message: "config か targetPages を指定してください",
+    path: ["config"],
+  });
 
 export async function GET(
   _request: NextRequest,
-  ctx: { params: { jobId: string } | Promise<{ jobId: string }> },
+  ctx: { params: { jobId: string } | Promise<{ jobId: string }> }
 ) {
   try {
-    const params = await ctx.params
+    const params = await ctx.params;
     // Validate jobId
-    if (!params?.jobId || params.jobId === 'undefined') {
-      throw new HttpError('Invalid jobId', 400)
+    if (!params?.jobId || params.jobId === "undefined") {
+      throw new ValidationError("Invalid jobId");
     }
-    const dbService = new DatabaseService()
+    const dbService = new DatabaseService();
 
     // ジョブの存在確認
-    const job = await dbService.getJobWithProgress(params.jobId)
+    const job = await dbService.getJobWithProgress(params.jobId);
     if (!job) {
-      throw new HttpError('Job not found', 404)
+      throw new ApiError("Job not found", 404, "NOT_FOUND");
     }
 
     // エピソード一覧を取得
-    const episodes = await dbService.getEpisodesByJobId(params.jobId)
+    const episodes = await dbService.getEpisodesByJobId(params.jobId);
 
     // エピソード未作成の場合は明示的に空を返す（フォールバックしない）
 
     if (episodes.length === 0) {
       // エピソードが存在しない場合は404を返し、上位が異常を検知できるようにする
-      throw new HttpError('No episodes found for this job', 404)
+      throw new ApiError("No episodes found for this job", 404, "NOT_FOUND");
     }
 
     return NextResponse.json({
@@ -64,44 +67,44 @@ export async function GET(
         estimatedPages: ep.estimatedPages,
         confidence: ep.confidence,
       })),
-    })
+    });
   } catch (error) {
-    console.error('Error fetching episodes:', error)
-    return toErrorResponse(error, 'Failed to fetch episodes')
+    console.error("Error fetching episodes:", error);
+    return createErrorResponse(error, "Failed to fetch episodes");
   }
 }
 
 export async function POST(
   request: NextRequest,
-  ctx: { params: { jobId: string } | Promise<{ jobId: string }> },
+  ctx: { params: { jobId: string } | Promise<{ jobId: string }> }
 ) {
   try {
-    const params = await ctx.params
+    const params = await ctx.params;
     // Validate jobId
-    if (!params?.jobId || params.jobId === 'undefined') {
-      throw new HttpError('Invalid jobId', 400)
+    if (!params?.jobId || params.jobId === "undefined") {
+      throw new ValidationError("Invalid jobId");
     }
 
-    const body = await request.json()
-    const validatedData = postRequestSchema.parse(body)
-    const { config, targetPages, minPages, maxPages } = validatedData
+    const body = await request.json();
+    const validatedData = postRequestSchema.parse(body);
+    const { config, targetPages, minPages, maxPages } = validatedData;
 
-    const dbService = new DatabaseService()
-    const processor = new JobNarrativeProcessor(dbService, config)
+    const dbService = new DatabaseService();
+    const processor = new JobNarrativeProcessor(dbService, config);
 
     // ジョブの存在確認
-    const job = await dbService.getJobWithProgress(params.jobId)
+    const job = await dbService.getJobWithProgress(params.jobId);
     if (!job) {
-      throw new HttpError('Job not found', 404)
+      throw new ApiError("Job not found", 404, "NOT_FOUND");
     }
 
     // エピソード分析がすでに完了している場合
     if (job.episodeCompleted) {
-      const episodes = await dbService.getEpisodesByJobId(params.jobId)
+      const episodes = await dbService.getEpisodesByJobId(params.jobId);
       return NextResponse.json({
-        message: 'Episode analysis already completed',
+        message: "Episode analysis already completed",
         jobId: params.jobId,
-        status: 'completed',
+        status: "completed",
         totalEpisodes: episodes.length,
         episodes: episodes.map((ep) => ({
           episodeNumber: ep.episodeNumber,
@@ -112,7 +115,7 @@ export async function POST(
           estimatedPages: ep.estimatedPages,
           confidence: ep.confidence,
         })),
-      })
+      });
     }
 
     // 同期モードのモック生成は廃止。通常のバックグラウンド処理のみ。
@@ -125,20 +128,23 @@ export async function POST(
           totalChunks: progress.totalChunks,
           episodes: progress.episodes.length,
           currentStep: progress.currentStep,
-        })
+        });
       })
       .catch((error) => {
-        console.error(`Error processing episode analysis job ${params.jobId}:`, error)
-      })
+        console.error(
+          `Error processing episode analysis job ${params.jobId}:`,
+          error
+        );
+      });
 
     return NextResponse.json({
-      message: 'Episode analysis started',
+      message: "Episode analysis started",
       jobId: params.jobId,
-      status: 'processing',
+      status: "processing",
       config: config ?? { targetPages, minPages, maxPages },
-    })
+    });
   } catch (error) {
-    console.error('Error starting episode analysis:', error)
-    return toErrorResponse(error, 'Failed to start episode analysis')
+    console.error("Error starting episode analysis:", error);
+    return createErrorResponse(error, "Failed to start episode analysis");
   }
 }

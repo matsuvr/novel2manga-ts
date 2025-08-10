@@ -1,17 +1,16 @@
 import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
 import { getEpisodeConfig } from '@/config'
 import type { Episode } from '@/db'
+import type { RetryableError } from '@/errors/retryable-error'
+import { isRetryableError } from '@/errors/retryable-error'
+import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repository'
 import type { DatabaseService } from '@/services/database'
 import type { EpisodeBoundary } from '@/types/episode'
 import type { JobProgress } from '@/types/job'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { getChunkData } from '@/utils/storage'
-import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repository'
 
-export interface RetryableError extends Error {
-  retryable: boolean
-  retryAfter?: number
-}
+// RetryableError is provided by errors/retryable-error
 
 export interface NarrativeProcessorConfig {
   chunksPerBatch: number
@@ -312,28 +311,15 @@ export class JobNarrativeProcessor {
    * エラーがリトライ可能かチェック
    */
   private isRetryableError(error: unknown): boolean {
+    // 公式の型ガードで判定。上位互換で 'retryable' フラグも許容
+    if (isRetryableError(error)) return true
     if (error instanceof Error) {
-      // タイムアウトエラー
-      if (error.message.includes('timeout')) return true
-
-      // ネットワークエラー
-      if (error.message.includes('network') || error.message.includes('fetch')) return true
-
-      // レート制限エラー
-      if (error.message.includes('rate limit') || error.message.includes('429')) return true
-
-      // 一時的なサーバーエラー
-      if (
-        error.message.includes('500') ||
-        error.message.includes('502') ||
-        error.message.includes('503')
-      )
-        return true
-
-      // RetryableErrorインターフェースを実装している場合
-      if ('retryable' in error && (error as RetryableError).retryable) return true
+      const msg = error.message.toLowerCase()
+      if (msg.includes('timeout')) return true
+      if (msg.includes('network') || msg.includes('fetch')) return true
+      if (msg.includes('rate limit') || msg.includes('429')) return true
+      if (msg.includes('500') || msg.includes('502') || msg.includes('503')) return true
     }
-
     return false
   }
 

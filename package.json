@@ -29,7 +29,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "codemod:http-error:dry": "jscodeshift -d -p -t scripts/codemods/convert-http-error-to-api-error.js \"src/**/*.ts?(x)\"",
+    "codemod:http-error": "jscodeshift -t scripts/codemods/convert-http-error-to-api-error.js \"src/**/*.ts?(x)\""
   },
   "keywords": [],
   "author": "",
