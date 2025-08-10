@@ -143,9 +143,13 @@ export class LocalFileStorage implements Storage {
 
       try {
         const metadataContent = await fs.readFile(metadataPath, 'utf-8')
-        const metadataData = JSON.parse(metadataContent)
-        isBinary = metadataData.isBinary || false
-        metadata = metadataData
+        const metadataData = JSON.parse(metadataContent) as Record<string, unknown>
+        isBinary = metadataData.isBinary === true
+        const INTERNAL_METADATA_KEYS = ['isBinary', 'createdAt']
+        const userMetadata = Object.fromEntries(
+          Object.entries(metadataData).filter(([key]) => !INTERNAL_METADATA_KEYS.includes(key)),
+        ) as Record<string, string>
+        metadata = userMetadata
       } catch {
         // メタデータファイルがない場合は、ファイル内容から判定
         const fileContent = await fs.readFile(filePath, 'utf-8')
