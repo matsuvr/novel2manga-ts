@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { appConfig } from '@/config/app.config'
-import { DatabaseService } from '@/services/database'
+import { getDatabaseService } from '@/services/db-factory'
+import { validateJobId } from '@/utils/validators'
 import { ApiError, createErrorResponse, ValidationError } from '@/utils/api-error'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
 
@@ -10,14 +11,12 @@ export async function GET(
 ) {
   try {
     const params = await ctx.params
-    if (!params?.jobId || params.jobId === 'undefined') {
-      throw new ValidationError('Invalid jobId', 'jobId')
-    }
+    validateJobId(params?.jobId)
     const { searchParams } = new URL(request.url)
     const episodeParam = searchParams.get('episode')
     const pageParam = searchParams.get('page')
 
-    const dbService = new DatabaseService()
+    const dbService = getDatabaseService()
 
     // ジョブの存在確認
     const job = await dbService.getJob(params.jobId)
