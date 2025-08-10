@@ -116,14 +116,17 @@ module.exports = function transformer(file, api) {
     // code: options?.code
     const codeArg = optionsArg
       ? j.optionalMemberExpression(optionsArg, j.identifier('code'), false, true)
-      : j.identifier('undefined')
+      : null
 
     // details: options?.details
     const detailsArg = optionsArg
       ? j.optionalMemberExpression(optionsArg, j.identifier('details'), false, true)
-      : j.identifier('undefined')
+      : null
 
-    const finalArgs = [msgArg || j.literal('Error'), statusExpr, codeArg, detailsArg]
+    // Only include codeArg and detailsArg if they are present
+    const finalArgs = [msgArg || j.literal('Error'), statusExpr]
+    if (codeArg) finalArgs.push(codeArg)
+    if (detailsArg) finalArgs.push(detailsArg)
     return finalArgs
   }
 
