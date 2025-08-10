@@ -10,7 +10,7 @@ const analyzeChunkRequestSchema = z.object({
   chunkIndex: z.number(),
 })
 
-// 5要素の出力スキーマ
+// 6要素の出力スキーマ: summary, characters, scenes, dialogues, highlights, situations
 const textAnalysisOutputSchema = z.object({
   summary: z.string().describe('このチャンクの内容要約（100-200文字）'),
   characters: z.array(
