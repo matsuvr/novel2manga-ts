@@ -1,4 +1,4 @@
-import type { NewOutput, Output } from '@/db'
+import type { NewOutput } from '@/db'
 
 /**
  * Database port for Output entity.

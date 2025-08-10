@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST } from '@/app/api/analyze/route'
 import { DatabaseService } from '@/services/database'
+import { __resetDatabaseServiceForTest } from '@/services/db-factory'
 import { StorageFactory } from '@/utils/storage'
 
 // モック設定
@@ -112,6 +113,7 @@ describe('/api/analyze', () => {
   let mockAnalysisStorage: any
 
   beforeEach(async () => {
+    __resetDatabaseServiceForTest()
     vi.clearAllMocks()
     testNovelId = 'test-novel-id'
 
@@ -164,6 +166,7 @@ describe('/api/analyze', () => {
   })
 
   afterEach(async () => {
+    __resetDatabaseServiceForTest()
     // テストデータのクリーンアップは統合テストで実施
   })
 

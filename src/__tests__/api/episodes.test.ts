@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GET, POST } from '@/app/api/jobs/[jobId]/episodes/route'
 import { DatabaseService } from '@/services/database'
+import { __resetDatabaseServiceForTest } from '@/services/db-factory'
 
 // モック設定
 vi.mock('@/utils/storage', () => ({
@@ -31,6 +32,7 @@ describe('/api/jobs/[jobId]/episodes', () => {
   let mockDbService: any
 
   beforeEach(async () => {
+    __resetDatabaseServiceForTest()
     vi.clearAllMocks()
 
     mockDbService = {
@@ -45,6 +47,7 @@ describe('/api/jobs/[jobId]/episodes', () => {
   })
 
   afterEach(async () => {
+    __resetDatabaseServiceForTest()
     // テスト用データのクリーンアップは省略（統合テストで実施）
   })
 

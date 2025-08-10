@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GET } from '@/app/api/jobs/[jobId]/status/route'
+import { __resetDatabaseServiceForTest } from '@/services/db-factory'
 import { DatabaseService } from '@/services/database'
 
 // Database と Storage のモック
@@ -20,6 +21,7 @@ describe('/api/jobs/[jobId]/status', () => {
   let mockDbService: any
 
   beforeEach(() => {
+  __resetDatabaseServiceForTest()
     vi.clearAllMocks()
 
     mockDbService = {
@@ -30,7 +32,7 @@ describe('/api/jobs/[jobId]/status', () => {
   })
 
   afterEach(() => {
-    // no-op
+  __resetDatabaseServiceForTest()
   })
 
   it('正常系: 既存ジョブのステータスを返す(200)', async () => {
