@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import type { NextRequest } from 'next/server'
-import { DatabaseService } from '@/services/database'
+import { getDatabaseService } from '@/services/db-factory'
+import { validateJobId } from '@/utils/validators'
 import { handleApiError, successResponse, validationError } from '@/utils/api-error'
 
 interface ShareRequest {
@@ -23,9 +24,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     const body = (await request.json()) as Partial<ShareRequest>
 
     // バリデーション
-    if (!body.jobId) {
-      return validationError('jobIdが必要です')
-    }
+  if (!body.jobId) return validationError('jobIdが必要です')
+  validateJobId(body.jobId)
 
     const expiresIn = body.expiresIn || 72 // デフォルト72時間
 
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     // データベースサービスの初期化
-    const dbService = new DatabaseService()
+  const dbService = getDatabaseService()
 
     // ジョブの存在確認
     const job = await dbService.getJob(body.jobId)

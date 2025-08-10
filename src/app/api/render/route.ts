@@ -1,11 +1,13 @@
 import type { NextRequest } from 'next/server'
-import { parse as parseYaml } from 'yaml'
+import { load as yamlLoad } from 'js-yaml'
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
-import { DatabaseService } from '@/services/database'
+import { getDatabaseService } from '@/services/db-factory'
 import type { MangaLayout } from '@/types/panel-layout'
 import { handleApiError, successResponse, validationError } from '@/utils/api-error'
 import { StorageFactory } from '@/utils/storage'
+import { validateJobId } from '@/utils/validators'
+import { isMangaLayout } from '@/utils/type-guards'
 
 interface RenderRequest {
   jobId: string
@@ -19,7 +21,8 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as Partial<RenderRequest>
 
     // 入力バリデーション
-    if (!body.jobId) return validationError('jobIdが必要です')
+  if (!body.jobId) return validationError('jobIdが必要です')
+  validateJobId(body.jobId)
     if (typeof body.episodeNumber !== 'number' || body.episodeNumber < 1)
       return validationError('有効なepisodeNumberが必要です')
     if (typeof body.pageNumber !== 'number' || body.pageNumber < 1)
@@ -29,7 +32,9 @@ export async function POST(request: NextRequest) {
     // YAMLパース
     let mangaLayout: MangaLayout
     try {
-      mangaLayout = parseYaml(body.layoutYaml) as MangaLayout
+      const parsed = yamlLoad(body.layoutYaml)
+      if (!isMangaLayout(parsed)) return validationError('無効なYAML形式です')
+      mangaLayout = parsed
     } catch {
       return validationError('無効なYAML形式です')
     }
@@ -40,7 +45,7 @@ export async function POST(request: NextRequest) {
     if (!targetPage) return validationError(`ページ ${body.pageNumber} が見つかりません`)
 
     // DBチェック
-    const dbService = new DatabaseService()
+  const dbService = getDatabaseService()
     const job = await dbService.getJob(body.jobId)
     if (!job) return validationError('指定されたジョブが見つかりません')
     const episodes = await dbService.getEpisodesByJobId(body.jobId)

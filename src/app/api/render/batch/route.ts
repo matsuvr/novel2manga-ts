@@ -1,11 +1,13 @@
 import type { NextRequest } from 'next/server'
-import { parse as parseYaml } from 'yaml'
+import { load as yamlLoad } from 'js-yaml'
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
-import { DatabaseService } from '@/services/database'
+import { getDatabaseService } from '@/services/db-factory'
 import type { MangaLayout } from '@/types/panel-layout'
 import { handleApiError, successResponse, validationError } from '@/utils/api-error'
 import { StorageFactory } from '@/utils/storage'
+import { validateJobId } from '@/utils/validators'
+import { isMangaLayout } from '@/utils/type-guards'
 
 interface BatchRenderRequest {
   jobId: string
@@ -45,9 +47,8 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as Partial<BatchRenderRequest>
 
     // バリデーション
-    if (!body.jobId) {
-      return validationError('jobIdが必要です')
-    }
+  if (!body.jobId) return validationError('jobIdが必要です')
+  validateJobId(body.jobId)
 
     if (typeof body.episodeNumber !== 'number' || body.episodeNumber < 1) {
       return validationError('有効なepisodeNumberが必要です')
@@ -66,7 +67,9 @@ export async function POST(request: NextRequest) {
     // YAMLをパース
     let mangaLayout: MangaLayout
     try {
-      mangaLayout = parseYaml(validatedBody.layoutYaml) as MangaLayout
+      const parsed = yamlLoad(validatedBody.layoutYaml)
+      if (!isMangaLayout(parsed)) return validationError('無効なYAML形式です')
+      mangaLayout = parsed
     } catch (_error) {
       return validationError('無効なYAML形式です')
     }
@@ -83,7 +86,7 @@ export async function POST(request: NextRequest) {
     }
 
     // データベースサービスの初期化
-    const dbService = new DatabaseService()
+  const dbService = getDatabaseService()
 
     // ジョブの存在確認（メソッドがある場合のみチェック）
     const job = await dbService.getJob(validatedBody.jobId)
