@@ -1,5 +1,9 @@
 import type { NewNovel, Novel } from '@/db'
 
+/**
+ * Database port for Novel entity.
+ * ensureNovel should insert-if-not-exists without mutating existing rows.
+ */
 export interface NovelDbPort {
   getNovel(id: string): Promise<Novel | null>
   getAllNovels(): Promise<Novel[]>

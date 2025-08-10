@@ -1,4 +1,5 @@
 import JSZip from 'jszip'
+import { randomUUID } from 'node:crypto'
 import type { NextRequest } from 'next/server'
 import PDFDocument from 'pdfkit'
 import { load as yamlLoad } from 'js-yaml'
@@ -87,8 +88,8 @@ export async function POST(request: NextRequest): Promise<Response> {
         return validationError('サポートされていないフォーマットです')
     }
 
-    // 成果物テーブルに記録
-    const outputId = `${body.jobId}-${body.format}-${Date.now()}`
+  // 成果物テーブルに記録（衝突回避のためUUIDを使用）
+  const outputId = `out_${randomUUID()}`
   await outputRepo.create({
       id: outputId,
       novelId: job.novelId,

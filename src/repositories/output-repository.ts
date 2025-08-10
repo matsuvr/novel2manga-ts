@@ -1,5 +1,9 @@
 import type { NewOutput, Output } from '@/db'
 
+/**
+ * Database port for Output entity.
+ * Implementations should persist a final artifact record and return its id.
+ */
 export interface OutputDbPort {
   createOutput(payload: Omit<NewOutput, 'createdAt'>): Promise<string>
 }
