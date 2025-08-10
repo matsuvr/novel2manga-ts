@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { appConfig } from '@/config/app.config'
 import { getDatabaseService } from '@/services/db-factory'
+import { EpisodeRepository } from '@/repositories/episode-repository'
 import { validateJobId } from '@/utils/validators'
 import { ApiError, createErrorResponse, ValidationError } from '@/utils/api-error'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
@@ -16,7 +17,8 @@ export async function GET(
     const episodeParam = searchParams.get('episode')
     const pageParam = searchParams.get('page')
 
-    const dbService = getDatabaseService()
+  const dbService = getDatabaseService()
+  const episodeRepo = new EpisodeRepository(dbService)
 
     // ジョブの存在確認
     const job = await dbService.getJob(params.jobId)
@@ -43,7 +45,7 @@ export async function GET(
     }
 
     // エピソード一覧を取得
-    const episodes = await dbService.getEpisodesByJobId(params.jobId)
+  const episodes = await episodeRepo.getByJobId(params.jobId)
     if (episodes.length === 0) {
       return NextResponse.json({
         jobId: params.jobId,

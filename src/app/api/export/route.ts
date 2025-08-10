@@ -1,9 +1,12 @@
 import JSZip from 'jszip'
+import { randomUUID } from 'node:crypto'
 import type { NextRequest } from 'next/server'
 import PDFDocument from 'pdfkit'
 import { load as yamlLoad } from 'js-yaml'
 import type { Episode } from '@/db'
 import { getDatabaseService } from '@/services/db-factory'
+import { EpisodeRepository } from '@/repositories/episode-repository'
+import { OutputRepository } from '@/repositories/output-repository'
 import { validateJobId } from '@/utils/validators'
 import type { MangaLayout } from '@/types/panel-layout'
 import { handleApiError, successResponse, validationError } from '@/utils/api-error'
@@ -39,7 +42,9 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     // データベースサービスの初期化
-    const dbService = getDatabaseService()
+  const dbService = getDatabaseService()
+  const episodeRepo = new EpisodeRepository(dbService)
+  const outputRepo = new OutputRepository(dbService)
 
     // ジョブの存在確認
     const job = await dbService.getJob(body.jobId)
@@ -48,7 +53,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     // エピソードの取得
-    const allEpisodes = await dbService.getEpisodesByJobId(body.jobId)
+  const allEpisodes = await episodeRepo.getByJobId(body.jobId)
 
     // エクスポート対象エピソードの決定
     let targetEpisodes = allEpisodes
@@ -83,9 +88,9 @@ export async function POST(request: NextRequest): Promise<Response> {
         return validationError('サポートされていないフォーマットです')
     }
 
-    // 成果物テーブルに記録
-    const outputId = `${body.jobId}-${body.format}-${Date.now()}`
-    await dbService.createOutput({
+  // 成果物テーブルに記録（衝突回避のためUUIDを使用）
+  const outputId = `out_${randomUUID()}`
+  await outputRepo.create({
       id: outputId,
       novelId: job.novelId,
       jobId: body.jobId,
