@@ -1,9 +1,10 @@
 import JSZip from 'jszip'
 import type { NextRequest } from 'next/server'
 import PDFDocument from 'pdfkit'
-import { parse as parseYaml } from 'yaml'
+import { load as yamlLoad } from 'js-yaml'
 import type { Episode } from '@/db'
-import { DatabaseService } from '@/services/database'
+import { getDatabaseService } from '@/services/db-factory'
+import { validateJobId } from '@/utils/validators'
 import type { MangaLayout } from '@/types/panel-layout'
 import { handleApiError, successResponse, validationError } from '@/utils/api-error'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
@@ -30,9 +31,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     const body = (await request.json()) as Partial<ExportRequest>
 
     // バリデーション
-    if (!body.jobId) {
-      return validationError('jobIdが必要です')
-    }
+    validateJobId(body.jobId)
 
     const validFormats = ['pdf', 'images_zip']
     if (!body.format || !validFormats.includes(body.format)) {
@@ -40,7 +39,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     // データベースサービスの初期化
-    const dbService = new DatabaseService()
+    const dbService = getDatabaseService()
 
     // ジョブの存在確認
     const job = await dbService.getJob(body.jobId)
@@ -118,6 +117,12 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 }
 
+function isMangaLayout(value: unknown): value is MangaLayout {
+  if (typeof value !== 'object' || value === null) return false
+  const v = value as { pages?: unknown }
+  return Array.isArray(v.pages)
+}
+
 async function exportToPDF(
   jobId: string,
   episodes: Episode[],
@@ -157,7 +162,12 @@ async function exportToPDF(
         console.warn(`レイアウトが見つかりません: ${layoutKey}`)
         continue
       }
-      mangaLayout = parseYaml(layoutData.text) as MangaLayout
+      const parsed = yamlLoad(layoutData.text)
+      if (!isMangaLayout(parsed)) {
+        console.warn(`レイアウト形式が不正です: ${layoutKey}`)
+        continue
+      }
+      mangaLayout = parsed
     } catch (error) {
       console.warn(`レイアウト解析エラー Episode ${episode.episodeNumber}:`, error)
       continue
@@ -255,7 +265,12 @@ async function exportToZIP(
       if (layoutData) {
         episodeFolder.file('layout.yaml', layoutData.text)
 
-        const mangaLayout = parseYaml(layoutData.text) as MangaLayout
+        const parsed = yamlLoad(layoutData.text)
+        if (!isMangaLayout(parsed)) {
+          console.warn(`レイアウト形式が不正です: ${layoutKey}`)
+          continue
+        }
+        const mangaLayout = parsed
 
         // ページ画像を追加
         if (mangaLayout.pages) {

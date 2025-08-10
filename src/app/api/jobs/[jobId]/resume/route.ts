@@ -1,14 +1,13 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import { DatabaseService } from '@/services/database'
+import { getDatabaseService } from '@/services/db-factory'
+import { validateJobId } from '@/utils/validators'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
-import { ApiError, createErrorResponse, ValidationError } from '@/utils/api-error'
+import { ApiError, createErrorResponse } from '@/utils/api-error'
 
 export async function POST(_request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
-    if (!params.jobId || params.jobId === 'undefined') {
-      throw new ValidationError('Invalid jobId')
-    }
-    const dbService = new DatabaseService()
+    validateJobId(params.jobId)
+    const dbService = getDatabaseService()
     const processor = new JobNarrativeProcessor(dbService)
 
     // ジョブが再開可能かチェック

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import { DatabaseService } from '@/services/database'
+import { getDatabaseService } from '@/services/db-factory'
+import { validateJobId } from '@/utils/validators'
 import {
   ApiError,
   createErrorResponse,
@@ -13,15 +14,13 @@ export async function GET(
 ) {
   try {
     const params = await ctx.params
-    // jobId validation
-    if (!params.jobId || params.jobId === 'undefined') {
-      throw new ValidationError('Invalid jobId')
-    }
+    // jobId validation (共通ユーティリティ)
+    validateJobId(params.jobId)
 
     console.log('[job-status] Fetching job status for:', params.jobId)
     const startTime = Date.now()
 
-    const dbService = new DatabaseService()
+    const dbService = getDatabaseService()
     const job = await dbService.getJobWithProgress(params.jobId)
 
     const duration = Date.now() - startTime
