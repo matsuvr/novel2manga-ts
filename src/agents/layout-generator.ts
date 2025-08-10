@@ -1,14 +1,9 @@
 import { Agent } from '@mastra/core'
 import { z } from 'zod'
 import { getLayoutGenerationConfig } from '@/config'
-import type {
-  EpisodeData,
-  LayoutGenerationConfig,
-  MangaLayout,
-  Page,
-  Panel,
-} from '@/types/panel-layout'
-import { layoutRules, selectLayoutTemplate } from '@/utils/layout-templates'
+import type { EpisodeData, LayoutGenerationConfig, MangaLayout, Panel } from '@/types/panel-layout'
+import { selectLayoutTemplate } from '@/utils/layout-templates'
+import { Page } from '@/domain/models/page'
 import { getLayoutGenerationLLM } from '@/utils/llm-factory'
 
 async function getLayoutModel() {
@@ -128,7 +123,7 @@ export class LayoutGeneratorAgent extends Agent {
     }
 
     // LLMの出力を実際のレイアウトに変換
-    const pages: Page[] = []
+    const pages: { page_number: number; panels: Panel[] }[] = []
 
     for (const pageData of llmResponse.object.pages) {
       const panelCount = pageData.panels.length
@@ -142,7 +137,8 @@ export class LayoutGeneratorAgent extends Agent {
       // テンプレートを選択
       const template = selectLayoutTemplate(panelCount, hasHighlight, isClimax, hasDialogue)
 
-      // パネルを生成
+      const page = new Page(pageData.pageNumber)
+
       type PanelData = {
         content: string
         dialogues?: { speaker: string; text: string }[]
@@ -150,46 +146,16 @@ export class LayoutGeneratorAgent extends Agent {
         importance: number
         suggestedSize: 'small' | 'medium' | 'large' | 'extra-large'
       }
-      const panels: Panel[] = pageData.panels.map((panelData: PanelData, index: number) => {
-        const templatePanel = template.panels[index] || template.panels[0]
 
-        // 重要度に応じてサイズを調整
-        let sizeMultiplier = 1.0
-        if (panelData.suggestedSize === 'extra-large') sizeMultiplier = 1.5
-        else if (panelData.suggestedSize === 'large') sizeMultiplier = 1.2
-        else if (panelData.suggestedSize === 'small') sizeMultiplier = 0.8
-
-        // サイズ調整（ページからはみ出さないように）
-        const adjustedSize = {
-          width: Math.min(templatePanel.size.width * sizeMultiplier, 1.0),
-          height: Math.min(templatePanel.size.height * sizeMultiplier, 1.0),
-        }
-
-        return {
-          id: index + 1,
-          position: templatePanel.position,
-          size: adjustedSize,
-          content: panelData.content,
-          dialogues: panelData.dialogues,
-          sourceChunkIndex: panelData.sourceChunkIndex,
-          importance: panelData.importance,
-        }
-      })
-
-      // レイアウトルールをチェック
-      if (layoutRules.forbidden.isEqualGrid(panels)) {
-        console.warn(`Page ${pageData.pageNumber} has equal grid layout, adjusting...`)
-        // サイズを微調整して均等分割を避ける
-        panels.forEach((panel, i) => {
-          const adjustment = 0.05 + i * 0.02
-          panel.size.width += i % 2 === 0 ? adjustment : -adjustment
-          panel.size.height += i % 2 === 1 ? adjustment : -adjustment
-        })
+      for (const panelData of pageData.panels as PanelData[]) {
+        page.addPanel(panelData, template)
       }
 
+      page.validateLayout()
+
       pages.push({
-        page_number: pageData.pageNumber,
-        panels,
+        page_number: page.pageNumber,
+        panels: page.getPanels().map((p) => p.toJSON()),
       })
     }
 
