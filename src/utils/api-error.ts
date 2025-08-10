@@ -269,7 +269,7 @@ export function createErrorResponse(
     return NextResponse.json(
       {
         success: false as const,
-        error: defaultMessage,
+        error: error.message && error.message.trim() !== "" ? error.message : defaultMessage,
         code: ERROR_CODES.INTERNAL_ERROR,
         details: error.message,
       },
