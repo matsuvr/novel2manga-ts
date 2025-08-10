@@ -8,6 +8,7 @@ import type { AnalyzeResponse } from '@/types/job'
 import { splitTextIntoChunks } from '@/utils/text-splitter'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { saveEpisodeBoundaries } from '@/utils/storage'
+import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repository'
 import { generateUUID } from '@/utils/uuid'
 
 // リクエストボディのスキーマ定義（互換のため、novelId か text のいずれかを許容）
@@ -316,7 +317,8 @@ export async function POST(request: NextRequest) {
         throw new Error('Failed to prepare narrative analysis input')
       }
 
-      const boundaries = await analyzeNarrativeArc(input)
+      const chunkRepository = new StorageChunkRepository()
+      const boundaries = await analyzeNarrativeArc(input, chunkRepository)
 
       if (boundaries.length > 0) {
         await saveEpisodeBoundaries(jobId, boundaries)

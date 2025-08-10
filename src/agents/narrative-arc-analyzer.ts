@@ -6,6 +6,7 @@ import { getEpisodeConfig, getNarrativeAnalysisConfig } from '@/config'
 import type { ChunkAnalysisResult } from '@/types/chunk'
 import type { EpisodeBoundary } from '@/types/episode'
 import { getNarrativeAnalysisLLM } from '@/utils/llm-factory'
+import type { IChunkRepository } from '@/domain/repositories/chunk-repository'
 
 const narrativeArcAnalyzer = new Agent({
   name: 'Narrative Arc Analyzer',
@@ -24,32 +25,35 @@ const narrativeArcAnalyzer = new Agent({
   },
 })
 
-export async function analyzeNarrativeArc(input: {
-  jobId: string
-  chunks: {
-    chunkIndex: number
-    text: string
-    analysis: {
-      summary: string
-      characters: { name: string; role: string }[]
-      dialogues: ChunkAnalysisResult['dialogues']
-      scenes: ChunkAnalysisResult['scenes']
-      highlights: {
-        text: string
-        importance: number
-        description: string
-        startIndex: number
-        endIndex: number
-      }[]
-    }
-  }[]
-  targetCharsPerEpisode: number
-  minCharsPerEpisode: number
-  maxCharsPerEpisode: number
-  startingEpisodeNumber?: number
-  isMiddleOfNovel: boolean
-  previousEpisodeEndText?: string
-}): Promise<EpisodeBoundary[]> {
+export async function analyzeNarrativeArc(
+  input: {
+    jobId: string
+    chunks: {
+      chunkIndex: number
+      text: string
+      analysis: {
+        summary: string
+        characters: { name: string; role: string }[]
+        dialogues: ChunkAnalysisResult['dialogues']
+        scenes: ChunkAnalysisResult['scenes']
+        highlights: {
+          text: string
+          importance: number
+          description: string
+          startIndex: number
+          endIndex: number
+        }[]
+      }
+    }[]
+    targetCharsPerEpisode: number
+    minCharsPerEpisode: number
+    maxCharsPerEpisode: number
+    startingEpisodeNumber?: number
+    isMiddleOfNovel: boolean
+    previousEpisodeEndText?: string
+  },
+  chunkRepository: IChunkRepository,
+): Promise<EpisodeBoundary[]> {
   console.log('analyzeNarrativeArc called with:', {
     chunks: input.chunks.length,
     targetChars: input.targetCharsPerEpisode,
@@ -71,27 +75,14 @@ export async function analyzeNarrativeArc(input: {
 
   // まず、チャンクの束を統合分析
   console.log('Performing bundle analysis first...')
-  console.log(`Loading analysis results for job ${input.jobId}...`)
 
-  const { StorageFactory } = await import('@/utils/storage')
-
-  async function getChunkAnalysis(jobId: string, chunkIndex: number) {
-    const analysisStorage = await StorageFactory.getAnalysisStorage()
-    const analysisPath = `analyses/${jobId}/chunk_${chunkIndex}.json`
-    const existingAnalysis = await analysisStorage.get(analysisPath)
-
-    if (existingAnalysis) {
-      const analysisData = JSON.parse(existingAnalysis.text)
-      return analysisData.analysis
-    }
-
-    return null
-  }
+  const chunkIndices = input.chunks.map((c) => c.chunkIndex)
+  const analyzedChunks = await chunkRepository.getAnalyzedChunks(input.jobId, chunkIndices)
+  const analysisMap = new Map(analyzedChunks.map((c) => [c.chunkIndex, c.analysis]))
 
   const chunksWithAnalyses = []
   for (const chunk of input.chunks) {
-    console.log(`Loading analysis for chunk ${chunk.chunkIndex}...`)
-    const analysisResult = await getChunkAnalysis(input.jobId, chunk.chunkIndex)
+    const analysisResult = chunk.analysis || analysisMap.get(chunk.chunkIndex)
 
     if (!analysisResult) {
       const error = `Chunk analysis not found for job ${input.jobId}, chunk ${chunk.chunkIndex}`
@@ -105,7 +96,7 @@ export async function analyzeNarrativeArc(input: {
     })
   }
 
-  console.log(`Successfully loaded ${chunksWithAnalyses.length} chunk analyses`)
+  console.log(`Successfully prepared ${chunksWithAnalyses.length} chunk analyses`)
 
   let bundleAnalysis: BundleAnalysisResult
   try {
