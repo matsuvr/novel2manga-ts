@@ -87,3 +87,6 @@ tmp_test/
 # log files
 *.log
 logs/
+
+# Test artifacts
+test-results/
