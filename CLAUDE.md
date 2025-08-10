@@ -8,7 +8,6 @@ Non‑negotiables (do these every time):
 - TypeScript: The any type is forbidden. Use precise types (unknown + type guards, generics, discriminated unions). No ts-ignore/ts-expect-error unless absolutely necessary and justified with a comment and a tracking task.
 - Lint/Format: Resolve all linter errors and warnings. Do not merge with outstanding issues. Do not disable rules to “make it pass” unless there is a justified, documented rationale.
 - DRY: Eliminate duplication. Extract shared logic into reusable modules/functions. No copy-paste forks of similar code paths.
-- LLM Configuration: NEVER modify LLM model configurations without explicit user instruction. ALL LLM settings must be centralized in src/config/app.config.ts ONLY. GPT-4 series models are DEPRECATED and MUST NOT be used due to higher costs and lower performance. Always use the exact model specified by the user.
 - SOLID: Follow Single-responsibility, Open/closed, Liskov, Interface segregation, Dependency inversion. Prefer composition over inheritance and stable, testable boundaries.
 
 Project conventions you must follow:
@@ -47,5 +46,3 @@ PR checklist (copy into your PR and tick all):
 
 If any item cannot be satisfied, stop and resolve it first. Do not proceed with implementation or merging until all conditions above are met.
 ```
-
-- テストを通すために処理のスキップをするのは禁止。問題を特定し解消するのがテストの目的。また、テストを通す目的のためだけにアプリ全体の設定を変更しようとしたりするのは絶対に絶対に厳禁。強い言葉で英語でルールに書いておいてください

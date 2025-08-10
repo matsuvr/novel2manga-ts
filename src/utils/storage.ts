@@ -850,7 +850,12 @@ async function resolveStorage(
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, localDir));
   }
 
-  const bucket = (globalThis as any)[binding] as R2Bucket | undefined;
+  const globalObj = globalThis as unknown as Record<string, unknown>;
+  const candidate = globalObj[binding];
+  const bucket =
+    candidate && typeof candidate === "object"
+      ? (candidate as R2Bucket)
+      : undefined;
   if (!bucket) {
     throw new Error(errorMessage);
   }

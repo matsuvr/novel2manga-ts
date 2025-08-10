@@ -2,16 +2,13 @@
 // Do not import in new code. Use createErrorResponse and ApiError from ./api-error instead.
 // This shim will be removed once all downstream consumers are confirmed.
 
-import { createErrorResponse, ValidationError } from "./api-error";
+import { createErrorResponse, ValidationError } from './api-error'
 
 /**
  * @deprecated Use createErrorResponse(error, defaultMessage) directly.
  */
-export function toErrorResponse(
-  error: unknown,
-  fallbackMessage = "Internal Server Error"
-) {
-  return createErrorResponse(error, fallbackMessage);
+export function toErrorResponse(error: unknown, fallbackMessage = 'Internal Server Error') {
+  return createErrorResponse(error, fallbackMessage)
 }
 
 /**
@@ -19,6 +16,6 @@ export function toErrorResponse(
  */
 export function assertParam(condition: unknown, message: string) {
   if (!condition) {
-    throw new ValidationError(message);
+    throw new ValidationError(message)
   }
 }

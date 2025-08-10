@@ -1,6 +1,6 @@
-import { Panel, type PanelInit } from './panel'
 import type { LayoutTemplate } from '@/types/panel-layout'
 import { layoutRules } from '@/utils/layout-templates'
+import { Panel, type PanelInit } from './panel'
 
 export class Page {
   public readonly pageNumber: number
