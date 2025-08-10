@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { RetryableError } from '@/errors/retryable-error'
 
 // ========================================
 // Error Classes (設計書対応)
@@ -13,20 +14,6 @@ export class ApiError extends Error {
   ) {
     super(message)
     this.name = 'ApiError'
-  }
-}
-
-// リトライ可能エラー
-export class RetryableError extends ApiError {
-  constructor(
-    message: string,
-    statusCode: number = 503,
-    public retryAfter?: number,
-    code?: string,
-    details?: Record<string, unknown>,
-  ) {
-    super(message, statusCode, code, details)
-    this.name = 'RetryableError'
   }
 }
 
@@ -64,14 +51,6 @@ export class AuthenticationError extends ApiError {
   constructor(message: string = '認証が必要です') {
     super(message, 401, 'AUTH_REQUIRED')
     this.name = 'AuthenticationError'
-  }
-}
-
-// レート制限エラー
-export class RateLimitError extends RetryableError {
-  constructor(retryAfter: number = 60) {
-    super('レート制限に達しました', 429, retryAfter, 'RATE_LIMIT')
-    this.name = 'RateLimitError'
   }
 }
 

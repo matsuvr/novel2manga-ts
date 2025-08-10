@@ -37,11 +37,6 @@ export interface EpisodeBoundary {
   estimatedPages: number
 }
 
-export interface RetryableError extends Error {
-  retryable: boolean
-  retryAfter?: number
-}
-
 export interface AnalyzeRequest {
   text: string
 }

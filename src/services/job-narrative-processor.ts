@@ -6,11 +6,7 @@ import type { EpisodeBoundary } from '@/types/episode'
 import type { JobProgress } from '@/types/job'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { getChunkData } from '@/utils/storage'
-
-export interface RetryableError extends Error {
-  retryable: boolean
-  retryAfter?: number
-}
+import { RetryableError } from '@/errors/retryable-error'
 
 export interface NarrativeProcessorConfig {
   chunksPerBatch: number
@@ -309,44 +305,16 @@ export class JobNarrativeProcessor {
    * エラーがリトライ可能かチェック
    */
   private isRetryableError(error: unknown): boolean {
-    if (error instanceof Error) {
-      // タイムアウトエラー
-      if (error.message.includes('timeout')) return true
-
-      // ネットワークエラー
-      if (error.message.includes('network') || error.message.includes('fetch')) return true
-
-      // レート制限エラー
-      if (error.message.includes('rate limit') || error.message.includes('429')) return true
-
-      // 一時的なサーバーエラー
-      if (
-        error.message.includes('500') ||
-        error.message.includes('502') ||
-        error.message.includes('503')
-      )
-        return true
-
-      // RetryableErrorインターフェースを実装している場合
-      if ('retryable' in error && (error as RetryableError).retryable) return true
-    }
-
-    return false
+    return error instanceof RetryableError && error.retryable
   }
 
   /**
    * リトライ遅延時間を計算
    */
   private getRetryDelay(error: unknown, attempt: number): number {
-    // RetryableErrorでretryAfterが指定されている場合
-    if (error && typeof error === 'object' && 'retryAfter' in error) {
-      const retryableError = error as RetryableError
-      if (retryableError.retryAfter) {
-        return retryableError.retryAfter
-      }
+    if (error instanceof RetryableError && error.retryAfter) {
+      return error.retryAfter
     }
-
-    // 指数バックオフ
     return this.config.retryDelay * 2 ** attempt
   }
 }
