@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
         console.warn('[/api/analyze] ensureNovel failed (non-fatal):', e)
       }
     } else if (inputNovelId) {
-      // novelId が指定された場合はまずDB存在確認 → 次にストレージ確認（テスト期待に合わせた順序）
+      // novelId が指定された場合は、まずDBに存在するか確認し、次にストレージからテキストを取得する
       const existingNovel = await dbService.getNovel(inputNovelId)
       if (!existingNovel) {
         return NextResponse.json(
