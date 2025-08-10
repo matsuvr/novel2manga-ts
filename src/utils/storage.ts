@@ -5,7 +5,7 @@ import { open } from "sqlite";
 import sqlite3 from "sqlite3";
 import { isDevelopment } from "@/config";
 
-// Cloudflare Workers のグローバルバインディング型は src/types/cloudflare.d.ts に集約
+// Cloudflare Workers のグローバルバインディング型は型定義ファイルに集約されています
 
 // ========================================
 // Storage Interfaces (設計書対応)
