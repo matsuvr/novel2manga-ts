@@ -137,9 +137,6 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
   return providers[provider]
 }
 
-export function getUseCaseParams(
-  useCase: keyof typeof useCaseParams,
-): UseCaseParams {
+export function getUseCaseParams(useCase: keyof typeof useCaseParams): UseCaseParams {
   return useCaseParams[useCase]
 }
-
