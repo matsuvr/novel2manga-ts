@@ -86,16 +86,18 @@ export async function POST(
 
     const dbService = getDatabaseService()
     const processor = new JobNarrativeProcessor(dbService, config)
+    const jobRepo = new JobRepository(dbService)
+    const episodeRepo = new EpisodeRepository(dbService)
 
     // ジョブの存在確認
-    const job = await dbService.getJobWithProgress(params.jobId)
+    const job = await jobRepo.getJobWithProgress(params.jobId)
     if (!job) {
       throw new ApiError('Job not found', 404, 'NOT_FOUND')
     }
 
     // エピソード分析がすでに完了している場合
     if (job.episodeCompleted) {
-      const episodes = await dbService.getEpisodesByJobId(params.jobId)
+      const episodes = await episodeRepo.getByJobId(params.jobId)
       return NextResponse.json({
         message: 'Episode analysis already completed',
         jobId: params.jobId,
