@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import type { NextRequest } from 'next/server'
 import { getDatabaseService } from '@/services/db-factory'
 import { EpisodeRepository } from '@/repositories/episode-repository'
+import { JobRepository } from '@/repositories/job-repository'
 import { validateJobId } from '@/utils/validators'
 import { handleApiError, successResponse, validationError } from '@/utils/api-error'
 
@@ -25,8 +26,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     const body = (await request.json()) as Partial<ShareRequest>
 
     // バリデーション
-  if (!body.jobId) return validationError('jobIdが必要です')
-  validateJobId(body.jobId)
+    if (!body.jobId) return validationError('jobIdが必要です')
+    validateJobId(body.jobId)
 
     const expiresIn = body.expiresIn || 72 // デフォルト72時間
 
@@ -36,18 +37,19 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     // データベースサービスの初期化
-  const dbService = getDatabaseService()
+    const dbService = getDatabaseService()
     const episodeRepo = new EpisodeRepository(dbService)
+    const jobRepo = new JobRepository(dbService)
 
     // ジョブの存在確認
-    const job = await dbService.getJob(body.jobId)
+    const job = await jobRepo.getJob(body.jobId)
     if (!job) {
       return validationError('指定されたジョブが見つかりません')
     }
 
     // エピソード指定がある場合は存在確認
     if (body.episodeNumbers && body.episodeNumbers.length > 0) {
-  const episodes = await episodeRepo.getByJobId(body.jobId)
+      const episodes = await episodeRepo.getByJobId(body.jobId)
       const existingEpisodeNumbers = new Set(episodes.map((e) => e.episodeNumber))
 
       const nonExistentEpisodes = body.episodeNumbers.filter(

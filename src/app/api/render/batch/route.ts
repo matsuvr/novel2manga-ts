@@ -48,8 +48,8 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as Partial<BatchRenderRequest>
 
     // バリデーション
-  if (!body.jobId) return validationError('jobIdが必要です')
-  validateJobId(body.jobId)
+    if (!body.jobId) return validationError('jobIdが必要です')
+    validateJobId(body.jobId)
 
     if (typeof body.episodeNumber !== 'number' || body.episodeNumber < 1) {
       return validationError('有効なepisodeNumberが必要です')
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     }
 
     // データベースサービスの初期化
-  const dbService = getDatabaseService()
+    const dbService = getDatabaseService()
     const episodeRepo = new EpisodeRepository(dbService)
 
     // ジョブの存在確認（メソッドがある場合のみチェック）
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     }
 
     // エピソードの存在確認（メソッドがある場合のみチェック）
-  const episodes = await episodeRepo.getByJobId(validatedBody.jobId)
+    const episodes = await episodeRepo.getByJobId(validatedBody.jobId)
     const targetEpisode = episodes.find((e) => e.episodeNumber === validatedBody.episodeNumber)
     if (!targetEpisode) {
       return validationError(`エピソード ${validatedBody.episodeNumber} が見つかりません`)
