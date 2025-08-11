@@ -107,6 +107,9 @@
     "wrangler": "^4.26.0"
   },
   "lint-staged": {
+    "biome.json": [
+      "biome format --write"
+    ],
     "**/*.{ts,tsx,js,jsx}": [
       "biome check --write --no-errors-on-unmatched"
     ],

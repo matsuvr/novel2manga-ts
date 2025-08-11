@@ -1,0 +1,2 @@
+# Exclude Biome config to avoid conflicts with Biome's own formatter
+biome.json
