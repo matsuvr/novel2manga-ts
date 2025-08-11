@@ -13,11 +13,8 @@ export default defineConfig({
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
-      // 単体テストのみ実行するために、統合/E2E/重い依存を持つテストを除外
-      '**/tests/**', // tests/integration/**, tests/e2e/** をまとめて除外
-      '**/__test__/integration/**',
-      '**/src/__tests__/integration/**',
-      '**/tests/e2e/**',
+      // 単体テストのみ実行するために、tests/ 配下（統合/E2E）と一時テストを除外
+      '**/tests/**', // tests/integration/**（E2E は tests/integration/e2e/）をまとめて除外
       // API の重いルート依存テスト（Next サーバやCanvas等が必要）
       '**/src/__tests__/api/render*.test.ts',
       '**/src/__tests__/api/render-complete.test.ts',

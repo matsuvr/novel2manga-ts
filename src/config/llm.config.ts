@@ -25,13 +25,13 @@ export interface UseCaseParams {
 export function getDefaultProvider(): LLMProvider {
   const env = process.env.APP_LLM_DEFAULT_PROVIDER as LLMProvider | undefined
   const allowed: LLMProvider[] = ['openai', 'gemini', 'groq', 'claude', 'openrouter']
-  return env && allowed.includes(env) ? env : 'openai'
+  return env && allowed.includes(env) ? env : 'groq'
 }
 
 // Provider fallback chain (first item is primary fallback)
 export function getFallbackChain(): LLMProvider[] {
   // Keeps previously used order with OpenRouter first
-  const chain: LLMProvider[] = ['openrouter', 'gemini', 'claude']
+  const chain: LLMProvider[] = ['groq', 'gemini', 'openai']
   return chain
 }
 
@@ -58,7 +58,7 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
   },
   groq: {
     apiKey: process.env.GROQ_API_KEY,
-    model: 'compound-beta',
+    model: 'openai/gpt-oss-120b',
     maxTokens: 8192,
     timeout: 30_000,
   },
@@ -84,7 +84,7 @@ export const useCaseParams: Record<
       openai: 'gpt-5-mini',
       claude: 'claude-sonnet-4-20250514',
       gemini: 'gemini-2.5-flash-lite',
-      groq: 'compound-beta',
+      groq: 'openai/gpt-oss-120b',
       // Cerebras対応の場合はファクトリ側で自動変換
       openrouter: 'openai/gpt-oss-120b',
     },
@@ -96,7 +96,7 @@ export const useCaseParams: Record<
       openai: 'gpt-5-mini',
       claude: 'claude-sonnet-4-20250514',
       gemini: 'gemini-2.5-flash',
-      groq: 'compound-beta',
+      groq: 'openai/gpt-oss-120b',
       openrouter: 'openai/gpt-oss-120b',
     },
   },
@@ -107,7 +107,7 @@ export const useCaseParams: Record<
       openai: 'gpt-5-mini',
       claude: 'claude-sonnet-4-20250514',
       gemini: 'gemini-2.5-flash',
-      groq: 'compound-beta',
+      groq: 'openai/gpt-oss-120b',
       openrouter: 'openai/gpt-oss-120b',
     },
   },
@@ -118,7 +118,7 @@ export const useCaseParams: Record<
       openai: 'gpt-5-mini',
       claude: 'claude-sonnet-4-20250514',
       gemini: 'gemini-2.5-flash',
-      groq: 'compound-beta',
+      groq: 'openai/gpt-oss-120b',
       openrouter: 'openai/gpt-oss-120b',
     },
   },
