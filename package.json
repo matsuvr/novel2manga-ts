@@ -42,6 +42,7 @@
   "license": "ISC",
   "description": "",
   "type": "module",
+  "repository": "matsuvrprojects/novel2manga-mastra",
   "engines": {
     "node": ">=20.9.0"
   },
