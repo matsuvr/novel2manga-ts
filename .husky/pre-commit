@@ -10,12 +10,12 @@ delete_nul_files() {
     echo "Removing empty file: $file"
     rm -f "$file" 2>/dev/null
   done
-  
+
   # Direct removal for common locations
   rm -f nul 2>/dev/null
   rm -f NUL 2>/dev/null
   rm -f null 2>/dev/null
-  
+
   # Windows-specific deletion using cmd
   if command -v cmd.exe >/dev/null 2>&1; then
     cmd.exe /c "del /Q nul 2>NUL" 2>/dev/null
@@ -26,5 +26,9 @@ delete_nul_files() {
 
 delete_nul_files
 
-# Run tests (default husky pre-commit)
+# Run linters/formatters on staged files, then tests
+echo "Running lint-staged..."
+npx lint-staged
+
+echo "Running tests..."
 npm test

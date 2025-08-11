@@ -2,8 +2,8 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { type NextRequest, NextResponse } from 'next/server'
 import type { Job } from '@/db'
-import { getDatabaseService } from '@/services/db-factory'
 import { JobRepository } from '@/repositories/job-repository'
+import { getDatabaseService } from '@/services/db-factory'
 import { ApiError, createErrorResponse, ValidationError } from '@/utils/api-error'
 
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {

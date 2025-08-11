@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GET } from '@/app/api/jobs/[jobId]/status/route'
-import { __resetDatabaseServiceForTest } from '@/services/db-factory'
 import { DatabaseService } from '@/services/database'
+import { __resetDatabaseServiceForTest } from '@/services/db-factory'
 
 // Database と Storage のモック
 vi.mock('@/utils/storage', () => ({

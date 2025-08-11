@@ -19,6 +19,8 @@
       "**/wrangler-*.log",
       "**/logs/**",
       "**/*.log",
+      "**/*.jsonc",
+      "**/tsconfig*.json",
       "**/test/**",
       "**/tests/**",
       "**/__tests__/**",
@@ -126,7 +128,18 @@
   },
   "overrides": [
     {
-      "includes": ["**/__tests__/**", "**/tests/**", "**/*.test.*", "**/*.spec.*", "**/.claude/**"],
+      "includes": ["**/*.jsonc", "**/tsconfig*.json"],
+      "linter": { "enabled": false },
+      "formatter": { "enabled": false }
+    },
+    {
+      "includes": [
+        "**/__tests__/**",
+        "**/tests/**",
+        "**/*.test.*",
+        "**/*.spec.*",
+        "**/.claude/**"
+      ],
       "linter": {
         "enabled": false
       },
