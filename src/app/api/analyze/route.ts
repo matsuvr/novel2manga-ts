@@ -64,8 +64,8 @@ export async function POST(request: NextRequest) {
 
     // StorageFactoryとDBを初期化
     const { StorageFactory } = await import('@/utils/storage')
-  const novelStorage = await StorageFactory.getNovelStorage()
-  const dbService = getDatabaseService()
+    const novelStorage = await StorageFactory.getNovelStorage()
+    const dbService = getDatabaseService()
 
     let novelId = inputNovelId
     let novelText: string

@@ -30,9 +30,14 @@ export class EpisodeRepository {
 
     if (!this.db.createEpisodes) {
       // Warn and no-op when write capability is unavailable
-      logError('EpisodeDbPort.createEpisodes is not implemented; bulkUpsert skipped', undefined, {
-        episodesCount: episodes.length,
-      }, 'warn')
+      logError(
+        'EpisodeDbPort.createEpisodes is not implemented; bulkUpsert skipped',
+        undefined,
+        {
+          episodesCount: episodes.length,
+        },
+        'warn',
+      )
       return
     }
 

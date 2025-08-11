@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { generateMangaLayout } from '@/agents/layout-generator'
 import { getDatabaseService } from '@/services/db-factory'
 import { EpisodeRepository } from '@/repositories/episode-repository'
+import { JobRepository } from '@/repositories/job-repository'
 import type { ChunkData, EpisodeData } from '@/types/panel-layout'
 import { ApiError, createErrorResponse } from '@/utils/api-error'
 import { getChunkData, StorageFactory } from '@/utils/storage'
@@ -36,16 +37,17 @@ export async function POST(request: NextRequest) {
     const validatedData = requestSchema.parse(body)
     const { jobId, episodeNumber, config } = validatedData
 
-  const dbService = getDatabaseService()
-  const episodeRepo = new EpisodeRepository(dbService)
+    const dbService = getDatabaseService()
+    const episodeRepo = new EpisodeRepository(dbService)
+    const jobRepo = new JobRepository(dbService)
 
     // ジョブとエピソード情報を取得
-    const job = await dbService.getJobWithProgress(jobId)
+    const job = await jobRepo.getJobWithProgress(jobId)
     if (!job) {
       throw new ApiError('Job not found', 404, 'NOT_FOUND')
     }
 
-  const episodes = await episodeRepo.getByJobId(jobId)
+    const episodes = await episodeRepo.getByJobId(jobId)
     const episode = episodes.find((ep) => ep.episodeNumber === episodeNumber)
     if (!episode) {
       throw new ApiError('Episode not found', 404, 'NOT_FOUND')

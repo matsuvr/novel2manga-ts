@@ -45,4 +45,9 @@ PR checklist (copy into your PR and tick all):
 - [ ] Updated: database\storage-structure.md
 
 If any item cannot be satisfied, stop and resolve it first. Do not proceed with implementation or merging until all conditions above are met.
+
+CLI tools policy
+- gh (GitHub CLI) is allowed for creating/updating branches and PRs, posting comments, and checking CI status.
+- rp (PR helper CLI) is allowed where available for PR management/automation.
+- When using these CLIs, document critical actions in the PR description or comments (e.g., links to comments or runs).
 ```
