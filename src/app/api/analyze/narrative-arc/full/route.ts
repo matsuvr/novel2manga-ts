@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { getDatabaseService } from '@/services/db-factory'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
 import { validateJobId } from '@/utils/validators'
+import { JobRepository } from '@/repositories/job-repository'
 
 const requestSchema = z.object({
   jobId: z.string(),
@@ -21,14 +22,15 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const validatedData = requestSchema.parse(body)
-  const { jobId, config } = validatedData
-  validateJobId(jobId)
+    const { jobId, config } = validatedData
+    validateJobId(jobId)
 
-  const dbService = getDatabaseService()
+    const dbService = getDatabaseService()
     const processor = new JobNarrativeProcessor(dbService, config)
+    const jobRepo = new JobRepository(dbService)
 
     // ジョブの存在確認
-    const job = await dbService.getJobWithProgress(jobId)
+    const job = await jobRepo.getJobWithProgress(jobId)
     if (!job) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }
