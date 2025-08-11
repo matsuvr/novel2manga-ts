@@ -5,6 +5,7 @@ import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
 import { getTextAnalysisConfig } from '@/config'
 import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repository'
 import { getDatabaseService } from '@/services/db-factory'
+import { JobRepository } from '@/repositories/job-repository'
 import type { AnalyzeResponse } from '@/types/job'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { saveEpisodeBoundaries } from '@/utils/storage'
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
     const { StorageFactory } = await import('@/utils/storage')
     const novelStorage = await StorageFactory.getNovelStorage()
     const dbService = getDatabaseService()
+    const jobRepo = new JobRepository(dbService)
 
     let novelId = inputNovelId
     let novelText: string
@@ -130,7 +132,7 @@ export async function POST(request: NextRequest) {
     if (!novelId) {
       return NextResponse.json({ error: 'novelId の解決に失敗しました' }, { status: 500 })
     }
-    await dbService.createJob(jobId, novelId, `Analysis Job for ${title || 'Novel'}`)
+    await jobRepo.createWithId(jobId, novelId, `Analysis Job for ${title || 'Novel'}`)
 
     // ジョブの総チャンク数を更新（初期化）
     await dbService.updateJobStep(jobId, 'initialized', 0, chunks.length)

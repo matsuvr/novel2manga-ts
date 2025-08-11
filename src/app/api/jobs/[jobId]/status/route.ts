@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { getDatabaseService } from '@/services/db-factory'
+import { JobRepository } from '@/repositories/job-repository'
 import { validateJobId } from '@/utils/validators'
 import {
   ApiError,
@@ -21,7 +22,8 @@ export async function GET(
     const startTime = Date.now()
 
     const dbService = getDatabaseService()
-    const job = await dbService.getJobWithProgress(params.jobId)
+    const jobRepo = new JobRepository(dbService)
+    const job = await jobRepo.getJobWithProgress(params.jobId)
 
     const duration = Date.now() - startTime
     console.log(`[job-status] Database query completed in ${duration}ms`)

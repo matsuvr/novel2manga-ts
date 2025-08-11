@@ -4,6 +4,7 @@ import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
 import { getDatabaseService } from '@/services/db-factory'
 import { EpisodeRepository } from '@/repositories/episode-repository'
+import { JobRepository } from '@/repositories/job-repository'
 import type { MangaLayout } from '@/types/panel-layout'
 import { handleApiError, successResponse, validationError } from '@/utils/api-error'
 import { StorageFactory } from '@/utils/storage'
@@ -89,9 +90,10 @@ export async function POST(request: NextRequest) {
     // データベースサービスの初期化
     const dbService = getDatabaseService()
     const episodeRepo = new EpisodeRepository(dbService)
+    const jobRepo = new JobRepository(dbService)
 
     // ジョブの存在確認（メソッドがある場合のみチェック）
-    const job = await dbService.getJob(validatedBody.jobId)
+    const job = await jobRepo.getJob(validatedBody.jobId)
     if (!job) {
       return validationError('指定されたジョブが見つかりません')
     }
