@@ -36,6 +36,10 @@
 - Do not commit secrets. Copy `.env.example` to `.env`/`.env.local`; keep `.env.test` for integration.
 - Verify Cloudflare bindings in `wrangler.toml` and regenerate environment types via `npm run cf-typegen` when bindings change.
 
+## CLI Tools
+- `gh` (GitHub CLI): create branches, push, open PRs from the terminal. Requires configured credentials and network access.
+- `rg` (ripgrep): fast recursive search for codebase auditing and refactors.
+
 ```instructions
 MANDATORY RULES FOR THIS REPOSITORY — READ BEFORE CODING
 
@@ -84,4 +88,3 @@ PR checklist (copy into your PR and tick all):
 
 If any item cannot be satisfied, stop and resolve it first. Do not proceed with implementation or merging until all conditions above are met.
 ```
-
