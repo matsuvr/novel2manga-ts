@@ -1,10 +1,10 @@
 import crypto from 'node:crypto'
 import type { NextRequest } from 'next/server'
-import { getDatabaseService } from '@/services/db-factory'
 import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
-import { validateJobId } from '@/utils/validators'
+import { getDatabaseService } from '@/services/db-factory'
 import { handleApiError, successResponse, validationError } from '@/utils/api-error'
+import { validateJobId } from '@/utils/validators'
 
 interface ShareRequest {
   jobId: string

@@ -27,14 +27,23 @@
           {
             "log": [
               "info",
-              [{ "elements": [], "content": "Expected an array, an object, or a literal here." }]
+              [
+                {
+                  "elements": [],
+                  "content": "Expected an array, an object, or a literal here."
+                }
+              ]
             ]
           },
           { "frame": { "path": null, "span": [0, 0], "sourceCode": "" } }
         ]
       },
       "verboseAdvices": { "advices": [] },
-      "location": { "path": { "file": "biome-report.json" }, "span": [0, 0], "sourceCode": "" },
+      "location": {
+        "path": { "file": "biome-report.json" },
+        "span": [0, 0],
+        "sourceCode": ""
+      },
       "tags": [],
       "source": null
     },
@@ -53,14 +62,23 @@
           {
             "log": [
               "info",
-              [{ "elements": [], "content": "Expected an array, an object, or a literal here." }]
+              [
+                {
+                  "elements": [],
+                  "content": "Expected an array, an object, or a literal here."
+                }
+              ]
             ]
           },
           { "frame": { "path": null, "span": [0, 0], "sourceCode": "" } }
         ]
       },
       "verboseAdvices": { "advices": [] },
-      "location": { "path": { "file": "biome-report.json" }, "span": [0, 0], "sourceCode": "" },
+      "location": {
+        "path": { "file": "biome-report.json" },
+        "span": [0, 0],
+        "sourceCode": ""
+      },
       "tags": [],
       "source": null
     },
@@ -76,7 +94,11 @@
       ],
       "advices": { "advices": [] },
       "verboseAdvices": { "advices": [] },
-      "location": { "path": { "file": "biome-report.json" }, "span": null, "sourceCode": null },
+      "location": {
+        "path": { "file": "biome-report.json" },
+        "span": null,
+        "sourceCode": null
+      },
       "tags": [],
       "source": null
     },
@@ -85,7 +107,10 @@
       "severity": "error",
       "description": "Formatter would have printed the following content:",
       "message": [
-        { "elements": [], "content": "Formatter would have printed the following content:" }
+        {
+          "elements": [],
+          "content": "Formatter would have printed the following content:"
+        }
       ],
       "advices": {
         "advices": [

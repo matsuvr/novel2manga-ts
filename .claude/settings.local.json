@@ -73,11 +73,6 @@
     ]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": [
-    "cloudflare",
-    "mastra",
-    "serena",
-    "deepwiki"
-  ],
+  "enabledMcpjsonServers": ["cloudflare", "mastra", "serena", "deepwiki"],
   "hooks": {}
 }

@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from 'vitest'
-import { NovelRepository, type NovelDbPort } from '@/repositories/novel-repository'
-import type { Novel, NewNovel } from '@/db'
+import { describe, expect, it, vi } from 'vitest'
+import type { NewNovel, Novel } from '@/db'
+import { type NovelDbPort, NovelRepository } from '@/repositories/novel-repository'
 
 function makePort(overrides: Partial<NovelDbPort> = {}): NovelDbPort {
   return {

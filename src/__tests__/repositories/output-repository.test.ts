@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from 'vitest'
-import { OutputRepository, type OutputDbPort } from '@/repositories/output-repository'
+import { describe, expect, it, vi } from 'vitest'
 import type { NewOutput } from '@/db'
+import { type OutputDbPort, OutputRepository } from '@/repositories/output-repository'
 
 function makePort(overrides: Partial<OutputDbPort> = {}): OutputDbPort {
   return {

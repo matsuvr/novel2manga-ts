@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import { saveNovelToStorage } from './storage/route'
-import { getDatabaseService } from '@/services/db-factory'
 import { NovelRepository } from '@/repositories/novel-repository'
+import { getDatabaseService } from '@/services/db-factory'
+import { saveNovelToStorage } from './storage/route'
 
 export async function POST(request: NextRequest) {
   try {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Job } from "@/db";
 import { type JobDbPort, JobRepository } from "@/repositories/job-repository";
 

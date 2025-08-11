@@ -1,9 +1,9 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { JobRepository } from '@/repositories/job-repository'
 import { getDatabaseService } from '@/services/db-factory'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
 import { validateJobId } from '@/utils/validators'
-import { JobRepository } from '@/repositories/job-repository'
 
 const requestSchema = z.object({
   jobId: z.string(),

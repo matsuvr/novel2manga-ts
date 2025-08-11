@@ -1,11 +1,11 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { appConfig } from '@/config/app.config'
-import { getDatabaseService } from '@/services/db-factory'
 import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
-import { validateJobId } from '@/utils/validators'
+import { getDatabaseService } from '@/services/db-factory'
 import { ApiError, createErrorResponse, ValidationError } from '@/utils/api-error'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { validateJobId } from '@/utils/validators'
 
 export async function GET(
   request: NextRequest,
