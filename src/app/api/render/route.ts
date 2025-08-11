@@ -1,15 +1,15 @@
-import type { NextRequest } from 'next/server'
 import { load as yamlLoad } from 'js-yaml'
+import type { NextRequest } from 'next/server'
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
-import { getDatabaseService } from '@/services/db-factory'
 import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
+import { getDatabaseService } from '@/services/db-factory'
 import type { MangaLayout } from '@/types/panel-layout'
 import { handleApiError, successResponse, validationError } from '@/utils/api-error'
 import { StorageFactory } from '@/utils/storage'
-import { validateJobId } from '@/utils/validators'
 import { isMangaLayout } from '@/utils/type-guards'
+import { validateJobId } from '@/utils/validators'
 
 interface RenderRequest {
   jobId: string

@@ -1,11 +1,11 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { EpisodeRepository } from '@/repositories/episode-repository'
+import { JobRepository } from '@/repositories/job-repository'
 import { getDatabaseService } from '@/services/db-factory'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
 import { ApiError, createErrorResponse } from '@/utils/api-error'
 import { validateJobId } from '@/utils/validators'
-import { JobRepository } from '@/repositories/job-repository'
-import { EpisodeRepository } from '@/repositories/episode-repository'
 
 // 入力互換: 既存のconfig形式と、testsが送る { targetPages, minPages, maxPages } のいずれか
 const postRequestSchema = z

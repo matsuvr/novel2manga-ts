@@ -1,13 +1,13 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import { getDatabaseService } from '@/services/db-factory'
 import { JobRepository } from '@/repositories/job-repository'
-import { validateJobId } from '@/utils/validators'
+import { getDatabaseService } from '@/services/db-factory'
 import {
   ApiError,
   createErrorResponse,
   toLegacyErrorResponse,
   ValidationError,
 } from '@/utils/api-error'
+import { validateJobId } from '@/utils/validators'
 
 export async function GET(
   _request: NextRequest,

@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { getDatabaseService } from '@/services/db-factory'
-import { validateJobId } from '@/utils/validators'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
 import { ApiError, createErrorResponse } from '@/utils/api-error'
+import { validateJobId } from '@/utils/validators'
 
 export async function POST(_request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
