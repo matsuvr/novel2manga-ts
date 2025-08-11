@@ -74,8 +74,8 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
-  const dbService = getDatabaseService()
-  const novelRepo = new NovelRepository(dbService)
+    const dbService = getDatabaseService()
+    const novelRepo = new NovelRepository(dbService)
 
   if (id) {
       // 特定のNovelを取得
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ novel, jobs: jobsList })
     } else {
       // 全てのNovelを取得
-      const novelsList = await novelRepo.list()
+  const novelsList = await novelRepo.list()
 
       return NextResponse.json({ novels: novelsList })
     }
