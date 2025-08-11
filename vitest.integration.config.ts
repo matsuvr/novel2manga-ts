@@ -10,7 +10,9 @@ export default defineConfig({
     setupFiles: './vitest.setup.ts',
     testTimeout: 600000, // 10分
     hookTimeout: 60000, // 1分
-    include: ['**/tests/integration/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    // Playwright の *.spec.* は含めない（tests/integration/e2e は Playwright が拾う）
+    include: ['**/tests/integration/**/*.test.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    exclude: ['**/tests/integration/e2e/**'],
   },
   resolve: {
     alias: {
