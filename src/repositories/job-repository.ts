@@ -26,16 +26,19 @@ export class JobRepository {
     return this.db.getJobWithProgress(id)
   }
 
-  async create(
-    arg1: string | { novelId: string; title?: string; totalChunks?: number; status?: string },
-    novelId?: string,
-    jobName?: string,
-  ): Promise<string> {
-    if (typeof arg1 === 'string') {
-      if (!novelId) throw new Error('novelId is required')
-      return this.db.createJob(arg1, novelId, jobName)
-    }
-    return this.db.createJob(arg1)
+  // Create a job with auto-generated id by DB layer
+  async create(payload: {
+    novelId: string
+    title?: string
+    totalChunks?: number
+    status?: string
+  }): Promise<string> {
+    return this.db.createJob(payload)
+  }
+
+  // Create a job with provided id
+  async createWithId(id: string, novelId: string, jobName?: string): Promise<string> {
+    return this.db.createJob(id, novelId, jobName)
   }
 
   async getByNovelId(novelId: string): Promise<Job[]> {
