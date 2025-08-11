@@ -37,9 +37,9 @@ export async function POST(request: NextRequest) {
     const validatedData = requestSchema.parse(body)
     const { jobId, episodeNumber, config } = validatedData
 
-  const dbService = getDatabaseService()
-  const episodeRepo = new EpisodeRepository(dbService)
-  const jobRepo = new JobRepository(dbService)
+    const dbService = getDatabaseService()
+    const episodeRepo = new EpisodeRepository(dbService)
+    const jobRepo = new JobRepository(dbService)
 
     // ジョブとエピソード情報を取得
     const job = await jobRepo.getJobWithProgress(jobId)
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       throw new ApiError('Job not found', 404, 'NOT_FOUND')
     }
 
-  const episodes = await episodeRepo.getByJobId(jobId)
+    const episodes = await episodeRepo.getByJobId(jobId)
     const episode = episodes.find((ep) => ep.episodeNumber === episodeNumber)
     if (!episode) {
       throw new ApiError('Episode not found', 404, 'NOT_FOUND')

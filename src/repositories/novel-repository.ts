@@ -21,7 +21,10 @@ export class NovelRepository {
     return this.db.getAllNovels()
   }
 
-  async ensure(id: string, payload: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
+  async ensure(
+    id: string,
+    payload: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'>,
+  ): Promise<void> {
     return this.db.ensureNovel(id, payload)
   }
 }

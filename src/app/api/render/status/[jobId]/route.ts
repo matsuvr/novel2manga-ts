@@ -18,9 +18,9 @@ export async function GET(
     const episodeParam = searchParams.get('episode')
     const pageParam = searchParams.get('page')
 
-  const dbService = getDatabaseService()
-  const episodeRepo = new EpisodeRepository(dbService)
-  const jobRepo = new JobRepository(dbService)
+    const dbService = getDatabaseService()
+    const episodeRepo = new EpisodeRepository(dbService)
+    const jobRepo = new JobRepository(dbService)
 
     // ジョブの存在確認
     const job = await jobRepo.getJob(params.jobId)
@@ -47,7 +47,7 @@ export async function GET(
     }
 
     // エピソード一覧を取得
-  const episodes = await episodeRepo.getByJobId(params.jobId)
+    const episodes = await episodeRepo.getByJobId(params.jobId)
     if (episodes.length === 0) {
       return NextResponse.json({
         jobId: params.jobId,

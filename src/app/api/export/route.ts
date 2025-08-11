@@ -43,10 +43,10 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     // データベースサービスの初期化
-  const dbService = getDatabaseService()
-  const episodeRepo = new EpisodeRepository(dbService)
-  const outputRepo = new OutputRepository(dbService)
-  const jobRepo = new JobRepository(dbService)
+    const dbService = getDatabaseService()
+    const episodeRepo = new EpisodeRepository(dbService)
+    const outputRepo = new OutputRepository(dbService)
+    const jobRepo = new JobRepository(dbService)
 
     // ジョブの存在確認
     const job = await jobRepo.getJob(body.jobId)
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     // エピソードの取得
-  const allEpisodes = await episodeRepo.getByJobId(body.jobId)
+    const allEpisodes = await episodeRepo.getByJobId(body.jobId)
 
     // エクスポート対象エピソードの決定
     let targetEpisodes = allEpisodes
@@ -90,9 +90,9 @@ export async function POST(request: NextRequest): Promise<Response> {
         return validationError('サポートされていないフォーマットです')
     }
 
-  // 成果物テーブルに記録（衝突回避のためUUIDを使用）
-  const outputId = `out_${randomUUID()}`
-  await outputRepo.create({
+    // 成果物テーブルに記録（衝突回避のためUUIDを使用）
+    const outputId = `out_${randomUUID()}`
+    await outputRepo.create({
       id: outputId,
       novelId: job.novelId,
       jobId: body.jobId,

@@ -22,10 +22,10 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const validatedData = requestSchema.parse(body)
-  const { jobId, config } = validatedData
-  validateJobId(jobId)
+    const { jobId, config } = validatedData
+    validateJobId(jobId)
 
-  const dbService = getDatabaseService()
+    const dbService = getDatabaseService()
     const processor = new JobNarrativeProcessor(dbService, config)
     const jobRepo = new JobRepository(dbService)
 

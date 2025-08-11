@@ -26,8 +26,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     const body = (await request.json()) as Partial<ShareRequest>
 
     // バリデーション
-  if (!body.jobId) return validationError('jobIdが必要です')
-  validateJobId(body.jobId)
+    if (!body.jobId) return validationError('jobIdが必要です')
+    validateJobId(body.jobId)
 
     const expiresIn = body.expiresIn || 72 // デフォルト72時間
 
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     // データベースサービスの初期化
-  const dbService = getDatabaseService()
+    const dbService = getDatabaseService()
     const episodeRepo = new EpisodeRepository(dbService)
     const jobRepo = new JobRepository(dbService)
 
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     // エピソード指定がある場合は存在確認
     if (body.episodeNumbers && body.episodeNumbers.length > 0) {
-  const episodes = await episodeRepo.getByJobId(body.jobId)
+      const episodes = await episodeRepo.getByJobId(body.jobId)
       const existingEpisodeNumbers = new Set(episodes.map((e) => e.episodeNumber))
 
       const nonExistentEpisodes = body.episodeNumbers.filter(

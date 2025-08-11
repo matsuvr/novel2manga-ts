@@ -29,8 +29,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '必須パラメータが不足しています' }, { status: 400 })
     }
 
-  const dbService = getDatabaseService()
-  const novelRepo = new NovelRepository(dbService)
+    const dbService = getDatabaseService()
+    const novelRepo = new NovelRepository(dbService)
 
     // 小説データを保存
     await novelRepo.ensure(uuid as string, {
@@ -43,9 +43,9 @@ export async function POST(request: NextRequest) {
     })
 
     // 処理ジョブを作成
-  const jobId = crypto.randomUUID()
-  const jobRepo = new JobRepository(dbService)
-  await jobRepo.createWithId(jobId, uuid as string, 'text_analysis')
+    const jobId = crypto.randomUUID()
+    const jobRepo = new JobRepository(dbService)
+    await jobRepo.createWithId(jobId, uuid as string, 'text_analysis')
 
     return NextResponse.json({
       success: true,
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
     const dbService = getDatabaseService()
     const novelRepo = new NovelRepository(dbService)
 
-  if (id) {
+    if (id) {
       // 特定のNovelを取得
       const novel = await novelRepo.get(id)
 
@@ -86,13 +86,13 @@ export async function GET(request: NextRequest) {
       }
 
       // 関連するジョブを取得
-  const jobRepo = new JobRepository(dbService)
-  const jobsList = await jobRepo.getByNovelId(id)
+      const jobRepo = new JobRepository(dbService)
+      const jobsList = await jobRepo.getByNovelId(id)
 
       return NextResponse.json({ novel, jobs: jobsList })
     } else {
       // 全てのNovelを取得
-  const novelsList = await novelRepo.list()
+      const novelsList = await novelRepo.list()
 
       return NextResponse.json({ novels: novelsList })
     }

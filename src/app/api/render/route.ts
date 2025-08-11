@@ -23,8 +23,8 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as Partial<RenderRequest>
 
     // 入力バリデーション
-  if (!body.jobId) return validationError('jobIdが必要です')
-  validateJobId(body.jobId)
+    if (!body.jobId) return validationError('jobIdが必要です')
+    validateJobId(body.jobId)
     if (typeof body.episodeNumber !== 'number' || body.episodeNumber < 1)
       return validationError('有効なepisodeNumberが必要です')
     if (typeof body.pageNumber !== 'number' || body.pageNumber < 1)
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     if (!targetPage) return validationError(`ページ ${body.pageNumber} が見つかりません`)
 
     // DBチェック
-  const dbService = getDatabaseService()
+    const dbService = getDatabaseService()
     const episodeRepo = new EpisodeRepository(dbService)
     const jobRepo = new JobRepository(dbService)
     const job = await jobRepo.getJob(body.jobId)
