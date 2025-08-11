@@ -1,14 +1,16 @@
 # 2025-08-10 進捗メモ
 
 ## 概要
+
 - PR #50「refactor(repo): Episode/Novel/Output repositories + adoption across routes」をマージ。ブランチ削除済み。
 - Repository パターン（Episode/Novel/Output）を主要ルートへ適用し、DRY・型安全性・テスト容易性を向上。
 
 ## 今日の進捗（サマリ）
+
 - Must fix/High Priority 反映完了
   - レポジトリ単体テスト追加（Episode/Novel/Output）。
   - オプショナルメソッドのJSDoc整備、未実装時の警告ログとエラーハンドリング強化（EpisodeRepository.bulkUpsert）。
-  - export ルートの出力IDを UUID ベース（out_<uuid>）へ変更（衝突耐性向上）。
+  - export ルートの出力IDを UUID ベース（out\_<uuid>）へ変更（衝突耐性向上）。
 - DRY/型安全化
   - getDatabaseService シングルトン導入・横展開、validateJobId ガード共通化。
   - ensureNovel の metadataPath 明示、YAML パースの型ガード isMangaLayout を導入。
@@ -24,17 +26,20 @@
   - Next.js 起動時に非標準 NODE_ENV の警告あり（テスト結果への影響なし）。
 
 ## 主要変更ハイライト
+
 - Repository 実装と採用: Job/Episode/Novel/Output。
 - ロギング強化: EpisodeRepository.bulkUpsert の未実装警告、失敗時のエラーログ＋再 throw。
-- export の出力ID生成を UUID 化（out_ プレフィックス）。
-- テスト安定化: DatabaseService シングルトンの __reset ヘルパを導入し API テストのモック干渉を解消。
+- export の出力ID生成を UUID 化（out\_ プレフィックス）。
+- テスト安定化: DatabaseService シングルトンの \_\_reset ヘルパを導入し API テストのモック干渉を解消。
 
 ## 既知の課題 / メモ
+
 - ポートIFの optional/required 整理（現状は optional を許容）。
 - Repository Factory 未導入（生成・依存注入の統一が未完）。
 - 設計/タスク/ストレージ仕様の設計ドキュメント未更新（コードとの差分あり）。
 
 ## 明日やること（ToDo）
+
 - Repositories
   - ポートの必須/任意メソッドを標準化（discriminated union もしくは明確な分割インターフェイス）。
   - Repository Factory を導入して DB ポート注入を統一、テストの差し替え容易化。
@@ -52,9 +57,9 @@
   - ルート全体の toLegacyErrorResponse 使用箇所の棚卸しと統一方針の明確化。
 
 ## 参考
-- PR #50: https://github.com/matsuvr/novel2manga-mastra/pull/50
-- 統合テストスクリプト: test:full-flow:win（小説→漫画 生成パイプライン E2E）
 
+- PR #50: https://github.com/matsuvrprojects/novel2manga-mastra/pull/50
+- 統合テストスクリプト: test:full-flow:win（小説→漫画 生成パイプライン E2E）
 
 実施内容
 統合フローのE2E（Windows用タスク）を実行し、5/5テストが連続パスすることを確認
@@ -68,7 +73,7 @@ tsc --noEmit: PASS
 Biome lint: PASS（エラー0）
 テスト修正の詳細
 storage.test.ts から不要になった getDatabase 参照を削除
-グローバルのバインディング削除での型警告（globalThis.*）を (globalThis as any) に統一して解消
+グローバルのバインディング削除での型警告（globalThis.\*）を (globalThis as any) に統一して解消
 現在の整頓状態
 データベース
 単一の実装に統一（Drizzle + better-sqlite3 / database/novel2manga.db）
@@ -78,7 +83,7 @@ storage.ts からDB関連のアダプタや getDatabase は排除済み（スト
 旧系の test/integration と src/tests/integration は除去済み
 test-results/ は .gitignore 済み（成果物はGit管理外）
 tsconfig と Vitest
-tsconfig は tests/** をエディタ型対象から除外（Vitest側は別configで解決）
+tsconfig は tests/\*\* をエディタ型対象から除外（Vitest側は別configで解決）
 vitest.config.ts と vitest.integration.config.ts 両立でユニット/統合の住み分けOK
 品質ゲート（本セッションの実行結果）
 Typecheck: PASS
