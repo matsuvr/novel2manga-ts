@@ -1,12 +1,11 @@
 /**
- * テスト実行前のサーバー起動スクリプト
+ * テスト実行前のサーバー起動スクリプト（moved from tests/setup）
  */
 import { type ChildProcess, spawn } from 'node:child_process'
 import fetch from 'node-fetch'
 
 let serverProcess: ChildProcess | null = null
 
-// サーバーの起動
 export async function startTestServer(): Promise<void> {
   console.log('テスト用サーバーを起動中...')
 
@@ -31,7 +30,6 @@ export async function startTestServer(): Promise<void> {
     })
   }
 
-  // サーバーが起動するまで待機
   let attempts = 0
   while (attempts < 30) {
     try {
@@ -42,9 +40,7 @@ export async function startTestServer(): Promise<void> {
         console.log('✓ サーバーヘルスチェック成功')
         return
       }
-    } catch {
-      // ヘルスチェック失敗、再試行
-    }
+    } catch {}
 
     await new Promise((resolve) => setTimeout(resolve, 2000))
     attempts++
@@ -53,13 +49,11 @@ export async function startTestServer(): Promise<void> {
   throw new Error('サーバーの起動に失敗しました')
 }
 
-// サーバーの停止
 export async function stopTestServer(): Promise<void> {
   if (serverProcess) {
     console.log('テスト用サーバーを停止中...')
     serverProcess.kill('SIGTERM')
 
-    // プロセスが終了するまで待機
     await new Promise((resolve) => {
       if (serverProcess) {
         serverProcess.on('exit', resolve)
@@ -73,7 +67,6 @@ export async function stopTestServer(): Promise<void> {
   }
 }
 
-// プロセス終了時にサーバーを停止
 process.on('SIGINT', async () => {
   await stopTestServer()
   process.exit(0)

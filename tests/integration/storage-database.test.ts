@@ -1,9 +1,9 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { DatabaseService } from '@/services/database'
 import type { JobProgress } from '@/types'
-import { DatabaseService } from '../../services/database'
-import { StorageFactory } from '../../utils/storage'
+import { StorageFactory } from '@/utils/storage'
 
 // モック設定
 vi.mock('@/config', () => ({
@@ -70,7 +70,7 @@ describe('Storage and Database Integration', () => {
 
       expect(retrieved).not.toBeNull()
       expect(retrieved?.text).toBeDefined()
-      expect(JSON.parse(retrieved?.text)).toEqual(novelData)
+  expect(JSON.parse(retrieved!.text!)).toEqual(novelData)
     })
   })
 
@@ -94,7 +94,7 @@ describe('Storage and Database Integration', () => {
 
       expect(retrieved).not.toBeNull()
       expect(retrieved?.text).toBeDefined()
-      expect(JSON.parse(retrieved?.text)).toEqual(chunkData)
+  expect(JSON.parse(retrieved!.text!)).toEqual(chunkData)
     })
   })
 
@@ -130,7 +130,7 @@ describe('Storage and Database Integration', () => {
 
       expect(retrieved).not.toBeNull()
       expect(retrieved?.text).toBeDefined()
-      expect(JSON.parse(retrieved?.text)).toEqual(analysisData)
+  expect(JSON.parse(retrieved!.text!)).toEqual(analysisData)
     })
   })
 
