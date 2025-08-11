@@ -1,0 +1,30 @@
+#!/bin/sh
+
+# Remove nul/NUL/null files (Windows issue with some code assistants)
+echo "Checking for nul/NUL/null files..."
+
+# Function to safely delete files on Windows/Unix
+delete_nul_files() {
+  # Find and delete nul files (Unix-style)
+  find . -type f \( -name "nul" -o -name "NUL" -o -name "null" \) -size 0 2>/dev/null | while read -r file; do
+    echo "Removing empty file: $file"
+    rm -f "$file" 2>/dev/null
+  done
+  
+  # Direct removal for common locations
+  rm -f nul 2>/dev/null
+  rm -f NUL 2>/dev/null
+  rm -f null 2>/dev/null
+  
+  # Windows-specific deletion using cmd
+  if command -v cmd.exe >/dev/null 2>&1; then
+    cmd.exe /c "del /Q nul 2>NUL" 2>/dev/null
+    cmd.exe /c "del /Q NUL 2>NUL" 2>/dev/null
+    cmd.exe /c "del /Q null 2>NUL" 2>/dev/null
+  fi
+}
+
+delete_nul_files
+
+# Run tests (default husky pre-commit)
+npm test

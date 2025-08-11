@@ -79,6 +79,11 @@ wrangler.toml.local
 .DS_Store
 Thumbs.db
 
+# Temporary/garbage files from code assistants
+nul
+NUL
+null
+
 # Project specific
 output.txt
 .local-storage/
