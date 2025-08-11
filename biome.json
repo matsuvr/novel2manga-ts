@@ -133,13 +133,7 @@
       "formatter": { "enabled": false }
     },
     {
-      "includes": [
-        "**/__tests__/**",
-        "**/tests/**",
-        "**/*.test.*",
-        "**/*.spec.*",
-        "**/.claude/**"
-      ],
+      "includes": ["**/__tests__/**", "**/tests/**", "**/*.test.*", "**/*.spec.*", "**/.claude/**"],
       "linter": {
         "enabled": false
       },
