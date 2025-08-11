@@ -32,7 +32,8 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "codemod:http-error:dry": "jscodeshift -d -p --extensions=ts,tsx --parser=tsx -t scripts/codemods/convert-http-error-to-api-error.js --ignore-pattern src/utils/api-error.ts --ignore-pattern src/__tests__ src",
-    "codemod:http-error": "jscodeshift --extensions=ts,tsx --parser=tsx -t scripts/codemods/convert-http-error-to-api-error.js --ignore-pattern src/utils/api-error.ts --ignore-pattern src/__tests__ src"
+    "codemod:http-error": "jscodeshift --extensions=ts,tsx --parser=tsx -t scripts/codemods/convert-http-error-to-api-error.js --ignore-pattern src/utils/api-error.ts --ignore-pattern src/__tests__ src",
+    "prepare": "husky"
   },
   "keywords": [],
   "author": "",
@@ -92,6 +93,7 @@
     "eslint": "^8.57.0",
     "eslint-config-next": "^15.4.4",
     "happy-dom": "^18.0.1",
+    "husky": "^9.1.7",
     "jscodeshift": "^0.14.0",
     "node-fetch": "^3.3.2",
     "playwright": "^1.44.0",
