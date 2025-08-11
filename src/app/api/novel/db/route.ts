@@ -1,6 +1,8 @@
 import crypto from 'node:crypto'
 import { type NextRequest, NextResponse } from 'next/server'
 import { getDatabaseService } from '@/services/db-factory'
+import { NovelRepository } from '@/repositories/novel-repository'
+import { JobRepository } from '@/repositories/job-repository'
 
 // Novel要素を保存
 export async function POST(request: NextRequest) {
@@ -28,9 +30,11 @@ export async function POST(request: NextRequest) {
     }
 
   const dbService = getDatabaseService()
+  const novelRepo = new NovelRepository(dbService)
+  const jobRepo = new JobRepository(dbService)
 
     // 小説データを保存
-    await dbService.ensureNovel(uuid as string, {
+    await novelRepo.ensure(uuid as string, {
       title: fileName as string,
       author: '',
       originalTextPath: fileName as string,
@@ -41,7 +45,7 @@ export async function POST(request: NextRequest) {
 
     // 処理ジョブを作成
     const jobId = crypto.randomUUID()
-    await dbService.createJob(jobId, uuid as string, 'text_analysis')
+    await jobRepo.create(jobId, uuid as string, 'text_analysis')
 
     return NextResponse.json({
       success: true,
@@ -71,22 +75,24 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
   const dbService = getDatabaseService()
+  const novelRepo = new NovelRepository(dbService)
+  const jobRepo = new JobRepository(dbService)
 
     if (id) {
       // 特定のNovelを取得
-      const novel = await dbService.getNovel(id)
+      const novel = await novelRepo.get(id)
 
       if (!novel) {
         return NextResponse.json({ error: 'Novelが見つかりません' }, { status: 404 })
       }
 
       // 関連するジョブを取得
-      const jobsList = await dbService.getJobsByNovelId(id)
+      const jobsList = await jobRepo.getByNovelId(id)
 
       return NextResponse.json({ novel, jobs: jobsList })
     } else {
       // 全てのNovelを取得
-      const novelsList = await dbService.getAllNovels()
+      const novelsList = await novelRepo.list()
 
       return NextResponse.json({ novels: novelsList })
     }

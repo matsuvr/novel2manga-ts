@@ -5,6 +5,7 @@ import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
 import { ApiError, createErrorResponse } from '@/utils/api-error'
 import { validateJobId } from '@/utils/validators'
 import { JobRepository } from '@/repositories/job-repository'
+import { EpisodeRepository } from '@/repositories/episode-repository'
 
 // 入力互換: 既存のconfig形式と、testsが送る { targetPages, minPages, maxPages } のいずれか
 const postRequestSchema = z
@@ -34,6 +35,7 @@ export async function GET(
   validateJobId(params?.jobId)
   const dbService = getDatabaseService()
   const jobRepo = new JobRepository(dbService)
+  const episodeRepo = new EpisodeRepository(dbService)
 
     // ジョブの存在確認
   const job = await jobRepo.getJobWithProgress(params.jobId)
@@ -42,7 +44,7 @@ export async function GET(
     }
 
     // エピソード一覧を取得
-  const episodes = await dbService.getEpisodesByJobId(params.jobId)
+  const episodes = await episodeRepo.getByJobId(params.jobId)
 
     // エピソード未作成の場合は明示的に空を返す（フォールバックしない）
 

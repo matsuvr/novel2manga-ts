@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { appConfig } from '@/config/app.config'
 import { getDatabaseService } from '@/services/db-factory'
 import { EpisodeRepository } from '@/repositories/episode-repository'
+import { JobRepository } from '@/repositories/job-repository'
 import { validateJobId } from '@/utils/validators'
 import { ApiError, createErrorResponse, ValidationError } from '@/utils/api-error'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
@@ -19,9 +20,10 @@ export async function GET(
 
   const dbService = getDatabaseService()
   const episodeRepo = new EpisodeRepository(dbService)
+  const jobRepo = new JobRepository(dbService)
 
     // ジョブの存在確認
-    const job = await dbService.getJob(params.jobId)
+    const job = await jobRepo.getJob(params.jobId)
     if (!job) {
       throw new ApiError('Job not found', 404, 'NOT_FOUND')
     }

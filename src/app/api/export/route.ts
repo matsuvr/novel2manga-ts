@@ -7,6 +7,7 @@ import type { Episode } from '@/db'
 import { getDatabaseService } from '@/services/db-factory'
 import { EpisodeRepository } from '@/repositories/episode-repository'
 import { OutputRepository } from '@/repositories/output-repository'
+import { JobRepository } from '@/repositories/job-repository'
 import { validateJobId } from '@/utils/validators'
 import type { MangaLayout } from '@/types/panel-layout'
 import { handleApiError, successResponse, validationError } from '@/utils/api-error'
@@ -45,9 +46,10 @@ export async function POST(request: NextRequest): Promise<Response> {
   const dbService = getDatabaseService()
   const episodeRepo = new EpisodeRepository(dbService)
   const outputRepo = new OutputRepository(dbService)
+  const jobRepo = new JobRepository(dbService)
 
     // ジョブの存在確認
-    const job = await dbService.getJob(body.jobId)
+    const job = await jobRepo.getJob(body.jobId)
     if (!job) {
       return validationError('指定されたジョブが見つかりません')
     }

@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import type { NextRequest } from 'next/server'
 import { getDatabaseService } from '@/services/db-factory'
 import { EpisodeRepository } from '@/repositories/episode-repository'
+import { JobRepository } from '@/repositories/job-repository'
 import { validateJobId } from '@/utils/validators'
 import { handleApiError, successResponse, validationError } from '@/utils/api-error'
 
@@ -38,9 +39,10 @@ export async function POST(request: NextRequest): Promise<Response> {
     // データベースサービスの初期化
   const dbService = getDatabaseService()
     const episodeRepo = new EpisodeRepository(dbService)
+    const jobRepo = new JobRepository(dbService)
 
     // ジョブの存在確認
-    const job = await dbService.getJob(body.jobId)
+    const job = await jobRepo.getJob(body.jobId)
     if (!job) {
       return validationError('指定されたジョブが見つかりません')
     }
