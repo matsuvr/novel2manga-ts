@@ -41,7 +41,8 @@ export class ApiError extends Error {
     message: string,
     public statusCode: number,
     public code?: ErrorCode,
-    public details?: Record<string, unknown>,
+    // details は文字列 (レガシーテスト互換) も許容するため unknown
+    public details?: unknown,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -258,6 +259,41 @@ export function createErrorResponse(
     },
     { status: 500 },
   )
+}
+
+// ========================================
+// Generic Error Message Extractor (共有ユーティリティ)
+// - さまざまな unknown エラー型から人間可読なメッセージ文字列を抽出
+// - 既存のルート / ハンドラで重複していた inline closure を置き換える目的
+// ========================================
+/**
+ * Extracts a human-readable error message from unknown error types.
+ * Handles Error instances, strings, objects (with safe JSON stringify), and
+ * edge cases like circular references, symbols, functions, null/undefined.
+ * Order of precedence:
+ * 1. Error -> error.message
+ * 2. string -> value
+ * 3. JSON.stringify(value) when it yields a string (objects / arrays / primitives)
+ * 4. Fallback String(value) for circular, symbol, function, undefined, etc.
+ * @param raw - The error object/value to extract message from
+ * @returns A string representation of the error
+ */
+export function extractErrorMessage(raw: unknown): string {
+  if (raw instanceof Error) return raw.message
+  if (typeof raw === 'string') return raw
+  try {
+    // JSON.stringify(undefined | symbol | function) => undefined なので ?? でフォールバック
+    const json = JSON.stringify(raw)
+    const base = json ?? String(raw)
+    // 長大なオブジェクトでメッセージ肥大化を避ける（メモリ/ログ負荷対策）
+    const MAX_ERROR_MESSAGE_LENGTH = 1000
+    if (base.length > MAX_ERROR_MESSAGE_LENGTH) {
+      return base.substring(0, MAX_ERROR_MESSAGE_LENGTH - 3) + '...'
+    }
+    return base
+  } catch {
+    return String(raw)
+  }
 }
 
 // ========================================
