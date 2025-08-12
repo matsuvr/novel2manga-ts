@@ -170,7 +170,10 @@
 - [ ] 10.6 Chunk → Scene 正規化アダプタ実装（アドホック scene 構造 → SceneFlexible → normalizeToSceneCore）
 - [ ] 10.7 永続化層（DB/R2 保存前）での `normalizeToSceneCore` 強制適用
 - [ ] 10.8 Scene 追加属性 (mood, visualElements) 利用開始: LLM プロンプト & 保存スキーマ反映
-- [ ] 10.9 Emotion / Highlight 種別語彙の列挙型化 + マッピングテーブル実装
+- [x] 10.9 Emotion / Highlight 種別語彙の列挙型化 + マッピングテーブル実装（Emotion 完了・Highlight 未対応）
+  - Emotion: `src/domain/models/emotion.ts` 追加、`EmotionSchema` と `normalizeEmotion()` 実装、対話モデルへ適用
+  - Highlight: 後続タスク（type/語彙の列挙と利用箇所の置換）
+  - 2025-08-12 (PR#63 Gemini medium): 空白のみ文字列を `undefined` として扱うロジック追加 (`normalizeEmotion`) + ユニットテスト追補
 - [ ] 10.10 ドキュメント反映（design.md 変更履歴セクション拡張, API エラー仕様章の更新）
 - [ ] 10.11 既存永続化 Scene データ一括マイグレーションスクリプト（オプション）
   - [x] Health エンドポイント追加 (`/api/health`) - DB と Storage の簡易疎通確認 (2025-08-12)
@@ -378,6 +381,13 @@ PRレビューコメントからの重要修正を実施し、リポジトリ層
     - エッジケース (null/undefined/wrong entity) 対応テスト
 
 - [x] 38. ドキュメント更新
+
+### 2025-08-12 PR#63 Gemini Medium Review Follow-ups
+
+- [x] G-EMO-WS-001: `normalizeEmotion` 空白のみ入力の未指定扱い (" " → undefined) とテスト追加
+- [x] G-STO-LOG-001: レガシー `StorageService.getNovel/getChunk` の JSON parse 失敗時ログ出力 (dev/test 限定) 追加
+- [x] G-LAYOUT-TYPE-001: MangaLayout interface → Zod 派生型へ一本化 (`panel-layout.ts` を schema inferences のみに縮約) + ドキュメント反映
+- [x] G-DOC-STORAGE-001: `database/storage-structure.md` のレガシーパス表記に (LEGACY) 明示と現行キー例注記追加
   - [x] TASK-DOCS-DESIGN-001: `design.md` アーキテクチャ図更新
     - Repository Layer (Ports & Adapters) 追加
     - コード例とメリット明記
