@@ -388,6 +388,7 @@ type R2BindingName =
   | 'ANALYSIS_STORAGE'
   | 'LAYOUTS_STORAGE'
   | 'RENDERS_STORAGE'
+  | 'OUTPUTS_STORAGE'
 
 async function resolveStorage(
   localDir: string,

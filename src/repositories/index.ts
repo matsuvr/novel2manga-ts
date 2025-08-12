@@ -12,19 +12,12 @@ export {
 export { JobRepository } from './job-repository'
 export { NovelRepository } from './novel-repository'
 export { OutputRepository } from './output-repository'
-// Port interfaces (standardized with discriminated unions)
+// Port interfaces (standardized)
 export type {
   EpisodeDbPort,
-  EpisodeReadCapabilities,
-  EpisodeWriteCapabilities,
   JobDbPort,
-  JobReadCapabilities,
-  JobWriteCapabilities,
   NovelDbPort,
-  NovelReadCapabilities,
-  NovelWriteCapabilities,
   OutputDbPort,
-  OutputWriteCapabilities,
   PartialUnifiedDbPort,
   PortConfiguration,
   PortFactory,
