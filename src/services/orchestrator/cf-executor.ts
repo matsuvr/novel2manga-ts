@@ -1,4 +1,4 @@
-import type { ScenarioData, MessageEnvelope } from '@/types/contracts'
+import type { MessageEnvelope, ScenarioData } from '@/types/contracts'
 
 /**
  * Cloudflare Executor Skeleton (Queues + Durable Objects)
@@ -54,7 +54,12 @@ export class CloudflareScenarioExecutor {
     }
   }
 
-  private createEnvelope(jobId: string, stepId: string, attempt: number, payload: unknown): MessageEnvelope {
+  private createEnvelope(
+    jobId: string,
+    stepId: string,
+    attempt: number,
+    payload: unknown,
+  ): MessageEnvelope {
     return {
       schemaVersion: '1.0',
       jobId,
@@ -75,4 +80,3 @@ export class CloudflareScenarioExecutor {
     return `${stepId}:${Math.abs(h)}`
   }
 }
-

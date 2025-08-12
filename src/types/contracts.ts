@@ -45,7 +45,11 @@ export type StepDefinition<I = unknown, O = unknown> = z.infer<typeof zStepDefin
   run: (input: I) => Promise<O>
 }
 
-export const zEdge = z.object({ from: zId, to: zId, fanIn: z.enum(['all', 'quorum']).default('all') })
+export const zEdge = z.object({
+  from: zId,
+  to: zId,
+  fanIn: z.enum(['all', 'quorum']).default('all'),
+})
 export type Edge = z.infer<typeof zEdge>
 
 export const zScenario = z.object({
@@ -59,12 +63,18 @@ export type ScenarioData = z.infer<typeof zScenario>
 // Novel → Manga contracts (lightweight; actual payloads may reference R2 paths)
 export const zIngestInput = z.object({
   novelR2Key: z.string().min(1),
-  settings: z.object({ windowTokens: z.number().int().positive(), strideTokens: z.number().int().positive() }),
+  settings: z.object({
+    windowTokens: z.number().int().positive(),
+    strideTokens: z.number().int().positive(),
+  }),
 })
 export const zIngestOutput = z.object({
   manifestKey: z.string(),
   totalChars: z.number().int().nonnegative(),
-  settings: z.object({ windowTokens: z.number().int().positive(), strideTokens: z.number().int().positive() }),
+  settings: z.object({
+    windowTokens: z.number().int().positive(),
+    strideTokens: z.number().int().positive(),
+  }),
 })
 
 export const zChunkOutput = z.object({
@@ -90,6 +100,12 @@ export const zStoryboardOutput = z.object({
   panels: z.array(z.object({ id: z.string(), sceneId: z.string(), prompt: z.string() })),
 })
 
-export const zImageResult = z.object({ panelId: z.string(), imageR2Key: z.string(), seed: z.number().int() })
+export const zImageResult = z.object({
+  panelId: z.string(),
+  imageR2Key: z.string(),
+  seed: z.number().int(),
+})
 
-export const zComposeOutput = z.object({ pages: z.array(z.object({ index: z.number().int(), r2Key: z.string() })) })
+export const zComposeOutput = z.object({
+  pages: z.array(z.object({ index: z.number().int(), r2Key: z.string() })),
+})
