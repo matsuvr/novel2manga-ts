@@ -7,7 +7,12 @@ import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repositor
 import { getJobRepository } from '@/repositories'
 import { getDatabaseService } from '@/services/db-factory'
 import type { AnalyzeResponse } from '@/types/job'
-import { ApiError, createErrorResponse, createSuccessResponse } from '@/utils/api-error'
+import {
+  ApiError,
+  createErrorResponse,
+  createSuccessResponse,
+  extractErrorMessage,
+} from '@/utils/api-error'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { StorageKeys, saveEpisodeBoundaries } from '@/utils/storage'
 import { splitTextIntoChunks } from '@/utils/text-splitter'
@@ -62,7 +67,10 @@ export async function POST(request: NextRequest) {
     }
 
     const { novelId: inputNovelId, text: inputText, title, splitOnly } = validationResult.data
-    console.log('[/api/analyze] Inputs:', { novelId: inputNovelId, hasText: !!inputText })
+    console.log('[/api/analyze] Inputs:', {
+      novelId: inputNovelId,
+      hasText: !!inputText,
+    })
 
     // StorageFactoryとDBを初期化
     const { StorageFactory } = await import('@/utils/storage')
@@ -135,7 +143,11 @@ export async function POST(request: NextRequest) {
     if (!novelId) {
       throw new ApiError('novelId の解決に失敗しました', 500, 'INTERNAL_ERROR')
     }
-    await jobRepo.create({ id: jobId, novelId, title: `Analysis Job for ${title || 'Novel'}` })
+    await jobRepo.create({
+      id: jobId,
+      novelId,
+      title: `Analysis Job for ${title || 'Novel'}`,
+    })
 
     // ジョブの総チャンク数を更新（初期化）
     await dbService.updateJobStep(jobId, 'initialized', 0, chunks.length)
@@ -281,7 +293,7 @@ export async function POST(request: NextRequest) {
         } catch (agentError) {
           console.error(`[/api/analyze] Chunk ${i} agent error details:`, {
             error: agentError,
-            message: agentError instanceof Error ? agentError.message : String(agentError),
+            message: extractErrorMessage(agentError),
             stack: agentError instanceof Error ? agentError.stack : 'No stack',
             name: agentError instanceof Error ? agentError.name : 'Unknown',
           })
@@ -305,7 +317,7 @@ export async function POST(request: NextRequest) {
         await analysisStorage.put(analysisPath, JSON.stringify(analysisData, null, 2))
         console.log(`[/api/analyze] Chunk ${i} analyzed successfully`)
       } catch (error) {
-        const errorMsg = `Failed to analyze chunk ${i}: ${error instanceof Error ? error.message : String(error)}`
+        const errorMsg = `Failed to analyze chunk ${i}: ${extractErrorMessage(error)}`
         console.error(`[/api/analyze] ${errorMsg}`)
         await dbService.updateJobError(jobId, errorMsg, `analyze_chunk_${i}`)
         throw new Error(errorMsg)
@@ -342,7 +354,7 @@ export async function POST(request: NextRequest) {
       console.error('[/api/analyze] Episode analysis failed:', episodeError)
       await dbService.updateJobError(
         jobId,
-        `Episode analysis failed: ${episodeError instanceof Error ? episodeError.message : String(episodeError)}`,
+        `Episode analysis failed: ${extractErrorMessage(episodeError)}`,
         'episode',
       )
       if (String(process.env.NODE_ENV) !== 'test') {

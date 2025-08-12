@@ -1,6 +1,11 @@
 import type { NextRequest } from 'next/server'
 import { getJobRepository } from '@/repositories'
-import { ApiError, createErrorResponse, createSuccessResponse } from '@/utils/api-error'
+import {
+  ApiError,
+  createErrorResponse,
+  createSuccessResponse,
+  extractErrorMessage,
+} from '@/utils/api-error'
 import { validateJobId } from '@/utils/validators'
 
 export async function GET(
@@ -60,7 +65,7 @@ export async function GET(
       }
     }
     // それ以外はメッセージ固定
-    const causeMessage = error instanceof Error ? error.message : String(error)
+    const causeMessage = extractErrorMessage(error)
     // テストは data.details が文字列で .toContain できることを期待
     return Response.json(
       {

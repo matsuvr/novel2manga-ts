@@ -261,6 +261,21 @@ export function createErrorResponse(
 }
 
 // ========================================
+// Generic Error Message Extractor (共有ユーティリティ)
+// - さまざまな unknown エラー型から人間可読なメッセージ文字列を抽出
+// - 既存のルート / ハンドラで重複していた inline closure を置き換える目的
+// ========================================
+export function extractErrorMessage(raw: unknown): string {
+  if (raw instanceof Error) return raw.message
+  if (typeof raw === 'string') return raw
+  try {
+    return JSON.stringify(raw)
+  } catch {
+    return String(raw)
+  }
+}
+
+// ========================================
 // Legacy Functions (後方互換性)
 // ========================================
 
