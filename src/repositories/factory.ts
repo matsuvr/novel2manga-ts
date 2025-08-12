@@ -1,6 +1,6 @@
 import type { DatabaseService } from '@/services/database'
 import { getDatabaseService } from '@/services/db-factory'
-
+import { adaptAll } from './adapters'
 import { EpisodeRepository } from './episode-repository'
 import { JobRepository } from './job-repository'
 import { NovelRepository } from './novel-repository'
@@ -21,8 +21,13 @@ export class RepositoryFactory {
   private static readonly CACHE_TTL_MS = (() => {
     const v = process.env.REPOSITORY_FACTORY_TTL_MS
     const parsed = v ? Number.parseInt(v, 10) : NaN
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1000 * 60 * 30
-  })() // 30分 デフォルト TTL（長期稼働メモリ管理対策）
+    if (Number.isFinite(parsed) && parsed > 0) return parsed
+    // 開発/テストでは短い TTL (5分) でホットリロード性を高め、本番は 30分 でインスタンス再利用
+    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+      return 1000 * 60 * 5
+    }
+    return 1000 * 60 * 30
+  })() // env override > mode fallback > production default 30m
   private static lastAccess = Date.now()
 
   // Repository instances cache (singleton per factory instance)
@@ -93,7 +98,8 @@ export class RepositoryFactory {
    */
   getEpisodeRepository(): EpisodeRepository {
     if (!this.episodeRepo) {
-      this.episodeRepo = new EpisodeRepository(this.dbService)
+      const { episode } = adaptAll(this.dbService)
+      this.episodeRepo = new EpisodeRepository(episode)
     }
     return this.episodeRepo
   }
@@ -103,7 +109,8 @@ export class RepositoryFactory {
    */
   getJobRepository(): JobRepository {
     if (!this.jobRepo) {
-      this.jobRepo = new JobRepository(this.dbService)
+      const { job } = adaptAll(this.dbService)
+      this.jobRepo = new JobRepository(job)
     }
     return this.jobRepo
   }
@@ -113,7 +120,8 @@ export class RepositoryFactory {
    */
   getNovelRepository(): NovelRepository {
     if (!this.novelRepo) {
-      this.novelRepo = new NovelRepository(this.dbService)
+      const { novel } = adaptAll(this.dbService)
+      this.novelRepo = new NovelRepository(novel)
     }
     return this.novelRepo
   }
@@ -123,7 +131,8 @@ export class RepositoryFactory {
    */
   getOutputRepository(): OutputRepository {
     if (!this.outputRepo) {
-      this.outputRepo = new OutputRepository(this.dbService)
+      const { output } = adaptAll(this.dbService)
+      this.outputRepo = new OutputRepository(output)
     }
     return this.outputRepo
   }

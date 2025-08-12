@@ -2,6 +2,7 @@ import { load as yamlLoad } from 'js-yaml'
 import type { NextRequest } from 'next/server'
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
+import { adaptAll } from '@/repositories/adapters'
 import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
 import { getDatabaseService } from '@/services/db-factory'
@@ -94,8 +95,9 @@ export async function POST(request: NextRequest) {
 
     // データベースサービスの初期化
     const dbService = getDatabaseService()
-    const episodeRepo = new EpisodeRepository(dbService)
-    const jobRepo = new JobRepository(dbService)
+    const { episode: episodePort, job: jobPort } = adaptAll(dbService)
+    const episodeRepo = new EpisodeRepository(episodePort)
+    const jobRepo = new JobRepository(jobPort)
 
     // ジョブの存在確認（メソッドがある場合のみチェック）
     const job = await jobRepo.getJob(validatedBody.jobId)
