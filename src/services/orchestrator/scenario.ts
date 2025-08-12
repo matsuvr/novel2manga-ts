@@ -1,10 +1,17 @@
 import { z } from 'zod'
 import type { Edge, ScenarioData, StepDefinition } from '@/types/contracts'
 
+// Internal erased step type to store heterogeneous generic steps safely.
+// We intentionally widen run signature to (input: unknown) => Promise<unknown> so that
+// generic StepDefinition<I,O> can be stored without variance errors. Each concrete step
+// still preserves its precise types at the call site; inside the runner we treat them
+// opaquely (runtime schemas should validate if enforced later).
+type ErasedStep = StepDefinition<unknown, unknown>
+
 export class ScenarioBuilder {
   private id: string
   private version: string
-  private steps: StepDefinition[] = []
+  private steps: ErasedStep[] = []
   private edges: Edge[] = []
 
   private stepIds = new Set<string>()
@@ -17,7 +24,8 @@ export class ScenarioBuilder {
   step<I, O>(def: StepDefinition<I, O>): this {
     if (this.stepIds.has(def.id)) throw new Error(`Duplicate step id: ${def.id}`)
     this.stepIds.add(def.id)
-    this.steps.push(def)
+    // Erase generics for storage (variance safe)
+    this.steps.push(def as unknown as ErasedStep)
     return this
   }
 
@@ -42,7 +50,9 @@ export class ScenarioBuilder {
       incomingCount.set(s.id, 0)
     }
     for (const e of this.edges) {
-      outgoing.get(e.from)!.push(e.to)
+      const list = outgoing.get(e.from)
+      if (!list) throw new Error(`Edge.from not initialized: ${e.from}`)
+      list.push(e.to)
       incomingCount.set(e.to, (incomingCount.get(e.to) || 0) + 1)
     }
     const queue: string[] = Array.from(incomingCount.entries())
@@ -50,7 +60,8 @@ export class ScenarioBuilder {
       .map(([id]) => id)
     let visited = 0
     while (queue.length) {
-      const n = queue.shift()!
+      const n = queue.shift()
+      if (n === undefined) break
       visited++
       for (const m of outgoing.get(n) || []) {
         const c = (incomingCount.get(m) || 0) - 1
@@ -60,13 +71,24 @@ export class ScenarioBuilder {
     }
     if (visited !== this.steps.length) throw new Error('Scenario graph contains a cycle')
 
-    const data: ScenarioData = { id: this.id, version: this.version, steps: this.steps, edges: this.edges }
+    const data: ScenarioData = {
+      id: this.id,
+      version: this.version,
+      steps: this.steps,
+      edges: this.edges,
+    }
     // Runtime schema validation (ensures shape is sound, run functions are not validated by zod)
     const ScenarioSchema = z.object({
       id: z.string(),
       version: z.string(),
       steps: z.array(z.object({ id: z.string() } as any)),
-      edges: z.array(z.object({ from: z.string(), to: z.string(), fanIn: z.enum(['all', 'quorum']) })),
+      edges: z.array(
+        z.object({
+          from: z.string(),
+          to: z.string(),
+          fanIn: z.enum(['all', 'quorum']),
+        }),
+      ),
     })
     ScenarioSchema.parse(data)
     return data
@@ -80,7 +102,10 @@ export interface RunOptions {
 }
 
 // Minimal in-memory runner for development and tests. This does NOT enqueue to Cloudflare Queues.
-export async function runScenario(scenario: ScenarioData, opts: RunOptions = {}): Promise<RunOutputs> {
+export async function runScenario(
+  scenario: ScenarioData,
+  opts: RunOptions = {},
+): Promise<RunOutputs> {
   // Topological order
   const incoming = new Map<string, number>()
   const nexts = new Map<string, string[]>()
@@ -90,10 +115,15 @@ export async function runScenario(scenario: ScenarioData, opts: RunOptions = {})
   }
   for (const e of scenario.edges) {
     incoming.set(e.to, (incoming.get(e.to) || 0) + 1)
-    nexts.get(e.from)!.push(e.to)
+    const arr = nexts.get(e.from)
+    if (!arr) throw new Error(`Edge.from not initialized: ${e.from}`)
+    arr.push(e.to)
   }
   const ready: string[] = []
-  for (const [id, c] of incoming.entries()) if (c === 0) ready.push(id)
+  // Use forEach to avoid downlevelIteration requirement on Map iterator in older targets
+  incoming.forEach((c, id) => {
+    if (c === 0) ready.push(id)
+  })
 
   const stepById = new Map(scenario.steps.map((s) => [s.id, s]))
   const outputs: RunOutputs = {}
@@ -102,7 +132,7 @@ export async function runScenario(scenario: ScenarioData, opts: RunOptions = {})
   const initialAssigned = new Set<string>()
   if (opts.initialInput !== undefined) {
     for (const id of ready) {
-      outputs[id + ':input'] = opts.initialInput
+      outputs[`${id}:input`] = opts.initialInput
       initialAssigned.add(id)
       break
     }
@@ -110,17 +140,30 @@ export async function runScenario(scenario: ScenarioData, opts: RunOptions = {})
 
   const pending = [...ready]
   while (pending.length) {
-    const id = pending.shift()!
-    const step = stepById.get(id)!
+    const id = pending.shift()
+    if (!id) break
+    const step = stepById.get(id)
+    if (!step) throw new Error(`Step not found: ${id}`)
 
     // Construct input: prefer explicit previous edge outputs
     const upstream = scenario.edges.filter((e) => e.to === id).map((e) => outputs[e.from])
-    const baseInput = upstream.length === 0 ? outputs[id + ':input'] : upstream.length === 1 ? upstream[0] : upstream
+    const baseInput =
+      upstream.length === 0
+        ? outputs[`${id}:input`]
+        : upstream.length === 1
+          ? upstream[0]
+          : upstream
 
     let result: unknown
-    if (step.mapField && baseInput && typeof baseInput === 'object' && step.mapField in (baseInput as any)) {
+    if (
+      step.mapField &&
+      baseInput &&
+      typeof baseInput === 'object' &&
+      step.mapField in (baseInput as any)
+    ) {
       const items = (baseInput as any)[step.mapField]
-      if (!Array.isArray(items)) throw new Error(`mapField ${step.mapField} is not an array for step ${id}`)
+      if (!Array.isArray(items))
+        throw new Error(`mapField ${step.mapField} is not an array for step ${id}`)
       const mapped = []
       for (const item of items) {
         mapped.push(await (step as any).run(item))
@@ -139,4 +182,3 @@ export async function runScenario(scenario: ScenarioData, opts: RunOptions = {})
 
   return outputs
 }
-

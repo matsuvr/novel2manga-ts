@@ -1,4 +1,4 @@
-"use client"
+'use client'
 import { useCallback, useMemo, useState } from 'react'
 import { createNovelToMangaScenario } from '@/agents/scenarios/novel-to-manga'
 
@@ -28,9 +28,16 @@ export function ScenarioViewer() {
       const res = await fetch('/api/scenario/run', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ novelR2Key: 'novels/example.txt', settings: { windowTokens: 512, strideTokens: 256 } }),
+        body: JSON.stringify({
+          novelR2Key: 'novels/example.txt',
+          settings: { windowTokens: 512, strideTokens: 256 },
+        }),
       })
-      const json = (await res.json()) as { ok: boolean; summary?: RunSummary; error?: string }
+      const json = (await res.json()) as {
+        ok: boolean
+        summary?: RunSummary
+        error?: string
+      }
       if (!json.ok) throw new Error(json.error || 'Run failed')
       setSummary(json.summary ?? null)
     } catch (e) {
@@ -62,6 +69,7 @@ export function ScenarioViewer() {
         </ul>
       </div>
       <button
+        type="button"
         disabled={loading}
         onClick={onRun}
         className="rounded bg-blue-600 px-3 py-1.5 text-white disabled:opacity-50"
@@ -82,4 +90,3 @@ export function ScenarioViewer() {
     </div>
   )
 }
-
