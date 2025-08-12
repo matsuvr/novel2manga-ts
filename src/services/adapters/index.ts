@@ -65,14 +65,6 @@ export async function storyboard(
   return { panels }
 }
 
-export async function promptGen(input: {
-  id: string
-  sceneId: string
-  prompt: string
-}): Promise<{ id: string; sceneId: string; prompt: string }> {
-  return input
-}
-
 export async function imageGen(input: {
   id: string
   sceneId: string

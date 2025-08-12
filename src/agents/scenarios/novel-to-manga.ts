@@ -33,7 +33,7 @@ export function createNovelToMangaScenario() {
     outputSchema: zChunkOutput,
     retry: { maxAttempts: 3, backoffMs: 1000, factor: 2, jitter: true },
     idempotencyFrom: ['manifestKey'],
-    run: async (input) => {
+    run: async (input: unknown) => {
       // Validate upstream output strictly
       const parsed = zIngestOutput.parse(input)
       return adapters.chunk(parsed)
@@ -60,7 +60,7 @@ export function createNovelToMangaScenario() {
     parallelism: 32,
     retry: { maxAttempts: 5, backoffMs: 1000, factor: 2, jitter: true },
     idempotencyFrom: ['index', 'r2Key'],
-    run: async (input) => {
+    run: async (input: unknown) => {
       // Each item from windows[] is passed here due to mapField handling.
       const itemSchema = z.object({
         index: z.number().int().nonnegative(),
@@ -78,7 +78,7 @@ export function createNovelToMangaScenario() {
     outputSchema: zReduceOutput,
     retry: { maxAttempts: 3, backoffMs: 1500, factor: 2, jitter: true },
     idempotencyFrom: [],
-    run: async (input) => {
+    run: async (input: unknown) => {
       const parsed = z.array(zWindowAnalysis).parse(input)
       return adapters.reduce(parsed)
     },
@@ -91,7 +91,7 @@ export function createNovelToMangaScenario() {
     outputSchema: zStoryboardOutput,
     retry: { maxAttempts: 3, backoffMs: 1000, factor: 2, jitter: true },
     idempotencyFrom: [],
-    run: async (input) => adapters.storyboard(zReduceOutput.parse(input)),
+    run: async (input: unknown) => adapters.storyboard(zReduceOutput.parse(input)),
   })
   b.edge({ from: 'reduce', to: 'storyboard', fanIn: 'all' })
 
@@ -102,7 +102,7 @@ export function createNovelToMangaScenario() {
     parallelism: 1,
     retry: { maxAttempts: 3, backoffMs: 800, factor: 2, jitter: true },
     idempotencyFrom: [],
-    run: async (input) => {
+    run: async (input: unknown) => {
       const parsed = zStoryboardOutput.parse(input)
       // For each panel, we could enrich prompt later; return unchanged for now.
       return parsed
@@ -127,7 +127,7 @@ export function createNovelToMangaScenario() {
     parallelism: 32,
     retry: { maxAttempts: 5, backoffMs: 1200, factor: 2, jitter: true },
     idempotencyFrom: ['id'],
-    run: async (input) => {
+    run: async (input: unknown) => {
       const itemSchema = z.object({
         id: z.string().min(1),
         sceneId: z.string().min(1),
@@ -144,7 +144,7 @@ export function createNovelToMangaScenario() {
     outputSchema: zComposeOutput,
     retry: { maxAttempts: 3, backoffMs: 2000, factor: 2, jitter: true },
     idempotencyFrom: [],
-    run: async (input) => adapters.compose(z.array(zImageResult).parse(input)),
+    run: async (input: unknown) => adapters.compose(z.array(zImageResult).parse(input)),
   })
   b.edge({ from: 'image', to: 'compose', fanIn: 'all' })
 
@@ -157,7 +157,7 @@ export function createNovelToMangaScenario() {
     }),
     retry: { maxAttempts: 3, backoffMs: 1000, factor: 2, jitter: true },
     idempotencyFrom: [],
-    run: async (input) => adapters.publish(zComposeOutput.parse(input)),
+    run: async (input: unknown) => adapters.publish(zComposeOutput.parse(input)),
   })
   b.edge({ from: 'compose', to: 'publish', fanIn: 'all' })
 

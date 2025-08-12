@@ -81,7 +81,14 @@ export class ScenarioBuilder {
     const ScenarioSchema = z.object({
       id: z.string(),
       version: z.string(),
-      steps: z.array(z.object({ id: z.string() } as any)),
+      steps: z.array(
+        z.object({
+          id: z.string(),
+          inputSchema: z.unknown().optional(),
+          outputSchema: z.unknown().optional(),
+          mapField: z.string().optional(),
+        }),
+      ),
       edges: z.array(
         z.object({
           from: z.string(),
@@ -162,9 +169,9 @@ export async function runScenario(
     const exec = async (): Promise<unknown> => {
       // Schema validation (input)
       let validatedInput: unknown = baseInput
-      if (step.inputSchema && typeof (step.inputSchema as any).parse === 'function') {
+      if (step.inputSchema && isZodSchema(step.inputSchema)) {
         try {
-          validatedInput = (step.inputSchema as any).parse(baseInput)
+          validatedInput = step.inputSchema.parse(baseInput)
         } catch (e) {
           throw new Error(`Input validation failed for step ${id}: ${(e as Error).message}`)
         }
@@ -174,9 +181,9 @@ export async function runScenario(
         step.mapField &&
         validatedInput &&
         typeof validatedInput === 'object' &&
-        step.mapField in (validatedInput as any)
+        hasMapFieldArray(validatedInput, step.mapField)
       ) {
-        const items = (validatedInput as any)[step.mapField]
+        const items = (validatedInput as Record<string, unknown[]>)[step.mapField]
         if (!Array.isArray(items))
           throw new Error(`mapField ${step.mapField} is not an array for step ${id}`)
         const mapped: unknown[] = []
@@ -209,13 +216,13 @@ export async function runScenario(
       try {
         const res = await withTimeout()
         // Output schema validation
-        if (step.outputSchema && typeof (step.outputSchema as any).parse === 'function') {
+        if (step.outputSchema && isZodSchema(step.outputSchema)) {
           try {
             if (step.mapField && Array.isArray(res)) {
               // Validate each mapped element individually against the single-item schema.
               for (let i = 0; i < res.length; i++) {
                 try {
-                  ;(step.outputSchema as any).parse(res[i])
+                  step.outputSchema.parse(res[i])
                 } catch (e) {
                   throw new Error(
                     `Output validation failed for step ${id} at index ${i}: ${(e as Error).message}`,
@@ -223,7 +230,7 @@ export async function runScenario(
                 }
               }
             } else {
-              ;(step.outputSchema as any).parse(res)
+              step.outputSchema.parse(res)
             }
           } catch (e) {
             if ((e as Error).message.startsWith('Output validation failed for step')) throw e
@@ -264,4 +271,23 @@ function computeBackoffMs(policy: RetryPolicy | undefined, attempt: number): num
     delay = delay - jitterPortion + Math.random() * (2 * jitterPortion)
   }
   return Math.min(delay, base * 64) // crude cap
+}
+
+// Type guards
+type PossibleZod = { parse: (data: unknown) => unknown }
+function isZodSchema(value: unknown): value is PossibleZod {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'parse' in value &&
+    typeof (value as any).parse === 'function'
+  )
+}
+function hasMapFieldArray(obj: unknown, field: string): obj is Record<string, unknown[]> {
+  return (
+    !!obj &&
+    typeof obj === 'object' &&
+    field in obj &&
+    Array.isArray((obj as Record<string, unknown>)[field])
+  )
 }

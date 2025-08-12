@@ -2,6 +2,15 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createNovelToMangaScenario } from "@/agents/scenarios/novel-to-manga";
 import { runScenario, ScenarioBuilder } from "@/services/orchestrator/scenario";
+import {
+  zChunkOutput,
+  zComposeOutput,
+  zImageResult,
+  zIngestOutput,
+  zReduceOutput,
+  zStoryboardOutput,
+  zWindowAnalysis,
+} from "@/types/contracts";
 
 describe("Scenario DSL", () => {
   it("builds and runs the novel-to-manga flow in memory", async () => {
@@ -33,17 +42,22 @@ describe("Scenario DSL", () => {
     });
 
     // Ensure key stages produced outputs
-    expect(outputs["ingest"]).toMatchObject({
-      manifestKey: expect.any(String),
-      totalChars: expect.any(Number),
-    });
-    expect(outputs["chunk"]).toMatchObject({ windows: expect.any(Array) });
-    // analyzeWindow produces an array of window analyses
-    expect(Array.isArray(outputs["analyzeWindow"] as unknown[])).toBe(true);
-    expect((outputs["reduce"] as any).scenes?.length).toBeGreaterThan(0);
-    expect((outputs["storyboard"] as any).panels?.length).toBeGreaterThan(0);
-    expect(Array.isArray(outputs["image"] as unknown[])).toBe(true);
-    expect((outputs["compose"] as any).pages?.length).toBeGreaterThan(0);
+    const ingestOut = zIngestOutput.parse(outputs["ingest"]);
+    expect(ingestOut.totalChars).toBeGreaterThan(0);
+    const chunkOut = zChunkOutput.parse(outputs["chunk"]);
+    expect(chunkOut.windows.length).toBeGreaterThan(0);
+    const windowAnalyses = z
+      .array(zWindowAnalysis)
+      .parse(outputs["analyzeWindow"]);
+    expect(windowAnalyses.length).toBe(chunkOut.windows.length);
+    const reduceOut = zReduceOutput.parse(outputs["reduce"]);
+    expect(reduceOut.scenes.length).toBeGreaterThan(0);
+    const storyboardOut = zStoryboardOutput.parse(outputs["storyboard"]);
+    expect(storyboardOut.panels.length).toBeGreaterThan(0);
+    const imageOut = z.array(zImageResult).parse(outputs["image"]);
+    expect(imageOut.length).toBeGreaterThan(0);
+    const composeOut = zComposeOutput.parse(outputs["compose"]);
+    expect(composeOut.pages.length).toBeGreaterThan(0);
     expect(outputs["publish"]).toMatchObject({ ok: true });
   });
 

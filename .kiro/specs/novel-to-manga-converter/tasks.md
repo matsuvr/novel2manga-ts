@@ -254,6 +254,13 @@
   - [ ] STEP-OBS-INIT-001: Metrics (latency/retries), structured log, traceId 発行 初期実装
   - [ ] STEP-DOC-ALIGN-001: design.md の Queue Runtime / Envelope / Retry セクション最終確定と差分記載
   - _Requirements: オーケストレーション、可観測性、拡張性_
+  - [x] REVIEW-64-TS-SCHEMA-001: 全シナリオ step run 関数に (input: unknown) 型と Zod.parse 導入（implicit any 排除）
+  - [x] REVIEW-64-TEST-SCHEMA-002: `scenario-dsl.test.ts` を Zod schema parse ベースに更新
+  - [x] REVIEW-64-API-SCHEMA-003: `/api/scenario/run` summary 集計を safeParse 化
+  - [x] REVIEW-64-UI-SCHEMA-004: `ScenarioViewer` フロントエンドレスポンスを Zod discriminated union で検証
+  - [x] REVIEW-64-IDEMP-005: cf-executor idempotencyKey を 安定ソート + sha256 16hex トリムに変更
+  - [x] REVIEW-64-DEADCODE-006: 未使用 `promptGen` アダプタ削除
+  - [x] REVIEW-64-ANY-007: scenario.ts の any キャストを type guard (isZodSchema / hasMapFieldArray) で除去
 
 ## 🚨 緊急修正タスク（2025-08-07追加）
 

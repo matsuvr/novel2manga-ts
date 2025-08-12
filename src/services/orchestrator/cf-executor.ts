@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import type { MessageEnvelope, ScenarioData } from '@/types/contracts'
 
 /**
@@ -77,10 +78,25 @@ export class CloudflareScenarioExecutor {
   }
 
   private deriveIdempotencyKey(jobId: string, stepId: string, payload: unknown): string {
-    // Simple deterministic key; replace with stable hashing (e.g., xxhash) when wiring for production.
-    const base = `${jobId}:${stepId}:${JSON.stringify(payload)?.slice(0, 200)}`
-    let h = 0
-    for (let i = 0; i < base.length; i++) h = (h * 31 + base.charCodeAt(i)) | 0
-    return `${stepId}:${Math.abs(h)}`
+    const canonical = canonicalStringify(payload)
+    const hash = createHash('sha256')
+      .update(jobId)
+      .update(':')
+      .update(stepId)
+      .update(':')
+      .update(canonical)
+      .digest('hex')
+    // Truncate to 16 hex chars for brevity (64 bits)
+    return `${stepId}:${hash.slice(0, 16)}`
   }
+}
+
+// Stable JSON stringify with sorted object keys (handles arrays & primitives recursively)
+function canonicalStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map((v) => canonicalStringify(v)).join(',')}]`
+  const entries = Object.keys(value as Record<string, unknown>)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${canonicalStringify((value as Record<string, unknown>)[k])}`)
+  return `{${entries.join(',')}}`
 }

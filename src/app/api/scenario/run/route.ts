@@ -2,6 +2,15 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createNovelToMangaScenario } from '@/agents/scenarios/novel-to-manga'
 import { runScenario } from '@/services/orchestrator/scenario'
+import {
+  zChunkOutput,
+  zComposeOutput,
+  zImageResult,
+  zIngestOutput,
+  zReduceOutput,
+  zStoryboardOutput,
+  zWindowAnalysis,
+} from '@/types/contracts'
 
 const zRunInput = z.object({
   novelR2Key: z.string().min(1),
@@ -20,16 +29,26 @@ export async function POST(req: Request) {
     const outputs = await runScenario(scenario, { initialInput: input })
     const elapsedMs = Date.now() - started
 
+    const ingestParsed = zIngestOutput.safeParse(outputs.ingest)
+    const chunkParsed = zChunkOutput.safeParse(outputs.chunk)
+    const windowArray = Array.isArray(outputs.analyzeWindow)
+      ? z.array(zWindowAnalysis).safeParse(outputs.analyzeWindow)
+      : { success: false as const }
+    const reduceParsed = zReduceOutput.safeParse(outputs.reduce)
+    const storyboardParsed = zStoryboardOutput.safeParse(outputs.storyboard)
+    const imageParsed = Array.isArray(outputs.image)
+      ? z.array(zImageResult).safeParse(outputs.image)
+      : { success: false as const }
+    const composeParsed = zComposeOutput.safeParse(outputs.compose)
+
     const summary = {
-      ingest: outputs.ingest,
-      chunk: outputs.chunk,
-      analyzeCount: Array.isArray(outputs.analyzeWindow)
-        ? (outputs.analyzeWindow as unknown[]).length
-        : 0,
-      scenes: (outputs.reduce as any)?.scenes?.length ?? 0,
-      panels: (outputs.storyboard as any)?.panels?.length ?? 0,
-      images: Array.isArray(outputs.image) ? (outputs.image as unknown[]).length : 0,
-      pages: (outputs.compose as any)?.pages?.length ?? 0,
+      ingest: ingestParsed.success ? ingestParsed.data : undefined,
+      chunk: chunkParsed.success ? chunkParsed.data : undefined,
+      analyzeCount: windowArray.success ? windowArray.data.length : 0,
+      scenes: reduceParsed.success ? reduceParsed.data.scenes.length : 0,
+      panels: storyboardParsed.success ? storyboardParsed.data.panels.length : 0,
+      images: imageParsed.success ? imageParsed.data.length : 0,
+      pages: composeParsed.success ? composeParsed.data.pages.length : 0,
       publish: outputs.publish,
       elapsedMs,
     }

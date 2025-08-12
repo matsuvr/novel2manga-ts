@@ -1860,6 +1860,12 @@ Cloudflare Queues は少なくとも 1 回配送 (at-least-once) を前提とす
 2. R2 書込に `ifNoneMatch` (将来: ETag 条件) かキー存在チェックで二重生成防止。
 3. DO が (stepId, nodeInstanceId, idempotencyKey) の完了記録を保持し重複 callback を無視。
 
+2025-08-13 更新 (PR#64 Review 対応):
+
+- `cf-executor` の `deriveIdempotencyKey` を JSON.stringify 依存の簡易ハッシュから「キーソート canonical stringify + sha256( jobId:stepId:canonicalInput ) → 16 hex (64bit) トリム」へ改善。キー順序非決定性・200文字トリム衝突リスクを除去し deterministic かつ低衝突率を確保。
+- Scenario DSL 各 step.run で `input: unknown` を明示し必ず対応する Zod schema で `parse()`、暗黙 any / unsafe cast を排除。
+- In-memory runner (`scenario.ts`) で Zod schema 判定を type guard (`isZodSchema`) により安全化し、fan-out mapField 配列要素の個別検証を保持。
+
 #### Observability Roadmap
 
 - Metrics: per step (latency p50/p95, retries, DLQ count)。Durable Object 内にリングバッファ集計、export API 提供。

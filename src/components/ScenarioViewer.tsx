@@ -1,16 +1,17 @@
 'use client'
 import { useCallback, useMemo, useState } from 'react'
+import { z } from 'zod'
 import { createNovelToMangaScenario } from '@/agents/scenarios/novel-to-manga'
 
 type RunSummary = {
-  ingest: unknown
-  chunk: unknown
+  ingest?: unknown
+  chunk?: unknown
   analyzeCount: number
   scenes: number
   panels: number
   images: number
   pages: number
-  publish: unknown
+  publish?: unknown
   elapsedMs: number
 }
 
@@ -33,13 +34,24 @@ export function ScenarioViewer() {
           settings: { windowTokens: 512, strideTokens: 256 },
         }),
       })
-      const json = (await res.json()) as {
-        ok: boolean
-        summary?: RunSummary
-        error?: string
-      }
+      const zRunSummary = z.object({
+        ingest: z.unknown().optional(),
+        chunk: z.unknown().optional(),
+        analyzeCount: z.number(),
+        scenes: z.number(),
+        panels: z.number(),
+        images: z.number(),
+        pages: z.number(),
+        publish: z.unknown().optional(),
+        elapsedMs: z.number(),
+      })
+      const zResponse = z.discriminatedUnion('ok', [
+        z.object({ ok: z.literal(true), summary: zRunSummary }),
+        z.object({ ok: z.literal(false), error: z.string().optional() }),
+      ])
+      const json = zResponse.parse(await res.json())
       if (!json.ok) throw new Error(json.error || 'Run failed')
-      setSummary(json.summary ?? null)
+      setSummary(json.summary)
     } catch (e) {
       setError((e as Error).message)
     } finally {
