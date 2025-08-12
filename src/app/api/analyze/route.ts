@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { chunkAnalyzerAgent } from '@/agents/chunk-analyzer'
 import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
@@ -7,6 +7,7 @@ import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repositor
 import { getJobRepository } from '@/repositories'
 import { getDatabaseService } from '@/services/db-factory'
 import type { AnalyzeResponse } from '@/types/job'
+import { ApiError, createErrorResponse, createSuccessResponse } from '@/utils/api-error'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { StorageKeys, saveEpisodeBoundaries } from '@/utils/storage'
 import { splitTextIntoChunks } from '@/utils/text-splitter'
@@ -37,7 +38,9 @@ export async function POST(request: NextRequest) {
       rawBody = await request.json()
     } catch (error) {
       console.error('[/api/analyze] JSON parse error:', error)
-      return NextResponse.json({ error: '無効なJSONが送信されました' }, { status: 400 })
+      return createErrorResponse(
+        new ApiError('無効なJSONが送信されました', 400, 'VALIDATION_ERROR'),
+      )
     }
 
     console.log('[/api/analyze] Raw body:', rawBody)
@@ -48,15 +51,13 @@ export async function POST(request: NextRequest) {
     const validationResult = analyzeRequestSchema.safeParse(rawBody)
     if (!validationResult.success) {
       console.error('[/api/analyze] Validation error:', validationResult.error)
-      return NextResponse.json(
-        {
-          error: 'リクエストボディが無効です',
-          details: validationResult.error.issues.map((issue) => ({
+      return createErrorResponse(
+        new ApiError('リクエストボディが無効です', 400, 'VALIDATION_ERROR', {
+          issues: validationResult.error.issues.map((issue) => ({
             field: issue.path.join('.'),
             message: issue.message,
           })),
-        },
-        { status: 400 },
+        }),
       )
     }
 
@@ -100,11 +101,10 @@ export async function POST(request: NextRequest) {
       // novelId が指定された場合は、まずDBに存在するか確認し、次にストレージからテキストを取得する
       const existingNovel = await dbService.getNovel(inputNovelId)
       if (!existingNovel) {
-        return NextResponse.json(
-          {
-            error: `小説ID "${inputNovelId}" がデータベースに見つかりません。先に/api/novelエンドポイントで小説を登録してください。`,
-          },
-          { status: 404 },
+        throw new ApiError(
+          `小説ID "${inputNovelId}" がデータベースに見つかりません。先に/api/novelエンドポイントで小説を登録してください。`,
+          404,
+          'NOT_FOUND',
         )
       }
 
@@ -112,9 +112,10 @@ export async function POST(request: NextRequest) {
       const novelKey = `${inputNovelId}.json`
       const novelFile = await novelStorage.get(novelKey)
       if (!novelFile) {
-        return NextResponse.json(
-          { error: `小説ID "${inputNovelId}" のテキストがストレージに見つかりません。` },
-          { status: 404 },
+        throw new ApiError(
+          `小説ID "${inputNovelId}" のテキストがストレージに見つかりません。`,
+          404,
+          'NOT_FOUND',
         )
       }
       const novelData = JSON.parse(novelFile.text)
@@ -122,7 +123,9 @@ export async function POST(request: NextRequest) {
       novelId = inputNovelId
     } else {
       // 型上ありえないがガード
-      return NextResponse.json({ error: 'novelId か text が必要です' }, { status: 400 })
+      return createErrorResponse(
+        new ApiError('novelId か text が必要です', 400, 'VALIDATION_ERROR'),
+      )
     }
 
     const jobId = generateUUID()
@@ -130,7 +133,7 @@ export async function POST(request: NextRequest) {
 
     // ジョブを作成
     if (!novelId) {
-      return NextResponse.json({ error: 'novelId の解決に失敗しました' }, { status: 500 })
+      throw new ApiError('novelId の解決に失敗しました', 500, 'INTERNAL_ERROR')
     }
     await jobRepo.createWithId(jobId, novelId, `Analysis Job for ${title || 'Novel'}`)
 
@@ -185,9 +188,14 @@ export async function POST(request: NextRequest) {
         },
       }
       // 互換用: トップレベルにも jobId/chunkCount を付与し、splitOnlyモードを明示
-      return NextResponse.json(
-        { ...response, jobId, chunkCount: chunks.length, mode: 'splitOnly' },
-        { status: 201 },
+      return createSuccessResponse(
+        {
+          ...response,
+          jobId,
+          chunkCount: chunks.length,
+          mode: 'splitOnly',
+        },
+        201,
       )
     }
 
@@ -356,7 +364,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 互換用にトップレベルにも jobId/chunkCount を出す
-    return NextResponse.json({ ...response, jobId, chunkCount: chunks.length }, { status: 201 })
+    return createSuccessResponse({ ...response, jobId, chunkCount: chunks.length }, 201)
   } catch (error) {
     console.error('[/api/analyze] Error details:', error)
     console.error(
@@ -370,12 +378,10 @@ export async function POST(request: NextRequest) {
     console.error('[/api/analyze] OPENAI_API_KEY exists:', !!process.env.OPENAI_API_KEY)
     console.error('[/api/analyze] NODE_ENV:', process.env.NODE_ENV)
 
-    return NextResponse.json(
-      {
-        error: 'テキストの分析中にエラーが発生しました',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    )
+    // ApiError はそのまま / その他はラップ
+    if (error instanceof ApiError) {
+      return createErrorResponse(error)
+    }
+    return createErrorResponse(error, 'テキストの分析中にエラーが発生しました')
   }
 }

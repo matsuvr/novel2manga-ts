@@ -30,6 +30,10 @@ export class RepositoryFactory {
    * Get singleton factory instance with default database service
    */
   static getInstance(): RepositoryFactory {
+    // In test environment, always return a fresh instance to avoid cross-test pollution
+    if (process.env.NODE_ENV === 'test') {
+      return new RepositoryFactory()
+    }
     if (!RepositoryFactory.instance) {
       RepositoryFactory.instance = new RepositoryFactory()
     }

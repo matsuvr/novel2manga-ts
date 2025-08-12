@@ -347,6 +347,8 @@ export class DatabaseService {
     characterCount?: number
     status?: string
   }): Promise<void>
+  // Internal implementation handling both overload signatures. Use a broad unknown then narrow.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Overload consolidation; validated below
   async createEpisode(episode: any): Promise<void> {
     // 簡易入力かどうかを判定
     const isMinimal =
@@ -489,7 +491,7 @@ export class DatabaseService {
     jobId: string,
     episodeNumber: number,
     pageNumber: number,
-  ): Promise<any | null> {
+  ): Promise<import('@/db/schema').RenderStatus | null> {
     const result = await this.db
       .select()
       .from(renderStatus)
@@ -502,23 +504,29 @@ export class DatabaseService {
       )
       .limit(1)
 
-    return result[0] || null
+    return (result[0] as import('@/db/schema').RenderStatus) || null
   }
 
-  async getRenderStatusByEpisode(jobId: string, episodeNumber: number): Promise<any[]> {
-    return await this.db
+  async getRenderStatusByEpisode(
+    jobId: string,
+    episodeNumber: number,
+  ): Promise<import('@/db/schema').RenderStatus[]> {
+    return (await this.db
       .select()
       .from(renderStatus)
       .where(and(eq(renderStatus.jobId, jobId), eq(renderStatus.episodeNumber, episodeNumber)))
-      .orderBy(renderStatus.pageNumber)
+      .orderBy(renderStatus.pageNumber)) as import('@/db/schema').RenderStatus[]
   }
 
-  async getAllRenderStatusByJob(jobId: string): Promise<any[]> {
-    return await this.db
+  async getAllRenderStatusByJob(jobId: string): Promise<import('@/db/schema').RenderStatus[]> {
+    return (await this.db
       .select()
       .from(renderStatus)
       .where(eq(renderStatus.jobId, jobId))
-      .orderBy(renderStatus.episodeNumber, renderStatus.pageNumber)
+      .orderBy(
+        renderStatus.episodeNumber,
+        renderStatus.pageNumber,
+      )) as import('@/db/schema').RenderStatus[]
   }
 
   async updateRenderStatus(

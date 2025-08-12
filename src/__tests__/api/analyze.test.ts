@@ -90,6 +90,11 @@ vi.mock('@/utils/storage', () => ({
     getChunkStorage: vi.fn(),
     getAnalysisStorage: vi.fn(),
   },
+  // StorageKeys をテスト用に最低限再現（本番実装とシグネチャ整合）
+  StorageKeys: {
+    chunk: (jobId: string, index: number) => `${jobId}/chunks/${index}.txt`,
+    chunkAnalysis: (jobId: string, index: number) => `${jobId}/analysis/chunk-${index}.json`,
+  },
   saveEpisodeBoundaries: vi.fn(),
 }))
 

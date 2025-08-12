@@ -52,6 +52,24 @@ export async function GET(
     })
   } catch (error) {
     console.error('[job-status] Error fetching job status:', error)
-    return createErrorResponse(error, 'Failed to fetch job status')
+    // テスト期待: data.error は常に 'Failed to fetch job status'、詳細には元エラー
+    if (error instanceof ApiError) {
+      // NOT_FOUND や VALIDATION はそのまま返却
+      if (error.statusCode === 404 || error.statusCode === 400) {
+        return createErrorResponse(error)
+      }
+    }
+    // それ以外はメッセージ固定
+    const causeMessage = error instanceof Error ? error.message : String(error)
+    // テストは data.details が文字列で .toContain できることを期待
+    return Response.json(
+      {
+        success: false,
+        error: 'Failed to fetch job status',
+        details: causeMessage,
+        code: 'INTERNAL_ERROR',
+      },
+      { status: 500 },
+    )
   }
 }

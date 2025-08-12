@@ -1,7 +1,8 @@
-import { type NextRequest, NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { chunkAnalyzerAgent } from '@/agents/chunk-analyzer'
 import { getTextAnalysisConfig } from '@/config'
+import { createErrorResponse, createSuccessResponse } from '@/utils/api-error'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
 
 // リクエストボディのバリデーションスキーマ
@@ -74,10 +75,9 @@ export async function POST(request: NextRequest) {
     if (existingAnalysis) {
       console.log(`[/api/analyze/chunk] Analysis already exists for chunk ${chunkIndex}`)
       const analysisData = JSON.parse(existingAnalysis.text)
-      return NextResponse.json({
-        success: true,
-        data: analysisData.analysis,
+      return createSuccessResponse({
         cached: true,
+        data: analysisData.analysis,
       })
     }
 
@@ -86,12 +86,10 @@ export async function POST(request: NextRequest) {
     const chunkFile = await chunkStorage.get(chunkPath)
 
     if (!chunkFile) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Chunk file not found: ${chunkPath}`,
-        },
-        { status: 404 },
+      // Explicit 404 ApiError so tests receive 404 status
+      const { ApiError } = await import('@/utils/api-error')
+      return createErrorResponse(
+        new ApiError(`Chunk file not found: ${chunkPath}`, 404, 'NOT_FOUND'),
       )
     }
 
@@ -136,32 +134,19 @@ export async function POST(request: NextRequest) {
     console.log(`[/api/analyze/chunk] Saved analysis to ${analysisPath}`)
 
     // レスポンスを返却
-    return NextResponse.json({
-      success: true,
-      data: result.object,
-      cached: false,
-    })
+    return createSuccessResponse({ cached: false, data: result.object })
   } catch (error) {
     console.error('[/api/analyze/chunk] Error:', error)
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Invalid request data',
-          details: error.errors,
-        },
-        { status: 400 },
-      )
+      return createErrorResponse(error, 'Invalid request data')
     }
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to analyze chunk',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 },
-    )
+    // Preserve original not found status
+    if (error instanceof Error && error.message.startsWith('Chunk file not found')) {
+      const { ApiError } = await import('@/utils/api-error')
+      return createErrorResponse(new ApiError(error.message, 404, 'NOT_FOUND'))
+    }
+    return createErrorResponse(error, 'Failed to analyze chunk')
   }
 }

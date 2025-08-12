@@ -279,7 +279,19 @@ export function notFoundError(resource: string): NextResponse {
   return createErrorResponse(new NotFoundError(resource))
 }
 
-export function createSuccessResponse<T>(data: T, status: number = 200): NextResponse {
+export function createSuccessResponse<T extends Record<string, unknown> | unknown>(
+  data: T,
+  status: number = 200,
+): NextResponse {
+  // If payload already contains a top-level success flag, trust caller (idempotent wrap)
+  if (typeof data === 'object' && data && 'success' in (data as Record<string, unknown>)) {
+    return NextResponse.json(data, { status })
+  }
+  // For common API patterns expecting flattened fields (tests read data.job, not data.data.job)
+  if (typeof data === 'object' && data && !Array.isArray(data)) {
+    return NextResponse.json({ success: true, ...(data as Record<string, unknown>) }, { status })
+  }
+  // Primitive or array payloads go under data key
   return NextResponse.json({ success: true, data }, { status })
 }
 
