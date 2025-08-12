@@ -1,4 +1,5 @@
 import type { Episode, Job, NewEpisode, NewNovel, NewOutput, Novel } from '@/db'
+import type { JobStatus } from '@/types/job'
 
 /**
  * Repository Port Layer (標準化版)
@@ -51,6 +52,8 @@ export interface JobDbPort {
     totalChunks?: number
     status?: string
   }): Promise<string>
+  /** Update job status (and optionally error reason) */
+  updateJobStatus(id: string, status: JobStatus, error?: string): Promise<void>
 }
 
 // === Novel Port (RO / RW: ensureNovel が書込) ===

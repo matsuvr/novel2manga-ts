@@ -1,4 +1,5 @@
 import type { DatabaseService } from '@/services/database'
+import type { JobStatus } from '@/types/job'
 import type {
   EpisodeDbPort,
   EpisodeDbPortRW,
@@ -35,6 +36,8 @@ export function adaptJobPort(db: DatabaseService): JobDbPort {
     getJobWithProgress: (id) => db.getJobWithProgress(id),
     getJobsByNovelId: (novelId) => db.getJobsByNovelId(novelId),
     createJob: (payload) => db.createJob(payload),
+    updateJobStatus: (id: string, status: JobStatus, error?: string) =>
+      db.updateJobStatus(id, status, error),
   }
 }
 
