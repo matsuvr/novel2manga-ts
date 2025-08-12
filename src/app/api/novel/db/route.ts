@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { adaptAll } from '@/repositories/adapters'
@@ -91,6 +92,7 @@ export async function POST(request: NextRequest) {
         error instanceof Error && 'uuid' in error
           ? (error as Error & { uuid?: string }).uuid
           : undefined,
+      requestId: randomUUID(), // Add request tracing
       timestamp: new Date().toISOString(),
     })
     return createErrorResponse(error, 'Novelの保存中にエラーが発生しました')
@@ -125,7 +127,11 @@ export async function GET(request: NextRequest) {
       return createSuccessResponse({ novels: novelsList })
     }
   } catch (error) {
-    console.error('Novel取得エラー:', error)
+    console.error('Novel取得エラー:', {
+      error,
+      requestId: randomUUID(), // Add request tracing
+      timestamp: new Date().toISOString(),
+    })
     return createErrorResponse(error, 'Novelの取得中にエラーが発生しました')
   }
 }

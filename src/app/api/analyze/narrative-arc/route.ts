@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { NextRequest } from 'next/server'
 // (No direct NextResponse usage; all responses via helpers)
 import { z } from 'zod'
@@ -62,10 +63,13 @@ export async function POST(request: NextRequest) {
       const chunkRepository = new StorageChunkRepository()
       boundaries = await analyzeNarrativeArc(input, chunkRepository)
     } catch (analysisError) {
-      console.error('=== Narrative arc analysis failed ===')
-      console.error('Novel ID:', validatedData.novelId)
-      console.error('Input chunks:', input.chunks.length)
-      console.error('Error:', analysisError)
+      console.error('Narrative arc analysis failed:', {
+        error: analysisError,
+        novelId: validatedData.novelId,
+        inputChunks: input.chunks.length,
+        requestId: randomUUID(), // Add request tracing
+        timestamp: new Date().toISOString(),
+      })
 
       // エラーをそのまま上位に伝える（フォールバックなし）
       throw analysisError
