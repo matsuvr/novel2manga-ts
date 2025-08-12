@@ -244,6 +244,15 @@
   - [x] ドキュメントリンク整備（Cloudflare Queues/DO/D1/R2、Mastra）
   - [ ] Cloudflare Queues / Durable Objects 実行ランタイム（MCPで最新API確認後に実装）
   - [ ] Mastraパイプラインへのコンパイル（MCPでAPI確認後）
+  - [ ] STEP-Q-EXEC-001: Queue Executor 実装（Cloudflare Queues consumer → adapter dispatch）
+    - 受け入れ: batch 消費, fan-out 並列, retry(max 3) & dead-letter ログ
+  - [ ] STEP-DO-COORD-001: Durable Object Coordinator 実装（シナリオ状態管理）
+    - 受け入れ: topo sort, ready step 判定, completion callback 処理, idempotency 記録
+  - [ ] STEP-IDEMP-001: idempotencyKey 生成ユーティリティ (`sha256(stepId+canonicalInputRef)`) + テスト
+  - [ ] STEP-OUTPUT-EXT-001: 出力サイズ閾値 (>8KB) で R2 externalize するラッパ実装
+  - [ ] STEP-FANIN-QUORUM-001: fan-in quorum ポリシー (all/quorum%) 評価ロジック
+  - [ ] STEP-OBS-INIT-001: Metrics (latency/retries), structured log, traceId 発行 初期実装
+  - [ ] STEP-DOC-ALIGN-001: design.md の Queue Runtime / Envelope / Retry セクション最終確定と差分記載
   - _Requirements: オーケストレーション、可観測性、拡張性_
 
 ## 🚨 緊急修正タスク（2025-08-07追加）
@@ -404,6 +413,7 @@ PRレビューコメントからの重要修正を実施し、リポジトリ層
 - [ ] SK-EXPORT-001: `StorageKeys.exportOutput(jobId, fmt)` を追加し、エクスポート成果物のキーを統一
 - [ ] SK-RENDER-STATUS-001: `StorageKeys.renderStatus(jobId, ep, page)` を追加し、JSON 状態の保存/取得を標準化
 - [ ] LEGACY-STORAGE-REMOVE: `src/services/storage.ts` の削除（依存ゼロの確認と Playwright/E2E の再実行）
+  - [ ] STORAGE-AUDIT-IMPL-001: `utils/storage.ts` に `auditStorageKeys()` 実装（並列列挙 + issues 集計） & ユニットテスト
 
 ### 2025-08-12 PR#63 Gemini Medium Review Follow-ups
 
@@ -416,6 +426,7 @@ PRレビューコメントからの重要修正を実施し、リポジトリ層
     - コード例とメリット明記
   - [x] TASK-DOCS-TASKS-001: `tasks.md` 完了タスク記録
   - [x] TASK-DOCS-STORAGE-001: `database/storage-structure.md` audit 機能追記
+  - [x] TASK-DOCS-SCENARIO-001: Scenario Orchestrator DSL 追加分 (Queue Runtime 設計/Envelope/Retry/Idempotency) を design.md 反映
 
 ## 完了成果物
 

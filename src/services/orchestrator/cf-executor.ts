@@ -38,7 +38,11 @@ export class CloudflareScenarioExecutor {
 
   async start(scenario: ScenarioData, jobId: string, initialPayload: unknown): Promise<void> {
     const { coordinator } = this.deps
-    await coordinator.initializeJob({ jobId, scenarioId: scenario.id, version: scenario.version })
+    await coordinator.initializeJob({
+      jobId,
+      scenarioId: scenario.id,
+      version: scenario.version,
+    })
 
     // Identify entry steps (no incoming edges)
     const incoming = new Map<string, number>()

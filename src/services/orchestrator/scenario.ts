@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { Edge, ScenarioData, StepDefinition } from '@/types/contracts'
+import type { Edge, RetryPolicy, ScenarioData, StepDefinition } from '@/types/contracts'
 
 // Internal erased step type to store heterogeneous generic steps safely.
 // We intentionally widen run signature to (input: unknown) => Promise<unknown> so that
@@ -99,6 +99,10 @@ export type RunOutputs = Record<string, unknown>
 
 export interface RunOptions {
   initialInput?: unknown
+  // Maximum per-step execution time (ms) in this in-memory runner (soft timeout via Promise.race)
+  stepTimeoutMs?: number
+  // If true, collect errors instead of throwing immediately; failed step output key will contain an Error instance
+  collectErrors?: boolean
 }
 
 // Minimal in-memory runner for development and tests. This does NOT enqueue to Cloudflare Queues.
@@ -127,6 +131,7 @@ export async function runScenario(
 
   const stepById = new Map(scenario.steps.map((s) => [s.id, s]))
   const outputs: RunOutputs = {}
+  const errors: Record<string, unknown> = {}
 
   // Provide initial input to the first ready node if defined
   const initialAssigned = new Set<string>()
@@ -154,25 +159,91 @@ export async function runScenario(
           ? upstream[0]
           : upstream
 
-    let result: unknown
-    if (
-      step.mapField &&
-      baseInput &&
-      typeof baseInput === 'object' &&
-      step.mapField in (baseInput as any)
-    ) {
-      const items = (baseInput as any)[step.mapField]
-      if (!Array.isArray(items))
-        throw new Error(`mapField ${step.mapField} is not an array for step ${id}`)
-      const mapped = []
-      for (const item of items) {
-        mapped.push(await (step as any).run(item))
+    const exec = async (): Promise<unknown> => {
+      // Schema validation (input)
+      let validatedInput: unknown = baseInput
+      if (step.inputSchema && typeof (step.inputSchema as any).parse === 'function') {
+        try {
+          validatedInput = (step.inputSchema as any).parse(baseInput)
+        } catch (e) {
+          throw new Error(`Input validation failed for step ${id}: ${(e as Error).message}`)
+        }
       }
-      result = mapped
-    } else {
-      result = await (step as any).run(baseInput)
+      // Fan-out handling
+      if (
+        step.mapField &&
+        validatedInput &&
+        typeof validatedInput === 'object' &&
+        step.mapField in (validatedInput as any)
+      ) {
+        const items = (validatedInput as any)[step.mapField]
+        if (!Array.isArray(items))
+          throw new Error(`mapField ${step.mapField} is not an array for step ${id}`)
+        const mapped: unknown[] = []
+        for (const item of items) {
+          mapped.push(await (step.run as (arg: unknown) => Promise<unknown>)(item))
+        }
+        return mapped
+      }
+      return (step.run as (arg: unknown) => Promise<unknown>)(validatedInput)
     }
-    outputs[id] = result
+
+    const withTimeout = async (): Promise<unknown> => {
+      const timeoutMs = opts.stepTimeoutMs
+      if (!timeoutMs || timeoutMs <= 0) return exec()
+      return Promise.race([
+        exec(),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`Step ${id} timed out after ${timeoutMs}ms`)),
+            timeoutMs,
+          ),
+        ),
+      ])
+    }
+
+    const retryCfg: RetryPolicy | undefined = step.retry as RetryPolicy | undefined
+    const maxAttempts = retryCfg?.maxAttempts ?? 1
+    let attempt = 0
+    while (attempt < maxAttempts) {
+      try {
+        const res = await withTimeout()
+        // Output schema validation
+        if (step.outputSchema && typeof (step.outputSchema as any).parse === 'function') {
+          try {
+            if (step.mapField && Array.isArray(res)) {
+              // Validate each mapped element individually against the single-item schema.
+              for (let i = 0; i < res.length; i++) {
+                try {
+                  ;(step.outputSchema as any).parse(res[i])
+                } catch (e) {
+                  throw new Error(
+                    `Output validation failed for step ${id} at index ${i}: ${(e as Error).message}`,
+                  )
+                }
+              }
+            } else {
+              ;(step.outputSchema as any).parse(res)
+            }
+          } catch (e) {
+            if ((e as Error).message.startsWith('Output validation failed for step')) throw e
+            throw new Error(`Output validation failed for step ${id}: ${(e as Error).message}`)
+          }
+        }
+        outputs[id] = res
+        break
+      } catch (err) {
+        attempt++
+        if (attempt >= maxAttempts) {
+          if (!opts.collectErrors) throw err
+          errors[id] = err
+          outputs[id] = err
+          break
+        }
+        const backoff = computeBackoffMs(retryCfg, attempt)
+        if (backoff > 0) await new Promise((r) => setTimeout(r, backoff))
+      }
+    }
 
     for (const n of nexts.get(id) || []) {
       incoming.set(n, (incoming.get(n) || 0) - 1)
@@ -181,4 +252,16 @@ export async function runScenario(
   }
 
   return outputs
+}
+
+function computeBackoffMs(policy: RetryPolicy | undefined, attempt: number): number {
+  if (!policy) return 0
+  const base = policy.backoffMs ?? 0
+  const factor = policy.factor ?? 2
+  let delay = base * factor ** (attempt - 1)
+  if (policy.jitter) {
+    const jitterPortion = delay * 0.2
+    delay = delay - jitterPortion + Math.random() * (2 * jitterPortion)
+  }
+  return Math.min(delay, base * 64) // crude cap
 }
