@@ -173,6 +173,7 @@
 - [ ] 10.9 Emotion / Highlight 種別語彙の列挙型化 + マッピングテーブル実装
 - [ ] 10.10 ドキュメント反映（design.md 変更履歴セクション拡張, API エラー仕様章の更新）
 - [ ] 10.11 既存永続化 Scene データ一括マイグレーションスクリプト（オプション）
+  - [x] Health エンドポイント追加 (`/api/health`) - DB と Storage の簡易疎通確認 (2025-08-12)
   - [x] 環境変数の整理（.envはシークレットのみ）
   - [x] 複数LLMプロバイダー対応（OpenAI、Gemini、Groq、Local）
   - [x] OpenRouterプロバイダー実装と統合
@@ -330,6 +331,10 @@
   - [x] RepositoryFactory に DatabaseService 健全性チェック追加 (2025-08-12)
   - [x] `createWithId` ヘルパ削除 (2025-08-12)
   - [x] `HttpError` 新規使用禁止 ESLint ガード導入 (2025-08-12)
+  - [x] Repository Port 標準化 (entity/mode discriminant + adapters) 実装 (2025-08-12)
+  - [x] Port/Factory テスト追加 (ports-guards / adapters-structure / factory-ttl) (2025-08-12)
+  - [x] Storage Audit 並列化 + 静的公開 (2025-08-12)
+  - [ ] StorageKeys v2 正規化 (prefix 冗長性解消) マイグレーション設計と PoC (保留)
   - [ ] HEALTH-API-001: `/api/health` 実装と E2E テスト置換 (placeholder test からの移行)
     - 背景: 現在の Playwright テストはプレースホルダで CI 通過のみ目的
     - 受け入れ条件:
