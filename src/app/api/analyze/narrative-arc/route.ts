@@ -9,6 +9,7 @@ import {
   createErrorResponse,
   createSuccessResponse,
   ERROR_CODES,
+  extractErrorMessage,
   ValidationError,
 } from '@/utils/api-error'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
@@ -123,15 +124,7 @@ export async function POST(request: NextRequest) {
       return createErrorResponse(error)
     }
     // レガシー互換: tests は error に固定メッセージ, details に元エラーを期待
-    const original = (() => {
-      if (error instanceof Error) return error.message
-      if (typeof error === 'string') return error
-      try {
-        return JSON.stringify(error)
-      } catch {
-        return String(error)
-      }
-    })()
+    const original = extractErrorMessage(error)
     return createErrorResponse(
       new ApiError('Failed to analyze narrative arc', 500, ERROR_CODES.INTERNAL_ERROR, {
         original,

@@ -6,7 +6,12 @@ import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
 import { getDatabaseService } from '@/services/db-factory'
 import type { MangaLayout } from '@/types/panel-layout'
-import { handleApiError, successResponse, validationError } from '@/utils/api-error'
+import {
+  extractErrorMessage,
+  handleApiError,
+  successResponse,
+  validationError,
+} from '@/utils/api-error'
 import { StorageFactory } from '@/utils/storage'
 import { isMangaLayout } from '@/utils/type-guards'
 import { validateJobId } from '@/utils/validators'
@@ -227,7 +232,7 @@ export async function POST(request: NextRequest) {
         results.push({
           pageNumber,
           status: 'failed',
-          error: error instanceof Error ? error.message : String(error),
+          error: extractErrorMessage(error),
         })
 
         failedCount++

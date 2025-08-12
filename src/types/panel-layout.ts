@@ -84,10 +84,14 @@ export interface Character {
 }
 
 import type { Scene } from '@/domain/models/scene'
-// NOTE: 旧レイアウト処理では Scene { time: boolean; location: boolean; ... } の疑似フラグ用途があった。
-// 現行統一モデルでは location: string, time?: string となるため、
-// もし既存ロジックが boolean 判定を想定している箇所が残る場合は adapter 層で
-// e.g. hasTime = !!scene.time などに置換する。未移行箇所が確認されたら TASK 10.x に追記。
+// Re-export Scene for consumers needing layout + scene types from a single import path
+export type { Scene }
+// NOTE (legacy compatibility): 旧レイアウト処理は Scene { time: boolean; location: boolean } を
+// 疑似フラグとして参照していたが、統一モデルでは time?: string, location: string に正規化。
+// 既存コード側で boolean 判定がまだ必要なケースは domain/models/scene.ts の
+// sceneLegacyFlags(scene) で hasTime / hasLocation を得る。直接 !!scene.time 等を書くより
+// ヘルパー経由にすることで除去時 (全移行完了後) に探索容易。
+// 未移行箇所が見つかった場合はタスク管理 (tasks.md) に "Remove legacy scene flags usage" を追記。
 
 export interface DialogueElement {
   emotion: string

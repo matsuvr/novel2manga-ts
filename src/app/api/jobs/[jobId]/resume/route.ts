@@ -1,7 +1,12 @@
 import type { NextRequest } from 'next/server'
 import { getDatabaseService } from '@/services/db-factory'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
-import { ApiError, createErrorResponse, createSuccessResponse } from '@/utils/api-error'
+import {
+  ApiError,
+  createErrorResponse,
+  createSuccessResponse,
+  extractErrorMessage,
+} from '@/utils/api-error'
 import { validateJobId } from '@/utils/validators'
 
 export async function POST(_request: NextRequest, { params }: { params: { jobId: string } }) {
@@ -46,7 +51,7 @@ export async function POST(_request: NextRequest, { params }: { params: { jobId:
       error instanceof ApiError
         ? error
         : new ApiError('Failed to resume job', 500, 'INTERNAL_ERROR', {
-            cause: error instanceof Error ? error.message : String(error),
+            cause: extractErrorMessage(error),
           })
     return createErrorResponse(normalized, 'Failed to resume job')
   }
