@@ -66,15 +66,9 @@ export async function GET(
     }
     // それ以外はメッセージ固定
     const causeMessage = extractErrorMessage(error)
-    // テストは data.details が文字列で .toContain できることを期待
-    return Response.json(
-      {
-        success: false,
-        error: 'Failed to fetch job status',
-        details: causeMessage,
-        code: 'INTERNAL_ERROR',
-      },
-      { status: 500 },
+    // テスト互換: エラーメッセージ固定 & details 文字列
+    return createErrorResponse(
+      new ApiError('Failed to fetch job status', 500, 'INTERNAL_ERROR', causeMessage),
     )
   }
 }

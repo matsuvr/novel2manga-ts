@@ -84,6 +84,8 @@ export interface Character {
 }
 
 import type { Scene } from '@/domain/models/scene'
+// Re-export Scene for consumers needing layout + scene types from a single import path
+export type { Scene }
 // NOTE (legacy compatibility): 旧レイアウト処理は Scene { time: boolean; location: boolean } を
 // 疑似フラグとして参照していたが、統一モデルでは time?: string, location: string に正規化。
 // 既存コード側で boolean 判定がまだ必要なケースは domain/models/scene.ts の
