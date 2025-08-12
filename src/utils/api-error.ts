@@ -9,6 +9,11 @@ import { HttpError } from './http-errors'
 // ========================================
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
+  // INVALID_INPUT: Zod 等構造化検証エラーのうち、フィールド粒度ではなく入力全体が不正なケースを今後段階的に移行させる予定
+  // VALIDATION_ERROR との違い:
+  //  - VALIDATION_ERROR: 単一フィールド/フォームレベルでの再入力が可能なケース
+  //  - INVALID_INPUT: ドメイン制約違反や相互依存により入力全体の再構築が必要なケース
+  INVALID_INPUT: 'INVALID_INPUT',
   NOT_FOUND: 'NOT_FOUND',
   FORBIDDEN: 'FORBIDDEN',
   AUTH_REQUIRED: 'AUTH_REQUIRED',
