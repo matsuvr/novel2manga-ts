@@ -172,6 +172,7 @@
 - [ ] 10.8 Scene 追加属性 (mood, visualElements) 利用開始: LLM プロンプト & 保存スキーマ反映
 - [ ] 10.9 Emotion / Highlight 種別語彙の列挙型化 + マッピングテーブル実装
 - [ ] 10.10 ドキュメント反映（design.md 変更履歴セクション拡張, API エラー仕様章の更新）
+- [ ] 10.11 既存永続化 Scene データ一括マイグレーションスクリプト（オプション）
   - [x] 環境変数の整理（.envはシークレットのみ）
   - [x] 複数LLMプロバイダー対応（OpenAI、Gemini、Groq、Local）
   - [x] OpenRouterプロバイダー実装と統合

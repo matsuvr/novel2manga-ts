@@ -111,11 +111,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Narrative arc analysis error:', error)
     if (error instanceof z.ZodError) {
-      // Zod エラーを統一レスポンスへマッピング
+      // Zod エラー: 既に INVALID_INPUT を適用済 (コメント更新: 段階的 → 実装済)
       return createErrorResponse(
         new ValidationError('Invalid request data', undefined, {
           issues: error.errors,
-          code: ERROR_CODES.INVALID_INPUT, // 将来的に ZodError -> INVALID_INPUT へ整理
+          code: ERROR_CODES.INVALID_INPUT,
         }),
       )
     }
@@ -123,15 +123,18 @@ export async function POST(request: NextRequest) {
       return createErrorResponse(error)
     }
     // レガシー互換: tests は error に固定メッセージ, details に元エラーを期待
+    const original = (() => {
+      if (error instanceof Error) return error.message
+      if (typeof error === 'string') return error
+      try {
+        return JSON.stringify(error)
+      } catch {
+        return String(error)
+      }
+    })()
     return createErrorResponse(
       new ApiError('Failed to analyze narrative arc', 500, ERROR_CODES.INTERNAL_ERROR, {
-        // 元エラーメッセージを details に格納（テスト互換性確保 & デバッグ支援）
-        original:
-          error instanceof Error
-            ? error.message
-            : typeof error === 'string'
-              ? error
-              : String(error),
+        original,
       }),
     )
   }

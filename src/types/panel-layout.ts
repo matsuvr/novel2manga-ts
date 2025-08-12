@@ -84,6 +84,10 @@ export interface Character {
 }
 
 import type { Scene } from '@/domain/models/scene'
+// NOTE: 旧レイアウト処理では Scene { time: boolean; location: boolean; ... } の疑似フラグ用途があった。
+// 現行統一モデルでは location: string, time?: string となるため、
+// もし既存ロジックが boolean 判定を想定している箇所が残る場合は adapter 層で
+// e.g. hasTime = !!scene.time などに置換する。未移行箇所が確認されたら TASK 10.x に追記。
 
 export interface DialogueElement {
   emotion: string

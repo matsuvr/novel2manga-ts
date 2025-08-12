@@ -1,4 +1,5 @@
-import { z } from 'zod'
+import { ZodError, z } from 'zod'
+import { ERROR_CODES, ValidationError } from '@/utils/api-error'
 
 // 統一 Scene ドメインモデル / スキーマ集約
 // 目的:
@@ -44,7 +45,26 @@ export function isSceneDomainModel(value: unknown): value is SceneFlexible {
 
 export function normalizeToSceneCore(scene: unknown): Scene {
   // 柔軟な入力 -> 厳格 Scene への正規化
-  // 足りない必須フィールドはエラーにする (呼び出し元で try/catch)
-  const flexible = SceneFlexibleSchema.parse(scene)
-  return SceneCoreSchema.parse(flexible)
+  // 必須フィールド不足時は ValidationError (code=INVALID_INPUT) にラップ
+  try {
+    // 直接 Core で検証 (Flexible -> Core の二段階は不要なため簡略化)
+    return SceneCoreSchema.parse(scene)
+  } catch (err) {
+    if (err instanceof ZodError) {
+      const requiredKeys = new Set(['id', 'location', 'description', 'startIndex', 'endIndex'])
+      const missingFields = Array.from(requiredKeys).filter((k) =>
+        err.issues.some((i) => i.path.length === 1 && i.path[0] === k),
+      )
+      throw new ValidationError(
+        `Scene normalization failed: missing or invalid required fields: ${missingFields.join(', ')}`,
+        undefined,
+        {
+          issues: err.issues,
+          missingFields,
+          code: ERROR_CODES.INVALID_INPUT,
+        },
+      )
+    }
+    throw err
+  }
 }

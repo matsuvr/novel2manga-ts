@@ -25,6 +25,15 @@
 - Scene 追加語彙（emotion semantics 等）の列挙型化とマッピングテーブル整備。
 - 永続化境界での `normalizeToSceneCore` 強制適用と移行ステップのテスト追加。
 
+#### Migration Strategy (Scenes)
+
+既存永続化済みデータに旧 Scene 形（boolean フラグ等）が混在する可能性への対応方針:
+
+1. 読込パスでの寛容パース: 旧構造を受けた場合、`{ location: flag? 'UNKNOWN' : original, description: setting/mood 合成 }` などのマッピングを adapter で実施予定。
+2. `normalizeToSceneCore` 適用前に補完: 不足フィールド (id, description 等) は一時ID生成 (`scene-${index}-${hash}`) とし audit ログへ記録。
+3. マイグレーションスクリプト（オプション）: 開発環境で既存 JSON/R2 オブジェクトを一括走査し Core 形式へ再書込（TASK 10.11 検討）。
+4. 検証レポート: マイグレーション前後で missingFields 件数を集計し tasks.md に貼付。
+
 これらは `.kiro/specs/novel-to-manga-converter/tasks.md` に新規タスク群として追記しました。
 
 ## Requirements Mapping
