@@ -683,6 +683,5 @@ export async function auditStorageKeys(options: {
 
   return { scanned, issues }
 }
-
 // StorageFactory へ監査機能を動的に付与 (破壊的変更回避)
 ;(StorageFactory as any).auditKeys = auditStorageKeys

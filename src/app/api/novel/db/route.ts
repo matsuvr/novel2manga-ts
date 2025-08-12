@@ -52,7 +52,11 @@ export async function POST(request: NextRequest) {
     const jobId = crypto.randomUUID()
     const { job: jobPort } = adaptAll(dbService)
     const jobRepo = new JobRepository(jobPort)
-    await jobRepo.create({ id: jobId, novelId: uuid as string, title: 'text_analysis' })
+    await jobRepo.create({
+      id: jobId,
+      novelId: uuid as string,
+      title: 'text_analysis',
+    })
 
     return createSuccessResponse({
       novel: {
