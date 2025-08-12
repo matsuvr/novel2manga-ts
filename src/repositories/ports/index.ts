@@ -126,11 +126,23 @@ export interface PortConfiguration {
 export type PortFactory<T extends Partial<UnifiedDbPort>> = (config: PortConfiguration) => T
 
 // Runtime type guards for discriminated union narrowing (defensive checks)
-export const isEpisodePort = (p: unknown): p is EpisodeDbPort =>
-  !!p && typeof p === 'object' && (p as any).entity === 'episode'
-export const isNovelPort = (p: unknown): p is NovelDbPort =>
-  !!p && typeof p === 'object' && (p as any).entity === 'novel'
-export const isJobPort = (p: unknown): p is JobDbPort =>
-  !!p && typeof p === 'object' && (p as any).entity === 'job'
-export const isOutputPort = (p: unknown): p is OutputDbPort =>
-  !!p && typeof p === 'object' && (p as any).entity === 'output'
+export const isEpisodePort = (p: unknown): p is EpisodeDbPort => {
+  if (!p || typeof p !== 'object') return false
+  const obj = p as { entity?: unknown }
+  return obj.entity === 'episode'
+}
+export const isNovelPort = (p: unknown): p is NovelDbPort => {
+  if (!p || typeof p !== 'object') return false
+  const obj = p as { entity?: unknown }
+  return obj.entity === 'novel'
+}
+export const isJobPort = (p: unknown): p is JobDbPort => {
+  if (!p || typeof p !== 'object') return false
+  const obj = p as { entity?: unknown }
+  return obj.entity === 'job'
+}
+export const isOutputPort = (p: unknown): p is OutputDbPort => {
+  if (!p || typeof p !== 'object') return false
+  const obj = p as { entity?: unknown }
+  return obj.entity === 'output'
+}

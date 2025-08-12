@@ -8,15 +8,29 @@
 
 今回の変更で以下を統合/改善しました:
 
+**Repository Ports & Adapters Pattern 導入:**
+
+- リポジトリ層の標準化により型安全性とテスタビリティを向上。Entity別の discriminated union ports (`EpisodeDbPort`, `NovelDbPort`, `JobDbPort`, `OutputDbPort`) に Read-Only/Read-Write モードを明示
+- Adapter Pattern (`src/repositories/adapters.ts`) により既存 `DatabaseService` を非侵襲で新ポート仕様に適合、後方互換性を確保
+- Type Guards (`hasEpisodeWriteCapabilities` など) でランタイム安全性と compile-time narrowing を提供
+- Repository Factory Cache TTL: 環境変数 `REPOSITORY_FACTORY_TTL_MS` で上書き可能（開発/テスト: 5分、本番: 30分）
+
+**Storage Path Structure 正規化:**
+
+- Storage Key 重複パス問題を修正 (例: `.local-storage/novels/novels/` → `.local-storage/novels/`)
+- StorageKeys の ID バリデーション強化（パストラバーサル防止、null バイト/URL エンコード検出）
+- Storage Audit Parallelization: `Promise.all` 並列化により I/O 待機時間を大幅短縮
+
+**Type Safety & Code Quality 改善:**
+
+- 全 `any` 型使用を廃止、strict TypeScript compliance を達成
+- Zod エラーハンドリング統合 (`createSuccessResponse`/`createErrorResponse`)
+- 新エラーコード `INVALID_INPUT` 導入による入力検証レスポンスの明確化
+
 - Scene ドメインモデルの単一ソース化: `src/domain/models/scene.ts` を新設し、従来 `text-analysis.ts` / `database-models.ts` / `panel-layout.ts` などで重複していた `SceneSchema` を一本化。
   - 2段階スキーマ設計: `SceneFlexibleSchema` (LLM出力/外部入力の未確定段階を緩く受ける) と `SceneCoreSchema` (永続化・厳格分析用の必須フィールド) を導入。
   - 既存コード後方互換: 既存参照名 `SceneSchema` は Core を再エクスポートして破壊的変更を回避。
   - 目的: 型重複によるドリフト防止 / 正規化パイプライン挿入容易化 / 将来のシーン拡張フィールド (mood, visualElements 等) の漸進導入。
-- 正規化ユーティリティ: `normalizeToSceneCore()` を追加し、Flexible 形から必須フィールド未充足時はバリデーションエラーを即座に検出できるようにした（まだ永続化フローへの組込みは未実装、今後のタスク）。
-- エラーハンドリング標準化 (Narrative Arc API): `/api/analyze/narrative-arc` を `createSuccessResponse` / `createErrorResponse` ベースへ移行し、旧 `{ error, details }` 形式を段階的に統一。
-  - Zod 構造化検証エラーおよび入力範囲不備ケースで `ValidationError` + details.code=`INVALID_INPUT` を付与。
-  - 既存テスト互換のため、内部エラー時は `error: "Failed to analyze narrative arc"` を維持しつつ `details.original` に元メッセージを格納。
-- 新エラーコード `INVALID_INPUT` 導入: フィールド単体再入力ではなく入力全体再構築が必要なケースを `VALIDATION_ERROR` から概念的に分離（現時点では narrative-arc のみ使用 / 段階的ロールアウト予定）。
 
 今後予定される追随作業:
 
@@ -83,6 +97,14 @@ graph TB
         Q[Export Service] --> R[Format Converters]
     end
 
+    subgraph "Repository Layer (Ports & Adapters)"
+        RA[Repository Adapters] --> RD[DatabaseService]
+        RP[Repository Ports] --> RA
+        RF[Repository Factory] --> RP
+        RT[Type Guards] --> RP
+        RC[Repository Cache] --> RF
+    end
+
     subgraph "Data Layer"
         S[Cloudflare D1] --> T[Novel/Job/Chunk Tables]
         S --> U[Episode/Layout/Render Tables]
@@ -92,9 +114,11 @@ graph TB
     end
 
     B --> E
-    C --> K
+    C --> RF
     E --> K
-    K --> S
+    K --> RF
+    RF --> RD
+    RD --> S
     G --> M
     M --> O
     O --> W
@@ -1139,18 +1163,80 @@ export class StorageFactory {
 
 従来 `DatabaseService` がそのまま全用途で利用されていたため、テスト・静的解析・最小権限化（read-only vs read-write）判別が困難だった。以下の方針で改善:
 
-- Port Interfaces: Episode / Job / Novel / Output それぞれ RO/RW 能力を discriminant (`entity`, `mode`) で明示。
-- Adapter Layer: 既存 `DatabaseService` を修正せず `adaptAll()` でポートを生成（後方互換性確保）。
-- Type Guards: `hasEpisodeWriteCapabilities` などでランタイム安全性と narrow を提供。
-- UnifiedDbPort: 将来的に複合操作（トランザクション風）を扱うための統合型を用意（現時点は未使用）。
-- Testing: 新規テスト (`ports-guards.test.ts`, `adapters-structure.test.ts`, `factory-ttl.test.ts`) によりキャッシュ TTL / モード判定 / discriminant 整合性を検証。
+**Port Interfaces Design:**
+
+```typescript
+// Discriminated Union Ports with Entity and Mode
+export interface EpisodeDbPortRO {
+  entity: "episode";
+  mode: "ro";
+  getEpisode(id: string): Promise<Episode | null>;
+  getEpisodesByJobId(jobId: string): Promise<Episode[]>;
+}
+
+export interface EpisodeDbPortRW extends Omit<EpisodeDbPortRO, "mode"> {
+  mode: "rw";
+  createEpisodes(episodes: NewEpisode[]): Promise<void>;
+}
+
+// Type Guards for Runtime Safety
+export function hasEpisodeWriteCapabilities(
+  port: EpisodeDbPort,
+): port is EpisodeDbPortRW {
+  const candidate: unknown = port as unknown;
+  if (!candidate || typeof candidate !== "object") return false;
+  const obj = candidate as { mode?: unknown; createEpisodes?: unknown };
+  return obj.mode === "rw" || typeof obj.createEpisodes === "function";
+}
+```
+
+**Adapter Pattern Implementation:**
+
+```typescript
+// Non-invasive adaptation of existing DatabaseService
+export function adaptEpisodeDbPort(
+  dbService: DatabaseService,
+  mode: "ro" | "rw",
+): EpisodeDbPortRO | EpisodeDbPortRW {
+  const base = {
+    entity: "episode" as const,
+    mode: mode as const,
+    getEpisode: dbService.getEpisode.bind(dbService),
+    getEpisodesByJobId: dbService.getEpisodesByJobId.bind(dbService),
+  };
+
+  if (mode === "rw") {
+    return {
+      ...base,
+      mode: "rw" as const,
+      createEpisodes: dbService.createEpisodes.bind(dbService),
+    };
+  }
+  return base;
+}
+```
+
+**Repository Factory with Caching:**
+
+```typescript
+// Environment-specific TTL configuration
+private static readonly CACHE_TTL_MS = (() => {
+  const v = process.env.REPOSITORY_FACTORY_TTL_MS
+  const parsed = v ? Number.parseInt(v, 10) : NaN
+  const isDev = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test"
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : (isDev ? 1000 * 60 * 5 : 1000 * 60 * 30) // 5min dev, 30min prod
+})()
+```
 
 利点:
 
-1. 最小権限: RO 実装（将来 R2 読み取り専用レプリカ等）追加が容易。
-2. 型安全: entity 間の API 誤使用をコンパイル時に検出。
-3. テスト容易性: アダプタ注入により in-memory / fake 実装差し替えが単純化。
-4. 漸進移行: DatabaseService の大規模改変を避けつつ段階的リファクタが可能。
+1. **最小権限**: RO 実装（将来 R2 読み取り専用レプリカ等）追加が容易。
+2. **型安全**: entity 間の API 誤使用をコンパイル時に検出。
+3. **テスト容易性**: アダプタ注入により in-memory / fake 実装差し替えが単純化。
+4. **漸進移行**: DatabaseService の大規模改変を避けつつ段階的リファクタが可能。
+5. **後方互換**: 既存コードは変更なしで新ポートの恩恵を受ける。
 
 #### Storage Audit Parallelization 詳細
 

@@ -71,7 +71,8 @@
       "Bash(git add:*)",
       "Bash(gh pr view:*)",
       "Bash(git checkout:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npm run typecheck:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

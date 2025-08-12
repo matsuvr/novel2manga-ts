@@ -486,48 +486,47 @@ function validateId(id: string, label: string): void {
 export const StorageKeys = {
   novel: (uuid: string) => {
     validateId(uuid, 'uuid')
-    // NOTE: 現在は getNovelStorage() が baseDir = novels, かつキーも novels/uuid.json となり二重になる懸念があるが
-    // 既存テスト/利用コード互換性のため一旦維持。将来: baseDir をルートに寄せキーから先頭プレフィックスを除去する移行を検討。
-    return `novels/${uuid}.json`
+    // Fixed: Remove duplicate 'novels/' prefix since getNovelStorage() already provides baseDir = novels
+    return `${uuid}.json`
   },
   chunk: (jobId: string, index: number) => {
     validateId(jobId, 'jobId')
-    return `chunks/${jobId}/chunk_${index}.txt`
+    return `${jobId}/chunk_${index}.txt`
   },
   chunkAnalysis: (jobId: string, index: number) => {
     validateId(jobId, 'jobId')
-    return `analyses/${jobId}/chunk_${index}.json`
+    return `${jobId}/chunk_${index}.json`
   },
   integratedAnalysis: (jobId: string) => {
     validateId(jobId, 'jobId')
-    return `analyses/${jobId}/integrated.json`
+    return `${jobId}/integrated.json`
   },
   narrativeAnalysis: (jobId: string) => {
     validateId(jobId, 'jobId')
-    return `analyses/${jobId}/narrative.json`
+    return `${jobId}/narrative.json`
   },
   episodeLayout: (jobId: string, episodeNumber: number) => {
     validateId(jobId, 'jobId')
-    return `layouts/${jobId}/episode_${episodeNumber}.yaml`
+    return `${jobId}/episode_${episodeNumber}.yaml`
   },
   pageRender: (jobId: string, episodeNumber: number, pageNumber: number) => {
     validateId(jobId, 'jobId')
-    return `renders/${jobId}/episode_${episodeNumber}/page_${pageNumber}.png`
+    return `${jobId}/episode_${episodeNumber}/page_${pageNumber}.png`
   },
   pageThumbnail: (jobId: string, episodeNumber: number, pageNumber: number) => {
     validateId(jobId, 'jobId')
-    return `renders/${jobId}/episode_${episodeNumber}/thumbnails/page_${pageNumber}_thumb.png`
+    return `${jobId}/episode_${episodeNumber}/thumbnails/page_${pageNumber}_thumb.png`
   },
   exportOutput: (jobId: string, format: string) => {
     validateId(jobId, 'jobId')
     if (!/^[a-zA-Z0-9]+$/.test(format)) {
       throw new Error('StorageKeys: invalid export format')
     }
-    return `exports/${jobId}/output.${format}`
+    return `${jobId}/output.${format}`
   },
   renderStatus: (jobId: string, episodeNumber: number, pageNumber: number) => {
     validateId(jobId, 'jobId')
-    return `render-status/${jobId}/episode_${episodeNumber}/page_${pageNumber}.json`
+    return `${jobId}/episode_${episodeNumber}/page_${pageNumber}.json`
   },
 } as const
 

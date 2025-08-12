@@ -46,3 +46,5 @@ PR checklist (copy into your PR and tick all):
 
 If any item cannot be satisfied, stop and resolve it first. Do not proceed with implementation or merging until all conditions above are met.
 ```
+
+- あなたはgh, rp, jqのコマンドが利用可能です

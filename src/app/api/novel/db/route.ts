@@ -87,7 +87,10 @@ export async function POST(request: NextRequest) {
     console.error('Novel保存エラー:', {
       error,
       // uuid がパースに失敗した場合 undefined の可能性があるため optional
-      uuid: (error as any)?.uuid ?? undefined,
+      uuid:
+        error instanceof Error && 'uuid' in error
+          ? (error as Error & { uuid?: string }).uuid
+          : undefined,
       timestamp: new Date().toISOString(),
     })
     return createErrorResponse(error, 'Novelの保存中にエラーが発生しました')

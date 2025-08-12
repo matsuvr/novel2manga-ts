@@ -334,6 +334,67 @@
   - [x] Repository Port 標準化 (entity/mode discriminant + adapters) 実装 (2025-08-12)
   - [x] Port/Factory テスト追加 (ports-guards / adapters-structure / factory-ttl) (2025-08-12)
   - [x] Storage Audit 並列化 + 静的公開 (2025-08-12)
+
+### Repository Storage Standardization (2025-08-12 完了)
+
+PRレビューコメントからの重要修正を実施し、リポジトリ層とストレージ層の標準化を完了:
+
+- [x] 34. 必須修正 - CLAUDE.md 違反項目解消
+  - [x] TASK-TYPE-SAFETY-001: 全 `any` 型使用廃止 (`src/repositories/ports/index.ts`, `src/app/api/novel/db/route.ts`)
+    - 受け入れ条件: TypeScript strict モード完全準拠、適切な型ガード使用
+    - テスト: 既存型ガードテストがグリーンのまま
+  - [x] TASK-STORAGE-PATH-001: StorageKeys重複パス修正
+    - 問題: `.local-storage/novels/novels/` 形式の重複パス生成
+    - 修正: StorageKeys から prefix 除去、getNovelStorage() の baseDir を活用
+    - テスト: ストレージ統合テストでパス検証
+
+- [x] 35. Repository Ports & Adapters Pattern
+  - [x] TASK-PORTS-DESIGN-001: Discriminated Union Ports 設計
+    - Entity別ポート (`EpisodeDbPort`, `NovelDbPort`, `JobDbPort`, `OutputDbPort`)
+    - Read-Only/Read-Write モード明示 (`entity`, `mode` discriminant)
+    - Type Guards 実装 (`hasEpisodeWriteCapabilities` 等)
+  - [x] TASK-ADAPTERS-IMPL-001: Adapter Pattern 実装
+    - 非侵襲適合: `adaptAll()` で DatabaseService → Ports 変換
+    - 後方互換性確保、段階的移行対応
+  - [x] TASK-FACTORY-CACHE-001: Repository Factory TTL機能
+    - 環境変数 `REPOSITORY_FACTORY_TTL_MS` 対応 (dev:5分, prod:30分)
+    - メモリ滞留防止のためTTL経過時自動クリア
+
+- [x] 36. Storage & Security 強化
+  - [x] TASK-STORAGE-AUDIT-001: Storage Audit並列化
+    - 逐次走査 → `Promise.all` 並列処理による I/O 待機短縮
+    - 動的 monkey patch 廃止、`StorageFactory.auditKeys` 静的公開
+  - [x] TASK-PATH-SECURITY-001: パストラバーサル防止
+    - StorageKeys ID バリデーション強化 (null バイト/URL エンコード検出)
+    - `validateId()` による allowlist アプローチ実装
+
+- [x] 37. テストカバレッジ拡充
+  - [x] TASK-TEST-ADAPTERS-001: アダプターパターンテスト (`src/__tests__/repositories/adapters.test.ts`)
+    - モック DatabaseService との統合テスト
+    - 全 entity 操作の動作確認
+  - [x] TASK-TEST-GUARDS-001: 型ガードテスト拡充 (`src/__tests__/repositories/ports-guards.test.ts`)
+    - Write capability 判定テスト
+    - Discriminated union 型ガードテスト
+    - エッジケース (null/undefined/wrong entity) 対応テスト
+
+- [x] 38. ドキュメント更新
+  - [x] TASK-DOCS-DESIGN-001: `design.md` アーキテクチャ図更新
+    - Repository Layer (Ports & Adapters) 追加
+    - コード例とメリット明記
+  - [x] TASK-DOCS-TASKS-001: `tasks.md` 完了タスク記録
+  - [x] TASK-DOCS-STORAGE-001: `database/storage-structure.md` audit 機能追記
+
+## 完了成果物
+
+本セクションにより以下が実現:
+
+- TypeScript strict 準拠 (any 型完全廃止)
+- SOLID 原則準拠のリポジトリ設計
+- 型安全性とテスタビリティの大幅向上
+- セキュリティ強化 (パストラバーサル防止)
+- パフォーマンス改善 (並列ストレージアクセス)
+- 包括的テストカバレッジ
+- 後方互換性を保持した段階的移行
   - [ ] StorageKeys v2 正規化 (prefix 冗長性解消) マイグレーション設計と PoC (保留)
   - [ ] HEALTH-API-001: `/api/health` 実装と E2E テスト置換 (placeholder test からの移行)
     - 背景: 現在の Playwright テストはプレースホルダで CI 通過のみ目的
