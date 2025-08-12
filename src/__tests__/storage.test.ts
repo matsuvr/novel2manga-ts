@@ -23,9 +23,7 @@ describe("Storage", () => {
       expect(StorageKeys.novel("test-uuid")).toBe("test-uuid.json");
       // chunk key signature changed to (jobId, index) and now stores .txt (without top-level dir prefix)
       expect(StorageKeys.chunk("job-1", 3)).toBe("job-1/chunk_3.txt");
-      expect(StorageKeys.chunkAnalysis("job-1", 0)).toBe(
-        "job-1/chunk_0.json"
-      );
+      expect(StorageKeys.chunkAnalysis("job-1", 0)).toBe("job-1/chunk_0.json");
       expect(StorageKeys.integratedAnalysis("job-1")).toBe(
         "job-1/integrated.json"
       );
