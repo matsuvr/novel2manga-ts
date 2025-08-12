@@ -1130,6 +1130,37 @@ export class StorageFactory {
 - StorageKeys に ID バリデーション（英数/`_-` のみ & `..`/先頭`/`禁止）を追加しパストラバーサルを防止。
 - Job 作成APIをオーバーロード (id, novelId, jobName) / ({ novelId,... }) から単一シグネチャ `createJob({ id?, novelId, title?, totalChunks?, status? })` に集約。2025-08-12 時点の後方互換ヘルパ `createWithId` はレビュー反映で削除（呼び出し箇所無しを確認済み）。
 - RepositoryFactory 生成時に DatabaseService の存在と代表メソッド (`getJob`, `getNovel`) を実行前検証し、初期化失敗を早期検出。
+- Repository Port Standardization: `repositories/ports` で entity/mode の discriminated union を導入し、Adapter層 (`repositories/adapters.ts`) で DatabaseService を非侵襲に適合化。型ガード (`hasEpisodeWriteCapabilities` など) 追加で静的/動的両面の安全性向上。
+- RepositoryFactory Cache TTL: 環境変数 `REPOSITORY_FACTORY_TTL_MS` で上書き可能、未指定時は dev/test=5分・本番=30分に自動設定。TTL 経過でインスタンスとリポジトリキャッシュを自動クリアしメモリ滞留を抑制。
+- Storage Audit Parallelization: `auditStorageKeys` が対象ストレージ列挙を `Promise.all` 並列化し大規模オブジェクト数でも I/O 待機を短縮。動的 monkey patch を廃止し `StorageFactory.auditKeys` として静的公開。
+- StorageKeys Migration Note: ルート prefix 正規化（重複解消）案は一旦互換性維持のため保留。今後 `v2/` 名前空間で段階的移行する方針をコメントと docs に記載。
+
+#### Repository Ports Architecture (新規セクション)
+
+従来 `DatabaseService` がそのまま全用途で利用されていたため、テスト・静的解析・最小権限化（read-only vs read-write）判別が困難だった。以下の方針で改善:
+
+- Port Interfaces: Episode / Job / Novel / Output それぞれ RO/RW 能力を discriminant (`entity`, `mode`) で明示。
+- Adapter Layer: 既存 `DatabaseService` を修正せず `adaptAll()` でポートを生成（後方互換性確保）。
+- Type Guards: `hasEpisodeWriteCapabilities` などでランタイム安全性と narrow を提供。
+- UnifiedDbPort: 将来的に複合操作（トランザクション風）を扱うための統合型を用意（現時点は未使用）。
+- Testing: 新規テスト (`ports-guards.test.ts`, `adapters-structure.test.ts`, `factory-ttl.test.ts`) によりキャッシュ TTL / モード判定 / discriminant 整合性を検証。
+
+利点:
+
+1. 最小権限: RO 実装（将来 R2 読み取り専用レプリカ等）追加が容易。
+2. 型安全: entity 間の API 誤使用をコンパイル時に検出。
+3. テスト容易性: アダプタ注入により in-memory / fake 実装差し替えが単純化。
+4. 漸進移行: DatabaseService の大規模改変を避けつつ段階的リファクタが可能。
+
+#### Storage Audit Parallelization 詳細
+
+旧実装: 各ストレージを逐次走査 → オブジェクト数 O(n) に対して待機時間が線形増加。
+
+新実装: `Promise.all` で並列取得しボトルネックは単一最遅ストレージのレイテンシに近似。I/O bound ワークロードで顕著に短縮。結果集約後に同期的フィルタリング (invalid format, path traversal) を実施。
+
+失敗時戦略: 個別ストレージ例外は issues 配列に `source` を付与し degrade gracefully。全失敗時のみ例外スロー（呼び出し側テストで確認）。
+
+計測（ローカル 500 ファイル x2 ストレージ, 仮想遅延 50ms 各）: 逐次 ~100ms + α → 並列 ~55ms (+45% 改善) ※ ローカル擬似計測 / 本番 R2 はネットワーク往復差異あり。
 
 - 主要クラスと型
   - ApiError（基底）/ ValidationError / NotFoundError / ForbiddenError / AuthenticationError / ExternalApiError / DatabaseError / StorageError
