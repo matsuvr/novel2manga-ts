@@ -13,9 +13,9 @@ describe("extractErrorMessage", () => {
     expect(extractErrorMessage({ a: 1, b: "x" })).toBe('{"a":1,"b":"x"}');
   });
   it("falls back to String for circular object", () => {
-  const obj: Record<string, unknown> = {} as Record<string, unknown>;
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment -- circular assignment is intentional and safe for test
-  ;(obj as any).self = obj;
+  const obj: Record<string, unknown> = {};
+  // 循環参照を生成（Record<string, unknown> なので self プロパティ追加は許容される）
+  obj.self = obj;
     const result = extractErrorMessage(obj);
     // Circular -> JSON.stringify throws -> fallback to String => [object Object]
     expect(result).toBe("[object Object]");
@@ -38,5 +38,12 @@ describe("extractErrorMessage", () => {
     function sampleFn() { /* noop */ }
     const msg = extractErrorMessage(sampleFn);
     expect(msg).toMatch(/sampleFn|function/i);
+  });
+
+  it("truncates very large JSON strings (>1000 chars)", () => {
+    const large = { data: 'a'.repeat(1500) };
+    const msg = extractErrorMessage(large);
+    expect(msg.length).toBe(1000);
+    expect(msg.endsWith('...')).toBe(true);
   });
 });

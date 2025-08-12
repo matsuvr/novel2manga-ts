@@ -284,7 +284,13 @@ export function extractErrorMessage(raw: unknown): string {
   try {
     // JSON.stringify(undefined | symbol | function) => undefined なので ?? でフォールバック
     const json = JSON.stringify(raw)
-    return json ?? String(raw)
+    const base = json ?? String(raw)
+    // 長大なオブジェクトでメッセージ肥大化を避ける（メモリ/ログ負荷対策）
+    const MAX_ERROR_MESSAGE_LENGTH = 1000
+    if (base.length > MAX_ERROR_MESSAGE_LENGTH) {
+      return base.substring(0, MAX_ERROR_MESSAGE_LENGTH - 3) + '...'
+    }
+    return base
   } catch {
     return String(raw)
   }
