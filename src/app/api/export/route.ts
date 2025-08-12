@@ -4,6 +4,7 @@ import JSZip from 'jszip'
 import type { NextRequest } from 'next/server'
 import PDFDocument from 'pdfkit'
 import type { Episode } from '@/db'
+import { adaptAll } from '@/repositories/adapters'
 import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
 import { OutputRepository } from '@/repositories/output-repository'
@@ -44,9 +45,10 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     // データベースサービスの初期化
     const dbService = getDatabaseService()
-    const episodeRepo = new EpisodeRepository(dbService)
-    const outputRepo = new OutputRepository(dbService)
-    const jobRepo = new JobRepository(dbService)
+    const { episode: episodePort, output: outputPort, job: jobPort } = adaptAll(dbService)
+    const episodeRepo = new EpisodeRepository(episodePort)
+    const outputRepo = new OutputRepository(outputPort)
+    const jobRepo = new JobRepository(jobPort)
 
     // ジョブの存在確認
     const job = await jobRepo.getJob(body.jobId)

@@ -486,46 +486,47 @@ function validateId(id: string, label: string): void {
 export const StorageKeys = {
   novel: (uuid: string) => {
     validateId(uuid, 'uuid')
-    return `novels/${uuid}.json`
+    // Fixed: Remove duplicate 'novels/' prefix since getNovelStorage() already provides baseDir = novels
+    return `${uuid}.json`
   },
   chunk: (jobId: string, index: number) => {
     validateId(jobId, 'jobId')
-    return `chunks/${jobId}/chunk_${index}.txt`
+    return `${jobId}/chunk_${index}.txt`
   },
   chunkAnalysis: (jobId: string, index: number) => {
     validateId(jobId, 'jobId')
-    return `analyses/${jobId}/chunk_${index}.json`
+    return `${jobId}/chunk_${index}.json`
   },
   integratedAnalysis: (jobId: string) => {
     validateId(jobId, 'jobId')
-    return `analyses/${jobId}/integrated.json`
+    return `${jobId}/integrated.json`
   },
   narrativeAnalysis: (jobId: string) => {
     validateId(jobId, 'jobId')
-    return `analyses/${jobId}/narrative.json`
+    return `${jobId}/narrative.json`
   },
   episodeLayout: (jobId: string, episodeNumber: number) => {
     validateId(jobId, 'jobId')
-    return `layouts/${jobId}/episode_${episodeNumber}.yaml`
+    return `${jobId}/episode_${episodeNumber}.yaml`
   },
   pageRender: (jobId: string, episodeNumber: number, pageNumber: number) => {
     validateId(jobId, 'jobId')
-    return `renders/${jobId}/episode_${episodeNumber}/page_${pageNumber}.png`
+    return `${jobId}/episode_${episodeNumber}/page_${pageNumber}.png`
   },
   pageThumbnail: (jobId: string, episodeNumber: number, pageNumber: number) => {
     validateId(jobId, 'jobId')
-    return `renders/${jobId}/episode_${episodeNumber}/thumbnails/page_${pageNumber}_thumb.png`
+    return `${jobId}/episode_${episodeNumber}/thumbnails/page_${pageNumber}_thumb.png`
   },
   exportOutput: (jobId: string, format: string) => {
     validateId(jobId, 'jobId')
     if (!/^[a-zA-Z0-9]+$/.test(format)) {
       throw new Error('StorageKeys: invalid export format')
     }
-    return `exports/${jobId}/output.${format}`
+    return `${jobId}/output.${format}`
   },
   renderStatus: (jobId: string, episodeNumber: number, pageNumber: number) => {
     validateId(jobId, 'jobId')
-    return `render-status/${jobId}/episode_${episodeNumber}/page_${pageNumber}.json`
+    return `${jobId}/episode_${episodeNumber}/page_${pageNumber}.json`
   },
 } as const
 
@@ -616,4 +617,79 @@ export const StorageFactory = {
   getLayoutStorage,
   getRenderStorage,
   getOutputStorage,
+  // 監査関数を型安全に提供
+  auditKeys: auditStorageKeys,
 } as const
+
+// ========================================
+// Storage Key Audit System (キー整合性監査)
+// 目的: R2/ローカル双方で不整合・禁止パターン・重複を早期検出
+// 運用: 管理系API / 手動スクリプト から呼び出し
+// ========================================
+
+export interface StorageKeyIssue {
+  key: string
+  issue: 'invalid-format' | 'duplicate' | 'forbidden-segment'
+  detail?: string
+}
+
+const FORBIDDEN_SEGMENTS = ['//', '__MACOSX', '.DS_Store']
+
+/** 単純な正規表現で許容フォーマットを定義 (a-z0-9/_.-) */
+const KEY_REGEX = /^[a-z0-9][a-z0-9/_.-]*$/
+
+export async function auditStorageKeys(options: {
+  storages?: Array<keyof typeof StorageFactory>
+  prefix?: string
+  abortSignal?: AbortSignal
+}): Promise<{
+  scanned: number
+  issues: StorageKeyIssue[]
+}> {
+  const target = options.storages || [
+    'getNovelStorage',
+    'getChunkStorage',
+    'getAnalysisStorage',
+    'getLayoutStorage',
+    'getRenderStorage',
+    'getOutputStorage',
+  ]
+
+  const issues: StorageKeyIssue[] = []
+  const seen = new Set<string>()
+  let scanned = 0
+  // 並列で各ストレージをスキャン
+  await Promise.all(
+    target.map(async (name) => {
+      const getter = (StorageFactory as Record<string, unknown>)[name]
+      if (typeof getter !== 'function') return
+      const storage = (await (getter as () => Promise<Storage>)()) as Storage
+      if (!storage.list) return
+      const keys = await storage.list(options.prefix)
+      for (const key of keys) {
+        if (options.abortSignal?.aborted) return
+        scanned++
+        if (!KEY_REGEX.test(key)) {
+          issues.push({
+            key,
+            issue: 'invalid-format',
+            detail: 'regex-mismatch',
+          })
+        }
+        for (const seg of FORBIDDEN_SEGMENTS) {
+          if (key.includes(seg)) {
+            issues.push({ key, issue: 'forbidden-segment', detail: seg })
+          }
+        }
+        if (seen.has(key)) {
+          issues.push({ key, issue: 'duplicate' })
+        } else {
+          seen.add(key)
+        }
+      }
+    }),
+  )
+
+  return { scanned, issues }
+}
+// NOTE: 動的追加は廃止。auditKeys は StorageFactory 定義に含めた。

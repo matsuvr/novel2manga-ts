@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
+import { adaptAll } from '@/repositories/adapters'
 import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
 import { getDatabaseService } from '@/services/db-factory'
@@ -34,8 +35,9 @@ export async function GET(
     const params = await ctx.params
     validateJobId(params?.jobId)
     const dbService = getDatabaseService()
-    const jobRepo = new JobRepository(dbService)
-    const episodeRepo = new EpisodeRepository(dbService)
+    const { job: jobPort, episode: episodePort } = adaptAll(dbService)
+    const jobRepo = new JobRepository(jobPort)
+    const episodeRepo = new EpisodeRepository(episodePort)
 
     // ジョブの存在確認
     const job = await jobRepo.getJobWithProgress(params.jobId)
@@ -85,9 +87,10 @@ export async function POST(
     const { config, targetPages, minPages, maxPages } = validatedData
 
     const dbService = getDatabaseService()
+    const { job: jobPort, episode: episodePort } = adaptAll(dbService)
     const processor = new JobNarrativeProcessor(dbService, config)
-    const jobRepo = new JobRepository(dbService)
-    const episodeRepo = new EpisodeRepository(dbService)
+    const jobRepo = new JobRepository(jobPort)
+    const episodeRepo = new EpisodeRepository(episodePort)
 
     // ジョブの存在確認
     const job = await jobRepo.getJobWithProgress(params.jobId)

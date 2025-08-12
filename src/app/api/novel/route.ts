@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server'
+import { adaptAll } from '@/repositories/adapters'
 import { NovelRepository } from '@/repositories/novel-repository'
 import { getDatabaseService } from '@/services/db-factory'
 import { createErrorResponse, createSuccessResponse } from '@/utils/api-error'
@@ -17,7 +18,8 @@ export async function POST(request: NextRequest) {
     // Repositoryを使用してDBに保存
     try {
       const dbService = getDatabaseService()
-      const novelRepo = new NovelRepository(dbService)
+      const { novel: novelPort } = adaptAll(dbService)
+      const novelRepo = new NovelRepository(novelPort)
 
       // 小説情報をDBに保存（UUIDを指定）
       await novelRepo.ensure(data.uuid, {

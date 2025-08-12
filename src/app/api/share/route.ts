@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import type { NextRequest } from 'next/server'
+import { adaptAll } from '@/repositories/adapters'
 import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
 import { getDatabaseService } from '@/services/db-factory'
@@ -38,8 +39,9 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     // データベースサービスの初期化
     const dbService = getDatabaseService()
-    const episodeRepo = new EpisodeRepository(dbService)
-    const jobRepo = new JobRepository(dbService)
+    const { episode: episodePort, job: jobPort } = adaptAll(dbService)
+    const episodeRepo = new EpisodeRepository(episodePort)
+    const jobRepo = new JobRepository(jobPort)
 
     // ジョブの存在確認
     const job = await jobRepo.getJob(body.jobId)
