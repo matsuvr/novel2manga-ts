@@ -617,3 +617,72 @@ export const StorageFactory = {
   getRenderStorage,
   getOutputStorage,
 } as const
+
+// ========================================
+// Storage Key Audit System (キー整合性監査)
+// 目的: R2/ローカル双方で不整合・禁止パターン・重複を早期検出
+// 運用: 管理系API / 手動スクリプト から呼び出し
+// ========================================
+
+export interface StorageKeyIssue {
+  key: string
+  issue: 'invalid-format' | 'duplicate' | 'forbidden-segment'
+  detail?: string
+}
+
+const FORBIDDEN_SEGMENTS = ['//', '__MACOSX', '.DS_Store']
+
+/** 単純な正規表現で許容フォーマットを定義 (a-z0-9/_.-) */
+const KEY_REGEX = /^[a-z0-9][a-z0-9/_.-]*$/
+
+export async function auditStorageKeys(options: {
+  storages?: Array<keyof typeof StorageFactory>
+  prefix?: string
+  abortSignal?: AbortSignal
+}): Promise<{
+  scanned: number
+  issues: StorageKeyIssue[]
+}> {
+  const target = options.storages || [
+    'getNovelStorage',
+    'getChunkStorage',
+    'getAnalysisStorage',
+    'getLayoutStorage',
+    'getRenderStorage',
+    'getOutputStorage',
+  ]
+
+  const issues: StorageKeyIssue[] = []
+  const seen = new Set<string>()
+  let scanned = 0
+
+  for (const name of target) {
+    const storage = (await (StorageFactory as any)[name]()) as Storage
+    if (!storage.list) continue
+    const keys = await storage.list(options.prefix)
+    for (const key of keys) {
+      if (options.abortSignal?.aborted) {
+        return { scanned, issues }
+      }
+      scanned++
+      if (!KEY_REGEX.test(key)) {
+        issues.push({ key, issue: 'invalid-format', detail: 'regex-mismatch' })
+      }
+      for (const seg of FORBIDDEN_SEGMENTS) {
+        if (key.includes(seg)) {
+          issues.push({ key, issue: 'forbidden-segment', detail: seg })
+        }
+      }
+      if (seen.has(key)) {
+        issues.push({ key, issue: 'duplicate' })
+      } else {
+        seen.add(key)
+      }
+    }
+  }
+
+  return { scanned, issues }
+}
+
+// StorageFactory へ監査機能を動的に付与 (破壊的変更回避)
+;(StorageFactory as any).auditKeys = auditStorageKeys
