@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { SceneSchema } from '@/domain/models/scene'
+export { SceneSchema } // 以前の公開API維持: tests 等が直接 import { SceneSchema } from '.../text-analysis' を想定
 
 // 登場人物スキーマ
 export const CharacterSchema = z.object({
@@ -8,15 +10,7 @@ export const CharacterSchema = z.object({
   firstAppearance: z.number(), // テキスト内での初登場位置（インデックス）
 })
 
-// シーンスキーマ
-export const SceneSchema = z.object({
-  id: z.string(),
-  location: z.string(),
-  time: z.string().optional(),
-  description: z.string(),
-  startIndex: z.number(),
-  endIndex: z.number(),
-})
+// SceneSchema は domain/models/scene.ts の統一定義を利用
 
 // 対話スキーマ
 export const DialogueSchema = z.object({

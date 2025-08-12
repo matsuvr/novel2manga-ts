@@ -4,6 +4,38 @@
 
 本設計書は、小説テキストをマンガ形式のレイアウト（絵コンテ）に自動変換するWebアプリケーションの技術実装について定義します。本ツールは編集者を補佐するツールであり、マンガの絵そのものを生成するのではなく、コマ割りと吹き出し配置の構成案を提供します。Mastra AIフレームワークをベースに、TypeScriptとNext.js 14を使用して、長文テキストの解析、5要素の抽出（登場人物・シーン・対話・ハイライト・状況）、連載エピソード構成、マンガレイアウト生成を実現します。
 
+### 2025-08-12 更新サマリ
+
+今回の変更で以下を統合/改善しました:
+
+- Scene ドメインモデルの単一ソース化: `src/domain/models/scene.ts` を新設し、従来 `text-analysis.ts` / `database-models.ts` / `panel-layout.ts` などで重複していた `SceneSchema` を一本化。
+  - 2段階スキーマ設計: `SceneFlexibleSchema` (LLM出力/外部入力の未確定段階を緩く受ける) と `SceneCoreSchema` (永続化・厳格分析用の必須フィールド) を導入。
+  - 既存コード後方互換: 既存参照名 `SceneSchema` は Core を再エクスポートして破壊的変更を回避。
+  - 目的: 型重複によるドリフト防止 / 正規化パイプライン挿入容易化 / 将来のシーン拡張フィールド (mood, visualElements 等) の漸進導入。
+- 正規化ユーティリティ: `normalizeToSceneCore()` を追加し、Flexible 形から必須フィールド未充足時はバリデーションエラーを即座に検出できるようにした（まだ永続化フローへの組込みは未実装、今後のタスク）。
+- エラーハンドリング標準化 (Narrative Arc API): `/api/analyze/narrative-arc` を `createSuccessResponse` / `createErrorResponse` ベースへ移行し、旧 `{ error, details }` 形式を段階的に統一。
+  - Zod 構造化検証エラーおよび入力範囲不備ケースで `ValidationError` + details.code=`INVALID_INPUT` を付与。
+  - 既存テスト互換のため、内部エラー時は `error: "Failed to analyze narrative arc"` を維持しつつ `details.original` に元メッセージを格納。
+- 新エラーコード `INVALID_INPUT` 導入: フィールド単体再入力ではなく入力全体再構築が必要なケースを `VALIDATION_ERROR` から概念的に分離（現時点では narrative-arc のみ使用 / 段階的ロールアウト予定）。
+
+今後予定される追随作業:
+
+- 他 API ルートへの `INVALID_INPUT` 適用とドキュメント明確化。
+- チャンク分析結果内シーン（まだアドホック構造の箇所）を Flexible 経由で Core へ正規化するアダプタ層実装。
+- Scene 追加語彙（emotion semantics 等）の列挙型化とマッピングテーブル整備。
+- 永続化境界での `normalizeToSceneCore` 強制適用と移行ステップのテスト追加。
+
+#### Migration Strategy (Scenes)
+
+既存永続化済みデータに旧 Scene 形（boolean フラグ等）が混在する可能性への対応方針:
+
+1. 読込パスでの寛容パース: 旧構造を受けた場合、`{ location: flag? 'UNKNOWN' : original, description: setting/mood 合成 }` などのマッピングを adapter で実施予定。
+2. `normalizeToSceneCore` 適用前に補完: 不足フィールド (id, description 等) は一時ID生成 (`scene-${index}-${hash}`) とし audit ログへ記録。
+3. マイグレーションスクリプト（オプション）: 開発環境で既存 JSON/R2 オブジェクトを一括走査し Core 形式へ再書込（TASK 10.11 検討）。
+4. 検証レポート: マイグレーション前後で missingFields 件数を集計し tasks.md に貼付。
+
+これらは `.kiro/specs/novel-to-manga-converter/tasks.md` に新規タスク群として追記しました。
+
 ## Requirements Mapping
 
 ### Design Component Traceability
