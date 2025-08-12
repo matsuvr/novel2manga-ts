@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import type { NextRequest } from 'next/server'
+import { adaptAll } from '@/repositories/adapters'
 import { JobRepository } from '@/repositories/job-repository'
 import { NovelRepository } from '@/repositories/novel-repository'
 import { getDatabaseService } from '@/services/db-factory'
@@ -34,7 +35,8 @@ export async function POST(request: NextRequest) {
     }
 
     const dbService = getDatabaseService()
-    const novelRepo = new NovelRepository(dbService)
+    const { novel: novelPort } = adaptAll(dbService)
+    const novelRepo = new NovelRepository(novelPort)
 
     // 小説データを保存
     await novelRepo.ensure(uuid as string, {
@@ -48,7 +50,8 @@ export async function POST(request: NextRequest) {
 
     // 処理ジョブを作成
     const jobId = crypto.randomUUID()
-    const jobRepo = new JobRepository(dbService)
+    const { job: jobPort } = adaptAll(dbService)
+    const jobRepo = new JobRepository(jobPort)
     await jobRepo.create({ id: jobId, novelId: uuid as string, title: 'text_analysis' })
 
     return createSuccessResponse({
@@ -78,7 +81,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     const dbService = getDatabaseService()
-    const novelRepo = new NovelRepository(dbService)
+    const { novel: novelPort } = adaptAll(dbService)
+    const novelRepo = new NovelRepository(novelPort)
 
     if (id) {
       // 特定のNovelを取得
@@ -89,7 +93,8 @@ export async function GET(request: NextRequest) {
       }
 
       // 関連するジョブを取得
-      const jobRepo = new JobRepository(dbService)
+      const { job: jobPort } = adaptAll(dbService)
+      const jobRepo = new JobRepository(jobPort)
       const jobsList = await jobRepo.getByNovelId(id)
 
       return createSuccessResponse({ novel, jobs: jobsList })

@@ -1,5 +1,6 @@
 import type { NewNovel, Novel } from '@/db'
-import type { NovelDbPort } from './ports'
+import type { NovelDbPort, NovelDbPortRW } from './ports'
+import { hasNovelWriteCapabilities } from './ports'
 
 // Re-export for backward compatibility
 export type { NovelDbPort } from './ports'
@@ -19,6 +20,9 @@ export class NovelRepository {
     id: string,
     payload: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'>,
   ): Promise<void> {
-    return this.db.ensureNovel(id, payload)
+    if (!hasNovelWriteCapabilities(this.db)) {
+      throw new Error('Novel port does not support write operations (ensureNovel)')
+    }
+    return (this.db as NovelDbPortRW).ensureNovel(id, payload)
   }
 }

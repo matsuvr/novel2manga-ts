@@ -1,6 +1,6 @@
 import type { DatabaseService } from '@/services/database'
 import { getDatabaseService } from '@/services/db-factory'
-
+import { adaptAll } from './adapters'
 import { EpisodeRepository } from './episode-repository'
 import { JobRepository } from './job-repository'
 import { NovelRepository } from './novel-repository'
@@ -93,7 +93,8 @@ export class RepositoryFactory {
    */
   getEpisodeRepository(): EpisodeRepository {
     if (!this.episodeRepo) {
-      this.episodeRepo = new EpisodeRepository(this.dbService)
+      const { episode } = adaptAll(this.dbService)
+      this.episodeRepo = new EpisodeRepository(episode)
     }
     return this.episodeRepo
   }
@@ -103,7 +104,8 @@ export class RepositoryFactory {
    */
   getJobRepository(): JobRepository {
     if (!this.jobRepo) {
-      this.jobRepo = new JobRepository(this.dbService)
+      const { job } = adaptAll(this.dbService)
+      this.jobRepo = new JobRepository(job)
     }
     return this.jobRepo
   }
@@ -113,7 +115,8 @@ export class RepositoryFactory {
    */
   getNovelRepository(): NovelRepository {
     if (!this.novelRepo) {
-      this.novelRepo = new NovelRepository(this.dbService)
+      const { novel } = adaptAll(this.dbService)
+      this.novelRepo = new NovelRepository(novel)
     }
     return this.novelRepo
   }
@@ -123,7 +126,8 @@ export class RepositoryFactory {
    */
   getOutputRepository(): OutputRepository {
     if (!this.outputRepo) {
-      this.outputRepo = new OutputRepository(this.dbService)
+      const { output } = adaptAll(this.dbService)
+      this.outputRepo = new OutputRepository(output)
     }
     return this.outputRepo
   }
