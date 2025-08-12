@@ -24,7 +24,23 @@ export class RepositoryFactory {
   private novelRepo: NovelRepository | null = null
   private outputRepo: OutputRepository | null = null
 
-  constructor(private readonly dbService: DatabaseService = getDatabaseService()) {}
+  constructor(private readonly dbService: DatabaseService = getDatabaseService()) {
+    // dbService の健全性チェック（レビュー指摘対応）
+    if (!dbService || typeof dbService !== 'object') {
+      throw new Error('RepositoryFactory: invalid DatabaseService instance')
+    }
+    // 代表的なメソッド存在確認（将来の型変更時の早期検出）
+    const requiredMethods: Array<keyof DatabaseService> = [
+      'getJob',
+      'getNovel',
+    ] as unknown as Array<keyof DatabaseService>
+    const anyDb = dbService as unknown as Record<string, unknown>
+    for (const m of requiredMethods) {
+      if (typeof anyDb[m as string] !== 'function') {
+        throw new Error(`RepositoryFactory: dbService is missing method ${String(m)}`)
+      }
+    }
+  }
 
   /**
    * Get singleton factory instance with default database service

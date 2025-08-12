@@ -435,6 +435,7 @@ export function createNovel(
   }
 }
 
+// Deprecated: use databaseService.createJob({ id?, novelId, title? }) instead.
 export function createJob(id: string, novelId: string, jobName?: string): Job {
   const now = new Date()
   return {

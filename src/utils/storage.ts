@@ -455,21 +455,66 @@ export async function getChunkData(
 // Storage Keys & Factory (Public API)
 // ========================================
 
+// ========================================
+// Storage Key Builders (with validation)
+// - パストラバーサル防止のため ID を検証（英数とハイフン/アンダースコアのみ許可）
+// - レビュー指摘: 「path traversal guard」対応
+// ========================================
+
+function validateId(id: string, label: string): void {
+  if (typeof id !== 'string' || id.length === 0) {
+    throw new Error(`StorageKeys: ${label} is empty`)
+  }
+  // 先頭 ../ や /、含まれる .. セグメント、許可外文字を拒否
+  if (id.includes('..') || id.startsWith('/') || /[^a-zA-Z0-9_-]/.test(id)) {
+    throw new Error(`StorageKeys: invalid ${label} value`)
+  }
+}
+
 export const StorageKeys = {
-  novel: (uuid: string) => `novels/${uuid}.json`,
-  chunk: (jobId: string, index: number) => `chunks/${jobId}/chunk_${index}.txt`,
-  chunkAnalysis: (jobId: string, index: number) => `analyses/${jobId}/chunk_${index}.json`,
-  integratedAnalysis: (jobId: string) => `analyses/${jobId}/integrated.json`,
-  narrativeAnalysis: (jobId: string) => `analyses/${jobId}/narrative.json`,
-  episodeLayout: (jobId: string, episodeNumber: number) =>
-    `layouts/${jobId}/episode_${episodeNumber}.yaml`,
-  pageRender: (jobId: string, episodeNumber: number, pageNumber: number) =>
-    `renders/${jobId}/episode_${episodeNumber}/page_${pageNumber}.png`,
-  pageThumbnail: (jobId: string, episodeNumber: number, pageNumber: number) =>
-    `renders/${jobId}/episode_${episodeNumber}/thumbnails/page_${pageNumber}_thumb.png`,
-  exportOutput: (jobId: string, format: string) => `exports/${jobId}/output.${format}`,
-  renderStatus: (jobId: string, episodeNumber: number, pageNumber: number) =>
-    `render-status/${jobId}/episode_${episodeNumber}/page_${pageNumber}.json`,
+  novel: (uuid: string) => {
+    validateId(uuid, 'uuid')
+    return `novels/${uuid}.json`
+  },
+  chunk: (jobId: string, index: number) => {
+    validateId(jobId, 'jobId')
+    return `chunks/${jobId}/chunk_${index}.txt`
+  },
+  chunkAnalysis: (jobId: string, index: number) => {
+    validateId(jobId, 'jobId')
+    return `analyses/${jobId}/chunk_${index}.json`
+  },
+  integratedAnalysis: (jobId: string) => {
+    validateId(jobId, 'jobId')
+    return `analyses/${jobId}/integrated.json`
+  },
+  narrativeAnalysis: (jobId: string) => {
+    validateId(jobId, 'jobId')
+    return `analyses/${jobId}/narrative.json`
+  },
+  episodeLayout: (jobId: string, episodeNumber: number) => {
+    validateId(jobId, 'jobId')
+    return `layouts/${jobId}/episode_${episodeNumber}.yaml`
+  },
+  pageRender: (jobId: string, episodeNumber: number, pageNumber: number) => {
+    validateId(jobId, 'jobId')
+    return `renders/${jobId}/episode_${episodeNumber}/page_${pageNumber}.png`
+  },
+  pageThumbnail: (jobId: string, episodeNumber: number, pageNumber: number) => {
+    validateId(jobId, 'jobId')
+    return `renders/${jobId}/episode_${episodeNumber}/thumbnails/page_${pageNumber}_thumb.png`
+  },
+  exportOutput: (jobId: string, format: string) => {
+    validateId(jobId, 'jobId')
+    if (!/^[a-zA-Z0-9]+$/.test(format)) {
+      throw new Error('StorageKeys: invalid export format')
+    }
+    return `exports/${jobId}/output.${format}`
+  },
+  renderStatus: (jobId: string, episodeNumber: number, pageNumber: number) => {
+    validateId(jobId, 'jobId')
+    return `render-status/${jobId}/episode_${episodeNumber}/page_${pageNumber}.json`
+  },
 } as const
 
 // エピソード境界保存関数

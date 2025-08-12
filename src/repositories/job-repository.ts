@@ -15,8 +15,9 @@ export class JobRepository {
     return this.db.getJobWithProgress(id)
   }
 
-  // Create a job with auto-generated id by DB layer
+  // Create a job (id optional)
   async create(payload: {
+    id?: string
     novelId: string
     title?: string
     totalChunks?: number
@@ -25,9 +26,9 @@ export class JobRepository {
     return this.db.createJob(payload)
   }
 
-  // Create a job with provided id
+  // Backward compatibility helper (to be removed): create with explicit id & name
   async createWithId(id: string, novelId: string, jobName?: string): Promise<string> {
-    return this.db.createJob(id, novelId, jobName)
+    return this.db.createJob({ id, novelId, title: jobName })
   }
 
   async getByNovelId(novelId: string): Promise<Job[]> {

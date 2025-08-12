@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     // 処理ジョブを作成
     const jobId = crypto.randomUUID()
     const jobRepo = new JobRepository(dbService)
-    await jobRepo.createWithId(jobId, uuid as string, 'text_analysis')
+    await jobRepo.create({ id: jobId, novelId: uuid as string, title: 'text_analysis' })
 
     return NextResponse.json({
       success: true,

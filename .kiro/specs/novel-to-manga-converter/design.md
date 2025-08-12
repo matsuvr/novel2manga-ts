@@ -100,6 +100,7 @@ graph TB
 - **LLMフォールバックチェーン**: openrouter → gemini → claude の自動フォールバック、可用性向上（Gemini追加）
 
 ### 型互換性に関する注記（Mastra × Vercel AI SDK）
+
 - 現状、Vercel AI SDK v5 の LanguageModelV2 と Mastra Agent 側の期待型（LanguageModelV1）に差異があり、`src/agents/layout-generator.ts` では一時的に `as any` キャストで適合させています。
 - 恒久対策としては、Mastra側の更新または軽量アダプタ層（V1→V2ブリッジ）の導入を検討中（tasks.md: TASK-LLM-ADAPTER-001）。
 - **StorageFactory Pattern**: 環境別ストレージ抽象化、開発・本番環境の自動切り替え
@@ -168,40 +169,43 @@ sequenceDiagram
 // Mastra Agent定義（実装済み）
 // ChunkAnalyzerAgent - チャンク分析エージェント
 const chunkAnalyzerAgent = new Agent({
-  name: 'chunk-analyzer',
-  description: '小説のチャンクを分析してキャラクター、場面、対話、ハイライト、状況を抽出するエージェント',
+  name: "chunk-analyzer",
+  description:
+    "小説のチャンクを分析してキャラクター、場面、対話、ハイライト、状況を抽出するエージェント",
   instructions: () => getTextAnalysisConfig().systemPrompt,
   model: async () => {
-    const llm = await getTextAnalysisLLM()
-    return llm.provider(llm.model)
-  }
-})
+    const llm = await getTextAnalysisLLM();
+    return llm.provider(llm.model);
+  },
+});
 
 // NarrativeArcAnalyzerAgent - 物語構造分析エージェント
 const narrativeArcAnalyzerAgent = new Agent({
-  name: 'narrative-arc-analyzer',
-  description: '小説全体の物語構造を分析してエピソード境界を検出するエージェント',
+  name: "narrative-arc-analyzer",
+  description:
+    "小説全体の物語構造を分析してエピソード境界を検出するエージェント",
   instructions: () => getNarrativeAnalysisConfig().systemPrompt,
   model: async () => {
-    const llm = await getNarrativeAnalysisLLM()
-    return llm.provider(llm.model)
-  }
-})
+    const llm = await getNarrativeAnalysisLLM();
+    return llm.provider(llm.model);
+  },
+});
 
 // LayoutGeneratorAgent - レイアウト生成エージェント
 const layoutGeneratorAgent = new Agent({
-  name: 'layout-generator',
-  description: 'エピソード分析結果からマンガレイアウトYAMLを生成するエージェント',
+  name: "layout-generator",
+  description:
+    "エピソード分析結果からマンガレイアウトYAMLを生成するエージェント",
   instructions: () => getLayoutGenerationConfig().systemPrompt,
   model: async () => {
-    const llm = await getLayoutGenerationLLM()
-    return llm.provider(llm.model)
-  }
-})
+    const llm = await getLayoutGenerationLLM();
+    return llm.provider(llm.model);
+  },
+});
 
 // LLMプロバイダー設定
 interface LLMProviderConfig {
-  provider: 'openai' | 'gemini' | 'groq' | 'local' | 'openrouter' | 'claude';
+  provider: "openai" | "gemini" | "groq" | "local" | "openrouter" | "claude";
   apiKey?: string;
   model: string;
   temperature?: number;
@@ -212,16 +216,22 @@ interface LLMProviderConfig {
 // フォールバックチェーン機能（実装済み）
 // LLM Factory関数群
 export async function getTextAnalysisLLM() {
-  const config = getTextAnalysisConfig()
-  const preferredProvider = config.provider === 'default' ? appConfig.llm.defaultProvider : config.provider
-  const llmInstance = await getProviderWithFallback(preferredProvider)
-  return llmInstance
+  const config = getTextAnalysisConfig();
+  const preferredProvider =
+    config.provider === "default"
+      ? appConfig.llm.defaultProvider
+      : config.provider;
+  const llmInstance = await getProviderWithFallback(preferredProvider);
+  return llmInstance;
 }
 
 export async function getNarrativeAnalysisLLM() {
-  const config = getNarrativeAnalysisConfig()
-  const preferredProvider = config.provider === 'default' ? appConfig.llm.defaultProvider : config.provider
-  return await getProviderWithFallback(preferredProvider)
+  const config = getNarrativeAnalysisConfig();
+  const preferredProvider =
+    config.provider === "default"
+      ? appConfig.llm.defaultProvider
+      : config.provider;
+  return await getProviderWithFallback(preferredProvider);
 }
 
 export async function getProviderWithFallback(preferredProvider?: string) {
@@ -232,13 +242,13 @@ export async function getProviderWithFallback(preferredProvider?: string) {
 // ジョブ管理サービス（実装済み）
 export class JobNarrativeProcessor {
   constructor(config: NarrativeProcessorConfig) {
-    this.config = config
-    this.dbService = new DatabaseService()
+    this.config = config;
+    this.dbService = new DatabaseService();
   }
 
   async processJob(
     jobId: string,
-    onProgress?: (progress: JobProgress) => void
+    onProgress?: (progress: JobProgress) => void,
   ): Promise<JobProgress> {
     // 分割→分析→エピソード分析の完全フロー実装済み
   }
@@ -288,42 +298,42 @@ export class DatabaseService {
 
 ### Frontend Components
 
-| Component Name | Responsibility | Props/State Summary | Status |
-|----------------|----------------|---------------------|--------|
-| HomeClient | メインクライアント境界コンポーネント | sampleText, processing states | Implemented |
-| TextInputArea | テキスト入力UI | text, onChange, maxLength, characterCount | Implemented |
-| ProcessingProgress | 処理進捗表示 | currentStep, progress, message | Implemented |
-| ResultsDisplay | 結果表示コンポーネント | episodes, layouts, renders | Implemented |
-| Logger | ログ表示コンポーネント | logs, maxLogs | Implemented |
-| NovelUploader | 小説アップロードUI | onUpload, accepted formats | Partially |
-| MangaPreview | マンガプレビュー表示 | layout, panels, editable | Not Implemented |
-| PanelEditor | コマ編集インターフェース | panel, onResize, onMove | Not Implemented |
-| SpeechBubbleEditor | 吹き出し編集 | bubble, text, style, onEdit | Not Implemented |
-| ExportDialog | エクスポート設定 | formats, onExport | Not Implemented |
-| ProjectManager | プロジェクト管理UI | projects, onSave, onLoad | Not Implemented |
+| Component Name     | Responsibility                       | Props/State Summary                       | Status          |
+| ------------------ | ------------------------------------ | ----------------------------------------- | --------------- |
+| HomeClient         | メインクライアント境界コンポーネント | sampleText, processing states             | Implemented     |
+| TextInputArea      | テキスト入力UI                       | text, onChange, maxLength, characterCount | Implemented     |
+| ProcessingProgress | 処理進捗表示                         | currentStep, progress, message            | Implemented     |
+| ResultsDisplay     | 結果表示コンポーネント               | episodes, layouts, renders                | Implemented     |
+| Logger             | ログ表示コンポーネント               | logs, maxLogs                             | Implemented     |
+| NovelUploader      | 小説アップロードUI                   | onUpload, accepted formats                | Partially       |
+| MangaPreview       | マンガプレビュー表示                 | layout, panels, editable                  | Not Implemented |
+| PanelEditor        | コマ編集インターフェース             | panel, onResize, onMove                   | Not Implemented |
+| SpeechBubbleEditor | 吹き出し編集                         | bubble, text, style, onEdit               | Not Implemented |
+| ExportDialog       | エクスポート設定                     | formats, onExport                         | Not Implemented |
+| ProjectManager     | プロジェクト管理UI                   | projects, onSave, onLoad                  | Not Implemented |
 
 ### API Endpoints
 
-| Method | Route | Purpose | Auth | Status Codes |
-|--------|-------|---------|------|--------------|
-| POST | /api/novel | 小説登録（テキスト + メタデータ） | Implemented | 200, 400, 413, 500 |
-| GET | /api/novel/storage/:id | 小説テキスト取得 | Implemented | 200, 404, 500 |
-| POST | /api/novel/db | 小説メタデータDB保存 | Implemented | 200, 400, 500 |
-| GET | /api/novel/[uuid]/chunks | チャンク分割・取得 | Implemented | 200, 404, 500 |
-| POST | /api/analyze | 統合分析（チャンク分割→分析→エピソード分析） | Implemented | 200, 400, 500 |
-| POST | /api/analyze/chunk | チャンク単位の5要素分析 | Implemented | 200, 400, 500 |
-| POST | /api/analyze/episode | エピソード境界分析 | Implemented | 200, 400, 500 |
-| POST | /api/analyze/narrative-arc/full | 全体物語構造分析 | Implemented | 200, 400, 500 |
-| GET | /api/job/[id] | ジョブ情報取得 | Implemented | 200, 404, 500 |
-| GET | /api/jobs/[jobId]/status | ジョブステータス取得 | Implemented | 200, 404, 500 |
-| GET | /api/jobs/[jobId]/episodes | エピソード一覧取得 | Implemented | 200, 404, 500 |
-| POST | /api/jobs/[jobId]/resume | ジョブ再開 | Implemented | 200, 400, 404, 500 |
-| POST | /api/layout/generate | レイアウトYAML生成 | Implemented | 200, 400, 500 |
-| POST | /api/render | Canvasレンダリング | Implemented | 201, 400, 500 |
-| POST | /api/render/batch | バッチレンダリング | Implemented | 201, 400, 500 |
-| GET | /api/render/status/[jobId] | レンダリング状況確認 | Implemented | 200, 400, 500 |
-| POST | /api/export | マンガエクスポート（PDF・ZIP） | Partially Implemented | 201, 400, 500 |
-| POST | /api/share | 共有リンク生成 | Partially Implemented | 201, 401, 500 |
+| Method | Route                           | Purpose                                      | Auth                  | Status Codes       |
+| ------ | ------------------------------- | -------------------------------------------- | --------------------- | ------------------ |
+| POST   | /api/novel                      | 小説登録（テキスト + メタデータ）            | Implemented           | 200, 400, 413, 500 |
+| GET    | /api/novel/storage/:id          | 小説テキスト取得                             | Implemented           | 200, 404, 500      |
+| POST   | /api/novel/db                   | 小説メタデータDB保存                         | Implemented           | 200, 400, 500      |
+| GET    | /api/novel/[uuid]/chunks        | チャンク分割・取得                           | Implemented           | 200, 404, 500      |
+| POST   | /api/analyze                    | 統合分析（チャンク分割→分析→エピソード分析） | Implemented           | 200, 400, 500      |
+| POST   | /api/analyze/chunk              | チャンク単位の5要素分析                      | Implemented           | 200, 400, 500      |
+| POST   | /api/analyze/episode            | エピソード境界分析                           | Implemented           | 200, 400, 500      |
+| POST   | /api/analyze/narrative-arc/full | 全体物語構造分析                             | Implemented           | 200, 400, 500      |
+| GET    | /api/job/[id]                   | ジョブ情報取得                               | Implemented           | 200, 404, 500      |
+| GET    | /api/jobs/[jobId]/status        | ジョブステータス取得                         | Implemented           | 200, 404, 500      |
+| GET    | /api/jobs/[jobId]/episodes      | エピソード一覧取得                           | Implemented           | 200, 404, 500      |
+| POST   | /api/jobs/[jobId]/resume        | ジョブ再開                                   | Implemented           | 200, 400, 404, 500 |
+| POST   | /api/layout/generate            | レイアウトYAML生成                           | Implemented           | 200, 400, 500      |
+| POST   | /api/render                     | Canvasレンダリング                           | Implemented           | 201, 400, 500      |
+| POST   | /api/render/batch               | バッチレンダリング                           | Implemented           | 201, 400, 500      |
+| GET    | /api/render/status/[jobId]      | レンダリング状況確認                         | Implemented           | 200, 400, 500      |
+| POST   | /api/export                     | マンガエクスポート（PDF・ZIP）               | Partially Implemented | 201, 400, 500      |
+| POST   | /api/share                      | 共有リンク生成                               | Partially Implemented | 201, 401, 500      |
 
 ## Data Models
 
@@ -417,143 +427,143 @@ erDiagram
 // TypeScript 型定義（Drizzle ORM + Zodスキーマ統合）
 
 // Core Models - Drizzle自動生成型とZodスキーマの併用
-export type Novel = typeof novels.$inferSelect    // Drizzle自動生成
-export type NewNovel = typeof novels.$inferInsert // Insert用
-export type Job = typeof jobs.$inferSelect        // Drizzle自動生成
-export type NewJob = typeof jobs.$inferInsert     // Insert用
-export type Chunk = typeof chunks.$inferSelect
-export type NewChunk = typeof chunks.$inferInsert
-export type Episode = typeof episodes.$inferSelect
-export type NewEpisode = typeof episodes.$inferInsert
-export type StorageFile = typeof storageFiles.$inferSelect
-export type NewStorageFile = typeof storageFiles.$inferInsert
+export type Novel = typeof novels.$inferSelect; // Drizzle自動生成
+export type NewNovel = typeof novels.$inferInsert; // Insert用
+export type Job = typeof jobs.$inferSelect; // Drizzle自動生成
+export type NewJob = typeof jobs.$inferInsert; // Insert用
+export type Chunk = typeof chunks.$inferSelect;
+export type NewChunk = typeof chunks.$inferInsert;
+export type Episode = typeof episodes.$inferSelect;
+export type NewEpisode = typeof episodes.$inferInsert;
+export type StorageFile = typeof storageFiles.$inferSelect;
+export type NewStorageFile = typeof storageFiles.$inferInsert;
 
 // Zodスキーマベース型（バリデーション付き）
-export type NovelZod = z.infer<typeof NovelSchema>
-export type JobZod = z.infer<typeof JobSchema>
-export type TextAnalysis = z.infer<typeof TextAnalysisSchema>
+export type NovelZod = z.infer<typeof NovelSchema>;
+export type JobZod = z.infer<typeof JobSchema>;
+export type TextAnalysis = z.infer<typeof TextAnalysisSchema>;
 
 // 分析結果型（統合定義）
 export interface ChunkAnalysisResult {
-  chunkIndex: number
+  chunkIndex: number;
   characters: Array<{
-    name: string
-    role: 'protagonist' | 'antagonist' | 'supporting' | 'minor'
-    description?: string
-  }>
+    name: string;
+    role: "protagonist" | "antagonist" | "supporting" | "minor";
+    description?: string;
+  }>;
   scenes: Array<{
-    location: string
-    timeOfDay?: string
-    atmosphere?: string
-    description?: string
-  }>
+    location: string;
+    timeOfDay?: string;
+    atmosphere?: string;
+    description?: string;
+  }>;
   dialogues: Array<{
-    speaker: string
-    content: string
-    emotion?: string
-    importance: 'high' | 'medium' | 'low'
-  }>
+    speaker: string;
+    content: string;
+    emotion?: string;
+    importance: "high" | "medium" | "low";
+  }>;
   highlights: Array<{
-    type: 'action' | 'emotion' | 'plot' | 'description'
-    content: string
-    importance: number
-    intensity: number
-    relevance: number
-    startIndex: number
-    endIndex: number
-  }>
+    type: "action" | "emotion" | "plot" | "description";
+    content: string;
+    importance: number;
+    intensity: number;
+    relevance: number;
+    startIndex: number;
+    endIndex: number;
+  }>;
   situations: Array<{
-    type: 'conflict' | 'resolution' | 'transition' | 'development'
-    description: string
-    significance: number
-  }>
+    type: "conflict" | "resolution" | "transition" | "development";
+    description: string;
+    significance: number;
+  }>;
   narrativeElements: {
-    tension: number
-    pacing: 'slow' | 'medium' | 'fast'
-    emotionalTone: string
-    plotRelevance: number
-  }
+    tension: number;
+    pacing: "slow" | "medium" | "fast";
+    emotionalTone: string;
+    plotRelevance: number;
+  };
 }
 
 // マンガレイアウト型
 export interface MangaLayout {
-  title: string
-  author?: string
-  created_at: string
-  episodeNumber: number
-  episodeTitle?: string
-  pages: Page[]
+  title: string;
+  author?: string;
+  created_at: string;
+  episodeNumber: number;
+  episodeTitle?: string;
+  pages: Page[];
 }
 
 export interface Page {
-  pageNumber: number
-  panels: Panel[]
+  pageNumber: number;
+  panels: Panel[];
   dimensions: {
-    width: number
-    height: number
-  }
+    width: number;
+    height: number;
+  };
 }
 
 export interface Panel {
-  id: string
+  id: string;
   position: {
-    x: number
-    y: number
-    width: number
-    height: number
-  }
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
   content: {
-    type: 'dialogue' | 'narration' | 'action' | 'transition'
-    text?: string
-    speaker?: string
-    emotion?: string
-  }
-  speechBubbles?: SpeechBubble[]
+    type: "dialogue" | "narration" | "action" | "transition";
+    text?: string;
+    speaker?: string;
+    emotion?: string;
+  };
+  speechBubbles?: SpeechBubble[];
 }
 
 export interface SpeechBubble {
-  id: string
+  id: string;
   position: {
-    x: number
-    y: number
-    width: number
-    height: number
-  }
-  style: 'speech' | 'thought' | 'narration' | 'effect'
-  text: string
-  speaker?: string
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  style: "speech" | "thought" | "narration" | "effect";
+  text: string;
+  speaker?: string;
   tailPosition?: {
-    x: number
-    y: number
-  }
+    x: number;
+    y: number;
+  };
 }
 
 // 統合分析型（エピソード分析結果）
 export interface NarrativeArcAnalysis {
   episodes: Array<{
-    episodeNumber: number
-    title?: string
-    summary?: string
-    startChunk: number
-    startCharIndex: number
-    endChunk: number
-    endCharIndex: number
-    estimatedPages: number
-    confidence: number
-    keyEvents: string[]
-    emotionalArc: string[]
-  }>
+    episodeNumber: number;
+    title?: string;
+    summary?: string;
+    startChunk: number;
+    startCharIndex: number;
+    endChunk: number;
+    endCharIndex: number;
+    estimatedPages: number;
+    confidence: number;
+    keyEvents: string[];
+    emotionalArc: string[];
+  }>;
   overallStructure: {
-    totalEpisodes: number
-    averageEpisodeLength: number
-    genreClassification: string[]
-    mainThemes: string[]
-  }
+    totalEpisodes: number;
+    averageEpisodeLength: number;
+    genreClassification: string[];
+    mainThemes: string[];
+  };
   metadata: {
-    analysisTimestamp: string
-    processingTimeMs: number
-    modelUsed: string
-  }
+    analysisTimestamp: string;
+    processingTimeMs: number;
+    modelUsed: string;
+  };
 }
 
 // Zodスキーマ例（参考）
@@ -593,280 +603,302 @@ const TextAnalysisSchema = z.object({
 
 // 小説テーブル（最上位エンティティ）
 export const novels = sqliteTable(
-  'novels',
+  "novels",
   {
-    id: text('id').primaryKey(),
-    title: text('title'),
-    author: text('author'),
-    originalTextPath: text('original_text_path').notNull(), // ストレージ上の小説ファイルパス
-    textLength: integer('text_length').notNull(),
-    language: text('language').default('ja'),
-    metadataPath: text('metadata_path'), // ストレージ上のメタデータJSONファイルパス
-    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+    id: text("id").primaryKey(),
+    title: text("title"),
+    author: text("author"),
+    originalTextPath: text("original_text_path").notNull(), // ストレージ上の小説ファイルパス
+    textLength: integer("text_length").notNull(),
+    language: text("language").default("ja"),
+    metadataPath: text("metadata_path"), // ストレージ上のメタデータJSONファイルパス
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
-    createdAtIdx: index('idx_novels_created_at').on(table.createdAt),
+    createdAtIdx: index("idx_novels_created_at").on(table.createdAt),
   }),
-)
+);
 
 // 変換ジョブテーブル（小説に対する変換処理）
 export const jobs = sqliteTable(
-  'jobs',
+  "jobs",
   {
-    id: text('id').primaryKey(),
-    novelId: text('novel_id')
+    id: text("id").primaryKey(),
+    novelId: text("novel_id")
       .notNull()
-      .references(() => novels.id, { onDelete: 'cascade' }),
-    jobName: text('job_name'),
+      .references(() => novels.id, { onDelete: "cascade" }),
+    jobName: text("job_name"),
 
     // ステータス管理
-    status: text('status').notNull().default('pending'), // pending/processing/completed/failed/paused
-    currentStep: text('current_step').notNull().default('initialized'), // initialized/split/analyze/episode/layout/render/complete
+    status: text("status").notNull().default("pending"), // pending/processing/completed/failed/paused
+    currentStep: text("current_step").notNull().default("initialized"), // initialized/split/analyze/episode/layout/render/complete
 
     // 各ステップの完了状態
-    splitCompleted: integer('split_completed', { mode: 'boolean' }).default(false),
-    analyzeCompleted: integer('analyze_completed', { mode: 'boolean' }).default(false),
-    episodeCompleted: integer('episode_completed', { mode: 'boolean' }).default(false),
-    layoutCompleted: integer('layout_completed', { mode: 'boolean' }).default(false),
-    renderCompleted: integer('render_completed', { mode: 'boolean' }).default(false),
+    splitCompleted: integer("split_completed", { mode: "boolean" }).default(
+      false,
+    ),
+    analyzeCompleted: integer("analyze_completed", { mode: "boolean" }).default(
+      false,
+    ),
+    episodeCompleted: integer("episode_completed", { mode: "boolean" }).default(
+      false,
+    ),
+    layoutCompleted: integer("layout_completed", { mode: "boolean" }).default(
+      false,
+    ),
+    renderCompleted: integer("render_completed", { mode: "boolean" }).default(
+      false,
+    ),
 
     // 各ステップの成果物パス（ディレクトリ）
-    chunksDirPath: text('chunks_dir_path'),
-    analysesDirPath: text('analyses_dir_path'),
-    episodesDataPath: text('episodes_data_path'),
-    layoutsDirPath: text('layouts_dir_path'),
-    rendersDirPath: text('renders_dir_path'),
+    chunksDirPath: text("chunks_dir_path"),
+    analysesDirPath: text("analyses_dir_path"),
+    episodesDataPath: text("episodes_data_path"),
+    layoutsDirPath: text("layouts_dir_path"),
+    rendersDirPath: text("renders_dir_path"),
 
     // 進捗詳細
-    totalChunks: integer('total_chunks').default(0),
-    processedChunks: integer('processed_chunks').default(0),
-    totalEpisodes: integer('total_episodes').default(0),
-    processedEpisodes: integer('processed_episodes').default(0),
-    totalPages: integer('total_pages').default(0),
-    renderedPages: integer('rendered_pages').default(0),
+    totalChunks: integer("total_chunks").default(0),
+    processedChunks: integer("processed_chunks").default(0),
+    totalEpisodes: integer("total_episodes").default(0),
+    processedEpisodes: integer("processed_episodes").default(0),
+    totalPages: integer("total_pages").default(0),
+    renderedPages: integer("rendered_pages").default(0),
 
     // エラー管理
-    lastError: text('last_error'),
-    lastErrorStep: text('last_error_step'),
-    retryCount: integer('retry_count').default(0),
+    lastError: text("last_error"),
+    lastErrorStep: text("last_error_step"),
+    retryCount: integer("retry_count").default(0),
 
     // 再開用の状態保存
-    resumeDataPath: text('resume_data_path'),
+    resumeDataPath: text("resume_data_path"),
 
     // タイムスタンプ
-    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
-    startedAt: text('started_at'),
-    completedAt: text('completed_at'),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+    startedAt: text("started_at"),
+    completedAt: text("completed_at"),
   },
   (table) => ({
-    novelIdIdx: index('idx_jobs_novel_id').on(table.novelId),
-    statusIdx: index('idx_jobs_status').on(table.status),
-    novelIdStatusIdx: index('idx_jobs_novel_id_status').on(table.novelId, table.status),
-    currentStepIdx: index('idx_jobs_current_step').on(table.currentStep),
+    novelIdIdx: index("idx_jobs_novel_id").on(table.novelId),
+    statusIdx: index("idx_jobs_status").on(table.status),
+    novelIdStatusIdx: index("idx_jobs_novel_id_status").on(
+      table.novelId,
+      table.status,
+    ),
+    currentStepIdx: index("idx_jobs_current_step").on(table.currentStep),
   }),
-)
+);
 
 // ジョブステップ履歴テーブル（各ステップの実行記録）
 export const jobStepHistory = sqliteTable(
-  'job_step_history',
+  "job_step_history",
   {
-    id: text('id').primaryKey(),
-    jobId: text('job_id')
+    id: text("id").primaryKey(),
+    jobId: text("job_id")
       .notNull()
-      .references(() => jobs.id, { onDelete: 'cascade' }),
-    stepName: text('step_name').notNull(), // split/analyze/episode/layout/render
-    status: text('status').notNull(), // started/completed/failed/skipped
-    startedAt: text('started_at').notNull(),
-    completedAt: text('completed_at'),
-    durationSeconds: integer('duration_seconds'),
-    inputPath: text('input_path'),
-    outputPath: text('output_path'),
-    errorMessage: text('error_message'),
-    metadata: text('metadata'), // JSON形式の追加情報
-    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    stepName: text("step_name").notNull(), // split/analyze/episode/layout/render
+    status: text("status").notNull(), // started/completed/failed/skipped
+    startedAt: text("started_at").notNull(),
+    completedAt: text("completed_at"),
+    durationSeconds: integer("duration_seconds"),
+    inputPath: text("input_path"),
+    outputPath: text("output_path"),
+    errorMessage: text("error_message"),
+    metadata: text("metadata"), // JSON形式の追加情報
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
-    jobIdIdx: index('idx_job_step_history_job_id').on(table.jobId),
+    jobIdIdx: index("idx_job_step_history_job_id").on(table.jobId),
   }),
-)
+);
 
 // チャンクテーブル（分割されたテキスト）
 export const chunks = sqliteTable(
-  'chunks',
+  "chunks",
   {
-    id: text('id').primaryKey(),
-    novelId: text('novel_id')
+    id: text("id").primaryKey(),
+    novelId: text("novel_id")
       .notNull()
-      .references(() => novels.id, { onDelete: 'cascade' }),
-    jobId: text('job_id')
+      .references(() => novels.id, { onDelete: "cascade" }),
+    jobId: text("job_id")
       .notNull()
-      .references(() => jobs.id, { onDelete: 'cascade' }),
-    chunkIndex: integer('chunk_index').notNull(),
-    contentPath: text('content_path').notNull(),
-    startPosition: integer('start_position').notNull(),
-    endPosition: integer('end_position').notNull(),
-    wordCount: integer('word_count'),
-    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    chunkIndex: integer("chunk_index").notNull(),
+    contentPath: text("content_path").notNull(),
+    startPosition: integer("start_position").notNull(),
+    endPosition: integer("end_position").notNull(),
+    wordCount: integer("word_count"),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
-    novelIdIdx: index('idx_chunks_novel_id').on(table.novelId),
-    jobIdIdx: index('idx_chunks_job_id').on(table.jobId),
-    uniqueJobChunk: index('unique_job_chunk').on(table.jobId, table.chunkIndex),
+    novelIdIdx: index("idx_chunks_novel_id").on(table.novelId),
+    jobIdIdx: index("idx_chunks_job_id").on(table.jobId),
+    uniqueJobChunk: index("unique_job_chunk").on(table.jobId, table.chunkIndex),
   }),
-)
+);
 
 // チャンク分析状態テーブル（各チャンクの分析完了状態）
 export const chunkAnalysisStatus = sqliteTable(
-  'chunk_analysis_status',
+  "chunk_analysis_status",
   {
-    id: text('id').primaryKey(),
-    jobId: text('job_id')
+    id: text("id").primaryKey(),
+    jobId: text("job_id")
       .notNull()
-      .references(() => jobs.id, { onDelete: 'cascade' }),
-    chunkIndex: integer('chunk_index').notNull(),
-    isAnalyzed: integer('is_analyzed', { mode: 'boolean' }).default(false),
-    analysisPath: text('analysis_path'),
-    analyzedAt: text('analyzed_at'),
-    retryCount: integer('retry_count').default(0),
-    lastError: text('last_error'),
-    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    chunkIndex: integer("chunk_index").notNull(),
+    isAnalyzed: integer("is_analyzed", { mode: "boolean" }).default(false),
+    analysisPath: text("analysis_path"),
+    analyzedAt: text("analyzed_at"),
+    retryCount: integer("retry_count").default(0),
+    lastError: text("last_error"),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
-    jobIdIdx: index('idx_chunk_analysis_status_job_id').on(table.jobId),
-    uniqueJobChunk: index('unique_job_chunk_analysis').on(table.jobId, table.chunkIndex),
+    jobIdIdx: index("idx_chunk_analysis_status_job_id").on(table.jobId),
+    uniqueJobChunk: index("unique_job_chunk_analysis").on(
+      table.jobId,
+      table.chunkIndex,
+    ),
   }),
-)
+);
 
 // エピソードテーブル
 export const episodes = sqliteTable(
-  'episodes',
+  "episodes",
   {
-    id: text('id').primaryKey(),
-    novelId: text('novel_id')
+    id: text("id").primaryKey(),
+    novelId: text("novel_id")
       .notNull()
-      .references(() => novels.id, { onDelete: 'cascade' }),
-    jobId: text('job_id')
+      .references(() => novels.id, { onDelete: "cascade" }),
+    jobId: text("job_id")
       .notNull()
-      .references(() => jobs.id, { onDelete: 'cascade' }),
-    episodeNumber: integer('episode_number').notNull(),
-    title: text('title'),
-    summary: text('summary'),
-    startChunk: integer('start_chunk').notNull(),
-    startCharIndex: integer('start_char_index').notNull(),
-    endChunk: integer('end_chunk').notNull(),
-    endCharIndex: integer('end_char_index').notNull(),
-    estimatedPages: integer('estimated_pages').notNull(),
-    confidence: real('confidence').notNull(),
-    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    episodeNumber: integer("episode_number").notNull(),
+    title: text("title"),
+    summary: text("summary"),
+    startChunk: integer("start_chunk").notNull(),
+    startCharIndex: integer("start_char_index").notNull(),
+    endChunk: integer("end_chunk").notNull(),
+    endCharIndex: integer("end_char_index").notNull(),
+    estimatedPages: integer("estimated_pages").notNull(),
+    confidence: real("confidence").notNull(),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
-    novelIdIdx: index('idx_episodes_novel_id').on(table.novelId),
-    jobIdIdx: index('idx_episodes_job_id').on(table.jobId),
-    uniqueJobEpisode: index('unique_job_episode').on(table.jobId, table.episodeNumber),
+    novelIdIdx: index("idx_episodes_novel_id").on(table.novelId),
+    jobIdIdx: index("idx_episodes_job_id").on(table.jobId),
+    uniqueJobEpisode: index("unique_job_episode").on(
+      table.jobId,
+      table.episodeNumber,
+    ),
   }),
-)
+);
 
 // レイアウト状態テーブル（各エピソードのレイアウト生成状態）
 export const layoutStatus = sqliteTable(
-  'layout_status',
+  "layout_status",
   {
-    id: text('id').primaryKey(),
-    jobId: text('job_id')
+    id: text("id").primaryKey(),
+    jobId: text("job_id")
       .notNull()
-      .references(() => jobs.id, { onDelete: 'cascade' }),
-    episodeNumber: integer('episode_number').notNull(),
-    isGenerated: integer('is_generated', { mode: 'boolean' }).default(false),
-    layoutPath: text('layout_path'),
-    totalPages: integer('total_pages'),
-    totalPanels: integer('total_panels'),
-    generatedAt: text('generated_at'),
-    retryCount: integer('retry_count').default(0),
-    lastError: text('last_error'),
-    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    episodeNumber: integer("episode_number").notNull(),
+    isGenerated: integer("is_generated", { mode: "boolean" }).default(false),
+    layoutPath: text("layout_path"),
+    totalPages: integer("total_pages"),
+    totalPanels: integer("total_panels"),
+    generatedAt: text("generated_at"),
+    retryCount: integer("retry_count").default(0),
+    lastError: text("last_error"),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
-    jobIdIdx: index('idx_layout_status_job_id').on(table.jobId),
-    uniqueJobEpisode: index('unique_job_episode_layout').on(table.jobId, table.episodeNumber),
+    jobIdIdx: index("idx_layout_status_job_id").on(table.jobId),
+    uniqueJobEpisode: index("unique_job_episode_layout").on(
+      table.jobId,
+      table.episodeNumber,
+    ),
   }),
-)
+);
 
 // 描画状態テーブル（各ページの描画状態）
 export const renderStatus = sqliteTable(
-  'render_status',
+  "render_status",
   {
-    id: text('id').primaryKey(),
-    jobId: text('job_id')
+    id: text("id").primaryKey(),
+    jobId: text("job_id")
       .notNull()
-      .references(() => jobs.id, { onDelete: 'cascade' }),
-    episodeNumber: integer('episode_number').notNull(),
-    pageNumber: integer('page_number').notNull(),
-    isRendered: integer('is_rendered', { mode: 'boolean' }).default(false),
-    imagePath: text('image_path'),
-    thumbnailPath: text('thumbnail_path'),
-    width: integer('width'),
-    height: integer('height'),
-    fileSize: integer('file_size'),
-    renderedAt: text('rendered_at'),
-    retryCount: integer('retry_count').default(0),
-    lastError: text('last_error'),
-    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    episodeNumber: integer("episode_number").notNull(),
+    pageNumber: integer("page_number").notNull(),
+    isRendered: integer("is_rendered", { mode: "boolean" }).default(false),
+    imagePath: text("image_path"),
+    thumbnailPath: text("thumbnail_path"),
+    width: integer("width"),
+    height: integer("height"),
+    fileSize: integer("file_size"),
+    renderedAt: text("rendered_at"),
+    retryCount: integer("retry_count").default(0),
+    lastError: text("last_error"),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
-    jobIdIdx: index('idx_render_status_job_id').on(table.jobId),
-    uniqueJobEpisodePage: index('unique_job_episode_page').on(
+    jobIdIdx: index("idx_render_status_job_id").on(table.jobId),
+    uniqueJobEpisodePage: index("unique_job_episode_page").on(
       table.jobId,
       table.episodeNumber,
       table.pageNumber,
     ),
   }),
-)
+);
 
 // 最終成果物テーブル
 export const outputs = sqliteTable(
-  'outputs',
+  "outputs",
   {
-    id: text('id').primaryKey(),
-    novelId: text('novel_id')
+    id: text("id").primaryKey(),
+    novelId: text("novel_id")
       .notNull()
-      .references(() => novels.id, { onDelete: 'cascade' }),
-    jobId: text('job_id')
+      .references(() => novels.id, { onDelete: "cascade" }),
+    jobId: text("job_id")
       .notNull()
-      .references(() => jobs.id, { onDelete: 'cascade' }),
-    outputType: text('output_type').notNull(), // pdf/images_zip
-    outputPath: text('output_path').notNull(),
-    fileSize: integer('file_size'),
-    pageCount: integer('page_count'),
-    metadataPath: text('metadata_path'),
-    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    outputType: text("output_type").notNull(), // pdf/images_zip
+    outputPath: text("output_path").notNull(),
+    fileSize: integer("file_size"),
+    pageCount: integer("page_count"),
+    metadataPath: text("metadata_path"),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
-    novelIdIdx: index('idx_outputs_novel_id').on(table.novelId),
-    jobIdIdx: index('idx_outputs_job_id').on(table.jobId),
+    novelIdIdx: index("idx_outputs_novel_id").on(table.novelId),
+    jobIdIdx: index("idx_outputs_job_id").on(table.jobId),
   }),
-)
+);
 
 // ストレージ参照テーブル（全ファイルの追跡）
 export const storageFiles = sqliteTable(
-  'storage_files',
+  "storage_files",
   {
-    id: text('id').primaryKey(),
-    novelId: text('novel_id')
+    id: text("id").primaryKey(),
+    novelId: text("novel_id")
       .notNull()
-      .references(() => novels.id, { onDelete: 'cascade' }),
-    jobId: text('job_id').references(() => jobs.id, { onDelete: 'cascade' }),
-    filePath: text('file_path').notNull().unique(),
-    fileCategory: text('file_category').notNull(), // original/chunk/analysis/episode/layout/render/output/metadata
-    fileType: text('file_type').notNull(), // txt/json/yaml/png/jpg/pdf/zip
-    mimeType: text('mime_type'), // 追加: 実際のMIMEタイプ (例: 'image/png')
-    fileSize: integer('file_size'),
-    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+      .references(() => novels.id, { onDelete: "cascade" }),
+    jobId: text("job_id").references(() => jobs.id, { onDelete: "cascade" }),
+    filePath: text("file_path").notNull().unique(),
+    fileCategory: text("file_category").notNull(), // original/chunk/analysis/episode/layout/render/output/metadata
+    fileType: text("file_type").notNull(), // txt/json/yaml/png/jpg/pdf/zip
+    mimeType: text("mime_type"), // 追加: 実際のMIMEタイプ (例: 'image/png')
+    fileSize: integer("file_size"),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
-    novelIdIdx: index('idx_storage_files_novel_id').on(table.novelId),
+    novelIdIdx: index("idx_storage_files_novel_id").on(table.novelId),
   }),
-)
+);
 
 // インデックスはDrizzleテーブル定義内で管理：
 // - novels: createdAtIdx
@@ -881,12 +913,12 @@ export const storageFiles = sqliteTable(
 // - storageFiles: novelIdIdx
 
 // 型エクスポート（Drizzle自動生成）
-export type Novel = typeof novels.$inferSelect
-export type NewNovel = typeof novels.$inferInsert
-export type Job = typeof jobs.$inferSelect
-export type NewJob = typeof jobs.$inferInsert
-export type Episode = typeof episodes.$inferSelect
-export type NewEpisode = typeof episodes.$inferInsert
+export type Novel = typeof novels.$inferSelect;
+export type NewNovel = typeof novels.$inferInsert;
+export type Job = typeof jobs.$inferSelect;
+export type NewJob = typeof jobs.$inferInsert;
+export type Episode = typeof episodes.$inferSelect;
+export type NewEpisode = typeof episodes.$inferInsert;
 // その他すべてのテーブル型も同様に自動生成
 
 // データベースビューはDrizzleでは直接サポートされていないため、
@@ -970,6 +1002,7 @@ novels/
 - **型安全性**: TypeScriptによるスキーマとクエリの型チェック
 - **バージョン管理**: `drizzle/migrations/`ディレクトリで管理
 - **マイグレーションコマンド**:
+
   ```bash
   # スキーマ変更からマイグレーション生成
   npx drizzle-kit generate
@@ -980,6 +1013,7 @@ novels/
   # 本番環境適用（D1）
   npx wrangler d1 migrations apply novel2manga
   ```
+
 - **インデックス戦略**: Drizzleテーブル定義内で複合インデックス管理
 
 ## Storage and Database Abstraction
@@ -989,8 +1023,14 @@ novels/
 ```typescript
 // Custom Storage Interface（Web Storage APIとの競合を避けるため）
 interface NovelStorage {
-  put(key: string, value: string | Buffer, metadata?: Record<string, string>): Promise<void>;
-  get(key: string): Promise<{ text: string; metadata?: Record<string, string> } | null>;
+  put(
+    key: string,
+    value: string | Buffer,
+    metadata?: Record<string, string>,
+  ): Promise<void>;
+  get(
+    key: string,
+  ): Promise<{ text: string; metadata?: Record<string, string> } | null>;
   delete(key: string): Promise<void>;
   exists(key: string): Promise<boolean>;
 }
@@ -1017,16 +1057,16 @@ class R2Storage implements NovelStorage {
 
 // Drizzle統合データベース接続
 class DatabaseService {
-  private db: DrizzleDatabase
+  private db: DrizzleDatabase;
 
   constructor() {
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       // SQLite + Drizzle
-      const sqliteDb = new Database(dbConfig.path)
-      this.db = drizzle(sqliteDb, { schema })
+      const sqliteDb = new Database(dbConfig.path);
+      this.db = drizzle(sqliteDb, { schema });
     } else {
       // D1 + Drizzle
-      this.db = drizzle(globalThis.DB, { schema })
+      this.db = drizzle(globalThis.DB, { schema });
     }
   }
 }
@@ -1050,6 +1090,14 @@ export class StorageFactory {
 ### エラー処理戦略（2025-08-10更新）
 
 本プロジェクトのAPIエラーハンドリングは `src/utils/api-error.ts` に集約し、全ルートは `createErrorResponse` を用いて単一の形でJSONエラーを返します。ルート実装では原則として `ApiError` 階層を throw し、その他の例外は共通レスポンダが安全に変換します。
+
+### 2025-08-12 更新 (PR#59 レビュー反映)
+
+- 成功レスポンスも `createSuccessResponse` に統一。`/api/layout/generate` を含む全ての新/更新ルートはトップレベル `{ success: true, ...payload }` 形式を使用。
+- 旧 `NextResponse.json` 直接返却は段階的廃止（互換保持が不要になり次第リファクタ継続）。
+- StorageKeys に ID バリデーション（英数/`_-` のみ & `..`/先頭`/`禁止）を追加しパストラバーサルを防止。
+- Job 作成APIをオーバーロード (id, novelId, jobName) / ({ novelId,... }) から単一シグネチャ `createJob({ id?, novelId, title?, totalChunks?, status? })` に集約。Repository 層は後方互換ヘルパ `createWithId` を内部で `create({id,...})` にフォワード。
+- RepositoryFactory 生成時に DatabaseService の存在と代表メソッド (`getJob`, `getNovel`) を実行前検証し、初期化失敗を早期検出。
 
 - 主要クラスと型
   - ApiError（基底）/ ValidationError / NotFoundError / ForbiddenError / AuthenticationError / ExternalApiError / DatabaseError / StorageError
@@ -1083,10 +1131,11 @@ export const ERROR_CODES = {
   INTERNAL_ERROR: "INTERNAL_ERROR",
   UNKNOWN_ERROR: "UNKNOWN_ERROR",
 } as const;
-export type ErrorCode = typeof ERROR_CODES[keyof typeof ERROR_CODES];
+export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
 ```
 
 運用ガイド:
+
 - ルート内で新たに識別したい状態（例: 再開不能など）は `ERROR_CODES` にコードを追加してから `ApiError` に付与します（例: INVALID_STATE）。
 - `HttpError` は新規使用禁止（将来的にlintガード予定）。既存分は responder で互換処理されます。
 
@@ -1101,6 +1150,7 @@ export type ErrorCode = typeof ERROR_CODES[keyof typeof ERROR_CODES];
 ```
 
 実装上のガイド:
+
 - ルートでは `throw new ValidationError('...')` などのドメイン例外を使用する。
 - 例外は最上位の try/catch で `return createErrorResponse(err, 'Route specific fallback')` に渡す。
 - 旧 `toErrorResponse` / `api-error-response.ts` は廃止。互換層は削除済みで、`HttpError` は新実装によりブリッジされるが新規使用は非推奨。
@@ -1123,27 +1173,27 @@ export type ErrorCode = typeof ERROR_CODES[keyof typeof ERROR_CODES];
 export const appConfig = {
   // チャンク分割設定
   chunks: {
-    defaultChunkSize: 5000,        // 【ここを設定】
-    defaultOverlapSize: 500,       // 【ここを設定】
+    defaultChunkSize: 5000, // 【ここを設定】
+    defaultOverlapSize: 500, // 【ここを設定】
     minChunkSize: 1000,
     maxChunkSize: 10000,
   },
 
   // LLMプロバイダー設定
   llm: {
-    defaultProvider: 'openrouter', // 【ここを設定】
+    defaultProvider: "openrouter", // 【ここを設定】
     providers: {
-      openai: { model: 'o3' }, // OpenAI o3 (reasoningモデル、temperatureパラメータなし)
-      gemini: { model: 'gemini-2.5-flash', temperature: 0.7 },
-      groq: { model: 'compound-beta', maxTokens: 8192 },
-      local: { model: 'gpt-oss:20b', baseUrl: 'http://localhost:11434' },
-      openrouter: { model: 'openai/gpt-oss-120b', temperature: 0.7 },
+      openai: { model: "o3" }, // OpenAI o3 (reasoningモデル、temperatureパラメータなし)
+      gemini: { model: "gemini-2.5-flash", temperature: 0.7 },
+      groq: { model: "compound-beta", maxTokens: 8192 },
+      local: { model: "gpt-oss:20b", baseUrl: "http://localhost:11434" },
+      openrouter: { model: "openai/gpt-oss-120b", temperature: 0.7 },
     },
   },
 
   // 処理設定
   processing: {
-    maxConcurrentChunks: 3,        // 【ここを設定】
+    maxConcurrentChunks: 3, // 【ここを設定】
     retryAttempts: 3,
     retryDelay: 1000,
     cacheEnabled: true,
@@ -1151,7 +1201,7 @@ export const appConfig = {
   },
 
   // LLMフォールバックチェーン設定
-  llmFallbackChain: ['openrouter', 'gemini', 'claude'], // 【ここを設定】
+  llmFallbackChain: ["openrouter", "gemini", "claude"], // 【ここを設定】
 };
 ```
 
@@ -1205,7 +1255,11 @@ declare global {
 }
 
 export interface R2Bucket {
-  put(key: string, value: ReadableStream | ArrayBuffer | string, options?: R2PutOptions): Promise<R2Object | null>;
+  put(
+    key: string,
+    value: ReadableStream | ArrayBuffer | string,
+    options?: R2PutOptions,
+  ): Promise<R2Object | null>;
   get(key: string, options?: R2GetOptions): Promise<R2ObjectBody | null>;
   delete(key: string): Promise<void>;
   list(options?: R2ListOptions): Promise<R2Objects>;
@@ -1282,13 +1336,13 @@ sequenceDiagram
 
 ### Performance Targets
 
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| 初期表示時間 (FCP) | < 1.5秒 | Lighthouse |
-| API レスポンス (p95) | < 200ms | APIエンドポイント |
-| 絵コンテ生成時間 | < 5秒/ページ | Canvas API測定 |
-| テキスト解析 | < 5秒/10,000文字 | 処理時間測定 |
-| 同時ユーザー数 | > 1,000 | 負荷テスト |
+| Metric               | Target           | Measurement       |
+| -------------------- | ---------------- | ----------------- |
+| 初期表示時間 (FCP)   | < 1.5秒          | Lighthouse        |
+| API レスポンス (p95) | < 200ms          | APIエンドポイント |
+| 絵コンテ生成時間     | < 5秒/ページ     | Canvas API測定    |
+| テキスト解析         | < 5秒/10,000文字 | 処理時間測定      |
+| 同時ユーザー数       | > 1,000          | 負荷テスト        |
 
 ### Caching Strategy
 
@@ -1306,7 +1360,7 @@ sequenceDiagram
     if (memCached) return memCached;
 
     // L2: Cloudflare KVチェック
-    const kvCached = await CACHE.get(key, 'json');
+    const kvCached = await CACHE.get(key, "json");
     if (kvCached) {
       memoryCache.set(key, kvCached, 3600); // 1時間メモリキャッシュ
       return kvCached as T;
@@ -1315,6 +1369,7 @@ sequenceDiagram
     return null;
   }
   ```
+
 - **データベースキャッシュ**: D1クエリ結果キャッシュ
 - **Edge キャッシュ**: Cloudflare Tiered Cacheによる多階層キャッシュ
 - **キャッシュ戦略**:
@@ -1345,7 +1400,9 @@ sequenceDiagram
 ### 🔴 発見された致命的問題
 
 #### 1. Job Status Endpoint完全停止
+
 **現象**:
+
 - UI上は「処理中」表示だが実際は何も処理されていない
 - `/api/jobs/[jobId]/status`が継続的に500エラー
 - データベースからJobデータが読み取れない
@@ -1353,7 +1410,9 @@ sequenceDiagram
 **原因**: `DatabaseService.getJobWithProgress()`が例外をthrow
 
 #### 2. Mastraエージェント統合失敗
+
 **現象**:
+
 - チャンク分析が開始されない
 - LLMプロバイダーとの接続が確立されない
 - 環境変数はあるがMastra設定が不適切
@@ -1361,13 +1420,16 @@ sequenceDiagram
 **原因**: LLM Factory の設定ミスまたはMastraエージェントの初期化失敗
 
 #### 3. 分析パイプライン完全停止
+
 **現象**:
+
 - 小説アップロード後、表面的にはJobが作成されるが処理が進まない
 - チャンク分割・分析・エピソード構成等が一切実行されない
 
 ### 🚨 緊急修正が必要なタスク（優先順）
 
 #### Task 1: Job Status読み取り修正 [CRITICAL]
+
 ```typescript
 // 問題: src/services/database.ts の getJobWithProgress が失敗
 // 修正必要: 例外ハンドリングとnullチェック
@@ -1388,25 +1450,27 @@ async getJobWithProgress(id: string) {
 ```
 
 #### Task 2: LLM統合の基本動作確認 [CRITICAL]
+
 ```typescript
 // 問題: src/utils/llm-factory.ts でプロバイダー接続失敗
 // 修正必要: フォールバック機能と基本接続テスト
 export async function validateLLMConnection() {
-  const providers = ['openai', 'openrouter', 'gemini']
+  const providers = ["openai", "openrouter", "gemini"];
 
   for (const provider of providers) {
-    const config = getLLMProviderConfig(provider)
+    const config = getLLMProviderConfig(provider);
     if (config.apiKey) {
-      console.log(`Testing ${provider} connection...`)
+      console.log(`Testing ${provider} connection...`);
       // 基本接続テストを実装
-      return provider
+      return provider;
     }
   }
-  throw new Error('No working LLM provider found')
+  throw new Error("No working LLM provider found");
 }
 ```
 
 #### Task 3: 分析パイプライン修正 [CRITICAL]
+
 ```typescript
 // 問題: src/app/api/analyze/route.ts でMastraエージェント呼び出し失敗
 // 修正必要: エラーハンドリングと段階的処理
@@ -1417,32 +1481,34 @@ try {
     characters: [],
     dialogues: [],
     scenes: [],
-    highlights: []
-  }
+    highlights: [],
+  };
 
   // Mastra呼び出しは後回し、まずは固定値で動作確認
-  await analysisStorage.put(analysisPath, JSON.stringify(simpleAnalysis))
-
+  await analysisStorage.put(analysisPath, JSON.stringify(simpleAnalysis));
 } catch (error) {
-  console.error('Analysis failed:', error)
-  await dbService.updateJobError(jobId, error.message, 'analyze')
-  throw error
+  console.error("Analysis failed:", error);
+  await dbService.updateJobError(jobId, error.message, "analyze");
+  throw error;
 }
 ```
 
 ### 📅 段階的修復計画
 
 #### Week 1: 基盤修復
+
 - [ ] Job Status APIを最低限動作させる
 - [ ] データベース読み書きの基本動作確認
 - [ ] 簡単なテキスト処理で分析パイプラインを疎通させる
 
 #### Week 2: LLM統合
+
 - [ ] 1つのLLMプロバイダーとの接続を確立
 - [ ] Mastraエージェントの基本動作確認
 - [ ] 実際のテキスト分析処理を実装
 
 #### Week 3: 処理完成
+
 - [ ] 全分析ステップの実装
 - [ ] エピソード分析・レイアウト生成の基本実装
 - [ ] エラーハンドリングとリトライ機能
@@ -1484,9 +1550,10 @@ try {
 ### Testing Approach
 
 1. **単体テスト (Vitest)**
+
    ```typescript
-   describe('TextAnalyzer', () => {
-     it('should extract 5 elements from novel text', async () => {
+   describe("TextAnalyzer", () => {
+     it("should extract 5 elements from novel text", async () => {
        const result = await analyzer.analyze(sampleText);
        expect(result.characters).toHaveLength(3);
        expect(result.scenes).toBeDefined();
@@ -1529,17 +1596,20 @@ graph LR
 本日の変更と現在の実動状況を追補します。
 
 ### 1) パイプラインの最低限復旧（splitOnly）
+
 - アップロード→ジョブ作成→チャンク分割→ステータス取得までの一連が安定動作
 - `/api/jobs/:jobId/status`: 正常応答・進捗マッピング強化（chunks_created / analysis_completed 等を許容）
 - `/api/jobs/:jobId/episodes`: 分割直後は404（仕様として明示）
 - `/api/render/status/:jobId`: エピソード未生成時は `no_episodes` を返却（仕様として明示）
 
 ### 2) API契約の明確化
+
 - `/api/analyze` において、Mastra出力の型を zod スキーマに基づき明示（型安全性の向上）
 - Episodes取得の404を「未生成状態の正規レスポンス」としてUI/テストで扱う前提に変更
 - Job Statusの`currentStep`は以下をサポート: `initialized | split | analyze | episode | layout | render | complete`（互換ラベル: `chunks_created`, `analysis_completed` などの状態補助をUIで吸収）
 
 ### 3) フロントエンドの堅牢化
+
 - ProcessingProgress:
   - ポーリングの安定化（3s）、依存配列の是正、同一データ時の再レンダー抑制
   - DEV限定のログパネル・重複抑止・キー重複回避
@@ -1549,15 +1619,18 @@ graph LR
   - 型参照の整合性（Episode型の参照先統一）
 
 ### 4) 設定/LLM/構成
+
 - OpenRouterの既定モデルを `qwen/qwen3-235b-a22b-thinking-2507` へ変更
 - 環境変数オーバーライドの型安全化（プロバイダ/ログレベルのバリデーションを追加）
 - `config-loader` を環境変数ベースに簡素化（深いマージユーティリティの撤去）
 
 ### 5) ストレージの最適化
+
 - JSON保存時はインデント無しでI/Oを軽量化
 - メタデータファイルは必要時のみ作成（不要なディレクトリ作成を削減）
 
 ### 6) 既知の課題（継続）
+
 - LLM実行（analyze以降）の本稼働、Mastraエージェントの疎通確認
 - エピソード生成→レイアウト→レンダリングの本処理実装とAPI/DB契約の固定
 - `resumeDataPath`の実装と中断復旧（リトライ/再開）

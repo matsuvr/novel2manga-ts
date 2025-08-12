@@ -1,10 +1,10 @@
 import yaml from 'js-yaml'
-import { type NextRequest, NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { generateMangaLayout } from '@/agents/layout-generator'
 import { getEpisodeRepository, getJobRepository } from '@/repositories'
 import type { ChunkData, EpisodeData } from '@/types/panel-layout'
-import { ApiError, createErrorResponse } from '@/utils/api-error'
+import { ApiError, createErrorResponse, createSuccessResponse } from '@/utils/api-error'
 import { getChunkData, StorageFactory, StorageKeys } from '@/utils/storage'
 
 const requestSchema = z.object({
@@ -138,12 +138,12 @@ export async function POST(request: NextRequest) {
     const storageKey = StorageKeys.episodeLayout(jobId, episodeNumber)
     await layoutStorage.put(storageKey, yamlContent)
 
-    return NextResponse.json({
+    return createSuccessResponse({
       message: 'Layout generated successfully',
       jobId,
       episodeNumber,
       storageKey,
-      layout: layout,
+      layout,
     })
   } catch (error) {
     console.error('Error generating layout:', error)

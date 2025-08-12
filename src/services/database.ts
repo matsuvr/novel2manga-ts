@@ -68,43 +68,22 @@ export class DatabaseService {
     return await this.db.select().from(novels).orderBy(desc(novels.createdAt))
   }
 
-  // Job関連メソッド
-  async createJob(id: string, novelId: string, jobName?: string): Promise<string>
+  // Job関連メソッド（統一シグネチャ）
   async createJob(payload: {
+    id?: string
     novelId: string
     title?: string
     totalChunks?: number
     status?: string
-  }): Promise<string>
-  async createJob(
-    arg1: string | { novelId: string; title?: string; totalChunks?: number; status?: string },
-    novelId?: string,
-    jobName?: string,
-  ): Promise<string> {
-    if (typeof arg1 === 'string') {
-      // 既存の署名: (id, novelId, jobName)
-      if (!novelId) {
-        throw new Error('novelId is required')
-      }
-      await this.db.insert(jobs).values({
-        id: arg1,
-        novelId: novelId,
-        jobName,
-        status: 'pending',
-        currentStep: 'initialized',
-      })
-      return arg1
-    }
-
-    // オーバーロード: ({ novelId, ... }) → id を生成して返す
-    const id = crypto.randomUUID()
+  }): Promise<string> {
+    const id = payload.id || crypto.randomUUID()
     await this.db.insert(jobs).values({
       id,
-      novelId: arg1.novelId,
-      jobName: arg1.title,
-      status: (arg1.status as Job['status']) || 'pending',
+      novelId: payload.novelId,
+      jobName: payload.title,
+      status: (payload.status as Job['status']) || 'pending',
       currentStep: 'initialized',
-      totalChunks: arg1.totalChunks || 0,
+      totalChunks: payload.totalChunks || 0,
     })
     return id
   }

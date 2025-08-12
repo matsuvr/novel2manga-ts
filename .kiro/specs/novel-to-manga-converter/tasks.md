@@ -89,7 +89,7 @@
 - [x] 6. APIエンドポイントの実装（2025-08-05ほぼ完了）
 - [x] 6.1 認証とプロジェクト管理API（基礎実装）
   - [ ] NextAuth.js v5のセットアップとテスト
-  - [ ] /api/auth/*エンドポイント実装
+  - [ ] /api/auth/\*エンドポイント実装
   - [ ] /api/projectsのCRUD APIテスト作成と実装
   - [x] Cloudflare Workers基盤設定（Hono + D1 + R2）
   - _Requirements: REQ-6 - プロジェクト管理_
@@ -304,6 +304,10 @@
 - [ ] 33. 追加フォローアップ（軽微）
   - [ ] ルート内の `HttpError` 新規使用のlintガード検討（禁止 or 自動変換）
   - [x] 失敗時レスポンスの `code` 値の体系化（定数/enum化） — `ERROR_CODES` と `ErrorCode` ユニオン導入済み（2025-08-10）
+  - [x] 成功レスポンスの `createSuccessResponse` への統一（/api/layout/generate を含む）(2025-08-12)
+  - [x] StorageKeys に ID バリデーション追加でパストラバーサル防止 (2025-08-12)
+  - [x] Job 作成APIシグネチャ統一 (`createJob({ id?, novelId, ... })`) (2025-08-12)
+  - [x] RepositoryFactory に DatabaseService 健全性チェック追加 (2025-08-12)
 
 ## 既存タスク（延期）
 

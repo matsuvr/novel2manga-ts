@@ -30,9 +30,13 @@ export interface JobDbPort {
   getJob(id: string): Promise<Job | null>
   getJobWithProgress(id: string): Promise<(Job & { progress: unknown | null }) | null>
   getJobsByNovelId(novelId: string): Promise<Job[]>
-  // Overloaded method signatures for flexibility
-  createJob(id: string, novelId: string, jobName?: string): Promise<string>
+  /**
+   * Create a job.
+   * - If id is provided uses that id (useful for external correlation / deterministic ids in tests)
+   * - Otherwise generates a new id
+   */
   createJob(payload: {
+    id?: string
     novelId: string
     title?: string
     totalChunks?: number

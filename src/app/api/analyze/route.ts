@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
     if (!novelId) {
       throw new ApiError('novelId の解決に失敗しました', 500, 'INTERNAL_ERROR')
     }
-    await jobRepo.createWithId(jobId, novelId, `Analysis Job for ${title || 'Novel'}`)
+    await jobRepo.create({ id: jobId, novelId, title: `Analysis Job for ${title || 'Novel'}` })
 
     // ジョブの総チャンク数を更新（初期化）
     await dbService.updateJobStep(jobId, 'initialized', 0, chunks.length)

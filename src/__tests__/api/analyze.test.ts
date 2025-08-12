@@ -132,6 +132,8 @@ describe('/api/analyze', () => {
         textLength: 1000,
         language: 'ja',
       }),
+      // RepositoryFactory のランタイム検証対策で追加
+      getJob: vi.fn().mockResolvedValue(null),
       createJob: vi.fn(),
       updateJobStep: vi.fn(),
       createChunk: vi.fn(),
