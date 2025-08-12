@@ -10,6 +10,7 @@ import { JobRepository } from '@/repositories/job-repository'
 import { OutputRepository } from '@/repositories/output-repository'
 import { getDatabaseService } from '@/services/db-factory'
 import type { MangaLayout } from '@/types/panel-layout'
+import { isMangaLayout } from '@/utils/type-guards'
 import { handleApiError, successResponse, validationError } from '@/utils/api-error'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
 import { validateJobId } from '@/utils/validators'
@@ -126,11 +127,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 }
 
-function isMangaLayout(value: unknown): value is MangaLayout {
-  if (typeof value !== 'object' || value === null) return false
-  const v = value as { pages?: unknown }
-  return Array.isArray(v.pages)
-}
+// isMangaLayout is imported from utils/type-guards (Zod-backed)
 
 async function exportToPDF(
   jobId: string,

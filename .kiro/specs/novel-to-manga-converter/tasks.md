@@ -170,7 +170,9 @@
 - [ ] 10.6 Chunk → Scene 正規化アダプタ実装（アドホック scene 構造 → SceneFlexible → normalizeToSceneCore）
 - [ ] 10.7 永続化層（DB/R2 保存前）での `normalizeToSceneCore` 強制適用
 - [ ] 10.8 Scene 追加属性 (mood, visualElements) 利用開始: LLM プロンプト & 保存スキーマ反映
-- [ ] 10.9 Emotion / Highlight 種別語彙の列挙型化 + マッピングテーブル実装
+- [x] 10.9 Emotion / Highlight 種別語彙の列挙型化 + マッピングテーブル実装（Emotion 完了・Highlight 未対応）
+  - Emotion: `src/domain/models/emotion.ts` 追加、`EmotionSchema` と `normalizeEmotion()` 実装、対話モデルへ適用
+  - Highlight: 後続タスク（type/語彙の列挙と利用箇所の置換）
 - [ ] 10.10 ドキュメント反映（design.md 変更履歴セクション拡張, API エラー仕様章の更新）
 - [ ] 10.11 既存永続化 Scene データ一括マイグレーションスクリプト（オプション）
   - [x] Health エンドポイント追加 (`/api/health`) - DB と Storage の簡易疎通確認 (2025-08-12)

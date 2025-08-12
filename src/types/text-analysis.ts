@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { EmotionSchema } from '@/domain/models/emotion'
 import { SceneSchema } from '@/domain/models/scene'
 export { SceneSchema } // 以前の公開API維持: tests 等が直接 import { SceneSchema } from '.../text-analysis' を想定
 
@@ -17,7 +18,7 @@ export const DialogueSchema = z.object({
   id: z.string(),
   speakerId: z.string(), // Character.idへの参照
   text: z.string(),
-  emotion: z.string().optional(), // 感情（happy, sad, angry, surprised等）
+  emotion: EmotionSchema.optional(), // 感情（共通語彙に準拠）
   index: z.number(), // テキスト内での位置
 })
 

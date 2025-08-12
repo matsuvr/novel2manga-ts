@@ -34,8 +34,10 @@ export interface Size {
   height: number // 0.0 - 1.0
 }
 
+import type { Emotion } from '@/domain/models/emotion'
+
 export interface Dialogue {
-  emotion?: string
+  emotion?: Emotion
   speaker: string
   text: string
 }

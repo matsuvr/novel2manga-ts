@@ -32,6 +32,12 @@
   - 既存コード後方互換: 既存参照名 `SceneSchema` は Core を再エクスポートして破壊的変更を回避。
   - 目的: 型重複によるドリフト防止 / 正規化パイプライン挿入容易化 / 将来のシーン拡張フィールド (mood, visualElements 等) の漸進導入。
 
+**ドメインモデル整合性（優先度2） 着手:**
+
+- Emotion 語彙の共通化: `src/domain/models/emotion.ts` を追加し、`EmotionSchema`（列挙）と `normalizeEmotion()` を提供。解析/レイアウト両方で emotion を共有し、シノニム（think/inner → thought）を正規化。
+- Dialogue の emotion 型適用: `src/types/text-analysis.ts` と `src/types/panel-layout.ts` の対話に Emotion を適用（テスト互換のため `happy`/`normal` 等も許容）。
+- MangaLayout Zod スキーマ導入: `src/types/panel-layout.zod.ts` に YAML レイアウト用の厳密スキーマを追加し、`src/utils/type-guards.ts` の `isMangaLayout` を Zod バックエンドに移行。`validateMangaLayout()` で人間可読なエラー配列も取得可能。`/api/export` の重複ガードを統一。
+
 今後予定される追随作業:
 
 - 他 API ルートへの `INVALID_INPUT` 適用とドキュメント明確化。
