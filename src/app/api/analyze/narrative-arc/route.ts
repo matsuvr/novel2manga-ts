@@ -1,10 +1,16 @@
 import type { NextRequest } from 'next/server'
-import { NextResponse } from 'next/server'
+// (No direct NextResponse usage; all responses via helpers)
 import { z } from 'zod'
 import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
 import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repository'
 import type { EpisodeBoundary } from '@/types/episode'
-import { ApiError, createErrorResponse, createSuccessResponse } from '@/utils/api-error'
+import {
+  ApiError,
+  createErrorResponse,
+  createSuccessResponse,
+  ERROR_CODES,
+  ValidationError,
+} from '@/utils/api-error'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { saveEpisodeBoundaries } from '@/utils/storage'
 
@@ -31,13 +37,14 @@ export async function POST(request: NextRequest) {
     })
 
     if (!input) {
-      // レガシー互換: tests は details に文字列を期待
-      return NextResponse.json(
-        {
-          error: 'Failed to prepare narrative analysis input',
-          details: 'Not enough chunks available or invalid chunk range',
-        },
-        { status: 400 },
+      // 旧仕様: { error, details } を返していたが他エンドポイントと統一
+      // 理由: APIクライアント側の分岐削減 / 統一的な code ハンドリング
+      // NOTE: このケースはフィールド単体ではなく入力範囲全体が不正 → INVALID_INPUT へ段階的移行予定
+      return createErrorResponse(
+        new ValidationError('Failed to prepare narrative analysis input', undefined, {
+          reason: 'Not enough chunks available or invalid chunk range',
+          code: ERROR_CODES.INVALID_INPUT,
+        }),
       )
     }
 
@@ -104,26 +111,28 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Narrative arc analysis error:', error)
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid request data', details: error.errors },
-        { status: 400 },
+      // Zod エラーを統一レスポンスへマッピング
+      return createErrorResponse(
+        new ValidationError('Invalid request data', undefined, {
+          issues: error.errors,
+          code: ERROR_CODES.INVALID_INPUT, // 将来的に ZodError -> INVALID_INPUT へ整理
+        }),
       )
     }
     if (error instanceof ApiError) {
       return createErrorResponse(error)
     }
     // レガシー互換: tests は error に固定メッセージ, details に元エラーを期待
-    return NextResponse.json(
-      {
-        error: 'Failed to analyze narrative arc',
-        details:
+    return createErrorResponse(
+      new ApiError('Failed to analyze narrative arc', 500, ERROR_CODES.INTERNAL_ERROR, {
+        // 元エラーメッセージを details に格納（テスト互換性確保 & デバッグ支援）
+        original:
           error instanceof Error
             ? error.message
             : typeof error === 'string'
               ? error
               : String(error),
-      },
-      { status: 500 },
+      }),
     )
   }
 }

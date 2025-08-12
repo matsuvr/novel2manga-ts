@@ -83,13 +83,7 @@ export interface Character {
   description: string
 }
 
-export interface Scene {
-  time: boolean
-  location: boolean
-  setting: string
-  mood: string
-  visualElements: string[]
-}
+import type { Scene } from '@/domain/models/scene'
 
 export interface DialogueElement {
   emotion: string
