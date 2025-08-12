@@ -32,18 +32,6 @@ Quality gates (must pass before merge):
 - Docs/specs/tasks updated in the same PR: design.md, tasks.md, schema.ts + migrations, storage-structure.md.
 - No duplicated code introduced; shared utilities factored appropriately.
 
-PR checklist (copy into your PR and tick all):
-- [ ] Latest docs fetched via MCP (Mastra, Cloudflare, and relevant libs). Links included in PR.
-- [ ] No any types introduced; strict types only. No unjustified ts-ignore.
-- [ ] Linter and formatter clean (0 errors). No rule disabling without justification.
-- [ ] DRY and SOLID upheld; no redundant implementations.
-- [ ] Unit tests added/updated in src/__tests__ and passing.
-- [ ] E2E scenarios added/updated and passing with Playwright MCP.
-- [ ] Updated: .kiro\specs\novel-to-manga-converter\design.md
-- [ ] Updated: .kiro\specs\novel-to-manga-converter\tasks.md
-- [ ] Updated: src\db\schema.ts (+ migrations applied/generated as needed)
-- [ ] Updated: database\storage-structure.md
-
 If any item cannot be satisfied, stop and resolve it first. Do not proceed with implementation or merging until all conditions above are met.
 ```
 

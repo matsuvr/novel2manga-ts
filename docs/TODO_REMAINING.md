@@ -44,19 +44,19 @@
 
 ### 型定義の境界整理
 
-- [ ] Scene型の統一（最重要）
-  - 解析側: location/time は string
-  - パネル側: boolean になっている矛盾を解消
-  - 共通ドメインモデル `src/domain/models/scene.ts` へ集約
-- [ ] Dialogue型の拡張
-  - emotion の共通語彙定義
-  - ドメイン層での一貫性確保
+- [x] Scene型の統一（最重要）
+  - 解析側/パネル側の不整合を解消（location/time は string に統一）
+  - 共通ドメインモデル `src/domain/models/scene.ts` へ集約（Flexible/Core 二層 + 正規化ユーティリティ）
+- [x] Dialogue型の拡張（Emotion語彙の共通化）
+  - `src/domain/models/emotion.ts` を追加し Emotion を列挙化、シノニム正規化 `normalizeEmotion()` 提供
+  - 解析/レイアウト両モデルに Emotion を適用（既存テスト互換のため `happy`/`normal` 等を許容）
 
 ### バリデーション層の強化
 
-- [ ] 型ガードの厳密化
-  - `isMangaLayout` のエラーメッセージ改善
-  - zod スキーマによる実行時検証強化
+- [x] 型ガードの厳密化
+  - `isMangaLayout` を Zod バックエンドに変更（`src/utils/type-guards.ts`）
+  - `validateMangaLayout()` を追加し、フィールド単位のエラーメッセージ配列を返却
+  - YAMLレイアウトの実行時検証スキーマを `src/types/panel-layout.zod.ts` に追加
 
 ## 優先度3: コア処理フローの改善
 
