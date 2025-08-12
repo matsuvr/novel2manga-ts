@@ -288,7 +288,7 @@ export function extractErrorMessage(raw: unknown): string {
     // 長大なオブジェクトでメッセージ肥大化を避ける（メモリ/ログ負荷対策）
     const MAX_ERROR_MESSAGE_LENGTH = 1000
     if (base.length > MAX_ERROR_MESSAGE_LENGTH) {
-      return base.substring(0, MAX_ERROR_MESSAGE_LENGTH - 3) + '...'
+      return `${base.substring(0, MAX_ERROR_MESSAGE_LENGTH - 3)}...`
     }
     return base
   } catch {
