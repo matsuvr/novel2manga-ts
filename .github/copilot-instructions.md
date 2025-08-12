@@ -47,7 +47,17 @@ PR checklist (copy into your PR and tick all):
 If any item cannot be satisfied, stop and resolve it first. Do not proceed with implementation or merging until all conditions above are met.
 
 CLI tools policy
-- gh (GitHub CLI) is allowed for creating/updating branches and PRs, posting comments, and checking CI status.
+- gh (GitHub CLI) is allowed for creating/updating branches and PRs, posting comments, and checking CI status. You may operate GitHub programmatically with it (e.g. create branches, open/update PRs, add review comments, check workflow runs). Always summarize critical gh actions (what/why + resulting URL) in the PR description or a comment.
 - rp (PR helper CLI) is allowed where available for PR management/automation.
 - When using these CLIs, document critical actions in the PR description or comments (e.g., links to comments or runs).
+- rg (ripgrep) is available for fast, recursive code/text searches. Prefer it over ad‑hoc Node/TS grep scripts. Scope searches narrowly (add globs / --type) to avoid noise; do not paste excessively long raw outputs—summarize.
+- jq is available for robust JSON querying, filtering, and transformation (e.g., parsing test reports, API responses). Keep non‑trivial filters readable (split with --arg/--slurpfile as needed) and add a brief inline comment for complex expressions.
+
+Test execution policy (avoid hanging interactive sessions)
+- Always run unit/integration tests in non-interactive mode so automation (CI, scripted local runs) finishes without manual key presses.
+- Use `npm test` (maps to `vitest run`) for a one-shot run. This exits automatically.
+- If you see a prompt where pressing `h` shows help or `q` quits, you're in watch/interactive mode (started with plain `vitest` or `vitest --ui`). Exit with `q` and rerun using `npm test` or `npx vitest run`.
+- Do NOT use watch/interactive (`vitest` without `run`) in CI or automated scripts. Reserve `npm run test:watch` locally only when actively developing.
+- Ensure any added scripts or docs reference `vitest run` (or `npm test`) for deterministic, non-blocking execution. Failing to do so can stall pipelines.
+- For integration tests, prefer the provided scripts: `npm run test:integration:run` (non-interactive) or `npm run test:integration` (interactive only when intentionally debugging).
 ```

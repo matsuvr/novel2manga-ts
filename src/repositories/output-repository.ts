@@ -1,12 +1,8 @@
 import type { NewOutput } from '@/db'
+import type { OutputDbPort } from './ports'
 
-/**
- * Database port for Output entity.
- * Implementations should persist a final artifact record and return its id.
- */
-export interface OutputDbPort {
-  createOutput(payload: Omit<NewOutput, 'createdAt'>): Promise<string>
-}
+// Re-export for backward compatibility
+export type { OutputDbPort } from './ports'
 
 export class OutputRepository {
   constructor(private readonly db: OutputDbPort) {}

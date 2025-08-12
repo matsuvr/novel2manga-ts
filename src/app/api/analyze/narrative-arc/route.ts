@@ -1,8 +1,10 @@
-import { type NextRequest, NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
 import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repository'
 import type { EpisodeBoundary } from '@/types/episode'
+import { ApiError, createErrorResponse, createSuccessResponse } from '@/utils/api-error'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { saveEpisodeBoundaries } from '@/utils/storage'
 
@@ -29,6 +31,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (!input) {
+      // レガシー互換: tests は details に文字列を期待
       return NextResponse.json(
         {
           error: 'Failed to prepare narrative analysis input',
@@ -97,24 +100,28 @@ export async function POST(request: NextRequest) {
           : undefined,
     }
 
-    return NextResponse.json(responseData)
+    return createSuccessResponse(responseData)
   } catch (error) {
     console.error('Narrative arc analysis error:', error)
-
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        {
-          error: 'Invalid request data',
-          details: error.errors,
-        },
+        { error: 'Invalid request data', details: error.errors },
         { status: 400 },
       )
     }
-
+    if (error instanceof ApiError) {
+      return createErrorResponse(error)
+    }
+    // レガシー互換: tests は error に固定メッセージ, details に元エラーを期待
     return NextResponse.json(
       {
         error: 'Failed to analyze narrative arc',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        details:
+          error instanceof Error
+            ? error.message
+            : typeof error === 'string'
+              ? error
+              : String(error),
       },
       { status: 500 },
     )

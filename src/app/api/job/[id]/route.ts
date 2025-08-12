@@ -1,10 +1,14 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { type NextRequest, NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 import type { Job } from '@/db'
-import { JobRepository } from '@/repositories/job-repository'
-import { getDatabaseService } from '@/services/db-factory'
-import { ApiError, createErrorResponse, ValidationError } from '@/utils/api-error'
+import { getJobRepository } from '@/repositories'
+import {
+  ApiError,
+  createErrorResponse,
+  createSuccessResponse,
+  ValidationError,
+} from '@/utils/api-error'
 
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -15,8 +19,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
     // 本番（想定）: DB から取得
     if (process.env.NODE_ENV === 'production') {
-      const db = getDatabaseService()
-      const jobRepo = new JobRepository(db)
+      const jobRepo = getJobRepository()
       const job: Job | null = await jobRepo.getJob(id)
 
       if (!job) throw new ApiError('ジョブが見つかりません', 404, 'NOT_FOUND')
@@ -26,7 +29,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
         { jobId: id, chunkIndex: 0 },
         { jobId: id, chunkIndex: 1 },
       ]
-      return NextResponse.json({ job, chunks })
+      return createSuccessResponse({ job, chunks })
     }
 
     // 開発/テスト: ローカルファイルから取得
@@ -50,7 +53,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
         chunks = []
       }
 
-      return NextResponse.json({ job, chunks })
+      return createSuccessResponse({ job, chunks })
     } catch {
       throw new ApiError('ジョブが見つかりません', 404, 'NOT_FOUND')
     }

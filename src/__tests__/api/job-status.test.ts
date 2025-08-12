@@ -25,7 +25,9 @@ describe('/api/jobs/[jobId]/status', () => {
     vi.clearAllMocks()
 
     mockDbService = {
+      getJob: vi.fn().mockResolvedValue(null), // RepositoryFactory 検証回避用
       getJobWithProgress: vi.fn(),
+      getNovel: vi.fn().mockResolvedValue(null),
     }
 
     vi.mocked(DatabaseService).mockReturnValue(mockDbService)

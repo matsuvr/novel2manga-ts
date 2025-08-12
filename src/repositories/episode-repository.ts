@@ -1,22 +1,10 @@
 import type { Episode, NewEpisode } from '@/db'
 import { logError } from '@/utils/api-error'
+import type { EpisodeDbPort } from './ports'
+import { hasEpisodeWriteCapabilities } from './ports'
 
-/**
- * Database port for Episode entity.
- *
- * Notes on optional methods:
- * - createEpisodes is optional to allow read-only implementations (e.g., in test or limited runtimes).
- *   When unavailable, callers of bulkUpsert should expect a no-op; a warning will be logged.
- */
-export interface EpisodeDbPort {
-  /** Fetch all episodes for a job (ordered by episodeNumber ascending). */
-  getEpisodesByJobId(jobId: string): Promise<Episode[]>
-  /**
-   * Bulk create or upsert episodes. Implementations should upsert on (jobId, episodeNumber).
-   * Optional to support read-only adapters.
-   */
-  createEpisodes?(episodes: Array<Omit<NewEpisode, 'id' | 'createdAt'>>): Promise<void>
-}
+// Re-export for backward compatibility
+export type { EpisodeDbPort } from './ports'
 
 export class EpisodeRepository {
   constructor(private readonly db: EpisodeDbPort) {}
@@ -28,7 +16,7 @@ export class EpisodeRepository {
   async bulkUpsert(episodes: Array<Omit<NewEpisode, 'id' | 'createdAt'>>): Promise<void> {
     if (episodes.length === 0) return
 
-    if (!this.db.createEpisodes) {
+    if (!hasEpisodeWriteCapabilities(this.db)) {
       // Warn and no-op when write capability is unavailable
       logError(
         'EpisodeDbPort.createEpisodes is not implemented; bulkUpsert skipped',

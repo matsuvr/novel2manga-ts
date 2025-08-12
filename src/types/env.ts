@@ -8,6 +8,7 @@ export interface Env {
   ANALYSIS_STORAGE: R2Bucket
   LAYOUTS_STORAGE: R2Bucket
   RENDERS_STORAGE: R2Bucket
+  OUTPUTS_STORAGE: R2Bucket
   CACHE: KVNamespace
   ENVIRONMENT: string
 }

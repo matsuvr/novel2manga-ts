@@ -1,12 +1,6 @@
-import { type NextRequest, NextResponse } from 'next/server'
-import { JobRepository } from '@/repositories/job-repository'
-import { getDatabaseService } from '@/services/db-factory'
-import {
-  ApiError,
-  createErrorResponse,
-  toLegacyErrorResponse,
-  ValidationError,
-} from '@/utils/api-error'
+import type { NextRequest } from 'next/server'
+import { getJobRepository } from '@/repositories'
+import { ApiError, createErrorResponse, createSuccessResponse } from '@/utils/api-error'
 import { validateJobId } from '@/utils/validators'
 
 export async function GET(
@@ -21,8 +15,7 @@ export async function GET(
     console.log('[job-status] Fetching job status for:', params.jobId)
     const startTime = Date.now()
 
-    const dbService = getDatabaseService()
-    const jobRepo = new JobRepository(dbService)
+    const jobRepo = getJobRepository()
     const job = await jobRepo.getJobWithProgress(params.jobId)
 
     const duration = Date.now() - startTime
@@ -35,7 +28,7 @@ export async function GET(
       throw new ApiError('Job not found', 404, 'NOT_FOUND')
     }
 
-    return NextResponse.json({
+    return createSuccessResponse({
       job: {
         id: job.id,
         status: job.status,
@@ -59,13 +52,24 @@ export async function GET(
     })
   } catch (error) {
     console.error('[job-status] Error fetching job status:', error)
-    // Preserve status for known ApiError/ValidationError
-    if (error instanceof ApiError || error instanceof ValidationError) {
-      return createErrorResponse(error)
+    // テスト期待: data.error は常に 'Failed to fetch job status'、詳細には元エラー
+    if (error instanceof ApiError) {
+      // NOT_FOUND や VALIDATION はそのまま返却
+      if (error.statusCode === 404 || error.statusCode === 400) {
+        return createErrorResponse(error)
+      }
     }
-
-    // For unexpected errors, use legacy-compatible response with a normalized message
-    // so tests can assert details includes the original cause string
-    return toLegacyErrorResponse(error, 'Failed to fetch job status')
+    // それ以外はメッセージ固定
+    const causeMessage = error instanceof Error ? error.message : String(error)
+    // テストは data.details が文字列で .toContain できることを期待
+    return Response.json(
+      {
+        success: false,
+        error: 'Failed to fetch job status',
+        details: causeMessage,
+        code: 'INTERNAL_ERROR',
+      },
+      { status: 500 },
+    )
   }
 }
