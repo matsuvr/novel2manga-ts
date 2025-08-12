@@ -92,7 +92,10 @@ export function normalizeToSceneCore(scene: unknown): Scene {
 
 // Legacy adapter helper: 旧 boolean ベースの hasTime / hasLocation 判定が残存するコード向け
 // （現状利用箇所なし。必要時 panel-layout 等で import して使用）
-export function sceneLegacyFlags(scene: SceneFlexible): { hasTime: boolean; hasLocation: boolean } {
+export function sceneLegacyFlags(scene: SceneFlexible): {
+  hasTime: boolean
+  hasLocation: boolean
+} {
   return {
     hasTime: typeof scene.time === 'string' && scene.time.trim().length > 0,
     hasLocation: typeof scene.location === 'string' && scene.location.trim().length > 0,
