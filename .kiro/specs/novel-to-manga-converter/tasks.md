@@ -235,6 +235,17 @@
   - [x] 包括的なテスト作成（render-complete.test.ts）
   - _Requirements: REQ-3 - マンガレイアウト生成_
 
+- [x] 16. シナリオオーケストレーター（DSL）骨格追加（2025-08-12追加）
+  - [x] 型付き契約の追加（`src/types/contracts.ts`）
+  - [x] シナリオDSL/ランナーの追加（`src/services/orchestrator/scenario.ts`）
+  - [x] シナリオ定義の追加（`src/agents/scenarios/novel-to-manga.ts`）
+  - [x] アダプタのスタブ（`src/services/adapters/`）
+  - [x] ユニットテスト追加（`src/__tests__/scenario-dsl.test.ts`）
+  - [x] ドキュメントリンク整備（Cloudflare Queues/DO/D1/R2、Mastra）
+  - [ ] Cloudflare Queues / Durable Objects 実行ランタイム（MCPで最新API確認後に実装）
+  - [ ] Mastraパイプラインへのコンパイル（MCPでAPI確認後）
+  - _Requirements: オーケストレーション、可観測性、拡張性_
+
 ## 🚨 緊急修正タスク（2025-08-07追加）
 
 現在のシステムは**基本機能が動作しない状態**のため、以下の緊急修正を優先実施する必要があります。
@@ -336,7 +347,9 @@
   - [x] `HttpError` 新規使用禁止 ESLint ガード導入 (2025-08-12)
   - [x] Repository Port 標準化 (entity/mode discriminant + adapters) 実装 (2025-08-12)
   - [x] Port/Factory テスト追加 (ports-guards / adapters-structure / factory-ttl) (2025-08-12)
-  - [x] Storage Audit 並列化 + 静的公開 (2025-08-12)
+  - [ ] Storage Audit API の実装（`utils/storage.ts` に `auditStorageKeys()` を追加）
+    - 並列走査（Promise.all）と部分成功の集計設計は確定済（設計書反映済）
+    - 実装とユニットテストは未着手（本ファイル更新により可視化）
 
 ### Repository Storage Standardization (2025-08-12 完了)
 
@@ -381,6 +394,16 @@ PRレビューコメントからの重要修正を実施し、リポジトリ層
     - エッジケース (null/undefined/wrong entity) 対応テスト
 
 - [x] 38. ドキュメント更新
+  - [x] design.md: Legacy StorageService の現状（DEPRECATED 残置）に修正
+  - [x] storage-structure.md: 現行 StorageKeys のみを「実装済」扱いに調整、未実装キーは「計画中」に分類
+  - [x] tasks.md: Storage Audit を「未実装」に訂正し TODO を具体化
+
+### StorageKeys フォローアップ（新規 TODO）
+
+- [ ] SK-THUMB-001: `StorageKeys.pageThumbnail(jobId, ep, page)` を追加し、レンダリング時にサムネイル作成/保存を統一
+- [ ] SK-EXPORT-001: `StorageKeys.exportOutput(jobId, fmt)` を追加し、エクスポート成果物のキーを統一
+- [ ] SK-RENDER-STATUS-001: `StorageKeys.renderStatus(jobId, ep, page)` を追加し、JSON 状態の保存/取得を標準化
+- [ ] LEGACY-STORAGE-REMOVE: `src/services/storage.ts` の削除（依存ゼロの確認と Playwright/E2E の再実行）
 
 ### 2025-08-12 PR#63 Gemini Medium Review Follow-ups
 

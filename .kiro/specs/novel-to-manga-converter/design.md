@@ -15,11 +15,12 @@
 - Type Guards (`hasEpisodeWriteCapabilities` など) でランタイム安全性と compile-time narrowing を提供
 - Repository Factory Cache TTL: 環境変数 `REPOSITORY_FACTORY_TTL_MS` で上書き可能（開発/テスト: 5分、本番: 30分）
 
-**Storage Path Structure 正規化:**
+**Storage Path Structure 正規化（現状/計画の明確化）:**
 
-- Storage Key 重複パス問題を修正 (例: `.local-storage/novels/novels/` → `.local-storage/novels/`)
-- StorageKeys の ID バリデーション強化（パストラバーサル防止、null バイト/URL エンコード検出）
-- Storage Audit Parallelization: `Promise.all` 並列化により I/O 待機時間を大幅短縮
+- Storage Key 重複パス問題を修正 (例: `.local-storage/novels/novels/` → `.local-storage/novels/`)（実装済）
+- StorageKeys の ID バリデーション強化（パストラバーサル防止、null バイト/URL エンコード検出）（実装済）
+- Legacy `StorageService` は非推奨（DEPRECATED）として残置し、参照が無いことを確認後に削除予定（現状: `src/services/storage.ts` が残存）
+- Storage Audit（キー一括検査）は設計に反映済だが、関数提供（`auditStorageKeys`）は未実装。提供形態は `utils/storage.ts` への追加を計画（TODO）
 
 **Type Safety & Code Quality 改善:**
 
@@ -1780,3 +1781,15 @@ graph LR
 - PlaywrightによるE2E拡張（エピソード〜レンダリングまで）
 
 以上をもって、08-07時点の「致命的停止」から、08-08時点では「分割までの基盤」復旧を確認。
+ 
+### Scenario Orchestrator (DSL)
+
+- Purpose: Declarative, typed scenario describing the end-to-end pipeline and handoffs between microservices. Web UI can reference this to render progress and control execution.
+- Location:
+  - `src/types/contracts.ts`: Envelope, retry policy, and per-step payload schemas (Zod).
+  - `src/services/orchestrator/scenario.ts`: ScenarioBuilder (DAG validation, topo sort) and an in-memory runner for dev/tests.
+  - `src/agents/scenarios/novel-to-manga.ts`: Scenario definition wiring steps and edges.
+  - `src/services/adapters/`: Thin facades per microservice (currently stubs for tests).
+- Handoffs: Message payloads reference large blobs via `r2://...` keys. Each message carries `jobId`, `stepId`, `correlationId`, and an `idempotencyKey` derivable from inputs.
+- Fan-out/Fan-in: Steps can declare `mapField` to shard work (windows/panels). Joins are represented by edges converging on a step with `fanIn: 'all' | 'quorum'` (quorum policy to be implemented in queue-backed runtime).
+- Cloudflare/Mastra: Queue-backed executor and Durable Object coordinator to be added after validating latest APIs and limits. This design keeps adapters idempotent and messages versioned.
