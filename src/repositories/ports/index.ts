@@ -79,10 +79,10 @@ export interface OutputDbPort {
 /** Check if a port has Episode write capabilities */
 export function hasEpisodeWriteCapabilities(port: EpisodeDbPort): port is EpisodeDbPortRW {
   // 後方互換: mode 判定が無くても createEpisodes があれば write とみなす
-  return (
-    (port as any).mode === 'rw' ||
-    ('createEpisodes' in (port as any) && typeof (port as any).createEpisodes === 'function')
-  )
+  const candidate: unknown = port as unknown
+  if (!candidate || typeof candidate !== 'object') return false
+  const obj = candidate as { mode?: unknown; createEpisodes?: unknown }
+  return obj.mode === 'rw' || typeof obj.createEpisodes === 'function'
 }
 
 /** Check if a port has Job write capabilities (always true for JobDbPort) */
@@ -93,10 +93,10 @@ export function hasJobWriteCapabilities(port: JobDbPort): port is JobDbPort {
 /** Check if a port has Novel write capabilities (always true for NovelDbPort) */
 export function hasNovelWriteCapabilities(port: NovelDbPort): port is NovelDbPortRW {
   // 後方互換: mode 判定が無くても ensureNovel があれば write とみなす
-  return (
-    (port as any).mode === 'rw' ||
-    ('ensureNovel' in (port as any) && typeof (port as any).ensureNovel === 'function')
-  )
+  const candidate: unknown = port as unknown
+  if (!candidate || typeof candidate !== 'object') return false
+  const obj = candidate as { mode?: unknown; ensureNovel?: unknown }
+  return obj.mode === 'rw' || typeof obj.ensureNovel === 'function'
 }
 
 // === Unified Port Type ===

@@ -486,6 +486,8 @@ function validateId(id: string, label: string): void {
 export const StorageKeys = {
   novel: (uuid: string) => {
     validateId(uuid, 'uuid')
+    // NOTE: 現在は getNovelStorage() が baseDir = novels, かつキーも novels/uuid.json となり二重になる懸念があるが
+    // 既存テスト/利用コード互換性のため一旦維持。将来: baseDir をルートに寄せキーから先頭プレフィックスを除去する移行を検討。
     return `novels/${uuid}.json`
   },
   chunk: (jobId: string, index: number) => {
@@ -616,6 +618,8 @@ export const StorageFactory = {
   getLayoutStorage,
   getRenderStorage,
   getOutputStorage,
+  // 監査関数を型安全に提供
+  auditKeys: auditStorageKeys,
 } as const
 
 // ========================================
@@ -655,33 +659,38 @@ export async function auditStorageKeys(options: {
   const issues: StorageKeyIssue[] = []
   const seen = new Set<string>()
   let scanned = 0
-
-  for (const name of target) {
-    const storage = (await (StorageFactory as any)[name]()) as Storage
-    if (!storage.list) continue
-    const keys = await storage.list(options.prefix)
-    for (const key of keys) {
-      if (options.abortSignal?.aborted) {
-        return { scanned, issues }
-      }
-      scanned++
-      if (!KEY_REGEX.test(key)) {
-        issues.push({ key, issue: 'invalid-format', detail: 'regex-mismatch' })
-      }
-      for (const seg of FORBIDDEN_SEGMENTS) {
-        if (key.includes(seg)) {
-          issues.push({ key, issue: 'forbidden-segment', detail: seg })
+  // 並列で各ストレージをスキャン
+  await Promise.all(
+    target.map(async (name) => {
+      const getter = (StorageFactory as Record<string, unknown>)[name]
+      if (typeof getter !== 'function') return
+      const storage = (await (getter as () => Promise<Storage>)()) as Storage
+      if (!storage.list) return
+      const keys = await storage.list(options.prefix)
+      for (const key of keys) {
+        if (options.abortSignal?.aborted) return
+        scanned++
+        if (!KEY_REGEX.test(key)) {
+          issues.push({
+            key,
+            issue: 'invalid-format',
+            detail: 'regex-mismatch',
+          })
+        }
+        for (const seg of FORBIDDEN_SEGMENTS) {
+          if (key.includes(seg)) {
+            issues.push({ key, issue: 'forbidden-segment', detail: seg })
+          }
+        }
+        if (seen.has(key)) {
+          issues.push({ key, issue: 'duplicate' })
+        } else {
+          seen.add(key)
         }
       }
-      if (seen.has(key)) {
-        issues.push({ key, issue: 'duplicate' })
-      } else {
-        seen.add(key)
-      }
-    }
-  }
+    }),
+  )
 
   return { scanned, issues }
 }
-// StorageFactory へ監査機能を動的に付与 (破壊的変更回避)
-;(StorageFactory as any).auditKeys = auditStorageKeys
+// NOTE: 動的追加は廃止。auditKeys は StorageFactory 定義に含めた。

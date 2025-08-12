@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     }
 
     const dbService = getDatabaseService()
-    const { novel: novelPort } = adaptAll(dbService)
+    const { novel: novelPort, job: jobPort } = adaptAll(dbService)
     const novelRepo = new NovelRepository(novelPort)
 
     // 小説データを保存
@@ -50,7 +50,6 @@ export async function POST(request: NextRequest) {
 
     // 処理ジョブを作成
     const jobId = crypto.randomUUID()
-    const { job: jobPort } = adaptAll(dbService)
     const jobRepo = new JobRepository(jobPort)
     await jobRepo.create({
       id: jobId,
@@ -74,7 +73,12 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Novel保存エラー:', error)
+    console.error('Novel保存エラー:', {
+      error,
+      // uuid がパースに失敗した場合 undefined の可能性があるため optional
+      uuid: (error as any)?.uuid ?? undefined,
+      timestamp: new Date().toISOString(),
+    })
     return createErrorResponse(error, 'Novelの保存中にエラーが発生しました')
   }
 }
@@ -85,7 +89,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     const dbService = getDatabaseService()
-    const { novel: novelPort } = adaptAll(dbService)
+    const { novel: novelPort, job: jobPort } = adaptAll(dbService)
     const novelRepo = new NovelRepository(novelPort)
 
     if (id) {
@@ -97,7 +101,6 @@ export async function GET(request: NextRequest) {
       }
 
       // 関連するジョブを取得
-      const { job: jobPort } = adaptAll(dbService)
       const jobRepo = new JobRepository(jobPort)
       const jobsList = await jobRepo.getByNovelId(id)
 
@@ -105,7 +108,6 @@ export async function GET(request: NextRequest) {
     } else {
       // 全てのNovelを取得
       const novelsList = await novelRepo.list()
-
       return createSuccessResponse({ novels: novelsList })
     }
   } catch (error) {

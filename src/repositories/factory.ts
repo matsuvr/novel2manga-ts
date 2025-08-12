@@ -21,8 +21,13 @@ export class RepositoryFactory {
   private static readonly CACHE_TTL_MS = (() => {
     const v = process.env.REPOSITORY_FACTORY_TTL_MS
     const parsed = v ? Number.parseInt(v, 10) : NaN
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1000 * 60 * 30
-  })() // 30分 デフォルト TTL（長期稼働メモリ管理対策）
+    if (Number.isFinite(parsed) && parsed > 0) return parsed
+    // 開発/テストでは短い TTL (5分) でホットリロード性を高め、本番は 30分 でインスタンス再利用
+    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+      return 1000 * 60 * 5
+    }
+    return 1000 * 60 * 30
+  })() // env override > mode fallback > production default 30m
   private static lastAccess = Date.now()
 
   // Repository instances cache (singleton per factory instance)
