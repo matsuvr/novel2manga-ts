@@ -20,23 +20,23 @@ describe("Storage", () => {
 
   describe("StorageKeys", () => {
     it("should generate correct storage keys", () => {
-      expect(StorageKeys.novel("test-uuid")).toBe("novels/test-uuid.json");
-  // chunk key signature changed to (jobId, index) and now stores .txt
-  expect(StorageKeys.chunk("job-1", 3)).toBe("chunks/job-1/chunk_3.txt");
+      expect(StorageKeys.novel("test-uuid")).toBe("test-uuid.json");
+      // chunk key signature changed to (jobId, index) and now stores .txt (without top-level dir prefix)
+      expect(StorageKeys.chunk("job-1", 3)).toBe("job-1/chunk_3.txt");
       expect(StorageKeys.chunkAnalysis("job-1", 0)).toBe(
-        "analyses/job-1/chunk_0.json"
+        "job-1/chunk_0.json"
       );
       expect(StorageKeys.integratedAnalysis("job-1")).toBe(
-        "analyses/job-1/integrated.json"
+        "job-1/integrated.json"
       );
       expect(StorageKeys.narrativeAnalysis("job-1")).toBe(
-        "analyses/job-1/narrative.json"
+        "job-1/narrative.json"
       );
       expect(StorageKeys.episodeLayout("job-1", 1)).toBe(
-        "layouts/job-1/episode_1.yaml"
+        "job-1/episode_1.yaml"
       );
       expect(StorageKeys.pageRender("job-1", 1, 1)).toBe(
-        "renders/job-1/episode_1/page_1.png"
+        "job-1/episode_1/page_1.png"
       );
     });
   });

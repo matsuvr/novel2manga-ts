@@ -1007,55 +1007,20 @@ const novelStatusQuery = db
 */
 ```
 
-### R2 Storage Structure
+### R2 Storage Structure (2025-08-12 現行)
 
-現在実装されている統合ストレージ構造：
+物理キーはフラット: baseDir(バケット/ローカルディレクトリ) + StorageKeys が生成する相対キー。
 
 ```
-novels/
-└── {novelId}/
-    ├── original/
-    │   ├── text.txt                    # 元の小説テキスト
-    │   └── metadata.json              # 小説のメタデータ
-    │
-    └── jobs/
-        └── {jobId}/
-            ├── chunks/
-            │   ├── chunk_001.txt       # チャンクテキスト
-            │   ├── chunk_002.txt
-            │   └── ...
-            │
-            ├── analyses/
-            │   ├── chunk_001.json      # チャンク分析結果
-            │   ├── chunk_002.json
-            │   └── ...
-            │
-            ├── episodes/
-            │   ├── episodes.json       # エピソード一覧
-            │   └── episode_{n}/
-            │       ├── layout.yaml     # レイアウト定義
-            │       └── metadata.json   # レイアウトメタデータ
-            │
-            ├── renders/
-            │   ├── config.json         # 描画設定
-            │   ├── episode_{n}/
-            │   │   ├── page_001.png    # 描画済みページ
-            │   │   ├── page_002.png
-            │   │   └── ...
-            │   └── thumbnails/
-            │       └── episode_{n}/
-            │           ├── page_001_thumb.png
-            │           └── ...
-            │
-            ├── outputs/
-            │   ├── manga.pdf           # PDF形式（ページ順JPEG統合）
-            │   ├── manga_images.zip    # ZIP形式（JPEG画像＋YAML設定）
-            │   └── metadata.json       # 成果物メタデータ
-            │
-            └── state/
-                ├── job_progress.json   # ジョブ進捗状態
-                └── resume_data.json    # 再開用データ
+NOVEL_STORAGE  : novels/{novelId}.json
+CHUNKS_STORAGE : {jobId}/chunk_{index}.txt
+ANALYSIS_STORAGE: {jobId}/chunk_{index}.json | {jobId}/integrated.json | {jobId}/narrative.json
+LAYOUTS_STORAGE: {jobId}/episode_{n}.yaml
+RENDERS_STORAGE: {jobId}/episode_{n}/page_{p}.png (+ thumbnails/ 配下)
+OUTPUTS_STORAGE: {jobId}/output.pdf
 ```
+
+旧階層 `novels/{novelId}/jobs/{jobId}/...` は廃止。jobId スコープでの一貫管理により削除や走査がO(対象ジョブのキー数)で完結し、関連集約ロジックを単純化。
 
 ### Migration Strategy (Drizzle)
 
@@ -1133,18 +1098,11 @@ class DatabaseService {
   }
 }
 
-// Storage Factory（実装済み）
-// src/services/storage.ts で完全実装済み
-/*
-export class StorageFactory {
-  static async getNovelStorage(): Promise<NovelStorage>
-  static async getChunkStorage(): Promise<NovelStorage>
-  static async getAnalysisStorage(): Promise<NovelStorage>
-  static async getLayoutStorage(): Promise<NovelStorage>
-  static async getRenderStorage(): Promise<NovelStorage>
-  static async getDatabase(): Promise<DatabaseService>
-}
-*/
+// Storage (2025-08-12 更新)
+// 旧 src/services/storage.ts は削除済み。現在は src/utils/storage.ts の
+// getNovelStorage / getChunkStorage / getAnalysisStorage / getLayoutStorage /
+// getRenderStorage / getOutputStorage と StorageKeys が唯一の公開 API。
+// Factory クラスは存在せず、named export の軽量構成で二重管理を防止。
 ```
 
 ## Error Handling
