@@ -92,7 +92,11 @@ export function hasJobWriteCapabilities(port: JobDbPort): port is JobDbPort {
 
 /** Check if a port has Novel write capabilities (always true for NovelDbPort) */
 export function hasNovelWriteCapabilities(port: NovelDbPort): port is NovelDbPortRW {
-  return port.mode === 'rw' && 'ensureNovel' in port
+  // 後方互換: mode 判定が無くても ensureNovel があれば write とみなす
+  return (
+    (port as any).mode === 'rw' ||
+    ('ensureNovel' in (port as any) && typeof (port as any).ensureNovel === 'function')
+  )
 }
 
 // === Unified Port Type ===
