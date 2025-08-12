@@ -1,38 +1,49 @@
-import crypto from 'node:crypto'
 import type { NextRequest } from 'next/server'
+import { z } from 'zod'
 import { adaptAll } from '@/repositories/adapters'
 import { JobRepository } from '@/repositories/job-repository'
 import { NovelRepository } from '@/repositories/novel-repository'
 import { getDatabaseService } from '@/services/db-factory'
-import { createErrorResponse, createSuccessResponse } from '@/utils/api-error'
+import { ApiError, createErrorResponse, createSuccessResponse } from '@/utils/api-error'
+import { generateUUID } from '@/utils/uuid'
 
 // Novel要素を保存
 export async function POST(request: NextRequest) {
   try {
-    const { uuid, fileName, length, totalChunks, chunkSize, overlapSize } =
-      (await request.json()) as {
-        uuid: unknown
-        fileName: unknown
-        length: unknown
-        totalChunks: unknown
-        chunkSize: unknown
-        overlapSize: unknown
-      }
+    // スキーマ定義（エラー整形のため issues を収集）
+    const schema = z.object({
+      uuid: z.string().min(1, 'uuid は必須です'),
+      fileName: z.string().min(1, 'fileName は必須です'),
+      length: z.number().int().nonnegative(),
+      totalChunks: z.number().int().positive(),
+      chunkSize: z.number().int().positive(),
+      overlapSize: z.number().int().min(0),
+    })
 
-    // バリデーション
-    if (
-      !uuid ||
-      !fileName ||
-      typeof length !== 'number' ||
-      typeof totalChunks !== 'number' ||
-      typeof chunkSize !== 'number' ||
-      typeof overlapSize !== 'number'
-    ) {
+    let json: unknown
+    try {
+      json = await request.json()
+    } catch {
       return createErrorResponse(
-        new Error('必須パラメータが不足しています'),
-        '必須パラメータが不足しています',
+        new ApiError('無効なJSONが送信されました', 400, 'INVALID_INPUT'),
+        '無効なJSONが送信されました',
       )
     }
+
+    const parsed = schema.safeParse(json)
+    if (!parsed.success) {
+      return createErrorResponse(
+        new ApiError('リクエストボディが無効です', 400, 'INVALID_INPUT', {
+          issues: parsed.error.issues.map((i) => ({
+            field: i.path.join('.'),
+            message: i.message,
+          })),
+        }),
+        'リクエストボディが無効です',
+      )
+    }
+
+    const { uuid, fileName, length, totalChunks, chunkSize, overlapSize } = parsed.data
 
     const dbService = getDatabaseService()
     const { novel: novelPort, job: jobPort } = adaptAll(dbService)
@@ -49,7 +60,7 @@ export async function POST(request: NextRequest) {
     })
 
     // 処理ジョブを作成
-    const jobId = crypto.randomUUID()
+    const jobId = generateUUID()
     const jobRepo = new JobRepository(jobPort)
     await jobRepo.create({
       id: jobId,
