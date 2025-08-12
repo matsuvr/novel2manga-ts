@@ -90,6 +90,55 @@ storage/
 
 これにより API パラメータをそのまま key に用いた場合の階層逸脱を防止。
 
+### 2025-08-12 追加: Repository Ports & Storage 改善
+
+#### Repository Layer Architecture
+
+新しい Repository Ports & Adapters Pattern により型安全性とテスタビリティを向上:
+
+**Port Interfaces:**
+
+- Entity別の discriminated union ports (`EpisodeDbPort`, `NovelDbPort`, `JobDbPort`, `OutputDbPort`)
+- Read-Only (`mode: "ro"`) / Read-Write (`mode: "rw"`) モード明示
+- Type Guards (`hasEpisodeWriteCapabilities` 等) によるランタイム安全性
+
+**Adapter Pattern:**
+
+```typescript
+// Non-invasive adaptation of existing DatabaseService
+const ports = adaptAll(dbService);
+// 各 repository は適切な port のみ受信
+const novelRepo = new NovelRepository(ports.novel); // NovelDbPortRW
+```
+
+**Repository Factory Caching:**
+
+- 環境変数 `REPOSITORY_FACTORY_TTL_MS` で TTL 制御 (dev: 5分, prod: 30分)
+- TTL 経過時に自動キャッシュクリアでメモリ滞留防止
+
+#### Storage Audit & Path Standardization
+
+**並列化によるパフォーマンス改善:**
+
+- auditStorageKeys: 対象ストレージ一覧を逐次 → 並列 (Promise.all) へ移行しレイテンシ短縮
+- StorageFactory.auditKeys として静的メソッド化（以前の動的代入を撤廃し型安全性を向上）
+- 失敗ストレージは issues に source 情報付きで集約し部分的成功を許容
+
+**Path Duplication 修正:**
+
+- 問題: StorageKeys が重複パスを生成 (例: `.local-storage/novels/novels/`)
+- 修正: StorageKeys から prefix を除去、getNovelStorage() の baseDir を活用
+- 結果: 正規化されたパス構造 (例: `.local-storage/novels/{uuid}.json`)
+
+**将来のキー正規化:**
+
+- 近未来計画: 冗長 prefix 完全解消のため `v2/` 名前空間を導入し段階的移行（旧キーはリード専用互換）
+- Migration 方針 (案):
+  1. 期間中は書込を v2 + 旧パス双方にミラー (dual-write)
+  2. 監査レポートで未移行ファイル 0 を確認
+  3. 読込パスから旧パス fallback を削除
+  4. 旧プレフィックス一括削除 (安全ロック付き)
+
 ## ストレージタイプ
 
 ### 開発環境（ローカル）

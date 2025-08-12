@@ -18,18 +18,20 @@
 - [x] Repository Factory の導入 (2025-08-12 完了)
   - 依存性注入の統一、テスト容易性向上
   - `src/repositories/factory.ts` 作成済み / TTL 環境可変化 / ランタイム型ガード強化
-- [ ] ポートIFの必須/任意メソッド標準化
-  - discriminated union による明確な分割（未着手）
-  - `src/repositories/ports/*.ts` の整理（未着手）
+- [x] ポートIFの必須/任意メソッド標準化 (2025-08-12 完了)
+  - discriminated union による明確な分割: `EpisodeDbPortRO/RW`, `NovelDbPortRO/RW`
+  - ランタイム型ガード追加: `isEpisodePort`, `hasEpisodeWriteCapabilities` 等
+  - 互換性: 既存 Repository 実装は entity/mode 付与アダプタでラップ予定（現状直接利用箇所で不整合なし）
 
 ### ストレージ層の抽象化統一【DRY原則】
 
 - [x] ストレージキー管理の一元化 (2025-08-12 進捗: API主要ルート移行完了)
   - `StorageKeys` クラスへの移行 / null byte & %00 バリデーション追加
   - `/api/layout/generate` 他 解析/レンダ/エクスポートルート修正済み
-- [ ] Storage Factory の機能拡張
-  - `OUTPUTS_STORAGE` バインディング追加（未）
-  - R2/ローカルのキー整合性監査システム（未）
+- [x] Storage Factory の機能拡張 (2025-08-12 完了)
+  - `OUTPUTS_STORAGE` バインディング wrangler.toml 反映済 (監査で確認)
+  - R2/ローカルのキー整合性監査システム `auditStorageKeys()` 実装 (`src/utils/storage.ts`)
+  - 追加改善候補: サイズ/メタデータ統計出力, 整合性自動修復 (別タスク化予定)
 
 ### APIレスポンス統一【DRY原則】
 

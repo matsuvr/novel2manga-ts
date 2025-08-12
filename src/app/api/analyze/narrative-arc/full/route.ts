@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
+import { adaptAll } from '@/repositories/adapters'
 import { JobRepository } from '@/repositories/job-repository'
 import { getDatabaseService } from '@/services/db-factory'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
@@ -27,8 +28,9 @@ export async function POST(request: NextRequest) {
     validateJobId(jobId)
 
     const dbService = getDatabaseService()
+    const { job: jobPort } = adaptAll(dbService)
     const processor = new JobNarrativeProcessor(dbService, config)
-    const jobRepo = new JobRepository(dbService)
+    const jobRepo = new JobRepository(jobPort)
 
     // ジョブの存在確認
     const job = await jobRepo.getJobWithProgress(jobId)
