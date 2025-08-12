@@ -98,11 +98,13 @@ novels/{novel_id}/jobs/{job_id}/analyses/chunk_001.json
 7. **jobs.resume_data_path**
    → `novels/{novel_id}/jobs/{job_id}/state/resume_data.json`
 
-8. **chunks.content_path** → `chunks/{job_id}/chunk_{index}.txt` (インデックスゼロ起点, v2 で JSON 移行予定)
-9. **chunk_analysis_status.analysis_path** → `analysis/{job_id}/chunk_{index}.json`
-10. **layout_status.layout_path** → `novels/{novel_id}/jobs/{job_id}/episodes/episode_{number}/layout.yaml`
-11. **render_status.image_path** → `novels/{novel_id}/jobs/{job_id}/renders/episode_{episode}/page_{page:03d}.png`
-12. **outputs.output_path** → `novels/{novel_id}/jobs/{job_id}/outputs/manga.{format}`
+8. (LEGACY) **chunks.content_path** → `chunks/{job_id}/chunk_{index}.txt` → 現行キーはベースディレクトリ付与後 `{job_id}/chunk_{index}.txt`
+9. (LEGACY) **chunk_analysis_status.analysis_path** → `analysis/{job_id}/chunk_{index}.json` → 現行 `{job_id}/chunk_{index}.json`
+10. (LEGACY) **layout_status.layout_path** → `novels/{novel_id}/jobs/{job_id}/episodes/episode_{number}/layout.yaml` → 現行 `{job_id}/episode_{number}/layout.yaml`
+11. (LEGACY) **render_status.image_path** → `novels/{novel_id}/jobs/{job_id}/renders/episode_{episode}/page_{page:03d}.png` → 現行 `{job_id}/episode_{episode}/page_{page:03d}.png`
+12. (LEGACY) **outputs.output_path** → `novels/{novel_id}/jobs/{job_id}/outputs/manga.{format}` → 現行 `{job_id}/output.{format}`
+
+上記 8-12 は互換参照のため残存する旧表記です。実際のストレージアクセスは常に StorageKeys を経由し **プレフィックス無しのキー** を使用します (ベースパスは StorageFactory 側で付与)。
 
 ### 2025-08-12 更新: StorageKeys Validation (確定仕様)
 

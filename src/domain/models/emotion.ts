@@ -44,6 +44,8 @@ const NORMALIZATION_MAP: Record<string, Emotion> = {
 export function normalizeEmotion(value: string | undefined | null): Emotion | undefined {
   if (!value) return undefined
   const key = String(value).toLowerCase().trim()
+  // Gemini review (PR#63 medium): Treat whitespace-only same as empty -> undefined
+  if (key === '') return undefined
   // 未知値は安全側で 'normal' にフォールバック
   if (!(key in NORMALIZATION_MAP)) {
     // Warn in dev/test only to avoid noisy production logs (env heuristic)

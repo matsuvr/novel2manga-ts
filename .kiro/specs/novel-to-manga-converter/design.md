@@ -37,6 +37,9 @@
 - Emotion 語彙の共通化: `src/domain/models/emotion.ts` を追加し、`EmotionSchema`（列挙）と `normalizeEmotion()` を提供。解析/レイアウト両方で emotion を共有し、シノニム（think/inner → thought）を正規化。
 - Dialogue の emotion 型適用: `src/types/text-analysis.ts` と `src/types/panel-layout.ts` の対話に Emotion を適用（テスト互換のため `happy`/`normal` 等も許容）。
 - MangaLayout Zod スキーマ導入: `src/types/panel-layout.zod.ts` に YAML レイアウト用の厳密スキーマを追加し、`src/utils/type-guards.ts` の `isMangaLayout` を Zod バックエンドに移行。`validateMangaLayout()` で人間可読なエラー配列も取得可能。`/api/export` の重複ガードを統一。
+- 2025-08-12 (PR#63 Gemini medium 対応): MangaLayout の手動 `interface` 定義を廃止し、Zod スキーマ単一路線 (single source of truth) へ統合。`src/types/panel-layout.ts` は `z.infer<typeof MangaLayoutSchema>` から派生する型エイリアスのみをエクスポートしドリフトを防止。型互換性はコンパイル時アサーションで検証。
+- 2025-08-12 (PR#63 Gemini medium 対応): `normalizeEmotion()` が空白のみの文字列 (例: " ") を未指定扱い (`undefined`) として扱うよう変更し、無意味な 'normal' フォールバックと警告ログ発生を回避。
+- 2025-08-12 (PR#63 Gemini medium 対応): レガシー `StorageService` (`src/services/storage.ts`) の JSON パース失敗をサイレントに握りつぶさず、開発/テスト環境で `console.error` を出力する診断ログを追加（完全削除前のトラブルシュート容易化）。
 
 今後予定される追随作業:
 

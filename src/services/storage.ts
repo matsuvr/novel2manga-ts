@@ -39,7 +39,12 @@ export class StorageService {
       const raw = await object.text()
       const parsed = JSON.parse(raw) as { content?: string }
       return parsed.content ?? null
-    } catch {
+    } catch (err) {
+      // Gemini review (PR#63 medium): add logging for parse failures (temporary until file removed)
+      if (typeof process === 'undefined' || process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console -- legacy deprecation diagnostic
+        console.error(`[legacy:StorageService] Failed to parse novel key="${key}"`, err)
+      }
       return null
     }
   }
@@ -52,7 +57,11 @@ export class StorageService {
       const raw = await object.text()
       const parsed = JSON.parse(raw) as { content?: string }
       return parsed.content ?? null
-    } catch {
+    } catch (err) {
+      if (typeof process === 'undefined' || process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console -- legacy deprecation diagnostic
+        console.error(`[legacy:StorageService] Failed to parse chunk key="${key}"`, err)
+      }
       return null
     }
   }
