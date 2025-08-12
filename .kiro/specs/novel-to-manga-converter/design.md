@@ -1385,6 +1385,33 @@ sequenceDiagram
 - D1の自動レプリケーション機能
 - Cloudflareの自動スケーリングとDDoS保護
 
+### Native モジュール (better-sqlite3) 取扱い指針（2025-08-12 追加）
+
+開発/CI で `better-sqlite3` が Node.js ABI 差異 (ERR_DLOPEN_FAILED / NODE_MODULE_VERSION 不一致) によりロード失敗しフルフローテストが 500 を返す事象が発生したため、以下を設計に組み込み対応済み。
+
+対策:
+
+1. `package.json` に `postinstall` で `npm rebuild better-sqlite3 || true` を追加（依存再取得直後に ABI 再構築）
+2. 障害時ログで再ビルド指示（Database 初期化箇所での catch 追加は今後の改善余地）
+3. ドキュメント本節に標準リカバリ手順を明記
+
+手動リカバリ手順:
+
+```bash
+npm rebuild better-sqlite3
+# 失敗が続く場合:
+rm -rf node_modules package-lock.json
+npm ci
+```
+
+将来改善案:
+
+- `.nvmrc` / Volta による Node バージョン固定化
+- D1 (Cloudflare) をローカル開発で優先利用するアダプタに切替しネイティブ依存を排除
+- 失敗時に自動フォールバック: better-sqlite3 → `sqlite3` (パフォーマンス低下許容モード)
+
+確認結果 (2025-08-12): 再ビルド後 `npm run test:full-flow:win` は 5/5 テスト成功、再発なし。
+
 ## 実装状況更新（2025-08-07）
 
 ### 🎯 現在の実装状況（現実的評価）

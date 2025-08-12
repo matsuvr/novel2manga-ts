@@ -17,6 +17,8 @@ import { OutputRepository } from './output-repository'
  */
 export class RepositoryFactory {
   private static instance: RepositoryFactory | null = null
+  private static readonly CACHE_TTL_MS = 1000 * 60 * 30 // 30分 TTL（将来の長期稼働メモリ管理対策）
+  private static lastAccess = Date.now()
 
   // Repository instances cache (singleton per factory instance)
   private episodeRepo: EpisodeRepository | null = null
@@ -25,19 +27,21 @@ export class RepositoryFactory {
   private outputRepo: OutputRepository | null = null
 
   constructor(private readonly dbService: DatabaseService = getDatabaseService()) {
-    // dbService の健全性チェック（レビュー指摘対応）
-    if (!dbService || typeof dbService !== 'object') {
+    this.assertValidDbService(dbService)
+  }
+
+  // 型ガード + ランタイム検証（unknownキャスト除去）
+  // 最低限利用するメソッドのみチェックし、将来的にここを拡張する
+  // eslint-disable-next-line class-methods-use-this
+  private assertValidDbService(db: unknown): asserts db is DatabaseService {
+    if (!db || typeof db !== 'object') {
       throw new Error('RepositoryFactory: invalid DatabaseService instance')
     }
-    // 代表的なメソッド存在確認（将来の型変更時の早期検出）
-    const requiredMethods: Array<keyof DatabaseService> = [
-      'getJob',
-      'getNovel',
-    ] as unknown as Array<keyof DatabaseService>
-    const anyDb = dbService as unknown as Record<string, unknown>
-    for (const m of requiredMethods) {
-      if (typeof anyDb[m as string] !== 'function') {
-        throw new Error(`RepositoryFactory: dbService is missing method ${String(m)}`)
+    const required: Array<keyof DatabaseService> = ['getJob', 'getNovel']
+    for (const key of required) {
+      // @ts-expect-error 細部の構造検証はランタイムで十分（型ガード目的）
+      if (typeof db[key] !== 'function') {
+        throw new Error(`RepositoryFactory: dbService missing method ${String(key)}`)
       }
     }
   }
@@ -46,6 +50,14 @@ export class RepositoryFactory {
    * Get singleton factory instance with default database service
    */
   static getInstance(): RepositoryFactory {
+    // TTL 経過後はキャッシュをリフレッシュ（メモリリークリスク低減）
+    if (
+      RepositoryFactory.instance &&
+      Date.now() - RepositoryFactory.lastAccess > RepositoryFactory.CACHE_TTL_MS
+    ) {
+      RepositoryFactory.instance.clearCache()
+      RepositoryFactory.instance = null
+    }
     // In test environment, always return a fresh instance to avoid cross-test pollution
     if (process.env.NODE_ENV === 'test') {
       return new RepositoryFactory()
@@ -53,6 +65,7 @@ export class RepositoryFactory {
     if (!RepositoryFactory.instance) {
       RepositoryFactory.instance = new RepositoryFactory()
     }
+    RepositoryFactory.lastAccess = Date.now()
     return RepositoryFactory.instance
   }
 

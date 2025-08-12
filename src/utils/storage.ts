@@ -469,6 +469,14 @@ function validateId(id: string, label: string): void {
   if (id.includes('..') || id.startsWith('/') || /[^a-zA-Z0-9_-]/.test(id)) {
     throw new Error(`StorageKeys: invalid ${label} value`)
   }
+  // URLエンコードされた入力は禁止（%エスケープを含むと decode で変化する）
+  try {
+    if (decodeURIComponent(id) !== id) {
+      throw new Error(`StorageKeys: encoded characters not allowed in ${label}`)
+    }
+  } catch {
+    throw new Error(`StorageKeys: invalid percent-encoding in ${label}`)
+  }
 }
 
 export const StorageKeys = {

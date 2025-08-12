@@ -243,6 +243,12 @@
   - [x] エラー時のログ強化
   - [x] 統合テスト（5/5）で疎通確認
   - _Requirements: 基本的な処理フロー_
+  - [x] 18.1 ネイティブモジュール ABI ドリフト対策（2025-08-12 完了）
+    - [x] better-sqlite3 ABI mismatch (NODE_MODULE_VERSION 127→137) 調査と原因特定
+    - [x] `npm rebuild better-sqlite3` により修復しフルフローテスト再成功
+    - [x] `postinstall` スクリプトに再ビルド処理を追加
+    - [x] 設計書 (design.md) に指針とリカバリ手順追記
+    - _Requirements: 安定稼働・CI 再現性_
 
 ### Phase 2: LLM統合（Week 2）[CRITICAL]
 

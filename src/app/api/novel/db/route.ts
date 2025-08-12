@@ -1,8 +1,9 @@
 import crypto from 'node:crypto'
-import { type NextRequest, NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { JobRepository } from '@/repositories/job-repository'
 import { NovelRepository } from '@/repositories/novel-repository'
 import { getDatabaseService } from '@/services/db-factory'
+import { createErrorResponse, createSuccessResponse } from '@/utils/api-error'
 
 // Novel要素を保存
 export async function POST(request: NextRequest) {
@@ -26,7 +27,10 @@ export async function POST(request: NextRequest) {
       typeof chunkSize !== 'number' ||
       typeof overlapSize !== 'number'
     ) {
-      return NextResponse.json({ error: '必須パラメータが不足しています' }, { status: 400 })
+      return createErrorResponse(
+        new Error('必須パラメータが不足しています'),
+        '必須パラメータが不足しています',
+      )
     }
 
     const dbService = getDatabaseService()
@@ -47,8 +51,7 @@ export async function POST(request: NextRequest) {
     const jobRepo = new JobRepository(dbService)
     await jobRepo.create({ id: jobId, novelId: uuid as string, title: 'text_analysis' })
 
-    return NextResponse.json({
-      success: true,
+    return createSuccessResponse({
       novel: {
         id: uuid,
         originalTextFile: fileName,
@@ -65,7 +68,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Novel保存エラー:', error)
-    return NextResponse.json({ error: 'Novelの保存中にエラーが発生しました' }, { status: 500 })
+    return createErrorResponse(error, 'Novelの保存中にエラーが発生しました')
   }
 }
 
@@ -82,22 +85,22 @@ export async function GET(request: NextRequest) {
       const novel = await novelRepo.get(id)
 
       if (!novel) {
-        return NextResponse.json({ error: 'Novelが見つかりません' }, { status: 404 })
+        return createErrorResponse(new Error('Novelが見つかりません'), 'Novelが見つかりません')
       }
 
       // 関連するジョブを取得
       const jobRepo = new JobRepository(dbService)
       const jobsList = await jobRepo.getByNovelId(id)
 
-      return NextResponse.json({ novel, jobs: jobsList })
+      return createSuccessResponse({ novel, jobs: jobsList })
     } else {
       // 全てのNovelを取得
       const novelsList = await novelRepo.list()
 
-      return NextResponse.json({ novels: novelsList })
+      return createSuccessResponse({ novels: novelsList })
     }
   } catch (error) {
     console.error('Novel取得エラー:', error)
-    return NextResponse.json({ error: 'Novelの取得中にエラーが発生しました' }, { status: 500 })
+    return createErrorResponse(error, 'Novelの取得中にエラーが発生しました')
   }
 }

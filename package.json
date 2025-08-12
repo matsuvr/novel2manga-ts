@@ -36,7 +36,8 @@
     "db:studio": "drizzle-kit studio",
     "codemod:http-error:dry": "jscodeshift -d -p --extensions=ts,tsx --parser=tsx -t scripts/codemods/convert-http-error-to-api-error.js --ignore-pattern src/utils/api-error.ts --ignore-pattern src/__tests__ src",
     "codemod:http-error": "jscodeshift --extensions=ts,tsx --parser=tsx -t scripts/codemods/convert-http-error-to-api-error.js --ignore-pattern src/utils/api-error.ts --ignore-pattern src/__tests__ src",
-    "prepare": "husky"
+    "prepare": "husky",
+    "postinstall": "npm rebuild better-sqlite3 || true"
   },
   "keywords": [],
   "author": "",

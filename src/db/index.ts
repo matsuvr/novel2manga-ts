@@ -19,8 +19,33 @@ export function getDatabase() {
       fs.mkdirSync(dbDir, { recursive: true })
     }
 
-    const sqliteDb = new Database(dbPath)
-    db = drizzle(sqliteDb, { schema })
+    try {
+      const sqliteDb = new Database(dbPath)
+      db = drizzle(sqliteDb, { schema })
+    } catch (error) {
+      // 特定: ネイティブモジュール ABI 不一致 (ERR_DLOPEN_FAILED) などのロード失敗を捕捉
+      const msg = error instanceof Error ? error.message : String(error)
+      const isAbiMismatch = /NODE_MODULE_VERSION/i.test(msg) || /ERR_DLOPEN_FAILED/i.test(msg)
+      if (isAbiMismatch) {
+        console.error(
+          '[Database:init] better-sqlite3 のネイティブモジュール読み込みに失敗しました (ABI mismatch 可能性)',
+          {
+            message: msg,
+            hint: '再ビルド手順: npm rebuild better-sqlite3 もしくは node_modules 再生成 (postinstall で自動実行設定済み)',
+            steps: [
+              'npm rebuild better-sqlite3',
+              'rm -rf node_modules package-lock.json',
+              'npm ci',
+            ],
+            nodeVersion: process.version,
+            cwd: process.cwd(),
+          },
+        )
+      } else {
+        console.error('[Database:init] 予期しない初期化エラー', msg)
+      }
+      throw error
+    }
 
     // Run migrations automatically in development/test environments
     if (
