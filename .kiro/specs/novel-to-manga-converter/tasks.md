@@ -159,6 +159,20 @@
 
 - [x] 9. 設定とLLMプロバイダー管理（2025-07-30実装）
   - [x] 設定ファイル統合（app.config.tsへの集約）
+
+### 10. ドメインモデル統合とエラーハンドリング標準化（2025-08-12 着手）
+
+- [x] 10.1 Scene ドメインモデル単一化 (`src/domain/models/scene.ts` 作成, Flexible/Core 二層構造)
+- [x] 10.2 既存重複定義の除去と再エクスポート（`text-analysis.ts` / `database-models.ts` / `panel-layout.ts`）
+- [x] 10.3 Narrative Arc API の統一レスポンス化 (`createSuccessResponse` / `createErrorResponse` 適用)
+- [x] 10.4 `INVALID_INPUT` エラーコード追加と narrative-arc での Zod/準備失敗マッピング
+- [ ] 10.5 他 API エンドポイントへの `INVALID_INPUT` 適用拡大とテスト更新
+- [ ] 10.6 Chunk → Scene 正規化アダプタ実装（アドホック scene 構造 → SceneFlexible → normalizeToSceneCore）
+- [ ] 10.7 永続化層（DB/R2 保存前）での `normalizeToSceneCore` 強制適用
+- [ ] 10.8 Scene 追加属性 (mood, visualElements) 利用開始: LLM プロンプト & 保存スキーマ反映
+- [ ] 10.9 Emotion / Highlight 種別語彙の列挙型化 + マッピングテーブル実装
+- [ ] 10.10 ドキュメント反映（design.md 変更履歴セクション拡張, API エラー仕様章の更新）
+- [ ] 10.11 既存永続化 Scene データ一括マイグレーションスクリプト（オプション）
   - [x] 環境変数の整理（.envはシークレットのみ）
   - [x] 複数LLMプロバイダー対応（OpenAI、Gemini、Groq、Local）
   - [x] OpenRouterプロバイダー実装と統合

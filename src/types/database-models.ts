@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { SceneSchema } from '@/domain/models/scene'
+export { SceneSchema }
 
 // ========================================
 // Status Types (設計書対応)
@@ -228,15 +230,7 @@ export const CharacterSchema = z.object({
   firstAppearance: z.number(),
 })
 
-// Scene - シーン
-export const SceneSchema = z.object({
-  id: z.string(),
-  location: z.string(),
-  time: z.string().optional(),
-  description: z.string(),
-  startIndex: z.number(),
-  endIndex: z.number(),
-})
+// SceneSchema は domain/models/scene.ts の統一定義を利用
 
 // Dialogue - 対話
 export const DialogueSchema = z.object({
