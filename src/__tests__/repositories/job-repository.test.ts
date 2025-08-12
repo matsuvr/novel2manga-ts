@@ -31,28 +31,19 @@ function createMockPort() {
 }
 
 describe("JobRepository", () => {
-  it('createWithId delegates to db.createJob with provided id (backward compatibility)', async () => {
+  it('create delegates to db.createJob with provided id (deterministic)', async () => {
     const { mock, calls } = createMockPort()
     const repo = new JobRepository(mock)
-    const id = await repo.createWithId('jid', 'nid', 'text_analysis')
+    const id = await repo.create({ id: 'jid', novelId: 'nid', title: 'Job' })
     expect(id).toBe('jid')
-    expect(calls.createPayload).toEqual([
-      { id: 'jid', novelId: 'nid', title: 'text_analysis' },
-    ])
+    expect(calls.createPayload).toEqual([{ id: 'jid', novelId: 'nid', title: 'Job' }])
   })
 
-  it('create delegates to db.createJob with payload and returns generated id', async () => {
+  it('create delegates to db.createJob without id and returns generated id', async () => {
     const { mock, calls } = createMockPort()
     const repo = new JobRepository(mock)
-    const id = await repo.create({
-      novelId: 'nid',
-      title: 'Job',
-      totalChunks: 10,
-      status: 'pending',
-    })
+    const id = await repo.create({ novelId: 'nid', title: 'Job', totalChunks: 10, status: 'pending' })
     expect(id).toBe('generated-id')
-    expect(calls.createPayload).toEqual([
-      { novelId: 'nid', title: 'Job', totalChunks: 10, status: 'pending' },
-    ])
+    expect(calls.createPayload).toEqual([{ novelId: 'nid', title: 'Job', totalChunks: 10, status: 'pending' }])
   })
 });

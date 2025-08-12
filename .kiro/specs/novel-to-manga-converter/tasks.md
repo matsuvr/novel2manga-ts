@@ -308,6 +308,8 @@
   - [x] StorageKeys に ID バリデーション追加でパストラバーサル防止 (2025-08-12)
   - [x] Job 作成APIシグネチャ統一 (`createJob({ id?, novelId, ... })`) (2025-08-12)
   - [x] RepositoryFactory に DatabaseService 健全性チェック追加 (2025-08-12)
+  - [x] `createWithId` ヘルパ削除 (2025-08-12)
+  - [x] `HttpError` 新規使用禁止 ESLint ガード導入 (2025-08-12)
 
 ## 既存タスク（延期）
 

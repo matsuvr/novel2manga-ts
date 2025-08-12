@@ -435,31 +435,7 @@ export function createNovel(
   }
 }
 
-// Deprecated: use databaseService.createJob({ id?, novelId, title? }) instead.
-export function createJob(id: string, novelId: string, jobName?: string): Job {
-  const now = new Date()
-  return {
-    id,
-    novelId,
-    jobName,
-    status: 'pending',
-    currentStep: 'initialized',
-    splitCompleted: false,
-    analyzeCompleted: false,
-    episodeCompleted: false,
-    layoutCompleted: false,
-    renderCompleted: false,
-    totalChunks: 0,
-    processedChunks: 0,
-    totalEpisodes: 0,
-    processedEpisodes: 0,
-    totalPages: 0,
-    renderedPages: 0,
-    retryCount: 0,
-    createdAt: now,
-    updatedAt: now,
-  }
-}
+// Removed deprecated createJob(id, novelId, jobName?) helper in favor of DatabaseService.createJob
 
 export function createChunk(
   id: string,

@@ -1096,7 +1096,7 @@ export class StorageFactory {
 - 成功レスポンスも `createSuccessResponse` に統一。`/api/layout/generate` を含む全ての新/更新ルートはトップレベル `{ success: true, ...payload }` 形式を使用。
 - 旧 `NextResponse.json` 直接返却は段階的廃止（互換保持が不要になり次第リファクタ継続）。
 - StorageKeys に ID バリデーション（英数/`_-` のみ & `..`/先頭`/`禁止）を追加しパストラバーサルを防止。
-- Job 作成APIをオーバーロード (id, novelId, jobName) / ({ novelId,... }) から単一シグネチャ `createJob({ id?, novelId, title?, totalChunks?, status? })` に集約。Repository 層は後方互換ヘルパ `createWithId` を内部で `create({id,...})` にフォワード。
+- Job 作成APIをオーバーロード (id, novelId, jobName) / ({ novelId,... }) から単一シグネチャ `createJob({ id?, novelId, title?, totalChunks?, status? })` に集約。2025-08-12 時点の後方互換ヘルパ `createWithId` はレビュー反映で削除（呼び出し箇所無しを確認済み）。
 - RepositoryFactory 生成時に DatabaseService の存在と代表メソッド (`getJob`, `getNovel`) を実行前検証し、初期化失敗を早期検出。
 
 - 主要クラスと型
@@ -1137,7 +1137,7 @@ export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
 運用ガイド:
 
 - ルート内で新たに識別したい状態（例: 再開不能など）は `ERROR_CODES` にコードを追加してから `ApiError` に付与します（例: INVALID_STATE）。
-- `HttpError` は新規使用禁止（将来的にlintガード予定）。既存分は responder で互換処理されます。
+- `HttpError` は新規使用禁止。2025-08-12 に ESLint ガードを全体適用（`api-error.ts` 互換層内のみ許可）。既存分は responder で互換処理されます。
 
 レスポンスの標準形:
 

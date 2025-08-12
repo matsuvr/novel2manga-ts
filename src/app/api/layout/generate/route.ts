@@ -143,6 +143,8 @@ export async function POST(request: NextRequest) {
       jobId,
       episodeNumber,
       storageKey,
+      // Backward compatibility alias (TODO: remove after 2025-09-01)
+      layoutPath: storageKey,
       layout,
     })
   } catch (error) {

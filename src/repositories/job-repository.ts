@@ -26,11 +26,6 @@ export class JobRepository {
     return this.db.createJob(payload)
   }
 
-  // Backward compatibility helper (to be removed): create with explicit id & name
-  async createWithId(id: string, novelId: string, jobName?: string): Promise<string> {
-    return this.db.createJob({ id, novelId, title: jobName })
-  }
-
   async getByNovelId(novelId: string): Promise<Job[]> {
     return this.db.getJobsByNovelId(novelId)
   }
