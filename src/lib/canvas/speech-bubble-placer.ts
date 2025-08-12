@@ -1,4 +1,5 @@
 import type { Emotion } from '@/domain/models/emotion'
+import { normalizeEmotion } from '@/domain/models/emotion'
 import type { Dialogue } from '@/types/panel-layout'
 import type { PanelLayout } from './panel-layout-engine'
 
@@ -129,14 +130,13 @@ export class SpeechBubblePlacer {
   private determineStyle(dialogue: Dialogue): 'normal' | 'thought' | 'shout' {
     // 感情が明示的に指定されている場合
     if (dialogue.emotion) {
-      switch (dialogue.emotion) {
+      const emo = normalizeEmotion(dialogue.emotion) // ensure synonym folding (PR63 review fix)
+      switch (emo) {
         case 'shout':
         case 'angry':
         case 'excited':
           return 'shout'
-        case 'think':
         case 'thought':
-        case 'inner':
           return 'thought'
         default:
           return 'normal'
