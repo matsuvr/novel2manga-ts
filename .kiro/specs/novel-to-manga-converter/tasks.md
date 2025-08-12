@@ -330,6 +330,13 @@
   - [x] RepositoryFactory に DatabaseService 健全性チェック追加 (2025-08-12)
   - [x] `createWithId` ヘルパ削除 (2025-08-12)
   - [x] `HttpError` 新規使用禁止 ESLint ガード導入 (2025-08-12)
+  - [ ] HEALTH-API-001: `/api/health` 実装と E2E テスト置換 (placeholder test からの移行)
+    - 背景: 現在の Playwright テストはプレースホルダで CI 通過のみ目的
+    - 受け入れ条件:
+      - `/api/health` が 200 で `{ success: true, uptimeSeconds: number }` を返却
+      - uptimeSeconds は process.uptime() の整数切り捨て
+      - E2E テスト: レスポンス構造と閾値 (>=0) を検証し placeholder 削除
+      - design.md / tasks.md 更新
 
 ## 既存タスク（延期）
 
