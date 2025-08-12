@@ -32,6 +32,15 @@
   - 既存コード後方互換: 既存参照名 `SceneSchema` は Core を再エクスポートして破壊的変更を回避。
   - 目的: 型重複によるドリフト防止 / 正規化パイプライン挿入容易化 / 将来のシーン拡張フィールド (mood, visualElements 等) の漸進導入。
 
+**ドメインモデル整合性（優先度2） 着手:**
+
+- Emotion 語彙の共通化: `src/domain/models/emotion.ts` を追加し、`EmotionSchema`（列挙）と `normalizeEmotion()` を提供。解析/レイアウト両方で emotion を共有し、シノニム（think/inner → thought）を正規化。
+- Dialogue の emotion 型適用: `src/types/text-analysis.ts` と `src/types/panel-layout.ts` の対話に Emotion を適用（テスト互換のため `happy`/`normal` 等も許容）。
+- MangaLayout Zod スキーマ導入: `src/types/panel-layout.zod.ts` に YAML レイアウト用の厳密スキーマを追加し、`src/utils/type-guards.ts` の `isMangaLayout` を Zod バックエンドに移行。`validateMangaLayout()` で人間可読なエラー配列も取得可能。`/api/export` の重複ガードを統一。
+- 2025-08-12 (PR#63 Gemini medium 対応): MangaLayout の手動 `interface` 定義を廃止し、Zod スキーマ単一路線 (single source of truth) へ統合。`src/types/panel-layout.ts` は `z.infer<typeof MangaLayoutSchema>` から派生する型エイリアスのみをエクスポートしドリフトを防止。型互換性はコンパイル時アサーションで検証。
+- 2025-08-12 (PR#63 Gemini medium 対応): `normalizeEmotion()` が空白のみの文字列 (例: " ") を未指定扱い (`undefined`) として扱うよう変更し、無意味な 'normal' フォールバックと警告ログ発生を回避。
+- 2025-08-12 (PR#63 Gemini medium 対応): レガシー `StorageService` (`src/services/storage.ts`) の JSON パース失敗をサイレントに握りつぶさず、開発/テスト環境で `console.error` を出力する診断ログを追加（完全削除前のトラブルシュート容易化）。
+
 今後予定される追随作業:
 
 - 他 API ルートへの `INVALID_INPUT` 適用とドキュメント明確化。
@@ -1001,55 +1010,20 @@ const novelStatusQuery = db
 */
 ```
 
-### R2 Storage Structure
+### R2 Storage Structure (2025-08-12 現行)
 
-現在実装されている統合ストレージ構造：
+物理キーはフラット: baseDir(バケット/ローカルディレクトリ) + StorageKeys が生成する相対キー。
 
 ```
-novels/
-└── {novelId}/
-    ├── original/
-    │   ├── text.txt                    # 元の小説テキスト
-    │   └── metadata.json              # 小説のメタデータ
-    │
-    └── jobs/
-        └── {jobId}/
-            ├── chunks/
-            │   ├── chunk_001.txt       # チャンクテキスト
-            │   ├── chunk_002.txt
-            │   └── ...
-            │
-            ├── analyses/
-            │   ├── chunk_001.json      # チャンク分析結果
-            │   ├── chunk_002.json
-            │   └── ...
-            │
-            ├── episodes/
-            │   ├── episodes.json       # エピソード一覧
-            │   └── episode_{n}/
-            │       ├── layout.yaml     # レイアウト定義
-            │       └── metadata.json   # レイアウトメタデータ
-            │
-            ├── renders/
-            │   ├── config.json         # 描画設定
-            │   ├── episode_{n}/
-            │   │   ├── page_001.png    # 描画済みページ
-            │   │   ├── page_002.png
-            │   │   └── ...
-            │   └── thumbnails/
-            │       └── episode_{n}/
-            │           ├── page_001_thumb.png
-            │           └── ...
-            │
-            ├── outputs/
-            │   ├── manga.pdf           # PDF形式（ページ順JPEG統合）
-            │   ├── manga_images.zip    # ZIP形式（JPEG画像＋YAML設定）
-            │   └── metadata.json       # 成果物メタデータ
-            │
-            └── state/
-                ├── job_progress.json   # ジョブ進捗状態
-                └── resume_data.json    # 再開用データ
+NOVEL_STORAGE  : novels/{novelId}.json
+CHUNKS_STORAGE : {jobId}/chunk_{index}.txt
+ANALYSIS_STORAGE: {jobId}/chunk_{index}.json | {jobId}/integrated.json | {jobId}/narrative.json
+LAYOUTS_STORAGE: {jobId}/episode_{n}.yaml
+RENDERS_STORAGE: {jobId}/episode_{n}/page_{p}.png (+ thumbnails/ 配下)
+OUTPUTS_STORAGE: {jobId}/output.pdf
 ```
+
+旧階層 `novels/{novelId}/jobs/{jobId}/...` は廃止。jobId スコープでの一貫管理により削除や走査がO(対象ジョブのキー数)で完結し、関連集約ロジックを単純化。
 
 ### Migration Strategy (Drizzle)
 
@@ -1127,18 +1101,11 @@ class DatabaseService {
   }
 }
 
-// Storage Factory（実装済み）
-// src/services/storage.ts で完全実装済み
-/*
-export class StorageFactory {
-  static async getNovelStorage(): Promise<NovelStorage>
-  static async getChunkStorage(): Promise<NovelStorage>
-  static async getAnalysisStorage(): Promise<NovelStorage>
-  static async getLayoutStorage(): Promise<NovelStorage>
-  static async getRenderStorage(): Promise<NovelStorage>
-  static async getDatabase(): Promise<DatabaseService>
-}
-*/
+// Storage (2025-08-12 更新)
+// 旧 src/services/storage.ts は削除済み。現在は src/utils/storage.ts の
+// getNovelStorage / getChunkStorage / getAnalysisStorage / getLayoutStorage /
+// getRenderStorage / getOutputStorage と StorageKeys が唯一の公開 API。
+// Factory クラスは存在せず、named export の軽量構成で二重管理を防止。
 ```
 
 ## Error Handling
