@@ -1,5 +1,8 @@
+import { normalizeEmotion } from '@/domain/models/emotion'
 import type {
   ChunkAnalysisResult,
+  Dialogue,
+  DialogueElement,
   EpisodeData,
   MangaLayout,
   Page,
@@ -104,7 +107,15 @@ export class MangaPageRenderer {
       const content = this.buildPanelContent(chunk)
 
       // 対話の配置を計算
-      const dialogues = this.bubblePlacer.placeDialogues(chunk.dialogues || [], layout)
+      // Chunk の dialogues は DialogueElement[] (emotion: string) なので描画用 Dialogue[] に正規化
+      const normalizedDialogues: Dialogue[] = (chunk.dialogues || []).map(
+        (d: DialogueElement): Dialogue => ({
+          speaker: d.speaker,
+          text: d.text,
+          emotion: normalizeEmotion(d.emotion),
+        }),
+      )
+      const dialogues = this.bubblePlacer.placeDialogues(normalizedDialogues, layout)
 
       const panel: Panel = {
         id: panelId++,
