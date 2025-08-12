@@ -52,19 +52,49 @@ export function normalizeToSceneCore(scene: unknown): Scene {
   } catch (err) {
     if (err instanceof ZodError) {
       const requiredKeys = new Set(['id', 'location', 'description', 'startIndex', 'endIndex'])
-      const missingFields = Array.from(requiredKeys).filter((k) =>
-        err.issues.some((i) => i.path.length === 1 && i.path[0] === k),
-      )
-      throw new ValidationError(
-        `Scene normalization failed: missing or invalid required fields: ${missingFields.join(', ')}`,
-        undefined,
-        {
-          issues: err.issues,
-          missingFields,
-          code: ERROR_CODES.INVALID_INPUT,
-        },
-      )
+      const missingFields: string[] = []
+      const invalidTypeFields: string[] = []
+
+      for (const issue of err.issues) {
+        if (issue.path.length === 1) {
+          const key = issue.path[0]
+          if (requiredKeys.has(String(key))) {
+            if (issue.code === 'invalid_type') {
+              // Zod invalid_type で received が undefined → 未指定
+              // それ以外 (string 期待 number 提供等) → 型不一致
+              const received: unknown = (issue as any).received
+              if (received === 'undefined' || received === undefined) {
+                if (!missingFields.includes(String(key))) missingFields.push(String(key))
+              } else {
+                if (!invalidTypeFields.includes(String(key))) invalidTypeFields.push(String(key))
+              }
+            }
+          }
+        }
+      }
+
+      const parts: string[] = []
+      if (missingFields.length) parts.push(`missing: ${missingFields.join(', ')}`)
+      if (invalidTypeFields.length) parts.push(`invalid type: ${invalidTypeFields.join(', ')}`)
+      const summary = parts.length ? parts.join(' | ') : 'validation failed'
+
+      throw new ValidationError(`Scene normalization failed: ${summary}`, undefined, {
+        issues: err.issues,
+        missingFields,
+        // 追加の詳細: 型不一致フィールド
+        invalidTypeFields,
+        code: ERROR_CODES.INVALID_INPUT,
+      })
     }
     throw err
+  }
+}
+
+// Legacy adapter helper: 旧 boolean ベースの hasTime / hasLocation 判定が残存するコード向け
+// （現状利用箇所なし。必要時 panel-layout 等で import して使用）
+export function sceneLegacyFlags(scene: SceneFlexible): { hasTime: boolean; hasLocation: boolean } {
+  return {
+    hasTime: typeof scene.time === 'string' && scene.time.trim().length > 0,
+    hasLocation: typeof scene.location === 'string' && scene.location.trim().length > 0,
   }
 }

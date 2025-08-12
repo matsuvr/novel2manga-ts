@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isSceneDomainModel, normalizeToSceneCore, SceneCoreSchema, SceneFlexibleSchema } from '@/domain/models/scene'
+import { isSceneDomainModel, normalizeToSceneCore, SceneCoreSchema, SceneFlexibleSchema, sceneLegacyFlags } from '@/domain/models/scene'
 import { ValidationError } from '@/utils/api-error'
 
 describe('domain/models/scene', () => {
@@ -40,6 +40,23 @@ describe('domain/models/scene', () => {
         }
       }
     })
+
+    it('captures invalid type fields separately from missing fields', () => {
+      try {
+        normalizeToSceneCore({ id: 123, // invalid type
+          location: 'Loc', description: 'D', startIndex: '0', endIndex: 10 } as any)
+      } catch (e) {
+        expect(e).toBeInstanceOf(ValidationError)
+        if (e instanceof ValidationError) {
+          // invalidTypeFields が含まれていること
+          expect(e.details?.invalidTypeFields).toBeDefined()
+          expect(Array.isArray(e.details?.invalidTypeFields)).toBe(true)
+          // id と startIndex の型不一致が検出されること（順不同）
+          const fields = e.details?.invalidTypeFields as string[]
+          expect(fields).toEqual(expect.arrayContaining(['id', 'startIndex']))
+        }
+      }
+    })
   })
 
   describe('schemas', () => {
@@ -50,6 +67,15 @@ describe('domain/models/scene', () => {
 
     it('SceneCoreSchema enforces required fields', () => {
       expect(() => SceneCoreSchema.parse({ id: 'x' })).toThrow()
+    })
+  })
+
+  describe('sceneLegacyFlags', () => {
+    it('returns boolean flags based on presence of time/location strings', () => {
+      const flags = sceneLegacyFlags({ location: 'Tokyo', time: 'Night' })
+      expect(flags).toEqual({ hasTime: true, hasLocation: true })
+      const flags2 = sceneLegacyFlags({ location: '  ', time: '' })
+      expect(flags2).toEqual({ hasTime: false, hasLocation: false })
     })
   })
 })
