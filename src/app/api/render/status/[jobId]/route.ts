@@ -1,9 +1,14 @@
-import { type NextRequest, NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { appConfig } from '@/config/app.config'
 import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
 import { getDatabaseService } from '@/services/db-factory'
-import { ApiError, createErrorResponse, ValidationError } from '@/utils/api-error'
+import {
+  ApiError,
+  createErrorResponse,
+  createSuccessResponse,
+  ValidationError,
+} from '@/utils/api-error'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
 import { validateJobId } from '@/utils/validators'
 
@@ -49,7 +54,7 @@ export async function GET(
     // エピソード一覧を取得
     const episodes = await episodeRepo.getByJobId(params.jobId)
     if (episodes.length === 0) {
-      return NextResponse.json({
+      return createSuccessResponse({
         jobId: params.jobId,
         status: 'no_episodes',
         renderStatus: [],
@@ -134,7 +139,7 @@ export async function GET(
       renderStatus.push(episodeStatus)
     }
 
-    return NextResponse.json({
+    return createSuccessResponse({
       jobId: params.jobId,
       status: 'success',
       renderStatus,

@@ -1,4 +1,10 @@
-import { type NextRequest, NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import {
+  createErrorResponse,
+  createSuccessResponse,
+  NotFoundError,
+  ValidationError,
+} from '@/utils/api-error'
 import { StorageFactory } from '@/utils/storage'
 import { generateUUID } from '@/utils/uuid'
 
@@ -39,7 +45,8 @@ export async function POST(request: NextRequest) {
 
     // テスト期待: 文字列かつ非空を満たさない場合は同一メッセージ
     if (typeof text !== 'string' || text.length === 0) {
-      return NextResponse.json({ error: 'テキストが必要です' }, { status: 400 })
+      // 明示的にValidationErrorを利用し400を保証
+      return createErrorResponse(new ValidationError('テキストが必要です'))
     }
 
     const result = await saveNovelToStorage(text)
@@ -47,13 +54,13 @@ export async function POST(request: NextRequest) {
     const duration = Date.now() - startTime
     console.log(`[novel-storage] Storage completed in ${duration}ms`)
 
-    return NextResponse.json({
+    return createSuccessResponse({
       message: '小説が正常にアップロードされました',
       ...result,
     })
   } catch (error) {
     console.error('ファイル保存エラー:', error)
-    return NextResponse.json({ error: 'ファイルの保存中にエラーが発生しました' }, { status: 500 })
+    return createErrorResponse(error, 'ファイルの保存中にエラーが発生しました')
   }
 }
 
@@ -64,7 +71,7 @@ export async function GET(request: NextRequest) {
     const uuid = searchParams.get('uuid')
 
     if (!uuid) {
-      return NextResponse.json({ error: 'UUIDが必要です' }, { status: 400 })
+      return createErrorResponse(new ValidationError('UUIDが必要です', 'uuid'))
     }
 
     const key = `${uuid}.json`
@@ -74,12 +81,13 @@ export async function GET(request: NextRequest) {
     const result = await storage.get(key)
 
     if (!result) {
-      return NextResponse.json({ error: 'ファイルが見つかりません' }, { status: 404 })
+      // 既存テストは具体的ID付きメッセージでなく固定文字列を期待
+      return createErrorResponse(new NotFoundError('ファイル'), 'ファイルが見つかりません')
     }
 
     const fileData = JSON.parse(result.text)
 
-    return NextResponse.json({
+    return createSuccessResponse({
       text: fileData.text,
       uuid,
       fileName: `${uuid}.json`,
@@ -87,6 +95,6 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('ファイル取得エラー:', error)
-    return NextResponse.json({ error: 'ファイルの取得中にエラーが発生しました' }, { status: 500 })
+    return createErrorResponse(error, 'ファイルの取得中にエラーが発生しました')
   }
 }

@@ -69,7 +69,9 @@
       "Bash(gh pr list:*)",
       "Bash(npx vitest:*)",
       "Bash(git add:*)",
-      "Bash(gh pr view:*)"
+      "Bash(gh pr view:*)",
+      "Bash(git checkout:*)",
+      "Bash(git commit:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

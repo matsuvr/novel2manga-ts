@@ -41,4 +41,16 @@ bucket_name = "chunks-storage"
 binding = "ANALYSIS_STORAGE"
 bucket_name = "analysis-storage"
 
+[[r2_buckets]]
+binding = "LAYOUTS_STORAGE"
+bucket_name = "layouts-storage"
+
+[[r2_buckets]]
+binding = "RENDERS_STORAGE"
+bucket_name = "renders-storage"
+
+[[r2_buckets]]
+binding = "OUTPUTS_STORAGE"
+bucket_name = "outputs-storage"
+
 # D1データベースの設定（開発環境ではローカルSQLiteを使用）

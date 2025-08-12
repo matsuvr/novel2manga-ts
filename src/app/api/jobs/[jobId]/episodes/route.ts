@@ -1,10 +1,10 @@
-import { type NextRequest, NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
 import { getDatabaseService } from '@/services/db-factory'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
-import { ApiError, createErrorResponse } from '@/utils/api-error'
+import { ApiError, createErrorResponse, createSuccessResponse } from '@/utils/api-error'
 import { validateJobId } from '@/utils/validators'
 
 // 入力互換: 既存のconfig形式と、testsが送る { targetPages, minPages, maxPages } のいずれか
@@ -53,7 +53,7 @@ export async function GET(
       throw new ApiError('No episodes found for this job', 404, 'NOT_FOUND')
     }
 
-    return NextResponse.json({
+    return createSuccessResponse({
       jobId: params.jobId,
       totalEpisodes: episodes.length,
       episodes: episodes.map((ep) => ({
@@ -98,7 +98,7 @@ export async function POST(
     // エピソード分析がすでに完了している場合
     if (job.episodeCompleted) {
       const episodes = await episodeRepo.getByJobId(params.jobId)
-      return NextResponse.json({
+      return createSuccessResponse({
         message: 'Episode analysis already completed',
         jobId: params.jobId,
         status: 'completed',
@@ -131,7 +131,7 @@ export async function POST(
         console.error(`Error processing episode analysis job ${params.jobId}:`, error)
       })
 
-    return NextResponse.json({
+    return createSuccessResponse({
       message: 'Episode analysis started',
       jobId: params.jobId,
       status: 'processing',

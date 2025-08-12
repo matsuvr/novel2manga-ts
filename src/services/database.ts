@@ -68,43 +68,22 @@ export class DatabaseService {
     return await this.db.select().from(novels).orderBy(desc(novels.createdAt))
   }
 
-  // Job関連メソッド
-  async createJob(id: string, novelId: string, jobName?: string): Promise<string>
+  // Job関連メソッド（統一シグネチャ）
   async createJob(payload: {
+    id?: string
     novelId: string
     title?: string
     totalChunks?: number
     status?: string
-  }): Promise<string>
-  async createJob(
-    arg1: string | { novelId: string; title?: string; totalChunks?: number; status?: string },
-    novelId?: string,
-    jobName?: string,
-  ): Promise<string> {
-    if (typeof arg1 === 'string') {
-      // 既存の署名: (id, novelId, jobName)
-      if (!novelId) {
-        throw new Error('novelId is required')
-      }
-      await this.db.insert(jobs).values({
-        id: arg1,
-        novelId: novelId,
-        jobName,
-        status: 'pending',
-        currentStep: 'initialized',
-      })
-      return arg1
-    }
-
-    // オーバーロード: ({ novelId, ... }) → id を生成して返す
-    const id = crypto.randomUUID()
+  }): Promise<string> {
+    const id = payload.id || crypto.randomUUID()
     await this.db.insert(jobs).values({
       id,
-      novelId: arg1.novelId,
-      jobName: arg1.title,
-      status: (arg1.status as Job['status']) || 'pending',
+      novelId: payload.novelId,
+      jobName: payload.title,
+      status: (payload.status as Job['status']) || 'pending',
       currentStep: 'initialized',
-      totalChunks: arg1.totalChunks || 0,
+      totalChunks: payload.totalChunks || 0,
     })
     return id
   }
@@ -347,6 +326,8 @@ export class DatabaseService {
     characterCount?: number
     status?: string
   }): Promise<void>
+  // Internal implementation handling both overload signatures. Use a broad unknown then narrow.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Overload consolidation; validated below
   async createEpisode(episode: any): Promise<void> {
     // 簡易入力かどうかを判定
     const isMinimal =
@@ -489,7 +470,7 @@ export class DatabaseService {
     jobId: string,
     episodeNumber: number,
     pageNumber: number,
-  ): Promise<any | null> {
+  ): Promise<import('@/db/schema').RenderStatus | null> {
     const result = await this.db
       .select()
       .from(renderStatus)
@@ -502,23 +483,29 @@ export class DatabaseService {
       )
       .limit(1)
 
-    return result[0] || null
+    return (result[0] as import('@/db/schema').RenderStatus) || null
   }
 
-  async getRenderStatusByEpisode(jobId: string, episodeNumber: number): Promise<any[]> {
-    return await this.db
+  async getRenderStatusByEpisode(
+    jobId: string,
+    episodeNumber: number,
+  ): Promise<import('@/db/schema').RenderStatus[]> {
+    return (await this.db
       .select()
       .from(renderStatus)
       .where(and(eq(renderStatus.jobId, jobId), eq(renderStatus.episodeNumber, episodeNumber)))
-      .orderBy(renderStatus.pageNumber)
+      .orderBy(renderStatus.pageNumber)) as import('@/db/schema').RenderStatus[]
   }
 
-  async getAllRenderStatusByJob(jobId: string): Promise<any[]> {
-    return await this.db
+  async getAllRenderStatusByJob(jobId: string): Promise<import('@/db/schema').RenderStatus[]> {
+    return (await this.db
       .select()
       .from(renderStatus)
       .where(eq(renderStatus.jobId, jobId))
-      .orderBy(renderStatus.episodeNumber, renderStatus.pageNumber)
+      .orderBy(
+        renderStatus.episodeNumber,
+        renderStatus.pageNumber,
+      )) as import('@/db/schema').RenderStatus[]
   }
 
   async updateRenderStatus(

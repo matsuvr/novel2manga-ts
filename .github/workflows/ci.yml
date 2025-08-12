@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main, feat/**]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node version from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type Check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint:check
+
+      - name: Unit Tests
+        run: npm run test:unit -- --run
+
+      - name: Full Flow Integration (splitOnly)
+        run: npm run test:full-flow --if-present
+
+      - name: Start App (background) for E2E
+        run: |
+          nohup npm run dev &
+          echo $! > dev.pid
+          n=0; until curl -sf http://localhost:3000/api/health || [ $n -ge 40 ]; do n=$((n+1)); sleep 3; done
+        shell: bash
+
+      - name: Playwright Install Browsers
+        run: npx playwright install --with-deps
+
+      - name: E2E Tests (health)
+        env:
+          E2E_BASE_URL: http://localhost:3000
+        run: npm run test:e2e -- --grep "health endpoint"
+
+      - name: Upload Test Results (optional)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            test-results
+            playwright-report
+            coverage
+
+      - name: Stop Dev Server
+        if: always()
+        run: |
+          if [ -f dev.pid ]; then kill $(cat dev.pid) || true; fi
+        shell: bash

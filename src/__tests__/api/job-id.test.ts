@@ -49,6 +49,7 @@ describe('/api/job/[id]', () => {
       createNovel: vi.fn().mockResolvedValue(testNovelId),
       createJob: vi.fn(),
       createChunk: vi.fn(),
+      getNovel: vi.fn().mockResolvedValue(null),
       getJob: vi.fn().mockImplementation((id: string) => {
         if (id === testJobId) {
           return Promise.resolve({

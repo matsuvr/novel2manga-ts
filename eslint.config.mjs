@@ -114,4 +114,33 @@ export default [
       ],
     },
   },
+  // Disallow HttpError usage project-wide except inside api-error.ts compatibility layer
+  {
+    files: ['**/*.{ts,tsx,js,jsx}'],
+    excludedFiles: ['src/utils/api-error.ts', 'src/utils/http-errors.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@/utils/http-errors',
+              message: 'HttpError is deprecated. Use ApiError hierarchy instead.',
+            },
+            {
+              name: 'src/utils/http-errors',
+              message: 'HttpError is deprecated. Use ApiError hierarchy instead.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "NewExpression[callee.name='HttpError']",
+          message: 'HttpError is deprecated. Use ApiError hierarchy instead.',
+        },
+      ],
+    },
+  },
 ]
