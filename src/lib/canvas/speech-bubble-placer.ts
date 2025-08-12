@@ -1,3 +1,4 @@
+import type { Emotion } from '@/domain/models/emotion'
 import type { Dialogue } from '@/types/panel-layout'
 import type { PanelLayout } from './panel-layout-engine'
 
@@ -34,10 +35,11 @@ export class SpeechBubblePlacer {
       )
 
       // 配置情報を対話に追加（実際の描画時に使用）
+      const detected = this.detectEmotion(dialogue.text)
       const placedDialogue: Dialogue = {
         ...dialogue,
         // 吹き出しの位置情報は描画時に計算されるため、ここでは対話の順序と重要度を保持
-        emotion: dialogue.emotion ?? this.detectEmotion(dialogue.text),
+        emotion: dialogue.emotion ?? detected,
       }
 
       placedDialogues.push(placedDialogue)
@@ -155,7 +157,7 @@ export class SpeechBubblePlacer {
   /**
    * テキストから感情を検出
    */
-  private detectEmotion(text: string): string | undefined {
+  private detectEmotion(text: string): Emotion | undefined {
     // 叫び
     if (text.includes('！！') || text.includes('!!')) {
       return 'shout'
