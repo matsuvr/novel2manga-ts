@@ -41,7 +41,8 @@ export class ApiError extends Error {
     message: string,
     public statusCode: number,
     public code?: ErrorCode,
-    public details?: Record<string, unknown>,
+    // details は文字列 (レガシーテスト互換) も許容するため unknown
+    public details?: unknown,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -265,11 +266,21 @@ export function createErrorResponse(
 // - さまざまな unknown エラー型から人間可読なメッセージ文字列を抽出
 // - 既存のルート / ハンドラで重複していた inline closure を置き換える目的
 // ========================================
+/**
+ * Extract a human readable error message from an unknown error-like value.
+ * Order of precedence:
+ * 1. Error instance -> .message
+ * 2. string -> as-is
+ * 3. JSON.stringify(value) when it returns a string (objects, arrays, primitives)
+ * 4. Fallback to String(value) (covers symbols, circular structures, undefined, functions etc.)
+ */
 export function extractErrorMessage(raw: unknown): string {
   if (raw instanceof Error) return raw.message
   if (typeof raw === 'string') return raw
   try {
-    return JSON.stringify(raw)
+    // JSON.stringify(undefined | symbol | function) => undefined なので ?? でフォールバック
+    const json = JSON.stringify(raw)
+    return json ?? String(raw)
   } catch {
     return String(raw)
   }
