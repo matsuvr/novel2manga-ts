@@ -1,0 +1,82 @@
+[
+  {
+    "id": 3110768343,
+    "node_id": "PRR_kwDOPTsDnM65ao7X",
+    "user": {
+      "login": "gemini-code-assist[bot]",
+      "id": 176961590,
+      "node_id": "BOT_kgDOCow4Ng",
+      "avatar_url": "https://avatars.githubusercontent.com/in/956858?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D",
+      "html_url": "https://github.com/apps/gemini-code-assist",
+      "followers_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/followers",
+      "following_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/following{/other_user}",
+      "gists_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/subscriptions",
+      "organizations_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/orgs",
+      "repos_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/repos",
+      "events_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/received_events",
+      "type": "Bot",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "body": "## Summary of Changes\n\nHello @matsuvr, I'm Gemini Code Assist[^1]! I'm currently reviewing this pull request and will post my feedback shortly. In the meantime, here's a summary to help you and other reviewers quickly get up to speed!\n\nこのプルリクエストは、アプリケーションのドメインモデルの整合性を大幅に向上させることを目的としています。特に、感情語彙の標準化とレイアウトバリデーションの強化に焦点を当てています。Zodライブラリを導入してスキーマバリデーションを堅牢化し、ストレージメカニズムをリファクタリングして、よりフラットで一貫性のあるキー構造を実現しました。これにより、データの信頼性が向上し、将来的な開発が容易になります。\n\n### Highlights\n\n* **感情語彙の標準化**: ダイアログで使用される感情タイプを標準化するために、新しい`EmotionSchema`と`normalizeEmotion()`関数が導入されました。これにより、テキスト分析とパネルレイアウト全体で一貫性が確保され、シノニムも処理されます。\n* **Zodによるマンガレイアウトのバリデーション強化**: `isMangaLayout`型ガードがZodスキーマを使用するように移行され、YAMLレイアウトのより堅牢なバリデーションと詳細なエラーレポートが可能になりました。新しい`panel-layout.zod.ts`ファイルでこれらのスキーマが定義されています。\n* **ストレージシステムの抜本的リファクタリング**: レガシーな`StorageService`が削除され、ストレージ構造ドキュメント（`storage-structure.md`）が新しいフラットキー方式とJSONの統一性を反映するように更新されました。これにより、ストレージ管理が簡素化され、一貫性が向上します。\n* **コードベースのクリーンアップとスタイル統一**: `CLAUDE.md`からPRチェックリストが削除され、Biomeフォーマットが適用され、コードベースのスタイルの一貫性が確保されました。\n\n\n\n\n\n<details>\n<summary><b>Using Gemini Code Assist</b></summary>\n<br>\n\nThe full guide for Gemini Code Assist can be found on our [documentation page](https://developers.google.com/gemini-code-assist/docs/review-github-code), here are some quick tips.\n\n<b>Invoking Gemini</b>\n\nYou can request assistance from Gemini at any point in your pull request via creating an issue comment (i.e. comment on the pull request page) using either `/gemini <command>` or `@gemini-code-assist <command>`. Below is a summary of the supported commands.\n\nFeature | Command | Description\n--- | --- | ---\nCode Review | `/gemini review` | Performs a code review for the current pull request in its current state.\nPull Request Summary | `/gemini summary` | Provides a summary of the current pull request in its current state.\nComment | @gemini-code-assist | Responds in comments when explicitly tagged, both in issue comments and review comments.\nHelp | `/gemini help` | Displays a list of available commands.\n\n<b>Customization</b>\n\nTo customize Gemini Code Assist for GitHub experience, repository maintainers can create a configuration file and/or provide a custom code review style guide (such as PEP-8 for Python) by creating and adding files to a `.gemini/` folder in the base of the repository. Detailed instructions can be found [here](https://developers.google.com/gemini-code-assist/docs/customize-gemini-behavior-github).\n\n<b>Limitations & Feedback</b>\n\nGemini Code Assist may make mistakes. Please leave feedback on any instances where its feedback is incorrect or counter productive. You can react with :thumbsup: and :thumbsdown: on @gemini-code-assist comments. If you're interested in giving your feedback about your experience with Gemini Code Assist for Github and other Google products, sign up [here](https://google.qualtrics.com/jfe/form/SV_2cyuGuTWsEw84yG).\n\n<b>You can also get AI-powered code generation, chat, as well as code reviews directly in the IDE at no cost with the [Gemini Code Assist IDE Extension](https://cloud.google.com/products/gemini/code-assist).</b>\n</details>\n\n\n\n\n[^1]: Review the [Privacy Notices](https://policies.google.com/privacy), [Generative AI Prohibited Use Policy](https://policies.google.com/terms/generative-ai/use-policy), [Terms of Service](https://policies.google.com/terms), and learn how to configure Gemini Code Assist in GitHub [here](https://developers.google.com/gemini-code-assist/docs/customize-gemini-behavior-github). Gemini can make mistakes, so double check it and [use code with caution](https://support.google.com/legal/answer/13505487).\n",
+    "state": "COMMENTED",
+    "html_url": "https://github.com/matsuvrprojects/novel2manga-mastra/pull/63#pullrequestreview-3110768343",
+    "pull_request_url": "https://api.github.com/repos/matsuvrprojects/novel2manga-mastra/pulls/63",
+    "author_association": "NONE",
+    "_links": {
+      "html": {
+        "href": "https://github.com/matsuvrprojects/novel2manga-mastra/pull/63#pullrequestreview-3110768343"
+      },
+      "pull_request": {
+        "href": "https://api.github.com/repos/matsuvrprojects/novel2manga-mastra/pulls/63"
+      }
+    },
+    "submitted_at": "2025-08-12T13:55:16Z",
+    "commit_id": "6e78fd27eb6374e182865bf2d56e7e6784a09e6a"
+  },
+  {
+    "id": 3110775453,
+    "node_id": "PRR_kwDOPTsDnM65aqqd",
+    "user": {
+      "login": "gemini-code-assist[bot]",
+      "id": 176961590,
+      "node_id": "BOT_kgDOCow4Ng",
+      "avatar_url": "https://avatars.githubusercontent.com/in/956858?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D",
+      "html_url": "https://github.com/apps/gemini-code-assist",
+      "followers_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/followers",
+      "following_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/following{/other_user}",
+      "gists_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/subscriptions",
+      "organizations_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/orgs",
+      "repos_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/repos",
+      "events_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/gemini-code-assist%5Bbot%5D/received_events",
+      "type": "Bot",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "body": "## Code Review\n\nこのプルリクエストは、ドメインモデルの整合性向上とストレージ層のリファクタリングという、大規模かつ重要な改善を含んでいます。特に、`Emotion`語彙の共通化とZodによる`MangaLayout`の厳密なバリデーション導入は、コードの堅牢性を大きく高める素晴らしい変更です。また、レガシーな`StorageService`を廃止し、フラットなキー構造に移行したことで、ストレージの管理が大幅に簡素化・明確化されています。全体として非常によく構成された変更ですが、いくつかの実装詳細とドキュメントの整合性について、さらなる改善のためのフィードバックをいくつか提案します。",
+    "state": "COMMENTED",
+    "html_url": "https://github.com/matsuvrprojects/novel2manga-mastra/pull/63#pullrequestreview-3110775453",
+    "pull_request_url": "https://api.github.com/repos/matsuvrprojects/novel2manga-mastra/pulls/63",
+    "author_association": "NONE",
+    "_links": {
+      "html": {
+        "href": "https://github.com/matsuvrprojects/novel2manga-mastra/pull/63#pullrequestreview-3110775453"
+      },
+      "pull_request": {
+        "href": "https://api.github.com/repos/matsuvrprojects/novel2manga-mastra/pulls/63"
+      }
+    },
+    "submitted_at": "2025-08-12T13:56:30Z",
+    "commit_id": "6e78fd27eb6374e182865bf2d56e7e6784a09e6a"
+  }
+]

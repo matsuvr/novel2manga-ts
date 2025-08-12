@@ -1,44 +1,29 @@
-// パネルレイアウトのYAML構造に対応する型定義
+// パネルレイアウトのYAML構造に対応する型定義 (single source of truth: Zod schema)
+// Gemini review (PR#63 medium): Avoid divergence between interface & Zod schema.
+// We now derive all exported types from panel-layout.zod.ts schemas via z.infer.
+// If schema changes, these types update automatically.
+import type { z } from 'zod'
+import type {
+  DialogueSchema,
+  MangaLayoutSchema,
+  PageSchema,
+  PanelSchema,
+  PositionSchema,
+  SizeSchema,
+} from './panel-layout.zod'
 
-export interface MangaLayout {
-  title: string
-  author?: string
-  created_at: string
-  episodeNumber: number
-  episodeTitle?: string
-  pages: Page[]
-}
+export type Position = z.infer<typeof PositionSchema> // 0.0 - 1.0 normalized coordinates
+export type Size = z.infer<typeof SizeSchema>
+export type Dialogue = z.infer<typeof DialogueSchema>
+export type Panel = z.infer<typeof PanelSchema>
+export type Page = z.infer<typeof PageSchema>
+export type MangaLayout = z.infer<typeof MangaLayoutSchema>
 
-export interface Page {
-  page_number: number
-  panels: Panel[]
-}
+// Compile-time structural compatibility assertion (fails on drift if manually reintroduced)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type __AssertMangaLayoutConsistency = MangaLayout['pages'][number] extends Page ? true : never
 
-export interface Panel {
-  id: number | string
-  position: Position
-  size: Size
-  content: string
-  dialogues?: Dialogue[]
-  sourceChunkIndex?: number // このパネルの元となったチャンクのインデックス
-  importance?: number // ハイライトシーンの重要度 (1-10)
-}
-
-export interface Position {
-  x: number // 0.0 - 1.0 (0が右端、1が左端)
-  y: number // 0.0 - 1.0 (0が上端、1が下端)
-}
-
-export interface Size {
-  width: number // 0.0 - 1.0
-  height: number // 0.0 - 1.0
-}
-
-export interface Dialogue {
-  emotion?: string
-  speaker: string
-  text: string
-}
+// Emotion type already incorporated by DialogueSchema (emotion?: Emotion)
 
 // エピソードデータ（レイアウト生成の入力）
 export interface EpisodeData {
