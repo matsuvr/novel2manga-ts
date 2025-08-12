@@ -54,13 +54,17 @@ vi.mock('@/agents/chunk-analyzer', () => ({
   },
 }))
 
-vi.mock('@/utils/storage', () => ({
-  StorageFactory: {
-    getDatabase: vi.fn(),
-    getChunkStorage: vi.fn(),
-    getAnalysisStorage: vi.fn(),
-  },
-}))
+vi.mock('@/utils/storage', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    StorageFactory: {
+      getDatabase: vi.fn(),
+      getChunkStorage: vi.fn(),
+      getAnalysisStorage: vi.fn(),
+    },
+  }
+})
 
 vi.mock('@/config', () => ({
   getTextAnalysisConfig: vi.fn(() => ({

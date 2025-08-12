@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { chunkAnalyzerAgent } from '@/agents/chunk-analyzer'
 import { getTextAnalysisConfig } from '@/config'
-import { StorageFactory } from '@/utils/storage'
+import { StorageFactory, StorageKeys } from '@/utils/storage'
 
 // リクエストボディのバリデーションスキーマ
 const analyzeChunkRequestSchema = z.object({
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     const analysisStorage = await StorageFactory.getAnalysisStorage()
 
     // 既に分析済みかチェック
-    const analysisPath = `analyses/${jobId}/chunk_${chunkIndex}.json`
+    const analysisPath = StorageKeys.chunkAnalysis(jobId, chunkIndex)
     const existingAnalysis = await analysisStorage.get(analysisPath)
 
     if (existingAnalysis) {
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
     }
 
     // チャンクテキストを取得
-    const chunkPath = `chunks/${jobId}/chunk_${chunkIndex}.txt`
+    const chunkPath = StorageKeys.chunk(jobId, chunkIndex)
     const chunkFile = await chunkStorage.get(chunkPath)
 
     if (!chunkFile) {

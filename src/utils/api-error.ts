@@ -279,8 +279,13 @@ export function notFoundError(resource: string): NextResponse {
   return createErrorResponse(new NotFoundError(resource))
 }
 
+export function createSuccessResponse<T>(data: T, status: number = 200): NextResponse {
+  return NextResponse.json({ success: true, data }, { status })
+}
+
+// Alias for backward compatibility (to be removed)
 export function successResponse<T>(data: T, status: number = 200): NextResponse {
-  return NextResponse.json(data, { status })
+  return createSuccessResponse(data, status)
 }
 
 // ========================================

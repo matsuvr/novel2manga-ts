@@ -434,7 +434,7 @@ export async function getRenderStorage(): Promise<Storage> {
 
 // Output Storage
 export async function getOutputStorage(): Promise<Storage> {
-  return resolveStorage('outputs', 'RENDERS_STORAGE', 'Output storage not configured')
+  return resolveStorage('outputs', 'OUTPUTS_STORAGE', 'Output storage not configured')
 }
 
 // Database
@@ -445,7 +445,7 @@ export async function getChunkData(
   chunkIndex: number,
 ): Promise<{ text: string } | null> {
   const storage = await getChunkStorage()
-  const key = `chunks/${jobId}/chunk_${chunkIndex}.txt`
+  const key = StorageKeys.chunk(jobId, chunkIndex)
   const result = await storage.get(key)
   return result ? { text: result.text } : null
 }
@@ -456,7 +456,7 @@ export async function getChunkData(
 
 export const StorageKeys = {
   novel: (uuid: string) => `novels/${uuid}.json`,
-  chunk: (chunkId: string) => `chunks/${chunkId}.json`,
+  chunk: (jobId: string, index: number) => `chunks/${jobId}/chunk_${index}.txt`,
   chunkAnalysis: (jobId: string, index: number) => `analyses/${jobId}/chunk_${index}.json`,
   integratedAnalysis: (jobId: string) => `analyses/${jobId}/integrated.json`,
   narrativeAnalysis: (jobId: string) => `analyses/${jobId}/narrative.json`,
@@ -467,6 +467,8 @@ export const StorageKeys = {
   pageThumbnail: (jobId: string, episodeNumber: number, pageNumber: number) =>
     `renders/${jobId}/episode_${episodeNumber}/thumbnails/page_${pageNumber}_thumb.png`,
   exportOutput: (jobId: string, format: string) => `exports/${jobId}/output.${format}`,
+  renderStatus: (jobId: string, episodeNumber: number, pageNumber: number) =>
+    `render-status/${jobId}/episode_${episodeNumber}/page_${pageNumber}.json`,
 } as const
 
 // エピソード境界保存関数

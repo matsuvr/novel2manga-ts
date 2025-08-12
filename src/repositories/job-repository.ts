@@ -1,19 +1,8 @@
 import type { Job } from '@/db'
+import type { JobDbPort } from './ports'
 
-export interface JobDbPort {
-  getJob(id: string): Promise<Job | null>
-  getJobWithProgress(id: string): Promise<(Job & { progress: unknown | null }) | null>
-  // Create job (two supported call signatures, matching DatabaseService)
-  createJob(id: string, novelId: string, jobName?: string): Promise<string>
-  createJob(payload: {
-    novelId: string
-    title?: string
-    totalChunks?: number
-    status?: string
-  }): Promise<string>
-  // List jobs for a novel
-  getJobsByNovelId(novelId: string): Promise<Job[]>
-}
+// Re-export for backward compatibility
+export type { JobDbPort } from './ports'
 
 export class JobRepository {
   constructor(private readonly db: JobDbPort) {}

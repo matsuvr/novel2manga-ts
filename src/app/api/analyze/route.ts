@@ -4,11 +4,11 @@ import { chunkAnalyzerAgent } from '@/agents/chunk-analyzer'
 import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
 import { getTextAnalysisConfig } from '@/config'
 import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repository'
-import { JobRepository } from '@/repositories/job-repository'
+import { getJobRepository } from '@/repositories'
 import { getDatabaseService } from '@/services/db-factory'
 import type { AnalyzeResponse } from '@/types/job'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
-import { saveEpisodeBoundaries } from '@/utils/storage'
+import { StorageKeys, saveEpisodeBoundaries } from '@/utils/storage'
 import { splitTextIntoChunks } from '@/utils/text-splitter'
 import { generateUUID } from '@/utils/uuid'
 
@@ -66,8 +66,8 @@ export async function POST(request: NextRequest) {
     // StorageFactoryとDBを初期化
     const { StorageFactory } = await import('@/utils/storage')
     const novelStorage = await StorageFactory.getNovelStorage()
+    const jobRepo = getJobRepository()
     const dbService = getDatabaseService()
-    const jobRepo = new JobRepository(dbService)
 
     let novelId = inputNovelId
     let novelText: string
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
       const content = chunks[i]
 
       // チャンクファイルをストレージに保存
-      const chunkPath = `chunks/${jobId}/chunk_${i}.txt`
+      const chunkPath = StorageKeys.chunk(jobId, i)
       await chunkStorage.put(chunkPath, content)
 
       // チャンク情報をDBに保存（ファイルパスのみ）
@@ -286,7 +286,7 @@ export async function POST(request: NextRequest) {
         }
 
         // 分析結果をストレージに保存
-        const analysisPath = `analyses/${jobId}/chunk_${i}.json`
+        const analysisPath = StorageKeys.chunkAnalysis(jobId, i)
         const analysisData = {
           chunkIndex: i,
           jobId,

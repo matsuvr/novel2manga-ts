@@ -1,15 +1,11 @@
-import fs from 'node:fs/promises'
-import path from 'node:path'
 import yaml from 'js-yaml'
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { generateMangaLayout } from '@/agents/layout-generator'
-import { EpisodeRepository } from '@/repositories/episode-repository'
-import { JobRepository } from '@/repositories/job-repository'
-import { getDatabaseService } from '@/services/db-factory'
+import { getEpisodeRepository, getJobRepository } from '@/repositories'
 import type { ChunkData, EpisodeData } from '@/types/panel-layout'
 import { ApiError, createErrorResponse } from '@/utils/api-error'
-import { getChunkData, StorageFactory } from '@/utils/storage'
+import { getChunkData, StorageFactory, StorageKeys } from '@/utils/storage'
 
 const requestSchema = z.object({
   jobId: z.string(),
@@ -37,9 +33,8 @@ export async function POST(request: NextRequest) {
     const validatedData = requestSchema.parse(body)
     const { jobId, episodeNumber, config } = validatedData
 
-    const dbService = getDatabaseService()
-    const episodeRepo = new EpisodeRepository(dbService)
-    const jobRepo = new JobRepository(dbService)
+    const episodeRepo = getEpisodeRepository()
+    const jobRepo = getJobRepository()
 
     // ジョブとエピソード情報を取得
     const job = await jobRepo.getJobWithProgress(jobId)
@@ -67,10 +62,10 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // チャンク解析結果を取得（Storage経由: analyses/{jobId}/chunk_{i}.json）
+      // チャンク解析結果を取得（Storage経由）
       try {
         const analysisStorage = await StorageFactory.getAnalysisStorage()
-        const key = `analyses/${jobId}/chunk_${i}.json`
+        const key = StorageKeys.chunkAnalysis(jobId, i)
         const obj = await analysisStorage.get(key)
         if (!obj) {
           throw new Error('analysis not found')
@@ -132,24 +127,22 @@ export async function POST(request: NextRequest) {
     }
     const layout = await generateMangaLayout(episodeData, fullConfig)
 
-    // YAMLファイルとして保存
+    // YAMLファイルとして保存（StorageFactory経由）
     const yamlContent = yaml.dump(layout, {
       indent: 2,
       lineWidth: -1,
       noRefs: true,
     })
 
-    const outputDir = path.join(process.cwd(), '.local-storage', 'layouts', jobId)
-    await fs.mkdir(outputDir, { recursive: true })
-
-    const outputPath = path.join(outputDir, `episode_${episodeNumber}_layout.yaml`)
-    await fs.writeFile(outputPath, yamlContent, 'utf-8')
+    const layoutStorage = await StorageFactory.getLayoutStorage()
+    const storageKey = StorageKeys.episodeLayout(jobId, episodeNumber)
+    await layoutStorage.put(storageKey, yamlContent)
 
     return NextResponse.json({
       message: 'Layout generated successfully',
       jobId,
       episodeNumber,
-      layoutPath: outputPath,
+      storageKey,
       layout: layout,
     })
   } catch (error) {
