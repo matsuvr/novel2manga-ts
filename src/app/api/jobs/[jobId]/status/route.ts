@@ -1,6 +1,11 @@
 import type { NextRequest } from 'next/server'
 import { getJobRepository } from '@/repositories'
-import { ApiError, createErrorResponse, createSuccessResponse } from '@/utils/api-error'
+import {
+  ApiError,
+  createErrorResponse,
+  createSuccessResponse,
+  extractErrorMessage,
+} from '@/utils/api-error'
 import { validateJobId } from '@/utils/validators'
 
 export async function GET(
@@ -60,16 +65,10 @@ export async function GET(
       }
     }
     // それ以外はメッセージ固定
-    const causeMessage = error instanceof Error ? error.message : String(error)
-    // テストは data.details が文字列で .toContain できることを期待
-    return Response.json(
-      {
-        success: false,
-        error: 'Failed to fetch job status',
-        details: causeMessage,
-        code: 'INTERNAL_ERROR',
-      },
-      { status: 500 },
+    const causeMessage = extractErrorMessage(error)
+    // テスト互換: エラーメッセージ固定 & details 文字列
+    return createErrorResponse(
+      new ApiError('Failed to fetch job status', 500, 'INTERNAL_ERROR', causeMessage),
     )
   }
 }
