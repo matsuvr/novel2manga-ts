@@ -1,7 +1,7 @@
-import { type NextRequest, NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { getDatabaseService } from '@/services/db-factory'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
-import { ApiError, createErrorResponse } from '@/utils/api-error'
+import { ApiError, createErrorResponse, createSuccessResponse } from '@/utils/api-error'
 import { validateJobId } from '@/utils/validators'
 
 export async function POST(_request: NextRequest, { params }: { params: { jobId: string } }) {
@@ -35,7 +35,7 @@ export async function POST(_request: NextRequest, { params }: { params: { jobId:
         console.error(`Error processing job ${params.jobId}:`, error)
       })
 
-    return NextResponse.json({
+    return createSuccessResponse({
       message: 'Job resumed successfully',
       jobId: params.jobId,
     })

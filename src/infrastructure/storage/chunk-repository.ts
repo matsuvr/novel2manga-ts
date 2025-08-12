@@ -1,5 +1,5 @@
 import type { AnalyzedChunk, IChunkRepository } from '@/domain/repositories/chunk-repository'
-import { StorageFactory } from '@/utils/storage'
+import { StorageFactory, StorageKeys } from '@/utils/storage'
 
 // Repository implementation backed by StorageFactory, which selects the
 // appropriate storage (local filesystem in development, R2 in production).
@@ -9,7 +9,7 @@ export class StorageChunkRepository implements IChunkRepository {
     const results: AnalyzedChunk[] = []
 
     for (const index of chunkIndices) {
-      const key = `analyses/${jobId}/chunk_${index}.json`
+      const key = StorageKeys.chunkAnalysis(jobId, index)
       const existing = await analysisStorage.get(key)
       if (existing) {
         const data = JSON.parse(existing.text)

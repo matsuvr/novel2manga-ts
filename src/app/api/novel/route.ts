@@ -1,6 +1,7 @@
-import { type NextRequest, NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { NovelRepository } from '@/repositories/novel-repository'
 import { getDatabaseService } from '@/services/db-factory'
+import { createErrorResponse, createSuccessResponse } from '@/utils/api-error'
 import { saveNovelToStorage } from './storage/route'
 
 export async function POST(request: NextRequest) {
@@ -8,7 +9,7 @@ export async function POST(request: NextRequest) {
     const { text } = (await request.json()) as { text: unknown }
 
     if (!text || typeof text !== 'string') {
-      return NextResponse.json({ error: 'テキストが必要です' }, { status: 400 })
+      return createErrorResponse(new Error('テキストが必要です'))
     }
 
     const data = await saveNovelToStorage(text)
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
       // DBエラーがあってもストレージには保存されているので、処理は続行
     }
 
-    return NextResponse.json({
+    return createSuccessResponse({
       preview: data.preview || text.slice(0, 100),
       originalLength: text.length,
       fileName: data.fileName,
@@ -54,12 +55,6 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     })
 
-    return NextResponse.json(
-      {
-        error: 'サーバーエラーが発生しました',
-        details: error instanceof Error ? error.message : '不明なエラー',
-      },
-      { status: 500 },
-    )
+    return createErrorResponse(error, 'サーバーエラーが発生しました')
   }
 }

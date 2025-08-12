@@ -1,6 +1,5 @@
 import type { NextRequest } from 'next/server'
-import { NextResponse } from 'next/server'
-import { handleApiError, validationError } from '@/utils/api-error'
+import { createErrorResponse, handleApiError, validationError } from '@/utils/api-error'
 
 interface RouteParams {
   episodeNumber: string
@@ -33,14 +32,9 @@ export async function GET(_request: NextRequest, { params }: { params: RoutePara
 
     // TODO: 実際の実装では、jobIdを特定する方法が必要
     // 現在は開発中のため、501ステータスを返す
-    return NextResponse.json(
-      {
-        error: 'このエンドポイントは開発中です',
-        message: 'jobIdを特定する仕組みが必要です',
-        requestedEpisode: episodeNum,
-        requestedPage: pageNum,
-      },
-      { status: 501 },
+    return createErrorResponse(
+      new Error('このエンドポイントは開発中です'),
+      'jobIdを特定する仕組みが必要です',
     )
   } catch (error) {
     console.error('Render GET API error:', error)

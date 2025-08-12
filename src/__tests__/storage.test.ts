@@ -21,7 +21,8 @@ describe("Storage", () => {
   describe("StorageKeys", () => {
     it("should generate correct storage keys", () => {
       expect(StorageKeys.novel("test-uuid")).toBe("novels/test-uuid.json");
-      expect(StorageKeys.chunk("chunk-123")).toBe("chunks/chunk-123.json");
+  // chunk key signature changed to (jobId, index) and now stores .txt
+  expect(StorageKeys.chunk("job-1", 3)).toBe("chunks/job-1/chunk_3.txt");
       expect(StorageKeys.chunkAnalysis("job-1", 0)).toBe(
         "analyses/job-1/chunk_0.json"
       );

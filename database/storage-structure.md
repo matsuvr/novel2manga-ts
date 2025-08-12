@@ -74,29 +74,32 @@ storage/
 7. **jobs.resume_data_path**
    → `novels/{novel_id}/jobs/{job_id}/state/resume_data.json`
 
-8. **chunks.content_path**
-   → `novels/{novel_id}/jobs/{job_id}/chunks/chunk_{index:03d}.txt`
+8. **chunks.content_path** → `novels/{novel_id}/jobs/{job_id}/chunks/chunk_{index:03d}.txt`
+9. **chunk_analysis_status.analysis_path** → `novels/{novel_id}/jobs/{job_id}/analyses/chunk_{index:03d}.json`
+10. **layout_status.layout_path** → `novels/{novel_id}/jobs/{job_id}/episodes/episode_{number}/layout.yaml`
+11. **render_status.image_path** → `novels/{novel_id}/jobs/{job_id}/renders/episode_{episode}/page_{page:03d}.png`
+12. **outputs.output_path** → `novels/{novel_id}/jobs/{job_id}/outputs/manga.{format}`
 
-9. **chunk_analysis_status.analysis_path**
-   → `novels/{novel_id}/jobs/{job_id}/analyses/chunk_{index:03d}.json`
+### 2025-08-12 更新: StorageKeys Validation
 
-10. **layout_status.layout_path**
-    → `novels/{novel_id}/jobs/{job_id}/episodes/episode_{number}/layout.yaml`
+`src/utils/storage.ts` の `StorageKeys` はパストラバーサル防止のため以下のガードを追加:
 
-11. **render_status.image_path**
-    → `novels/{novel_id}/jobs/{job_id}/renders/episode_{episode}/page_{page:03d}.png`
+- IDは英数字と `_` / `-` のみ許可
+- `..` を含む、または `/` で開始する値は拒否
+- フォーマット拡張子は英数字のみ
 
-12. **outputs.output_path**
-    → `novels/{novel_id}/jobs/{job_id}/outputs/manga.{format}`
+これにより API パラメータをそのまま key に用いた場合の階層逸脱を防止。
 
 ## ストレージタイプ
 
 ### 開発環境（ローカル）
+
 ```
 .local-storage/novels/{novel_id}/...
 ```
 
 ### 本番環境（Cloudflare R2）
+
 ```
 novel-storage/novels/{novel_id}/...
 ```
