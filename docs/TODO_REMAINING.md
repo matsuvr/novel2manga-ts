@@ -15,27 +15,28 @@
 
 ### Repository/Factory 完全実装【最優先】
 
-- [ ] Repository Factory の導入
-  - 依存性注入の統一、テスト容易性向上（昨日からの継続課題）
-  - `src/repositories/factory.ts` 新規作成
+- [x] Repository Factory の導入 (2025-08-12 完了)
+  - 依存性注入の統一、テスト容易性向上
+  - `src/repositories/factory.ts` 作成済み / TTL 環境可変化 / ランタイム型ガード強化
 - [ ] ポートIFの必須/任意メソッド標準化
-  - discriminated union による明確な分割（昨日からの継続課題）
-  - `src/repositories/ports/*.ts` の整理
+  - discriminated union による明確な分割（未着手）
+  - `src/repositories/ports/*.ts` の整理（未着手）
 
 ### ストレージ層の抽象化統一【DRY原則】
 
-- [ ] ストレージキー管理の一元化
-  - `StorageKeys` クラスへの完全移行、ローカル直書き排除
-  - 特に `/api/layout/generate` のローカル保存を修正（行19-22の課題）
+- [x] ストレージキー管理の一元化 (2025-08-12 進捗: API主要ルート移行完了)
+  - `StorageKeys` クラスへの移行 / null byte & %00 バリデーション追加
+  - `/api/layout/generate` 他 解析/レンダ/エクスポートルート修正済み
 - [ ] Storage Factory の機能拡張
-  - `OUTPUTS_STORAGE` バインディング追加（現在 `RENDERS_STORAGE` を流用）
-  - R2/ローカルのキー整合性監査システム
+  - `OUTPUTS_STORAGE` バインディング追加（未）
+  - R2/ローカルのキー整合性監査システム（未）
 
 ### APIレスポンス統一【DRY原則】
 
-- [ ] 共通レスポンスヘルパーへの完全移行
-  - `createErrorResponse/successResponse` への統一
-  - `toLegacyErrorResponse` 使用箇所の排除
+- [x] 共通レスポンスヘルパーへのほぼ完全移行 (2025-08-12)
+  - `createSuccessResponse/createErrorResponse` へ統一（narrative-arc, episodes 等修正）
+  - 監視/軽量用途の `/api/health` と `/api/docs` は意図的にプレーンJSON継続 (軽量/可観測性のため)
+  - 残: `/api/health` を統一するかの判断（保留）
 
 ## 優先度2: ドメインモデル整合性（DDD）
 

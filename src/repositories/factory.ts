@@ -17,7 +17,12 @@ import { OutputRepository } from './output-repository'
  */
 export class RepositoryFactory {
   private static instance: RepositoryFactory | null = null
-  private static readonly CACHE_TTL_MS = 1000 * 60 * 30 // 30分 TTL（将来の長期稼働メモリ管理対策）
+  // TTL を環境変数で調整可能にし、運用でキャッシュ戦略を変更しやすくする
+  private static readonly CACHE_TTL_MS = (() => {
+    const v = process.env.REPOSITORY_FACTORY_TTL_MS
+    const parsed = v ? Number.parseInt(v, 10) : NaN
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1000 * 60 * 30
+  })() // 30分 デフォルト TTL（長期稼働メモリ管理対策）
   private static lastAccess = Date.now()
 
   // Repository instances cache (singleton per factory instance)
@@ -37,11 +42,11 @@ export class RepositoryFactory {
     if (!db || typeof db !== 'object') {
       throw new Error('RepositoryFactory: invalid DatabaseService instance')
     }
-    const required: Array<keyof DatabaseService> = ['getJob', 'getNovel']
+    const candidate = db as Record<string, unknown>
+    const required: Array<keyof DatabaseService & string> = ['getJob', 'getNovel']
     for (const key of required) {
-      // @ts-expect-error 細部の構造検証はランタイムで十分（型ガード目的）
-      if (typeof db[key] !== 'function') {
-        throw new Error(`RepositoryFactory: dbService missing method ${String(key)}`)
+      if (!(key in candidate) || typeof candidate[key] !== 'function') {
+        throw new Error(`RepositoryFactory: dbService missing method ${key}`)
       }
     }
   }

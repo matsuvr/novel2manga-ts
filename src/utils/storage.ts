@@ -469,6 +469,10 @@ function validateId(id: string, label: string): void {
   if (id.includes('..') || id.startsWith('/') || /[^a-zA-Z0-9_-]/.test(id)) {
     throw new Error(`StorageKeys: invalid ${label} value`)
   }
+  // 追加の攻撃パターン: null byte / %00 の混入を拒否（レビュー指摘）
+  if (id.includes('\0') || /%00/i.test(id)) {
+    throw new Error(`StorageKeys: null bytes not allowed in ${label}`)
+  }
   // URLエンコードされた入力は禁止（%エスケープを含むと decode で変化する）
   try {
     if (decodeURIComponent(id) !== id) {
