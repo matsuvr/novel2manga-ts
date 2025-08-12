@@ -267,12 +267,16 @@ export function createErrorResponse(
 // - 既存のルート / ハンドラで重複していた inline closure を置き換える目的
 // ========================================
 /**
- * Extract a human readable error message from an unknown error-like value.
+ * Extracts a human-readable error message from unknown error types.
+ * Handles Error instances, strings, objects (with safe JSON stringify), and
+ * edge cases like circular references, symbols, functions, null/undefined.
  * Order of precedence:
- * 1. Error instance -> .message
- * 2. string -> as-is
- * 3. JSON.stringify(value) when it returns a string (objects, arrays, primitives)
- * 4. Fallback to String(value) (covers symbols, circular structures, undefined, functions etc.)
+ * 1. Error -> error.message
+ * 2. string -> value
+ * 3. JSON.stringify(value) when it yields a string (objects / arrays / primitives)
+ * 4. Fallback String(value) for circular, symbol, function, undefined, etc.
+ * @param raw - The error object/value to extract message from
+ * @returns A string representation of the error
  */
 export function extractErrorMessage(raw: unknown): string {
   if (raw instanceof Error) return raw.message
