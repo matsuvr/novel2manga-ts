@@ -34,8 +34,6 @@ export async function POST(request: NextRequest) {
     let layoutYaml = body.layoutYaml
     if (!layoutYaml) {
       const layoutStorage = await StorageFactory.getLayoutStorage()
-      if (typeof body.episodeNumber !== 'number')
-        return validationError('有効なepisodeNumberが必要です')
       const layoutKey = StorageKeys.episodeLayout(body.jobId, body.episodeNumber)
       const obj = await layoutStorage.get(layoutKey)
       if (!obj) return validationError('layoutYamlが必要です')

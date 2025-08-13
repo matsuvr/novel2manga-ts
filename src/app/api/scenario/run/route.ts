@@ -48,11 +48,15 @@ export async function POST(req: Request) {
     const outputs = await runScenario(scenario, { initialInput })
     const elapsedMs = Date.now() - started
 
-    if ((input as any).kind === 'demo') {
+    if (input.kind === 'demo') {
       // Demo summary
       const renderOutput = outputs['render-demo'] as
         | { renderKey?: string; thumbnailKey?: string }
         | undefined
+      console.log('[scenario/demo] completed', {
+        elapsedMs,
+        hasRenderKey: !!renderOutput?.renderKey,
+      })
       return NextResponse.json({
         ok: true,
         kind: 'demo',

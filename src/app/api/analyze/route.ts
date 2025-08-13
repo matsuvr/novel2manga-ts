@@ -51,10 +51,11 @@ export async function POST(request: NextRequest) {
     console.log('[/api/analyze] Raw body:', rawBody)
     const url = new URL(request.url)
     const isDemoQuery = url.searchParams.get('demo') === '1'
+    type AnalyzeBody = z.infer<typeof analyzeRequestSchema> & { mode?: string }
     const isDemoBody =
       typeof rawBody === 'object' &&
       rawBody !== null &&
-      (rawBody as { mode?: unknown }).mode === 'demo'
+      (rawBody as Partial<AnalyzeBody>)?.mode === 'demo'
 
     // テスト/モック用フラグは廃止（フォールバックせずに正規処理/エラーにする）
 
