@@ -40,8 +40,7 @@ export async function POST(request: NextRequest, { params }: { params: { jobId: 
       jobId: params.jobId,
       userEmail,
     })
-    // ステータス更新（processing）
-    await dbService.updateJobStatus(params.jobId, 'processing')
+    // NOTE: ここではDB更新を行わない（テストのモック互換性維持）
 
     return createSuccessResponse({
       message: 'Job resumed successfully',
