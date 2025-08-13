@@ -29,7 +29,7 @@ const analyzeRequestSchema = z
     // テストや軽量実行用にチャンク分割のみ行うフラグ（明示モード。フォールバックではない）
     splitOnly: z.boolean().optional(),
   })
-  .refine((data) => !!data.novelId || !!data.text, {
+  .refine((data: { novelId?: unknown; text?: unknown }) => !!data.novelId || !!data.text, {
     message: 'novelId か text のいずれかが必要です',
     path: ['novelId'],
   })

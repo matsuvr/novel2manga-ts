@@ -44,7 +44,11 @@ export class Agent {
       throw new Error(`API key not found for provider: ${this.provider}`)
     }
 
-    switch (this.provider) {
+    // Claudeは未対応。型上の分岐に現れないよう as const 限定の union で扱う
+    type Supported = Exclude<LLMProvider, 'claude'>
+    const provider: Supported = this.provider as Supported
+
+    switch (provider) {
       case 'openai':
         this.client = new OpenAI({
           apiKey: config.apiKey,
@@ -70,10 +74,6 @@ export class Agent {
           baseURL: config.baseUrl || 'https://openrouter.ai/api/v1',
         })
         break
-
-      case 'claude':
-        // Anthropic (Claude) SDK is not wired yet. Prevent misconfiguration.
-        throw new Error('Claude provider is not supported in this build')
 
       default:
         throw new Error(`Unknown provider: ${this.provider}`)

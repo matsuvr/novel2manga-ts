@@ -1,6 +1,6 @@
 // Centralized LLM configuration: providers, defaults, and per-use-case parameters
 
-export type LLMProvider = 'openai' | 'gemini' | 'groq' | 'claude' | 'openrouter'
+export type LLMProvider = 'openai' | 'gemini' | 'groq' | 'openrouter'
 
 export interface ProviderConfig {
   apiKey?: string
@@ -37,15 +37,9 @@ export function getFallbackChain(): LLMProvider[] {
 export const providers: Record<LLMProvider, ProviderConfig> = {
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
-    model: 'gpt-5-mini',
+    model: 'gpt-5-mini', // gpt-5-mini はつい先日登場したモデルです。モデル指定を間違えているわけではありません
     maxTokens: 4096,
     timeout: 60_000,
-  },
-  claude: {
-    apiKey: process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY,
-    model: 'claude-sonnet-4-20250514',
-    maxTokens: 8192,
-    timeout: 30_000,
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY,
@@ -80,7 +74,6 @@ export const useCaseParams: Record<
     maxTokens: 8192,
     modelOverrides: {
       openai: 'gpt-5-mini',
-      claude: 'claude-sonnet-4-20250514',
       gemini: 'gemini-2.5-flash',
       groq: 'openai/gpt-oss-120b',
       // Cerebras対応の場合はファクトリ側で自動変換
@@ -92,7 +85,6 @@ export const useCaseParams: Record<
     maxTokens: 4096,
     modelOverrides: {
       openai: 'gpt-5-mini',
-      claude: 'claude-sonnet-4-20250514',
       gemini: 'gemini-2.5-flash',
       groq: 'openai/gpt-oss-120b',
       openrouter: 'openai/gpt-oss-120b',
@@ -103,7 +95,6 @@ export const useCaseParams: Record<
     maxTokens: 4096,
     modelOverrides: {
       openai: 'gpt-5-mini',
-      claude: 'claude-sonnet-4-20250514',
       gemini: 'gemini-2.5-flash',
       groq: 'openai/gpt-oss-120b',
       openrouter: 'openai/gpt-oss-120b',
@@ -114,7 +105,6 @@ export const useCaseParams: Record<
     maxTokens: 8192,
     modelOverrides: {
       openai: 'gpt-5-mini',
-      claude: 'claude-sonnet-4-20250514',
       gemini: 'gemini-2.5-flash',
       groq: 'openai/gpt-oss-120b',
       openrouter: 'openai/gpt-oss-120b',
@@ -135,9 +125,6 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
   const cfg = providers[provider]
   if (!cfg) {
     throw new Error(`Unknown LLM provider: ${provider}`)
-  }
-  if (provider === 'claude') {
-    throw new Error('Claude provider is not supported in this build')
   }
   return cfg
 }
