@@ -395,17 +395,32 @@ async function resolveStorage(
   binding: R2BindingName,
   errorMessage: string,
 ): Promise<Storage> {
-  if (isDevelopment()) {
+  // 明示ローカル指定 or 開発/テストはローカル
+  if (isDevelopment() || process.env.STORAGE_MODE === 'local') {
+    // eslint-disable-next-line no-console
+    console.log(`[storage] Using LocalFileStorage (dev/local): ${LOCAL_STORAGE_BASE}/${localDir}`)
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, localDir))
   }
 
+  // 本番: Cloudflare R2 バインディングがある場合のみR2、なければ安全にローカルへフォールバック
   const globalObj = globalThis as unknown as Record<string, unknown>
   const candidate = globalObj[binding]
   const bucket = candidate && typeof candidate === 'object' ? (candidate as R2Bucket) : undefined
-  if (!bucket) {
-    throw new Error(errorMessage)
+  if (bucket) {
+    // eslint-disable-next-line no-console
+    console.log(`[storage] Using R2Storage binding: ${binding}`)
+    return new R2Storage(bucket)
   }
-  return new R2Storage(bucket)
+
+  // フォールバック（ローカル）。運用上わかるように一度だけ警告を出す。
+  if (!process.env.__STORAGE_FALLBACK_WARNED__) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[storage] ${errorMessage}. Falling back to local storage at ${LOCAL_STORAGE_BASE}/${localDir}`,
+    )
+    process.env.__STORAGE_FALLBACK_WARNED__ = '1'
+  }
+  return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, localDir))
 }
 
 // Novel Storage

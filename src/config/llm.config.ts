@@ -21,17 +21,15 @@ export interface UseCaseParams {
   modelOverrides?: Partial<Record<LLMProvider, string>>
 }
 
-// Default provider with env override support
+// Default provider (config-driven only; no environment variable overrides)
 export function getDefaultProvider(): LLMProvider {
-  const env = process.env.APP_LLM_DEFAULT_PROVIDER as LLMProvider | undefined
-  const allowed: LLMProvider[] = ['openai', 'gemini', 'groq', 'claude', 'openrouter']
-  return env && allowed.includes(env) ? env : 'groq'
+  return 'openai'
 }
 
 // Provider fallback chain (first item is primary fallback)
 export function getFallbackChain(): LLMProvider[] {
-  // Keeps previously used order with OpenRouter first
-  const chain: LLMProvider[] = ['groq', 'gemini', 'openai']
+  // Config-driven fallback order
+  const chain: LLMProvider[] = ['openai', 'gemini', 'openrouter', 'groq']
   return chain
 }
 
@@ -51,7 +49,7 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY,
-    model: 'gemini-2.5-flash-lite',
+    model: 'gemini-2.5-flash',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
     maxTokens: 8192,
     timeout: 30_000,
@@ -83,7 +81,7 @@ export const useCaseParams: Record<
     modelOverrides: {
       openai: 'gpt-5-mini',
       claude: 'claude-sonnet-4-20250514',
-      gemini: 'gemini-2.5-flash-lite',
+      gemini: 'gemini-2.5-flash',
       groq: 'openai/gpt-oss-120b',
       // Cerebras対応の場合はファクトリ側で自動変換
       openrouter: 'openai/gpt-oss-120b',

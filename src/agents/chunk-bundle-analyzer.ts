@@ -1,25 +1,28 @@
-import { Agent } from '@mastra/core'
 import { z } from 'zod'
-import { getChunkBundleAnalysisConfig } from '@/config'
+import { getChunkBundleAnalysisConfig, getLLMDefaultProvider } from '@/config'
 import type { ChunkAnalysisResult } from '@/types/chunk'
-import { getChunkBundleAnalysisLLM } from '@/utils/llm-factory'
+import { BaseAgent } from './base-agent'
 
-const chunkBundleAnalyzer = new Agent({
-  name: 'Chunk Bundle Analyzer',
-  instructions: () => {
+// Singleton instance with lazy initialization
+let agentInstance: BaseAgent | null = null
+
+function getChunkBundleAnalyzer(): BaseAgent {
+  if (!agentInstance) {
     const config = getChunkBundleAnalysisConfig()
-    return config.systemPrompt
-  },
-  model: async ({ runtimeContext: _runtimeContext }) => {
-    // フォールバック機能付きでLLMを取得
-    const llm = await getChunkBundleAnalysisLLM()
-    console.log(`[chunkBundleAnalyzer] Using provider: ${llm.providerName}`)
-    console.log(`[chunkBundleAnalyzer] Using model: ${llm.model}`)
+    const provider = getLLMDefaultProvider()
 
-    // モデルを返す（適切な型で）
-    return llm.provider(llm.model)
-  },
-})
+    agentInstance = new BaseAgent({
+      name: 'Chunk Bundle Analyzer',
+      instructions: config.systemPrompt,
+      provider: provider,
+      maxTokens: config.maxTokens,
+    })
+
+    console.log(`[chunkBundleAnalyzer] Using provider: ${provider}`)
+  }
+
+  return agentInstance
+}
 
 // 統合分析の結果スキーマ
 export const bundleAnalysisSchema = z.object({
@@ -107,7 +110,11 @@ export async function analyzeChunkBundle(
           },
         ],
         keyDialogues: [
-          { speaker: '主人公', text: 'ここが山場だ。', significance: '決意を示す（モック）' },
+          {
+            speaker: '主人公',
+            text: 'ここが山場だ。',
+            significance: '決意を示す（モック）',
+          },
         ],
         narrativeFlow: {
           opening: '導入（モック）',
@@ -121,7 +128,11 @@ export async function analyzeChunkBundle(
     // 各チャンクの分析結果を構造化して整理
     const charactersMap = new Map<string, { descriptions: string[]; appearances: number }>()
     const allScenes: string[] = []
-    const allDialogues: Array<{ speaker: string; text: string; emotion?: string }> = []
+    const allDialogues: Array<{
+      speaker: string
+      text: string
+      emotion?: string
+    }> = []
     const allHighlights: Array<{
       type: string
       description: string
@@ -223,21 +234,20 @@ export async function analyzeChunkBundle(
     try {
       console.log('Sending to LLM for bundle analysis...')
 
-      const result = await chunkBundleAnalyzer.generate([{ role: 'user', content: userPrompt }], {
-        output: bundleAnalysisSchema,
-      })
-
-      if (!result.object) {
-        throw new Error('Failed to generate bundle analysis')
-      }
+      const chunkBundleAnalyzer = getChunkBundleAnalyzer()
+      const result = await chunkBundleAnalyzer.generateObject(
+        [{ role: 'user', content: userPrompt }],
+        bundleAnalysisSchema,
+        { maxRetries: 2 },
+      )
 
       console.log('Bundle analysis successful')
-      console.log('Summary length:', result.object.summary.length)
-      console.log('Characters found:', result.object.mainCharacters.length)
-      console.log('Highlights found:', result.object.highlights.length)
-      console.log('Key dialogues found:', result.object.keyDialogues.length)
+      console.log('Summary length:', result.summary.length)
+      console.log('Characters found:', result.mainCharacters.length)
+      console.log('Highlights found:', result.highlights.length)
+      console.log('Key dialogues found:', result.keyDialogues.length)
 
-      return result.object
+      return result
     } catch (error) {
       console.error('[analyzeChunkBundle] Bundle analysis LLM error:', error)
       throw error

@@ -1339,11 +1339,11 @@ export const appConfig = {
   llm: {
     defaultProvider: "openrouter", // 【ここを設定】
     providers: {
-      openai: { model: "o3" }, // OpenAI o3 (reasoningモデル、temperatureパラメータなし)
-      gemini: { model: "gemini-2.5-flash", temperature: 0.7 },
+      openai: { model: "gpt-5-mini" },
+      gemini: { model: "gemini-2.5-flash" },
       groq: { model: "compound-beta", maxTokens: 8192 },
       local: { model: "gpt-oss:20b", baseUrl: "http://localhost:11434" },
-      openrouter: { model: "openai/gpt-oss-120b", temperature: 0.7 },
+      openrouter: { model: "openai/gpt-oss-120b" },
     },
   },
 
