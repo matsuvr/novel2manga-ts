@@ -33,7 +33,10 @@ export async function POST(request: NextRequest) {
     const validatedData = requestSchema.parse(body)
     const { jobId, episodeNumber, config } = validatedData
     const url = new URL(request.url)
-    const isDemo = url.searchParams.get('demo') === '1' || (body as any)?.mode === 'demo'
+    type LayoutGenerateBody = z.infer<typeof requestSchema>
+    const isDemo =
+      url.searchParams.get('demo') === '1' ||
+      (body as Partial<LayoutGenerateBody> & { mode?: string })?.mode === 'demo'
 
     const episodeRepo = getEpisodeRepository()
     const jobRepo = getJobRepository()
