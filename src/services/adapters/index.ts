@@ -111,7 +111,7 @@ export async function demoAnalyze(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-  if (!res.ok) throw new Error(`demoAnalyze failed: ${res.status}`)
+  if (!res.ok) throw new Error(`[demoAnalyze] failed: ${res.status}`)
   const ResponseSchema = z.object({
     success: z.boolean().optional(),
     id: z.string().optional(),
@@ -142,7 +142,7 @@ export async function demoLayout(
       episodeNumber: input.episodeNumber,
     }),
   })
-  if (!res.ok) throw new Error(`demoLayout failed: ${res.status}`)
+  if (!res.ok) throw new Error(`[demoLayout] failed: ${res.status}`)
   const ResponseSchema = z.object({
     success: z.boolean().optional(),
     storageKey: z.string().optional(),
@@ -171,7 +171,7 @@ export async function demoRender(
       pageNumber: input.pageNumber,
     }),
   })
-  if (!res.ok) throw new Error(`demoRender failed: ${res.status}`)
+  if (!res.ok) throw new Error(`[demoRender] failed: ${res.status}`)
   const ResponseSchema = z.object({
     success: z.boolean().optional(),
     renderKey: z.string().optional(),

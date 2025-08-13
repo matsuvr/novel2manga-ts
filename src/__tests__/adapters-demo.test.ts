@@ -34,6 +34,21 @@ describe('demo adapters', () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.reject(new Error('Invalid JSON')) }) as any
     await expect(demoAnalyze({ baseUrl })).rejects.toThrow('Invalid JSON')
   })
+
+  it('handles network failures', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 }) as any
+    await expect(demoAnalyze({ baseUrl })).rejects.toThrow('[demoAnalyze] failed: 500')
+  })
+
+  it('handles missing jobId in demoLayout', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true }) }) as any
+    await expect(demoLayout({ baseUrl, jobId: 'job', episodeNumber: 1 })).rejects.toThrow('[demoLayout] storageKey missing in response')
+  })
+
+  it('handles missing renderKey in demoRender', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true }) }) as any
+    await expect(demoRender({ baseUrl, jobId: 'job', episodeNumber: 1, pageNumber: 1 })).rejects.toThrow('[demoRender] renderKey missing in response')
+  })
 })
 
 

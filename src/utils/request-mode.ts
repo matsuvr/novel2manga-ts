@@ -5,9 +5,14 @@ import { z } from 'zod'
 const zDemoFlag = z.object({ mode: z.literal('demo') })
 
 /**
- * detectDemoMode
- * - 判定優先度: クエリ (?demo=1) > ボディ ({ mode: 'demo' })
- * - どちらかが成立すれば true
+ * デモモードの検出（優先度: クエリ > ボディ）
+ * 
+ * Detects demo mode from either query parameter or request body.
+ * Query parameter takes precedence over body property.
+ * 
+ * @param request - NextRequest object containing URL and headers
+ * @param body - Request body (unknown type) to be safely parsed
+ * @returns true if demo mode detected via ?demo=1 query or {mode: "demo"} body, false otherwise
  */
 export function detectDemoMode(request: NextRequest, body: unknown): boolean {
   const hasQuery = new URL(request.url).searchParams.get('demo') === '1'
