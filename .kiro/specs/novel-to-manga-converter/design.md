@@ -90,6 +90,17 @@
 
 これらは `.kiro/specs/novel-to-manga-converter/tasks.md` に新規タスク群として追記しました。
 
+#### 2025-08-13 追記: キュー雛形/通知とAPI導線
+
+- インプロセスキュー雛形（開発用）を導入し、API からのエンキュー/再開導線を確認。
+  - `POST /api/jobs/[jobId]`（新規/再実行の投入）
+  - `POST /api/jobs/[jobId]/resume`（中断ジョブの再開）
+- 失敗時の DB 更新（`updateJobError`）と通知スタブ（`NOTIFICATIONS_ENABLED` で制御）を追加。
+- 本番移行方針は Cloudflare Queues + Durable Objects: idempotencyKey による重複排除、Envelope に追跡メタ情報（jobId/stepId/attempt/traceId）を含める。
+- 次段で Queue Executor / DO Coordinator / 外部化（R2）ポリシーを実装予定（tasks.md の STEP-\* を参照）。
+
+注: API エラー仕様は `createSuccessResponse`/`createErrorResponse` に統一済み。ZodError/HttpError 等のマッピングは Error Model セクションの定義に準拠（本日の更新で記述整合を再確認）。
+
 ## Requirements Mapping
 
 ### Design Component Traceability
