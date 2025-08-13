@@ -204,7 +204,7 @@ export function createDemoApiScenario() {
     retry: { maxAttempts: 3, backoffMs: 800, factor: 2, jitter: true },
     idempotencyFrom: ['baseUrl', 'jobId', 'episodeNumber'],
     run: async (input: unknown) =>
-      adapters.demoLayout(input as { baseUrl: string; jobId: string; episodeNumber?: number }),
+      adapters.demoLayout(input as { baseUrl: string; jobId: string; episodeNumber: number }),
   })
   b.edge({ from: 'analyze-demo', to: 'layout-demo', fanIn: 'all' })
 
@@ -227,7 +227,7 @@ export function createDemoApiScenario() {
     idempotencyFrom: ['jobId', 'episodeNumber', 'pageNumber'],
     run: (input: unknown) =>
       adapters.demoRender(
-        input as { baseUrl: string; jobId: string; episodeNumber?: number; pageNumber?: number },
+        input as { baseUrl: string; jobId: string; episodeNumber: number; pageNumber: number },
       ),
   })
   b.edge({ from: 'layout-demo', to: 'render-demo', fanIn: 'all' })
