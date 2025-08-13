@@ -135,6 +135,15 @@ graph TB
     Q --> W
 ```
 
+### Queue/Worker アーキテクチャ（追加）
+
+- 目的: API寿命に依存しない背景処理で超長文の分割/分析/レイアウトを実行
+- エンキュー: `POST /api/jobs/[jobId]`, `POST /api/jobs/[jobId]/resume`
+- 実装: 開発はインプロセス。将来は Cloudflare Queues（`globalThis.JOBS_QUEUE`）へ切替
+- ワーカー: `JobNarrativeProcessor.processJob(jobId)` を実行し、進捗をDBに段階保存
+- 失敗時: `DatabaseService.updateJobError(jobId, message, 'processing')` で `failed` に更新
+- 通知: 同意済みメールに完了/失敗を通知（`NOTIFICATIONS_ENABLED` 環境変数で有効化）
+
 ### Technology Stack (2025-08-09 更新)
 
 調査結果に基づく技術選定：
