@@ -6,10 +6,10 @@ const zDemoFlag = z.object({ mode: z.literal('demo') })
 
 /**
  * デモモードの検出（優先度: クエリ > ボディ）
- * 
+ *
  * Detects demo mode from either query parameter or request body.
  * Query parameter takes precedence over body property.
- * 
+ *
  * @param request - NextRequest object containing URL and headers
  * @param body - Request body (unknown type) to be safely parsed
  * @returns true if demo mode detected via ?demo=1 query or {mode: "demo"} body, false otherwise

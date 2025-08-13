@@ -1,29 +1,31 @@
-import { Agent } from '@mastra/core'
 import { z } from 'zod'
-
 import { analyzeChunkBundle, type BundleAnalysisResult } from '@/agents/chunk-bundle-analyzer'
-import { getEpisodeConfig, getNarrativeAnalysisConfig } from '@/config'
+import { getEpisodeConfig, getLLMDefaultProvider, getNarrativeAnalysisConfig } from '@/config'
 import type { IChunkRepository } from '@/domain/repositories/chunk-repository'
 import type { ChunkAnalysisResult } from '@/types/chunk'
 import type { EpisodeBoundary } from '@/types/episode'
-import { getNarrativeAnalysisLLM } from '@/utils/llm-factory'
+import { BaseAgent } from './base-agent'
 
-const narrativeArcAnalyzer = new Agent({
-  name: 'Narrative Arc Analyzer',
-  instructions: () => {
+// Singleton instance with lazy initialization
+let agentInstance: BaseAgent | null = null
+
+function getNarrativeArcAnalyzer(): BaseAgent {
+  if (!agentInstance) {
     const config = getNarrativeAnalysisConfig()
-    return config.systemPrompt
-  },
-  model: async () => {
-    // フォールバック機能付きでLLMを取得
-    const llm = await getNarrativeAnalysisLLM()
-    console.log(`[narrativeArcAnalyzer] Using provider: ${llm.providerName}`)
-    console.log(`[narrativeArcAnalyzer] Using model: ${llm.model}`)
+    const provider = getLLMDefaultProvider()
 
-    // モデルを返す
-    return llm.provider(llm.model)
-  },
-})
+    agentInstance = new BaseAgent({
+      name: 'Narrative Arc Analyzer',
+      instructions: config.systemPrompt,
+      provider: provider,
+      maxTokens: config.maxTokens,
+    })
+
+    console.log(`[narrativeArcAnalyzer] Using provider: ${provider}`)
+  }
+
+  return agentInstance
+}
 
 export async function analyzeNarrativeArc(
   input: {
@@ -195,12 +197,18 @@ export async function analyzeNarrativeArc(
     .join('、')
 
   const highlightsInfo = bundleAnalysis.highlights
-    .filter((h) => h.importance >= 6)
-    .map((h) => `- ${h.text} (重要度: ${h.importance})${h.context ? `\n  ${h.context}` : ''}`)
+    .filter((h: BundleAnalysisResult['highlights'][number]) => h.importance >= 6)
+    .map(
+      (h: BundleAnalysisResult['highlights'][number]) =>
+        `- ${h.text} (重要度: ${h.importance})${h.context ? `\n  ${h.context}` : ''}`,
+    )
     .join('\n')
 
   const characterActions = bundleAnalysis.keyDialogues
-    .map((d) => `${d.speaker}: 「${d.text}」\n  意味: ${d.significance}`)
+    .map(
+      (d: BundleAnalysisResult['keyDialogues'][number]) =>
+        `${d.speaker}: 「${d.text}」\n  意味: ${d.significance}`,
+    )
     .join('\n\n')
 
   // プロンプトのカスタマイズ
@@ -254,11 +262,14 @@ export async function analyzeNarrativeArc(
     console.log('Text length:', fullText.length)
     console.log('Target pages:', targetPages)
 
-    const result = await narrativeArcAnalyzer.generate([{ role: 'user', content: userPrompt }], {
-      output: responseSchema,
-    })
+    const narrativeArcAnalyzer = getNarrativeArcAnalyzer()
+    const result = await narrativeArcAnalyzer.generateObject(
+      [{ role: 'user', content: userPrompt }],
+      responseSchema,
+      { maxRetries: 2 },
+    )
 
-    if (!result.object) {
+    if (!result) {
       const errorMsg = 'Failed to generate narrative analysis - LLM returned no object'
       console.error(errorMsg)
       console.error('Result:', result)
@@ -266,20 +277,20 @@ export async function analyzeNarrativeArc(
     }
 
     console.log('LLM analysis successful')
-    console.log('Found boundaries:', result.object.boundaries.length)
-    console.log('Overall analysis:', result.object.overallAnalysis)
+    console.log('Found boundaries:', result.boundaries.length)
+    console.log('Overall analysis:', result.overallAnalysis)
 
     // バウンダリーが空の場合の警告
-    if (result.object.boundaries.length === 0) {
+    if (result.boundaries.length === 0) {
       console.warn('WARNING: No episode boundaries found by LLM')
-      console.warn('Suggestions:', result.object.suggestions)
+      console.warn('Suggestions:', result.suggestions)
       return []
     }
 
     // 文字位置からチャンク番号・位置を計算
     const previousTextLength = input.previousEpisodeEndText?.length || 0
     const boundaries = convertPositionsToBoundaries(
-      result.object.boundaries,
+      result.boundaries,
       input.chunks,
       previousTextLength,
     )

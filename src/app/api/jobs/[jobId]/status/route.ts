@@ -50,6 +50,7 @@ export async function GET(
         renderedPages: job.renderedPages ?? 0,
         totalPages: job.totalPages ?? 0,
         lastError: job.lastError,
+        lastErrorStep: (job as any).lastErrorStep,
         progress: job.progress,
         createdAt: job.createdAt,
         updatedAt: job.updatedAt,

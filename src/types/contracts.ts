@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-// NOTE: Validate Cloudflare and Mastra latest docs before binding to runtime specifics.
+// NOTE: Validate Cloudflare latest docs before binding to runtime specifics.
 // TODO(mcp): Verify queue/message size limits and durable object quotas. Pin links in PR.
 
 // Core identifiers

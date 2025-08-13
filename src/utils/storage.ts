@@ -395,17 +395,25 @@ async function resolveStorage(
   binding: R2BindingName,
   errorMessage: string,
 ): Promise<Storage> {
-  if (isDevelopment()) {
+  // 明示ローカル指定 or 開発/テストはローカル
+  if (isDevelopment() || process.env.STORAGE_MODE === 'local') {
+    // eslint-disable-next-line no-console
+    console.log(`[storage] Using LocalFileStorage (dev/local): ${LOCAL_STORAGE_BASE}/${localDir}`)
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, localDir))
   }
 
+  // 本番: Cloudflare R2 バインディングがある場合のみR2、なければ明示エラー
   const globalObj = globalThis as unknown as Record<string, unknown>
   const candidate = globalObj[binding]
   const bucket = candidate && typeof candidate === 'object' ? (candidate as R2Bucket) : undefined
-  if (!bucket) {
-    throw new Error(errorMessage)
+  if (bucket) {
+    // eslint-disable-next-line no-console
+    console.log(`[storage] Using R2Storage binding: ${binding}`)
+    return new R2Storage(bucket)
   }
-  return new R2Storage(bucket)
+
+  // ここでフォールバックせず、テスト期待に合わせてエラーを投げる
+  throw new Error(errorMessage)
 }
 
 // Novel Storage

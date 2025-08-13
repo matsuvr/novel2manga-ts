@@ -1,22 +1,30 @@
-import { Agent } from '@mastra/core/agent'
-import { getTextAnalysisConfig } from '@/config'
-import { getTextAnalysisLLM } from '@/utils/llm-factory'
+import { getLLMDefaultProvider, getTextAnalysisConfig } from '@/config'
+import { BaseAgent } from './base-agent'
 
-export const chunkAnalyzerAgent = new Agent({
-  name: 'chunk-analyzer',
-  description:
-    '小説のチャンクを分析して、キャラクター、場面、対話、ハイライト、状況を抽出するエージェント',
-  instructions: () => {
+// Singleton instance with lazy initialization
+let agentInstance: BaseAgent | null = null
+
+export function getChunkAnalyzerAgent(): BaseAgent {
+  if (!agentInstance) {
     const config = getTextAnalysisConfig()
-    return config.systemPrompt
-  },
-  model: async ({ runtimeContext: _runtimeContext }) => {
-    // フォールバック機能付きでLLMを取得
-    const llm = await getTextAnalysisLLM()
-    console.log(`[chunkAnalyzerAgent] Using provider: ${llm.providerName}`)
-    console.log(`[chunkAnalyzerAgent] Using model: ${llm.model}`)
+    const provider = getLLMDefaultProvider()
 
-    // モデルを返す
-    return llm.provider(llm.model)
+    agentInstance = new BaseAgent({
+      name: 'chunk-analyzer',
+      instructions: config.systemPrompt,
+      provider: provider,
+      maxTokens: config.maxTokens,
+    })
+
+    console.log(`[chunkAnalyzerAgent] Using provider: ${provider}`)
+  }
+
+  return agentInstance
+}
+
+// For backward compatibility
+export const chunkAnalyzerAgent = {
+  get instance() {
+    return getChunkAnalyzerAgent()
   },
-})
+}

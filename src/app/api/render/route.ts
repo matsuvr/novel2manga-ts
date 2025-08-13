@@ -78,9 +78,9 @@ export async function POST(request: NextRequest) {
     const imageBlob = await renderer.renderToImage(mangaLayout, body.pageNumber, 'png')
     const imageBuffer = Buffer.from(await imageBlob.arrayBuffer())
 
-    // 保存
+    // 保存（ストレージキーはStorageKeysを使用して一元管理）
     const renderStorage = await StorageFactory.getRenderStorage()
-    const renderKey = `renders/${body.jobId}/episode_${body.episodeNumber}/page_${body.pageNumber}.png`
+    const renderKey = StorageKeys.pageRender(body.jobId, body.episodeNumber, body.pageNumber)
     await renderStorage.put(renderKey, imageBuffer, {
       contentType: 'image/png',
       jobId: body.jobId,
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
       format: 'jpeg',
     })
     const thumbnailBuffer = Buffer.from(await thumbBlob.arrayBuffer())
-    const thumbnailKey = `renders/${body.jobId}/episode_${body.episodeNumber}/thumbnails/page_${body.pageNumber}_thumb.png`
+    const thumbnailKey = StorageKeys.pageThumbnail(body.jobId, body.episodeNumber, body.pageNumber)
     await renderStorage.put(thumbnailKey, thumbnailBuffer, {
       contentType: 'image/jpeg',
       jobId: body.jobId,

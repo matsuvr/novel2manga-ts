@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { generateMangaLayout } from '@/agents/layout-generator'
 import { getEpisodeRepository, getJobRepository } from '@/repositories'
+import { getDatabaseService } from '@/services/db-factory'
 import type { ChunkData, EpisodeData } from '@/types/panel-layout'
 import { ApiError, createErrorResponse, createSuccessResponse } from '@/utils/api-error'
 import { detectDemoMode } from '@/utils/request-mode'
@@ -82,7 +83,14 @@ export async function POST(request: NextRequest) {
           chunkIndex: 0,
           summary: 'デモ用サマリ',
           characters: [{ name: '太郎', role: 'protagonist', description: '主人公' }],
-          dialogues: [{ speaker: '太郎', text: 'やってみよう！', emotion: 'excited', context: '' }],
+          dialogues: [
+            {
+              speaker: '太郎',
+              text: 'やってみよう！',
+              emotion: 'excited',
+              context: '',
+            },
+          ],
           scenes: [
             {
               id: 'scene-0',
@@ -169,6 +177,13 @@ export async function POST(request: NextRequest) {
     }
 
     // レイアウトを生成
+    // 進捗: 現在のエピソードをレイアウト中としてcurrentStepを更新
+    try {
+      const dbService = getDatabaseService()
+      await dbService.updateJobStep(jobId, `layout_episode_${episodeNumber}`)
+    } catch (e) {
+      console.warn('[layout/generate] Failed to set step layout_episode:', e)
+    }
     // デフォルト値を設定してLayoutGenerationConfigを満たす
     const fullConfig = {
       panelsPerPage: {
@@ -225,6 +240,15 @@ export async function POST(request: NextRequest) {
     const storageKey = StorageKeys.episodeLayout(jobId, episodeNumber)
     await layoutStorage.put(storageKey, yamlContent)
 
+    // レイアウト完了をジョブに反映（UIの進捗更新用）
+    try {
+      const dbService = getDatabaseService()
+      await dbService.markJobStepCompleted(jobId, 'layout')
+      await dbService.updateJobStep(jobId, 'render')
+    } catch (e) {
+      console.warn('[layout/generate] Failed to update job step to render:', e)
+    }
+
     return createSuccessResponse({
       message: 'Layout generated successfully',
       jobId,
@@ -236,6 +260,20 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error generating layout:', error)
+    // 失敗時はジョブに明確なエラー理由とステップを記録
+    try {
+      const dbService = getDatabaseService()
+      const url = new URL(request.url)
+      const jobIdFromQuery = url.searchParams.get('jobId')
+      const safeJobId = jobIdFromQuery || 'unknown'
+      await dbService.updateJobError(
+        safeJobId,
+        `Layout generation failed: ${error instanceof Error ? error.message : String(error)}`,
+        'layout',
+      )
+    } catch {
+      // noop
+    }
     return createErrorResponse(error, 'Failed to generate layout')
   }
 }

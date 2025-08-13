@@ -7,53 +7,51 @@ import { StorageFactory } from '@/utils/storage'
 
 // モック設定
 vi.mock('@/agents/chunk-analyzer', () => ({
-  chunkAnalyzerAgent: {
-    generate: vi.fn().mockResolvedValue({
-      object: {
-        summary: 'テストチャンクの要約',
-        characters: [
-          {
-            name: 'テスト太郎',
-            description: 'テスト用キャラクター',
-            firstAppearance: 0,
-          },
-        ],
-        scenes: [
-          {
-            location: 'テスト場所',
-            time: '朝',
-            description: 'テストシーン',
-            startIndex: 0,
-            endIndex: 100,
-          },
-        ],
-        dialogues: [
-          {
-            speakerId: 'テスト太郎',
-            text: 'こんにちは',
-            emotion: 'normal',
-            index: 50,
-          },
-        ],
-        highlights: [
-          {
-            type: 'climax' as const,
-            description: 'クライマックス',
-            importance: 8,
-            startIndex: 80,
-            endIndex: 120,
-            text: 'クライマックス部分',
-          },
-        ],
-        situations: [
-          {
-            description: 'テスト状況',
-            index: 10,
-          },
-        ],
-      },
+  getChunkAnalyzerAgent: vi.fn(() => ({
+    generateObject: vi.fn().mockResolvedValue({
+      summary: 'テストチャンクの要約',
+      characters: [
+        {
+          name: 'テスト太郎',
+          description: 'テスト用キャラクター',
+          firstAppearance: 0,
+        },
+      ],
+      scenes: [
+        {
+          location: 'テスト場所',
+          time: '朝',
+          description: 'テストシーン',
+          startIndex: 0,
+          endIndex: 100,
+        },
+      ],
+      dialogues: [
+        {
+          speakerId: 'テスト太郎',
+          text: 'こんにちは',
+          emotion: 'normal',
+          index: 50,
+        },
+      ],
+      highlights: [
+        {
+          type: 'climax' as const,
+          description: 'クライマックス',
+          importance: 8,
+          startIndex: 80,
+          endIndex: 120,
+          text: 'クライマックス部分',
+        },
+      ],
+      situations: [
+        {
+          description: 'テスト状況',
+          index: 10,
+        },
+      ],
     }),
-  },
+  })),
 }))
 
 vi.mock('@/agents/narrative-arc-analyzer', () => ({
