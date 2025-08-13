@@ -280,7 +280,7 @@ function isZodSchema(value: unknown): value is PossibleZod {
     !!value &&
     typeof value === 'object' &&
     'parse' in value &&
-    typeof (value as any).parse === 'function'
+    typeof (value as Record<string, unknown>).parse === 'function'
   )
 }
 function hasMapFieldArray(obj: unknown, field: string): obj is Record<string, unknown[]> {

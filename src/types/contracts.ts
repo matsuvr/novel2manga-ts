@@ -32,8 +32,8 @@ export type RetryPolicy = z.infer<typeof zRetryPolicy>
 // Step definition contracts
 export const zStepDefinition = z.object({
   id: zId,
-  inputSchema: z.any(),
-  outputSchema: z.any(),
+  inputSchema: z.unknown(),
+  outputSchema: z.unknown(),
   // Optional mapper key for fan-out. When provided, the runtime will iterate over payload[key]
   mapField: z.string().optional(),
   parallelism: z.number().int().positive().optional(),
@@ -55,7 +55,7 @@ export type Edge = z.infer<typeof zEdge>
 export const zScenario = z.object({
   id: zId,
   version: z.string(),
-  steps: z.array(zStepDefinition.extend({ run: z.any() })),
+  steps: z.array(zStepDefinition.extend({ run: z.function() })),
   edges: z.array(zEdge),
 })
 export type ScenarioData = z.infer<typeof zScenario>
