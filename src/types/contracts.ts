@@ -109,3 +109,44 @@ export const zImageResult = z.object({
 export const zComposeOutput = z.object({
   pages: z.array(z.object({ index: z.number().int(), r2Key: z.string() })),
 })
+
+// ==============================
+// Demo Scenario (API Orchestrator)
+// ==============================
+export const zDemoAnalyzeInput = z.object({
+  baseUrl: z.string().url(),
+  text: z.string().optional(),
+  novelId: z.string().optional(),
+})
+export const zDemoAnalyzeOutput = z.object({
+  baseUrl: z.string().url(),
+  jobId: z.string(),
+  chunkCount: z.number().int().nonnegative().optional(),
+  mode: z.enum(['demo', 'splitOnly']).optional(),
+})
+
+export const zDemoLayoutInput = z.object({
+  baseUrl: z.string().url(),
+  jobId: z.string(),
+  episodeNumber: z.number().int().positive().default(1),
+})
+export const zDemoLayoutOutput = z.object({
+  baseUrl: z.string().url(),
+  jobId: z.string(),
+  episodeNumber: z.number().int().positive(),
+  storageKey: z.string(),
+})
+
+export const zDemoRenderInput = z.object({
+  baseUrl: z.string().url(),
+  jobId: z.string(),
+  episodeNumber: z.number().int().positive().default(1),
+  pageNumber: z.number().int().positive().default(1),
+})
+export const zDemoRenderOutput = z.object({
+  jobId: z.string(),
+  episodeNumber: z.number().int().positive(),
+  pageNumber: z.number().int().positive(),
+  renderKey: z.string(),
+  thumbnailKey: z.string().optional(),
+})
