@@ -12,14 +12,7 @@ export interface ProviderConfig {
   preferCerebras?: boolean
 }
 
-export interface UseCaseParams {
-  // 'default' means use defaultProvider
-  provider: 'default' | LLMProvider
-  // Max output tokens limit for the use-case
-  maxTokens: number
-  // Optional per-provider model override for the use-case
-  modelOverrides?: Partial<Record<LLMProvider, string>>
-}
+// Per-use-case parameters have been removed.
 
 // Default provider (config-driven only; no environment variable overrides)
 export function getDefaultProvider(): LLMProvider {
@@ -64,53 +57,7 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
   },
 }
 
-// Per-use-case parameters (models and token limits centralized here)
-export const useCaseParams: Record<
-  'textAnalysis' | 'narrativeArcAnalysis' | 'layoutGeneration' | 'chunkBundleAnalysis',
-  UseCaseParams
-> = {
-  textAnalysis: {
-    provider: 'default',
-    maxTokens: 8192,
-    modelOverrides: {
-      openai: 'gpt-5-mini',
-      gemini: 'gemini-2.5-flash',
-      groq: 'openai/gpt-oss-120b',
-      // Cerebras対応の場合はファクトリ側で自動変換
-      openrouter: 'openai/gpt-oss-120b',
-    },
-  },
-  narrativeArcAnalysis: {
-    provider: 'default',
-    maxTokens: 4096,
-    modelOverrides: {
-      openai: 'gpt-5-mini',
-      gemini: 'gemini-2.5-flash',
-      groq: 'openai/gpt-oss-120b',
-      openrouter: 'openai/gpt-oss-120b',
-    },
-  },
-  layoutGeneration: {
-    provider: 'default',
-    maxTokens: 4096,
-    modelOverrides: {
-      openai: 'gpt-5-mini',
-      gemini: 'gemini-2.5-flash',
-      groq: 'openai/gpt-oss-120b',
-      openrouter: 'openai/gpt-oss-120b',
-    },
-  },
-  chunkBundleAnalysis: {
-    provider: 'default',
-    maxTokens: 8192,
-    modelOverrides: {
-      openai: 'gpt-5-mini',
-      gemini: 'gemini-2.5-flash',
-      groq: 'openai/gpt-oss-120b',
-      openrouter: 'openai/gpt-oss-120b',
-    },
-  },
-}
+// Per-use-case parameters have been removed. Use `providers` as the single source of truth.
 
 // Accessors used by the rest of the app through src/config/index.ts
 export function getLLMDefaultProvider(): LLMProvider {
@@ -129,6 +76,4 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
   return cfg
 }
 
-export function getUseCaseParams(useCase: keyof typeof useCaseParams): UseCaseParams {
-  return useCaseParams[useCase]
-}
+// Accessor for per-use-case parameters has been removed. Use provider config instead.
