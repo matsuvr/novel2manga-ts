@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { getDatabaseService } from '@/services/db-factory'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
+import { getJobQueue } from '@/services/queue'
 import {
   ApiError,
   createErrorResponse,
@@ -9,13 +10,15 @@ import {
 } from '@/utils/api-error'
 import { validateJobId } from '@/utils/validators'
 
-export async function POST(_request: NextRequest, { params }: { params: { jobId: string } }) {
+export async function POST(request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
     validateJobId(params.jobId)
     const dbService = getDatabaseService()
-    const processor = new JobNarrativeProcessor(dbService)
+    const queue = getJobQueue()
 
     // ジョブが再開可能かチェック
+    // 互換性のため既存のProcessorのcanResumeを使用（テストもこれをモック）
+    const processor = new JobNarrativeProcessor(dbService)
     const canResume = await processor.canResumeJob(params.jobId)
     if (!canResume) {
       // Match test expectation exactly
@@ -26,19 +29,19 @@ export async function POST(_request: NextRequest, { params }: { params: { jobId:
       )
     }
 
-    // バックグラウンドで処理を再開
-    // 実際の実装では、ワーカーキューやバックグラウンドジョブシステムを使用すべき
-    processor
-      .processJob(params.jobId, (progress) => {
-        console.log(`Job ${params.jobId} progress:`, {
-          processedChunks: progress.processedChunks,
-          totalChunks: progress.totalChunks,
-          episodes: progress.episodes.length,
-        })
-      })
-      .catch((error) => {
-        console.error(`Error processing job ${params.jobId}:`, error)
-      })
+    // 任意の通知メール（同意済みの場合のみ）
+    const { userEmail } = (await request.json().catch(() => ({}))) as {
+      userEmail?: string
+    }
+
+    // バックグラウンドキューに投入
+    await queue.enqueue({
+      type: 'PROCESS_NARRATIVE',
+      jobId: params.jobId,
+      userEmail,
+    })
+    // ステータス更新（processing）
+    await dbService.updateJobStatus(params.jobId, 'processing')
 
     return createSuccessResponse({
       message: 'Job resumed successfully',

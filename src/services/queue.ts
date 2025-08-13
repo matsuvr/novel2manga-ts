@@ -1,0 +1,75 @@
+import { getDatabaseService } from './db-factory'
+import { JobNarrativeProcessor } from './job-narrative-processor'
+import { getNotificationService } from './notifications'
+
+export interface JobQueueMessage {
+  type: 'PROCESS_NARRATIVE'
+  jobId: string
+  userEmail?: string
+}
+
+export interface JobQueue {
+  enqueue: (message: JobQueueMessage) => Promise<void>
+}
+
+class InProcessQueue implements JobQueue {
+  async enqueue(message: JobQueueMessage): Promise<void> {
+    // ローカル/開発用の簡易版。即時に非同期で処理を開始
+    if (message.type !== 'PROCESS_NARRATIVE') return
+    const db = getDatabaseService()
+    const processor = new JobNarrativeProcessor(db)
+    const notifications = getNotificationService()
+
+    processor
+      .processJob(message.jobId, (progress) => {
+        // 簡易ロギング（実運用ではイベント配信やDB保存に置換）
+        console.log('[Queue] progress', message.jobId, {
+          processedChunks: progress.processedChunks,
+          totalChunks: progress.totalChunks,
+          episodes: progress.episodes.length,
+        })
+      })
+      .then(async () => {
+        if (message.userEmail) {
+          await notifications.sendJobCompletionEmail(message.userEmail, {
+            jobId: message.jobId,
+            status: 'completed',
+            completedAt: new Date().toISOString(),
+          })
+        }
+      })
+      .catch(async (err) => {
+        console.error('[Queue] Job processing failed', message.jobId, err)
+        if (message.userEmail) {
+          await notifications.sendJobCompletionEmail(message.userEmail, {
+            jobId: message.jobId,
+            status: 'failed',
+            errorMessage: err instanceof Error ? err.message : String(err),
+          })
+        }
+      })
+  }
+}
+
+let singleton: JobQueue | null = null
+
+export function getJobQueue(): JobQueue {
+  // Cloudflare Queues が利用可能ならそちらを使用（雛形）
+  const cfQueue = (
+    globalThis as unknown as {
+      JOBS_QUEUE?: { send: (body: unknown) => Promise<void> }
+    }
+  ).JOBS_QUEUE
+  if (!singleton) {
+    if (cfQueue) {
+      singleton = {
+        async enqueue(message: JobQueueMessage): Promise<void> {
+          await cfQueue.send(message)
+        },
+      }
+    } else {
+      singleton = new InProcessQueue()
+    }
+  }
+  return singleton
+}
