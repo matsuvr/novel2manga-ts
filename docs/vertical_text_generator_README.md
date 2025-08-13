@@ -439,7 +439,7 @@ API情報（認証不要）
 3. **カスタムフォントが読み込まれない**
    ```bash
    # Dockerコンテナ内でフォントの存在を確認
-   docker-compose exec svg-vertical-api ls -la /app/fonts/
+   docker-compose exec <your-service-name> ls -la /app/fonts/
    ```
 
 ### Cloud Runでのよくある問題

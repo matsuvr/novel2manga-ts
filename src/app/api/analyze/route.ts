@@ -248,60 +248,75 @@ export async function POST(request: NextRequest) {
     // テストモック分岐は削除
 
     // 分析結果のスキーマ
+    const nonEmptyObject = (schema: z.ZodObject<any>) =>
+      schema.refine((obj) => Object.keys(obj).length > 0, {
+        message: 'Empty object is not allowed',
+      })
+
     const textAnalysisOutputSchema = z
       .object({
         // 要求5要素のみ
         characters: z.array(
-          z
-            .object({
-              name: z.string().optional(),
-              description: z.string().optional(),
-              firstAppearance: z.number().optional(),
-            })
-            .strip(),
+          nonEmptyObject(
+            z
+              .object({
+                name: z.string().optional(),
+                description: z.string().optional(),
+                firstAppearance: z.number().optional(),
+              })
+              .strip(),
+          ),
         ),
         scenes: z.array(
-          z
-            .object({
-              location: z.string().optional(),
-              time: z.string().optional(),
-              description: z.string().optional(),
-              startIndex: z.number().optional(),
-              endIndex: z.number().optional(),
-            })
-            .strip(),
+          nonEmptyObject(
+            z
+              .object({
+                location: z.string().optional(),
+                time: z.string().optional(),
+                description: z.string().optional(),
+                startIndex: z.number().optional(),
+                endIndex: z.number().optional(),
+              })
+              .strip(),
+          ),
         ),
         dialogues: z.array(
-          z
-            .object({
-              speakerId: z.string().optional(),
-              text: z.string().optional(),
-              emotion: z.string().optional(),
-              index: z.number().optional(),
-            })
-            .strip(),
+          nonEmptyObject(
+            z
+              .object({
+                speakerId: z.string().optional(),
+                text: z.string().optional(),
+                emotion: z.string().optional(),
+                index: z.number().optional(),
+              })
+              .strip(),
+          ),
         ),
         highlights: z.array(
-          z
-            .object({
-              type: z
-                .enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence'])
-                .optional(),
-              description: z.string().optional(),
-              importance: z.number().min(1).max(10).optional(),
-              startIndex: z.number().optional(),
-              endIndex: z.number().optional(),
-              text: z.string().optional(),
-            })
-            .strip(),
+          nonEmptyObject(
+            z
+              .object({
+                type: z
+                  .enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence'])
+                  .optional(),
+                description: z.string().optional(),
+                importance: z.number().min(1).max(10).optional(),
+                startIndex: z.number().optional(),
+                endIndex: z.number().optional(),
+                text: z.string().optional(),
+              })
+              .strip(),
+          ),
         ),
         situations: z.array(
-          z
-            .object({
-              description: z.string().optional(),
-              index: z.number().optional(),
-            })
-            .strip(),
+          nonEmptyObject(
+            z
+              .object({
+                description: z.string().optional(),
+                index: z.number().optional(),
+              })
+              .strip(),
+          ),
         ),
       })
       .strip()
@@ -470,11 +485,7 @@ export async function POST(request: NextRequest) {
       error instanceof Error ? error.stack : 'No stack trace',
     )
 
-    // デバッグ情報を追加
-    console.error('[/api/analyze] Environment variables check:')
-    console.error('[/api/analyze] OPENROUTER_API_KEY exists:', !!process.env.OPENROUTER_API_KEY)
-    console.error('[/api/analyze] OPENAI_API_KEY exists:', !!process.env.OPENAI_API_KEY)
-    console.error('[/api/analyze] NODE_ENV:', process.env.NODE_ENV)
+    // Avoid leaking environment info in logs
 
     // ApiError はそのまま / その他はラップ
     if (error instanceof ApiError) {

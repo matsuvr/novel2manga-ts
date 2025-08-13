@@ -72,11 +72,8 @@ export class Agent {
         break
 
       case 'claude':
-        this.client = new OpenAI({
-          apiKey: config.apiKey,
-          baseURL: 'https://api.anthropic.com/v1',
-        })
-        break
+        // Anthropic (Claude) SDK is not wired yet. Prevent misconfiguration.
+        throw new Error('Claude provider is not supported in this build')
 
       default:
         throw new Error(`Unknown provider: ${this.provider}`)
@@ -142,24 +139,32 @@ export class Agent {
   ): Promise<z.infer<T>> {
     const client = this.client as GoogleGenAI
 
-    // Combine system and user messages for Gemini
-    const prompt = messages
-      .map((m) => {
-        const prefix =
-          m.role === 'system' ? 'System: ' : m.role === 'assistant' ? 'Assistant: ' : 'User: '
-        return prefix + m.content
-      })
-      .join('\n\n')
+    // Build role-preserving contents for Gemini
+    const contents = messages.map((m) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }))
 
     // Convert Zod schema to JSON Schema for Gemini
     const jsonSchema = this.zodToJsonSchema(schema)
 
-    // Add schema instruction to prompt
-    const schemaInstruction = `\n\nRespond with a valid JSON object that matches this schema:\n${JSON.stringify(jsonSchema, null, 2)}`
+    // Include schema requirement as a final instruction to the model
+    contents.push({
+      role: 'user',
+      parts: [
+        {
+          text: `Respond ONLY with a JSON object that matches this schema:\n${JSON.stringify(
+            jsonSchema,
+            null,
+            2,
+          )}`,
+        },
+      ],
+    })
 
     const response = await client.models.generateContent({
       model: this.model,
-      contents: prompt + schemaInstruction,
+      contents,
     })
 
     const text = response.text
@@ -176,21 +181,22 @@ export class Agent {
     }
   }
 
-  private zodToJsonSchema(schema: z.ZodTypeAny): any {
+  private zodToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
     // Simple Zod to JSON Schema converter
     // For production, consider using zod-to-json-schema library
     const def = schema._def
 
     if (def.typeName === 'ZodObject') {
       const shape = def.shape()
-      const properties: any = {}
+      const properties: Record<string, unknown> = {}
       const required: string[] = []
 
       for (const [key, value] of Object.entries(shape)) {
-        properties[key] = this.zodToJsonSchema(value as z.ZodTypeAny)
-        if (!(value as any).isOptional()) {
-          required.push(key)
-        }
+        const valueSchema = value as z.ZodTypeAny
+        properties[key] = this.zodToJsonSchema(valueSchema)
+        const valueDef = (valueSchema as z.ZodTypeAny)._def
+        const isOptional = valueDef?.typeName === 'ZodOptional'
+        if (!isOptional) required.push(key)
       }
 
       return {
@@ -207,28 +213,28 @@ export class Agent {
     } else if (def.typeName === 'ZodArray') {
       return {
         type: 'array',
-        items: this.zodToJsonSchema(def.type),
+        items: this.zodToJsonSchema(def.type as z.ZodTypeAny),
       }
     } else if (def.typeName === 'ZodEnum') {
       return {
         type: 'string',
-        enum: def.values,
+        enum: def.values as unknown[] as unknown[],
       }
     } else if (def.typeName === 'ZodOptional') {
-      return this.zodToJsonSchema(def.innerType)
+      return this.zodToJsonSchema(def.innerType as z.ZodTypeAny)
     } else if (def.typeName === 'ZodNullable') {
-      const innerSchema = this.zodToJsonSchema(def.innerType)
+      const innerSchema = this.zodToJsonSchema(def.innerType as z.ZodTypeAny)
       return {
         ...innerSchema,
         nullable: true,
       }
     } else if (def.typeName === 'ZodUnion') {
       return {
-        oneOf: def.options.map((opt: z.ZodTypeAny) => this.zodToJsonSchema(opt)),
+        oneOf: (def.options as z.ZodTypeAny[]).map((opt) => this.zodToJsonSchema(opt)),
       }
     } else {
       // Fallback for unsupported types
-      return { type: 'any' }
+      return {}
     }
   }
 
@@ -243,17 +249,14 @@ export class Agent {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         if (this.provider === 'gemini' && this.client instanceof GoogleGenAI) {
-          const prompt = allMessages
-            .map((m) => {
-              const prefix =
-                m.role === 'system' ? 'System: ' : m.role === 'assistant' ? 'Assistant: ' : 'User: '
-              return prefix + m.content
-            })
-            .join('\n\n')
+          const contents = allMessages.map((m) => ({
+            role: m.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: m.content }],
+          }))
 
           const response = await this.client.models.generateContent({
             model: this.model,
-            contents: prompt,
+            contents,
           })
 
           return response.text || ''
