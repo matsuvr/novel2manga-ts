@@ -11,9 +11,14 @@ export interface NotificationService {
 
 class ConsoleNotificationService implements NotificationService {
   async sendJobCompletionEmail(email: string, payload: JobNotificationPayload): Promise<void> {
-    // 雛形実装: 実際の送信プロバイダ（SendGrid/SES等）に置き換える
-    // CI/開発時はログのみ
-    console.log('[Notification] sendJobCompletionEmail', { email, payload })
+    const enabled = process.env.NOTIFICATIONS_ENABLED === 'true'
+    if (enabled) {
+      // TODO: 実際の送信実装（SendGrid/SES）
+      console.log('[Notification] (stub) would send email', { email, payload })
+    } else {
+      // 開発/テスト時のデフォルト動作
+      console.log('[Notification] (disabled) sendJobCompletionEmail', { email, payload })
+    }
   }
 }
 

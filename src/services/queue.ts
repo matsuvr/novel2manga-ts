@@ -40,6 +40,16 @@ class InProcessQueue implements JobQueue {
       })
       .catch(async (err) => {
         console.error('[Queue] Job processing failed', message.jobId, err)
+        // 失敗時はDBステータスをfailedに更新
+        try {
+          await db.updateJobError(
+            message.jobId,
+            err instanceof Error ? err.message : String(err),
+            'processing',
+          )
+        } catch (e) {
+          console.error('[Queue] Failed to update job error status', e)
+        }
         if (message.userEmail) {
           await notifications.sendJobCompletionEmail(message.userEmail, {
             jobId: message.jobId,
@@ -55,11 +65,7 @@ let singleton: JobQueue | null = null
 
 export function getJobQueue(): JobQueue {
   // Cloudflare Queues が利用可能ならそちらを使用（雛形）
-  const cfQueue = (
-    globalThis as unknown as {
-      JOBS_QUEUE?: { send: (body: unknown) => Promise<void> }
-    }
-  ).JOBS_QUEUE
+  const cfQueue = globalThis.JOBS_QUEUE
   if (!singleton) {
     if (cfQueue) {
       singleton = {

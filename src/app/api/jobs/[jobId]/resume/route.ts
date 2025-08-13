@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server'
+import { z } from 'zod'
 import { getDatabaseService } from '@/services/db-factory'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
 import { getJobQueue } from '@/services/queue'
@@ -29,13 +30,13 @@ export async function POST(request: NextRequest, { params }: { params: { jobId: 
       )
     }
 
-    // 任意の通知メール（同意済みの場合のみ）
-    const { userEmail } = (await request.json().catch(() => ({}))) as {
-      userEmail?: string
-    }
+    // 任意の通知メール（同意済みの場合のみ）: emailをZodでバリデーション
+    const EmailSchema = z.object({ userEmail: z.string().email().optional() })
+    const { userEmail } = EmailSchema.parse(await request.json().catch(() => ({})))
 
     // バックグラウンドキューに投入
-    await queue.enqueue({
+    // fire-and-forget（非同期実行）。戻り値は待たない
+    void queue.enqueue({
       type: 'PROCESS_NARRATIVE',
       jobId: params.jobId,
       userEmail,

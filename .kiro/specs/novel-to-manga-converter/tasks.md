@@ -183,6 +183,16 @@
   - [x] Cloudflareバインディング型定義
   - _Requirements: 設定管理とLLM統合_
 
+### 11. Queue/Worker 導入（新規）
+
+- [x] インプロセスキュー雛形追加（開発用）
+- [x] APIからのエンキュー（/api/jobs/[jobId], /api/jobs/[jobId]/resume）
+- [x] 失敗時DB更新（updateJobError）
+- [x] メール通知スタブとENV制御（NOTIFICATIONS_ENABLED）
+- [ ] Cloudflare Queuesへの切替（wrangler設定・コンシューマ実装）
+- [ ] 冪等性キー/重複防止（ジョブ単位ロック or Durable Objects）
+- [ ] 再開時のロック/重複排除の統合テスト
+
 - [x] 10. 物語構造分析機能（2025-07-30追加）
   - [x] NarrativeArcAnalyzerエージェント実装
   - [x] /api/analyze/narrative-arcエンドポイント実装
