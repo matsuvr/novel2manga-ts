@@ -52,7 +52,7 @@ MANDATORY RULES FOR THIS REPOSITORY — READ BEFORE CODING
 
 Non‑negotiables (do these every time):
 - Always fetch and develop against the latest official documentation via MCP tools before writing code.
-	- Mastra and Cloudflare: Use MCP to obtain and cite the latest docs and APIs. Do not rely on memory or outdated snippets. If docs cannot be verified, do not proceed.
+	- Cloudflare: Use MCP to obtain and cite the latest docs and APIs. Do not rely on memory or outdated snippets. If docs cannot be verified, do not proceed.
 	- Use Web search + Deepwiki to gather current library information. Prefer primary sources; cross‑check breaking changes and version constraints.
 - TypeScript: The any type is forbidden. Use precise types (unknown + type guards, generics, discriminated unions). No ts-ignore/ts-expect-error unless absolutely necessary and justified with a comment and a tracking task.
 - Lint/Format: Resolve all linter errors and warnings. Do not merge with outstanding issues. Do not disable rules to “make it pass” unless there is a justified, documented rationale.
@@ -71,8 +71,7 @@ Design, tasks, and data contracts — keep in sync in the same PR:
 - Storage layout: database\storage-structure.md defines storage contracts and layout. Update it when files, buckets/paths, or retention rules change.
 
 Technology‑specific directives:
-- Mastra: Before adding/updating pipelines, operators, or configs, retrieve the latest Mastra docs via MCP, confirm version compatibility, and reference the exact doc links in code comments or PR descriptions.
-- Cloudflare (Workers/Pages/D1/R2/Queues/etc.): Use MCP to verify the latest Cloudflare APIs and limits. Keep wrangler configuration accurate, document required bindings, and pin versions when possible.
+-- Cloudflare (Workers/Pages/D1/R2/Queues/etc.): Use MCP to verify the latest Cloudflare APIs and limits. Keep wrangler configuration accurate, document required bindings, and pin versions when possible.
 - Libraries: When introducing or upgrading dependencies, use web search + Context7 + Deepwiki to validate stability, maintenance status, and migration notes. Include justification and links in the PR.
 
 Quality gates (must pass before merge):
@@ -82,7 +81,7 @@ Quality gates (must pass before merge):
 - No duplicated code introduced; shared utilities factored appropriately.
 
 PR checklist (copy into your PR and tick all):
-- [ ] Latest docs fetched via MCP (Mastra, Cloudflare, and relevant libs). Links included in PR.
+- [ ] Latest docs fetched via MCP (Cloudflare and relevant libs). Links included in PR.
 - [ ] No any types introduced; strict types only. No unjustified ts-ignore.
 - [ ] Linter and formatter clean (0 errors). No rule disabling without justification.
 - [ ] DRY and SOLID upheld; no redundant implementations.

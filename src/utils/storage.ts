@@ -402,7 +402,7 @@ async function resolveStorage(
     return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, localDir))
   }
 
-  // 本番: Cloudflare R2 バインディングがある場合のみR2、なければ安全にローカルへフォールバック
+  // 本番: Cloudflare R2 バインディングがある場合のみR2、なければ明示エラー
   const globalObj = globalThis as unknown as Record<string, unknown>
   const candidate = globalObj[binding]
   const bucket = candidate && typeof candidate === 'object' ? (candidate as R2Bucket) : undefined
@@ -412,15 +412,8 @@ async function resolveStorage(
     return new R2Storage(bucket)
   }
 
-  // フォールバック（ローカル）。運用上わかるように一度だけ警告を出す。
-  if (!process.env.__STORAGE_FALLBACK_WARNED__) {
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[storage] ${errorMessage}. Falling back to local storage at ${LOCAL_STORAGE_BASE}/${localDir}`,
-    )
-    process.env.__STORAGE_FALLBACK_WARNED__ = '1'
-  }
-  return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, localDir))
+  // ここでフォールバックせず、テスト期待に合わせてエラーを投げる
+  throw new Error(errorMessage)
 }
 
 // Novel Storage

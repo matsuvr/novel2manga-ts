@@ -19,3 +19,4 @@ Notes
 
 - Local pre-push hooks are not used; CI gates the merge.
 - JSON/JSONC are formatted by Prettier; biome.json is formatted by Biome.
+- AI呼び出しは Mastra/ai-sdk を使用せず、OpenAI SDK と Google GenAI SDK を直接利用します。

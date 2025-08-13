@@ -13,7 +13,7 @@ import {
 } from '@/types/contracts'
 
 // Canonical, typed scenario used by the Web UI and runtime.
-// TODO(mcp): Confirm Mastra pipeline/operator APIs for compiling this DSL into Mastra runtime.
+// NOTE: Mastra 依存は撤廃。シナリオDSLは独自実行器で扱う。
 
 export function createNovelToMangaScenario() {
   const b = new ScenarioBuilder('novel-to-manga', '1.0.0')

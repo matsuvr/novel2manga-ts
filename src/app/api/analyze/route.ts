@@ -329,7 +329,7 @@ export async function POST(request: NextRequest) {
           .replace('{{previousChunkText}}', '')
           .replace('{{nextChunkText}}', '')
 
-        // Mastraエージェントを使用して分析（失敗時に1回だけ再試行: 同一プロンプトを再送）
+        // エージェント（OpenAI/Google GenAI SDK 直接呼び出し）を使用して分析（失敗時に1回だけ再試行: 同一プロンプトを再送）
         let result: z.infer<typeof textAnalysisOutputSchema>
         try {
           // 構造化出力を活用
