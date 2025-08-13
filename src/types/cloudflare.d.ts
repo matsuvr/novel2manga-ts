@@ -22,6 +22,12 @@ declare global {
   // Global environment bindings
   var NOVEL_STORAGE: NOVEL_STORAGE | undefined
   var DB: DB | undefined
+  // Cloudflare Queues (optional)
+  interface CFQueue {
+    send(body: unknown): Promise<void>
+    sendBatch(messages: Array<{ body: unknown }>): Promise<void>
+  }
+  var JOBS_QUEUE: CFQueue | undefined
 
   // Environment variables
   interface ProcessEnv {
