@@ -67,15 +67,20 @@ export function getJobQueue(): JobQueue {
   // Cloudflare Queues が利用可能ならそちらを使用（雛形）
   const cfQueue = globalThis.JOBS_QUEUE
   if (!singleton) {
-    if (cfQueue) {
-      singleton = {
-        async enqueue(message: JobQueueMessage): Promise<void> {
-          await cfQueue.send(message)
-        },
-      }
-    } else {
-      singleton = new InProcessQueue()
-    }
+    const hasValidCfQueue = Boolean(cfQueue && typeof cfQueue.send === 'function')
+    singleton = hasValidCfQueue
+      ? {
+          async enqueue(message: JobQueueMessage): Promise<void> {
+            // Type-safe: send が存在することをチェック済み
+            await (cfQueue as NonNullable<typeof cfQueue>).send(message)
+          },
+        }
+      : new InProcessQueue()
   }
   return singleton
+}
+
+// test-only: reset singleton for isolated tests
+export function __resetJobQueueForTest(): void {
+  singleton = null
 }

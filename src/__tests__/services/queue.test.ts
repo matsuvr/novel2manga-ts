@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDatabaseService } from '@/services/db-factory'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
 import { getNotificationService } from '@/services/notifications'
-import { getJobQueue } from '@/services/queue'
+import { __resetJobQueueForTest, getJobQueue } from '@/services/queue'
 
 vi.mock('@/services/job-narrative-processor', () => ({
   JobNarrativeProcessor: vi.fn().mockImplementation(() => ({
@@ -27,6 +27,7 @@ describe('JobQueue', () => {
     vi.clearAllMocks()
     // @ts-expect-error test shim
     globalThis.JOBS_QUEUE = undefined
+    __resetJobQueueForTest()
   })
 
   it('InProcessQueue: should process jobs immediately and send completion notification', async () => {
@@ -64,6 +65,16 @@ describe('JobQueue', () => {
   it('getJobQueue: should fallback to InProcessQueue when JOBS_QUEUE is undefined', async () => {
     const queue = getJobQueue()
     await expect(queue.enqueue({ type: 'PROCESS_NARRATIVE', jobId: 'job-3' })).resolves.toBeUndefined()
+  })
+
+  it('getJobQueue: should return Cloudflare-backed queue when JOBS_QUEUE is available', async () => {
+    __resetJobQueueForTest()
+    // @ts-expect-error test shim
+    globalThis.JOBS_QUEUE = { send: vi.fn().mockResolvedValue(undefined) }
+    const queue = getJobQueue()
+    await queue.enqueue({ type: 'PROCESS_NARRATIVE', jobId: 'job-4' })
+    // @ts-expect-error test shim
+    expect(globalThis.JOBS_QUEUE.send).toHaveBeenCalledWith({ type: 'PROCESS_NARRATIVE', jobId: 'job-4' })
   })
 })
 
