@@ -120,7 +120,7 @@ export async function demoAnalyze(
     mode: z.enum(['demo', 'splitOnly']).optional(),
     chunkCount: z.number().int().nonnegative().optional(),
   })
-  const json = ResponseSchema.parse(await res.json().catch(() => ({})))
+  const json = ResponseSchema.parse(await res.json())
   const jobId = json.id ?? json.jobId ?? json.data?.jobId
   if (!jobId) throw new Error('demoAnalyze: jobId missing')
   return {
@@ -148,7 +148,7 @@ export async function demoLayout(
     storageKey: z.string().optional(),
     layoutPath: z.string().optional(),
   })
-  const json = ResponseSchema.parse(await res.json().catch(() => ({})))
+  const json = ResponseSchema.parse(await res.json())
   const storageKey = json.storageKey ?? json.layoutPath
   if (!storageKey) throw new Error('demoLayout: storageKey missing')
   return {
@@ -177,7 +177,7 @@ export async function demoRender(
     renderKey: z.string().optional(),
     thumbnailKey: z.string().optional(),
   })
-  const json = ResponseSchema.parse(await res.json().catch(() => ({})))
+  const json = ResponseSchema.parse(await res.json())
   if (!json.renderKey) throw new Error('demoRender: renderKey missing')
   // json.renderKey は上で存在チェック済み
   return {

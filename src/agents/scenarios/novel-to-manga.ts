@@ -183,21 +183,18 @@ export function createDemoApiScenario() {
     }),
     retry: { maxAttempts: 3, backoffMs: 800, factor: 2, jitter: true },
     idempotencyFrom: ['baseUrl', 'text', 'novelId'],
+    // ランナーが inputSchema による検証を行うため、ここでの重複parseは不要
     run: (input: unknown) =>
-      adapters.demoAnalyze(
-        z
-          .object({
-            baseUrl: z.string().url(),
-            text: z.string().optional(),
-            novelId: z.string().optional(),
-          })
-          .parse(input),
-      ),
+      adapters.demoAnalyze(input as { baseUrl: string; text?: string; novelId?: string }),
   })
 
   b.step({
     id: 'layout-demo',
-    inputSchema: z.object({ baseUrl: z.string().url(), jobId: z.string() }),
+    inputSchema: z.object({
+      baseUrl: z.string().url(),
+      jobId: z.string(),
+      episodeNumber: z.number().int().positive().default(1),
+    }),
     outputSchema: z.object({
       baseUrl: z.string().url(),
       jobId: z.string(),
@@ -206,16 +203,8 @@ export function createDemoApiScenario() {
     }),
     retry: { maxAttempts: 3, backoffMs: 800, factor: 2, jitter: true },
     idempotencyFrom: ['baseUrl', 'jobId', 'episodeNumber'],
-    run: async (input: unknown) => {
-      const parsed = z
-        .object({
-          baseUrl: z.string().url(),
-          jobId: z.string(),
-          episodeNumber: z.number().int().positive().default(1),
-        })
-        .parse(input)
-      return adapters.demoLayout(parsed)
-    },
+    run: async (input: unknown) =>
+      adapters.demoLayout(input as { baseUrl: string; jobId: string; episodeNumber?: number }),
   })
   b.edge({ from: 'analyze-demo', to: 'layout-demo', fanIn: 'all' })
 
@@ -238,14 +227,7 @@ export function createDemoApiScenario() {
     idempotencyFrom: ['jobId', 'episodeNumber', 'pageNumber'],
     run: (input: unknown) =>
       adapters.demoRender(
-        z
-          .object({
-            baseUrl: z.string().url(),
-            jobId: z.string(),
-            episodeNumber: z.number().int().positive().default(1),
-            pageNumber: z.number().int().positive().default(1),
-          })
-          .parse(input),
+        input as { baseUrl: string; jobId: string; episodeNumber?: number; pageNumber?: number },
       ),
   })
   b.edge({ from: 'layout-demo', to: 'render-demo', fanIn: 'all' })
