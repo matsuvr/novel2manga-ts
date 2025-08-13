@@ -81,16 +81,10 @@ export async function POST(request: NextRequest) {
         analysis: {
           summary: 'デモ用サマリ',
           characters: [{ name: '太郎', role: 'protagonist', description: '主人公' }],
-          dialogues: [
-            {
-              speakerId: 'taro',
-              text: 'やってみよう！',
-              emotion: 'excited',
-              index: 0,
-            },
-          ],
+          dialogues: [{ speaker: '太郎', text: 'やってみよう！', emotion: 'excited', context: '' }],
           scenes: [
             {
+              id: 'scene-0',
               location: '公園',
               time: '昼',
               description: 'ベンチのある公園',
@@ -103,12 +97,11 @@ export async function POST(request: NextRequest) {
               type: 'emotional_peak',
               description: '決意の瞬間',
               importance: 8,
-              startIndex: 0,
-              endIndex: 10,
               text: 'やってみよう！',
+              reason: 'demo',
             },
           ],
-          situations: [{ description: '新しい挑戦', index: 0 }],
+          situations: [{ event: 'start', description: '新しい挑戦', significance: 'high' }],
         },
         isPartial: false,
         startOffset: 0,
@@ -161,7 +154,7 @@ export async function POST(request: NextRequest) {
     // エピソードデータを構築
     const episodeData: EpisodeData = {
       chunkAnalyses: chunkDataArray.map((chunk) => chunk.analysis),
-      author: job.jobName || 'Unknown Author',
+      author: job?.jobName || 'Unknown Author',
       title: `Episode ${ensuredEpisode.episodeNumber}` as const,
       episodeNumber: ensuredEpisode.episodeNumber,
       episodeTitle: ensuredEpisode.title || undefined,
