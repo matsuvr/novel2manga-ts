@@ -186,11 +186,24 @@ export async function runScenario(
         const items = (validatedInput as Record<string, unknown[]>)[step.mapField]
         if (!Array.isArray(items))
           throw new Error(`mapField ${step.mapField} is not an array for step ${id}`)
-        const mapped: unknown[] = []
-        for (const item of items) {
-          mapped.push(await (step.run as (arg: unknown) => Promise<unknown>)(item))
+        
+        const parallelism = step.parallelism
+        const runStep = step.run as (arg: unknown) => Promise<unknown>
+        
+        // Process items in parallel when parallelism allows it
+        if (!parallelism || parallelism >= items.length) {
+          // Unlimited parallelism or parallelism >= item count: process all items concurrently
+          return Promise.all(items.map(item => runStep(item)))
+        } else {
+          // Limited parallelism: process in chunks
+          const mapped: unknown[] = []
+          for (let i = 0; i < items.length; i += parallelism) {
+            const chunk = items.slice(i, i + parallelism)
+            const chunkResults = await Promise.all(chunk.map(item => runStep(item)))
+            mapped.push(...chunkResults)
+          }
+          return mapped
         }
-        return mapped
       }
       return (step.run as (arg: unknown) => Promise<unknown>)(validatedInput)
     }
