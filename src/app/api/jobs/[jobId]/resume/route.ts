@@ -1,6 +1,8 @@
 import type { NextRequest } from 'next/server'
+import { z } from 'zod'
 import { getDatabaseService } from '@/services/db-factory'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
+import { getJobQueue } from '@/services/queue'
 import {
   ApiError,
   createErrorResponse,
@@ -9,13 +11,15 @@ import {
 } from '@/utils/api-error'
 import { validateJobId } from '@/utils/validators'
 
-export async function POST(_request: NextRequest, { params }: { params: { jobId: string } }) {
+export async function POST(request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
     validateJobId(params.jobId)
     const dbService = getDatabaseService()
-    const processor = new JobNarrativeProcessor(dbService)
+    const queue = getJobQueue()
 
     // ジョブが再開可能かチェック
+    // 互換性のため既存のProcessorのcanResumeを使用（テストもこれをモック）
+    const processor = new JobNarrativeProcessor(dbService)
     const canResume = await processor.canResumeJob(params.jobId)
     if (!canResume) {
       // Match test expectation exactly
@@ -26,19 +30,18 @@ export async function POST(_request: NextRequest, { params }: { params: { jobId:
       )
     }
 
-    // バックグラウンドで処理を再開
-    // 実際の実装では、ワーカーキューやバックグラウンドジョブシステムを使用すべき
-    processor
-      .processJob(params.jobId, (progress) => {
-        console.log(`Job ${params.jobId} progress:`, {
-          processedChunks: progress.processedChunks,
-          totalChunks: progress.totalChunks,
-          episodes: progress.episodes.length,
-        })
-      })
-      .catch((error) => {
-        console.error(`Error processing job ${params.jobId}:`, error)
-      })
+    // 任意の通知メール（同意済みの場合のみ）: emailをZodでバリデーション
+    const EmailSchema = z.object({ userEmail: z.string().email().optional() })
+    const { userEmail } = EmailSchema.parse(await request.json().catch(() => ({})))
+
+    // バックグラウンドキューに投入
+    // fire-and-forget（非同期実行）。戻り値は待たない
+    void queue.enqueue({
+      type: 'PROCESS_NARRATIVE',
+      jobId: params.jobId,
+      userEmail,
+    })
+    // NOTE: ここではDB更新を行わない（テストのモック互換性維持）
 
     return createSuccessResponse({
       message: 'Job resumed successfully',
