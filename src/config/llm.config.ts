@@ -50,7 +50,7 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY,
     model: 'gemini-2.5-flash',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    // Native SDK uses default Gemini API; baseUrl override not required
     maxTokens: 8192,
     timeout: 30_000,
   },
@@ -132,7 +132,14 @@ export function getLLMFallbackChain(): LLMProvider[] {
 }
 
 export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
-  return providers[provider]
+  const cfg = providers[provider]
+  if (!cfg) {
+    throw new Error(`Unknown LLM provider: ${provider}`)
+  }
+  if (provider === 'claude') {
+    throw new Error('Claude provider is not supported in this build')
+  }
+  return cfg
 }
 
 export function getUseCaseParams(useCase: keyof typeof useCaseParams): UseCaseParams {

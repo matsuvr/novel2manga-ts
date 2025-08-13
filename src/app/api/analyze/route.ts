@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       console.error('[/api/analyze] Validation error:', validationResult.error)
       return createErrorResponse(
         new ApiError('リクエストボディが無効です', 400, 'VALIDATION_ERROR', {
-          issues: validationResult.error.issues.map((issue) => ({
+          issues: validationResult.error.issues.map((issue: z.ZodIssue) => ({
             field: issue.path.join('.'),
             message: issue.message,
           })),

@@ -197,12 +197,18 @@ export async function analyzeNarrativeArc(
     .join('、')
 
   const highlightsInfo = bundleAnalysis.highlights
-    .filter((h) => h.importance >= 6)
-    .map((h) => `- ${h.text} (重要度: ${h.importance})${h.context ? `\n  ${h.context}` : ''}`)
+    .filter((h: BundleAnalysisResult['highlights'][number]) => h.importance >= 6)
+    .map(
+      (h: BundleAnalysisResult['highlights'][number]) =>
+        `- ${h.text} (重要度: ${h.importance})${h.context ? `\n  ${h.context}` : ''}`,
+    )
     .join('\n')
 
   const characterActions = bundleAnalysis.keyDialogues
-    .map((d) => `${d.speaker}: 「${d.text}」\n  意味: ${d.significance}`)
+    .map(
+      (d: BundleAnalysisResult['keyDialogues'][number]) =>
+        `${d.speaker}: 「${d.text}」\n  意味: ${d.significance}`,
+    )
     .join('\n\n')
 
   // プロンプトのカスタマイズ
