@@ -109,9 +109,7 @@ export function getCurrentLLMProvider() {
 }
 
 // 特定のLLMプロバイダー設定を取得
-export function getLLMProviderConfig(
-  provider: 'openai' | 'gemini' | 'groq' | 'claude' | 'openrouter',
-) {
+export function getLLMProviderConfig(provider: 'openai' | 'gemini' | 'groq' | 'openrouter') {
   return getProviderConfig(provider)
 }
 
@@ -145,7 +143,6 @@ export function getAIConfig() {
   return {
     provider: getDefaultProvider(),
     openai: getProviderConfig('openai' as LLMProvider),
-    claude: getProviderConfig('claude' as LLMProvider),
     fallbackProvider: getFallbackChain()[0],
     maxConcurrentRequests: getAppConfig().processing.maxConcurrentChunks,
     requestQueueSize: 100, // 固定値

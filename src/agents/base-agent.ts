@@ -1,29 +1,26 @@
-import { Agent } from '@mastra/core'
-import type { z } from 'zod'
+import type { LLMProvider } from '@/config/llm.config'
+import { Agent } from './agent'
 
-type AgentInit = ConstructorParameters<typeof Agent>[0]
+export interface BaseAgentOptions {
+  name: string
+  instructions: string
+  provider: LLMProvider
+  model?: string
+  maxTokens?: number
+}
 
-export type BaseAgentOptions = AgentInit
-
-// 共通のMastra Agent基盤。将来のログやトレーシングを一元化する拡張ポイント。
+// 共通のAgent基盤。将来のログやトレーシングを一元化する拡張ポイント。
 export class BaseAgent extends Agent {
   constructor(options: BaseAgentOptions) {
     super({
       name: options.name,
       instructions: options.instructions,
+      provider: options.provider,
       model: options.model,
+      maxTokens: options.maxTokens,
     })
   }
 
-  // 便利ラッパー: Zodスキーマ指定でobjectを型安全に取得
-  async generateObject<T extends z.ZodTypeAny>(
-    messages: Array<{ role: 'user' | 'system' | 'assistant'; content: string }>,
-    schema: T,
-  ): Promise<z.infer<T>> {
-    const result = await this.generate(messages, { output: schema })
-    if (!result.object) {
-      throw new Error('Agent generate() returned no object')
-    }
-    return result.object as z.infer<T>
-  }
+  // BaseAgentではAgentのgenerateObjectをそのまま使用
+  // 追加のロギングやトレーシングが必要な場合はここでオーバーライド可能
 }

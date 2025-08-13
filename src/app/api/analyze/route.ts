@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
-import { chunkAnalyzerAgent } from '@/agents/chunk-analyzer'
+import { getChunkAnalyzerAgent } from '@/agents/chunk-analyzer'
 import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
 import { getTextAnalysisConfig } from '@/config'
 import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repository'
@@ -29,7 +29,7 @@ const analyzeRequestSchema = z
     // テストや軽量実行用にチャンク分割のみ行うフラグ（明示モード。フォールバックではない）
     splitOnly: z.boolean().optional(),
   })
-  .refine((data) => !!data.novelId || !!data.text, {
+  .refine((data: { novelId?: unknown; text?: unknown }) => !!data.novelId || !!data.text, {
     message: 'novelId か text のいずれかが必要です',
     path: ['novelId'],
   })
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       console.error('[/api/analyze] Validation error:', validationResult.error)
       return createErrorResponse(
         new ApiError('リクエストボディが無効です', 400, 'VALIDATION_ERROR', {
-          issues: validationResult.error.issues.map((issue) => ({
+          issues: validationResult.error.issues.map((issue: z.ZodIssue) => ({
             field: issue.path.join('.'),
             message: issue.message,
           })),
@@ -204,7 +204,14 @@ export async function POST(request: NextRequest) {
             confidence: 0.9,
           },
         ])
-        await dbService.markJobStepCompleted(jobId, 'episode')
+        // デモでは本来の要素分析をスキップするため、順序の整合性を保つために
+        // analyze → episode を仮完了としてマークする
+        if (!splitOnly) {
+          await dbService.markJobStepCompleted(jobId, 'analyze')
+          await dbService.markJobStepCompleted(jobId, 'episode')
+          // 次の段階へカーソルを進める（UIの現在処理表示用）
+          await dbService.updateJobStep(jobId, 'layout', chunks.length, chunks.length)
+        }
       } catch (e) {
         console.warn('[/api/analyze] saveEpisodeBoundaries (demo) failed (non-fatal):', e)
       }
@@ -241,53 +248,83 @@ export async function POST(request: NextRequest) {
     // テストモック分岐は削除
 
     // 分析結果のスキーマ
-    const textAnalysisOutputSchema = z.object({
-      summary: z.string(),
-      characters: z.array(
-        z.object({
-          name: z.string(),
-          description: z.string(),
-          firstAppearance: z.number(),
-        }),
-      ),
-      scenes: z.array(
-        z.object({
-          location: z.string(),
-          time: z.string().optional(),
-          description: z.string(),
-          startIndex: z.number(),
-          endIndex: z.number(),
-        }),
-      ),
-      dialogues: z.array(
-        z.object({
-          speakerId: z.string(),
-          text: z.string(),
-          emotion: z.string().optional(),
-          index: z.number(),
-        }),
-      ),
-      highlights: z.array(
-        z.object({
-          type: z.enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence']),
-          description: z.string(),
-          importance: z.number().min(1).max(10),
-          startIndex: z.number(),
-          endIndex: z.number(),
-          text: z.string().optional(),
-        }),
-      ),
-      situations: z.array(
-        z.object({
-          description: z.string(),
-          index: z.number(),
-        }),
-      ),
-    })
+    const nonEmptyObject = (schema: z.ZodObject<any>) =>
+      schema.refine((obj) => Object.keys(obj).length > 0, {
+        message: 'Empty object is not allowed',
+      })
+
+    const textAnalysisOutputSchema = z
+      .object({
+        // 要求5要素のみ
+        characters: z.array(
+          nonEmptyObject(
+            z
+              .object({
+                name: z.string().optional(),
+                description: z.string().optional(),
+                firstAppearance: z.number().optional(),
+              })
+              .strip(),
+          ),
+        ),
+        scenes: z.array(
+          nonEmptyObject(
+            z
+              .object({
+                location: z.string().optional(),
+                time: z.string().optional(),
+                description: z.string().optional(),
+                startIndex: z.number().optional(),
+                endIndex: z.number().optional(),
+              })
+              .strip(),
+          ),
+        ),
+        dialogues: z.array(
+          nonEmptyObject(
+            z
+              .object({
+                speakerId: z.string().optional(),
+                text: z.string().optional(),
+                emotion: z.string().optional(),
+                index: z.number().optional(),
+              })
+              .strip(),
+          ),
+        ),
+        highlights: z.array(
+          nonEmptyObject(
+            z
+              .object({
+                type: z
+                  .enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence'])
+                  .optional(),
+                description: z.string().optional(),
+                importance: z.number().min(1).max(10).optional(),
+                startIndex: z.number().optional(),
+                endIndex: z.number().optional(),
+                text: z.string().optional(),
+              })
+              .strip(),
+          ),
+        ),
+        situations: z.array(
+          nonEmptyObject(
+            z
+              .object({
+                description: z.string().optional(),
+                index: z.number().optional(),
+              })
+              .strip(),
+          ),
+        ),
+      })
+      .strip()
 
     for (let i = 0; i < chunks.length; i++) {
       try {
         console.log(`[/api/analyze] Analyzing chunk ${i}/${chunks.length}...`)
+        // 進捗: チャンクiの分析開始
         await dbService.updateJobStep(jobId, `analyze_chunk_${i}`, i, chunks.length)
 
         // チャンクテキストを取得
@@ -307,12 +344,16 @@ export async function POST(request: NextRequest) {
           .replace('{{previousChunkText}}', '')
           .replace('{{nextChunkText}}', '')
 
-        // Mastraエージェントを使用して分析
-        let result: { object: z.infer<typeof textAnalysisOutputSchema> }
+        // エージェント（OpenAI/Google GenAI SDK 直接呼び出し）を使用して分析（失敗時に1回だけ再試行: 同一プロンプトを再送）
+        let result: z.infer<typeof textAnalysisOutputSchema>
         try {
-          result = await chunkAnalyzerAgent.generate([{ role: 'user', content: prompt }], {
-            output: textAnalysisOutputSchema,
-          })
+          // 構造化出力を活用
+          const agent = getChunkAnalyzerAgent()
+          result = await agent.generateObject(
+            [{ role: 'user', content: prompt }],
+            textAnalysisOutputSchema,
+            { maxRetries: 2 },
+          )
         } catch (agentError) {
           console.error(`[/api/analyze] Chunk ${i} agent error details:`, {
             error: agentError,
@@ -320,12 +361,28 @@ export async function POST(request: NextRequest) {
             stack: agentError instanceof Error ? agentError.stack : 'No stack',
             name: agentError instanceof Error ? agentError.name : 'Unknown',
           })
-          throw agentError
+
+          try {
+            // 進捗: チャンクi リトライ中
+            await dbService.updateJobStep(jobId, `analyze_chunk_${i}_retry`, i, chunks.length)
+            const agent = getChunkAnalyzerAgent()
+            result = await agent.generateObject(
+              [{ role: 'user', content: prompt }],
+              textAnalysisOutputSchema,
+              { maxRetries: 1 },
+            )
+          } catch (retryError) {
+            console.error(`[/api/analyze] Chunk ${i} retry failed:`, {
+              error: retryError,
+              message: extractErrorMessage(retryError),
+            })
+            throw retryError
+          }
         }
 
-        if (!result.object) {
-          console.error(`[/api/analyze] Chunk ${i} result object is null/undefined:`, result)
-          throw new Error('Failed to generate analysis result - result.object is null')
+        if (!result) {
+          console.error(`[/api/analyze] Chunk ${i} result is null/undefined:`, result)
+          throw new Error('Failed to generate analysis result - result is null')
         }
 
         // 分析結果をストレージに保存
@@ -333,15 +390,18 @@ export async function POST(request: NextRequest) {
         const analysisData = {
           chunkIndex: i,
           jobId,
-          analysis: result.object,
+          analysis: result,
           analyzedAt: new Date().toISOString(),
         }
 
         await analysisStorage.put(analysisPath, JSON.stringify(analysisData, null, 2))
         console.log(`[/api/analyze] Chunk ${i} analyzed successfully`)
+        // 進捗: チャンクi 分析完了
+        await dbService.updateJobStep(jobId, `analyze_chunk_${i}_done`, i + 1, chunks.length)
       } catch (error) {
         const errorMsg = `Failed to analyze chunk ${i}: ${extractErrorMessage(error)}`
         console.error(`[/api/analyze] ${errorMsg}`)
+        // DBにエラー内容とステップ名を記録 → /api/jobs/[id]/status で lastError/lastErrorStep として返る
         await dbService.updateJobError(jobId, errorMsg, `analyze_chunk_${i}`)
         throw new Error(errorMsg)
       }
@@ -373,6 +433,24 @@ export async function POST(request: NextRequest) {
       console.log('[/api/analyze] Episode analysis completed')
       await dbService.markJobStepCompleted(jobId, 'episode')
       await dbService.updateJobStep(jobId, 'layout', chunks.length, chunks.length)
+
+      // 本番フロー: レイアウト生成のキックを自動で行う（第1話）。
+      // UIが /api/layout/generate を叩く前にサーバー側で進め、"layout"で止まり続ける事象を回避。
+      try {
+        const baseUrl = new URL(request.url).origin
+        const res = await fetch(`${baseUrl}/api/layout/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobId, episodeNumber: 1 }),
+        })
+        if (!res.ok) {
+          console.warn(`[/api/analyze] Auto layout kick failed: ${res.status} ${res.statusText}`)
+        } else {
+          console.log('[/api/analyze] Auto layout kick started for episode 1')
+        }
+      } catch (autoLayoutErr) {
+        console.warn('[/api/analyze] Auto layout kick error:', autoLayoutErr)
+      }
     } catch (episodeError) {
       console.error('[/api/analyze] Episode analysis failed:', episodeError)
       await dbService.updateJobError(
@@ -407,11 +485,7 @@ export async function POST(request: NextRequest) {
       error instanceof Error ? error.stack : 'No stack trace',
     )
 
-    // デバッグ情報を追加
-    console.error('[/api/analyze] Environment variables check:')
-    console.error('[/api/analyze] OPENROUTER_API_KEY exists:', !!process.env.OPENROUTER_API_KEY)
-    console.error('[/api/analyze] OPENAI_API_KEY exists:', !!process.env.OPENAI_API_KEY)
-    console.error('[/api/analyze] NODE_ENV:', process.env.NODE_ENV)
+    // Avoid leaking environment info in logs
 
     // ApiError はそのまま / その他はラップ
     if (error instanceof ApiError) {

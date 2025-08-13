@@ -14,6 +14,8 @@ interface ProcessStep {
 interface ProcessingProgressProps {
   jobId: string | null
   onComplete?: () => void
+  modeHint?: string // テスト/デモなどの実行モード表示
+  isDemoMode?: boolean // デモ/テストで分析をスキップする場合
 }
 
 interface JobData {
@@ -21,6 +23,7 @@ interface JobData {
     status: string
     currentStep: string
     lastError?: string
+    lastErrorStep?: string
     splitCompleted?: boolean
     analyzeCompleted?: boolean
     episodeCompleted?: boolean
@@ -81,7 +84,7 @@ const INITIAL_STEPS: ProcessStep[] = [
   },
 ]
 
-function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
+function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: ProcessingProgressProps) {
   const [steps, setSteps] = useState<ProcessStep[]>(() =>
     INITIAL_STEPS.map((step) => ({ ...step })),
   )
@@ -90,6 +93,29 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [showLogs, setShowLogs] = useState(process.env.NODE_ENV === 'development')
   const [lastJobData, setLastJobData] = useState<string>('')
+  const [runtimeHints, setRuntimeHints] = useState<Record<string, string>>({})
+
+  // ステップ名から詳細メッセージを生成
+  const describeStep = useCallback((stepId: string): string => {
+    if (!stepId) return '状態更新'
+    const mAnalyze = stepId.match(/^analyze_chunk_(\d+)(?:_(retry|done))?$/)
+    if (mAnalyze) {
+      const idx = mAnalyze[1]
+      const suffix = mAnalyze[2]
+      if (suffix === 'retry') return `要素分析: チャンク${idx} をリトライ中`
+      if (suffix === 'done') return `要素分析: チャンク${idx} 分析完了`
+      return `要素分析: チャンク${idx} を分析中`
+    }
+    const mLayoutEp = stepId.match(/^layout_episode_(\d+)$/)
+    if (mLayoutEp) {
+      return `レイアウト生成: エピソード${mLayoutEp[1]} をYAMLに変換中`
+    }
+    if (stepId.startsWith('layout')) return 'レイアウト生成中'
+    if (stepId.startsWith('episode')) return 'エピソード分割中'
+    if (stepId.startsWith('split')) return 'チャンク分割中'
+    if (stepId.startsWith('render')) return 'レンダリング中'
+    return stepId
+  }, [])
 
   const addLog = useCallback(
     (level: 'info' | 'error' | 'warning', message: string, data?: unknown) => {
@@ -136,7 +162,12 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
       }
 
       setLastJobData(jobDataString)
-      addLog('info', `Job状態更新: ${data.job.status} - ${data.job.currentStep}`)
+      // 詳細メッセージ
+      addLog('info', describeStep(data.job.currentStep))
+      if (data.job.lastError) {
+        const where = data.job.lastErrorStep ? describeStep(data.job.lastErrorStep) : '処理'
+        addLog('error', `${where}に失敗: ${data.job.lastError}`)
+      }
 
       // 状態を直接更新
       setSteps((prevSteps) => {
@@ -258,6 +289,60 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
           }
         }
 
+        // ステータス遷移に基づくログ（差分を検知）
+        for (let i = 0; i < updatedSteps.length; i++) {
+          const before = prevSteps[i]
+          const after = updatedSteps[i]
+          if (before.status !== after.status) {
+            if (after.status === 'processing') {
+              addLog('info', `${after.name} を開始しました`)
+            } else if (after.status === 'completed') {
+              // デモ/テストで分析やエピソード構成をスキップした場合は明示
+              if (isDemoMode && (after.id === 'analyze' || after.id === 'episode')) {
+                addLog('info', `デモ: ${after.name} をスキップ（仮完了）しました`)
+              } else {
+                addLog('info', `${after.name} が完了しました`)
+              }
+            } else if (after.status === 'error') {
+              addLog('error', `${after.name} でエラーが発生しました`)
+            }
+          }
+        }
+
+        // ステップごとの動的メッセージ（現在どこを処理中か）
+        const hints: Record<string, string> = {}
+        const stepId = data.job.currentStep || ''
+        const analyzeMatch = stepId.match(/^analyze_chunk_(\d+)(?:_(retry|done))?$/)
+        if (analyzeMatch && !data.job.analyzeCompleted) {
+          const idx = Number(analyzeMatch[1])
+          const total = data.job.totalChunks || 0
+          hints.analyze = `現在: チャンク ${Math.min(idx + 1, total || idx + 1)} / ${total || '?'} を分析中`
+        } else if (
+          (stepId === 'analyze' || stepId.startsWith('analyze_')) &&
+          !data.job.analyzeCompleted
+        ) {
+          const done = (data.job.processedChunks ?? 0) + 1
+          const total = data.job.totalChunks || 0
+          hints.analyze = `現在: チャンク ${Math.min(done, total || done)} / ${total || '?'} を分析中`
+        }
+        if ((stepId === 'split' || stepId === 'chunks_created') && !data.job.splitCompleted) {
+          const done = (data.job.processedChunks ?? 0) + 1
+          const total = data.job.totalChunks || 0
+          hints.split = `現在: チャンク ${Math.min(done, total || done)} / ${total || '?'} を作成中`
+        }
+        const layoutMatch = stepId.match(/^layout_episode_(\d+)$/)
+        if (layoutMatch && !data.job.layoutCompleted) {
+          const ep = Number(layoutMatch[1])
+          const totalEp = data.job.totalEpisodes || 0
+          hints.layout = `現在: エピソード ${Math.min(ep, totalEp || ep)} / ${totalEp || '?'} をレイアウト中`
+        }
+        if ((stepId === 'render' || stepId.startsWith('render_')) && !data.job.renderCompleted) {
+          const done = (data.job.renderedPages ?? 0) + 1
+          const total = data.job.totalPages || 0
+          hints.render = `現在: ページ ${Math.min(done, total || done)} / ${total || '?'} をレンダリング中`
+        }
+        setRuntimeHints(hints)
+
         // 現在のインデックスと進捗を設定
         setCurrentStepIndex(currentIndex)
         setOverallProgress(Math.round((completedCount / INITIAL_STEPS.length) * 100))
@@ -267,7 +352,7 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
 
       return data.job.status === 'completed' || data.job.status === 'failed' ? 'stop' : 'continue'
     },
-    [lastJobData, addLog, onComplete],
+    [lastJobData, addLog, onComplete, describeStep, isDemoMode],
   )
 
   useEffect(() => {
@@ -324,9 +409,17 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
     }
   }, [jobId, addLog, updateStepsFromJobData])
 
-  if (!jobId) {
-    return null
-  }
+  // jobIdが未確定でも進捗カードを表示（初期段階からUX向上）
+  useEffect(() => {
+    if (jobId) return
+    setSteps((prev) => {
+      const updated = prev.map((s) => ({ ...s }))
+      updated[0].status = 'processing'
+      return updated
+    })
+    setOverallProgress(Math.round((0 / INITIAL_STEPS.length) * 100))
+    addLog('info', '準備中: アップロードを開始しています')
+  }, [jobId, addLog])
 
   return (
     <div className="space-y-6">
@@ -344,6 +437,11 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
               </button>
             )}
           </div>
+          {modeHint && (
+            <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+              {modeHint}
+            </div>
+          )}
           <div className="flex items-center justify-between text-sm text-gray-600">
             <span>全体進捗</span>
             <span className="font-medium">{Math.round(overallProgress)}%</span>
@@ -420,6 +518,9 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
                   {step.name}
                 </h4>
                 <p className="text-sm text-gray-500 mt-1">{step.description}</p>
+                {step.status === 'processing' && runtimeHints[step.id] && (
+                  <p className="text-sm text-blue-600 mt-1">{runtimeHints[step.id]}</p>
+                )}
 
                 {step.status === 'processing' && step.progress !== undefined && (
                   <div className="mt-2">
@@ -459,9 +560,9 @@ function ProcessingProgress({ jobId, onComplete }: ProcessingProgressProps) {
             {logs.length === 0 ? (
               <p className="text-gray-500 italic">ログはまだありません</p>
             ) : (
-              logs.map((log) => (
+              logs.map((log, index) => (
                 <div
-                  key={`${log.timestamp}-${log.message}`}
+                  key={`${log.timestamp}-${index}`}
                   className={`flex items-start space-x-2 py-1 px-2 rounded ${
                     log.level === 'error'
                       ? 'bg-red-50 text-red-700'

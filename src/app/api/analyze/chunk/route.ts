@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
-import { chunkAnalyzerAgent } from '@/agents/chunk-analyzer'
+import { getChunkAnalyzerAgent } from '@/agents/chunk-analyzer'
 import { getTextAnalysisConfig } from '@/config'
 import { createErrorResponse, createSuccessResponse } from '@/utils/api-error'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
@@ -106,27 +106,30 @@ export async function POST(request: NextRequest) {
 
     console.log(`[/api/analyze/chunk] Sending to LLM for analysis...`)
 
-    // Mastraエージェントを使用してチャンクを分析
-    const result = await chunkAnalyzerAgent.generate([{ role: 'user', content: prompt }], {
-      output: textAnalysisOutputSchema,
-    })
+    // エージェントを使用してチャンクを分析
+    const agent = getChunkAnalyzerAgent()
+    const result = await agent.generateObject(
+      [{ role: 'user', content: prompt }],
+      textAnalysisOutputSchema,
+      { maxRetries: 2 },
+    )
 
-    if (!result.object) {
+    if (!result) {
       throw new Error('Failed to generate analysis result')
     }
 
     console.log(`[/api/analyze/chunk] Analysis complete:`)
-    console.log(`  - Characters: ${result.object.characters.length}`)
-    console.log(`  - Scenes: ${result.object.scenes.length}`)
-    console.log(`  - Dialogues: ${result.object.dialogues.length}`)
-    console.log(`  - Highlights: ${result.object.highlights.length}`)
-    console.log(`  - Situations: ${result.object.situations.length}`)
+    console.log(`  - Characters: ${result.characters.length}`)
+    console.log(`  - Scenes: ${result.scenes.length}`)
+    console.log(`  - Dialogues: ${result.dialogues.length}`)
+    console.log(`  - Highlights: ${result.highlights.length}`)
+    console.log(`  - Situations: ${result.situations.length}`)
 
     // 分析結果をストレージに保存
     const analysisData = {
       chunkIndex,
       jobId,
-      analysis: result.object,
+      analysis: result,
       analyzedAt: new Date().toISOString(),
     }
 
@@ -134,7 +137,7 @@ export async function POST(request: NextRequest) {
     console.log(`[/api/analyze/chunk] Saved analysis to ${analysisPath}`)
 
     // レスポンスを返却
-    return createSuccessResponse({ cached: false, data: result.object })
+    return createSuccessResponse({ cached: false, data: result })
   } catch (error) {
     console.error('[/api/analyze/chunk] Error:', error)
 

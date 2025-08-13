@@ -55,6 +55,8 @@ export default function HomeClient() {
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const isDemo =
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === '1'
 
   const handleSubmit = async () => {
     if (!novelText.trim()) return
@@ -72,7 +74,9 @@ export default function HomeClient() {
       })
 
       if (!uploadResponse.ok) {
-        const errorData = (await uploadResponse.json().catch(() => ({}))) as { error?: string }
+        const errorData = (await uploadResponse.json().catch(() => ({}))) as {
+          error?: string
+        }
         throw new Error(errorData.error || 'サーバーエラーが発生しました')
       }
 
@@ -86,18 +90,22 @@ export default function HomeClient() {
       // アップロード完了後すぐに進捗表示に移行
       setViewMode('progress')
 
-      const analyzeResponse = await fetch('/api/analyze', {
+      const analyzeEndpoint = isDemo ? '/api/analyze?demo=1' : '/api/analyze'
+      const analyzeResponse = await fetch(analyzeEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           novelId,
           chunkSize: 5000,
           overlapSize: 500,
+          ...(isDemo ? { mode: 'demo' } : {}),
         }),
       })
 
       if (!analyzeResponse.ok) {
-        const errorData = (await analyzeResponse.json().catch(() => ({}))) as { error?: string }
+        const errorData = (await analyzeResponse.json().catch(() => ({}))) as {
+          error?: string
+        }
         throw new Error(errorData.error || '分析の開始に失敗しました')
       }
 
@@ -124,7 +132,9 @@ export default function HomeClient() {
       const response = await fetch(`/api/jobs/${jobId}/episodes`)
       if (!response.ok) throw new Error('Failed to fetch episodes')
 
-      const data = (await response.json().catch(() => ({}))) as { episodes?: Episode[] }
+      const data = (await response.json().catch(() => ({}))) as {
+        episodes?: Episode[]
+      }
       setEpisodes(data.episodes || [])
       setViewMode('results')
       setIsProcessing(false)
@@ -147,7 +157,9 @@ export default function HomeClient() {
   return (
     <div
       className="min-h-screen"
-      style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+      style={{
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      }}
     >
       <header className="modern-header">
         <div className="container mx-auto px-6 py-4">
@@ -235,7 +247,16 @@ export default function HomeClient() {
 
         {(viewMode === 'processing' || viewMode === 'progress') && (
           <div className="max-w-4xl mx-auto">
-            <ProcessingProgress jobId={jobId} onComplete={handleProcessComplete} />
+            <ProcessingProgress
+              jobId={jobId}
+              onComplete={handleProcessComplete}
+              modeHint={
+                isDemo
+                  ? '本来はLLMで詳細分析を行いますが、デモモードのため処理を簡略化しています（URLに ?demo=1）。'
+                  : undefined
+              }
+              isDemoMode={isDemo}
+            />
 
             {/* 処理開始時の視覚的フィードバック */}
             <div className="mt-8 text-center">

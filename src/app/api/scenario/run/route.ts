@@ -3,6 +3,8 @@ import { z } from 'zod'
 import {
   createDemoApiScenario,
   createNovelToMangaScenario,
+  createProdApiScenario,
+  createTestApiScenario,
 } from '@/agents/scenarios/novel-to-manga'
 import { runScenario } from '@/services/orchestrator/scenario'
 import {
@@ -25,7 +27,7 @@ const zRunInput = z.union([
     }),
   }),
   z.object({
-    kind: z.literal('demo'),
+    kind: z.enum(['demo', 'prod', 'test']),
     baseUrl: z.string().url(),
     text: z.string().optional(),
     novelId: z.string().optional(),
@@ -39,7 +41,14 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}))
     const input = zRunInput.parse(body)
     const started = Date.now()
-    const scenario = input.kind === 'demo' ? createDemoApiScenario() : createNovelToMangaScenario()
+    const scenario =
+      input.kind === 'dsl'
+        ? createNovelToMangaScenario()
+        : input.kind === 'prod'
+          ? createProdApiScenario()
+          : input.kind === 'test'
+            ? createTestApiScenario()
+            : createDemoApiScenario()
     // Normalize initialInput for demo (first step expects baseUrl/text/novelId)
     const initialInput =
       input.kind === 'demo'
@@ -48,18 +57,18 @@ export async function POST(req: Request) {
     const outputs = await runScenario(scenario, { initialInput })
     const elapsedMs = Date.now() - started
 
-    if (input.kind === 'demo') {
+    if (input.kind === 'demo' || input.kind === 'test' || input.kind === 'prod') {
       // Demo summary
-      const renderOutput = outputs['render-demo'] as
-        | { renderKey?: string; thumbnailKey?: string }
-        | undefined
+      const key =
+        input.kind === 'demo' ? 'render-demo' : input.kind === 'test' ? 'render-test' : 'render'
+      const renderOutput = outputs[key] as { renderKey?: string; thumbnailKey?: string } | undefined
       console.log('[scenario/demo] completed', {
         elapsedMs,
         hasRenderKey: !!renderOutput?.renderKey,
       })
       return NextResponse.json({
         ok: true,
-        kind: 'demo',
+        kind: input.kind,
         result: renderOutput,
         elapsedMs,
       })
