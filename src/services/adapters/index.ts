@@ -1,4 +1,4 @@
-import type { z } from 'zod'
+import { z } from 'zod'
 import type {
   zChunkOutput,
   zComposeOutput,
@@ -112,19 +112,21 @@ export async function demoAnalyze(
     body: JSON.stringify(payload),
   })
   if (!res.ok) throw new Error(`demoAnalyze failed: ${res.status}`)
-  const json = (await res.json().catch(() => ({}))) as {
-    id?: string
-    jobId?: string
-    data?: { jobId?: string }
-    mode?: string
-    chunkCount?: number
-  }
-  const jobId = json.id || json.jobId || json.data?.jobId
+  const ResponseSchema = z.object({
+    success: z.boolean().optional(),
+    id: z.string().optional(),
+    jobId: z.string().optional(),
+    data: z.object({ jobId: z.string().optional() }).partial().optional(),
+    mode: z.enum(['demo', 'splitOnly']).optional(),
+    chunkCount: z.number().int().nonnegative().optional(),
+  })
+  const json = ResponseSchema.parse(await res.json().catch(() => ({})))
+  const jobId = json.id ?? json.jobId ?? json.data?.jobId
   if (!jobId) throw new Error('demoAnalyze: jobId missing')
   return {
     baseUrl: input.baseUrl,
     jobId,
-    mode: (json.mode as 'demo' | 'splitOnly') ?? 'demo',
+    mode: json.mode ?? 'demo',
     chunkCount: json.chunkCount,
   }
 }
@@ -141,11 +143,13 @@ export async function demoLayout(
     }),
   })
   if (!res.ok) throw new Error(`demoLayout failed: ${res.status}`)
-  const json = (await res.json().catch(() => ({}))) as {
-    storageKey?: string
-    layoutPath?: string
-  }
-  const storageKey = json.storageKey || json.layoutPath
+  const ResponseSchema = z.object({
+    success: z.boolean().optional(),
+    storageKey: z.string().optional(),
+    layoutPath: z.string().optional(),
+  })
+  const json = ResponseSchema.parse(await res.json().catch(() => ({})))
+  const storageKey = json.storageKey ?? json.layoutPath
   if (!storageKey) throw new Error('demoLayout: storageKey missing')
   return {
     baseUrl: input.baseUrl,
@@ -168,17 +172,19 @@ export async function demoRender(
     }),
   })
   if (!res.ok) throw new Error(`demoRender failed: ${res.status}`)
-  const json = (await res.json().catch(() => ({}))) as {
-    renderKey?: string
-    thumbnailKey?: string
-  }
+  const ResponseSchema = z.object({
+    success: z.boolean().optional(),
+    renderKey: z.string().optional(),
+    thumbnailKey: z.string().optional(),
+  })
+  const json = ResponseSchema.parse(await res.json().catch(() => ({})))
   if (!json.renderKey) throw new Error('demoRender: renderKey missing')
   // json.renderKey は上で存在チェック済み
   return {
     jobId: input.jobId,
     episodeNumber: input.episodeNumber,
     pageNumber: input.pageNumber,
-    renderKey: json.renderKey!,
+    renderKey: json.renderKey,
     thumbnailKey: json.thumbnailKey,
   }
 }

@@ -5,6 +5,7 @@ import { generateMangaLayout } from '@/agents/layout-generator'
 import { getEpisodeRepository, getJobRepository } from '@/repositories'
 import type { ChunkData, EpisodeData } from '@/types/panel-layout'
 import { ApiError, createErrorResponse, createSuccessResponse } from '@/utils/api-error'
+import { detectDemoMode } from '@/utils/request-mode'
 import { getChunkData, StorageFactory, StorageKeys } from '@/utils/storage'
 
 const requestSchema = z.object({
@@ -32,11 +33,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = requestSchema.parse(body)
     const { jobId, episodeNumber, config } = validatedData
-    const url = new URL(request.url)
-    type LayoutGenerateBody = z.infer<typeof requestSchema>
-    const isDemo =
-      url.searchParams.get('demo') === '1' ||
-      (body as Partial<LayoutGenerateBody> & { mode?: string })?.mode === 'demo'
+    const isDemo = detectDemoMode(request, body)
 
     const episodeRepo = getEpisodeRepository()
     const jobRepo = getJobRepository()

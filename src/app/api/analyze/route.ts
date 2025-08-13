@@ -14,6 +14,7 @@ import {
   extractErrorMessage,
 } from '@/utils/api-error'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
+import { detectDemoMode } from '@/utils/request-mode'
 import { StorageKeys, saveEpisodeBoundaries } from '@/utils/storage'
 import { splitTextIntoChunks } from '@/utils/text-splitter'
 import { generateUUID } from '@/utils/uuid'
@@ -49,13 +50,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('[/api/analyze] Raw body:', rawBody)
-    const url = new URL(request.url)
-    const isDemoQuery = url.searchParams.get('demo') === '1'
-    type AnalyzeBody = z.infer<typeof analyzeRequestSchema> & { mode?: string }
-    const isDemoBody =
-      typeof rawBody === 'object' &&
-      rawBody !== null &&
-      (rawBody as Partial<AnalyzeBody>)?.mode === 'demo'
+    const isDemo = detectDemoMode(request, rawBody)
 
     // テスト/モック用フラグは廃止（フォールバックせずに正規処理/エラーにする）
 
@@ -193,7 +188,7 @@ export async function POST(request: NextRequest) {
     await dbService.markJobStepCompleted(jobId, 'split')
 
     // splitOnly / demo の場合はここで終了（LLM呼び出しは行わない）
-    if (splitOnly || isDemoQuery || isDemoBody) {
+    if (splitOnly || isDemo) {
       // デモ/簡易用に最小限のエピソード境界を作成（1話・1ページ想定）
       try {
         await saveEpisodeBoundaries(jobId, [

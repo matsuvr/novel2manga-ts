@@ -42,6 +42,25 @@
 - 2025-08-12 (PR#63 Gemini medium 対応): `normalizeEmotion()` が空白のみの文字列 (例: " ") を未指定扱い (`undefined`) として扱うよう変更し、無意味な 'normal' フォールバックと警告ログ発生を回避。
 - 2025-08-12 (PR#63 Gemini medium 対応): レガシー `StorageService` (`src/services/storage.ts`) の JSON パース失敗をサイレントに握りつぶさず、開発/テスト環境で `console.error` を出力する診断ログを追加（完全削除前のトラブルシュート容易化）。
 
+### 2025-08-13 追加: デモオーケストレーション（本PR）
+
+本PRでは、LLM未依存でUIから「分割→仮レイアウト→描画」まで体験できるデモ経路を導入。
+
+- 共通デモ判定:
+  - `src/utils/request-mode.ts` に `detectDemoMode(request, body)` を追加し、`?demo=1` もしくは `body.mode="demo"` を型安全に検出（`zod.safeParse`）。
+  - `src/app/api/analyze/route.ts`, `src/app/api/layout/generate/route.ts` から重複ロジックを排除。
+
+- レイアウト自動保存と描画の自動読込:
+  - `layout/generate` はデモ時に最小YAMLを生成し `StorageKeys.episodeLayout(jobId, episodeNumber)` へ保存。
+  - `render` は `layoutYaml` 未指定時にストレージから自動読込（デモ/通常共用）。
+
+- シナリオ定義:
+  - 既存 `ScenarioBuilder` を用い、`createDemoApiScenario()`（`analyze-demo → layout-demo → render-demo`）を追加。
+  - アダプタ `src/services/adapters/index.ts` にデモ用 `demoAnalyze`/`demoLayout`/`demoRender` を実装。各APIレスポンスはZodで検証し、`withRetry` による指数バックオフリトライを適用。
+
+- MCPドキュメント検証（要件準拠）:
+  - Mastraの最新MCP関連ドキュメントを参照済み（paths: `tools-mcp/mcp-overview.mdx`, `agents/using-tools-and-mcp.mdx`, `workflows/using-with-agents-and-tools.mdx`, `reference/tools/mcp-client.mdx`, `reference/tools/mcp-server.mdx`, `reference/core/mastra-class.mdx`）。
+
 **Scenario Orchestrator DSL（初期インメモリ実行ランタイム）:**
 
 - 型付きシナリオ定義（DAG）を宣言的に構築する `ScenarioBuilder` を追加（`src/services/orchestrator/scenario.ts`）。
