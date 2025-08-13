@@ -1,0 +1,1568 @@
+
+[1m[46m RUN [49m[22m [36mv3.2.4 [39m[90mG:/TsProjects/novel2manga-mastra[39m
+
+ [32m✓[39m src/__tests__/repositories/adapters.test.ts[2m > [22mRepository Adapters[2m > [22madaptEpisodePort[2m > [22mshould create read-only episode port[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/adapters.test.ts[2m > [22mRepository Adapters[2m > [22madaptEpisodePort[2m > [22mshould create read-write episode port[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/adapters.test.ts[2m > [22mRepository Adapters[2m > [22madaptEpisodePort[2m > [22mread-write port should handle episode operations[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/adapters.test.ts[2m > [22mRepository Adapters[2m > [22madaptNovelPort[2m > [22mshould create read-only novel port[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/adapters.test.ts[2m > [22mRepository Adapters[2m > [22madaptNovelPort[2m > [22mshould create read-write novel port[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/adapters.test.ts[2m > [22mRepository Adapters[2m > [22madaptNovelPort[2m > [22mread-write port should handle novel operations[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/adapters.test.ts[2m > [22mRepository Adapters[2m > [22madaptJobPort[2m > [22mshould create job port (always read-write)[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/adapters.test.ts[2m > [22mRepository Adapters[2m > [22madaptJobPort[2m > [22mshould handle job operations[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/adapters.test.ts[2m > [22mRepository Adapters[2m > [22madaptOutputPort[2m > [22mshould create output port (always read-write)[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/adapters.test.ts[2m > [22mRepository Adapters[2m > [22madaptOutputPort[2m > [22mshould handle output operations[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/adapters.test.ts[2m > [22mRepository Adapters[2m > [22madaptAll[2m > [22mshould create all ports with proper entities[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/adapters.test.ts[2m > [22mRepository Adapters[2m > [22madaptAll[2m > [22mshould provide working ports for all entities[32m 0[2mms[22m[39m
+[90mstdout[2m | src/__tests__/storage.test.ts[2m > [22m[2mStorage[2m > [22m[2mStorageFactory[2m > [22m[2mshould throw error when storage is not configured in production
+[22m[39m[storage] Using LocalFileStorage (dev/local): G:\TsProjects\novel2manga-mastra\.test-storage/novels
+
+[90mstdout[2m | src/__tests__/storage-audit.test.ts[2m > [22m[2mstorage audit[2m > [22m[2mdetects invalid format keys
+[22m[39m[storage] Using LocalFileStorage (dev/local): G:\TsProjects\novel2manga-mastra\.test-storage/novels
+
+[90mstdout[2m | src/__tests__/storage.test.ts[2m > [22m[2mStorage[2m > [22m[2mStorageFactory[2m > [22m[2mshould return storage instances in development mode
+[22m[39m[storage] Using LocalFileStorage (dev/local): G:\TsProjects\novel2manga-mastra\.test-storage/novels
+
+[90mstdout[2m | src/__tests__/storage.test.ts[2m > [22m[2mStorage[2m > [22m[2mStorageFactory[2m > [22m[2mshould return storage instances in development mode
+[22m[39m[storage] Using LocalFileStorage (dev/local): G:\TsProjects\novel2manga-mastra\.test-storage/chunks
+
+ [32m✓[39m src/__tests__/storage-audit.test.ts[2m > [22mstorage audit[2m > [22mdetects invalid format keys[32m 7[2mms[22m[39m
+ [32m✓[39m src/__tests__/adapters-demo.test.ts[2m > [22mdemo adapters[2m > [22mdemoAnalyze parses jobId from multiple shapes[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/adapters-demo.test.ts[2m > [22mdemo adapters[2m > [22mdemoLayout returns storageKey[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/adapters-demo.test.ts[2m > [22mdemo adapters[2m > [22mdemoRender returns renderKey[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/adapters-demo.test.ts[2m > [22mdemo adapters[2m > [22mhandles malformed JSON gracefully[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/adapters-demo.test.ts[2m > [22mdemo adapters[2m > [22mhandles network failures[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/adapters-demo.test.ts[2m > [22mdemo adapters[2m > [22mhandles missing jobId in demoLayout[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/adapters-demo.test.ts[2m > [22mdemo adapters[2m > [22mhandles missing renderKey in demoRender[32m 0[2mms[22m[39m
+[90mstdout[2m | src/__tests__/storage.test.ts[2m > [22m[2mStorage[2m > [22m[2mStorageFactory[2m > [22m[2mshould return storage instances in development mode
+[22m[39m[storage] Using LocalFileStorage (dev/local): G:\TsProjects\novel2manga-mastra\.test-storage/analysis
+
+[90mstderr[2m | src/__tests__/services/queue.test.ts[2m > [22m[2mJobQueue[2m > [22m[2mInProcessQueue: should update DB and notify on failure
+[22m[39m[Queue] Job processing failed job-2 Error: boom
+    at fn.<anonymous> [90m(G:\TsProjects\novel2manga-mastra\[39msrc\__tests__\services\queue.test.ts:47:45[90m)[39m
+    at new mockCall [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/spy/dist/index.js:96:15[90m)[39m
+    at new spy [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mtinyspy[24m/dist/index.js:47:39[90m)[39m
+    at InProcessQueue.enqueue [90m(G:\TsProjects\novel2manga-mastra\[39msrc\services\queue.ts:20:23[90m)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\services\queue.test.ts:51:17
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:155:11
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:26
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1863:10[90m)[39m
+
+[90mstdout[2m | src/__tests__/storage.test.ts[2m > [22m[2mStorage[2m > [22m[2mStorageFactory[2m > [22m[2mshould return storage instances in development mode
+[22m[39m[storage] Using LocalFileStorage (dev/local): G:\TsProjects\novel2manga-mastra\.test-storage/layouts
+
+[90mstderr[2m | src/__tests__/domain/emotion.test.ts[2m > [22m[2mdomain/emotion[2m > [22m[2mnormalizes synonyms to canonical values
+[22m[39m[emotion] Unknown emotion value "unknown-value" -> falling back to 'normal'
+
+[90mstderr[2m | src/__tests__/services/queue.test.ts[2m > [22m[2mJobQueue[2m > [22m[2mgetJobQueue: should fallback to InProcessQueue when JOBS_QUEUE is undefined
+[22m[39m[Queue] Job processing failed job-3 Error: boom
+    at fn.<anonymous> [90m(G:\TsProjects\novel2manga-mastra\[39msrc\__tests__\services\queue.test.ts:47:45[90m)[39m
+    at new mockCall [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/spy/dist/index.js:96:15[90m)[39m
+    at new spy [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mtinyspy[24m/dist/index.js:47:39[90m)[39m
+    at InProcessQueue.enqueue [90m(G:\TsProjects\novel2manga-mastra\[39msrc\services\queue.ts:20:23[90m)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\services\queue.test.ts:67:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:155:11
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:26
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1863:10[90m)[39m
+
+[90mstdout[2m | src/__tests__/storage.test.ts[2m > [22m[2mStorage[2m > [22m[2mStorageFactory[2m > [22m[2mshould return storage instances in development mode
+[22m[39m[storage] Using LocalFileStorage (dev/local): G:\TsProjects\novel2manga-mastra\.test-storage/renders
+
+ [32m✓[39m src/utils/__tests__/chunk-splitter.test.ts[2m > [22msplitTextIntoChunks[2m > [22mthrows error for non-positive chunkSize[32m 2[2mms[22m[39m
+ [32m✓[39m src/utils/__tests__/chunk-splitter.test.ts[2m > [22msplitTextIntoChunks[2m > [22mthrows error for negative overlapSize[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/__tests__/chunk-splitter.test.ts[2m > [22msplitTextIntoChunks[2m > [22mthrows error when overlapSize is not less than chunkSize[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/__tests__/chunk-splitter.test.ts[2m > [22msplitTextIntoChunks[2m > [22mhandles text length that isn't a multiple of chunkSize[32m 1[2mms[22m[39m
+ [32m✓[39m src/utils/__tests__/chunk-splitter.test.ts[2m > [22msplitTextIntoChunks[2m > [22mcalculates overlap boundaries correctly[32m 0[2mms[22m[39m
+[90mstdout[2m | src/__tests__/storage.test.ts[2m > [22m[2mStorage[2m > [22m[2mStorageFactory[2m > [22m[2mshould return storage instances in production mode with bindings
+[22m[39m[storage] Using LocalFileStorage (dev/local): G:\TsProjects\novel2manga-mastra\.test-storage/novels
+
+ [32m✓[39m src/__tests__/domain/emotion.test.ts[2m > [22mdomain/emotion[2m > [22maccepts known emotions[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/domain/emotion.test.ts[2m > [22mdomain/emotion[2m > [22mnormalizes synonyms to canonical values[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mWrite Capability Guards[2m > [22mEpisode port write capability 判定[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mWrite Capability Guards[2m > [22mNovel port write capability 判定[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mWrite Capability Guards[2m > [22mJob port write capability 判定 (always RW)[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mWrite Capability Guards[2m > [22mLegacy port compatibility - Episode with createEpisodes method[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mWrite Capability Guards[2m > [22mLegacy port compatibility - Episode without createEpisodes method[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mWrite Capability Guards[2m > [22mLegacy port compatibility - Novel with ensureNovel method[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mWrite Capability Guards[2m > [22mLegacy port compatibility - Novel without ensureNovel method[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mDiscriminated Union Type Guards[2m > [22misEpisodePort - should return true for valid episode port[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mDiscriminated Union Type Guards[2m > [22misEpisodePort - should return false for non-episode port[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mDiscriminated Union Type Guards[2m > [22misEpisodePort - should return false for null/undefined[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mDiscriminated Union Type Guards[2m > [22misEpisodePort - should return false for non-object[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mDiscriminated Union Type Guards[2m > [22misNovelPort - should return true for valid novel port[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mDiscriminated Union Type Guards[2m > [22misNovelPort - should return false for non-novel port[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mDiscriminated Union Type Guards[2m > [22misJobPort - should return true for valid job port[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mDiscriminated Union Type Guards[2m > [22misJobPort - should return false for non-job port[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mDiscriminated Union Type Guards[2m > [22misOutputPort - should return true for valid output port[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mDiscriminated Union Type Guards[2m > [22misOutputPort - should return false for non-output port[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mEdge Cases[2m > [22mType guards should handle objects with extra properties[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mEdge Cases[2m > [22mType guards should handle objects with wrong entity type[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/ports-guards.test.ts[2m > [22mRepository Port Type Guards[2m > [22mEdge Cases[2m > [22mWrite capability guards should handle edge cases safely[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/services/queue.test.ts[2m > [22mJobQueue[2m > [22mInProcessQueue: should process jobs immediately and send completion notification[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/services/queue.test.ts[2m > [22mJobQueue[2m > [22mInProcessQueue: should update DB and notify on failure[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/services/queue.test.ts[2m > [22mJobQueue[2m > [22mgetJobQueue: should fallback to InProcessQueue when JOBS_QUEUE is undefined[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/services/queue.test.ts[2m > [22mJobQueue[2m > [22mgetJobQueue: should return Cloudflare-backed queue when JOBS_QUEUE is available[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/utils-request-mode.test.ts[2m > [22mdetectDemoMode[2m > [22mdetects via query[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/utils-request-mode.test.ts[2m > [22mdetectDemoMode[2m > [22mdetects via body.mode[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/utils-request-mode.test.ts[2m > [22mdetectDemoMode[2m > [22mreturns false otherwise[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/storage.test.ts[2m > [22mStorage[2m > [22mStorageKeys[2m > [22mshould generate correct storage keys[32m 1[2mms[22m[39m
+ [31m×[39m src/__tests__/storage.test.ts[2m > [22mStorage[2m > [22mStorageFactory[2m > [22mshould throw error when storage is not configured in production[32m 7[2mms[22m[39m
+[31m   → promise resolved "LocalFileStorage{ baseDir: 'G:\TsPro…' }" instead of rejecting[39m
+ [32m✓[39m src/__tests__/storage.test.ts[2m > [22mStorage[2m > [22mStorageFactory[2m > [22mshould return storage instances in development mode[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/storage.test.ts[2m > [22mStorage[2m > [22mStorageFactory[2m > [22mshould return storage instances in production mode with bindings[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/storage.test.ts[2m > [22mStorage[2m > [22mLocalFileStorage[2m > [22mshould exclude internal metadata fields for binary files[32m 7[2mms[22m[39m
+ [32m✓[39m src/__tests__/utils/type-guards.performance.test.ts[2m > [22misMangaLayout caching[2m > [22mreturns true consistently and benefits from cache on repeated calls[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/utils/type-guards.performance.test.ts[2m > [22misMangaLayout caching[2m > [22mrejects clearly invalid object fast[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/utils/type-guards.test.ts[2m > [22mtype-guards: isMangaLayout[2m > [22mreturns false for non-object[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/utils/type-guards.test.ts[2m > [22mtype-guards: isMangaLayout[2m > [22mreturns true for minimal valid layout[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/utils/type-guards.test.ts[2m > [22mtype-guards: isMangaLayout[2m > [22mvalidateMangaLayout returns errors for missing pages[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/manga-models.test.ts[2m > [22mManga Models[2m > [22mEpisode Schema[2m > [22mshould validate valid episode data[32m 3[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/manga-models.test.ts[2m > [22mManga Models[2m > [22mEpisode Schema[2m > [22mshould allow optional climaxPoint[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/manga-models.test.ts[2m > [22mManga Models[2m > [22mEpisode Schema[2m > [22mshould reject invalid episode number[32m 1[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/manga-models.test.ts[2m > [22mManga Models[2m > [22mPanel Schema[2m > [22mshould validate valid panel data[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/manga-models.test.ts[2m > [22mManga Models[2m > [22mPanel Schema[2m > [22mshould validate all panel types[32m 1[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/manga-models.test.ts[2m > [22mManga Models[2m > [22mPanel Schema[2m > [22mshould allow optional content fields[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/manga-models.test.ts[2m > [22mManga Models[2m > [22mPanelLayout Schema[2m > [22mshould validate valid panel layout[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/manga-models.test.ts[2m > [22mManga Models[2m > [22mPanelLayout Schema[2m > [22mshould validate all layout types[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/manga-models.test.ts[2m > [22mManga Models[2m > [22mMangaPage Schema[2m > [22mshould validate valid manga page data[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/manga-models.test.ts[2m > [22mManga Models[2m > [22mMangaPage Schema[2m > [22mshould allow empty panels array[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/manga-models.test.ts[2m > [22mManga Models[2m > [22mJapanese Reading Order[2m > [22mshould calculate correct reading order for grid layout[32m 1[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/manga-models.test.ts[2m > [22mManga Models[2m > [22mJapanese Reading Order[2m > [22mshould handle panels at the same vertical position[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/manga-models.test.ts[2m > [22mManga Models[2m > [22mJapanese Reading Order[2m > [22mshould sort panels by reading order[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/manga-models.test.ts[2m > [22mManga Models[2m > [22mJapanese Reading Order[2m > [22mshould apply Japanese reading order to panels[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/manga-models.test.ts[2m > [22mManga Models[2m > [22mReadingOrder Schema[2m > [22mshould validate reading order mapping[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/manga-models.test.ts[2m > [22mManga Models[2m > [22mReadingOrder Schema[2m > [22mshould reject non-positive order numbers[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/novel-repository.test.ts[2m > [22mNovelRepository[2m > [22mdelegates get[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/novel-repository.test.ts[2m > [22mNovelRepository[2m > [22mdelegates list[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/novel-repository.test.ts[2m > [22mNovelRepository[2m > [22mdelegates ensure[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/scenario-dsl.test.ts[2m > [22mScenario DSL[2m > [22mbuilds and runs the novel-to-manga flow in memory[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/scenario-dsl.test.ts[2m > [22mScenario DSL[2m > [22mdetects cycle in scenario definition[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/scenario-dsl.test.ts[2m > [22mScenario DSL[2m > [22mfails on invalid edge reference[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/scenario-dsl.test.ts[2m > [22mScenario DSL[2m > [22mvalidates input and output schemas and retries on failure[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/scenario-dsl.test.ts[2m > [22mScenario DSL[2m > [22mcollects errors when collectErrors enabled[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/extract-error-message.test.ts[2m > [22mextractErrorMessage[2m > [22mhandles Error instance[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/extract-error-message.test.ts[2m > [22mextractErrorMessage[2m > [22mhandles string[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/extract-error-message.test.ts[2m > [22mextractErrorMessage[2m > [22mserializes object[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/extract-error-message.test.ts[2m > [22mextractErrorMessage[2m > [22mfalls back to String for circular object[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/extract-error-message.test.ts[2m > [22mextractErrorMessage[2m > [22mhandles undefined[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/extract-error-message.test.ts[2m > [22mextractErrorMessage[2m > [22mhandles null[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/extract-error-message.test.ts[2m > [22mextractErrorMessage[2m > [22mhandles symbol[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/extract-error-message.test.ts[2m > [22mextractErrorMessage[2m > [22mhandles function[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/extract-error-message.test.ts[2m > [22mextractErrorMessage[2m > [22mtruncates very large JSON strings (>1000 chars)[32m 0[2mms[22m[39m
+[90mstdout[2m | src/__tests__/api/novel-storage.test.ts[2m > [22m[2m/api/novel/storage[2m > [22m[2mPOST /api/novel/storage[2m > [22m[2m有効なテキストでストレージに保存する
+[22m[39m[novel-storage] Starting storage operation
+
+[90mstderr[2m | src/__tests__/repositories/episode-repository.test.ts[2m > [22m[2mEpisodeRepository[2m > [22m[2mbulkUpsert is no-op with warning when createEpisodes is missing
+[22m[39m[WARN] EpisodeDbPort.createEpisodes is not implemented; bulkUpsert skipped {
+  timestamp: [35m2025-08-13T17:47:47.537Z[39m,
+  level: [32m'warn'[39m,
+  message: [32m'EpisodeDbPort.createEpisodes is not implemented; bulkUpsert skipped'[39m,
+  error: [90mundefined[39m,
+  context: { episodesCount: [33m1[39m }
+}
+
+[90mstdout[2m | src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m[2m/api/analyze/narrative-arc[2m > [22m[2mPOST /api/analyze/narrative-arc[2m > [22m[2m有効なリクエストでナラティブアーク分析を実行する
+[22m[39mAnalyzing narrative arc for novel test-novel-id, chunks 0-2, total chars: 76
+
+[90mstdout[2m | src/__tests__/api/novel-storage.test.ts[2m > [22m[2m/api/novel/storage[2m > [22m[2mPOST /api/novel/storage[2m > [22m[2m有効なテキストでストレージに保存する
+[22m[39m[novel-storage] Storage completed in 2ms
+
+[90mstderr[2m | src/__tests__/repositories/episode-repository.test.ts[2m > [22m[2mEpisodeRepository[2m > [22m[2mbulkUpsert rethrows on port error
+[22m[39m[ERROR] Failed to bulk upsert episodes {
+  timestamp: [35m2025-08-13T17:47:47.540Z[39m,
+  level: [32m'error'[39m,
+  message: [32m'Failed to bulk upsert episodes'[39m,
+  error: {
+    name: [32m'Error'[39m,
+    message: [32m'db error'[39m,
+    stack: [32m'Error: db error\n'[39m +
+      [32m'    at G:\\TsProjects\\novel2manga-mastra\\src\\__tests__\\repositories\\episode-repository.test.ts:70:54\n'[39m +
+      [32m'    at file:///G:/TsProjects/novel2manga-mastra/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11\n'[39m +
+      [32m'    at file:///G:/TsProjects/novel2manga-mastra/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26\n'[39m +
+      [32m'    at file:///G:/TsProjects/novel2manga-mastra/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20\n'[39m +
+      [32m'    at new Promise (<anonymous>)\n'[39m +
+      [32m'    at runWithTimeout (file:///G:/TsProjects/novel2manga-mastra/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)\n'[39m +
+      [32m'    at runTest (file:///G:/TsProjects/novel2manga-mastra/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)\n'[39m +
+      [32m'    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n'[39m +
+      [32m'    at runSuite (file:///G:/TsProjects/novel2manga-mastra/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)\n'[39m +
+      [32m'    at runSuite (file:///G:/TsProjects/novel2manga-mastra/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)'[39m
+  },
+  context: { episodesCount: [33m1[39m }
+}
+
+[90mstdout[2m | src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m[2m/api/analyze/narrative-arc[2m > [22m[2mPOST /api/analyze/narrative-arc[2m > [22m[2m有効なリクエストでナラティブアーク分析を実行する
+[22m[39mSaved 2 episode boundaries for novel test-novel-id
+
+ [32m✓[39m src/__tests__/domain/models/scene.test.ts[2m > [22mdomain/models/scene[2m > [22misSceneDomainModel[2m > [22mreturns true for flexible scene with partial fields[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/domain/models/scene.test.ts[2m > [22mdomain/models/scene[2m > [22misSceneDomainModel[2m > [22mreturns false for non-object[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/domain/models/scene.test.ts[2m > [22mdomain/models/scene[2m > [22mnormalizeToSceneCore[2m > [22mpasses valid core scene[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/domain/models/scene.test.ts[2m > [22mdomain/models/scene[2m > [22mnormalizeToSceneCore[2m > [22mfails with missing required fields and throws ValidationError[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/domain/models/scene.test.ts[2m > [22mdomain/models/scene[2m > [22mnormalizeToSceneCore[2m > [22mcaptures invalid type fields separately from missing fields[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/domain/models/scene.test.ts[2m > [22mdomain/models/scene[2m > [22mschemas[2m > [22mSceneFlexibleSchema allows partial[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/domain/models/scene.test.ts[2m > [22mdomain/models/scene[2m > [22mschemas[2m > [22mSceneCoreSchema enforces required fields[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/domain/models/scene.test.ts[2m > [22mdomain/models/scene[2m > [22msceneLegacyFlags[2m > [22mreturns boolean flags based on presence of time/location strings[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/text-analysis.test.ts[2m > [22mTextAnalysis Model[2m > [22mCharacter Schema[2m > [22mshould validate valid character data[32m 2[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/text-analysis.test.ts[2m > [22mTextAnalysis Model[2m > [22mCharacter Schema[2m > [22mshould reject invalid character data[32m 1[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/text-analysis.test.ts[2m > [22mTextAnalysis Model[2m > [22mScene Schema[2m > [22mshould validate valid scene data[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/text-analysis.test.ts[2m > [22mTextAnalysis Model[2m > [22mScene Schema[2m > [22mshould allow optional time field[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/text-analysis.test.ts[2m > [22mTextAnalysis Model[2m > [22mDialogue Schema[2m > [22mshould validate valid dialogue data[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/text-analysis.test.ts[2m > [22mTextAnalysis Model[2m > [22mDialogue Schema[2m > [22mshould allow optional emotion field[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/text-analysis.test.ts[2m > [22mTextAnalysis Model[2m > [22mHighlight Schema[2m > [22mshould validate valid highlight data[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/text-analysis.test.ts[2m > [22mTextAnalysis Model[2m > [22mHighlight Schema[2m > [22mshould enforce importance range 1-5[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/text-analysis.test.ts[2m > [22mTextAnalysis Model[2m > [22mHighlight Schema[2m > [22mshould validate highlight types[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/text-analysis.test.ts[2m > [22mTextAnalysis Model[2m > [22mSituation Schema[2m > [22mshould validate valid situation data[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/text-analysis.test.ts[2m > [22mTextAnalysis Model[2m > [22mTextAnalysis Schema[2m > [22mshould validate complete text analysis data[32m 1[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/text-analysis.test.ts[2m > [22mTextAnalysis Model[2m > [22mTextAnalysis Schema[2m > [22mshould validate empty arrays for optional collections[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/text-analysis.test.ts[2m > [22mTextAnalysis Model[2m > [22mTextAnalysis Schema[2m > [22mshould reject missing required fields[32m 0[2mms[22m[39m
+ [32m✓[39m src/types/__tests__/text-analysis.test.ts[2m > [22mTextAnalysis Model[2m > [22m5要素の構造検証[2m > [22mshould contain all 5 essential elements[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/health.test.ts[2m > [22m/api/health[2m > [22m正常系: 200 と ok ステータスを返す[32m 7[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/health.test.ts[2m > [22m/api/health[2m > [22mDB エラー時は503 と error ステータスを返す[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/health.test.ts[2m > [22m/api/health[2m > [22mStorage エラー時は503 と error ステータスを返す[32m 1[2mms[22m[39m
+[90mstdout[2m | src/__tests__/api/novel-storage.test.ts[2m > [22m[2m/api/novel/storage[2m > [22m[2mPOST /api/novel/storage[2m > [22m[2mtextが未指定の場合は400エラーを返す
+[22m[39m[novel-storage] Starting storage operation
+
+[90mstderr[2m | src/__tests__/api/job-enqueue.test.ts[2m > [22m[2m/api/jobs/[jobId] enqueue[2m > [22m[2m検証: 不正なメールは400を返す
+[22m[39mAPI Error: ZodError: [
+  {
+    "validation": "email",
+    "code": "invalid_string",
+    "message": "Invalid email",
+    "path": [
+      "userEmail"
+    ]
+  }
+]
+    at Object.get error [as error] [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:39:31[90m)[39m
+    at ZodObject.parse [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:114:22[90m)[39m
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\jobs\[jobId]\route.ts:11:39[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\job-enqueue.test.ts:59:17
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  issues: [
+    {
+      validation: [32m'email'[39m,
+      code: [32m'invalid_string'[39m,
+      message: [32m'Invalid email'[39m,
+      path: [36m[Array][39m
+    }
+  ],
+  addIssue: [36m[Function (anonymous)][39m,
+  addIssues: [36m[Function (anonymous)][39m,
+  errors: [
+    {
+      validation: [32m'email'[39m,
+      code: [32m'invalid_string'[39m,
+      message: [32m'Invalid email'[39m,
+      path: [36m[Array][39m
+    }
+  ]
+}
+
+[90mstdout[2m | src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m[2m/api/analyze/narrative-arc[2m > [22m[2mPOST /api/analyze/narrative-arc[2m > [22m[2m必須のフィールドのみでリクエストを送信する
+[22m[39mAnalyzing narrative arc for novel test-novel-id, chunks 0-2, total chars: 76
+
+ [32m✓[39m src/__tests__/Logger.test.tsx[2m > [22mLogger Component[2m > [22mshould render the logger component with empty logs[32m 16[2mms[22m[39m
+ [32m✓[39m src/__tests__/Logger.test.tsx[2m > [22mLogger Component[2m > [22mshould render log entries[32m 21[2mms[22m[39m
+[90mstderr[2m | src/__tests__/api/novel-storage.test.ts[2m > [22m[2m/api/novel/storage[2m > [22m[2mPOST /api/novel/storage[2m > [22m[2mtextが未指定の場合は400エラーを返す
+[22m[39mAPI Error: ValidationError: テキストが必要です
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\novel\storage\route.ts:49:34[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\novel-storage.test.ts:74:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m400[39m,
+  code: [32m'VALIDATION_ERROR'[39m,
+  details: { field: [90mundefined[39m },
+  field: [90mundefined[39m
+}
+
+[90mstdout[2m | src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m[2m/api/analyze/narrative-arc[2m > [22m[2mPOST /api/analyze/narrative-arc[2m > [22m[2m必須のフィールドのみでリクエストを送信する
+[22m[39mSaved 2 episode boundaries for novel test-novel-id
+
+ [32m✓[39m src/__tests__/repositories/episode-repository.test.ts[2m > [22mEpisodeRepository[2m > [22mgetByJobId delegates to port[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/episode-repository.test.ts[2m > [22mEpisodeRepository[2m > [22mbulkUpsert is no-op with warning when createEpisodes is missing[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/episode-repository.test.ts[2m > [22mEpisodeRepository[2m > [22mbulkUpsert calls createEpisodes when available[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/episode-repository.test.ts[2m > [22mEpisodeRepository[2m > [22mbulkUpsert rethrows on port error[32m 5[2mms[22m[39m
+[90mstdout[2m | src/__tests__/api/analyze-chunk.test.ts[2m > [22m[2m/api/analyze/chunk[2m > [22m[2mPOST /api/analyze/chunk[2m > [22m[2m有効なリクエストでチャンク分析を実行する
+[22m[39m[/api/analyze/chunk] Analyzing chunk 0 for job test-chunk-job
+
+[90mstdout[2m | src/__tests__/api/novel-storage.test.ts[2m > [22m[2m/api/novel/storage[2m > [22m[2mPOST /api/novel/storage[2m > [22m[2mtextが文字列でない場合は400エラーを返す
+[22m[39m[novel-storage] Starting storage operation
+
+[90mstderr[2m | src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m[2m/api/analyze/narrative-arc[2m > [22m[2mPOST /api/analyze/narrative-arc[2m > [22m[2mnovelIdが未指定の場合は400エラーを返す
+[22m[39mNarrative arc analysis error: ZodError: [
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "undefined",
+    "path": [
+      "novelId"
+    ],
+    "message": "Required"
+  }
+]
+    at Object.get error [as error] [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:39:31[90m)[39m
+    at ZodObject.parse [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:114:22[90m)[39m
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\narrative-arc\route.ts:31:41[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-narrative-arc.test.ts:169:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  issues: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'string'[39m,
+      received: [32m'undefined'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Required'[39m
+    }
+  ],
+  addIssue: [36m[Function (anonymous)][39m,
+  addIssues: [36m[Function (anonymous)][39m,
+  errors: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'string'[39m,
+      received: [32m'undefined'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Required'[39m
+    }
+  ]
+}
+API Error: ValidationError: Invalid request data
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\narrative-arc\route.ts:121:9[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-narrative-arc.test.ts:169:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m400[39m,
+  code: [32m'VALIDATION_ERROR'[39m,
+  details: { issues: [ [36m[Object][39m ], code: [32m'INVALID_INPUT'[39m, field: [90mundefined[39m },
+  field: [90mundefined[39m
+}
+
+ [32m✓[39m src/__tests__/api/job-enqueue.test.ts[2m > [22m/api/jobs/[jobId] enqueue[2m > [22m正常系: キューに投入し、processingへ更新する[32m 8[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/job-enqueue.test.ts[2m > [22m/api/jobs/[jobId] enqueue[2m > [22m検証: 不正なメールは400を返す[32m 7[2mms[22m[39m
+[90mstdout[2m | src/__tests__/api/analyze-chunk.test.ts[2m > [22m[2m/api/analyze/chunk[2m > [22m[2mPOST /api/analyze/chunk[2m > [22m[2m有効なリクエストでチャンク分析を実行する
+[22m[39m[/api/analyze/chunk] Loaded chunk text (35 chars)
+[/api/analyze/chunk] Sending to LLM for analysis...
+
+[90mstderr[2m | src/__tests__/api/novel-storage.test.ts[2m > [22m[2m/api/novel/storage[2m > [22m[2mPOST /api/novel/storage[2m > [22m[2mtextが文字列でない場合は400エラーを返す
+[22m[39mAPI Error: ValidationError: テキストが必要です
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\novel\storage\route.ts:49:34[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\novel-storage.test.ts:94:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m400[39m,
+  code: [32m'VALIDATION_ERROR'[39m,
+  details: { field: [90mundefined[39m },
+  field: [90mundefined[39m
+}
+
+[90mstderr[2m | src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m[2m/api/analyze/narrative-arc[2m > [22m[2mPOST /api/analyze/narrative-arc[2m > [22m[2mstartChunkIndexが未指定の場合は400エラーを返す
+[22m[39mNarrative arc analysis error: ZodError: [
+  {
+    "code": "invalid_type",
+    "expected": "number",
+    "received": "undefined",
+    "path": [
+      "startChunkIndex"
+    ],
+    "message": "Required"
+  }
+]
+    at Object.get error [as error] [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:39:31[90m)[39m
+    at ZodObject.parse [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:114:22[90m)[39m
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\narrative-arc\route.ts:31:41[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-narrative-arc.test.ts:193:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  issues: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'number'[39m,
+      received: [32m'undefined'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Required'[39m
+    }
+  ],
+  addIssue: [36m[Function (anonymous)][39m,
+  addIssues: [36m[Function (anonymous)][39m,
+  errors: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'number'[39m,
+      received: [32m'undefined'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Required'[39m
+    }
+  ]
+}
+API Error: ValidationError: Invalid request data
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\narrative-arc\route.ts:121:9[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-narrative-arc.test.ts:193:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m400[39m,
+  code: [32m'VALIDATION_ERROR'[39m,
+  details: { issues: [ [36m[Object][39m ], code: [32m'INVALID_INPUT'[39m, field: [90mundefined[39m },
+  field: [90mundefined[39m
+}
+
+[90mstdout[2m | src/__tests__/api/analyze-chunk.test.ts[2m > [22m[2m/api/analyze/chunk[2m > [22m[2mPOST /api/analyze/chunk[2m > [22m[2m有効なリクエストでチャンク分析を実行する
+[22m[39m[/api/analyze/chunk] Analysis complete:
+  - Characters: 1
+  - Scenes: 1
+  - Dialogues: 1
+  - Highlights: 1
+  - Situations: 1
+
+[90mstdout[2m | src/__tests__/api/novel-storage.test.ts[2m > [22m[2m/api/novel/storage[2m > [22m[2mPOST /api/novel/storage[2m > [22m[2mtextが空文字列の場合は400エラーを返す
+[22m[39m[novel-storage] Starting storage operation
+
+[90mstdout[2m | src/__tests__/api/analyze-chunk.test.ts[2m > [22m[2m/api/analyze/chunk[2m > [22m[2mPOST /api/analyze/chunk[2m > [22m[2m有効なリクエストでチャンク分析を実行する
+[22m[39m[/api/analyze/chunk] Saved analysis to test-chunk-job/chunk_0.json
+
+[90mstderr[2m | src/__tests__/api/novel-storage.test.ts[2m > [22m[2m/api/novel/storage[2m > [22m[2mPOST /api/novel/storage[2m > [22m[2mtextが空文字列の場合は400エラーを返す
+[22m[39mAPI Error: ValidationError: テキストが必要です
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\novel\storage\route.ts:49:34[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\novel-storage.test.ts:114:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m400[39m,
+  code: [32m'VALIDATION_ERROR'[39m,
+  details: { field: [90mundefined[39m },
+  field: [90mundefined[39m
+}
+
+[90mstderr[2m | src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m[2m/api/analyze/narrative-arc[2m > [22m[2mPOST /api/analyze/narrative-arc[2m > [22m[2mstartChunkIndexが負の値の場合は400エラーを返す
+[22m[39mNarrative arc analysis error: ZodError: [
+  {
+    "code": "too_small",
+    "minimum": 0,
+    "type": "number",
+    "inclusive": true,
+    "exact": false,
+    "message": "Number must be greater than or equal to 0",
+    "path": [
+      "startChunkIndex"
+    ]
+  }
+]
+    at Object.get error [as error] [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:39:31[90m)[39m
+    at ZodObject.parse [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:114:22[90m)[39m
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\narrative-arc\route.ts:31:41[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-narrative-arc.test.ts:218:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  issues: [
+    {
+      code: [32m'too_small'[39m,
+      minimum: [33m0[39m,
+      type: [32m'number'[39m,
+      inclusive: [33mtrue[39m,
+      exact: [33mfalse[39m,
+      message: [32m'Number must be greater than or equal to 0'[39m,
+      path: [36m[Array][39m
+    }
+  ],
+  addIssue: [36m[Function (anonymous)][39m,
+  addIssues: [36m[Function (anonymous)][39m,
+  errors: [
+    {
+      code: [32m'too_small'[39m,
+      minimum: [33m0[39m,
+      type: [32m'number'[39m,
+      inclusive: [33mtrue[39m,
+      exact: [33mfalse[39m,
+      message: [32m'Number must be greater than or equal to 0'[39m,
+      path: [36m[Array][39m
+    }
+  ]
+}
+API Error: ValidationError: Invalid request data
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\narrative-arc\route.ts:121:9[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-narrative-arc.test.ts:218:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m400[39m,
+  code: [32m'VALIDATION_ERROR'[39m,
+  details: { issues: [ [36m[Object][39m ], code: [32m'INVALID_INPUT'[39m, field: [90mundefined[39m },
+  field: [90mundefined[39m
+}
+
+[90mstdout[2m | src/__tests__/api/novel-storage.test.ts[2m > [22m[2m/api/novel/storage[2m > [22m[2mPOST /api/novel/storage[2m > [22m[2m長いテキストでも正常に処理する
+[22m[39m[novel-storage] Starting storage operation
+
+[90mstdout[2m | src/__tests__/api/analyze-chunk.test.ts[2m > [22m[2m/api/analyze/chunk[2m > [22m[2mPOST /api/analyze/chunk[2m > [22m[2m既に分析済みのチャンクの場合はキャッシュされた結果を返す
+[22m[39m[/api/analyze/chunk] Analyzing chunk 1 for job test-chunk-job
+
+[90mstdout[2m | src/__tests__/api/novel-storage.test.ts[2m > [22m[2m/api/novel/storage[2m > [22m[2mPOST /api/novel/storage[2m > [22m[2m長いテキストでも正常に処理する
+[22m[39m[novel-storage] Storage completed in 0ms
+
+[90mstdout[2m | src/__tests__/api/analyze-chunk.test.ts[2m > [22m[2m/api/analyze/chunk[2m > [22m[2mPOST /api/analyze/chunk[2m > [22m[2m既に分析済みのチャンクの場合はキャッシュされた結果を返す
+[22m[39m[/api/analyze/chunk] Analysis already exists for chunk 1
+
+[90mstderr[2m | src/__tests__/api/novel-storage.test.ts[2m > [22m[2m/api/novel/storage[2m > [22m[2mGET /api/novel/storage[2m > [22m[2mUUIDが未指定の場合は400エラーを返す
+[22m[39mAPI Error: ValidationError: UUIDが必要です
+    at Module.GET [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\novel\storage\route.ts:74:34[90m)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\novel-storage.test.ts:184:30
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:155:11
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:26
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1863:10[90m)[39m
+    at runTest [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1574:12[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at runSuite [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m {
+  statusCode: [33m400[39m,
+  code: [32m'VALIDATION_ERROR'[39m,
+  details: { field: [32m'uuid'[39m },
+  field: [32m'uuid'[39m
+}
+
+[90mstderr[2m | src/__tests__/api/novel-storage.test.ts[2m > [22m[2m/api/novel/storage[2m > [22m[2mGET /api/novel/storage[2m > [22m[2m存在しないUUIDの場合は404エラーを返す
+[22m[39mAPI Error: NotFoundError: ファイルが見つかりません
+    at Module.GET [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\novel\storage\route.ts:85:34[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\novel-storage.test.ts:199:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m404[39m,
+  code: [32m'NOT_FOUND'[39m,
+  details: { resource: [32m'ファイル'[39m, id: [90mundefined[39m }
+}
+
+[90mstderr[2m | src/__tests__/api/novel-storage.test.ts[2m > [22m[2m/api/novel/storage[2m > [22m[2mGET /api/novel/storage[2m > [22m[2mUUIDが空文字列の場合は400エラーを返す
+[22m[39mAPI Error: ValidationError: UUIDが必要です
+    at Module.GET [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\novel\storage\route.ts:74:34[90m)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\novel-storage.test.ts:209:30
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:155:11
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:26
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1863:10[90m)[39m
+    at runTest [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1574:12[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at runSuite [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m {
+  statusCode: [33m400[39m,
+  code: [32m'VALIDATION_ERROR'[39m,
+  details: { field: [32m'uuid'[39m },
+  field: [32m'uuid'[39m
+}
+
+[90mstderr[2m | src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m[2m/api/analyze/narrative-arc[2m > [22m[2mPOST /api/analyze/narrative-arc[2m > [22m[2m準備関数が失敗した場合は400エラーを返す
+[22m[39mAPI Error: ValidationError: Failed to prepare narrative analysis input
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\narrative-arc\route.ts:46:9[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-narrative-arc.test.ts:249:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m400[39m,
+  code: [32m'VALIDATION_ERROR'[39m,
+  details: {
+    reason: [32m'Not enough chunks available or invalid chunk range'[39m,
+    code: [32m'INVALID_INPUT'[39m,
+    field: [90mundefined[39m
+  },
+  field: [90mundefined[39m
+}
+
+ [32m✓[39m src/__tests__/api/novel-storage.test.ts[2m > [22m/api/novel/storage[2m > [22mPOST /api/novel/storage[2m > [22m有効なテキストでストレージに保存する[32m 7[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/novel-storage.test.ts[2m > [22m/api/novel/storage[2m > [22mPOST /api/novel/storage[2m > [22mtextが未指定の場合は400エラーを返す[32m 6[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/novel-storage.test.ts[2m > [22m/api/novel/storage[2m > [22mPOST /api/novel/storage[2m > [22mtextが文字列でない場合は400エラーを返す[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/novel-storage.test.ts[2m > [22m/api/novel/storage[2m > [22mPOST /api/novel/storage[2m > [22mtextが空文字列の場合は400エラーを返す[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/novel-storage.test.ts[2m > [22m/api/novel/storage[2m > [22mPOST /api/novel/storage[2m > [22m長いテキストでも正常に処理する[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/novel-storage.test.ts[2m > [22m/api/novel/storage[2m > [22mGET /api/novel/storage[2m > [22m有効なUUIDで小説を取得する[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/novel-storage.test.ts[2m > [22m/api/novel/storage[2m > [22mGET /api/novel/storage[2m > [22mUUIDが未指定の場合は400エラーを返す[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/novel-storage.test.ts[2m > [22m/api/novel/storage[2m > [22mGET /api/novel/storage[2m > [22m存在しないUUIDの場合は404エラーを返す[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/novel-storage.test.ts[2m > [22m/api/novel/storage[2m > [22mGET /api/novel/storage[2m > [22mUUIDが空文字列の場合は400エラーを返す[32m 1[2mms[22m[39m
+[90mstdout[2m | src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m[2m/api/analyze/narrative-arc[2m > [22m[2mPOST /api/analyze/narrative-arc[2m > [22m[2m分析関数がエラーを投げた場合は500エラーを返す
+[22m[39mAnalyzing narrative arc for novel test-novel-id, chunks 0-2, total chars: 76
+
+[90mstderr[2m | src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m[2m/api/analyze/narrative-arc[2m > [22m[2mPOST /api/analyze/narrative-arc[2m > [22m[2m分析関数がエラーを投げた場合は500エラーを返す
+[22m[39mNarrative arc analysis failed: {
+  error: Error: 分析処理でエラーが発生しました
+      at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-narrative-arc.test.ts:267:9
+  [90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+      at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20,
+  novelId: [32m'test-novel-id'[39m,
+  inputChunks: [33m3[39m,
+  requestId: [32m'c624999d-47f8-40b9-ad1d-826962f6d7ff'[39m,
+  timestamp: [32m'2025-08-13T17:47:47.563Z'[39m
+}
+Narrative arc analysis error: Error: 分析処理でエラーが発生しました
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-narrative-arc.test.ts:267:9
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20
+API Error: ApiError: Failed to analyze narrative arc
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\narrative-arc\route.ts:133:7[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-narrative-arc.test.ts:286:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m500[39m,
+  code: [32m'INTERNAL_ERROR'[39m,
+  details: { original: [32m'分析処理でエラーが発生しました'[39m }
+}
+
+[90mstderr[2m | src/__tests__/api/analyze-chunk.test.ts[2m > [22m[2m/api/analyze/chunk[2m > [22m[2mPOST /api/analyze/chunk[2m > [22m[2mjobIdが未指定の場合は400エラーを返す
+[22m[39m[/api/analyze/chunk] Error: ZodError: [
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "undefined",
+    "path": [
+      "jobId"
+    ],
+    "message": "Required"
+  }
+]
+    at Object.get error [as error] [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:39:31[90m)[39m
+    at ZodObject.parse [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:114:22[90m)[39m
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\chunk\route.ts:63:61[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-chunk.test.ts:229:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  issues: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'string'[39m,
+      received: [32m'undefined'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Required'[39m
+    }
+  ],
+  addIssue: [36m[Function (anonymous)][39m,
+  addIssues: [36m[Function (anonymous)][39m,
+  errors: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'string'[39m,
+      received: [32m'undefined'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Required'[39m
+    }
+  ]
+}
+API Error: ZodError: [
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "undefined",
+    "path": [
+      "jobId"
+    ],
+    "message": "Required"
+  }
+]
+    at Object.get error [as error] [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:39:31[90m)[39m
+    at ZodObject.parse [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:114:22[90m)[39m
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\chunk\route.ts:63:61[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-chunk.test.ts:229:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  issues: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'string'[39m,
+      received: [32m'undefined'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Required'[39m
+    }
+  ],
+  addIssue: [36m[Function (anonymous)][39m,
+  addIssues: [36m[Function (anonymous)][39m,
+  errors: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'string'[39m,
+      received: [32m'undefined'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Required'[39m
+    }
+  ]
+}
+
+[90mstdout[2m | src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m[2m/api/analyze/narrative-arc[2m > [22m[2mPOST /api/analyze/narrative-arc[2m > [22m[2m境界が見つからない場合は提案を含むレスポンスを返す
+[22m[39mAnalyzing narrative arc for novel test-novel-id, chunks 0-2, total chars: 76
+
+[90mstderr[2m | src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m[2m/api/analyze/narrative-arc[2m > [22m[2mPOST /api/analyze/narrative-arc[2m > [22m[2m境界が見つからない場合は提案を含むレスポンスを返す
+[22m[39mNo boundaries found for novel test-novel-id - not saving empty results
+
+[90mstderr[2m | src/__tests__/api/analyze-chunk.test.ts[2m > [22m[2m/api/analyze/chunk[2m > [22m[2mPOST /api/analyze/chunk[2m > [22m[2mchunkIndexが未指定の場合は400エラーを返す
+[22m[39m[/api/analyze/chunk] Error: ZodError: [
+  {
+    "code": "invalid_type",
+    "expected": "number",
+    "received": "undefined",
+    "path": [
+      "chunkIndex"
+    ],
+    "message": "Required"
+  }
+]
+    at Object.get error [as error] [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:39:31[90m)[39m
+    at ZodObject.parse [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:114:22[90m)[39m
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\chunk\route.ts:63:61[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-chunk.test.ts:253:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  issues: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'number'[39m,
+      received: [32m'undefined'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Required'[39m
+    }
+  ],
+  addIssue: [36m[Function (anonymous)][39m,
+  addIssues: [36m[Function (anonymous)][39m,
+  errors: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'number'[39m,
+      received: [32m'undefined'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Required'[39m
+    }
+  ]
+}
+API Error: ZodError: [
+  {
+    "code": "invalid_type",
+    "expected": "number",
+    "received": "undefined",
+    "path": [
+      "chunkIndex"
+    ],
+    "message": "Required"
+  }
+]
+    at Object.get error [as error] [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:39:31[90m)[39m
+    at ZodObject.parse [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:114:22[90m)[39m
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\chunk\route.ts:63:61[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-chunk.test.ts:253:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  issues: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'number'[39m,
+      received: [32m'undefined'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Required'[39m
+    }
+  ],
+  addIssue: [36m[Function (anonymous)][39m,
+  addIssues: [36m[Function (anonymous)][39m,
+  errors: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'number'[39m,
+      received: [32m'undefined'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Required'[39m
+    }
+  ]
+}
+
+[90mstderr[2m | src/__tests__/api/jobs-resume.test.ts[2m > [22m[2m/api/jobs/[jobId]/resume[2m > [22m[2mPOST /api/jobs/[jobId]/resume[2m > [22m[2m再開不可能なジョブの場合は400エラーを返す
+[22m[39mError resuming job: ApiError: Job cannot be resumed. It may be completed or not found.
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\jobs\[jobId]\resume\route.ts:26:13[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\jobs-resume.test.ts:85:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m400[39m,
+  code: [32m'INVALID_STATE'[39m,
+  details: [90mundefined[39m
+}
+API Error: ApiError: Job cannot be resumed. It may be completed or not found.
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\jobs\[jobId]\resume\route.ts:26:13[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\jobs-resume.test.ts:85:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m400[39m,
+  code: [32m'INVALID_STATE'[39m,
+  details: [90mundefined[39m
+}
+
+[90mstderr[2m | src/__tests__/api/analyze-chunk.test.ts[2m > [22m[2m/api/analyze/chunk[2m > [22m[2mPOST /api/analyze/chunk[2m > [22m[2mchunkIndexが数値でない場合は400エラーを返す
+[22m[39m[/api/analyze/chunk] Error: ZodError: [
+  {
+    "code": "invalid_type",
+    "expected": "number",
+    "received": "string",
+    "path": [
+      "chunkIndex"
+    ],
+    "message": "Expected number, received string"
+  }
+]
+    at Object.get error [as error] [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:39:31[90m)[39m
+    at ZodObject.parse [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:114:22[90m)[39m
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\chunk\route.ts:63:61[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-chunk.test.ts:278:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  issues: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'number'[39m,
+      received: [32m'string'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Expected number, received string'[39m
+    }
+  ],
+  addIssue: [36m[Function (anonymous)][39m,
+  addIssues: [36m[Function (anonymous)][39m,
+  errors: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'number'[39m,
+      received: [32m'string'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Expected number, received string'[39m
+    }
+  ]
+}
+API Error: ZodError: [
+  {
+    "code": "invalid_type",
+    "expected": "number",
+    "received": "string",
+    "path": [
+      "chunkIndex"
+    ],
+    "message": "Expected number, received string"
+  }
+]
+    at Object.get error [as error] [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:39:31[90m)[39m
+    at ZodObject.parse [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:114:22[90m)[39m
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\chunk\route.ts:63:61[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-chunk.test.ts:278:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  issues: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'number'[39m,
+      received: [32m'string'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Expected number, received string'[39m
+    }
+  ],
+  addIssue: [36m[Function (anonymous)][39m,
+  addIssues: [36m[Function (anonymous)][39m,
+  errors: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'number'[39m,
+      received: [32m'string'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Expected number, received string'[39m
+    }
+  ]
+}
+
+[90mstderr[2m | src/__tests__/api/jobs-resume.test.ts[2m > [22m[2m/api/jobs/[jobId]/resume[2m > [22m[2mPOST /api/jobs/[jobId]/resume[2m > [22m[2m存在しないジョブIDの場合は400エラーを返す
+[22m[39mError resuming job: ApiError: Job cannot be resumed. It may be completed or not found.
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\jobs\[jobId]\resume\route.ts:26:13[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\jobs-resume.test.ts:104:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m400[39m,
+  code: [32m'INVALID_STATE'[39m,
+  details: [90mundefined[39m
+}
+API Error: ApiError: Job cannot be resumed. It may be completed or not found.
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\jobs\[jobId]\resume\route.ts:26:13[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\jobs-resume.test.ts:104:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m400[39m,
+  code: [32m'INVALID_STATE'[39m,
+  details: [90mundefined[39m
+}
+
+[90mstderr[2m | src/__tests__/api/episodes.test.ts[2m > [22m[2m/api/jobs/[jobId]/episodes[2m > [22m[2mGET /api/jobs/[jobId]/episodes[2m > [22m[2m存在しないジョブIDの場合は404を返す
+[22m[39mError fetching episodes: ApiError: Job not found
+    at Module.GET [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\jobs\[jobId]\episodes\route.ts:45:13[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\episodes.test.ts:62:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m404[39m,
+  code: [32m'NOT_FOUND'[39m,
+  details: [90mundefined[39m
+}
+API Error: ApiError: Job not found
+    at Module.GET [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\jobs\[jobId]\episodes\route.ts:45:13[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\episodes.test.ts:62:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m404[39m,
+  code: [32m'NOT_FOUND'[39m,
+  details: [90mundefined[39m
+}
+
+[90mstdout[2m | src/__tests__/api/analyze-chunk.test.ts[2m > [22m[2m/api/analyze/chunk[2m > [22m[2mPOST /api/analyze/chunk[2m > [22m[2m存在しないチャンクファイルの場合は404エラーを返す
+[22m[39m[/api/analyze/chunk] Analyzing chunk 999 for job test-chunk-job
+
+[90mstderr[2m | src/__tests__/api/jobs-resume.test.ts[2m > [22m[2m/api/jobs/[jobId]/resume[2m > [22m[2mPOST /api/jobs/[jobId]/resume[2m > [22m[2mcanResumeJobでエラーが発生した場合は500エラーを返す
+[22m[39mError resuming job: Error: データベースエラー
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\jobs-resume.test.ts:114:42
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:155:11
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:26
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1863:10[90m)[39m
+    at runTest [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1574:12[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at runSuite [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
+    at runSuite [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
+API Error: ApiError: Failed to resume job
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\jobs\[jobId]\resume\route.ts:56:11[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\jobs-resume.test.ts:121:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m500[39m,
+  code: [32m'INTERNAL_ERROR'[39m,
+  details: { cause: [32m'データベースエラー'[39m }
+}
+
+ [32m✓[39m src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m/api/analyze/narrative-arc[2m > [22mPOST /api/analyze/narrative-arc[2m > [22m有効なリクエストでナラティブアーク分析を実行する[32m 9[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m/api/analyze/narrative-arc[2m > [22mPOST /api/analyze/narrative-arc[2m > [22m必須のフィールドのみでリクエストを送信する[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m/api/analyze/narrative-arc[2m > [22mPOST /api/analyze/narrative-arc[2m > [22mnovelIdが未指定の場合は400エラーを返す[32m 9[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m/api/analyze/narrative-arc[2m > [22mPOST /api/analyze/narrative-arc[2m > [22mstartChunkIndexが未指定の場合は400エラーを返す[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m/api/analyze/narrative-arc[2m > [22mPOST /api/analyze/narrative-arc[2m > [22mstartChunkIndexが負の値の場合は400エラーを返す[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m/api/analyze/narrative-arc[2m > [22mPOST /api/analyze/narrative-arc[2m > [22m準備関数が失敗した場合は400エラーを返す[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m/api/analyze/narrative-arc[2m > [22mPOST /api/analyze/narrative-arc[2m > [22m分析関数がエラーを投げた場合は500エラーを返す[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze-narrative-arc.test.ts[2m > [22m/api/analyze/narrative-arc[2m > [22mPOST /api/analyze/narrative-arc[2m > [22m境界が見つからない場合は提案を含むレスポンスを返す[32m 2[2mms[22m[39m
+[90mstderr[2m | src/__tests__/api/episodes.test.ts[2m > [22m[2m/api/jobs/[jobId]/episodes[2m > [22m[2mPOST /api/jobs/[jobId]/episodes[2m > [22m[2m存在しないジョブIDの場合は404を返す
+[22m[39mError starting episode analysis: ApiError: Job not found
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\jobs\[jobId]\episodes\route.ts:98:13[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\episodes.test.ts:130:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m404[39m,
+  code: [32m'NOT_FOUND'[39m,
+  details: [90mundefined[39m
+}
+API Error: ApiError: Job not found
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\jobs\[jobId]\episodes\route.ts:98:13[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\episodes.test.ts:130:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m404[39m,
+  code: [32m'NOT_FOUND'[39m,
+  details: [90mundefined[39m
+}
+
+[90mstderr[2m | src/__tests__/api/analyze-chunk.test.ts[2m > [22m[2m/api/analyze/chunk[2m > [22m[2mPOST /api/analyze/chunk[2m > [22m[2m存在しないチャンクファイルの場合は404エラーを返す
+[22m[39mAPI Error: ApiError: Chunk file not found: test-chunk-job/chunk_999.txt
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\chunk\route.ts:92:9[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-chunk.test.ts:303:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m404[39m,
+  code: [32m'NOT_FOUND'[39m,
+  details: [90mundefined[39m
+}
+
+[90mstderr[2m | src/__tests__/api/jobs-resume.test.ts[2m > [22m[2m/api/jobs/[jobId]/resume[2m > [22m[2mPOST /api/jobs/[jobId]/resume[2m > [22m[2mprocessJobでエラーが発生してもレスポンスは正常に返す（バックグラウンド処理）
+[22m[39m[Queue] Job processing failed test-job-resume Error: 処理エラー
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\jobs-resume.test.ts:132:40
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:155:11
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:26
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1863:10[90m)[39m
+    at runTest [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1574:12[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at runSuite [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
+    at runSuite [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
+[Queue] Failed to update job error status TypeError: db.updateJobError is not a function
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\services\queue.ts:45:20
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+
+[90mstderr[2m | src/__tests__/api/episodes.test.ts[2m > [22m[2m/api/jobs/[jobId]/episodes[2m > [22m[2mPOST /api/jobs/[jobId]/episodes[2m > [22m[2m無効なリクエストボディの場合は400を返す
+[22m[39mError starting episode analysis: ZodError: [
+  {
+    "code": "invalid_type",
+    "expected": "number",
+    "received": "string",
+    "path": [
+      "config",
+      "targetCharsPerEpisode"
+    ],
+    "message": "Expected number, received string"
+  }
+]
+    at Object.get error [as error] [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:39:31[90m)[39m
+    at ZodEffects.parse [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:114:22[90m)[39m
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\jobs\[jobId]\episodes\route.ts:86:45[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\episodes.test.ts:166:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  issues: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'number'[39m,
+      received: [32m'string'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Expected number, received string'[39m
+    }
+  ],
+  addIssue: [36m[Function (anonymous)][39m,
+  addIssues: [36m[Function (anonymous)][39m,
+  errors: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'number'[39m,
+      received: [32m'string'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Expected number, received string'[39m
+    }
+  ]
+}
+API Error: ZodError: [
+  {
+    "code": "invalid_type",
+    "expected": "number",
+    "received": "string",
+    "path": [
+      "config",
+      "targetCharsPerEpisode"
+    ],
+    "message": "Expected number, received string"
+  }
+]
+    at Object.get error [as error] [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:39:31[90m)[39m
+    at ZodEffects.parse [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:114:22[90m)[39m
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\jobs\[jobId]\episodes\route.ts:86:45[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\episodes.test.ts:166:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  issues: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'number'[39m,
+      received: [32m'string'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Expected number, received string'[39m
+    }
+  ],
+  addIssue: [36m[Function (anonymous)][39m,
+  addIssues: [36m[Function (anonymous)][39m,
+  errors: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'number'[39m,
+      received: [32m'string'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Expected number, received string'[39m
+    }
+  ]
+}
+
+[90mstdout[2m | src/__tests__/api/analyze-chunk.test.ts[2m > [22m[2m/api/analyze/chunk[2m > [22m[2mPOST /api/analyze/chunk[2m > [22m[2m存在しないjobIdの場合は404エラーを返す
+[22m[39m[/api/analyze/chunk] Analyzing chunk 0 for job nonexistent-job
+
+[90mstdout[2m | src/__tests__/api/jobs-resume.test.ts[2m > [22m[2m/api/jobs/[jobId]/resume[2m > [22m[2mPOST /api/jobs/[jobId]/resume[2m > [22m[2mプログレスコールバックが正しく呼ばれることを確認する
+[22m[39m[Queue] progress test-job-resume { processedChunks: [33m5[39m, totalChunks: [33m10[39m, episodes: [33m2[39m }
+
+[90mstderr[2m | src/__tests__/api/analyze-chunk.test.ts[2m > [22m[2m/api/analyze/chunk[2m > [22m[2mPOST /api/analyze/chunk[2m > [22m[2m存在しないjobIdの場合は404エラーを返す
+[22m[39mAPI Error: ApiError: Chunk file not found: nonexistent-job/chunk_0.txt
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\chunk\route.ts:92:9[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze-chunk.test.ts:328:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m404[39m,
+  code: [32m'NOT_FOUND'[39m,
+  details: [90mundefined[39m
+}
+
+ [32m✓[39m src/__tests__/api/episodes.test.ts[2m > [22m/api/jobs/[jobId]/episodes[2m > [22mGET /api/jobs/[jobId]/episodes[2m > [22m存在しないジョブIDの場合は404を返す[32m 9[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/episodes.test.ts[2m > [22m/api/jobs/[jobId]/episodes[2m > [22mPOST /api/jobs/[jobId]/episodes[2m > [22m有効なリクエストでエピソード分析を開始する[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/episodes.test.ts[2m > [22m/api/jobs/[jobId]/episodes[2m > [22mPOST /api/jobs/[jobId]/episodes[2m > [22m存在しないジョブIDの場合は404を返す[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/episodes.test.ts[2m > [22m/api/jobs/[jobId]/episodes[2m > [22mPOST /api/jobs/[jobId]/episodes[2m > [22m無効なリクエストボディの場合は400を返す[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/jobs-resume.test.ts[2m > [22m/api/jobs/[jobId]/resume[2m > [22mPOST /api/jobs/[jobId]/resume[2m > [22m再開可能なジョブの場合、正常に再開する[32m 9[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/jobs-resume.test.ts[2m > [22m/api/jobs/[jobId]/resume[2m > [22mPOST /api/jobs/[jobId]/resume[2m > [22m再開不可能なジョブの場合は400エラーを返す[32m 7[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/jobs-resume.test.ts[2m > [22m/api/jobs/[jobId]/resume[2m > [22mPOST /api/jobs/[jobId]/resume[2m > [22m存在しないジョブIDの場合は400エラーを返す[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/jobs-resume.test.ts[2m > [22m/api/jobs/[jobId]/resume[2m > [22mPOST /api/jobs/[jobId]/resume[2m > [22mcanResumeJobでエラーが発生した場合は500エラーを返す[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/jobs-resume.test.ts[2m > [22m/api/jobs/[jobId]/resume[2m > [22mPOST /api/jobs/[jobId]/resume[2m > [22mprocessJobでエラーが発生してもレスポンスは正常に返す（バックグラウンド処理）[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/jobs-resume.test.ts[2m > [22m/api/jobs/[jobId]/resume[2m > [22mPOST /api/jobs/[jobId]/resume[2m > [22mプログレスコールバックが正しく呼ばれることを確認する[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze-chunk.test.ts[2m > [22m/api/analyze/chunk[2m > [22mPOST /api/analyze/chunk[2m > [22m有効なリクエストでチャンク分析を実行する[32m 11[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze-chunk.test.ts[2m > [22m/api/analyze/chunk[2m > [22mPOST /api/analyze/chunk[2m > [22m既に分析済みのチャンクの場合はキャッシュされた結果を返す[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze-chunk.test.ts[2m > [22m/api/analyze/chunk[2m > [22mPOST /api/analyze/chunk[2m > [22mjobIdが未指定の場合は400エラーを返す[32m 8[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze-chunk.test.ts[2m > [22m/api/analyze/chunk[2m > [22mPOST /api/analyze/chunk[2m > [22mchunkIndexが未指定の場合は400エラーを返す[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze-chunk.test.ts[2m > [22m/api/analyze/chunk[2m > [22mPOST /api/analyze/chunk[2m > [22mchunkIndexが数値でない場合は400エラーを返す[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze-chunk.test.ts[2m > [22m/api/analyze/chunk[2m > [22mPOST /api/analyze/chunk[2m > [22m存在しないチャンクファイルの場合は404エラーを返す[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze-chunk.test.ts[2m > [22m/api/analyze/chunk[2m > [22mPOST /api/analyze/chunk[2m > [22m存在しないjobIdの場合は404エラーを返す[32m 1[2mms[22m[39m
+[90mstdout[2m | src/__tests__/api/job-status.test.ts[2m > [22m[2m/api/jobs/[jobId]/status[2m > [22m[2m正常系: 既存ジョブのステータスを返す(200)
+[22m[39m[job-status] Fetching job status for: job-ok
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2m有効なnovelIdで分析を実行する
+[22m[39m[/api/analyze] Request received
+
+[90mstdout[2m | src/__tests__/api/job-status.test.ts[2m > [22m[2m/api/jobs/[jobId]/status[2m > [22m[2m正常系: 既存ジョブのステータスを返す(200)
+[22m[39m[job-status] Database query completed in 1ms
+[job-status] Job found: [33mtrue[39m
+[job-status] Job details: { id: [32m'job-ok'[39m, status: [32m'processing'[39m }
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2m有効なnovelIdで分析を実行する
+[22m[39m[/api/analyze] Raw body: { novelId: [32m'test-novel-id'[39m }
+[/api/analyze] Inputs: { novelId: [32m'test-novel-id'[39m, hasText: [33mfalse[39m }
+
+[90mstderr[2m | src/__tests__/api/job-id.test.ts[2m > [22m[2m/api/job/[id][2m > [22m[2mGET /api/job/[id][2m > [22m[2mjobIdが未指定の場合は400エラーを返す
+[22m[39mAPI Error: ValidationError: ジョブIDが指定されていません
+    at Module.GET [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\job\[id]\route.ts:17:13[90m)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\job-id.test.ts:152:30
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:155:11
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:26
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1863:10[90m)[39m
+    at runTest [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1574:12[90m)[39m
+    at runSuite [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
+    at runSuite [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m {
+  statusCode: [33m400[39m,
+  code: [32m'VALIDATION_ERROR'[39m,
+  details: { field: [90mundefined[39m },
+  field: [90mundefined[39m
+}
+
+[90mstdout[2m | src/__tests__/api/job-status.test.ts[2m > [22m[2m/api/jobs/[jobId]/status[2m > [22m[2m不存在: ジョブが無い場合は404
+[22m[39m[job-status] Fetching job status for: job-missing
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2m有効なnovelIdで分析を実行する
+[22m[39m[/api/analyze] Starting analysis of 2 chunks...
+
+[90mstdout[2m | src/__tests__/api/job-status.test.ts[2m > [22m[2m/api/jobs/[jobId]/status[2m > [22m[2m不存在: ジョブが無い場合は404
+[22m[39m[job-status] Database query completed in 0ms
+[job-status] Job found: [33mtrue[39m
+[job-status] Job details: { id: [32m'job-ok'[39m, status: [32m'processing'[39m }
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2m有効なnovelIdで分析を実行する
+[22m[39m[/api/analyze] Analyzing chunk 0/2...
+
+[90mstdout[2m | src/__tests__/api/job-status.test.ts[2m > [22m[2m/api/jobs/[jobId]/status[2m > [22m[2mDB例外: getJobWithProgress が例外を投げた場合は500と明示的エラー
+[22m[39m[job-status] Fetching job status for: job-db-error
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2m有効なnovelIdで分析を実行する
+[22m[39m[/api/analyze] Text analysis config: {
+  "userPromptTemplate": "チャンク{{chunkIndex}}の分析: {{chunkText}} 前: {{previousChunkText}} 次: {{nextChunkText}}"
+}
+
+[90mstdout[2m | src/__tests__/api/job-status.test.ts[2m > [22m[2m/api/jobs/[jobId]/status[2m > [22m[2mDB例外: getJobWithProgress が例外を投げた場合は500と明示的エラー
+[22m[39m[job-status] Database query completed in 0ms
+[job-status] Job found: [33mtrue[39m
+[job-status] Job details: { id: [32m'job-ok'[39m, status: [32m'processing'[39m }
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2m有効なnovelIdで分析を実行する
+[22m[39m[/api/analyze] Chunk 0 analyzed successfully
+
+[90mstderr[2m | src/__tests__/api/job-status.test.ts[2m > [22m[2m/api/jobs/[jobId]/status[2m > [22m[2m無効ID: jobId が undefined 文字列の場合は400
+[22m[39m[job-status] Error fetching job status: ValidationError: Invalid jobId
+    at validateJobId [90m(G:\TsProjects\novel2manga-mastra\[39msrc\utils\validators.ts:5:11[90m)[39m
+    at Module.GET [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\jobs\[jobId]\status\route.ts:18:5[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\job-status.test.ts:121:17
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m400[39m,
+  code: [32m'VALIDATION_ERROR'[39m,
+  details: { field: [32m'jobId'[39m },
+  field: [32m'jobId'[39m
+}
+API Error: ValidationError: Invalid jobId
+    at validateJobId [90m(G:\TsProjects\novel2manga-mastra\[39msrc\utils\validators.ts:5:11[90m)[39m
+    at Module.GET [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\jobs\[jobId]\status\route.ts:18:5[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\job-status.test.ts:121:17
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m400[39m,
+  code: [32m'VALIDATION_ERROR'[39m,
+  details: { field: [32m'jobId'[39m },
+  field: [32m'jobId'[39m
+}
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2m有効なnovelIdで分析を実行する
+[22m[39m[/api/analyze] Analyzing chunk 1/2...
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2m有効なnovelIdで分析を実行する
+[22m[39m[/api/analyze] Text analysis config: {
+  "userPromptTemplate": "チャンク{{chunkIndex}}の分析: {{chunkText}} 前: {{previousChunkText}} 次: {{nextChunkText}}"
+}
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2m有効なnovelIdで分析を実行する
+[22m[39m[/api/analyze] Chunk 1 analyzed successfully
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2m有効なnovelIdで分析を実行する
+[22m[39m[/api/analyze] All 2 chunks analyzed successfully
+[/api/analyze] Starting episode analysis...
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2m有効なnovelIdで分析を実行する
+[22m[39m[/api/analyze] Episode analysis completed
+
+ [32m✓[39m src/__tests__/api/job-status.test.ts[2m > [22m/api/jobs/[jobId]/status[2m > [22m正常系: 既存ジョブのステータスを返す(200)[32m 10[2mms[22m[39m
+ [31m×[39m src/__tests__/api/job-status.test.ts[2m > [22m/api/jobs/[jobId]/status[2m > [22m不存在: ジョブが無い場合は404[32m 9[2mms[22m[39m
+[31m   → expected 200 to be 404 // Object.is equality[39m
+ [31m×[39m src/__tests__/api/job-status.test.ts[2m > [22m/api/jobs/[jobId]/status[2m > [22mDB例外: getJobWithProgress が例外を投げた場合は500と明示的エラー[32m 2[2mms[22m[39m
+[31m   → expected 200 to be 500 // Object.is equality[39m
+ [32m✓[39m src/__tests__/api/job-status.test.ts[2m > [22m/api/jobs/[jobId]/status[2m > [22m無効ID: jobId が undefined 文字列の場合は400[32m 3[2mms[22m[39m
+[90mstderr[2m | src/__tests__/api/job-id.test.ts[2m > [22m[2m/api/job/[id][2m > [22m[2mGET /api/job/[id][2m > [22m[2m本番環境で存在しないジョブIDの場合は404エラーを返す
+[22m[39mAPI Error: ApiError: ジョブが見つかりません
+    at Module.GET [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\job\[id]\route.ts:25:23[90m)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\job-id.test.ts:167:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m404[39m,
+  code: [32m'NOT_FOUND'[39m,
+  details: [90mundefined[39m
+}
+
+[90mstderr[2m | src/__tests__/api/job-id.test.ts[2m > [22m[2m/api/job/[id][2m > [22m[2mGET /api/job/[id][2m > [22m[2m開発環境で存在しないジョブファイルの場合は404エラーを返す
+[22m[39mAPI Error: ApiError: ジョブが見つかりません
+    at Module.GET [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\job\[id]\route.ts:58:13[90m)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\job-id.test.ts:185:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m404[39m,
+  code: [32m'NOT_FOUND'[39m,
+  details: [90mundefined[39m
+}
+
+ [32m✓[39m src/__tests__/api/job-id.test.ts[2m > [22m/api/job/[id][2m > [22mGET /api/job/[id][2m > [22m本番環境では有効なジョブIDでジョブ詳細を取得する[32m 13[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/job-id.test.ts[2m > [22m/api/job/[id][2m > [22mGET /api/job/[id][2m > [22m開発環境では有効なジョブIDでローカルファイルからジョブ詳細を取得する[32m 12[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/job-id.test.ts[2m > [22m/api/job/[id][2m > [22mGET /api/job/[id][2m > [22mjobIdが未指定の場合は400エラーを返す[32m 10[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/job-id.test.ts[2m > [22m/api/job/[id][2m > [22mGET /api/job/[id][2m > [22m本番環境で存在しないジョブIDの場合は404エラーを返す[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/job-id.test.ts[2m > [22m/api/job/[id][2m > [22mGET /api/job/[id][2m > [22m開発環境で存在しないジョブファイルの場合は404エラーを返す[32m 3[2mms[22m[39m
+[90mstderr[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2m有効なnovelIdで分析を実行する
+[22m[39mAggregateError: 
+[90m    at internalConnectMultiple (node:net:1134:18)[39m
+[90m    at afterConnectMultiple (node:net:1715:7)[39m {
+  code: [32m'ECONNREFUSED'[39m,
+  [errors]: [
+    Error: connect ECONNREFUSED ::1:3000
+    [90m    at createConnectionError (node:net:1678:14)[39m
+    [90m    at afterConnectMultiple (node:net:1708:16)[39m {
+      errno: [33m-4078[39m,
+      code: [32m'ECONNREFUSED'[39m,
+      syscall: [32m'connect'[39m,
+      address: [32m'::1'[39m,
+      port: [33m3000[39m
+    },
+    Error: connect ECONNREFUSED 127.0.0.1:3000
+    [90m    at createConnectionError (node:net:1678:14)[39m
+    [90m    at afterConnectMultiple (node:net:1708:16)[39m {
+      errno: [33m-4078[39m,
+      code: [32m'ECONNREFUSED'[39m,
+      syscall: [32m'connect'[39m,
+      address: [32m'127.0.0.1'[39m,
+      port: [33m3000[39m
+    }
+  ]
+}
+
+[90mstderr[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2m有効なnovelIdで分析を実行する
+[22m[39m[/api/analyze] Auto layout kick error: DOMException [NetworkError]: Failed to execute "fetch()" on "Window" with URL "http://localhost:3000/api/layout/generate": 
+    at Fetch.onError [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mhappy-dom[24m/src/fetch/Fetch.ts:673:4[90m)[39m
+[90m    at ClientRequest.emit (node:events:519:35)[39m
+[90m    at emitErrorEvent (node:_http_client:106:11)[39m
+[90m    at Socket.socketErrorListener (node:_http_client:574:5)[39m
+[90m    at Socket.emit (node:events:507:28)[39m
+[90m    at emitErrorNT (node:internal/streams/destroy:170:8)[39m
+[90m    at emitErrorCloseNT (node:internal/streams/destroy:129:3)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:90:21)[39m
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2mnovelIdが未指定の場合は400エラーを返す
+[22m[39m[/api/analyze] Request received
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2mnovelIdが未指定の場合は400エラーを返す
+[22m[39m[/api/analyze] Raw body: {}
+
+[90mstderr[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2mnovelIdが未指定の場合は400エラーを返す
+[22m[39m[/api/analyze] Validation error: ZodError: [
+  {
+    "code": "custom",
+    "message": "novelId か text のいずれかが必要です",
+    "path": [
+      "novelId"
+    ]
+  }
+]
+    at Object.get error [as error] [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:39:31[90m)[39m
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\route.ts:60:74[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze.test.ts:215:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  issues: [
+    {
+      code: [32m'custom'[39m,
+      message: [32m'novelId か text のいずれかが必要です'[39m,
+      path: [36m[Array][39m
+    }
+  ],
+  addIssue: [36m[Function (anonymous)][39m,
+  addIssues: [36m[Function (anonymous)][39m,
+  errors: [
+    {
+      code: [32m'custom'[39m,
+      message: [32m'novelId か text のいずれかが必要です'[39m,
+      path: [36m[Array][39m
+    }
+  ]
+}
+API Error: ApiError: リクエストボディが無効です
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\route.ts:62:9[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze.test.ts:215:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m400[39m,
+  code: [32m'VALIDATION_ERROR'[39m,
+  details: { issues: [ [36m[Object][39m ] }
+}
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2mnovelIdが文字列でない場合は400エラーを返す
+[22m[39m[/api/analyze] Request received
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2mnovelIdが文字列でない場合は400エラーを返す
+[22m[39m[/api/analyze] Raw body: { novelId: [33m123[39m }
+
+[90mstderr[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2mnovelIdが文字列でない場合は400エラーを返す
+[22m[39m[/api/analyze] Validation error: ZodError: [
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "number",
+    "path": [
+      "novelId"
+    ],
+    "message": "Expected string, received number"
+  }
+]
+    at Object.get error [as error] [90m(file:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4mzod[24m/v3/types.js:39:31[90m)[39m
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\route.ts:60:74[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze.test.ts:235:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  issues: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'string'[39m,
+      received: [32m'number'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Expected string, received number'[39m
+    }
+  ],
+  addIssue: [36m[Function (anonymous)][39m,
+  addIssues: [36m[Function (anonymous)][39m,
+  errors: [
+    {
+      code: [32m'invalid_type'[39m,
+      expected: [32m'string'[39m,
+      received: [32m'number'[39m,
+      path: [36m[Array][39m,
+      message: [32m'Expected string, received number'[39m
+    }
+  ]
+}
+API Error: ApiError: リクエストボディが無効です
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\route.ts:62:9[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze.test.ts:235:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m400[39m,
+  code: [32m'VALIDATION_ERROR'[39m,
+  details: { issues: [ [36m[Object][39m ] }
+}
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2m存在しないnovelIdの場合は404エラーを返す
+[22m[39m[/api/analyze] Request received
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2m存在しないnovelIdの場合は404エラーを返す
+[22m[39m[/api/analyze] Raw body: { novelId: [32m'nonexistent-novel-id'[39m }
+[/api/analyze] Inputs: { novelId: [32m'nonexistent-novel-id'[39m, hasText: [33mfalse[39m }
+
+[90mstderr[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2m存在しないnovelIdの場合は404エラーを返す
+[22m[39m[/api/analyze] Error details: ApiError: 小説ID "nonexistent-novel-id" がデータベースに見つかりません。先に/api/novelエンドポイントで小説を登録してください。
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\route.ts:114:15[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze.test.ts:258:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m404[39m,
+  code: [32m'NOT_FOUND'[39m,
+  details: [90mundefined[39m
+}
+[/api/analyze] Error stack: ApiError: 小説ID "nonexistent-novel-id" がデータベースに見つかりません。先に/api/novelエンドポイントで小説を登録してください。
+    at Module.POST (G:\TsProjects\novel2manga-mastra\src\app\api\analyze\route.ts:114:15)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at G:\TsProjects\novel2manga-mastra\src\__tests__\api\analyze.test.ts:258:24
+    at file:///G:/TsProjects/novel2manga-mastra/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+API Error: ApiError: 小説ID "nonexistent-novel-id" がデータベースに見つかりません。先に/api/novelエンドポイントで小説を登録してください。
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\route.ts:114:15[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze.test.ts:258:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m404[39m,
+  code: [32m'NOT_FOUND'[39m,
+  details: [90mundefined[39m
+}
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2mストレージに小説テキストが存在しない場合は404エラーを返す
+[22m[39m[/api/analyze] Request received
+
+[90mstdout[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2mストレージに小説テキストが存在しない場合は404エラーを返す
+[22m[39m[/api/analyze] Raw body: { novelId: [32m'novel-without-text'[39m }
+[/api/analyze] Inputs: { novelId: [32m'novel-without-text'[39m, hasText: [33mfalse[39m }
+
+[90mstderr[2m | src/__tests__/api/analyze.test.ts[2m > [22m[2m/api/analyze[2m > [22m[2mPOST /api/analyze[2m > [22m[2mストレージに小説テキストが存在しない場合は404エラーを返す
+[22m[39m[/api/analyze] Error details: ApiError: 小説ID "novel-without-text" のテキストがストレージに見つかりません。
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\route.ts:125:15[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze.test.ts:289:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m404[39m,
+  code: [32m'NOT_FOUND'[39m,
+  details: [90mundefined[39m
+}
+[/api/analyze] Error stack: ApiError: 小説ID "novel-without-text" のテキストがストレージに見つかりません。
+    at Module.POST (G:\TsProjects\novel2manga-mastra\src\app\api\analyze\route.ts:125:15)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at G:\TsProjects\novel2manga-mastra\src\__tests__\api\analyze.test.ts:289:24
+    at file:///G:/TsProjects/novel2manga-mastra/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+API Error: ApiError: 小説ID "novel-without-text" のテキストがストレージに見つかりません。
+    at Module.POST [90m(G:\TsProjects\novel2manga-mastra\[39msrc\app\api\analyze\route.ts:125:15[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90mG:\TsProjects\novel2manga-mastra\[39msrc\__tests__\api\analyze.test.ts:289:24
+    at [90mfile:///G:/TsProjects/novel2manga-mastra/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20 {
+  statusCode: [33m404[39m,
+  code: [32m'NOT_FOUND'[39m,
+  details: [90mundefined[39m
+}
+
+[90mstderr[2m | src/__tests__/api/analyze.test.ts
+[22m[39mAggregateError: 
+[90m    at internalConnectMultiple (node:net:1134:18)[39m
+[90m    at afterConnectMultiple (node:net:1715:7)[39m {
+  code: [32m'ECONNREFUSED'[39m,
+  [errors]: [
+    Error: connect ECONNREFUSED ::1:3000
+    [90m    at createConnectionError (node:net:1678:14)[39m
+    [90m    at afterConnectMultiple (node:net:1708:16)[39m {
+      errno: [33m-4078[39m,
+      code: [32m'ECONNREFUSED'[39m,
+      syscall: [32m'connect'[39m,
+      address: [32m'::1'[39m,
+      port: [33m3000[39m
+    },
+    Error: connect ECONNREFUSED 127.0.0.1:3000
+    [90m    at createConnectionError (node:net:1678:14)[39m
+    [90m    at afterConnectMultiple (node:net:1708:16)[39m {
+      errno: [33m-4078[39m,
+      code: [32m'ECONNREFUSED'[39m,
+      syscall: [32m'connect'[39m,
+      address: [32m'127.0.0.1'[39m,
+      port: [33m3000[39m
+    }
+  ]
+}
+
+ [32m✓[39m src/__tests__/api/analyze.test.ts[2m > [22m/api/analyze[2m > [22mPOST /api/analyze[2m > [22m有効なnovelIdで分析を実行する[32m 59[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze.test.ts[2m > [22m/api/analyze[2m > [22mPOST /api/analyze[2m > [22mnovelIdが未指定の場合は400エラーを返す[32m 6[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze.test.ts[2m > [22m/api/analyze[2m > [22mPOST /api/analyze[2m > [22mnovelIdが文字列でない場合は400エラーを返す[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze.test.ts[2m > [22m/api/analyze[2m > [22mPOST /api/analyze[2m > [22m存在しないnovelIdの場合は404エラーを返す[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/api/analyze.test.ts[2m > [22m/api/analyze[2m > [22mPOST /api/analyze[2m > [22mストレージに小説テキストが存在しない場合は404エラーを返す[32m 2[2mms[22m[39m
+[90mstdout[2m | src/__tests__/database.test.ts[2m > [22m[2mDatabaseService[2m > [22m[2mgetJob[2m > [22m[2mshould get a job by id
+[22m[39m[DatabaseService] getJob called for id: job-123
+
+[90mstdout[2m | src/__tests__/database.test.ts[2m > [22m[2mDatabaseService[2m > [22m[2mgetJob[2m > [22m[2mshould get a job by id
+[22m[39m[DatabaseService] Total jobs in database: [90mundefined[39m
+
+[90mstdout[2m | src/__tests__/database.test.ts[2m > [22m[2mDatabaseService[2m > [22m[2mgetJob[2m > [22m[2mshould get a job by id
+[22m[39m[DatabaseService] getJob result: not found
+
+ [32m✓[39m src/__tests__/database.test.ts[2m > [22mDatabaseService[2m > [22mcreateJob[2m > [22mshould create a new job[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/database.test.ts[2m > [22mDatabaseService[2m > [22mcreateChunk[2m > [22mshould create a new chunk[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/database.test.ts[2m > [22mDatabaseService[2m > [22mgetJob[2m > [22mshould get a job by id[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/database.test.ts[2m > [22mDatabaseService[2m > [22mupdateJobStatus[2m > [22mshould update job status[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/factory-ttl.test.ts[2m > [22mRepositoryFactory TTL (production semantics)[2m > [22mreuses instance within TTL and refreshes after TTL expiry[33m 620[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/factory-ttl.test.ts[2m > [22mRepositoryFactory TTL (production semantics)[2m > [22mhonors REPOSITORY_FACTORY_TTL_MS override value[32m 33[2mms[22m[39m
+ [32m✓[39m src/__tests__/sample.test.ts[2m > [22mSample Test Suite[2m > [22mshould pass a basic test[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/sample.test.ts[2m > [22mSample Test Suite[2m > [22mshould handle string comparisons[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/services/notifications.test.ts[2m > [22mNotificationService[2m > [22mlogs when disabled[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/services/notifications.test.ts[2m > [22mNotificationService[2m > [22mlogs stub send when enabled[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/job-repository.test.ts[2m > [22mJobRepository[2m > [22mcreate delegates to db.createJob with provided id (deterministic)[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/job-repository.test.ts[2m > [22mJobRepository[2m > [22mcreate delegates to db.createJob without id and returns generated id[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/layout-input-adapter.test.ts[2m > [22mbuildLayoutLLMInput[2m > [22mshould build LLM input with simplified chunks and constraints[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/adapters-structure.test.ts[2m > [22madaptAll[2m > [22m各ポートの discriminant / mode が期待通り[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/domain/emotion.normalize.test.ts[2m > [22mnormalizeEmotion[2m > [22mfolds synonyms to canonical form[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/domain/emotion.normalize.test.ts[2m > [22mnormalizeEmotion[2m > [22mwarns on unknown (non-production)[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/domain/emotion.normalize.test.ts[2m > [22mnormalizeEmotion[2m > [22mtreats whitespace-only as undefined[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/repositories/output-repository.test.ts[2m > [22mOutputRepository[2m > [22mdelegates create[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/domain/page.test.ts[2m > [22mPage domain model[2m > [22madds panels using template and adjusts invalid layout[32m 2[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/__tests__/storage.test.ts[2m > [22mStorage[2m > [22mStorageFactory[2m > [22mshould throw error when storage is not configured in production
+[31m[1mAssertionError[22m: promise resolved "LocalFileStorage{ baseDir: 'G:\TsPro…' }" instead of rejecting[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- Error {[39m
+[32m-   "message": "rejected promise",[39m
+[31m+ LocalFileStorage {[39m
+[31m+   "baseDir": "G:\\TsProjects\\novel2manga-mastra\\.test-storage\\novels",[39m
+[2m  }[22m
+
+[36m [2m❯[22m src/__tests__/storage.test.ts:[2m51:52[22m[39m
+    [90m 49| [39m      [35mdelete[39m (globalThis [35mas[39m any)[33m.[39m[33mRENDERS_STORAGE[39m[33m;[39m
+    [90m 50| [39m
+    [90m 51| [39m      [35mawait[39m [34mexpect[39m([33mStorageFactory[39m[33m.[39m[34mgetNovelStorage[39m())[33m.[39mrejects[33m.[39m[34mtoThrow[39m(
+    [90m   | [39m                                                   [31m^[39m
+    [90m 52| [39m        [32m"Novel storage not configured"[39m
+    [90m 53| [39m      )[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/__tests__/api/job-status.test.ts[2m > [22m/api/jobs/[jobId]/status[2m > [22m不存在: ジョブが無い場合は404
+[31m[1mAssertionError[22m: expected 200 to be 404 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 404[39m
+[31m+ 200[39m
+
+[36m [2m❯[22m src/__tests__/api/job-status.test.ts:[2m100:24[22m[39m
+    [90m 98| [39m    [35mconst[39m data [33m=[39m [35mawait[39m res[33m.[39m[34mjson[39m()
+    [90m 99| [39m
+    [90m100| [39m    [34mexpect[39m(res[33m.[39mstatus)[33m.[39m[34mtoBe[39m([34m404[39m)
+    [90m   | [39m                       [31m^[39m
+    [90m101| [39m    [34mexpect[39m(data[33m.[39merror)[33m.[39m[34mtoBe[39m([32m'Job not found'[39m)
+    [90m102| [39m  })
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/__tests__/api/job-status.test.ts[2m > [22m/api/jobs/[jobId]/status[2m > [22mDB例外: getJobWithProgress が例外を投げた場合は500と明示的エラー
+[31m[1mAssertionError[22m: expected 200 to be 500 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 500[39m
+[31m+ 200[39m
+
+[36m [2m❯[22m src/__tests__/api/job-status.test.ts:[2m113:24[22m[39m
+    [90m111| [39m    [35mconst[39m data [33m=[39m [35mawait[39m res[33m.[39m[34mjson[39m()
+    [90m112| [39m
+    [90m113| [39m    [34mexpect[39m(res[33m.[39mstatus)[33m.[39m[34mtoBe[39m([34m500[39m)
+    [90m   | [39m                       [31m^[39m
+    [90m114| [39m    [34mexpect[39m(data[33m.[39merror)[33m.[39m[34mtoBe[39m([32m'Failed to fetch job status'[39m)
+    [90m115| [39m    [34mexpect[39m(data[33m.[39mdetails)[33m.[39m[34mtoContain[39m([32m'DB connection failed'[39m)
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m37 passed[39m[22m[90m (39)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m194 passed[39m[22m[90m (197)[39m
+[2m   Start at [22m 02:47:46
+[2m   Duration [22m 1.80s[2m (transform 2.79s, setup 4.20s, collect 8.19s, tests 1.14s, environment 15.43s, prepare 5.25s)[22m
+
