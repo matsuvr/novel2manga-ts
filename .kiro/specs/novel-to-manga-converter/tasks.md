@@ -174,7 +174,7 @@
   - Emotion: `src/domain/models/emotion.ts` 追加、`EmotionSchema` と `normalizeEmotion()` 実装、対話モデルへ適用
   - Highlight: 後続タスク（type/語彙の列挙と利用箇所の置換）
   - 2025-08-12 (PR#63 Gemini medium): 空白のみ文字列を `undefined` として扱うロジック追加 (`normalizeEmotion`) + ユニットテスト追補
-- [ ] 10.10 ドキュメント反映（design.md 変更履歴セクション拡張, API エラー仕様章の更新）
+- [x] 10.10 ドキュメント反映（design.md 変更履歴セクション拡張, API エラー仕様章の更新）(2025-08-13 完了)
 - [ ] 10.11 既存永続化 Scene データ一括マイグレーションスクリプト（オプション）
   - [x] Health エンドポイント追加 (`/api/health`) - DB と Storage の簡易疎通確認 (2025-08-12)
   - [x] 環境変数の整理（.envはシークレットのみ）
