@@ -32,20 +32,39 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = requestSchema.parse(body)
     const { jobId, episodeNumber, config } = validatedData
+    const url = new URL(request.url)
+    const isDemo = url.searchParams.get('demo') === '1' || (body as any)?.mode === 'demo'
 
     const episodeRepo = getEpisodeRepository()
     const jobRepo = getJobRepository()
 
-    // ジョブとエピソード情報を取得
-    const job = await jobRepo.getJobWithProgress(jobId)
-    if (!job) {
+    // デモ時はジョブ/エピソード存在チェックを緩め、なければ仮構築
+    const job = await jobRepo.getJobWithProgress(jobId).catch(() => null)
+    if (!job && !isDemo) {
       throw new ApiError('Job not found', 404, 'NOT_FOUND')
     }
-
-    const episodes = await episodeRepo.getByJobId(jobId)
-    const episode = episodes.find((ep) => ep.episodeNumber === episodeNumber)
+    const episodes = await episodeRepo.getByJobId(jobId).catch(() => [])
+    let episode = episodes.find((ep) => ep.episodeNumber === episodeNumber)
     if (!episode) {
-      throw new ApiError('Episode not found', 404, 'NOT_FOUND')
+      if (isDemo) {
+        episode = {
+          id: `demo-${jobId}-ep${episodeNumber}`,
+          novelId: job?.novelId || `demo-novel-${jobId}`,
+          jobId,
+          episodeNumber,
+          title: 'Demo Episode',
+          summary: 'デモ用の自動作成エピソード',
+          startChunk: 0,
+          startCharIndex: 0,
+          endChunk: 0,
+          endCharIndex: 0,
+          estimatedPages: 1,
+          confidence: 0.9,
+          createdAt: new Date().toISOString(),
+        }
+      } else {
+        throw new ApiError('Episode not found', 404, 'NOT_FOUND')
+      }
     }
 
     // ここまででepisodeは必ず存在
@@ -54,41 +73,84 @@ export async function POST(request: NextRequest) {
     // エピソードに含まれるチャンクの解析結果を取得
     const chunkDataArray: ChunkData[] = []
 
-    for (let i = ensuredEpisode.startChunk; i <= ensuredEpisode.endChunk; i++) {
-      const chunkContent = await getChunkData(jobId, i)
-      if (!chunkContent) {
-        throw new Error(
-          `Chunk ${i} not found for job ${jobId}. Cannot proceed with layout generation.`,
-        )
-      }
-
-      // チャンク解析結果を取得（Storage経由）
-      try {
-        const analysisStorage = await StorageFactory.getAnalysisStorage()
-        const key = StorageKeys.chunkAnalysis(jobId, i)
-        const obj = await analysisStorage.get(key)
-        if (!obj) {
-          throw new Error('analysis not found')
+    if (isDemo) {
+      // 解析結果なしで固定の最小データを用意
+      chunkDataArray.push({
+        chunkIndex: 0,
+        text: 'デモ用の短いテキスト',
+        analysis: {
+          summary: 'デモ用サマリ',
+          characters: [{ name: '太郎', role: 'protagonist', description: '主人公' }],
+          dialogues: [
+            {
+              speakerId: 'taro',
+              text: 'やってみよう！',
+              emotion: 'excited',
+              index: 0,
+            },
+          ],
+          scenes: [
+            {
+              location: '公園',
+              time: '昼',
+              description: 'ベンチのある公園',
+              startIndex: 0,
+              endIndex: 10,
+            },
+          ],
+          highlights: [
+            {
+              type: 'emotional_peak',
+              description: '決意の瞬間',
+              importance: 8,
+              startIndex: 0,
+              endIndex: 10,
+              text: 'やってみよう！',
+            },
+          ],
+          situations: [{ description: '新しい挑戦', index: 0 }],
+        },
+        isPartial: false,
+        startOffset: 0,
+        endOffset: 10,
+      })
+    } else {
+      for (let i = ensuredEpisode.startChunk; i <= ensuredEpisode.endChunk; i++) {
+        const chunkContent = await getChunkData(jobId, i)
+        if (!chunkContent) {
+          throw new Error(
+            `Chunk ${i} not found for job ${jobId}. Cannot proceed with layout generation.`,
+          )
         }
-        const parsed = JSON.parse(obj.text)
-        const analysis = parsed.analysis ?? parsed
 
-        // エピソード境界を考慮した部分チャンクの処理
-        const isPartial = i === ensuredEpisode.startChunk || i === ensuredEpisode.endChunk
-        const startOffset = i === ensuredEpisode.startChunk ? ensuredEpisode.startCharIndex : 0
-        const endOffset =
-          i === ensuredEpisode.endChunk ? ensuredEpisode.endCharIndex : chunkContent.text.length
+        // チャンク解析結果を取得（Storage経由）
+        try {
+          const analysisStorage = await StorageFactory.getAnalysisStorage()
+          const key = StorageKeys.chunkAnalysis(jobId, i)
+          const obj = await analysisStorage.get(key)
+          if (!obj) {
+            throw new Error('analysis not found')
+          }
+          const parsed = JSON.parse(obj.text)
+          const analysis = parsed.analysis ?? parsed
 
-        chunkDataArray.push({
-          chunkIndex: i,
-          text: chunkContent.text.substring(startOffset, endOffset),
-          analysis: analysis,
-          isPartial,
-          startOffset,
-          endOffset,
-        })
-      } catch (error) {
-        console.error(`Failed to load analysis for chunk ${i}:`, error)
+          // エピソード境界を考慮した部分チャンクの処理
+          const isPartial = i === ensuredEpisode.startChunk || i === ensuredEpisode.endChunk
+          const startOffset = i === ensuredEpisode.startChunk ? ensuredEpisode.startCharIndex : 0
+          const endOffset =
+            i === ensuredEpisode.endChunk ? ensuredEpisode.endCharIndex : chunkContent.text.length
+
+          chunkDataArray.push({
+            chunkIndex: i,
+            text: chunkContent.text.substring(startOffset, endOffset),
+            analysis: analysis,
+            isPartial,
+            startOffset,
+            endOffset,
+          })
+        } catch (error) {
+          console.error(`Failed to load analysis for chunk ${i}:`, error)
+        }
       }
     }
 
@@ -125,7 +187,38 @@ export async function POST(request: NextRequest) {
       highlightPanelSizeMultiplier: config?.highlightPanelSizeMultiplier ?? 2.0,
       readingDirection: config?.readingDirection ?? ('right-to-left' as const),
     }
-    const layout = await generateMangaLayout(episodeData, fullConfig)
+    // デモ時は固定1ページレイアウトを返す（エージェント非依存）
+    const layout = isDemo
+      ? {
+          title: episodeData.episodeTitle || `エピソード${episodeData.episodeNumber}`,
+          author: job?.jobName || 'Demo',
+          created_at: new Date().toISOString().split('T')[0],
+          episodeNumber: episodeData.episodeNumber,
+          episodeTitle: episodeData.episodeTitle,
+          pages: [
+            {
+              page_number: 1,
+              panels: [
+                {
+                  id: 'p1',
+                  position: { x: 40, y: 40 },
+                  size: { width: 360, height: 220 },
+                  content: '場所: 公園\n新しい挑戦',
+                  dialogues: [
+                    {
+                      speaker: '太郎',
+                      text: 'やってみよう！',
+                      emotion: 'excited',
+                    },
+                  ],
+                  sourceChunkIndex: 0,
+                  importance: 8,
+                },
+              ],
+            },
+          ],
+        }
+      : await generateMangaLayout(episodeData, fullConfig)
 
     // YAMLファイルとして保存（StorageFactory経由）
     const yamlContent = yaml.dump(layout, {

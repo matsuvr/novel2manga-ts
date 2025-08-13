@@ -163,3 +163,92 @@ export function createNovelToMangaScenario() {
 
   return b.build()
 }
+
+// デモ用: APIオーケストレーション（analyze→layout→render）
+export function createDemoApiScenario() {
+  const b = new ScenarioBuilder('demo-api', '1.0.0')
+
+  b.step({
+    id: 'analyze-demo',
+    inputSchema: z.object({
+      baseUrl: z.string().url(),
+      text: z.string().optional(),
+      novelId: z.string().optional(),
+    }),
+    outputSchema: z.object({
+      baseUrl: z.string().url(),
+      jobId: z.string(),
+      mode: z.enum(['demo', 'splitOnly']).optional(),
+      chunkCount: z.number().int().nonnegative().optional(),
+    }),
+    retry: { maxAttempts: 3, backoffMs: 800, factor: 2, jitter: true },
+    idempotencyFrom: ['baseUrl', 'text', 'novelId'],
+    run: (input: unknown) =>
+      adapters.demoAnalyze(
+        z
+          .object({
+            baseUrl: z.string().url(),
+            text: z.string().optional(),
+            novelId: z.string().optional(),
+          })
+          .parse(input),
+      ),
+  })
+
+  b.step({
+    id: 'layout-demo',
+    inputSchema: z.object({ baseUrl: z.string().url(), jobId: z.string() }),
+    outputSchema: z.object({
+      baseUrl: z.string().url(),
+      jobId: z.string(),
+      episodeNumber: z.number().int().positive(),
+      storageKey: z.string(),
+    }),
+    retry: { maxAttempts: 3, backoffMs: 800, factor: 2, jitter: true },
+    idempotencyFrom: ['baseUrl', 'jobId', 'episodeNumber'],
+    run: async (input: unknown) => {
+      const parsed = z
+        .object({
+          baseUrl: z.string().url(),
+          jobId: z.string(),
+          episodeNumber: z.number().int().positive().default(1),
+        })
+        .parse(input)
+      return adapters.demoLayout(parsed)
+    },
+  })
+  b.edge({ from: 'analyze-demo', to: 'layout-demo', fanIn: 'all' })
+
+  b.step({
+    id: 'render-demo',
+    inputSchema: z.object({
+      baseUrl: z.string().url(),
+      jobId: z.string(),
+      episodeNumber: z.number().int().positive().default(1),
+      pageNumber: z.number().int().positive().default(1),
+    }),
+    outputSchema: z.object({
+      jobId: z.string(),
+      episodeNumber: z.number().int().positive(),
+      pageNumber: z.number().int().positive(),
+      renderKey: z.string(),
+      thumbnailKey: z.string().optional(),
+    }),
+    retry: { maxAttempts: 3, backoffMs: 800, factor: 2, jitter: true },
+    idempotencyFrom: ['jobId', 'episodeNumber', 'pageNumber'],
+    run: (input: unknown) =>
+      adapters.demoRender(
+        z
+          .object({
+            baseUrl: z.string().url(),
+            jobId: z.string(),
+            episodeNumber: z.number().int().positive().default(1),
+            pageNumber: z.number().int().positive().default(1),
+          })
+          .parse(input),
+      ),
+  })
+  b.edge({ from: 'layout-demo', to: 'render-demo', fanIn: 'all' })
+
+  return b.build()
+}
