@@ -245,6 +245,33 @@
   - [x] 包括的なテスト作成（render-complete.test.ts）
   - _Requirements: REQ-3 - マンガレイアウト生成_
 
+- [x] 16. シナリオオーケストレーター（DSL）骨格追加（2025-08-12追加）
+  - [x] 型付き契約の追加（`src/types/contracts.ts`）
+  - [x] シナリオDSL/ランナーの追加（`src/services/orchestrator/scenario.ts`）
+  - [x] シナリオ定義の追加（`src/agents/scenarios/novel-to-manga.ts`）
+  - [x] アダプタのスタブ（`src/services/adapters/`）
+  - [x] ユニットテスト追加（`src/__tests__/scenario-dsl.test.ts`）
+  - [x] ドキュメントリンク整備（Cloudflare Queues/DO/D1/R2、Mastra）
+  - [ ] Cloudflare Queues / Durable Objects 実行ランタイム（MCPで最新API確認後に実装）
+  - [ ] Mastraパイプラインへのコンパイル（MCPでAPI確認後）
+  - [ ] STEP-Q-EXEC-001: Queue Executor 実装（Cloudflare Queues consumer → adapter dispatch）
+    - 受け入れ: batch 消費, fan-out 並列, retry(max 3) & dead-letter ログ
+  - [ ] STEP-DO-COORD-001: Durable Object Coordinator 実装（シナリオ状態管理）
+    - 受け入れ: topo sort, ready step 判定, completion callback 処理, idempotency 記録
+  - [ ] STEP-IDEMP-001: idempotencyKey 生成ユーティリティ (`sha256(stepId+canonicalInputRef)`) + テスト
+  - [ ] STEP-OUTPUT-EXT-001: 出力サイズ閾値 (>8KB) で R2 externalize するラッパ実装
+  - [ ] STEP-FANIN-QUORUM-001: fan-in quorum ポリシー (all/quorum%) 評価ロジック
+  - [ ] STEP-OBS-INIT-001: Metrics (latency/retries), structured log, traceId 発行 初期実装
+  - [ ] STEP-DOC-ALIGN-001: design.md の Queue Runtime / Envelope / Retry セクション最終確定と差分記載
+  - _Requirements: オーケストレーション、可観測性、拡張性_
+  - [x] REVIEW-64-TS-SCHEMA-001: 全シナリオ step run 関数に (input: unknown) 型と Zod.parse 導入（implicit any 排除）
+  - [x] REVIEW-64-TEST-SCHEMA-002: `scenario-dsl.test.ts` を Zod schema parse ベースに更新
+  - [x] REVIEW-64-API-SCHEMA-003: `/api/scenario/run` summary 集計を safeParse 化
+  - [x] REVIEW-64-UI-SCHEMA-004: `ScenarioViewer` フロントエンドレスポンスを Zod discriminated union で検証
+  - [x] REVIEW-64-IDEMP-005: cf-executor idempotencyKey を 安定ソート + sha256 16hex トリムに変更
+  - [x] REVIEW-64-DEADCODE-006: 未使用 `promptGen` アダプタ削除
+  - [x] REVIEW-64-ANY-007: scenario.ts の any キャストを type guard (isZodSchema / hasMapFieldArray) で除去
+
 ## 🚨 緊急修正タスク（2025-08-07追加）
 
 現在のシステムは**基本機能が動作しない状態**のため、以下の緊急修正を優先実施する必要があります。
@@ -346,7 +373,9 @@
   - [x] `HttpError` 新規使用禁止 ESLint ガード導入 (2025-08-12)
   - [x] Repository Port 標準化 (entity/mode discriminant + adapters) 実装 (2025-08-12)
   - [x] Port/Factory テスト追加 (ports-guards / adapters-structure / factory-ttl) (2025-08-12)
-  - [x] Storage Audit 並列化 + 静的公開 (2025-08-12)
+  - [ ] Storage Audit API の実装（`utils/storage.ts` に `auditStorageKeys()` を追加）
+    - 並列走査（Promise.all）と部分成功の集計設計は確定済（設計書反映済）
+    - 実装とユニットテストは未着手（本ファイル更新により可視化）
 
 ### Repository Storage Standardization (2025-08-12 完了)
 
@@ -391,6 +420,17 @@ PRレビューコメントからの重要修正を実施し、リポジトリ層
     - エッジケース (null/undefined/wrong entity) 対応テスト
 
 - [x] 38. ドキュメント更新
+  - [x] design.md: Legacy StorageService の現状（DEPRECATED 残置）に修正
+  - [x] storage-structure.md: 現行 StorageKeys のみを「実装済」扱いに調整、未実装キーは「計画中」に分類
+  - [x] tasks.md: Storage Audit を「未実装」に訂正し TODO を具体化
+
+### StorageKeys フォローアップ（新規 TODO）
+
+- [ ] SK-THUMB-001: `StorageKeys.pageThumbnail(jobId, ep, page)` を追加し、レンダリング時にサムネイル作成/保存を統一
+- [ ] SK-EXPORT-001: `StorageKeys.exportOutput(jobId, fmt)` を追加し、エクスポート成果物のキーを統一
+- [ ] SK-RENDER-STATUS-001: `StorageKeys.renderStatus(jobId, ep, page)` を追加し、JSON 状態の保存/取得を標準化
+- [ ] LEGACY-STORAGE-REMOVE: `src/services/storage.ts` の削除（依存ゼロの確認と Playwright/E2E の再実行）
+  - [ ] STORAGE-AUDIT-IMPL-001: `utils/storage.ts` に `auditStorageKeys()` 実装（並列列挙 + issues 集計） & ユニットテスト
 
 ### 2025-08-12 PR#63 Gemini Medium Review Follow-ups
 
@@ -403,6 +443,7 @@ PRレビューコメントからの重要修正を実施し、リポジトリ層
     - コード例とメリット明記
   - [x] TASK-DOCS-TASKS-001: `tasks.md` 完了タスク記録
   - [x] TASK-DOCS-STORAGE-001: `database/storage-structure.md` audit 機能追記
+  - [x] TASK-DOCS-SCENARIO-001: Scenario Orchestrator DSL 追加分 (Queue Runtime 設計/Envelope/Retry/Idempotency) を design.md 反映
 
 ## 完了成果物
 

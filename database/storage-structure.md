@@ -1,15 +1,15 @@
 # ストレージ構造設計
 
-## 2025-08-12 更新 (Legacy Service 削除 / フラットキー方式導入)
+## 2025-08-12 更新（Legacy Service の現状とフラットキー方式）
 
-旧来の **階層ディレクトリ (novels/{novel_id}/jobs/{job_id}/...)** および `txt` ベース保存、`src/services/storage.ts` に存在したレガシー `StorageService` は削除されました。現在は `src/utils/storage.ts` の `StorageFactory` + `StorageKeys` が唯一の公開 API です。これにより以下を達成:
+旧来の **階層ディレクトリ (novels/{novel_id}/jobs/{job_id}/...)** および `txt` ベース保存は廃止方向です。`src/services/storage.ts` のレガシー `StorageService` は現在も DEPRECATED として残置しており、参照が無いことを確認次第に削除します。現行の正規 API は `src/utils/storage.ts` の `StorageKeys` と各種 `get*Storage()` 群です。これにより以下を達成:
 
 - 重複プレフィックス問題の解消 (例: `novels/novels/`)
 - 取り扱いフォーマットの JSON への統一（バイナリ画像等を除く）
 - キー検証 (ID Validation) によるパストラバーサル防止
 - Storage Audit (`auditStorageKeys`) による継続的整合性検査
 
-## 現行キー命名規則 (StorageKeys)
+## 現行キー命名規則（実装済み StorageKeys）
 
 | 種別                 | 生成関数                                     | 形式例                                          |
 | -------------------- | -------------------------------------------- | ----------------------------------------------- |
@@ -20,6 +20,11 @@
 | 物語構造(エピソード) | `StorageKeys.narrativeAnalysis(jobId)`       | `{jobId}/narrative.json`                        |
 | エピソードレイアウト | `StorageKeys.episodeLayout(jobId, ep)`       | `{jobId}/episode_1.yaml`                        |
 | ページ画像           | `StorageKeys.pageRender(jobId, ep, page)`    | `{jobId}/episode_1/page_1.png`                  |
+
+以下は設計済み（計画中）のキーで、コード実装は未着手です。
+
+| 種別（計画中）       | 生成関数                                     | 形式例                                          |
+| -------------------- | -------------------------------------------- | ----------------------------------------------- |
 | サムネイル           | `StorageKeys.pageThumbnail(jobId, ep, page)` | `{jobId}/episode_1/thumbnails/page_1_thumb.png` |
 | エクスポート成果物   | `StorageKeys.exportOutput(jobId, fmt)`       | `{jobId}/output.pdf`                            |
 | レンダリング状態     | `StorageKeys.renderStatus(jobId, ep, page)`  | `{jobId}/episode_1/page_1.json`                 |
@@ -50,9 +55,9 @@ novels/{novel_id}/jobs/{job_id}/analyses/chunk_001.json
 
 バリデーション失敗時は即座に例外を投げ、キー生成段階で不正利用を遮断します。
 
-## Storage Audit
+## Storage Audit（設計・計画）
 
-`auditStorageKeys({ storages?, prefix? })` により指定ストレージを並列走査し以下を検出:
+将来的に `auditStorageKeys({ storages?, prefix? })` を `src/utils/storage.ts` へ実装し、指定ストレージを並列走査して以下を検出する計画です:
 
 - invalid-format: 正規表現 `^[a-z0-9][a-z0-9/_.-]*$` 不一致
 - forbidden-segment: `//`, `__MACOSX`, `.DS_Store` を含む
@@ -64,7 +69,7 @@ novels/{novel_id}/jobs/{job_id}/analyses/chunk_001.json
 2. Novel 削除時: 関連 Job → ストレージファイル → DB レコードの順で削除 (整合性維持)
 3. Orphan ファイル検出: `storage_files` テーブルとの突合で孤立キーを定期削除
 
-将来対応 (提案):
+将来対応（提案）:
 
 - v2 名前空間導入 (`v2/{jobId}/...`) により長期的キー進化をステージング
 - 旧キー読み込み → 新キー書き込み (dual-read/write) 期間後に旧キー削除
@@ -152,7 +157,7 @@ const novelRepo = new NovelRepository(ports.novel); // NovelDbPortRW
 
 **Path Duplication 修正 / Legacy 廃止:**
 
-- 旧 `src/services/storage.ts` 削除により二重管理解消
+- Legacy `src/services/storage.ts` は DEPRECATED として残置（今後削除）。
 - StorageKeys が単一ソース・プレフィックス重複不可
 - `.local-storage/<category>/<key>` の最終形 (例: `.local-storage/novels/{uuid}.json`)
 
