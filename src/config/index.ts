@@ -14,7 +14,6 @@ import {
   getLLMDefaultProvider as getDefaultProvider,
   getLLMFallbackChain as getFallbackChain,
   getLLMProviderConfig as getProviderConfig,
-  getUseCaseParams,
   type LLMProvider,
 } from './llm.config'
 
@@ -50,11 +49,11 @@ export function getLLMConfig() {
 // 物語弧分析設定を取得
 export function getNarrativeAnalysisConfig() {
   const prompts = getAppConfig().llm.narrativeArcAnalysis
-  const params = getUseCaseParams('narrativeArcAnalysis')
+  const provider = getDefaultProvider()
+  const providerConfig = getProviderConfig(provider as LLMProvider)
   return {
-    provider: params.provider,
-    maxTokens: params.maxTokens,
-    modelOverrides: params.modelOverrides,
+    provider: provider,
+    maxTokens: providerConfig.maxTokens,
     systemPrompt: prompts.systemPrompt,
     userPromptTemplate: prompts.userPromptTemplate,
   }
@@ -63,11 +62,11 @@ export function getNarrativeAnalysisConfig() {
 // テキスト分析設定を取得
 export function getTextAnalysisConfig() {
   const prompts = getAppConfig().llm.textAnalysis
-  const params = getUseCaseParams('textAnalysis')
+  const provider = getDefaultProvider()
+  const providerConfig = getProviderConfig(provider as LLMProvider)
   return {
-    provider: params.provider,
-    maxTokens: params.maxTokens,
-    modelOverrides: params.modelOverrides,
+    provider: provider,
+    maxTokens: providerConfig.maxTokens,
     systemPrompt: prompts.systemPrompt,
     userPromptTemplate: prompts.userPromptTemplate,
   }
@@ -76,11 +75,11 @@ export function getTextAnalysisConfig() {
 // レイアウト生成設定を取得
 export function getLayoutGenerationConfig() {
   const prompts = getAppConfig().llm.layoutGeneration
-  const params = getUseCaseParams('layoutGeneration')
+  const provider = getDefaultProvider()
+  const providerConfig = getProviderConfig(provider as LLMProvider)
   return {
-    provider: params.provider,
-    maxTokens: params.maxTokens,
-    modelOverrides: params.modelOverrides,
+    provider: provider,
+    maxTokens: providerConfig.maxTokens,
     systemPrompt: prompts.systemPrompt,
     userPromptTemplate: prompts.userPromptTemplate,
   }
@@ -89,11 +88,11 @@ export function getLayoutGenerationConfig() {
 // チャンクバンドル統合分析設定を取得
 export function getChunkBundleAnalysisConfig() {
   const prompts = getAppConfig().llm.chunkBundleAnalysis
-  const params = getUseCaseParams('chunkBundleAnalysis')
+  const provider = getDefaultProvider()
+  const providerConfig = getProviderConfig(provider as LLMProvider)
   return {
-    provider: params.provider,
-    maxTokens: params.maxTokens,
-    modelOverrides: params.modelOverrides,
+    provider: provider,
+    maxTokens: providerConfig.maxTokens,
     systemPrompt: prompts.systemPrompt,
     userPromptTemplate: prompts.userPromptTemplate,
   }
