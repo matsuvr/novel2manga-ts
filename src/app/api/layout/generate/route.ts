@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
         chunkIndex: 0,
         text: 'デモ用の短いテキスト',
         analysis: {
+          chunkIndex: 0,
           summary: 'デモ用サマリ',
           characters: [{ name: '太郎', role: 'protagonist', description: '主人公' }],
           dialogues: [{ speaker: '太郎', text: 'やってみよう！', emotion: 'excited', context: '' }],
