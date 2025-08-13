@@ -122,7 +122,7 @@ export async function demoAnalyze(
   })
   const json = ResponseSchema.parse(await res.json())
   const jobId = json.id ?? json.jobId ?? json.data?.jobId
-  if (!jobId) throw new Error('demoAnalyze: jobId missing')
+  if (!jobId) throw new Error('[demoAnalyze] jobId missing in response')
   return {
     baseUrl: input.baseUrl,
     jobId,
@@ -150,7 +150,7 @@ export async function demoLayout(
   })
   const json = ResponseSchema.parse(await res.json())
   const storageKey = json.storageKey ?? json.layoutPath
-  if (!storageKey) throw new Error('demoLayout: storageKey missing')
+  if (!storageKey) throw new Error('[demoLayout] storageKey missing in response')
   return {
     baseUrl: input.baseUrl,
     jobId: input.jobId,
@@ -178,7 +178,7 @@ export async function demoRender(
     thumbnailKey: z.string().optional(),
   })
   const json = ResponseSchema.parse(await res.json())
-  if (!json.renderKey) throw new Error('demoRender: renderKey missing')
+  if (!json.renderKey) throw new Error('[demoRender] renderKey missing in response')
   // json.renderKey は上で存在チェック済み
   return {
     jobId: input.jobId,

@@ -29,6 +29,11 @@ describe('demo adapters', () => {
 		const out = await demoRender({ baseUrl, jobId: 'job', episodeNumber: 1, pageNumber: 1 })
 		expect(out.renderKey).toBe('r')
 	})
+
+  it('handles malformed JSON gracefully', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.reject(new Error('Invalid JSON')) }) as any
+    await expect(demoAnalyze({ baseUrl })).rejects.toThrow('Invalid JSON')
+  })
 })
 
 
