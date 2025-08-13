@@ -14,6 +14,7 @@ import {
   extractErrorMessage,
 } from '@/utils/api-error'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
+import { detectDemoMode } from '@/utils/request-mode'
 import { StorageKeys, saveEpisodeBoundaries } from '@/utils/storage'
 import { splitTextIntoChunks } from '@/utils/text-splitter'
 import { generateUUID } from '@/utils/uuid'
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('[/api/analyze] Raw body:', rawBody)
+    const isDemo = detectDemoMode(request, rawBody)
 
     // テスト/モック用フラグは廃止（フォールバックせずに正規処理/エラーにする）
 
@@ -185,12 +187,33 @@ export async function POST(request: NextRequest) {
     await dbService.updateJobStep(jobId, 'split', 0, chunks.length)
     await dbService.markJobStepCompleted(jobId, 'split')
 
-    // splitOnly が指定された場合はここで終了（LLM呼び出しは行わない）
-    if (splitOnly) {
+    // splitOnly / demo の場合はここで終了（LLM呼び出しは行わない）
+    if (splitOnly || isDemo) {
+      // デモ/簡易用に最小限のエピソード境界を作成（1話・1ページ想定）
+      try {
+        await saveEpisodeBoundaries(jobId, [
+          {
+            episodeNumber: 1,
+            title: 'Demo Episode',
+            summary: 'デモ用の自動作成エピソード',
+            startChunk: 0,
+            startCharIndex: 0,
+            endChunk: Math.max(0, chunks.length - 1),
+            endCharIndex: chunks.length > 0 ? chunks[Math.max(0, chunks.length - 1)].length : 0,
+            estimatedPages: 1,
+            confidence: 0.9,
+          },
+        ])
+        await dbService.markJobStepCompleted(jobId, 'episode')
+      } catch (e) {
+        console.warn('[/api/analyze] saveEpisodeBoundaries (demo) failed (non-fatal):', e)
+      }
       const response: AnalyzeResponse = {
         success: true,
         id: jobId,
-        message: `splitOnly: テキストを${chunks.length}個のチャンクに分割しました（分析は未実行）`,
+        message: splitOnly
+          ? `splitOnly: テキストを${chunks.length}個のチャンクに分割しました（分析は未実行）`
+          : `demo: テキストを${chunks.length}個のチャンクに分割し、デモ用エピソードを作成しました（分析は未実行）`,
         data: {
           jobId,
           chunkCount: chunks.length,
@@ -205,7 +228,7 @@ export async function POST(request: NextRequest) {
           ...response,
           jobId,
           chunkCount: chunks.length,
-          mode: 'splitOnly',
+          mode: splitOnly ? 'splitOnly' : 'demo',
         },
         201,
       )

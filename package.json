@@ -5,7 +5,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:unit": "vitest",
+    "test:unit": "vitest run",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
     "test:integration": "dotenv -e .env.test -- vitest --config vitest.integration.config.ts",

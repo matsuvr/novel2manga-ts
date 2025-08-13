@@ -1,7 +1,13 @@
-import type { z } from 'zod'
+import { z } from 'zod'
 import type {
   zChunkOutput,
   zComposeOutput,
+  zDemoAnalyzeInput,
+  zDemoAnalyzeOutput,
+  zDemoLayoutInput,
+  zDemoLayoutOutput,
+  zDemoRenderInput,
+  zDemoRenderOutput,
   zImageResult,
   zIngestInput,
   zIngestOutput,
@@ -87,4 +93,98 @@ export async function publish(
   input: z.infer<typeof zComposeOutput>,
 ): Promise<{ ok: true; indexCount: number }> {
   return { ok: true, indexCount: input.pages.length }
+}
+
+// ==============================
+// Demo Orchestrator Adapters
+// ==============================
+export async function demoAnalyze(
+  input: z.infer<typeof zDemoAnalyzeInput>,
+): Promise<z.infer<typeof zDemoAnalyzeOutput>> {
+  const payload = input.text
+    ? { text: input.text }
+    : input.novelId
+      ? { novelId: input.novelId }
+      : { text: 'デモ用テキストです。' }
+  const res = await fetch(`${input.baseUrl}/api/analyze?demo=1`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error(`[demoAnalyze] failed: ${res.status}`)
+  const ResponseSchema = z.object({
+    success: z.boolean().optional(),
+    id: z.string().optional(),
+    jobId: z.string().optional(),
+    data: z.object({ jobId: z.string().optional() }).partial().optional(),
+    mode: z.enum(['demo', 'splitOnly']).optional(),
+    chunkCount: z.number().int().nonnegative().optional(),
+  })
+  const json = ResponseSchema.parse(await res.json())
+  const jobId = json.id ?? json.jobId ?? json.data?.jobId
+  if (!jobId) throw new Error('[demoAnalyze] jobId missing in response')
+  return {
+    baseUrl: input.baseUrl,
+    jobId,
+    mode: json.mode ?? 'demo',
+    chunkCount: json.chunkCount,
+  }
+}
+
+export async function demoLayout(
+  input: z.infer<typeof zDemoLayoutInput>,
+): Promise<z.infer<typeof zDemoLayoutOutput>> {
+  const res = await fetch(`${input.baseUrl}/api/layout/generate?demo=1`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jobId: input.jobId,
+      episodeNumber: input.episodeNumber,
+    }),
+  })
+  if (!res.ok) throw new Error(`[demoLayout] failed: ${res.status}`)
+  const ResponseSchema = z.object({
+    success: z.boolean().optional(),
+    storageKey: z.string().optional(),
+    layoutPath: z.string().optional(),
+  })
+  const json = ResponseSchema.parse(await res.json())
+  const storageKey = json.storageKey ?? json.layoutPath
+  if (!storageKey) throw new Error('[demoLayout] storageKey missing in response')
+  return {
+    baseUrl: input.baseUrl,
+    jobId: input.jobId,
+    episodeNumber: input.episodeNumber,
+    storageKey,
+  }
+}
+
+export async function demoRender(
+  input: z.infer<typeof zDemoRenderInput>,
+): Promise<z.infer<typeof zDemoRenderOutput>> {
+  const res = await fetch(`${input.baseUrl}/api/render`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jobId: input.jobId,
+      episodeNumber: input.episodeNumber,
+      pageNumber: input.pageNumber,
+    }),
+  })
+  if (!res.ok) throw new Error(`[demoRender] failed: ${res.status}`)
+  const ResponseSchema = z.object({
+    success: z.boolean().optional(),
+    renderKey: z.string().optional(),
+    thumbnailKey: z.string().optional(),
+  })
+  const json = ResponseSchema.parse(await res.json())
+  if (!json.renderKey) throw new Error('[demoRender] renderKey missing in response')
+  // json.renderKey は上で存在チェック済み
+  return {
+    jobId: input.jobId,
+    episodeNumber: input.episodeNumber,
+    pageNumber: input.pageNumber,
+    renderKey: json.renderKey,
+    thumbnailKey: json.thumbnailKey,
+  }
 }
