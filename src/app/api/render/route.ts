@@ -8,7 +8,7 @@ import { JobRepository } from '@/repositories/job-repository'
 import { getDatabaseService } from '@/services/db-factory'
 import type { MangaLayout } from '@/types/panel-layout'
 import { handleApiError, successResponse, validationError } from '@/utils/api-error'
-import { StorageFactory } from '@/utils/storage'
+import { StorageFactory, StorageKeys } from '@/utils/storage'
 import { isMangaLayout } from '@/utils/type-guards'
 import { validateJobId } from '@/utils/validators'
 
@@ -30,12 +30,20 @@ export async function POST(request: NextRequest) {
       return validationError('有効なepisodeNumberが必要です')
     if (typeof body.pageNumber !== 'number' || body.pageNumber < 1)
       return validationError('有効なpageNumberが必要です')
-    if (!body.layoutYaml) return validationError('layoutYamlが必要です')
+    // layoutYaml が未指定でも、ストレージに保存済みの YAML を自動読込（デモ/実運用双方で便利）
+    let layoutYaml = body.layoutYaml
+    if (!layoutYaml) {
+      const layoutStorage = await StorageFactory.getLayoutStorage()
+      const layoutKey = StorageKeys.episodeLayout(body.jobId, body.episodeNumber)
+      const obj = await layoutStorage.get(layoutKey)
+      if (!obj) return validationError('layoutYamlが必要です')
+      layoutYaml = obj.text
+    }
 
     // YAMLパース
     let mangaLayout: MangaLayout
     try {
-      const parsed = yamlLoad(body.layoutYaml)
+      const parsed = yamlLoad(layoutYaml)
       if (!isMangaLayout(parsed)) return validationError('無効なYAML形式です')
       mangaLayout = parsed
     } catch {

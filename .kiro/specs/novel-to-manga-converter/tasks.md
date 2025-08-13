@@ -272,6 +272,17 @@
   - [x] REVIEW-64-DEADCODE-006: 未使用 `promptGen` アダプタ削除
   - [x] REVIEW-64-ANY-007: scenario.ts の any キャストを type guard (isZodSchema / hasMapFieldArray) で除去
 
+### 17. デモオーケストレーション導入（2025-08-13 本PR）
+
+- [x] 共通デモ判定 `detectDemoMode()` 追加（`src/utils/request-mode.ts`）
+- [x] `/api/analyze` と `/api/layout/generate` に適用（any 排除）
+- [x] `/api/render` の YAML 自動読込（既存機能をデモで活用）
+- [x] `createDemoApiScenario()` をシナリオに追加（`analyze-demo → layout-demo → render-demo`）
+- [x] アダプタに Zod 検証＋ `withRetry` リトライ適用（`src/services/adapters/index.ts`）
+- [x] 単体テスト: `detectDemoMode` と デモアダプタ（モックfetch）
+- [ ] デモ用レイアウトテンプレートの外部化（Magic Values 排除）
+- [ ] E2E: `/api/scenario/run {kind: 'demo'}` のハッピーパス
+
 ## 🚨 緊急修正タスク（2025-08-07追加）
 
 現在のシステムは**基本機能が動作しない状態**のため、以下の緊急修正を優先実施する必要があります。
