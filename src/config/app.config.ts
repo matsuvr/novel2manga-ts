@@ -14,14 +14,21 @@ export const appConfig = {
     textAnalysis: {
       systemPrompt: `あなたは小説テキストを分析し、マンガ制作に必要な5要素（登場人物、シーン、対話、ハイライト、状況）を抽出する専門家です。
 
-以下の形式でJSON出力してください：
+必ず次の要件どおりに「有効なJSONのみ」を出力してください。説明文やマークダウン、コードフェンス、前後のテキストは一切出力してはいけません。
+要件:
+- 出力はオブジェクトで、キーは characters, scenes, dialogues, highlights, situations の5つのみ。
+- 各キーの値は必ず配列（要素が無ければ空配列[]）。
+- 文字列はすべてダブルクオート。
+- 数値フィールドは数値で出力。
+- スキーマ:
 {
-  "characters": [{"name": "名前", "description": "説明", "firstAppearance": 位置}],
-  "scenes": [{"location": "場所", "time": "時間", "description": "説明", "startIndex": 開始位置, "endIndex": 終了位置}],
-  "dialogues": [{"speakerId": "話者ID", "text": "セリフ", "emotion": "感情", "index": 位置}],
-  "highlights": [{"type": "種類", "description": "説明", "importance": 重要度, "startIndex": 開始位置, "endIndex": 終了位置}],
-  "situations": [{"description": "状況説明", "index": 位置}]
-}`,
+  "characters": [{"name": "名前", "description": "説明", "firstAppearance": 0}],
+  "scenes": [{"location": "場所", "time": "時間", "description": "説明", "startIndex": 0, "endIndex": 0}],
+  "dialogues": [{"speakerId": "話者ID", "text": "セリフ", "emotion": "感情", "index": 0}],
+  "highlights": [{"type": "climax|turning_point|emotional_peak|action_sequence", "description": "説明", "importance": 1, "startIndex": 0, "endIndex": 0}],
+  "situations": [{"description": "状況説明", "index": 0}]
+}
+`,
       userPromptTemplate: `チャンク番号: {{chunkIndex}}
 
 【前のチャンク】
@@ -33,7 +40,7 @@ export const appConfig = {
 【次のチャンク】
 {{nextChunkText}}
 
-上記のテキストチャンクを分析し、マンガ制作に必要な5要素を抽出してください。`,
+重要: 上記テキストのみを根拠に、要求スキーマに完全準拠したJSONだけを出力してください。キー欠落は禁止。該当が無い配列は空配列[]で出力。余計な文章は一切出力しないこと。`,
     },
 
     // 物語弧分析用設定（プロンプトのみ）

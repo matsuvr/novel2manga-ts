@@ -1,20 +1,9 @@
 import { z } from 'zod'
 import { BaseAgent } from '@/agents/base-agent'
-import { getLayoutGenerationConfig } from '@/config'
+import { getLayoutGenerationConfig, getLLMDefaultProvider } from '@/config'
 import { Page } from '@/domain/models/page'
 import type { EpisodeData, LayoutGenerationConfig, MangaLayout, Panel } from '@/types/panel-layout'
 import { selectLayoutTemplate } from '@/utils/layout-templates'
-import { getLayoutGenerationLLM } from '@/utils/llm-factory'
-
-async function getLayoutModel() {
-  // 共有LLMファクトリを使用して、フォールバックやモデルオーバーライドを一元化
-  const llm = await getLayoutGenerationLLM()
-  // デバッグ出力（統一）
-  console.log(`[layout-generator] Using provider: ${llm.providerName}`)
-  console.log(`[layout-generator] Using model: ${llm.model}`)
-  // Mastra Agent の model コールバックはモデルインスタンスを返す関数を期待
-  return llm.provider(llm.model)
-}
 
 // LLMへの入力スキーマは現在使用していないが、将来のバリデーション用に保持
 // const layoutGenerationInputSchema = z.object({
@@ -68,14 +57,17 @@ const layoutGenerationOutputSchema = z.object({
 
 export class LayoutGeneratorAgent extends BaseAgent {
   constructor() {
+    const config = getLayoutGenerationConfig()
+    const provider = getLLMDefaultProvider()
+
     super({
       name: 'layout-generator',
-      instructions: () => {
-        const config = getLayoutGenerationConfig()
-        return config.systemPrompt
-      },
-      model: getLayoutModel,
+      instructions: config.systemPrompt,
+      provider: provider,
+      maxTokens: config.maxTokens,
     })
+
+    console.log(`[layout-generator] Using provider: ${provider}`)
   }
 
   async generateLayout(
@@ -98,6 +90,7 @@ export class LayoutGeneratorAgent extends BaseAgent {
     const llmResponseObject = await this.generateObject(
       [{ role: 'user', content: prompt }],
       layoutGenerationOutputSchema,
+      { maxRetries: 2 },
     )
 
     // LLMの出力を実際のレイアウトに変換
@@ -105,7 +98,10 @@ export class LayoutGeneratorAgent extends BaseAgent {
 
     for (const pageData of llmResponseObject.pages) {
       const panelCount = pageData.panels.length
-      type PanelType = { importance: number; dialogues?: { speaker: string; text: string }[] }
+      type PanelType = {
+        importance: number
+        dialogues?: { speaker: string; text: string }[]
+      }
       const hasHighlight = pageData.panels.some((p: PanelType) => p.importance >= 7)
       const isClimax = pageData.panels.some((p: PanelType) => p.importance >= 9)
       const hasDialogue = pageData.panels.some(

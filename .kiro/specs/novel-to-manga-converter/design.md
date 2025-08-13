@@ -2,7 +2,7 @@
 
 ## Overview
 
-本設計書は、小説テキストをマンガ形式のレイアウト（絵コンテ）に自動変換するWebアプリケーションの技術実装について定義します。本ツールは編集者を補佐するツールであり、マンガの絵そのものを生成するのではなく、コマ割りと吹き出し配置の構成案を提供します。Mastra AIフレームワークをベースに、TypeScriptとNext.js 14を使用して、長文テキストの解析、5要素の抽出（登場人物・シーン・対話・ハイライト・状況）、連載エピソード構成、マンガレイアウト生成を実現します。
+本設計書は、小説テキストをマンガ形式のレイアウト（絵コンテ）に自動変換するWebアプリケーションの技術実装について定義します。本ツールは編集者を補佐するツールであり、マンガの絵そのものを生成するのではなく、コマ割りと吹き出し配置の構成案を提供します。AI実行は Mastra ではなく、OpenAI SDK と Google GenAI SDK を直接呼び出す構成に統一しています（TypeScript + Next.js 15）。
 
 ### 2025-08-12 更新サマリ
 
@@ -122,10 +122,10 @@ graph TB
         C --> D[Interactive Editor]
     end
 
-    subgraph "AI Processing Layer (Mastra Agents)"
-        E[Mastra Framework] --> F[ChunkAnalyzer Agent]
-        E --> G[LayoutGenerator Agent]
-        E --> H[NarrativeArcAnalyzer Agent]
+    subgraph "AI Processing Layer (Direct SDKs)"
+        E[OpenAI SDK / Google GenAI SDK] --> F[ChunkAnalyzer]
+        E --> G[LayoutGenerator]
+        E --> H[NarrativeArcAnalyzer]
         F --> I[5-Element Extractor]
         H --> J[Episode Boundary Detection]
     end
@@ -180,7 +180,7 @@ graph TB
 調査結果に基づく技術選定：
 
 - **Frontend**: Next.js 15.3.3 (App Router) + TypeScript 5 + Tailwind CSS v4
-- **AI Framework**: Mastra (TypeScript agent framework)
+- **AI SDKs**: OpenAI SDK, Google GenAI SDK（直接呼び出し）
 - **絵コンテ生成**: Canvas API（枠線・テキスト・吹き出しのみ、イラストは含まない）
 - **Backend**: Next.js API Routes + Mastra Agents
 - **Database**: Cloudflare D1 (SQLite ベース) / SQLite (開発環境)
@@ -204,7 +204,7 @@ graph TB
 - **設定管理**: app.config.ts による一元管理、環境変数オーバーライド、チューニング用コメント付き
 - **LLMフォールバックチェーン**: openrouter → gemini → claude の自動フォールバック、可用性向上（Gemini追加）
 
-### 型互換性に関する注記（Mastra × Vercel AI SDK）
+### 型互換性に関する注記（OpenAI/GenAI）
 
 - 現状、Vercel AI SDK v5 の LanguageModelV2 と Mastra Agent 側の期待型（LanguageModelV1）に差異があり、`src/agents/layout-generator.ts` では一時的に `as any` キャストで適合させています。
 - 恒久対策としては、Mastra側の更新または軽量アダプタ層（V1→V2ブリッジ）の導入を検討中（tasks.md: TASK-LLM-ADAPTER-001）。
@@ -1339,11 +1339,11 @@ export const appConfig = {
   llm: {
     defaultProvider: "openrouter", // 【ここを設定】
     providers: {
-      openai: { model: "o3" }, // OpenAI o3 (reasoningモデル、temperatureパラメータなし)
-      gemini: { model: "gemini-2.5-flash", temperature: 0.7 },
+      openai: { model: "gpt-5-mini" },
+      gemini: { model: "gemini-2.5-flash" },
       groq: { model: "compound-beta", maxTokens: 8192 },
       local: { model: "gpt-oss:20b", baseUrl: "http://localhost:11434" },
-      openrouter: { model: "openai/gpt-oss-120b", temperature: 0.7 },
+      openrouter: { model: "openai/gpt-oss-120b" },
     },
   },
 
@@ -1831,7 +1831,7 @@ graph LR
   - `src/services/adapters/`: Thin facades per microservice (currently stubs for tests).
 - Handoffs: Message payloads reference large blobs via `r2://...` keys. Each message carries `jobId`, `stepId`, `correlationId`, and an `idempotencyKey` derivable from inputs.
 - Fan-out/Fan-in: Steps can declare `mapField` to shard work (windows/panels). Joins are represented by edges converging on a step with `fanIn: 'all' | 'quorum'` (quorum policy to be implemented in queue-backed runtime).
-- Cloudflare/Mastra: Queue-backed executor and Durable Object coordinator to be added after validating latest APIs and limits. This design keeps adapters idempotent and messages versioned.
+- Cloudflare: Queue-backed executor and Durable Object coordinator to be added after validating latest APIs and limits. This design keeps adapters idempotent and messages versioned.
 
 #### Planned Queue Runtime Architecture (Next Phase)
 

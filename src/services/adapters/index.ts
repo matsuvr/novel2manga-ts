@@ -188,3 +188,118 @@ export async function demoRender(
     thumbnailKey: json.thumbnailKey,
   }
 }
+
+// ==============================
+// Production Orchestrator Adapters
+// ==============================
+
+export async function prodAnalyze(input: {
+  baseUrl: string
+  text?: string
+  novelId?: string
+  title?: string
+}): Promise<{
+  baseUrl: string
+  jobId: string
+  chunkCount?: number
+}> {
+  const payload = input.text
+    ? { text: input.text, title: input.title }
+    : input.novelId
+      ? { novelId: input.novelId, title: input.title }
+      : null
+  if (!payload) throw new Error('[prodAnalyze] either text or novelId is required')
+  const res = await fetch(`${input.baseUrl}/api/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error(`[prodAnalyze] failed: ${res.status}`)
+  const ResponseSchema = z.object({
+    success: z.boolean().optional(),
+    id: z.string().optional(),
+    jobId: z.string().optional(),
+    data: z
+      .object({
+        jobId: z.string().optional(),
+        chunkCount: z.number().int().nonnegative().optional(),
+      })
+      .partial()
+      .optional(),
+  })
+  const json = ResponseSchema.parse(await res.json())
+  const jobId = json.id ?? json.jobId ?? json.data?.jobId
+  if (!jobId) throw new Error('[prodAnalyze] jobId missing in response')
+  return { baseUrl: input.baseUrl, jobId, chunkCount: json.data?.chunkCount }
+}
+
+export async function prodLayout(input: {
+  baseUrl: string
+  jobId: string
+  episodeNumber: number
+}): Promise<{
+  baseUrl: string
+  jobId: string
+  episodeNumber: number
+  storageKey: string
+}> {
+  const res = await fetch(`${input.baseUrl}/api/layout/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jobId: input.jobId,
+      episodeNumber: input.episodeNumber,
+    }),
+  })
+  if (!res.ok) throw new Error(`[prodLayout] failed: ${res.status}`)
+  const ResponseSchema = z.object({
+    storageKey: z.string().optional(),
+    layoutPath: z.string().optional(),
+  })
+  const json = ResponseSchema.parse(await res.json())
+  const storageKey = json.storageKey ?? json.layoutPath
+  if (!storageKey) throw new Error('[prodLayout] storageKey missing in response')
+  return {
+    baseUrl: input.baseUrl,
+    jobId: input.jobId,
+    episodeNumber: input.episodeNumber,
+    storageKey,
+  }
+}
+
+export async function prodRender(input: {
+  baseUrl: string
+  jobId: string
+  episodeNumber: number
+  pageNumber: number
+}): Promise<{
+  jobId: string
+  episodeNumber: number
+  pageNumber: number
+  renderKey: string
+  thumbnailKey?: string
+}> {
+  const res = await fetch(`${input.baseUrl}/api/render`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jobId: input.jobId,
+      episodeNumber: input.episodeNumber,
+      pageNumber: input.pageNumber,
+    }),
+  })
+  if (!res.ok) throw new Error(`[prodRender] failed: ${res.status}`)
+  const ResponseSchema = z.object({
+    renderKey: z.string().optional(),
+    thumbnailKey: z.string().optional(),
+  })
+  const json = ResponseSchema.parse(await res.json())
+  if (!json.renderKey) throw new Error('[prodRender] renderKey missing in response')
+  return {
+    jobId: input.jobId,
+    episodeNumber: input.episodeNumber,
+    pageNumber: input.pageNumber,
+    renderKey: json.renderKey,
+    thumbnailKey: json.thumbnailKey,
+  }
+}

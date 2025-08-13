@@ -9,7 +9,6 @@ import type { MessageEnvelope, ScenarioData } from '@/types/contracts'
  * - Durable Objects: https://developers.cloudflare.com/durable-objects/
  * - D1: https://developers.cloudflare.com/d1/
  * - R2: https://developers.cloudflare.com/r2/
- * - Mastra overview: https://mastra.ai/docs
  */
 
 // Lightweight queue producer interface to decouple from direct Env types.

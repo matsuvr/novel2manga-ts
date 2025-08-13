@@ -5,53 +5,51 @@ import { StorageFactory } from "@/utils/storage";
 
 // モック設定
 vi.mock("@/agents/chunk-analyzer", () => ({
-  chunkAnalyzerAgent: {
-    generate: vi.fn().mockResolvedValue({
-      object: {
-        summary: "チャンク分析結果の要約",
-        characters: [
-          {
-            name: "テスト花子",
-            description: "テスト用女性キャラクター",
-            firstAppearance: 15,
-          },
-        ],
-        scenes: [
-          {
-            location: "学校",
-            time: "午後",
-            description: "学校の教室でのシーン",
-            startIndex: 0,
-            endIndex: 200,
-          },
-        ],
-        dialogues: [
-          {
-            speakerId: "テスト花子",
-            text: "おはようございます",
-            emotion: "cheerful",
-            index: 100,
-          },
-        ],
-        highlights: [
-          {
-            type: "emotional_peak" as const,
-            description: "感情的な山場",
-            importance: 7,
-            startIndex: 150,
-            endIndex: 180,
-            text: "感情的な部分の抜粋",
-          },
-        ],
-        situations: [
-          {
-            description: "緊迫した状況",
-            index: 120,
-          },
-        ],
-      },
+  getChunkAnalyzerAgent: vi.fn(() => ({
+    generateObject: vi.fn().mockResolvedValue({
+      summary: "チャンク分析結果の要約",
+      characters: [
+        {
+          name: "テスト花子",
+          description: "テスト用女性キャラクター",
+          firstAppearance: 15,
+        },
+      ],
+      scenes: [
+        {
+          location: "学校",
+          time: "午後",
+          description: "学校の教室でのシーン",
+          startIndex: 0,
+          endIndex: 200,
+        },
+      ],
+      dialogues: [
+        {
+          speakerId: "テスト花子",
+          text: "おはようございます",
+          emotion: "cheerful",
+          index: 100,
+        },
+      ],
+      highlights: [
+        {
+          type: "emotional_peak" as const,
+          description: "感情的な山場",
+          importance: 7,
+          startIndex: 150,
+          endIndex: 180,
+          text: "感情的な部分の抜粋",
+        },
+      ],
+      situations: [
+        {
+          description: "緊迫した状況",
+          index: 120,
+        },
+      ],
     }),
-  },
+  })),
 }));
 
 vi.mock("@/utils/storage", async (importOriginal) => {
