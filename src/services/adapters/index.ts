@@ -178,7 +178,7 @@ export async function demoRender(
     jobId: input.jobId,
     episodeNumber: input.episodeNumber,
     pageNumber: input.pageNumber,
-    renderKey: json.renderKey,
+    renderKey: json.renderKey!,
     thumbnailKey: json.thumbnailKey,
   }
 }
