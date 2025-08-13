@@ -15,11 +15,12 @@
 - Type Guards (`hasEpisodeWriteCapabilities` など) でランタイム安全性と compile-time narrowing を提供
 - Repository Factory Cache TTL: 環境変数 `REPOSITORY_FACTORY_TTL_MS` で上書き可能（開発/テスト: 5分、本番: 30分）
 
-**Storage Path Structure 正規化:**
+**Storage Path Structure 正規化（現状/計画の明確化）:**
 
-- Storage Key 重複パス問題を修正 (例: `.local-storage/novels/novels/` → `.local-storage/novels/`)
-- StorageKeys の ID バリデーション強化（パストラバーサル防止、null バイト/URL エンコード検出）
-- Storage Audit Parallelization: `Promise.all` 並列化により I/O 待機時間を大幅短縮
+- Storage Key 重複パス問題を修正 (例: `.local-storage/novels/novels/` → `.local-storage/novels/`)（実装済）
+- StorageKeys の ID バリデーション強化（パストラバーサル防止、null バイト/URL エンコード検出）（実装済）
+- Legacy `StorageService` は非推奨（DEPRECATED）として残置し、参照が無いことを確認後に削除予定（現状: `src/services/storage.ts` が残存）
+- Storage Audit（キー一括検査）は設計に反映済だが、関数提供（`auditStorageKeys`）は未実装。提供形態は `utils/storage.ts` への追加を計画（TODO）
 
 **Type Safety & Code Quality 改善:**
 
@@ -40,6 +41,17 @@
 - 2025-08-12 (PR#63 Gemini medium 対応): MangaLayout の手動 `interface` 定義を廃止し、Zod スキーマ単一路線 (single source of truth) へ統合。`src/types/panel-layout.ts` は `z.infer<typeof MangaLayoutSchema>` から派生する型エイリアスのみをエクスポートしドリフトを防止。型互換性はコンパイル時アサーションで検証。
 - 2025-08-12 (PR#63 Gemini medium 対応): `normalizeEmotion()` が空白のみの文字列 (例: " ") を未指定扱い (`undefined`) として扱うよう変更し、無意味な 'normal' フォールバックと警告ログ発生を回避。
 - 2025-08-12 (PR#63 Gemini medium 対応): レガシー `StorageService` (`src/services/storage.ts`) の JSON パース失敗をサイレントに握りつぶさず、開発/テスト環境で `console.error` を出力する診断ログを追加（完全削除前のトラブルシュート容易化）。
+
+**Scenario Orchestrator DSL（初期インメモリ実行ランタイム）:**
+
+- 型付きシナリオ定義（DAG）を宣言的に構築する `ScenarioBuilder` を追加（`src/services/orchestrator/scenario.ts`）。
+- ステップごとの型安全な入出力 (`StepDefinition<I, O>`) と Zod 契約 (`src/types/contracts.ts`) により、オーケストレーション処理を静的検証。
+- `mapField` による fan-out (チャンクウィンドウ/パネル分割) をサポートし、後続ステップはリスト統合を想定した fan-in パターンを記述可能（queue ランタイムでは quorum / all 集約ポリシーを導入予定）。
+- インメモリ実行は開発/テストに限定（シングルプロセス、順次 or fan-out 同期展開）。本番では Cloudflare Queues + Durable Objects で非同期分散実行へ昇格予定。
+- 大容量ペイロードは R2 参照 (`r2://<bucket>/<key>`) を message envelope に埋め込み、メッセージ本体を軽量化（Queue サイズ上限対策）。
+- 冪等性: `idempotencyKey = sha256(stepId + canonicalInputRef)` を設計（Queue 再配信時にDO側で重複検出しスキップ）。
+- 観測性: 追跡フィールド (`jobId`, `stepId`, `correlationId`, `attempt`, `traceId`) を envelope に含め、Log/Metric/Trace 統合を可能にする（Tracer 実装は後続タスク）。
+- 参照ドキュメント（MCP取得 `/cloudflare/workers-sdk`）: Queues API `Queue.send()`, Durable Objects `namespace.get(id).fetch()`, R2 `bucket.put/get`。
 
 今後予定される追随作業:
 
@@ -1789,3 +1801,110 @@ graph LR
 - PlaywrightによるE2E拡張（エピソード〜レンダリングまで）
 
 以上をもって、08-07時点の「致命的停止」から、08-08時点では「分割までの基盤」復旧を確認。
+
+### Scenario Orchestrator (DSL)
+
+- Purpose: Declarative, typed scenario describing the end-to-end pipeline and handoffs between microservices. Web UI can reference this to render progress and control execution.
+- Location:
+  - `src/types/contracts.ts`: Envelope, retry policy, and per-step payload schemas (Zod).
+  - `src/services/orchestrator/scenario.ts`: ScenarioBuilder (DAG validation, topo sort) and an in-memory runner for dev/tests.
+  - `src/agents/scenarios/novel-to-manga.ts`: Scenario definition wiring steps and edges.
+  - `src/services/adapters/`: Thin facades per microservice (currently stubs for tests).
+- Handoffs: Message payloads reference large blobs via `r2://...` keys. Each message carries `jobId`, `stepId`, `correlationId`, and an `idempotencyKey` derivable from inputs.
+- Fan-out/Fan-in: Steps can declare `mapField` to shard work (windows/panels). Joins are represented by edges converging on a step with `fanIn: 'all' | 'quorum'` (quorum policy to be implemented in queue-backed runtime).
+- Cloudflare/Mastra: Queue-backed executor and Durable Object coordinator to be added after validating latest APIs and limits. This design keeps adapters idempotent and messages versioned.
+
+#### Planned Queue Runtime Architecture (Next Phase)
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as /api/scenario/run
+    participant DO as ScenarioCoordinator (Durable Object)
+    participant Q as Cloudflare Queue (steps)
+    participant A as Adapter Worker(s)
+    participant R2 as R2 Storage
+
+    Client->>API: POST scenario definition id (pre-registered)
+    API->>DO: init(jobId, scenarioId)
+    DO->>DO: topo sort + seed ready steps
+    loop Seed Fan-out
+      DO->>Q: enqueue step message (Envelope: jobId, stepId, attempt=0, idempotencyKey)
+    end
+    Q-->>A: deliver message batch
+    A->>R2: (optional) read referenced input blobs
+    A->>A: execute adapter logic (idempotent)
+    A->>R2: persist large output blob(s)
+    A->>Q: (future) emit follow-up events (optional)
+    A->>DO: callback complete(status, outputsRef, metrics)
+    DO->>DO: record completion; if downstream ready fan-in satisfied enqueue next steps
+    DO-->>Client: (poll/Webhook) updated progress graph
+```
+
+#### Envelope Fields (Queue Message Contract)
+
+| Field          | Purpose                                     | Notes                                  |
+| -------------- | ------------------------------------------- | -------------------------------------- | ------ | ------------------------ |
+| version        | Schema evolution                            | Start at `1`                           |
+| jobId          | Correlate all steps of a scenario           | Partition key for metrics              |
+| stepId         | Logical step name (`ingest`, `chunk`, etc.) | Unique per scenario definition         |
+| nodeInstanceId | Distinguish fan-out clones                  | `${stepId}#${index}`                   |
+| attempt        | Retry counter                               | Backoff policy configurable per step   |
+| idempotencyKey | Deduplicate replays                         | DO keeps LRU cache (size/time bounded) |
+| correlationId  | Trace continuity across steps               | Generated once per job                 |
+| inputRefs      | R2 / DB references to inputs                | Inline for small (<8KB) payloads       |
+| outputPolicy   | inline                                      | r2                                     | hybrid | Governs storage strategy |
+
+#### Retry & Backoff Strategy
+
+- Default: exponential (base 2) with jitter, capped at 5 attempts or step override.
+- Non-retryable classification: validation errors (`INVALID_INPUT`), deterministic transformations.
+- Retry signal sources: Adapter explicit throw of `RetryableError`, transient storage/network codes (429/503/ETIMEDOUT), DO timeout not acknowledged.
+
+#### Idempotency & Exactly-Once Semantics (Pragmatic)
+
+Cloudflare Queues は少なくとも 1 回配送 (at-least-once) を前提とするため、アダプタ側で以下を遵守:
+
+1. 入力→出力が純関数（副作用は R2 書込のみ）。
+2. R2 書込に `ifNoneMatch` (将来: ETag 条件) かキー存在チェックで二重生成防止。
+3. DO が (stepId, nodeInstanceId, idempotencyKey) の完了記録を保持し重複 callback を無視。
+
+2025-08-13 更新 (PR#64 Review 対応):
+
+- `cf-executor` の `deriveIdempotencyKey` を JSON.stringify 依存の簡易ハッシュから「キーソート canonical stringify + sha256( jobId:stepId:canonicalInput ) → 16 hex (64bit) トリム」へ改善。キー順序非決定性・200文字トリム衝突リスクを除去し deterministic かつ低衝突率を確保。
+- Scenario DSL 各 step.run で `input: unknown` を明示し必ず対応する Zod schema で `parse()`、暗黙 any / unsafe cast を排除。
+- In-memory runner (`scenario.ts`) で Zod schema 判定を type guard (`isZodSchema`) により安全化し、fan-out mapField 配列要素の個別検証を保持。
+
+#### Observability Roadmap
+
+- Metrics: per step (latency p50/p95, retries, DLQ count)。Durable Object 内にリングバッファ集計、export API 提供。
+- Tracing: Envelope.correlationId + step span id。軽量 JSON Lines を R2 にバッチ flush。
+- Logging: Structured JSON (`level, ts, jobId, stepId, msg, fields{}`)。
+
+#### Cloudflare Bindings (Planned wrangler.toml Additions)
+
+```toml
+[[queues.producers]]
+binding = "SCENARIO_STEPS"
+queue = "scenario-steps"
+
+[[queues.consumers]]
+queue = "scenario-steps"
+max_batch_size = 5
+max_batch_timeout = 1
+max_retries = 3
+
+[[durable_objects.bindings]]
+name = "SCENARIO_COORDINATOR"
+class_name = "ScenarioCoordinator"
+```
+
+Durable Object 実装は `class ScenarioCoordinator { async fetch(req, env) { /* state machine */ } }` を想定。Queue 消費ワーカーは `export default { queue(batch, env) { ... } }` 形式（参照: `/cloudflare/workers-sdk` Queue & Durable Objects API）。
+
+#### Open Items (Reflected in tasks.md)
+
+- Queue Executor 実装 & E2E (happy path, retry, idempotency) テスト
+- Durable Object state schema（in-memory index & R2 spillover）設計
+- Output externalization (threshold-based inline→R2 切替)
+- Back-pressure (max in-flight fan-out) 制御
+- Metrics & tracing 初期実装
