@@ -447,7 +447,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
   async createEpisodes(episodeList: Array<Omit<NewEpisode, 'id' | 'createdAt'>>): Promise<void> {
     if (episodeList.length === 0) return
 
-    await this.db.transaction(async (tx) => {
+    this.db.transaction((tx) => {
       const toInsert = episodeList.map((episode) => ({
         id: makeEpisodeId(episode.jobId, episode.episodeNumber),
         novelId: episode.novelId,
@@ -463,8 +463,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
         confidence: episode.confidence,
       }))
 
-      await tx
-        .insert(episodes)
+      tx.insert(episodes)
         .values(toInsert)
         .onConflictDoUpdate({
           target: [episodes.jobId, episodes.episodeNumber],
@@ -479,17 +478,19 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
             confidence: sql`excluded.confidence`,
           },
         })
+        .run()
 
       const jobId = episodeList[0].jobId
-      const total = await tx
+      const total = tx
         .select({ count: sql`count(*)` })
         .from(episodes)
         .where(eq(episodes.jobId, jobId))
-      const totalEpisodes = Number(total[0]?.count ?? 0)
-      await tx
-        .update(jobs)
+        .get()
+      const totalEpisodes = Number(total?.count ?? 0)
+      tx.update(jobs)
         .set({ totalEpisodes, updatedAt: new Date().toISOString() })
         .where(eq(jobs.id, jobId))
+        .run()
     })
   }
 

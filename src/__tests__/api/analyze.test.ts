@@ -194,11 +194,9 @@ describe('/api/analyze', () => {
 
       expect(response.status).toBe(201)
       expect(data.success).toBe(true)
-      expect(data.id).toBe('test-job-uuid')
-      expect(data.data.jobId).toBe('test-job-uuid')
-      expect(data.data.chunkCount).toBe(2)
+      expect(data.jobId).toBe('test-job-uuid')
+      expect(data.chunkCount).toBe(2)
       expect(data.message).toContain('分析を完了しました')
-      expect(data.metadata.timestamp).toBeDefined()
     })
 
     it('novelIdが未指定の場合は400エラーを返す', async () => {

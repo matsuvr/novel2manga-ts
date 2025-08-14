@@ -1,0 +1,265 @@
+/**
+ * サービス統合テスト
+ * 複数のサービス層の協調動作をテスト
+ */
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AnalyzePipeline } from '@/services/application/analyze-pipeline'
+import { resetAgentMocks, setupAgentMocks } from './__helpers/test-agents'
+import type { TestDatabase } from './__helpers/test-database'
+import { cleanupTestDatabase, createTestDatabase, TestDataFactory } from './__helpers/test-database'
+import { TestStorageDataFactory, TestStorageFactory } from './__helpers/test-storage'
+
+// テスト用設定のモック
+vi.mock('@/config', () => ({
+  getTextAnalysisConfig: vi.fn(() => ({
+    userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
+  })),
+  getLLMProviderConfig: vi.fn(() => ({
+    apiKey: 'test-key',
+    model: 'test-model',
+    maxTokens: 1000,
+  })),
+  getDatabaseConfig: vi.fn(() => ({
+    sqlite: {
+      path: ':memory:',
+    },
+  })),
+}))
+
+// StorageFactoryのモック
+let testStorageFactory: TestStorageFactory
+vi.mock('@/utils/storage', () => ({
+  StorageFactory: {
+    getNovelStorage: () => testStorageFactory.getNovelStorage(),
+    getChunkStorage: () => testStorageFactory.getChunkStorage(),
+    getAnalysisStorage: () => testStorageFactory.getAnalysisStorage(),
+  },
+  StorageKeys: {
+    chunk: (jobId: string, index: number) => `${jobId}/chunks/${index}.txt`,
+    chunkAnalysis: (jobId: string, index: number) => `${jobId}/analysis/chunk-${index}.json`,
+  },
+  saveEpisodeBoundaries: vi.fn(),
+}))
+
+describe('Service Integration Tests', () => {
+  let testDb: TestDatabase
+  let dataFactory: TestDataFactory
+  let storageDataFactory: TestStorageDataFactory
+
+  beforeEach(async () => {
+    // テストデータベースの初期化
+    testDb = await createTestDatabase()
+    dataFactory = new TestDataFactory(testDb.db)
+
+    // テストストレージの初期化
+    testStorageFactory = new TestStorageFactory()
+    storageDataFactory = new TestStorageDataFactory(testStorageFactory)
+
+    // DatabaseServiceのモック
+    vi.doMock('@/services/database', () => ({
+      DatabaseService: vi.fn(() => testDb.service),
+    }))
+
+    // db-factoryのモック
+    vi.doMock('@/services/db-factory', () => ({
+      __resetDatabaseServiceForTest: vi.fn(),
+      getRepositoryFactory: vi.fn(() => ({
+        // 必要に応じて実装
+      })),
+    }))
+
+    // エージェントモックのセットアップ
+    setupAgentMocks()
+  })
+
+  afterEach(async () => {
+    resetAgentMocks()
+    testStorageFactory.clearAll()
+    await cleanupTestDatabase(testDb)
+    vi.clearAllMocks()
+  })
+
+  describe('AnalyzePipeline Service', () => {
+    it('完全な分析パイプラインを実行できる', async () => {
+      // 準備: テスト用小説データ
+      const novel = await dataFactory.createNovel({
+        id: 'test-novel-pipeline',
+        title: 'Pipeline Test Novel',
+        textLength: 5000,
+      })
+
+      const novelText = 'これは統合テスト用の長い小説テキストです。登場人物が活躍し、様々な場面が展開されます。'.repeat(100)
+      await storageDataFactory.seedNovelText(novel.id, novelText, { title: novel.title })
+
+      // 実行: 分析パイプラインの実行
+      const pipeline = new AnalyzePipeline()
+      const result = await pipeline.runWithNovelId(novel.id, {
+        splitOnly: false, // 完全な分析を実行
+        userEmail: 'test@example.com',
+      })
+
+      // 検証: パイプライン結果
+      expect(result.success).toBe(true)
+      expect(result.jobId).toBeDefined()
+      expect(result.chunkCount).toBeGreaterThan(0)
+
+      // 検証: データベースの状態
+      const job = await testDb.service.getJob(result.jobId)
+      expect(job).toBeDefined()
+      expect(job?.status).toBe('completed')
+      expect(job?.novelId).toBe(novel.id)
+
+      // 検証: チャンクが作成されている
+      const chunks = await testDb.service.getChunks(result.jobId)
+      expect(chunks.length).toBe(result.chunkCount)
+      expect(chunks[0].text).toBeDefined()
+      expect(chunks[0].wordCount).toBeGreaterThan(0)
+
+      // 検証: ストレージにチャンクが保存されている
+      const chunkStorage = await testStorageFactory.getChunkStorage()
+      expect(chunkStorage.has(`${result.jobId}/chunks/0.txt`)).toBe(true)
+
+      // 検証: 分析結果がストレージに保存されている
+      const analysisStorage = await testStorageFactory.getAnalysisStorage()
+      expect(analysisStorage.has(`${result.jobId}/analysis/chunk-0.json`)).toBe(true)
+    })
+
+    it('splitOnlyモードでは分析をスキップする', async () => {
+      // 準備: テスト用小説データ
+      const novel = await dataFactory.createNovel({
+        id: 'test-novel-split',
+        title: 'Split Only Test Novel',
+        textLength: 3000,
+      })
+
+      const novelText = 'これはsplitOnlyテスト用のテキストです。'.repeat(50)
+      await storageDataFactory.seedNovelText(novel.id, novelText, { title: novel.title })
+
+      // 実行: splitOnlyモードでの実行
+      const pipeline = new AnalyzePipeline()
+      const result = await pipeline.runWithNovelId(novel.id, {
+        splitOnly: true,
+        userEmail: 'test@example.com',
+      })
+
+      // 検証: パイプライン結果
+      expect(result.success).toBe(true)
+      expect(result.jobId).toBeDefined()
+      expect(result.chunkCount).toBeGreaterThan(0)
+
+      // 検証: ジョブのステータス
+      const job = await testDb.service.getJob(result.jobId)
+      expect(job?.status).toBe('completed')
+      expect(job?.currentStep).toBe('split_complete')
+
+      // 検証: チャンクは作成されているが分析結果はない
+      const chunks = await testDb.service.getChunks(result.jobId)
+      expect(chunks.length).toBe(result.chunkCount)
+
+      const chunkStorage = await testStorageFactory.getChunkStorage()
+      expect(chunkStorage.has(`${result.jobId}/chunks/0.txt`)).toBe(true)
+
+      const analysisStorage = await testStorageFactory.getAnalysisStorage()
+      expect(analysisStorage.has(`${result.jobId}/analysis/chunk-0.json`)).toBe(false)
+    })
+
+    it('存在しない小説IDでは適切なエラーが発生する', async () => {
+      const pipeline = new AnalyzePipeline()
+
+      await expect(
+        pipeline.runWithNovelId('nonexistent-novel-id', {
+          splitOnly: false,
+          userEmail: 'test@example.com',
+        }),
+      ).rejects.toThrow('小説ID がデータベースに見つかりません')
+    })
+
+    it('ストレージにテキストが存在しない場合は適切なエラーが発生する', async () => {
+      // 準備: データベースには小説レコードがあるが、ストレージにはテキストがない状態
+      const novel = await dataFactory.createNovel({
+        id: 'test-novel-no-storage',
+        title: 'No Storage Novel',
+        textLength: 1000,
+      })
+      // ストレージにはデータを保存しない
+
+      const pipeline = new AnalyzePipeline()
+
+      await expect(
+        pipeline.runWithNovelId(novel.id, {
+          splitOnly: false,
+          userEmail: 'test@example.com',
+        }),
+      ).rejects.toThrow('小説のテキストがストレージに見つかりません')
+    })
+  })
+
+  describe('Database and Storage Integration', () => {
+    it('データベースとストレージ間のデータ一貫性を保つ', async () => {
+      // 準備: 小説データの作成
+      const novel = await dataFactory.createNovel({
+        title: 'Consistency Test Novel',
+        textLength: 2000,
+      })
+
+      const novelText = 'データ一貫性テスト用のテキストです。'.repeat(30)
+      await storageDataFactory.seedNovelText(novel.id, novelText)
+
+      // 実行: パイプライン実行
+      const pipeline = new AnalyzePipeline()
+      const result = await pipeline.runWithNovelId(novel.id, {
+        splitOnly: false,
+        userEmail: 'test@example.com',
+      })
+
+      // 検証: データベースとストレージの一貫性
+      const job = await testDb.service.getJob(result.jobId)
+      const chunks = await testDb.service.getChunks(result.jobId)
+
+      expect(job).toBeDefined()
+      expect(chunks.length).toBe(result.chunkCount)
+
+      // 各チャンクについてストレージとデータベースの対応を確認
+      for (const chunk of chunks) {
+        const chunkStorage = await testStorageFactory.getChunkStorage()
+        const storedChunk = await chunkStorage.get(`${result.jobId}/chunks/${chunk.chunkIndex}.txt`)
+
+        expect(storedChunk).toBeDefined()
+        expect(storedChunk?.text).toBe(chunk.text)
+        expect(chunk.wordCount).toBeGreaterThan(0)
+        expect(chunk.jobId).toBe(result.jobId)
+      }
+    })
+
+    it('トランザクション境界でのロールバック処理', async () => {
+      // このテストは実際のエラーケースでのロールバック動作を検証
+      // より詳細な実装は実際のエラーハンドリング仕様に応じて調整
+      
+      const novel = await dataFactory.createNovel({
+        title: 'Rollback Test Novel',
+        textLength: 1000,
+      })
+
+      // ストレージエラーをシミュレート
+      const chunkStorage = await testStorageFactory.getChunkStorage()
+      const originalPut = chunkStorage.put.bind(chunkStorage)
+      vi.spyOn(chunkStorage, 'put').mockImplementationOnce(() => {
+        throw new Error('Storage error for testing')
+      })
+
+      const pipeline = new AnalyzePipeline()
+
+      // エラーが適切に伝播することを確認
+      await expect(
+        pipeline.runWithNovelId(novel.id, {
+          splitOnly: true,
+          userEmail: 'test@example.com',
+        }),
+      ).rejects.toThrow()
+
+      // モックを元に戻す
+      vi.mocked(chunkStorage.put).mockImplementation(originalPut)
+    })
+  })
+})

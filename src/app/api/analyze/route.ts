@@ -74,12 +74,13 @@ export async function POST(request: NextRequest) {
             splitOnly,
             title,
           })
+    // 統一されたレスポンス形式を返す（テストとの互換性を保つため）
     return ApiResponder.success(
-      result.response ?? {
+      {
         success: true,
         jobId: result.jobId,
         chunkCount: result.chunkCount,
-        message: 'Analysis completed',
+        message: result.response?.message ?? 'Analysis completed',
       },
       201,
     )
