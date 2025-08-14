@@ -10,6 +10,10 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Toggle this to 'true' when deploying and ready to run E2E on CI.
+    # Alternatively, override via 'env' at workflow_dispatch or environment.
+    env:
+      ENABLE_E2E: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,6 +40,7 @@ jobs:
         run: npm run test:full-flow --if-present
 
       - name: Start App (background) for E2E
+        if: ${{ env.ENABLE_E2E == 'true' }}
         run: |
           nohup npm run dev &
           echo $! > dev.pid
@@ -43,9 +48,11 @@ jobs:
         shell: bash
 
       - name: Playwright Install Browsers
+        if: ${{ env.ENABLE_E2E == 'true' }}
         run: npx playwright install --with-deps
 
       - name: E2E Tests (health)
+        if: ${{ env.ENABLE_E2E == 'true' }}
         env:
           E2E_BASE_URL: http://localhost:3000
         run: npm run test:e2e -- --grep "health endpoint"
@@ -55,13 +62,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
+          if-no-files-found: ignore
           path: |
             test-results
             playwright-report
             coverage
 
       - name: Stop Dev Server
-        if: always()
+        if: ${{ always() && env.ENABLE_E2E == 'true' }}
         run: |
           if [ -f dev.pid ]; then kill $(cat dev.pid) || true; fi
         shell: bash

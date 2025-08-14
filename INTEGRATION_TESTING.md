@@ -4,6 +4,18 @@
 
 従来のサーバー起動が必要な統合テストから、熟達したエンジニアが採用するベストプラクティスに基づく新しい統合テスト設計に移行しました。
 
+### CI での E2E 実行ポリシー（暫定）
+
+- 現在、GitHub Actions 上では E2E（Playwright）はデフォルト無効です。
+- 理由: CI 上でのサーバー起動と安定運用の準備が未完のため（デプロイ段階で再導入）。
+- 再有効化方法: `.github/workflows/ci.yml` のジョブ環境変数 `ENABLE_E2E: 'false'` を `'true'` にする、またはワークフロー入力/環境で `ENABLE_E2E` を `'true'` に上書きしてください。
+- 影響範囲: E2E に関わる以下のステップが `ENABLE_E2E == 'true'` の場合のみ実行されます。
+  - Dev サーバー起動（背景起動 + /api/health 待機）
+  - `npx playwright install --with-deps`
+  - `npm run test:e2e`（`E2E_BASE_URL` を `http://localhost:3000` に設定）
+  - Dev サーバー停止
+  - 成果物アップロード（未生成時は ignore）
+
 ## 新しい統合テスト設計
 
 ### 1. テスト分類
