@@ -9,7 +9,9 @@ interface EpisodeConfig {
 // 遅延インポートでモック欠落に耐性を持たせる
 async function getEpisodeConfigSafe(): Promise<EpisodeConfig> {
   try {
-    const mod = (await import('@/config')) as { getEpisodeConfig?: () => EpisodeConfig }
+    const mod = (await import('@/config')) as {
+      getEpisodeConfig?: () => EpisodeConfig
+    }
     if (typeof mod.getEpisodeConfig === 'function') {
       return mod.getEpisodeConfig()
     }
@@ -74,7 +76,8 @@ export async function prepareNarrativeAnalysisInput(
       chunkIndex: currentChunkIndex,
       text: chunkData.text,
       analysis: {
-        summary: analysisResult?.summary || '',
+        // summary は ChunkAnalysisResult 型に存在しないため、空文字に固定
+        summary: '',
         characters:
           analysisResult?.characters?.map((c: { name: string; role: string }) => ({
             name: c.name,
@@ -138,11 +141,18 @@ export async function prepareNarrativeAnalysisInput(
 
 export function calculateEstimatedPages(charCount: number): number {
   // 同様に安全に取得
-  const defaultCfg = { charsPerPage: 300 }
+  const defaultCfg: EpisodeConfig = {
+    targetCharsPerEpisode: 1000,
+    minCharsPerEpisode: 500,
+    maxCharsPerEpisode: 2000,
+    charsPerPage: 300,
+  }
   const cfgPromise = getEpisodeConfigSafe().catch(() => defaultCfg)
   // 注意: 同期関数だが、ここではデフォルト値で推定しつつ副作用なく対応
   // 厳密な値が必要なコードパスでは非同期版を使用
-  const globalWithConfig = globalThis as typeof globalThis & { __episodeCfg?: EpisodeConfig }
+  const globalWithConfig = globalThis as typeof globalThis & {
+    __episodeCfg?: EpisodeConfig
+  }
   const cfg: EpisodeConfig = globalWithConfig.__episodeCfg || defaultCfg
   void cfgPromise.then((c) => {
     globalWithConfig.__episodeCfg = c

@@ -44,15 +44,14 @@ export class ChunkRepository {
   }
 
   async getByJobId(jobId: string) {
-    const candidate: unknown = this.db as unknown
-    if (
-      candidate &&
-      typeof (candidate as { getChunksByJobId?: unknown }).getChunksByJobId === 'function'
-    ) {
-      return (this.db as { getChunksByJobId: (id: string) => Promise<unknown[]> }).getChunksByJobId(
-        jobId,
-      )
+    const hasGetByJob = (
+      x: unknown,
+    ): x is { getChunksByJobId: (id: string) => Promise<unknown[]> } => {
+      if (!x || typeof x !== 'object') return false
+      const obj = x as { getChunksByJobId?: unknown }
+      return typeof obj.getChunksByJobId === 'function'
     }
+    if (hasGetByJob(this.db)) return this.db.getChunksByJobId(jobId)
     // Fallback: not supported
     return []
   }
