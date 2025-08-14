@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { getChunkAnalyzerAgent } from '@/agents/chunk-analyzer'
 import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
 import { getTextAnalysisConfig } from '@/config'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
@@ -83,7 +82,7 @@ export class AnalyzePipeline {
     }
 
     const chunks = splitTextIntoChunks(novelText)
-    await jobRepo.updateStep(jobId, 'initialized', 0, chunks.length)
+    await jobRepo.updateStep(jobId, 'split', 0, chunks.length)
 
     // Persist chunks to storage and collect DB rows
     let currentPosition = 0
@@ -123,11 +122,8 @@ export class AnalyzePipeline {
           confidence: 0.9,
         },
       ])
-      if (!options.splitOnly) {
-        await jobRepo.markStepCompleted(jobId, 'analyze')
-        await jobRepo.markStepCompleted(jobId, 'episode')
-        await jobRepo.updateStep(jobId, 'layout', chunks.length, chunks.length)
-      }
+      await jobRepo.markStepCompleted(jobId, 'split')
+      await jobRepo.updateStatus(jobId, 'completed')
       const response: AnalyzeResponse = {
         success: true,
         id: jobId,
@@ -229,20 +225,18 @@ export class AnalyzePipeline {
 
       let result: z.infer<typeof textAnalysisOutputSchema>
       try {
-        const agent = getChunkAnalyzerAgent()
-        result = await agent.generateObject(
-          [{ role: 'user', content: prompt }],
-          textAnalysisOutputSchema,
-          { maxRetries: 2 },
-        )
+        const { analyzeChunkWithFallback } = await import('@/agents/chunk-analyzer')
+        const analysis = await analyzeChunkWithFallback(prompt, textAnalysisOutputSchema, {
+          maxRetries: 2,
+        })
+        result = analysis.result
       } catch (_e) {
         await jobRepo.updateStep(jobId, `analyze_chunk_${i}_retry`, i, chunks.length)
-        const agent = getChunkAnalyzerAgent()
-        result = await agent.generateObject(
-          [{ role: 'user', content: prompt }],
-          textAnalysisOutputSchema,
-          { maxRetries: 1 },
-        )
+        const { analyzeChunkWithFallback } = await import('@/agents/chunk-analyzer')
+        const analysis = await analyzeChunkWithFallback(prompt, textAnalysisOutputSchema, {
+          maxRetries: 1,
+        })
+        result = analysis.result
       }
       if (!result) throw new Error('Failed to generate analysis result')
 
@@ -288,6 +282,7 @@ export class AnalyzePipeline {
         data: { jobId, chunkCount: chunks.length },
         metadata: { timestamp: new Date().toISOString() },
       }
+      await jobRepo.updateStatus(jobId, 'completed')
       return { jobId, chunkCount: chunks.length, response }
     }
 
@@ -298,6 +293,7 @@ export class AnalyzePipeline {
       data: { jobId, chunkCount: chunks.length },
       metadata: { timestamp: new Date().toISOString() },
     }
+    await jobRepo.updateStatus(jobId, 'completed')
     return { jobId, chunkCount: chunks.length, response }
   }
 }

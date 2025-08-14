@@ -183,6 +183,20 @@
   - [x] Cloudflareバインディング型定義
   - _Requirements: 設定管理とLLM統合_
 
+### 2025-08-14: PR#64 レビュー修正の反映
+
+- 次を本リポジトリで実装・反映済み:
+  - Scenario step.run で (input: unknown) を採用し Zod.parse を必須化（implicit any の排除）
+  - mapField の fan-out 処理を明確化し、要素単位の Zod 検証を run 内で行うパターンに統一
+  - インメモリランナーで mapField 出力要素を step.outputSchema で個別検証するように強化
+  - cf-executor の冪等キー生成を canonical JSON + SHA-256 に変更（短縮 16hex）
+  - デッドコード（promptGen）を削除
+
+- 未完の follow-up タスク（優先度高）:
+  - [ ] STEP-IDEMP-001: idempotency key を共通ユーティリティへ抽出しユニットテストを追加
+    - 理由: 現在は cf-executor 内の実装だが、Queue/DO 実装と共有するための安定した API が必要
+  - [ ] Cloudflare Workers 向けのハッシュ実装互換性テスト（subtle.digest など）
+
 ### 11. Queue/Worker 導入（新規）
 
 - [x] インプロセスキュー雛形追加（開発用）

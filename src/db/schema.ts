@@ -8,7 +8,7 @@ export const novels = sqliteTable(
     id: text('id').primaryKey(),
     title: text('title'),
     author: text('author'),
-    originalTextPath: text('original_text_path').notNull(),
+    originalTextPath: text('original_text_path'),
     textLength: integer('text_length').notNull(),
     language: text('language').default('ja'),
     metadataPath: text('metadata_path'),

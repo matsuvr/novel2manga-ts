@@ -2,15 +2,24 @@ import type { NextRequest } from 'next/server'
 import { adaptAll } from '@/repositories/adapters'
 import { NovelRepository } from '@/repositories/novel-repository'
 import { getDatabaseService } from '@/services/db-factory'
-import { createErrorResponse, createSuccessResponse } from '@/utils/api-error'
+import { ValidationError } from '@/utils/api-error'
+import { ApiResponder } from '@/utils/api-responder'
 import { saveNovelToStorage } from './storage/route'
 
 export async function POST(request: NextRequest) {
   try {
-    const { text } = (await request.json()) as { text: unknown }
+    // JSON パース失敗時は 400 を返す
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch {
+      return ApiResponder.validation('無効なJSONが送信されました')
+    }
 
-    if (!text || typeof text !== 'string') {
-      return createErrorResponse(new Error('テキストが必要です'))
+    const { text } = (body || {}) as { text: unknown }
+
+    if (typeof text !== 'string' || text.length === 0) {
+      return ApiResponder.validation('テキストが必要です')
     }
 
     const data = await saveNovelToStorage(text)
@@ -37,13 +46,16 @@ export async function POST(request: NextRequest) {
       // DBエラーがあってもストレージには保存されているので、処理は続行
     }
 
-    return createSuccessResponse({
-      preview: data.preview || text.slice(0, 100),
-      originalLength: text.length,
-      fileName: data.fileName,
-      uuid: data.uuid,
-      message: '小説テキストを受信しました',
-    })
+    return ApiResponder.success(
+      {
+        preview: data.preview || text.slice(0, 100),
+        originalLength: text.length,
+        fileName: data.fileName,
+        uuid: data.uuid,
+        message: '小説が正常に保存されました',
+      },
+      201,
+    )
   } catch (error) {
     console.error('小説アップロードAPIエラー:', {
       error:
@@ -57,6 +69,9 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     })
 
-    return createErrorResponse(error, 'サーバーエラーが発生しました')
+    return ApiResponder.error(
+      error instanceof Error ? new ValidationError(error.message) : error,
+      'サーバーエラーが発生しました',
+    )
   }
 }

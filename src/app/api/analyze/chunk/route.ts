@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
-import { getChunkAnalyzerAgent } from '@/agents/chunk-analyzer'
+import { analyzeChunkWithFallback } from '@/agents/chunk-analyzer'
 import { getTextAnalysisConfig } from '@/config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { ApiResponder } from '@/utils/api-responder'
@@ -111,12 +111,13 @@ export async function POST(request: NextRequest) {
 
     logger.info('Sending to LLM for analysis')
 
-    // エージェントを使用してチャンクを分析
-    const agent = getChunkAnalyzerAgent()
-    const result = await agent.generateObject(
-      [{ role: 'user', content: prompt }],
+    // フォールバック付きでチャンク分析
+    const { result, usedProvider, fallbackFrom } = await analyzeChunkWithFallback(
+      prompt,
       textAnalysisOutputSchema,
-      { maxRetries: 2 },
+      {
+        maxRetries: 2,
+      },
     )
 
     if (!result) {
@@ -143,7 +144,12 @@ export async function POST(request: NextRequest) {
     logger.info('Saved analysis', { analysisPath })
 
     // レスポンスを返却
-    return ApiResponder.success({ cached: false, data: result })
+    return ApiResponder.success({
+      cached: false,
+      data: result,
+      usedProvider,
+      fallbackFrom,
+    })
   } catch (error) {
     const logger = getLogger().withContext({
       route: 'api/analyze/chunk',

@@ -12,10 +12,23 @@ export class TestMemoryStorage implements Storage {
   private storage: Map<string, { text: string; metadata?: Record<string, unknown> }> = new Map()
 
   async get(path: string): Promise<{ text: string; metadata?: Record<string, unknown> } | null> {
-    return this.storage.get(path) || null
+    const value = this.storage.get(path)
+    if (!value) return null
+    return value
   }
 
-  async put(path: string, data: { text: string; metadata?: Record<string, unknown> }): Promise<void> {
+  async put(
+    path: string,
+    data: { text: string; metadata?: Record<string, unknown> } | string | Buffer,
+  ): Promise<void> {
+    if (typeof data === 'string') {
+      this.storage.set(path, { text: data })
+      return
+    }
+    if (data instanceof Buffer) {
+      this.storage.set(path, { text: data.toString('utf-8') })
+      return
+    }
     this.storage.set(path, data)
   }
 

@@ -101,6 +101,20 @@
 
 注: API エラー仕様は `createSuccessResponse`/`createErrorResponse` に統一済み。ZodError/HttpError 等のマッピングは Error Model セクションの定義に準拠（本日の更新で記述整合を再確認）。
 
+### 2025-08-14 追記: PR#64 レビュー対応の反映
+
+- PR#64 のレビュー指摘に基づき、以下の主要な修正を実装しました。
+  - Scenario の各 step.run を (input: unknown) にし、対応する Zod スキーマで必ず parse することで暗黙 any を排除しました。
+  - mapField を使った fan-out の扱いを明確化し、ステップ入力ではコンテナスキーマを検証、run 内で配列要素を個別に Zod 検証するパターンに統一しました。
+  - インメモリランナーで mapField 出力の各要素を step.outputSchema で個別検証するように強化しました。
+  - cf-executor の冪等キー生成を canonical JSON 化 + SHA-256 に変更し、安定した idempotency key を生成するよう改善しました（将来的に共通ユーティリティへ抽出予定）。
+  - 不要なデッドコード（例: promptGen アダプタ）を削除しました。
+
+注記:
+
+- Workers 実行環境では Node の crypto.createHash が利用できないため、Cloudflare 用実装では subtle.digest 等の環境特有のAPIを使う必要があります。
+- idempotency ユーティリティの切り出しとユニットテストは未完了です（tasks.md に追記）。
+
 ## Requirements Mapping
 
 ### Design Component Traceability

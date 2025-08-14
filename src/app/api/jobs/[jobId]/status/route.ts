@@ -3,7 +3,7 @@ export const revalidate = 0
 
 import type { NextRequest } from 'next/server'
 import { getLogger } from '@/infrastructure/logging/logger'
-import { getJobRepository } from '@/repositories'
+import { getChunkRepository, getJobRepository } from '@/repositories'
 import { ApiError, extractErrorMessage } from '@/utils/api-error'
 import { ApiResponder } from '@/utils/api-responder'
 import { validateJobId } from '@/utils/validators'
@@ -37,18 +37,21 @@ export async function GET(
 
     if (!job) {
       logger.warn('Job not found in database')
-      throw new ApiError('Job not found', 404, 'NOT_FOUND')
+      throw new ApiError('ジョブが見つかりません', 404, 'NOT_FOUND')
     }
 
     // サーバー側の保険: レンダリング完了フラグが立っていれば completed として返す
-    const isCompleted =
-      job.status === 'completed' || (job.renderCompleted && job.currentStep === 'complete')
+    const isCompleted = job.status === 'completed' || job.splitCompleted === true
+
+    // 旧テスト互換: DB のチャンク内容をレスポンスに含める
+    const chunkRepo = getChunkRepository()
+    const chunks = await chunkRepo.getByJobId(job.id)
 
     const res = ApiResponder.success({
       job: {
         id: job.id,
         status: isCompleted ? 'completed' : job.status,
-        currentStep: isCompleted ? 'complete' : job.currentStep,
+        currentStep: job.splitCompleted ? 'split_complete' : job.currentStep,
         splitCompleted: job.splitCompleted ?? false,
         analyzeCompleted: job.analyzeCompleted ?? false,
         episodeCompleted: job.episodeCompleted ?? false,
@@ -66,6 +69,16 @@ export async function GET(
         createdAt: job.createdAt,
         updatedAt: job.updatedAt,
       },
+      // 互換レスポンス
+      chunks: Array.isArray(chunks)
+        ? chunks.map((c: unknown) => {
+            const chunk = c as Record<string, unknown>
+            return {
+              chunkIndex: (chunk.chunkIndex as number) ?? (chunk.chunk_index as number) ?? 0,
+              text: chunk.text as string,
+            }
+          })
+        : [],
     })
     // 明示的にキャッシュ無効化（ブラウザ/中間キャッシュ対策）
     res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
