@@ -148,6 +148,22 @@
 - [ ] ストレージ設計の更新（キー命名・メタデータ・保存契約）（`database/storage-structure.md`）
 - [ ] OpenAPI の公開手順とクライアント生成ガイド
 
+## 2025-08-14: PR#64 レビュー修正の反映（概要）
+
+- 本PRで実施された主な修正点:
+  - Scenario DSL の型安全化: step.run の暗黙 any 廃止と Zod パース導入
+  - mapField の fan-out/fan-in 処理の明確化および要素単位検証の強化
+  - cf-executor の冪等キー生成を canonical JSON + SHA-256 に変更
+  - テスト/API/UI の Zod safeParse 適用により型安全性とエラーハンドリングを強化
+
+- ドキュメント側の追加入力:
+  - tasks.md と design.md に修正内容と未完の follow-up タスクを追記済み
+
+- 要対応（Next steps）:
+  - idempotency key の共通ユーティリティ化と単体テスト追加 (高優先)
+  - Cloudflare Workers 向けのハッシュ互換性確認と実装
+  - Queue/DO 実装時の idempotency/重複検出統合テスト
+
 ---
 
 ## 実装方針とガイドライン

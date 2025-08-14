@@ -384,6 +384,28 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
           isPolling = false
           clearInterval(pollInterval)
           addLog('info', 'ポーリングを停止しました')
+          // 完了メッセージとダウンロード導線
+          try {
+            if (data.job.status === 'completed') {
+              addLog('info', '成果物のZIPを生成しています…')
+              const res = await fetch('/api/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jobId, format: 'images_zip' }),
+              })
+              if (res.ok) {
+                const json = (await res.json()) as { downloadUrl?: string }
+                if (json.downloadUrl) {
+                  addLog('info', 'ZIPの準備ができました。ダウンロードを開始します')
+                  window.open(json.downloadUrl, '_blank')
+                }
+              } else {
+                addLog('warning', 'ZIP生成に失敗しました（後からエクスポート画面で再試行できます）')
+              }
+            }
+          } catch (e) {
+            console.error(e)
+          }
         } else if (result === null) {
           // データに変化がない場合はログ出力しない
         }
@@ -399,7 +421,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
     // 最初のAPIコールを少し遅延させる
     const initialTimeout = setTimeout(() => {
       poll()
-      pollInterval = setInterval(poll, 3000) // 3秒間隔に変更
+      pollInterval = setInterval(poll, 1500) // 1.5秒間隔に短縮
     }, 1000)
 
     return () => {

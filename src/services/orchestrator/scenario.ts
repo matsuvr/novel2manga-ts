@@ -24,8 +24,12 @@ export class ScenarioBuilder {
   step<I, O>(def: StepDefinition<I, O>): this {
     if (this.stepIds.has(def.id)) throw new Error(`Duplicate step id: ${def.id}`)
     this.stepIds.add(def.id)
-    // Erase generics for storage (variance safe)
-    this.steps.push(def as unknown as ErasedStep)
+    // Erase generics for storage via run-wrapper to satisfy variance safely
+    const erased: ErasedStep = {
+      ...def,
+      run: (input: unknown) => def.run(input as I) as Promise<unknown>,
+    }
+    this.steps.push(erased)
     return this
   }
 

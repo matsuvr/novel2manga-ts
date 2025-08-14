@@ -1,63 +1,24 @@
-import fs from 'node:fs/promises'
-import path from 'node:path'
 import type { NextRequest } from 'next/server'
-import type { Job } from '@/db'
-import { getJobRepository } from '@/repositories'
-import {
-  ApiError,
-  createErrorResponse,
-  createSuccessResponse,
-  ValidationError,
-} from '@/utils/api-error'
+import { getLogger } from '@/infrastructure/logging/logger'
+import { getJobDetails } from '@/services/application/job-details'
+import { ValidationError } from '@/utils/api-error'
+import { ApiResponder } from '@/utils/api-responder'
 
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const logger = getLogger().withContext({
+      route: 'api/job/[id]',
+      method: 'GET',
+    })
     const id = params.id
     if (!id) {
       throw new ValidationError('ジョブIDが指定されていません')
     }
 
-    // 本番（想定）: DB から取得
-    if (process.env.NODE_ENV === 'production') {
-      const jobRepo = getJobRepository()
-      const job: Job | null = await jobRepo.getJob(id)
-
-      if (!job) throw new ApiError('ジョブが見つかりません', 404, 'NOT_FOUND')
-
-      // チャンクはダミー（本来は DB/Storage から取得）
-      const chunks = [
-        { jobId: id, chunkIndex: 0 },
-        { jobId: id, chunkIndex: 1 },
-      ]
-      return createSuccessResponse({ job, chunks })
-    }
-
-    // 開発/テスト: ローカルファイルから取得
-    const base = path.join(process.cwd(), '.test-storage', 'jobs')
-    const jobPath = path.join(base, `${id}.json`)
-    try {
-      const jobText = await fs.readFile(jobPath, 'utf-8')
-      const job = JSON.parse(jobText)
-
-      // チャンクディレクトリ
-      const chunksDir = path.join(process.cwd(), '.test-storage', 'chunks', id)
-      let chunks: Array<{ content: string; jobId?: string }> = []
-      try {
-        const files = await fs.readdir(chunksDir)
-        const sorted = files.filter((f) => f.startsWith('chunk_')).sort()
-        for (const f of sorted) {
-          const content = await fs.readFile(path.join(chunksDir, f), 'utf-8')
-          chunks.push({ content })
-        }
-      } catch {
-        chunks = []
-      }
-
-      return createSuccessResponse({ job, chunks })
-    } catch {
-      throw new ApiError('ジョブが見つかりません', 404, 'NOT_FOUND')
-    }
+    const { job, chunks } = await getJobDetails(id)
+    logger.info('Job details fetched', { id })
+    return ApiResponder.success({ job, chunks })
   } catch (error) {
-    return createErrorResponse(error, 'Failed to get job details')
+    return ApiResponder.error(error, 'Failed to get job details')
   }
 }

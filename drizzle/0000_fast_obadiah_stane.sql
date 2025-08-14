@@ -14,8 +14,8 @@ CREATE TABLE `chunk_analysis_status` (
 CREATE INDEX `idx_chunk_analysis_status_job_id` ON `chunk_analysis_status` (`job_id`);--> statement-breakpoint
 CREATE INDEX `unique_job_chunk_analysis` ON `chunk_analysis_status` (`job_id`,`chunk_index`);--> statement-breakpoint
 CREATE TABLE `chunks` (
-	`id` text PRIMARY KEY NOT NULL,
-	`novel_id` text NOT NULL,
+    `id` text PRIMARY KEY NOT NULL,
+    `novel_id` text,
 	`job_id` text NOT NULL,
 	`chunk_index` integer NOT NULL,
 	`content_path` text NOT NULL,
@@ -123,10 +123,10 @@ CREATE TABLE `layout_status` (
 CREATE INDEX `idx_layout_status_job_id` ON `layout_status` (`job_id`);--> statement-breakpoint
 CREATE INDEX `unique_job_episode_layout` ON `layout_status` (`job_id`,`episode_number`);--> statement-breakpoint
 CREATE TABLE `novels` (
-	`id` text PRIMARY KEY NOT NULL,
-	`title` text,
-	`author` text,
-	`original_text_path` text NOT NULL,
+    `id` text PRIMARY KEY NOT NULL,
+    `title` text,
+    `author` text,
+    `original_text_path` text,
 	`text_length` integer NOT NULL,
 	`language` text DEFAULT 'ja',
 	`metadata_path` text,

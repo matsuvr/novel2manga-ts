@@ -1,6 +1,6 @@
 // Centralized LLM configuration: providers, defaults, and per-use-case parameters
 
-export type LLMProvider = 'openai' | 'gemini' | 'groq' | 'openrouter'
+export type LLMProvider = 'openai' | 'gemini' | 'groq' | 'openrouter' | 'cerebras'
 
 export interface ProviderConfig {
   apiKey?: string
@@ -16,22 +16,33 @@ export interface ProviderConfig {
 
 // Default provider (config-driven only; no environment variable overrides)
 export function getDefaultProvider(): LLMProvider {
-  return 'openai'
+  // Tests should use Gemini to avoid expensive or flaky external calls
+  if (process.env.NODE_ENV === 'test') {
+    return 'gemini'
+  }
+  return 'cerebras'
 }
 
 // Provider fallback chain (first item is primary fallback)
 export function getFallbackChain(): LLMProvider[] {
   // Config-driven fallback order
-  const chain: LLMProvider[] = ['openai', 'gemini', 'openrouter', 'groq']
+  const chain: LLMProvider[] = ['cerebras', 'openai', 'gemini', 'openrouter', 'groq']
   return chain
 }
 
 // Central provider definitions (single source of truth for models/params)
 export const providers: Record<LLMProvider, ProviderConfig> = {
+  cerebras: {
+    apiKey: process.env.CEREBRAS_API_KEY,
+    model: 'gpt-oss-120b',
+    maxTokens: 8192,
+    timeout: 30_000,
+    baseUrl: 'https://api.cerebras.ai/v1',
+  },
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
     model: 'gpt-5-mini', // gpt-5-mini はつい先日登場したモデルです。モデル指定を間違えているわけではありません
-    maxTokens: 4096,
+    maxTokens: 8192,
     timeout: 60_000,
   },
   gemini: {

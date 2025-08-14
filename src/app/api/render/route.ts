@@ -1,15 +1,12 @@
-import { load as yamlLoad } from 'js-yaml'
 import type { NextRequest } from 'next/server'
-import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
-import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
+import { getLogger } from '@/infrastructure/logging/logger'
+import { getStoragePorts } from '@/infrastructure/storage/ports'
 import { adaptAll } from '@/repositories/adapters'
 import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
+import { renderBatchFromYaml } from '@/services/application/render'
 import { getDatabaseService } from '@/services/db-factory'
-import type { MangaLayout } from '@/types/panel-layout'
-import { handleApiError, successResponse, validationError } from '@/utils/api-error'
-import { StorageFactory, StorageKeys } from '@/utils/storage'
-import { isMangaLayout } from '@/utils/type-guards'
+import { ApiResponder } from '@/utils/api-responder'
 import { validateJobId } from '@/utils/validators'
 
 interface RenderRequest {
@@ -21,39 +18,27 @@ interface RenderRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    const _logger = getLogger().withContext({
+      route: 'api/render',
+      method: 'POST',
+    })
     const body = (await request.json()) as Partial<RenderRequest>
 
     // 入力バリデーション
-    if (!body.jobId) return validationError('jobIdが必要です')
+    if (!body.jobId) return ApiResponder.validation('jobIdが必要です')
     validateJobId(body.jobId)
     if (typeof body.episodeNumber !== 'number' || body.episodeNumber < 1)
-      return validationError('有効なepisodeNumberが必要です')
+      return ApiResponder.validation('有効なepisodeNumberが必要です')
     if (typeof body.pageNumber !== 'number' || body.pageNumber < 1)
-      return validationError('有効なpageNumberが必要です')
-    // layoutYaml が未指定でも、ストレージに保存済みの YAML を自動読込（デモ/実運用双方で便利）
+      return ApiResponder.validation('有効なpageNumberが必要です')
+    // layoutYaml が未指定ならストレージポートから取得
     let layoutYaml = body.layoutYaml
     if (!layoutYaml) {
-      const layoutStorage = await StorageFactory.getLayoutStorage()
-      const layoutKey = StorageKeys.episodeLayout(body.jobId, body.episodeNumber)
-      const obj = await layoutStorage.get(layoutKey)
-      if (!obj) return validationError('layoutYamlが必要です')
-      layoutYaml = obj.text
+      const ports = getStoragePorts()
+      const text = await ports.layout.getEpisodeLayout(body.jobId, body.episodeNumber)
+      if (!text) return ApiResponder.validation('layoutYamlが必要です')
+      layoutYaml = text
     }
-
-    // YAMLパース
-    let mangaLayout: MangaLayout
-    try {
-      const parsed = yamlLoad(layoutYaml)
-      if (!isMangaLayout(parsed)) return validationError('無効なYAML形式です')
-      mangaLayout = parsed
-    } catch {
-      return validationError('無効なYAML形式です')
-    }
-    if (!mangaLayout || typeof mangaLayout !== 'object')
-      return validationError('無効なYAML形式です')
-    if (!Array.isArray(mangaLayout.pages)) return validationError('レイアウトにpages配列が必要です')
-    const targetPage = mangaLayout.pages.find((p) => p.page_number === body.pageNumber)
-    if (!targetPage) return validationError(`ページ ${body.pageNumber} が見つかりません`)
 
     // DBチェック
     const dbService = getDatabaseService()
@@ -61,77 +46,40 @@ export async function POST(request: NextRequest) {
     const episodeRepo = new EpisodeRepository(episodePort)
     const jobRepo = new JobRepository(jobPort)
     const job = await jobRepo.getJob(body.jobId)
-    if (!job) return validationError('指定されたジョブが見つかりません')
+    if (!job) return ApiResponder.validation('指定されたジョブが見つかりません')
     const episodes = await episodeRepo.getByJobId(body.jobId)
     const targetEpisode = episodes.find((e) => e.episodeNumber === body.episodeNumber)
-    if (!targetEpisode) return validationError(`エピソード ${body.episodeNumber} が見つかりません`)
+    if (!targetEpisode)
+      return ApiResponder.validation(`エピソード ${body.episodeNumber} が見つかりません`)
 
-    // Canvas描画
-    const renderer = new MangaPageRenderer({
-      pageWidth: 842,
-      pageHeight: 595,
-      margin: 20,
-      panelSpacing: 10,
-      defaultFont: 'sans-serif',
-      fontSize: 14,
-    })
-    const imageBlob = await renderer.renderToImage(mangaLayout, body.pageNumber, 'png')
-    const imageBuffer = Buffer.from(await imageBlob.arrayBuffer())
-
-    // 保存（ストレージキーはStorageKeysを使用して一元管理）
-    const renderStorage = await StorageFactory.getRenderStorage()
-    const renderKey = StorageKeys.pageRender(body.jobId, body.episodeNumber, body.pageNumber)
-    await renderStorage.put(renderKey, imageBuffer, {
-      contentType: 'image/png',
-      jobId: body.jobId,
-      episodeNumber: String(body.episodeNumber),
-      pageNumber: String(body.pageNumber),
-    })
-
-    // サムネイル
-    const thumbBlob = await ThumbnailGenerator.generateThumbnail(imageBlob, {
-      width: 200,
-      height: 280,
-      quality: 0.8,
-      format: 'jpeg',
-    })
-    const thumbnailBuffer = Buffer.from(await thumbBlob.arrayBuffer())
-    const thumbnailKey = StorageKeys.pageThumbnail(body.jobId, body.episodeNumber, body.pageNumber)
-    await renderStorage.put(thumbnailKey, thumbnailBuffer, {
-      contentType: 'image/jpeg',
-      jobId: body.jobId,
-      episodeNumber: String(body.episodeNumber),
-      pageNumber: String(body.pageNumber),
-      type: 'thumbnail',
-    })
-
-    // ステータス更新（存在する場合）
-    await dbService.updateRenderStatus(body.jobId, body.episodeNumber, body.pageNumber, {
-      isRendered: true,
-      imagePath: renderKey,
-      thumbnailPath: thumbnailKey,
-      width: 842,
-      height: 595,
-      fileSize: imageBuffer.length,
-    })
-
-    return successResponse(
+    // サービスに委譲（単ページでもバッチAPIを活用）
+    const result = await renderBatchFromYaml(
+      body.jobId,
+      body.episodeNumber,
+      layoutYaml,
+      [body.pageNumber],
+      { concurrency: 1 },
+    )
+    const first = result.results[0]
+    if (!first || first.status !== 'success') {
+      return ApiResponder.error(new Error(first?.error || 'レンダリングに失敗しました'))
+    }
+    return ApiResponder.success(
       {
         success: true,
-        renderKey,
-        thumbnailKey,
+        renderKey: first.renderKey,
+        thumbnailKey: first.thumbnailKey,
         message: 'ページのレンダリングが完了しました',
         jobId: body.jobId,
         episodeNumber: body.episodeNumber,
         pageNumber: body.pageNumber,
-        fileSize: imageBuffer.length,
-        thumbnailSize: thumbnailBuffer.length,
+        fileSize: first.fileSize,
         dimensions: { width: 842, height: 595 },
-        renderedAt: new Date().toISOString(),
+        renderedAt: first.renderedAt,
       },
       201,
     )
   } catch (error) {
-    return handleApiError(error)
+    return ApiResponder.error(error)
   }
 }
