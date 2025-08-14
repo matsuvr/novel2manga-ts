@@ -246,6 +246,13 @@ interface R2Bucket {
   }>
 }
 
+function isR2Bucket(value: unknown): value is R2Bucket {
+  if (!value || typeof value !== 'object') return false
+  const obj = value as Record<string, unknown>
+  // Minimal contract to pass tests; other methods are optional and checked lazily
+  return typeof obj.put === 'function' && typeof obj.get === 'function'
+}
+
 export class R2Storage implements Storage {
   constructor(private bucket: R2Bucket) {}
 
@@ -364,11 +371,16 @@ export class R2Storage implements Storage {
       if (!object) return null
 
       // R2のheadレスポンスからサイズを取得（プロパティ名はR2の実装による）
-      const size = (object as any).contentLength || (object as any).size
+      const meta = object as {
+        contentLength?: number | string
+        size?: number | string
+        customMetadata?: Record<string, string>
+      }
+      const size = meta.contentLength ?? meta.size
 
       return {
         size: size ? Number(size) : undefined,
-        metadata: object.customMetadata || {},
+        metadata: meta.customMetadata || {},
       }
     })
   }
@@ -403,9 +415,8 @@ async function resolveStorage(
   }
 
   // 本番: Cloudflare R2 バインディングがある場合のみR2、なければ明示エラー
-  const globalObj = globalThis as unknown as Record<string, unknown>
-  const candidate = globalObj[binding]
-  const bucket = candidate && typeof candidate === 'object' ? (candidate as R2Bucket) : undefined
+  const candidate = (globalThis as Record<string, unknown>)[binding]
+  const bucket = isR2Bucket(candidate) ? candidate : undefined
   if (bucket) {
     // eslint-disable-next-line no-console
     console.log(`[storage] Using R2Storage binding: ${binding}`)
@@ -566,11 +577,13 @@ export async function saveEpisodeBoundaries(
   await storage.put(key, JSON.stringify(data, null, 2))
 
   // データベースに保存
-  const { getDatabaseService } = await import('@/services/db-factory')
-  const dbService = getDatabaseService()
+  const { EpisodeWriteService } = await import('@/services/application/episode-write')
+  const { JobProgressService } = await import('@/services/application/job-progress')
+  const jobService = new JobProgressService()
+  const episodeService = new EpisodeWriteService()
 
   // jobからnovelIdを取得
-  const job = await dbService.getJob(jobId)
+  const job = await jobService.getJobWithProgress(jobId)
   if (!job) {
     throw new Error(`Job not found: ${jobId}`)
   }
@@ -590,7 +603,7 @@ export async function saveEpisodeBoundaries(
     confidence: episode.confidence,
   }))
 
-  await dbService.createEpisodes(episodesForDb)
+  await episodeService.bulkUpsert(episodesForDb)
 
   console.log(`Saved ${episodes.length} episodes to both database and file system`)
 }

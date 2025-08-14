@@ -238,4 +238,11 @@ export class MangaPageRenderer {
 
     return renderedPages
   }
+
+  /**
+   * Clean up canvas resources to prevent memory leaks
+   */
+  cleanup(): void {
+    this.canvasRenderer.cleanup()
+  }
 }

@@ -1,14 +1,16 @@
 import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
 import { getEpisodeConfig } from '@/config'
-import type { Episode } from '@/db'
+import type { NewEpisode } from '@/db'
+import type { AnalyzedChunk, IChunkRepository } from '@/domain/repositories/chunk-repository'
 import type { RetryableError } from '@/errors/retryable-error'
 import { isRetryableError } from '@/errors/retryable-error'
-import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repository'
-import type { DatabaseService } from '@/services/database'
+import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
+import { getStoragePorts } from '@/infrastructure/storage/ports'
+import type { EpisodeWriteService } from '@/services/application/episode-write'
+import type { JobProgressService } from '@/services/application/job-progress'
 import type { EpisodeBoundary } from '@/types/episode'
 import type { JobProgress } from '@/types/job'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
-import { getChunkData } from '@/utils/storage'
 
 // RetryableError is provided by errors/retryable-error
 
@@ -26,8 +28,12 @@ export class JobNarrativeProcessor {
   private config: NarrativeProcessorConfig
 
   constructor(
-    private dbService: DatabaseService,
+    private jobService: JobProgressService,
+    private episodeService: EpisodeWriteService,
     config?: Partial<NarrativeProcessorConfig>,
+    private logger: LoggerPort = getLogger().withContext({
+      service: 'JobNarrativeProcessor',
+    }),
   ) {
     const episodeConfig = getEpisodeConfig()
     this.config = {
@@ -49,60 +55,82 @@ export class JobNarrativeProcessor {
     jobId: string,
     onProgress?: (progress: JobProgress) => void,
   ): Promise<JobProgress> {
-    console.log(`[JobNarrativeProcessor] Starting episode analysis for job ${jobId}`)
+    this.logger.info('Starting episode analysis', { jobId })
 
-    const chunkRepository = new StorageChunkRepository()
+    const chunkRepository: IChunkRepository = new (class implements IChunkRepository {
+      async getAnalyzedChunks(jobId: string, chunkIndices: number[]): Promise<AnalyzedChunk[]> {
+        const ports = getStoragePorts()
+        const out: AnalyzedChunk[] = []
+        for (const idx of chunkIndices) {
+          const obj = await ports.analysis.getAnalysis(jobId, idx)
+          if (obj) {
+            const data = JSON.parse(obj.text) as {
+              analysis?: import('@/types/episode').NarrativeAnalysisInput['chunks'][number]['analysis']
+            }
+            if (data.analysis) {
+              out.push({ chunkIndex: idx, analysis: data.analysis })
+            }
+          }
+        }
+        return out
+      }
+    })()
 
     try {
       // ジョブの開始をログ
-      await this.dbService.updateJobStep(jobId, 'episode_started')
+      await this.jobService.updateStep(jobId, 'episode')
 
-      const job = await this.dbService.getJobWithProgress(jobId)
+      const job = await this.jobService.getJobWithProgress(jobId)
       if (!job) {
         throw new Error(`Job ${jobId} not found`)
       }
 
-      console.log(`[JobNarrativeProcessor] Job found: ${job.id}, total chunks: ${job.totalChunks}`)
+      this.logger.info('Job found', {
+        id: job.id,
+        totalChunks: job.totalChunks,
+      })
 
       // 既存の進捗を取得、または新規作成
       let progress = job.progress || this.createInitialProgress(job.totalChunks || 0)
 
       // ステータスを処理中に更新
-      await this.dbService.updateJobStatus(jobId, 'processing')
-      await this.dbService.updateJobStep(jobId, 'processing_chunks', 0, job.totalChunks || 0)
+      await this.jobService.updateStatus(jobId, 'processing')
+      await this.jobService.updateStep(jobId, 'episode', 0, job.totalChunks || 0)
       while (!progress.isCompleted) {
         // 次のバッチ範囲を計算
         const startIndex = progress.processedChunks
         const endIndex = Math.min(startIndex + this.config.chunksPerBatch, progress.totalChunks)
 
-        console.log(
-          `[JobNarrativeProcessor] Processing chunks ${startIndex} to ${endIndex} for job ${jobId}`,
-        )
-        await this.dbService.updateJobStep(
-          jobId,
-          `processing_batch_${startIndex}_${endIndex}`,
-          startIndex,
-          progress.totalChunks,
-        )
+        this.logger.info('Processing chunks', { jobId, startIndex, endIndex })
+        await this.jobService.updateStep(jobId, `episode`, startIndex, progress.totalChunks)
 
         // チャンクの存在確認のみ実行（実際のデータ読み込みはprepareNarrativeAnalysisInputで行う）
         for (let i = startIndex; i < endIndex; i++) {
-          console.log(`[JobNarrativeProcessor] Verifying chunk ${i}`)
+          this.logger.debug('Verifying chunk', { chunkIndex: i })
           try {
-            const chunkData = await getChunkData(jobId, i)
+            const ports = getStoragePorts()
+            const chunkData = await (await ports).chunk.getChunk(jobId, i)
             if (!chunkData) {
               const error = `Chunk ${i} not found for job ${jobId}`
-              console.error(`[JobNarrativeProcessor] ${error}`)
-              await this.dbService.updateJobError(jobId, error, `loading_chunk_${i}`)
+              this.logger.error('Chunk missing', {
+                error,
+                jobId,
+                chunkIndex: i,
+              })
+              await this.jobService.updateError(jobId, error, `loading_chunk_${i}`, true)
               throw new Error(error)
             }
-            console.log(
-              `[JobNarrativeProcessor] Chunk ${i} verified successfully (${chunkData.text.length} chars)`,
-            )
+            this.logger.debug('Chunk verified', {
+              chunkIndex: i,
+              length: chunkData.text.length,
+            })
           } catch (error) {
             const errorMsg = `Failed to verify chunk ${i}: ${error instanceof Error ? error.message : String(error)}`
-            console.error(`[JobNarrativeProcessor] ${errorMsg}`)
-            await this.dbService.updateJobError(jobId, errorMsg, `loading_chunk_${i}`)
+            this.logger.error('Chunk verify failed', {
+              error: errorMsg,
+              chunkIndex: i,
+            })
+            await this.jobService.updateError(jobId, errorMsg, `loading_chunk_${i}`)
             throw new Error(errorMsg)
           }
         }
@@ -151,9 +179,9 @@ export class JobNarrativeProcessor {
         progress = this.updateProgress(progress, newEpisodes, endIndex)
 
         // データベースに保存
-        await this.dbService.updateJobProgress(jobId, progress)
+        await this.jobService.updateProgress(jobId, progress)
         if (newEpisodes.length > 0) {
-          await this.dbService.createEpisodes(newEpisodes)
+          await this.episodeService.bulkUpsert(newEpisodes)
         }
 
         // コールバック
@@ -163,21 +191,21 @@ export class JobNarrativeProcessor {
       }
 
       // 処理完了
-      await this.dbService.updateJobStatus(jobId, 'completed')
+      await this.jobService.updateStatus(jobId, 'completed')
       return progress
     } catch (error) {
       // エラー時の処理
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
-      console.error(`[JobNarrativeProcessor] Fatal error in job ${jobId}:`, {
+      this.logger.error('Fatal error', {
+        jobId,
         error: errorMessage,
         stack: error instanceof Error ? error.stack : undefined,
-        jobId,
       })
 
-      await this.dbService.updateJobError(jobId, errorMessage, 'episode_failed')
+      await this.jobService.updateError(jobId, errorMessage, 'episode_failed', true)
       throw error
     } finally {
-      console.log(`[JobNarrativeProcessor] Episode analysis completed for job ${jobId}`)
+      this.logger.info('Episode analysis completed', { jobId })
     }
   }
 
@@ -197,14 +225,16 @@ export class JobNarrativeProcessor {
   /**
    * 境界情報をエピソードに変換
    */
-  private convertBoundariesToEpisodes(boundaries: EpisodeBoundary[], jobId: string): Episode[] {
-    const episodes: Episode[] = []
+  private convertBoundariesToEpisodes(
+    boundaries: EpisodeBoundary[],
+    jobId: string,
+  ): Array<Omit<NewEpisode, 'id' | 'createdAt'>> {
+    const episodes: Array<Omit<NewEpisode, 'id' | 'createdAt'>> = []
 
     for (let i = 0; i < boundaries.length; i++) {
       const boundary = boundaries[i]
 
       episodes.push({
-        id: `${jobId}-episode-${boundary.episodeNumber}`,
         novelId: jobId,
         jobId,
         episodeNumber: boundary.episodeNumber,
@@ -216,7 +246,6 @@ export class JobNarrativeProcessor {
         endCharIndex: boundary.endCharIndex,
         estimatedPages: boundary.estimatedPages,
         confidence: boundary.confidence,
-        createdAt: new Date().toISOString(),
       })
     }
 
@@ -228,7 +257,17 @@ export class JobNarrativeProcessor {
    */
   private updateProgress(
     progress: JobProgress,
-    newEpisodes: Episode[],
+    newEpisodes: Array<{
+      episodeNumber: number
+      startChunk: number
+      startCharIndex: number
+      endChunk: number
+      endCharIndex: number
+      estimatedPages: number
+      confidence: number
+      title?: string | null
+      summary?: string | null
+    }>,
     newChunkIndex: number,
   ): JobProgress {
     const lastEpisode = newEpisodes[newEpisodes.length - 1]
@@ -265,7 +304,7 @@ export class JobNarrativeProcessor {
    * ジョブの処理を再開可能かチェック
    */
   async canResumeJob(jobId: string): Promise<boolean> {
-    const job = await this.dbService.getJobWithProgress(jobId)
+    const job = await this.jobService.getJobWithProgress(jobId)
     return (
       job !== null &&
       job.status !== 'completed' &&
@@ -285,10 +324,12 @@ export class JobNarrativeProcessor {
         return await fn()
       } catch (error) {
         lastError = error as Error
-        console.error(
-          `${operationName} failed (attempt ${attempt + 1}/${this.config.maxRetries}):`,
-          error,
-        )
+        this.logger.warn('Operation failed', {
+          operation: operationName,
+          attempt: attempt + 1,
+          maxRetries: this.config.maxRetries,
+          error: error instanceof Error ? error.message : String(error),
+        })
 
         // リトライ可能なエラーかチェック
         if (!this.isRetryableError(error)) {
@@ -298,7 +339,10 @@ export class JobNarrativeProcessor {
         // 最後の試行でなければ待機
         if (attempt < this.config.maxRetries - 1) {
           const delay = this.getRetryDelay(error, attempt)
-          console.log(`Retrying ${operationName} after ${delay}ms...`)
+          this.logger.info('Retrying operation', {
+            operation: operationName,
+            delayMs: delay,
+          })
           await new Promise((resolve) => setTimeout(resolve, delay))
         }
       }

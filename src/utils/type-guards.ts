@@ -1,7 +1,7 @@
 import type { MangaLayout } from '@/types/panel-layout'
 import { MangaLayoutSchema } from '@/types/panel-layout.zod'
 
-// NOTE (performance): Full Zod parsing on every guard call was flagged in PR #63 (Claude review "Areas for Improvement").
+// NOTE (performance): Full Zod parsing on every guard call can be costly on hot paths.
 // We introduce a two‑phase validation:
 //  1) A very cheap structural pre‑check (no recursion, no allocations other than property access)
 //  2) Full Zod parsing only if the object has not been validated before.

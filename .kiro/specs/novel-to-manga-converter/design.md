@@ -101,6 +101,20 @@
 
 注: API エラー仕様は `createSuccessResponse`/`createErrorResponse` に統一済み。ZodError/HttpError 等のマッピングは Error Model セクションの定義に準拠（本日の更新で記述整合を再確認）。
 
+### 2025-08-14 追記: PR#64 レビュー対応の反映
+
+- PR#64 のレビュー指摘に基づき、以下の主要な修正を実装しました。
+  - Scenario の各 step.run を (input: unknown) にし、対応する Zod スキーマで必ず parse することで暗黙 any を排除しました。
+  - mapField を使った fan-out の扱いを明確化し、ステップ入力ではコンテナスキーマを検証、run 内で配列要素を個別に Zod 検証するパターンに統一しました。
+  - インメモリランナーで mapField 出力の各要素を step.outputSchema で個別検証するように強化しました。
+  - cf-executor の冪等キー生成を canonical JSON 化 + SHA-256 に変更し、安定した idempotency key を生成するよう改善しました（将来的に共通ユーティリティへ抽出予定）。
+  - 不要なデッドコード（例: promptGen アダプタ）を削除しました。
+
+注記:
+
+- Workers 実行環境では Node の crypto.createHash が利用できないため、Cloudflare 用実装では subtle.digest 等の環境特有のAPIを使う必要があります。
+- idempotency ユーティリティの切り出しとユニットテストは未完了です（tasks.md に追記）。
+
 ## Requirements Mapping
 
 ### Design Component Traceability
@@ -1938,3 +1952,9 @@ Durable Object 実装は `class ScenarioCoordinator { async fetch(req, env) { /*
 - Output externalization (threshold-based inline→R2 切替)
 - Back-pressure (max in-flight fan-out) 制御
 - Metrics & tracing 初期実装
+  \n### 2025-08-14 追加: DB アクセス境界の標準化（DRY/SOLID/DDD 準拠）
+
+- Repository Ports 拡張: `JobDbPort` に `updateJobStep`/`markJobStepCompleted`/`updateJobProgress`/`updateJobError` を追加。`OutputDbPort` に `getOutput` を追加。新規 `ChunkDbPort` を定義。
+- 新規 Repository 実装: `ChunkRepository`, `OutputRepository` を追加。`RepositoryFactory` に対応する getter を実装し、`adaptAll` で `chunk` ポートを供給。
+- API ルートの依存反転: `/api/analyze` と `/api/export` が `DatabaseService` を直接呼ぶ箇所（ジョブ進捗更新・チャンク作成・成果物取得）を Repository 経由に置換。`/api/job/[id]` は環境分岐（ファイル直読み）を廃止し常に Repository 経由に統一。
+- 期待効果: 層の一貫性（Application → Repository → DatabaseService）、テスタビリティ向上（ポート差替え）、将来のデータソース切替（D1/R2/外部API）を容易化。

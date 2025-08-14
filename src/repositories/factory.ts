@@ -1,6 +1,6 @@
-import type { DatabaseService } from '@/services/database'
-import { getDatabaseService } from '@/services/db-factory'
+import { DatabaseService } from '@/services/database'
 import { adaptAll } from './adapters'
+import { ChunkRepository } from './chunk-repository'
 import { EpisodeRepository } from './episode-repository'
 import { JobRepository } from './job-repository'
 import { NovelRepository } from './novel-repository'
@@ -34,9 +34,10 @@ export class RepositoryFactory {
   private episodeRepo: EpisodeRepository | null = null
   private jobRepo: JobRepository | null = null
   private novelRepo: NovelRepository | null = null
+  private chunkRepo: ChunkRepository | null = null
   private outputRepo: OutputRepository | null = null
 
-  constructor(private readonly dbService: DatabaseService = getDatabaseService()) {
+  constructor(private readonly dbService: DatabaseService = new DatabaseService()) {
     this.assertValidDbService(dbService)
   }
 
@@ -126,9 +127,16 @@ export class RepositoryFactory {
     return this.novelRepo
   }
 
-  /**
-   * Get or create OutputRepository instance
-   */
+  /** Get or create ChunkRepository instance */
+  getChunkRepository(): ChunkRepository {
+    if (!this.chunkRepo) {
+      const { chunk } = adaptAll(this.dbService)
+      this.chunkRepo = new ChunkRepository(chunk)
+    }
+    return this.chunkRepo
+  }
+
+  /** Get or create OutputRepository instance */
   getOutputRepository(): OutputRepository {
     if (!this.outputRepo) {
       const { output } = adaptAll(this.dbService)
@@ -145,6 +153,7 @@ export class RepositoryFactory {
       episode: this.getEpisodeRepository(),
       job: this.getJobRepository(),
       novel: this.getNovelRepository(),
+      chunk: this.getChunkRepository(),
       output: this.getOutputRepository(),
     } as const
   }
@@ -156,6 +165,7 @@ export class RepositoryFactory {
     this.episodeRepo = null
     this.jobRepo = null
     this.novelRepo = null
+    this.chunkRepo = null
     this.outputRepo = null
   }
 }
@@ -167,4 +177,5 @@ export const getRepositoryFactory = () => RepositoryFactory.getInstance()
 export const getEpisodeRepository = () => getRepositoryFactory().getEpisodeRepository()
 export const getJobRepository = () => getRepositoryFactory().getJobRepository()
 export const getNovelRepository = () => getRepositoryFactory().getNovelRepository()
+export const getChunkRepository = () => getRepositoryFactory().getChunkRepository()
 export const getOutputRepository = () => getRepositoryFactory().getOutputRepository()
