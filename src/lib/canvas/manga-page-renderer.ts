@@ -29,8 +29,8 @@ export class MangaPageRenderer {
 
   constructor(config?: Partial<MangaPageRendererConfig>) {
     this.config = {
-      pageWidth: 842, // A4横
-      pageHeight: 595, // A4横
+      pageWidth: 595, // A4縦
+      pageHeight: 842, // A4縦
       margin: 20,
       panelSpacing: 10,
       defaultFont: 'sans-serif',

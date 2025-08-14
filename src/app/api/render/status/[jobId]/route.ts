@@ -125,8 +125,8 @@ export async function GET(
             isRendered,
             imagePath: isRendered ? renderKey : undefined,
             thumbnailPath: isRendered ? thumbnailKey : undefined,
-            width: isRendered ? 842 : undefined,
-            height: isRendered ? 595 : undefined,
+            width: isRendered ? 595 : undefined,
+            height: isRendered ? 842 : undefined,
             fileSize: isRendered ? renderInfo?.size : undefined,
           })
         } catch {

@@ -7,8 +7,8 @@ import type { MangaLayout } from '@/types/panel-layout'
 vi.mock('@/lib/canvas/canvas-renderer', () => ({
   CanvasRenderer: vi.fn().mockImplementation(() => ({
     canvas: {
-      width: 842,
-      height: 595,
+      width: 595,
+      height: 842,
       getContext: vi.fn(),
     },
     renderMangaLayout: vi.fn(),
@@ -74,8 +74,8 @@ describe('MangaPageRenderer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     renderer = new MangaPageRenderer({
-      pageWidth: 842,
-      pageHeight: 595,
+      pageWidth: 595,
+      pageHeight: 842,
       margin: 20,
       panelSpacing: 10,
       defaultFont: 'sans-serif',
@@ -94,8 +94,8 @@ describe('MangaPageRenderer', () => {
     it('正しい設定で初期化できる', () => {
       expect(renderer).toBeDefined()
       expect(vi.mocked(CanvasRenderer)).toHaveBeenCalledWith({
-        width: 842,
-        height: 595,
+        width: 595,
+        height: 842,
         defaultFontSize: 14,
         font: 'sans-serif',
       })
@@ -105,8 +105,8 @@ describe('MangaPageRenderer', () => {
       renderer = new MangaPageRenderer()
       expect(vi.mocked(CanvasRenderer)).toHaveBeenCalledWith(
         expect.objectContaining({
-          width: 842,
-          height: 595,
+          width: 595,
+          height: 842,
         }),
       )
     })
@@ -117,8 +117,8 @@ describe('MangaPageRenderer', () => {
       const canvas = await renderer.renderToCanvas(mockLayout, 1)
 
       expect(canvas).toBeDefined()
-      expect(canvas.width).toBe(842)
-      expect(canvas.height).toBe(595)
+      expect(canvas.width).toBe(595)
+      expect(canvas.height).toBe(842)
       expect(mockCanvasRenderer.renderMangaLayout).toHaveBeenCalledWith(
         expect.objectContaining({
           pages: expect.arrayContaining([

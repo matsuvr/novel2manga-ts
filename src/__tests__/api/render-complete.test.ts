@@ -118,8 +118,8 @@ describe('/api/render エンドポイント', () => {
           isRendered: true,
           imagePath: expect.any(String),
           thumbnailPath: expect.any(String),
-          width: 842,
-          height: 595,
+          width: 595,
+          height: 842,
           fileSize: expect.any(Number),
         }
       )

@@ -257,6 +257,7 @@
   - [x] ThumbnailGeneratorの実装（サムネイル生成）
   - [x] DatabaseService.updateRenderStatusの実装（render_statusテーブル管理）
   - [x] 包括的なテスト作成（render-complete.test.ts）
+  - [x] デフォルトページサイズをA4縦（595×842 px）に変更
   - _Requirements: REQ-3 - マンガレイアウト生成_
 
 - [x] 16. シナリオオーケストレーター（DSL）骨格追加（2025-08-12追加）

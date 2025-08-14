@@ -67,8 +67,8 @@ vi.mock('canvas', () => ({
     toBuffer: vi.fn().mockImplementation((callback) => {
       callback(null, Buffer.from('mock-canvas-buffer'))
     }),
-    width: 842,
-    height: 595,
+    width: 595,
+    height: 842,
   }),
 }))
 

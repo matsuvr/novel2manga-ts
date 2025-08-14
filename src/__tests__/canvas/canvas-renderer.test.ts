@@ -161,8 +161,8 @@ describe('CanvasRenderer', () => {
   describe('マンガレイアウト描画', () => {
     beforeEach(() => {
       renderer = new CanvasRenderer({
-        width: 842,
-        height: 595,
+        width: 595,
+        height: 842,
       })
     })
 
@@ -200,9 +200,9 @@ describe('CanvasRenderer', () => {
       renderer.renderMangaLayout(layout)
 
       // 背景がクリアされる
-      expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, 842, 595)
+      expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, 595, 842)
       // 全体フレームが描画される
-      expect(ctx.strokeRect).toHaveBeenCalledWith(0, 0, 842, 595)
+      expect(ctx.strokeRect).toHaveBeenCalledWith(0, 0, 595, 842)
       // 各パネルが描画される（2つのパネル）
       expect(ctx.strokeRect).toHaveBeenCalledTimes(3) // 全体フレーム + 2パネル
     })

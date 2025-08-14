@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
         episodeNumber: body.episodeNumber,
         pageNumber: body.pageNumber,
         fileSize: first.fileSize,
-        dimensions: { width: 842, height: 595 },
+        dimensions: { width: 595, height: 842 },
         renderedAt: first.renderedAt,
       },
       201,

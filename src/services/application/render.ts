@@ -55,8 +55,8 @@ export async function renderBatchFromYaml(
   const validPages = targetPages.filter((p) => allPages.includes(p))
 
   const renderer = new MangaPageRenderer({
-    pageWidth: 842,
-    pageHeight: 595,
+    pageWidth: 595,
+    pageHeight: 842,
     margin: 20,
     panelSpacing: 10,
     defaultFont: 'sans-serif',
@@ -104,8 +104,8 @@ export async function renderBatchFromYaml(
         isRendered: true,
         imagePath: renderKey,
         thumbnailPath: thumbnailKey,
-        width: 842,
-        height: 595,
+        width: 595,
+        height: 842,
         fileSize: imageBuffer.length,
       })
 
