@@ -2,7 +2,7 @@
 
 ## Overview
 
-本設計書は、小説テキストをマンガ形式のレイアウト（絵コンテ）に自動変換するWebアプリケーションの技術実装について定義します。本ツールは編集者を補佐するツールであり、マンガの絵そのものを生成するのではなく、コマ割りと吹き出し配置の構成案を提供します。AI実行は Mastra ではなく、OpenAI SDK と Google GenAI SDK を直接呼び出す構成に統一しています（TypeScript + Next.js 15）。
+本設計書は、小説テキストをマンガ形式のレイアウト（絵コンテ）に自動変換するWebアプリケーションの技術実装について定義します。本ツールは編集者を補佐するツールであり、マンガの絵そのものを生成するのではなく、コマ割りと吹き出し配置の構成案を提供します。AI実行は Mastra ではなく、OpenAI SDK、Google GenAI SDK、Groq SDK を直接呼び出す構成に統一しています（TypeScript + Next.js 15）。
 
 ### 2025-08-12 更新サマリ
 
@@ -134,7 +134,7 @@ graph TB
     end
 
     subgraph "AI Processing Layer (Direct SDKs)"
-        E[OpenAI SDK / Google GenAI SDK] --> F[ChunkAnalyzer]
+        E[OpenAI SDK / Google GenAI SDK / Groq SDK] --> F[ChunkAnalyzer]
         E --> G[LayoutGenerator]
         E --> H[NarrativeArcAnalyzer]
         F --> I[5-Element Extractor]
@@ -191,7 +191,7 @@ graph TB
 調査結果に基づく技術選定：
 
 - **Frontend**: Next.js 15.3.3 (App Router) + TypeScript 5 + Tailwind CSS v4
-- **AI SDKs**: OpenAI SDK, Google GenAI SDK（直接呼び出し）
+- **AI SDKs**: OpenAI SDK, Google GenAI SDK, Groq SDK（直接呼び出し）
 - **絵コンテ生成**: Canvas API（枠線・テキスト・吹き出しのみ、イラストは含まない）
 - **Backend**: Next.js API Routes + Mastra Agents
 - **Database**: Cloudflare D1 (SQLite ベース) / SQLite (開発環境)

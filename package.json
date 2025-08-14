@@ -61,6 +61,7 @@
     "date-fns": "^4.1.0",
     "drizzle-kit": "^0.31.4",
     "drizzle-orm": "^0.44.4",
+    "groq-sdk": "^0.30.0",
     "js-yaml": "^4.1.0",
     "jszip": "^3.10.1",
     "next": "15.3.3",

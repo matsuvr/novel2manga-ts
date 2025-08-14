@@ -180,6 +180,7 @@
   - [x] 環境変数の整理（.envはシークレットのみ）
   - [x] 複数LLMプロバイダー対応（OpenAI、Gemini、Groq、Local）
   - [x] OpenRouterプロバイダー実装と統合
+  - [x] Groq SDK 直接統合（OpenAI互換APIの廃止）
   - [x] Cloudflareバインディング型定義
   - _Requirements: 設定管理とLLM統合_
 

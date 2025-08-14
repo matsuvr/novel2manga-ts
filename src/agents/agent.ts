@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai'
+import Groq from 'groq-sdk'
 import OpenAI from 'openai'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import type { z } from 'zod'
@@ -17,13 +18,32 @@ export interface GenerateOptions {
   maxRetries?: number
 }
 
+type ChatMessage = { role: 'user' | 'system' | 'assistant'; content: string }
+
+interface OpenAICompletion {
+  choices: Array<{ message?: { content?: string | null } }>
+}
+
+interface OpenAICompatibleClient {
+  chat: {
+    completions: {
+      create(params: {
+        model: string
+        messages: ChatMessage[]
+        max_tokens: number
+        response_format?: unknown
+      }): Promise<OpenAICompletion>
+    }
+  }
+}
+
 export class Agent {
   private name: string
   private instructions: string
   private provider: LLMProvider
   private model: string
   private maxTokens: number
-  private client: OpenAI | GoogleGenAI | null = null
+  private client: OpenAICompatibleClient | GoogleGenAI | null = null
 
   constructor(options: AgentOptions) {
     this.name = options.name
@@ -52,7 +72,7 @@ export class Agent {
       case 'openai':
         this.client = new OpenAI({
           apiKey: config.apiKey,
-        })
+        }) as OpenAICompatibleClient
         break
 
       case 'gemini':
@@ -62,17 +82,16 @@ export class Agent {
         break
 
       case 'groq':
-        this.client = new OpenAI({
+        this.client = new Groq({
           apiKey: config.apiKey,
-          baseURL: 'https://api.groq.com/openai/v1',
-        })
+        }) as OpenAICompatibleClient
         break
 
       case 'openrouter':
         this.client = new OpenAI({
           apiKey: config.apiKey,
           baseURL: config.baseUrl || 'https://openrouter.ai/api/v1',
-        })
+        }) as OpenAICompatibleClient
         break
 
       default:
@@ -81,21 +100,22 @@ export class Agent {
   }
 
   async generateObject<T extends z.ZodTypeAny>(
-    messages: Array<{ role: 'user' | 'system' | 'assistant'; content: string }>,
+    messages: ChatMessage[],
     schema: T,
     options?: GenerateOptions,
   ): Promise<z.infer<T>> {
     const maxRetries = options?.maxRetries ?? 2
 
     // Add system prompt as first message
-    const allMessages = [{ role: 'system' as const, content: this.instructions }, ...messages]
+    const allMessages: ChatMessage[] = [{ role: 'system', content: this.instructions }, ...messages]
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         if (this.provider === 'gemini' && this.client instanceof GoogleGenAI) {
           return await this.generateWithGemini(allMessages, schema)
-        } else if (this.client instanceof OpenAI) {
-          return await this.generateWithOpenAI(allMessages, schema)
+        }
+        if (this.client) {
+          return await this.generateWithOpenAICompatible(allMessages, schema)
         }
         throw new Error('Invalid client type')
       } catch (error) {
@@ -110,16 +130,16 @@ export class Agent {
     throw new Error('Max retries exceeded')
   }
 
-  private async generateWithOpenAI<T extends z.ZodTypeAny>(
-    messages: Array<{ role: 'user' | 'system' | 'assistant'; content: string }>,
+  private async generateWithOpenAICompatible<T extends z.ZodTypeAny>(
+    messages: ChatMessage[],
     schema: T,
   ): Promise<z.infer<T>> {
-    const client = this.client as OpenAI
+    const client = this.client as OpenAICompatibleClient
 
     // Use structured outputs with response_format
     const completion = await client.chat.completions.create({
       model: this.model,
-      messages: messages as OpenAI.ChatCompletionMessageParam[],
+      messages,
       max_tokens: this.maxTokens,
       response_format: zodResponseFormat(schema, 'response'),
     })
@@ -238,13 +258,10 @@ export class Agent {
     }
   }
 
-  async generate(
-    messages: Array<{ role: 'user' | 'system' | 'assistant'; content: string }>,
-    options?: GenerateOptions,
-  ): Promise<string> {
+  async generate(messages: ChatMessage[], options?: GenerateOptions): Promise<string> {
     const maxRetries = options?.maxRetries ?? 2
 
-    const allMessages = [{ role: 'system' as const, content: this.instructions }, ...messages]
+    const allMessages: ChatMessage[] = [{ role: 'system', content: this.instructions }, ...messages]
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -260,10 +277,12 @@ export class Agent {
           })
 
           return response.text || ''
-        } else if (this.client instanceof OpenAI) {
-          const completion = await this.client.chat.completions.create({
+        }
+
+        if (this.client) {
+          const completion = await (this.client as OpenAICompatibleClient).chat.completions.create({
             model: this.model,
-            messages: allMessages as OpenAI.ChatCompletionMessageParam[],
+            messages: allMessages,
             max_tokens: this.maxTokens,
           })
 
