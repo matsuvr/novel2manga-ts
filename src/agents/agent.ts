@@ -6,6 +6,7 @@ import type { ChatCompletionCreateParams } from 'openai/resources/chat/completio
 import { z } from 'zod'
 import { getLLMProviderConfig } from '@/config'
 import type { LLMProvider } from '@/config/llm.config'
+import { AgentError } from './errors'
 
 export interface AgentOptions {
   name: string
@@ -124,20 +125,35 @@ export class Agent {
     // Use structured outputs with response_format
     const responseFormat = zodResponseFormat(schema, 'response')
 
-    const completion = await client.chat.completions.create({
-      model: this.model,
-      messages: messages as OpenAI.ChatCompletionMessageParam[],
-      max_tokens: this.maxTokens,
-      // For OpenAI-compatible SDKs
-      response_format: responseFormat as unknown as ChatCompletionCreateParams['response_format'],
-    })
-    const content = completion.choices[0]?.message?.content
-    if (!content) {
-      throw new Error('No content in response')
-    }
+    try {
+      const completion = await client.chat.completions.create({
+        model: this.model,
+        messages: messages as OpenAI.ChatCompletionMessageParam[],
+        max_tokens: this.maxTokens,
+        // For OpenAI-compatible SDKs
+        response_format: responseFormat as ChatCompletionCreateParams['response_format'],
+      })
+      const content = completion.choices[0]?.message?.content
+      if (!content) {
+        throw AgentError.fromProviderError(new Error('No content in response'), 'openai')
+      }
 
-    const parsed = JSON.parse(content)
-    return schema.parse(parsed)
+      try {
+        const parsed = JSON.parse(content)
+        try {
+          return schema.parse(parsed)
+        } catch (schemaError) {
+          throw AgentError.fromSchemaValidationError(schemaError, 'openai')
+        }
+      } catch (jsonError) {
+        throw AgentError.fromJsonParseError(jsonError, 'openai')
+      }
+    } catch (error) {
+      if (error instanceof AgentError) {
+        throw error
+      }
+      throw AgentError.fromProviderError(error, 'openai')
+    }
   }
 
   private async generateWithCerebras<T extends z.ZodTypeAny>(
@@ -178,21 +194,21 @@ export class Agent {
         parsed = JSON.parse(content)
       } catch (jsonError) {
         console.error('[Cerebras] Invalid JSON response content:', content.substring(0, 200))
-        throw new Error(
-          `Cerebras returned invalid JSON: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`,
-        )
+        throw AgentError.fromJsonParseError(jsonError, 'cerebras')
       }
 
-      return schema.parse(parsed)
-    } catch (err) {
-      // No fallback - throw error immediately to stop processing
-      console.error('[Cerebras] Error in generateWithCerebras:', err)
-      if (err instanceof Error && err.message.includes('JSON')) {
-        throw new Error(
-          `Cerebras API returned invalid JSON response. Please check the model's JSON generation capabilities. Original error: ${err.message}`,
-        )
+      try {
+        return schema.parse(parsed)
+      } catch (schemaError) {
+        throw AgentError.fromSchemaValidationError(schemaError, 'cerebras')
       }
-      throw err
+    } catch (err) {
+      // Re-throw AgentErrors as-is, wrap others
+      if (err instanceof AgentError) {
+        throw err
+      }
+      console.error('[Cerebras] Error in generateWithCerebras:', err)
+      throw AgentError.fromProviderError(err, 'cerebras')
     }
   }
 
@@ -232,15 +248,22 @@ export class Agent {
 
     const text = response.text
     if (!text) {
-      throw new Error('Empty response from Gemini')
+      throw AgentError.fromProviderError(new Error('Empty response from Gemini'), 'gemini')
     }
 
     try {
       const parsed = JSON.parse(text)
-      return schema.parse(parsed)
+      try {
+        return schema.parse(parsed)
+      } catch (schemaError) {
+        throw AgentError.fromSchemaValidationError(schemaError, 'gemini')
+      }
     } catch (error) {
+      if (error instanceof AgentError) {
+        throw error
+      }
       console.error('Failed to parse Gemini response:', text)
-      throw error
+      throw AgentError.fromJsonParseError(error, 'gemini')
     }
   }
 
@@ -283,7 +306,7 @@ export class Agent {
     } else if (def.typeName === 'ZodEnum') {
       return {
         type: 'string',
-        enum: def.values as unknown[] as unknown[],
+        enum: def.values as string[],
       }
     } else if (def.typeName === 'ZodOptional') {
       return this.zodToJsonSchema(def.innerType as z.ZodTypeAny)

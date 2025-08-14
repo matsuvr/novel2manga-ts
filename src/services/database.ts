@@ -11,11 +11,30 @@ import {
   type Novel,
 } from '@/db'
 import { chunks, episodes, jobs, novels, outputs, renderStatus } from '@/db/schema'
+import type { TransactionPort, UnitOfWorkPort } from '@/repositories/ports'
 import type { JobProgress, JobStatus, JobStep } from '@/types/job'
 import { makeEpisodeId } from '@/utils/ids'
 
-export class DatabaseService {
+export class DatabaseService implements TransactionPort, UnitOfWorkPort {
   private db = getDatabase()
+
+  async withTransaction<T>(fn: () => Promise<T>): Promise<T> {
+    // Drizzle supports db.transaction; use it to ensure atomic operations
+    return await this.db.transaction(async () => await fn())
+  }
+
+  // UnitOfWorkPort basic implementation using implicit transaction semantics
+  async begin(): Promise<void> {
+    // No-op: Drizzle exposes transaction via callback; explicit begin not supported.
+  }
+
+  async commit(): Promise<void> {
+    // No-op: handled by callback completion
+  }
+
+  async rollback(): Promise<void> {
+    // No-op: use thrown error within transaction callback to rollback
+  }
 
   // Novel関連メソッド
   async createNovel(novel: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
@@ -243,22 +262,26 @@ export class DatabaseService {
     step: string,
     incrementRetry = true,
   ): Promise<void> {
-    const updateData: Partial<Job> = {
-      lastError: error,
-      lastErrorStep: step,
-      status: 'failed',
-      updatedAt: new Date().toISOString(),
-    }
-
-    if (incrementRetry) {
-      // Drizzleでretry_count + 1を行う
-      const currentJob = await this.getJob(id)
-      if (currentJob) {
-        updateData.retryCount = (currentJob.retryCount || 0) + 1
+    await this.db.transaction(async (tx) => {
+      const updateData: Partial<Job> = {
+        lastError: error,
+        lastErrorStep: step,
+        status: 'failed',
+        updatedAt: new Date().toISOString(),
       }
-    }
 
-    await this.db.update(jobs).set(updateData).where(eq(jobs.id, id))
+      if (incrementRetry) {
+        const current = await tx
+          .select({ retryCount: jobs.retryCount })
+          .from(jobs)
+          .where(eq(jobs.id, id))
+          .limit(1)
+        const currentRetry = Number(current[0]?.retryCount ?? 0)
+        updateData.retryCount = currentRetry + 1
+      }
+
+      await tx.update(jobs).set(updateData).where(eq(jobs.id, id))
+    })
   }
 
   async markJobStepCompleted(
@@ -327,15 +350,21 @@ export class DatabaseService {
     characterCount?: number
     status?: string
   }): Promise<void>
-  // Internal implementation handling both overload signatures. Use a broad unknown then narrow.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Overload consolidation; validated below
-  async createEpisode(episode: any): Promise<void> {
+  // Internal implementation handling both overload signatures. Use unknown then narrow with guards.
+  async createEpisode(episode: unknown): Promise<void> {
+    type MinimalInput = {
+      jobId: string
+      episodeNumber: number
+      title?: string
+    }
+    const isMinimalInput = (e: unknown): e is MinimalInput =>
+      !!e &&
+      typeof (e as { jobId?: unknown }).jobId === 'string' &&
+      typeof (e as { episodeNumber?: unknown }).episodeNumber === 'number' &&
+      ((e as { startChunk?: unknown }).startChunk === undefined ||
+        (e as { startCharIndex?: unknown }).startCharIndex === undefined)
     // 簡易入力かどうかを判定
-    const isMinimal =
-      episode &&
-      typeof episode.jobId === 'string' &&
-      typeof episode.episodeNumber === 'number' &&
-      (episode.startChunk === undefined || episode.startCharIndex === undefined)
+    const isMinimal = isMinimalInput(episode)
 
     if (isMinimal) {
       const job = await this.getJob(episode.jobId)
@@ -353,7 +382,7 @@ export class DatabaseService {
         endChunk: 1,
         endCharIndex: 0,
         estimatedPages: 1,
-        confidence: 0.5 as unknown as number,
+        confidence: 0.5,
         createdAt: new Date().toISOString(),
       }
 
@@ -375,22 +404,39 @@ export class DatabaseService {
       return
     }
 
-    const id = makeEpisodeId(episode.jobId, episode.episodeNumber)
+    // Attempt to treat as full NewEpisode-like payload
+    const e = episode as Partial<NewEpisode>
+    if (
+      e &&
+      typeof e.jobId === 'string' &&
+      typeof e.novelId === 'string' &&
+      typeof e.episodeNumber === 'number' &&
+      typeof e.startChunk === 'number' &&
+      typeof e.startCharIndex === 'number' &&
+      typeof e.endChunk === 'number' &&
+      typeof e.endCharIndex === 'number' &&
+      typeof e.estimatedPages === 'number' &&
+      typeof e.confidence === 'number'
+    ) {
+      const id = makeEpisodeId(e.jobId, e.episodeNumber)
+      await this.db.insert(episodes).values({
+        id,
+        novelId: e.novelId,
+        jobId: e.jobId,
+        episodeNumber: e.episodeNumber,
+        title: e.title,
+        summary: e.summary,
+        startChunk: e.startChunk,
+        startCharIndex: e.startCharIndex,
+        endChunk: e.endChunk,
+        endCharIndex: e.endCharIndex,
+        estimatedPages: e.estimatedPages,
+        confidence: e.confidence,
+      })
+      return
+    }
 
-    await this.db.insert(episodes).values({
-      id,
-      novelId: episode.novelId,
-      jobId: episode.jobId,
-      episodeNumber: episode.episodeNumber,
-      title: episode.title,
-      summary: episode.summary,
-      startChunk: episode.startChunk,
-      startCharIndex: episode.startCharIndex,
-      endChunk: episode.endChunk,
-      endCharIndex: episode.endCharIndex,
-      estimatedPages: episode.estimatedPages,
-      confidence: episode.confidence,
-    })
+    throw new Error('Invalid episode payload')
   }
 
   // 便宜メソッド（テスト用クリーンアップ）
@@ -399,58 +445,52 @@ export class DatabaseService {
   }
 
   async createEpisodes(episodeList: Array<Omit<NewEpisode, 'id' | 'createdAt'>>): Promise<void> {
-    if (episodeList.length === 0) {
-      return
-    }
+    if (episodeList.length === 0) return
 
-    const episodesToInsert = episodeList.map((episode) => ({
-      id: makeEpisodeId(episode.jobId, episode.episodeNumber),
-      novelId: episode.novelId,
-      jobId: episode.jobId,
-      episodeNumber: episode.episodeNumber,
-      title: episode.title,
-      summary: episode.summary,
-      startChunk: episode.startChunk,
-      startCharIndex: episode.startCharIndex,
-      endChunk: episode.endChunk,
-      endCharIndex: episode.endCharIndex,
-      estimatedPages: episode.estimatedPages,
-      confidence: episode.confidence,
-    }))
+    await this.db.transaction(async (tx) => {
+      const toInsert = episodeList.map((episode) => ({
+        id: makeEpisodeId(episode.jobId, episode.episodeNumber),
+        novelId: episode.novelId,
+        jobId: episode.jobId,
+        episodeNumber: episode.episodeNumber,
+        title: episode.title,
+        summary: episode.summary,
+        startChunk: episode.startChunk,
+        startCharIndex: episode.startCharIndex,
+        endChunk: episode.endChunk,
+        endCharIndex: episode.endCharIndex,
+        estimatedPages: episode.estimatedPages,
+        confidence: episode.confidence,
+      }))
 
-    // UPSERT: (jobId, episodeNumber) が重複した場合は更新
-    await this.db
-      .insert(episodes)
-      .values(episodesToInsert)
-      .onConflictDoUpdate({
-        target: [episodes.jobId, episodes.episodeNumber],
-        set: {
-          title: sql`excluded.title`,
-          summary: sql`excluded.summary`,
-          startChunk: sql`excluded.start_chunk`,
-          startCharIndex: sql`excluded.start_char_index`,
-          endChunk: sql`excluded.end_chunk`,
-          endCharIndex: sql`excluded.end_char_index`,
-          estimatedPages: sql`excluded.estimated_pages`,
-          confidence: sql`excluded.confidence`,
-        },
-      })
+      await tx
+        .insert(episodes)
+        .values(toInsert)
+        .onConflictDoUpdate({
+          target: [episodes.jobId, episodes.episodeNumber],
+          set: {
+            title: sql`excluded.title`,
+            summary: sql`excluded.summary`,
+            startChunk: sql`excluded.start_chunk`,
+            startCharIndex: sql`excluded.start_char_index`,
+            endChunk: sql`excluded.end_chunk`,
+            endCharIndex: sql`excluded.end_char_index`,
+            estimatedPages: sql`excluded.estimated_pages`,
+            confidence: sql`excluded.confidence`,
+          },
+        })
 
-    // jobのtotalEpisodesを更新
-    const jobId = episodeList[0].jobId
-    // jobのtotalEpisodesを再計算（重複更新も考慮）
-    const total = await this.db
-      .select({ count: sql`count(*)` })
-      .from(episodes)
-      .where(eq(episodes.jobId, jobId))
-    const totalEpisodes = Number(total[0]?.count ?? 0)
-    await this.db
-      .update(jobs)
-      .set({
-        totalEpisodes,
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(jobs.id, jobId))
+      const jobId = episodeList[0].jobId
+      const total = await tx
+        .select({ count: sql`count(*)` })
+        .from(episodes)
+        .where(eq(episodes.jobId, jobId))
+      const totalEpisodes = Number(total[0]?.count ?? 0)
+      await tx
+        .update(jobs)
+        .set({ totalEpisodes, updatedAt: new Date().toISOString() })
+        .where(eq(jobs.id, jobId))
+    })
   }
 
   async getEpisodesByJobId(jobId: string): Promise<Episode[]> {
@@ -501,6 +541,23 @@ export class DatabaseService {
       .from(renderStatus)
       .where(and(eq(renderStatus.jobId, jobId), eq(renderStatus.episodeNumber, episodeNumber)))
       .orderBy(renderStatus.pageNumber)) as import('@/db/schema').RenderStatus[]
+  }
+
+  async createChunksBatch(payloads: Array<Omit<NewChunk, 'id' | 'createdAt'>>): Promise<void> {
+    if (payloads.length === 0) return
+    await this.db.transaction(async (tx) => {
+      const toInsert = payloads.map((c) => ({
+        id: crypto.randomUUID(),
+        novelId: c.novelId,
+        jobId: c.jobId,
+        chunkIndex: c.chunkIndex,
+        contentPath: c.contentPath,
+        startPosition: c.startPosition,
+        endPosition: c.endPosition,
+        wordCount: c.wordCount,
+      }))
+      await tx.insert(chunks).values(toInsert)
+    })
   }
 
   async getAllRenderStatusByJob(jobId: string): Promise<import('@/db/schema').RenderStatus[]> {

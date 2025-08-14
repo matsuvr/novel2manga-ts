@@ -1,5 +1,5 @@
 import type { Episode, Job, NewEpisode, NewNovel, NewOutput, Novel } from '@/db'
-import type { JobStatus } from '@/types/job'
+import type { JobProgress, JobStatus } from '@/types/job'
 
 /**
  * Repository Port Layer (標準化版)
@@ -19,6 +19,25 @@ import type { JobStatus } from '@/types/job'
  * - Optional methods support read-only implementations
  * - Clear separation between required and optional capabilities
  */
+
+// === Job Step Types (strongly-typed progress states) ===
+export type BaseJobStep =
+  | 'initialized'
+  | 'split'
+  | 'analyze'
+  | 'episode'
+  | 'layout'
+  | 'render'
+  | 'complete'
+
+export type AnalyzeChunkStep =
+  | `analyze_chunk_${number}`
+  | `analyze_chunk_${number}_retry`
+  | `analyze_chunk_${number}_done`
+
+export type LayoutEpisodeStep = `layout_episode_${number}`
+
+export type JobStep = BaseJobStep | AnalyzeChunkStep | LayoutEpisodeStep
 
 // === Episode Port (RO / RW) ===
 
@@ -43,7 +62,7 @@ export interface JobDbPort {
   entity: 'job'
   mode: 'rw'
   getJob(id: string): Promise<Job | null>
-  getJobWithProgress(id: string): Promise<(Job & { progress: unknown | null }) | null>
+  getJobWithProgress(id: string): Promise<(Job & { progress: JobProgress | null }) | null>
   getJobsByNovelId(novelId: string): Promise<Job[]>
   createJob(payload: {
     id?: string
@@ -54,6 +73,24 @@ export interface JobDbPort {
   }): Promise<string>
   /** Update job status (and optionally error reason) */
   updateJobStatus(id: string, status: JobStatus, error?: string): Promise<void>
+  /** Update job step/progress counters */
+  updateJobStep(
+    id: string,
+    currentStep: JobStep,
+    processedChunks?: number,
+    totalChunks?: number,
+    error?: string,
+    errorStep?: string,
+  ): Promise<void>
+  /** Mark a specific pipeline step completed */
+  markJobStepCompleted(
+    id: string,
+    stepType: 'split' | 'analyze' | 'episode' | 'layout' | 'render',
+  ): Promise<void>
+  /** Update consolidated job progress model */
+  updateJobProgress(id: string, progress: JobProgress): Promise<void>
+  /** Set lastError and optionally increment retry */
+  updateJobError(id: string, error: string, step: string, incrementRetry?: boolean): Promise<void>
 }
 
 // === Novel Port (RO / RW: ensureNovel が書込) ===
@@ -75,6 +112,33 @@ export interface OutputDbPort {
   entity: 'output'
   mode: 'rw'
   createOutput(payload: Omit<NewOutput, 'createdAt'>): Promise<string>
+  getOutput(id: string): Promise<NewOutput | null>
+}
+
+// === Chunk Port (書込 + 参照最小限) ===
+export interface ChunkDbPort {
+  entity: 'chunk'
+  mode: 'rw'
+  createChunk(payload: {
+    novelId: string
+    jobId: string
+    chunkIndex: number
+    contentPath: string
+    startPosition: number
+    endPosition: number
+    wordCount?: number | null
+  }): Promise<string>
+  createChunksBatch(
+    payload: Array<{
+      novelId: string
+      jobId: string
+      chunkIndex: number
+      contentPath: string
+      startPosition: number
+      endPosition: number
+      wordCount?: number | null
+    }>,
+  ): Promise<void>
 }
 
 // === Type Guards ===
@@ -109,9 +173,14 @@ export function hasNovelWriteCapabilities(port: NovelDbPort): port is NovelDbPor
 export type UnifiedDbPort = Omit<EpisodeDbPortRW, 'entity'> &
   Omit<JobDbPort, 'entity'> &
   Omit<NovelDbPortRW, 'entity'> &
-  Omit<OutputDbPort, 'entity'> & {
+  Omit<OutputDbPort, 'entity'> &
+  Omit<ChunkDbPort, 'entity'> & {
     entities: Array<
-      EpisodeDbPort['entity'] | JobDbPort['entity'] | NovelDbPort['entity'] | OutputDbPort['entity']
+      | EpisodeDbPort['entity']
+      | JobDbPort['entity']
+      | NovelDbPort['entity']
+      | OutputDbPort['entity']
+      | ChunkDbPort['entity']
     >
   }
 
@@ -127,6 +196,18 @@ export interface PortConfiguration {
 
 /** Factory method signature for creating ports */
 export type PortFactory<T extends Partial<UnifiedDbPort>> = (config: PortConfiguration) => T
+
+// === Transaction / Unit of Work Ports ===
+
+export interface TransactionPort {
+  withTransaction<T>(fn: () => Promise<T>): Promise<T>
+}
+
+export interface UnitOfWorkPort {
+  begin(): Promise<void>
+  commit(): Promise<void>
+  rollback(): Promise<void>
+}
 
 // Runtime type guards for discriminated union narrowing (defensive checks)
 export const isEpisodePort = (p: unknown): p is EpisodeDbPort => {

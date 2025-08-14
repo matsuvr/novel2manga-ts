@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { adaptAll } from '@/repositories/adapters'
 import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
+import { EpisodeWriteService } from '@/services/application/episode-write'
+import { JobProgressService } from '@/services/application/job-progress'
 import { getDatabaseService } from '@/services/db-factory'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
 import { ApiError, createErrorResponse, createSuccessResponse } from '@/utils/api-error'
@@ -88,7 +90,11 @@ export async function POST(
 
     const dbService = getDatabaseService()
     const { job: jobPort, episode: episodePort } = adaptAll(dbService)
-    const processor = new JobNarrativeProcessor(dbService, config)
+    const processor = new JobNarrativeProcessor(
+      new JobProgressService(),
+      new EpisodeWriteService(),
+      config,
+    )
     const jobRepo = new JobRepository(jobPort)
     const episodeRepo = new EpisodeRepository(episodePort)
 

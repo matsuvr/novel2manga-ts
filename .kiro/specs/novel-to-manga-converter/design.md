@@ -1938,3 +1938,9 @@ Durable Object 実装は `class ScenarioCoordinator { async fetch(req, env) { /*
 - Output externalization (threshold-based inline→R2 切替)
 - Back-pressure (max in-flight fan-out) 制御
 - Metrics & tracing 初期実装
+  \n### 2025-08-14 追加: DB アクセス境界の標準化（DRY/SOLID/DDD 準拠）
+
+- Repository Ports 拡張: `JobDbPort` に `updateJobStep`/`markJobStepCompleted`/`updateJobProgress`/`updateJobError` を追加。`OutputDbPort` に `getOutput` を追加。新規 `ChunkDbPort` を定義。
+- 新規 Repository 実装: `ChunkRepository`, `OutputRepository` を追加。`RepositoryFactory` に対応する getter を実装し、`adaptAll` で `chunk` ポートを供給。
+- API ルートの依存反転: `/api/analyze` と `/api/export` が `DatabaseService` を直接呼ぶ箇所（ジョブ進捗更新・チャンク作成・成果物取得）を Repository 経由に置換。`/api/job/[id]` は環境分岐（ファイル直読み）を廃止し常に Repository 経由に統一。
+- 期待効果: 層の一貫性（Application → Repository → DatabaseService）、テスタビリティ向上（ポート差替え）、将来のデータソース切替（D1/R2/外部API）を容易化。

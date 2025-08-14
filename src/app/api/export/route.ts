@@ -1,18 +1,7 @@
-import { randomUUID } from 'node:crypto'
-import { load as yamlLoad } from 'js-yaml'
-import JSZip from 'jszip'
 import type { NextRequest } from 'next/server'
-import PDFDocument from 'pdfkit'
-import type { Episode } from '@/db'
-import { adaptAll } from '@/repositories/adapters'
-import { EpisodeRepository } from '@/repositories/episode-repository'
-import { JobRepository } from '@/repositories/job-repository'
-import { OutputRepository } from '@/repositories/output-repository'
-import { getDatabaseService } from '@/services/db-factory'
-import type { MangaLayout } from '@/types/panel-layout'
-import { handleApiError, successResponse, validationError } from '@/utils/api-error'
-import { StorageFactory, StorageKeys } from '@/utils/storage'
-import { isMangaLayout } from '@/utils/type-guards'
+import { getLogger } from '@/infrastructure/logging/logger'
+import { OutputService } from '@/services/application/output-service'
+import { ApiResponder } from '@/utils/api-responder'
 import { validateJobId } from '@/utils/validators'
 
 interface ExportRequest {
@@ -34,6 +23,7 @@ interface ExportResponse {
 
 export async function POST(request: NextRequest): Promise<Response> {
   try {
+    getLogger().withContext({ route: 'api/export', method: 'POST' })
     const body = (await request.json()) as Partial<ExportRequest>
 
     // バリデーション
@@ -41,78 +31,21 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     const validFormats = ['pdf', 'images_zip']
     if (!body.format || !validFormats.includes(body.format)) {
-      return validationError('有効なformatが必要です（pdf, images_zip）')
+      return ApiResponder.validation('有効なformatが必要です（pdf, images_zip）')
     }
 
-    // データベースサービスの初期化
-    const dbService = getDatabaseService()
-    const { episode: episodePort, output: outputPort, job: jobPort } = adaptAll(dbService)
-    const episodeRepo = new EpisodeRepository(episodePort)
-    const outputRepo = new OutputRepository(outputPort)
-    const jobRepo = new JobRepository(jobPort)
-
-    // ジョブの存在確認
-    const job = await jobRepo.getJob(body.jobId)
-    if (!job) {
-      return validationError('指定されたジョブが見つかりません')
-    }
-
-    // エピソードの取得
-    const allEpisodes = await episodeRepo.getByJobId(body.jobId)
-
-    // エクスポート対象エピソードの決定
-    let targetEpisodes = allEpisodes
-    if (body.episodeNumbers && body.episodeNumbers.length > 0) {
-      targetEpisodes = allEpisodes.filter((episode) =>
-        body.episodeNumbers?.includes(episode.episodeNumber),
-      )
-    }
-
-    if (targetEpisodes.length === 0) {
-      return validationError('エクスポート対象のエピソードが見つかりません')
-    }
-
-    console.log(
-      `エクスポート開始: Job ${body.jobId}, Format ${
-        body.format
-      }, Episodes: ${targetEpisodes.map((e) => e.episodeNumber).join(', ')}`,
+    const outputService = new OutputService()
+    const { outputId, fileSize, pageCount } = await outputService.export(
+      body.jobId as string,
+      body.format as 'pdf' | 'images_zip',
+      body.episodeNumbers,
     )
 
-    let exportFilePath: string
-    let fileSize: number
-    let pageCount: number
-
-    switch (body.format) {
-      case 'pdf':
-        ;({ exportFilePath, fileSize, pageCount } = await exportToPDF(body.jobId, targetEpisodes))
-        break
-      case 'images_zip':
-        ;({ exportFilePath, fileSize, pageCount } = await exportToZIP(body.jobId, targetEpisodes))
-        break
-      default:
-        return validationError('サポートされていないフォーマットです')
-    }
-
-    // 成果物テーブルに記録（衝突回避のためUUIDを使用）
-    const outputId = `out_${randomUUID()}`
-    await outputRepo.create({
-      id: outputId,
-      novelId: job.novelId,
-      jobId: body.jobId,
-      outputType: body.format,
-      outputPath: exportFilePath,
-      fileSize,
-      pageCount,
-      metadataPath: null,
-    })
-
-    console.log(`エクスポート完了: ${exportFilePath} (${fileSize} bytes, ${pageCount} pages)`)
-
-    return successResponse(
+    return ApiResponder.success(
       {
         success: true,
-        jobId: body.jobId,
-        format: body.format,
+        jobId: body.jobId as string,
+        format: body.format as string,
         downloadUrl: `/api/export/download/${outputId}`,
         message: `${body.format.toUpperCase()}形式でのエクスポートが完了しました`,
         fileSize,
@@ -122,29 +55,29 @@ export async function POST(request: NextRequest): Promise<Response> {
       201,
     )
   } catch (error) {
-    console.error('Export API error:', error)
-    return handleApiError(error)
+    return ApiResponder.error(error)
   }
 }
 
 // ダウンロード用エンドポイント
 export async function GET(_request: NextRequest): Promise<Response> {
   try {
+    const _logger = getLogger().withContext({
+      route: 'api/export',
+      method: 'GET',
+    })
     const url = new URL(_request.url)
     // 形式: /api/export/download/[outputId]
     const segments = url.pathname.split('/').filter(Boolean)
     const outputId = segments[segments.length - 1] || ''
-    if (!outputId) return validationError('outputIdが必要です')
+    if (!outputId) return ApiResponder.validation('outputIdが必要です')
 
     // outputId -> outputs 内の実ファイルパスはDBに記録済み（OutputRepository）
-    const db = getDatabaseService()
-    // OutputRepository 経由ではgetByIdが未サポートのため DatabaseService を直接使用
-    const record = await db.getOutput(outputId as string)
-    if (!record) return validationError('出力が見つかりません')
-
-    const outputStorage = await StorageFactory.getOutputStorage()
-    const file = await outputStorage.get(record.outputPath)
-    if (!file) return validationError('ファイルが存在しません')
+    const outputService = new OutputService()
+    const record = await outputService.getById(outputId as string)
+    if (!record) return ApiResponder.validation('出力が見つかりません')
+    const buffer = await outputService.getExportContent(record.outputPath)
+    if (!buffer) return ApiResponder.validation('ファイルが存在しません')
 
     // 形式に応じてContent-Type
     const isPdf = record.outputType === 'pdf'
@@ -153,12 +86,6 @@ export async function GET(_request: NextRequest): Promise<Response> {
     // LocalFileStorageはBase64ではなくプレーン文字列(JSONなど)を返すケースがあるため、Buffer変換を試行
     // LocalFileStorage.get はバイナリ保存時でも Base64 を返す設計
     // ただし互換のため UTF-8 もフォールバック
-    let buffer: Buffer
-    buffer = Buffer.from(file.text, 'base64')
-    if (buffer.length === 0) {
-      buffer = Buffer.from(file.text)
-    }
-
     return new Response(buffer, {
       status: 200,
       headers: {
@@ -168,221 +95,6 @@ export async function GET(_request: NextRequest): Promise<Response> {
       },
     })
   } catch (error) {
-    return handleApiError(error)
-  }
-}
-
-// isMangaLayout is imported from utils/type-guards (Zod-backed)
-
-async function exportToPDF(
-  jobId: string,
-  episodes: Episode[],
-): Promise<{ exportFilePath: string; fileSize: number; pageCount: number }> {
-  const renderStorage = await StorageFactory.getRenderStorage()
-
-  // PDF作成
-  const doc = new PDFDocument({
-    size: 'A4',
-    layout: 'landscape', // 横向き（マンガページに適している）
-    margins: {
-      top: 0,
-      bottom: 0,
-      left: 0,
-      right: 0,
-    },
-  })
-
-  const chunks: Buffer[] = []
-  doc.on('data', (chunk) => chunks.push(chunk))
-  doc.on('end', () => {
-    // PDF生成完了
-  })
-
-  let totalPages = 0
-
-  // エピソード順にページを追加
-  for (const episode of episodes.sort((a, b) => a.episodeNumber - b.episodeNumber)) {
-    console.log(`PDF生成: Episode ${episode.episodeNumber}`)
-
-    // エピソードのレイアウトYAMLを取得
-    let mangaLayout: MangaLayout
-    try {
-      const layoutKey = StorageKeys.episodeLayout(jobId, episode.episodeNumber)
-      const layoutData = await renderStorage.get(layoutKey)
-      if (!layoutData) {
-        console.warn(`レイアウトが見つかりません: ${layoutKey}`)
-        continue
-      }
-      const parsed = yamlLoad(layoutData.text)
-      if (!isMangaLayout(parsed)) {
-        console.warn(`レイアウト形式が不正です: ${layoutKey}`)
-        continue
-      }
-      mangaLayout = parsed
-    } catch (error) {
-      console.warn(`レイアウト解析エラー Episode ${episode.episodeNumber}:`, error)
-      continue
-    }
-
-    // ページごとにレンダリング画像を追加
-    if (mangaLayout.pages) {
-      for (const page of mangaLayout.pages.sort((a, b) => a.page_number - b.page_number)) {
-        try {
-          const pageImageKey = StorageKeys.pageRender(
-            jobId,
-            episode.episodeNumber,
-            page.page_number,
-          )
-          const imageData = await renderStorage.get(pageImageKey)
-
-          if (imageData?.text) {
-            // Base64データをBufferに変換
-            const imageBuffer = Buffer.from(imageData.text, 'base64')
-
-            // 新しいページを追加
-            if (totalPages > 0) {
-              doc.addPage()
-            }
-
-            // 画像をページ全体に配置
-            doc.image(imageBuffer, 0, 0, {
-              fit: [doc.page.width, doc.page.height],
-              align: 'center',
-              valign: 'center',
-            })
-
-            totalPages++
-          } else {
-            console.warn(`画像が見つかりません: ${pageImageKey}`)
-          }
-        } catch (error) {
-          console.warn(
-            `画像処理エラー Episode ${episode.episodeNumber}, Page ${page.page_number}:`,
-            error,
-          )
-        }
-      }
-    }
-  }
-
-  // PDFを完成
-  doc.end()
-
-  return new Promise((resolve, reject) => {
-    doc.on('end', async () => {
-      try {
-        const pdfBuffer = Buffer.concat(chunks)
-        const outputStorage = await StorageFactory.getOutputStorage()
-        const exportPath = StorageKeys.exportOutput(jobId, 'pdf')
-
-        await outputStorage.put(exportPath, pdfBuffer, {
-          contentType: 'application/pdf',
-          jobId: jobId,
-          type: 'pdf_export',
-        })
-
-        resolve({
-          exportFilePath: exportPath,
-          fileSize: pdfBuffer.length,
-          pageCount: totalPages,
-        })
-      } catch (error) {
-        reject(error)
-      }
-    })
-  })
-}
-
-async function exportToZIP(
-  jobId: string,
-  episodes: Episode[],
-): Promise<{ exportFilePath: string; fileSize: number; pageCount: number }> {
-  const renderStorage = await StorageFactory.getRenderStorage()
-  const zip = new JSZip()
-
-  let totalPages = 0
-
-  // エピソード順にファイルを追加
-  for (const episode of episodes.sort((a, b) => a.episodeNumber - b.episodeNumber)) {
-    console.log(`ZIP生成: Episode ${episode.episodeNumber}`)
-
-    const episodeFolder = zip.folder(`episode_${episode.episodeNumber.toString().padStart(3, '0')}`)
-    if (!episodeFolder) continue
-
-    // エピソードのレイアウトYAMLを追加
-    try {
-      const layoutKey = StorageKeys.episodeLayout(jobId, episode.episodeNumber)
-      const layoutData = await renderStorage.get(layoutKey)
-      if (layoutData) {
-        episodeFolder.file('layout.yaml', layoutData.text)
-
-        const parsed = yamlLoad(layoutData.text)
-        if (!isMangaLayout(parsed)) {
-          console.warn(`レイアウト形式が不正です: ${layoutKey}`)
-          continue
-        }
-        const mangaLayout = parsed
-
-        // ページ画像を追加
-        if (mangaLayout.pages) {
-          for (const page of mangaLayout.pages.sort((a, b) => a.page_number - b.page_number)) {
-            try {
-              const pageImageKey = StorageKeys.pageRender(
-                jobId,
-                episode.episodeNumber,
-                page.page_number,
-              )
-              const imageData = await renderStorage.get(pageImageKey)
-
-              if (imageData?.text) {
-                const imageBuffer = Buffer.from(imageData.text, 'base64')
-                const fileName = `page_${page.page_number.toString().padStart(3, '0')}.png`
-                episodeFolder.file(fileName, imageBuffer)
-                totalPages++
-              }
-            } catch (error) {
-              console.warn(
-                `画像処理エラー Episode ${episode.episodeNumber}, Page ${page.page_number}:`,
-                error,
-              )
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.warn(`レイアウト処理エラー Episode ${episode.episodeNumber}:`, error)
-    }
-  }
-
-  // メタデータファイルを追加
-  const metadata = {
-    jobId,
-    exportDate: new Date().toISOString(),
-    totalEpisodes: episodes.length,
-    totalPages,
-    episodes: episodes.map((e) => ({
-      episodeNumber: e.episodeNumber,
-      title: e.title,
-      estimatedPages: e.estimatedPages,
-    })),
-  }
-  zip.file('metadata.json', JSON.stringify(metadata, null, 2))
-
-  // ZIPファイルを生成
-  const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' })
-
-  const outputStorage = await StorageFactory.getOutputStorage()
-  const exportPath = StorageKeys.exportOutput(jobId, 'zip')
-
-  await outputStorage.put(exportPath, zipBuffer, {
-    contentType: 'application/zip',
-    jobId: jobId,
-    type: 'zip_export',
-  })
-
-  return {
-    exportFilePath: exportPath,
-    fileSize: zipBuffer.length,
-    pageCount: totalPages,
+    return ApiResponder.error(error)
   }
 }

@@ -500,3 +500,15 @@ PRレビューコメントからの重要修正を実施し、リポジトリ層
 **完全機能達成**: 2-3ヶ月
 
 **重要**: 現在はデモ画面以上の価値を提供できない状態のため、Phase 1-3の緊急修正を最優先で実施する必要があります。
+
+## 2025-08-14 DB アクセス境界の標準化
+
+- [x] Port 拡張: `JobDbPort` に進捗/エラー更新API、`OutputDbPort#getOutput` を追加
+- [x] 新規 Port: `ChunkDbPort` を追加
+- [x] Repository 実装: `ChunkRepository` と `OutputRepository`
+- [x] Factory 拡張: 上記 Repository の getter と adaptAll の `chunk` 供給
+- [x] ルート修正: `/api/analyze` を Repository 経由に更新（`updateStep/markStepCompleted/updateError`、`ChunkRepository.create`）
+- [x] ルート修正: `/api/export` を Repository 経由に更新（成果物作成/取得）
+- [x] ルート修正: `/api/job/[id]` の環境分岐を削除し Repository 一貫化
+- [ ] 追加テスト: Output/Chunk Repository のユニットテスト
+- [ ] 影響範囲の回帰テスト実行（unit/integration/e2e）

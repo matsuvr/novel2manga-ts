@@ -2,7 +2,8 @@ import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { getChunkAnalyzerAgent } from '@/agents/chunk-analyzer'
 import { getTextAnalysisConfig } from '@/config'
-import { createErrorResponse, createSuccessResponse } from '@/utils/api-error'
+import { getLogger } from '@/infrastructure/logging/logger'
+import { ApiResponder } from '@/utils/api-responder'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
 
 // リクエストボディのバリデーションスキーマ
@@ -58,11 +59,15 @@ const textAnalysisOutputSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const logger = getLogger().withContext({
+      route: 'api/analyze/chunk',
+      method: 'POST',
+    })
     // リクエストボディの取得とバリデーション
     const body = await request.json()
     const { jobId, chunkIndex } = analyzeChunkRequestSchema.parse(body)
 
-    console.log(`[/api/analyze/chunk] Analyzing chunk ${chunkIndex} for job ${jobId}`)
+    logger.info('Analyzing chunk', { jobId, chunkIndex })
 
     // ストレージから必要なデータを取得
     const chunkStorage = await StorageFactory.getChunkStorage()
@@ -73,9 +78,9 @@ export async function POST(request: NextRequest) {
     const existingAnalysis = await analysisStorage.get(analysisPath)
 
     if (existingAnalysis) {
-      console.log(`[/api/analyze/chunk] Analysis already exists for chunk ${chunkIndex}`)
+      logger.info('Analysis already exists', { chunkIndex })
       const analysisData = JSON.parse(existingAnalysis.text)
-      return createSuccessResponse({
+      return ApiResponder.success({
         cached: true,
         data: analysisData.analysis,
       })
@@ -88,13 +93,13 @@ export async function POST(request: NextRequest) {
     if (!chunkFile) {
       // Explicit 404 ApiError so tests receive 404 status
       const { ApiError } = await import('@/utils/api-error')
-      return createErrorResponse(
+      return ApiResponder.error(
         new ApiError(`Chunk file not found: ${chunkPath}`, 404, 'NOT_FOUND'),
       )
     }
 
     const chunkText = chunkFile.text
-    console.log(`[/api/analyze/chunk] Loaded chunk text (${chunkText.length} chars)`)
+    logger.debug('Loaded chunk text', { length: chunkText.length })
 
     // 設定を取得してプロンプトを生成
     const config = getTextAnalysisConfig()
@@ -104,7 +109,7 @@ export async function POST(request: NextRequest) {
       .replace('{{previousChunkText}}', '') // 簡易版では前後のテキストは省略
       .replace('{{nextChunkText}}', '')
 
-    console.log(`[/api/analyze/chunk] Sending to LLM for analysis...`)
+    logger.info('Sending to LLM for analysis')
 
     // エージェントを使用してチャンクを分析
     const agent = getChunkAnalyzerAgent()
@@ -118,12 +123,13 @@ export async function POST(request: NextRequest) {
       throw new Error('Failed to generate analysis result')
     }
 
-    console.log(`[/api/analyze/chunk] Analysis complete:`)
-    console.log(`  - Characters: ${result.characters.length}`)
-    console.log(`  - Scenes: ${result.scenes.length}`)
-    console.log(`  - Dialogues: ${result.dialogues.length}`)
-    console.log(`  - Highlights: ${result.highlights.length}`)
-    console.log(`  - Situations: ${result.situations.length}`)
+    logger.info('Analysis complete', {
+      characters: result.characters.length,
+      scenes: result.scenes.length,
+      dialogues: result.dialogues.length,
+      highlights: result.highlights.length,
+      situations: result.situations.length,
+    })
 
     // 分析結果をストレージに保存
     const analysisData = {
@@ -134,22 +140,28 @@ export async function POST(request: NextRequest) {
     }
 
     await analysisStorage.put(analysisPath, JSON.stringify(analysisData, null, 2))
-    console.log(`[/api/analyze/chunk] Saved analysis to ${analysisPath}`)
+    logger.info('Saved analysis', { analysisPath })
 
     // レスポンスを返却
-    return createSuccessResponse({ cached: false, data: result })
+    return ApiResponder.success({ cached: false, data: result })
   } catch (error) {
-    console.error('[/api/analyze/chunk] Error:', error)
+    const logger = getLogger().withContext({
+      route: 'api/analyze/chunk',
+      method: 'POST',
+    })
+    logger.error('Error', {
+      error: error instanceof Error ? error.message : String(error),
+    })
 
     if (error instanceof z.ZodError) {
-      return createErrorResponse(error, 'Invalid request data')
+      return ApiResponder.validation('Invalid request data')
     }
 
     // Preserve original not found status
     if (error instanceof Error && error.message.startsWith('Chunk file not found')) {
       const { ApiError } = await import('@/utils/api-error')
-      return createErrorResponse(new ApiError(error.message, 404, 'NOT_FOUND'))
+      return ApiResponder.error(new ApiError(error.message, 404, 'NOT_FOUND'))
     }
-    return createErrorResponse(error, 'Failed to analyze chunk')
+    return ApiResponder.error(error, 'Failed to analyze chunk')
   }
 }

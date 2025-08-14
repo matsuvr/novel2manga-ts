@@ -316,10 +316,8 @@ export type AppConfig = typeof appConfig
 
 // 環境変数オーバーライド用の変更可能な型
 type MutableAppConfig = {
-  [K in keyof AppConfig]: AppConfig[K] extends Record<string, any>
-    ? {
-        [P in keyof AppConfig[K]]: AppConfig[K][P]
-      }
+  [K in keyof AppConfig]: AppConfig[K] extends Record<string, unknown>
+    ? { [P in keyof AppConfig[K]]: AppConfig[K][P] }
     : AppConfig[K]
 }
 
