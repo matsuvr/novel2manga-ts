@@ -132,18 +132,17 @@ describe('Agent', () => {
       mockCerebrasCreate.mockResolvedValue(mockResponse)
 
       const schema = z.object({ test: z.string() })
-      
-      await expect(async () => {
-        await agent.generateObject([{ role: 'user', content: 'test' }], schema)
-      }).rejects.toThrow(AgentError)
+      const promise = agent.generateObject(
+        [{ role: 'user', content: 'test' }],
+        schema,
+        { maxRetries: 0 },
+      )
 
-      try {
-        await agent.generateObject([{ role: 'user', content: 'test' }], schema)
-      } catch (error) {
-        expect(error).toBeInstanceOf(AgentError)
+      await expect(promise).rejects.toBeInstanceOf(AgentError)
+      await promise.catch((error) => {
         expect((error as AgentError).provider).toBe('cerebras')
         expect((error as AgentError).type).toBe(AgentErrorType.JSON_PARSE_ERROR)
-      }
+      })
     })
 
     it('should handle Cerebras schema validation errors', async () => {
@@ -159,18 +158,17 @@ describe('Agent', () => {
       mockCerebrasCreate.mockResolvedValue(mockResponse)
 
       const schema = z.object({ test: z.string() })
-      
-      await expect(async () => {
-        await agent.generateObject([{ role: 'user', content: 'test' }], schema)
-      }).rejects.toThrow(AgentError)
+      const promise = agent.generateObject(
+        [{ role: 'user', content: 'test' }],
+        schema,
+        { maxRetries: 0 },
+      )
 
-      try {
-        await agent.generateObject([{ role: 'user', content: 'test' }], schema)
-      } catch (error) {
-        expect(error).toBeInstanceOf(AgentError)
+      await expect(promise).rejects.toBeInstanceOf(AgentError)
+      await promise.catch((error) => {
         expect((error as AgentError).provider).toBe('cerebras')
         expect((error as AgentError).type).toBe(AgentErrorType.SCHEMA_VALIDATION_ERROR)
-      }
+      })
     })
 
     it('should handle Cerebras API errors', async () => {
@@ -178,18 +176,17 @@ describe('Agent', () => {
       mockCerebrasCreate.mockRejectedValue(apiError)
 
       const schema = z.object({ test: z.string() })
-      
-      await expect(async () => {
-        await agent.generateObject([{ role: 'user', content: 'test' }], schema)
-      }).rejects.toThrow(AgentError)
+      const promise = agent.generateObject(
+        [{ role: 'user', content: 'test' }],
+        schema,
+        { maxRetries: 0 },
+      )
 
-      try {
-        await agent.generateObject([{ role: 'user', content: 'test' }], schema)
-      } catch (error) {
-        expect(error).toBeInstanceOf(AgentError)
+      await expect(promise).rejects.toBeInstanceOf(AgentError)
+      await promise.catch((error) => {
         expect((error as AgentError).provider).toBe('cerebras')
         expect((error as AgentError).type).toBe(AgentErrorType.PROVIDER_ERROR)
-      }
+      })
     })
 
     it('should handle network errors for Cerebras', async () => {
@@ -197,18 +194,17 @@ describe('Agent', () => {
       mockCerebrasCreate.mockRejectedValue(networkError)
 
       const schema = z.object({ test: z.string() })
-      
-      await expect(async () => {
-        await agent.generateObject([{ role: 'user', content: 'test' }], schema)
-      }).rejects.toThrow(AgentError)
+      const promise = agent.generateObject(
+        [{ role: 'user', content: 'test' }],
+        schema,
+        { maxRetries: 0 },
+      )
 
-      try {
-        await agent.generateObject([{ role: 'user', content: 'test' }], schema)
-      } catch (error) {
-        expect(error).toBeInstanceOf(AgentError)
+      await expect(promise).rejects.toBeInstanceOf(AgentError)
+      await promise.catch((error) => {
         expect((error as AgentError).provider).toBe('cerebras')
         expect((error as AgentError).type).toBe(AgentErrorType.PROVIDER_ERROR)
-      }
+      })
     })
   })
 
@@ -257,7 +253,9 @@ describe('Agent', () => {
       const schema = z.object({ test: z.string() })
       
       try {
-        await agent.generateObject([{ role: 'user', content: 'test' }], schema)
+        await agent.generateObject([{ role: 'user', content: 'test' }], schema, {
+          maxRetries: 0,
+        })
       } catch (error) {
         expect(error).toBe(originalError)
         expect(error).toBeInstanceOf(AgentError)
@@ -271,7 +269,9 @@ describe('Agent', () => {
       const schema = z.object({ test: z.string() })
       
       try {
-        await agent.generateObject([{ role: 'user', content: 'test' }], schema)
+        await agent.generateObject([{ role: 'user', content: 'test' }], schema, {
+          maxRetries: 0,
+        })
       } catch (error) {
         expect(error).toBeInstanceOf(AgentError)
         expect((error as AgentError).provider).toBe('openai')
