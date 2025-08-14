@@ -399,4 +399,28 @@ export class CanvasRenderer {
       })
     }
   }
+
+  /**
+   * Clean up canvas resources to prevent memory leaks
+   */
+  cleanup(): void {
+    try {
+      // Clear the canvas
+      this.ctx.clearRect(0, 0, this.config.width, this.config.height)
+
+      // Reset canvas state
+      this.ctx.restore()
+      this.ctx.resetTransform()
+
+      // For Node.js canvas, manually clear if possible
+      if (isServer && this.canvas) {
+        const nodeCanvas = this.canvas as NodeCanvas
+        // Set canvas dimensions to 0 to release memory
+        nodeCanvas.width = 0
+        nodeCanvas.height = 0
+      }
+    } catch (error) {
+      console.warn('Failed to cleanup canvas resources:', error)
+    }
+  }
 }

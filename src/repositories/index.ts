@@ -1,7 +1,10 @@
 // Repository classes
+
+export { ChunkRepository } from './chunk-repository'
 export { EpisodeRepository } from './episode-repository'
 // Repository Factory
 export {
+  getChunkRepository,
   getEpisodeRepository,
   getJobRepository,
   getNovelRepository,

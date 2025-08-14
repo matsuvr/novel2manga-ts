@@ -8,11 +8,9 @@
     "test:unit": "vitest run",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
-    "test:integration": "dotenv -e .env.test -- vitest --config vitest.integration.config.ts",
-    "test:integration:run": "dotenv -e .env.test -- vitest run --config vitest.integration.config.ts",
-    "test:integration:watch": "dotenv -e .env.test -- vitest --config vitest.integration.config.ts",
-    "test:full-flow": "bash ./scripts/run-integration-test.sh",
-    "test:full-flow:win": "scripts\\run-integration-test.bat",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:integration:watch": "vitest --config vitest.integration.config.ts",
+    "test:full-flow": "npm run test:integration",
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start",
@@ -49,6 +47,7 @@
     "node": ">=20.9.0"
   },
   "dependencies": {
+    "@cerebras/cerebras_cloud_sdk": "^1.46.0",
     "@google/genai": "^1.13.0",
     "@tailwindcss/postcss": "^4.1.11",
     "@types/js-yaml": "^4.0.9",

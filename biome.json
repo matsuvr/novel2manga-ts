@@ -30,7 +30,7 @@
       "**/jest.*",
       "**/cypress/**",
       "**/e2e/**",
-      "**/.claude/**",
+
       "biome-report.json"
     ]
   },
@@ -93,7 +93,7 @@
         "noDuplicateObjectKeys": "error",
         "noDuplicateParameters": "error",
         "noEmptyBlockStatements": "error",
-        "noExplicitAny": "off",
+        "noExplicitAny": "error",
         "noExtraNonNullAssertion": "error",
         "noFallthroughSwitchClause": "error",
         "noFunctionAssign": "error",
@@ -133,7 +133,7 @@
       "formatter": { "enabled": false }
     },
     {
-      "includes": ["**/__tests__/**", "**/tests/**", "**/*.test.*", "**/*.spec.*", "**/.claude/**"],
+      "includes": ["**/__tests__/**", "**/tests/**", "**/*.test.*", "**/*.spec.*"],
       "linter": {
         "enabled": false
       },

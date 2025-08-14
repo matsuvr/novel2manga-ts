@@ -47,8 +47,9 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
   }
 
   const handleViewEpisode = (episodeNumber: number) => {
-    // Open preview in new tab
-    window.open(`/api/render/${episodeNumber}/1`, '_blank')
+    // Open preview in new tab (episode page 1)
+    const url = `/api/render/${episodeNumber}/1?jobId=${encodeURIComponent(jobId)}`
+    window.open(url, '_blank')
   }
 
   if (!episodes || episodes.length === 0) {
@@ -178,7 +179,9 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
 
                     if (!response.ok) throw new Error('Export failed')
 
-                    const data = (await response.json()) as { downloadUrl?: string }
+                    const data = (await response.json()) as {
+                      downloadUrl?: string
+                    }
 
                     if (data.downloadUrl) {
                       window.open(data.downloadUrl, '_blank')
