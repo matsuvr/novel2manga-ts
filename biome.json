@@ -30,7 +30,7 @@
       "**/jest.*",
       "**/cypress/**",
       "**/e2e/**",
-      "**/.claude/**",
+
       "biome-report.json"
     ]
   },
@@ -133,7 +133,7 @@
       "formatter": { "enabled": false }
     },
     {
-      "includes": ["**/__tests__/**", "**/tests/**", "**/*.test.*", "**/*.spec.*", "**/.claude/**"],
+      "includes": ["**/__tests__/**", "**/tests/**", "**/*.test.*", "**/*.spec.*"],
       "linter": {
         "enabled": false
       },

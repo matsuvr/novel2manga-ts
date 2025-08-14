@@ -13,7 +13,7 @@ import {
   successResponse,
   validationError,
 } from '@/utils/api-error'
-import { StorageFactory } from '@/utils/storage'
+import { StorageFactory, StorageKeys } from '@/utils/storage'
 import { isMangaLayout } from '@/utils/type-guards'
 import { validateJobId } from '@/utils/validators'
 
@@ -156,7 +156,11 @@ export async function POST(request: NextRequest) {
       try {
         // 既存チェック
         if (options.skipExisting) {
-          const renderKey = `renders/${validatedBody.jobId}/episode_${validatedBody.episodeNumber}/page_${pageNumber}.png`
+          const renderKey = StorageKeys.pageRender(
+            validatedBody.jobId,
+            validatedBody.episodeNumber,
+            pageNumber,
+          )
           const exists = await renderStorage.exists(renderKey)
           if (exists) {
             results.push({
@@ -176,7 +180,11 @@ export async function POST(request: NextRequest) {
         const buffer = Buffer.from(await imageBlob.arrayBuffer())
 
         // 画像保存
-        const renderKey = `renders/${validatedBody.jobId}/episode_${validatedBody.episodeNumber}/page_${pageNumber}.png`
+        const renderKey = StorageKeys.pageRender(
+          validatedBody.jobId,
+          validatedBody.episodeNumber,
+          pageNumber,
+        )
         await renderStorage.put(renderKey, buffer, {
           contentType: 'image/png',
           jobId: validatedBody.jobId,
@@ -192,7 +200,11 @@ export async function POST(request: NextRequest) {
           format: 'jpeg',
         })
         const thumbnailBuffer = Buffer.from(await thumbnailBlob.arrayBuffer())
-        const thumbnailKey = `renders/${validatedBody.jobId}/episode_${validatedBody.episodeNumber}/thumbnails/page_${pageNumber}_thumb.png`
+        const thumbnailKey = StorageKeys.pageThumbnail(
+          validatedBody.jobId,
+          validatedBody.episodeNumber,
+          pageNumber,
+        )
 
         await renderStorage.put(thumbnailKey, thumbnailBuffer, {
           contentType: 'image/jpeg',
@@ -283,6 +295,18 @@ export async function POST(request: NextRequest) {
       failedPages: failedCount,
       results,
       duration,
+    }
+
+    // すべてのページが成功した場合、ジョブ進捗を更新
+    try {
+      const dbService = getDatabaseService()
+      if (failedCount === 0) {
+        await dbService.markJobStepCompleted(validatedBody.jobId, 'render')
+        await dbService.updateJobStep(validatedBody.jobId, 'complete')
+        await dbService.updateJobStatus(validatedBody.jobId, 'completed')
+      }
+    } catch (e) {
+      console.warn('[render/batch] Failed to mark render/complete in DB:', e)
     }
 
     return successResponse(response, 201)

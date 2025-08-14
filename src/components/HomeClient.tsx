@@ -1,13 +1,14 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import ProcessingProgress from '@/components/ProcessingProgress'
 import ResultsDisplay from '@/components/ResultsDisplay'
 import TextInputArea from '@/components/TextInputArea'
 import type { Episode } from '@/types/database-models'
 
-type ViewMode = 'input' | 'processing' | 'progress' | 'results'
+type ViewMode = 'input' | 'processing' | 'progress' | 'results' | 'redirecting'
 
 async function loadSample(path: string): Promise<string> {
   // Next.jsでアプリ直下のdocsは静的配信されないため、API経由で返す
@@ -49,9 +50,11 @@ function SampleButton({
 }
 
 export default function HomeClient() {
+  const router = useRouter()
   const [viewMode, setViewMode] = useState<ViewMode>('input')
   const [novelText, setNovelText] = useState('')
   const [jobId, setJobId] = useState<string | null>(null)
+  const [novelIdState, setNovelIdState] = useState<string | null>(null)
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -86,6 +89,7 @@ export default function HomeClient() {
       }
       const novelId = uploadData.uuid
       if (!novelId) throw new Error('novelId を取得できませんでした')
+      setNovelIdState(novelId)
 
       // アップロード完了後すぐに進捗表示に移行
       setViewMode('progress')
@@ -136,7 +140,21 @@ export default function HomeClient() {
         episodes?: Episode[]
       }
       setEpisodes(data.episodes || [])
-      setViewMode('results')
+      // 永続URLへ遷移（小説IDが利用可能な場合）。
+      // ただしブラウザのポップアップ/ナビブロック対策で、遷移待ちビューを出す。
+      if (novelIdState) {
+        const url = `/novel/${encodeURIComponent(novelIdState)}/results`
+        setPendingRedirect(url)
+        setViewMode('redirecting')
+        // 自動遷移を試みる
+        try {
+          router.push(url)
+        } catch {
+          // noop: ユーザが手動クリックできるUIを表示
+        }
+      } else {
+        setViewMode('results')
+      }
       setIsProcessing(false)
     } catch (err) {
       console.error('Error fetching results:', err)
@@ -153,6 +171,8 @@ export default function HomeClient() {
     setError(null)
     setIsProcessing(false)
   }
+
+  const [pendingRedirect, setPendingRedirect] = useState<string | null>(null)
 
   return (
     <div
@@ -290,6 +310,22 @@ export default function HomeClient() {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {viewMode === 'redirecting' && pendingRedirect && (
+          <div className="max-w-2xl mx-auto">
+            <div className="apple-card p-8 text-center space-y-3">
+              <div className="text-4xl">➡️</div>
+              <h3 className="text-xl font-semibold">結果ページへ移動します…</h3>
+              <p className="text-gray-600">
+                自動的に移動しない場合は
+                <a className="text-blue-600 underline ml-1" href={pendingRedirect}>
+                  こちらをクリック
+                </a>
+                してください。
+              </p>
             </div>
           </div>
         )}

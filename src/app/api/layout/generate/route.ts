@@ -249,6 +249,31 @@ export async function POST(request: NextRequest) {
       console.warn('[layout/generate] Failed to update job step to render:', e)
     }
 
+    // 自動でレンダリングをキック（非同期・結果は待たない）
+    try {
+      const baseUrl = new URL(request.url).origin
+      // fire-and-forget: レスポンスは待たずに開始だけ行う
+      void fetch(`${baseUrl}/api/render/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId, episodeNumber, layoutYaml: yamlContent }),
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            console.warn(
+              `[/api/layout/generate] Auto render kick failed: ${res.status} ${res.statusText}`,
+            )
+          } else {
+            console.log('[/api/layout/generate] Auto render kick started')
+          }
+        })
+        .catch((err) => {
+          console.warn('[/api/layout/generate] Auto render kick error:', err)
+        })
+    } catch (e) {
+      console.warn('[/api/layout/generate] Failed to kick auto render:', e)
+    }
+
     return createSuccessResponse({
       message: 'Layout generated successfully',
       jobId,

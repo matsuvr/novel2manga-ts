@@ -1,7 +1,9 @@
+import Cerebras from '@cerebras/cerebras_cloud_sdk'
 import { GoogleGenAI } from '@google/genai'
 import OpenAI from 'openai'
 import { zodResponseFormat } from 'openai/helpers/zod'
-import type { z } from 'zod'
+import type { ChatCompletionCreateParams } from 'openai/resources/chat/completions'
+import { z } from 'zod'
 import { getLLMProviderConfig } from '@/config'
 import type { LLMProvider } from '@/config/llm.config'
 
@@ -23,7 +25,7 @@ export class Agent {
   private provider: LLMProvider
   private model: string
   private maxTokens: number
-  private client: OpenAI | GoogleGenAI | null = null
+  private client: OpenAI | GoogleGenAI | Cerebras | null = null
 
   constructor(options: AgentOptions) {
     this.name = options.name
@@ -44,11 +46,12 @@ export class Agent {
       throw new Error(`API key not found for provider: ${this.provider}`)
     }
 
-    // Claudeは未対応。型上の分岐に現れないよう as const 限定の union で扱う
-    type Supported = Exclude<LLMProvider, 'claude'>
-    const provider: Supported = this.provider as Supported
-
-    switch (provider) {
+    switch (this.provider) {
+      case 'cerebras':
+        this.client = new Cerebras({
+          apiKey: config.apiKey,
+        })
+        break
       case 'openai':
         this.client = new OpenAI({
           apiKey: config.apiKey,
@@ -96,6 +99,8 @@ export class Agent {
           return await this.generateWithGemini(allMessages, schema)
         } else if (this.client instanceof OpenAI) {
           return await this.generateWithOpenAI(allMessages, schema)
+        } else if (this.client instanceof Cerebras) {
+          return await this.generateWithCerebras(allMessages, schema)
         }
         throw new Error('Invalid client type')
       } catch (error) {
@@ -117,13 +122,15 @@ export class Agent {
     const client = this.client as OpenAI
 
     // Use structured outputs with response_format
+    const responseFormat = zodResponseFormat(schema, 'response')
+
     const completion = await client.chat.completions.create({
       model: this.model,
       messages: messages as OpenAI.ChatCompletionMessageParam[],
       max_tokens: this.maxTokens,
-      response_format: zodResponseFormat(schema, 'response'),
+      // For OpenAI-compatible SDKs
+      response_format: responseFormat as unknown as ChatCompletionCreateParams['response_format'],
     })
-
     const content = completion.choices[0]?.message?.content
     if (!content) {
       throw new Error('No content in response')
@@ -131,6 +138,62 @@ export class Agent {
 
     const parsed = JSON.parse(content)
     return schema.parse(parsed)
+  }
+
+  private async generateWithCerebras<T extends z.ZodTypeAny>(
+    messages: Array<{ role: 'user' | 'system' | 'assistant'; content: string }>,
+    schema: T,
+  ): Promise<z.infer<T>> {
+    const client = this.client as Cerebras
+    try {
+      // First try: strict structured outputs
+      const completion = await client.chat.completions.create({
+        model: this.model,
+        messages: messages,
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'response',
+            strict: true,
+            schema: this.zodToJsonSchema(schema),
+          },
+        },
+      })
+
+      const chatCompletionSchema = z.object({
+        choices: z
+          .array(
+            z.object({
+              message: z.object({ content: z.string() }),
+            }),
+          )
+          .min(1),
+      })
+      const parsedCompletion = chatCompletionSchema.parse(completion)
+      const content = parsedCompletion.choices[0].message.content
+
+      // Try to parse JSON with better error handling
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(content)
+      } catch (jsonError) {
+        console.error('[Cerebras] Invalid JSON response content:', content.substring(0, 200))
+        throw new Error(
+          `Cerebras returned invalid JSON: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`,
+        )
+      }
+
+      return schema.parse(parsed)
+    } catch (err) {
+      // No fallback - throw error immediately to stop processing
+      console.error('[Cerebras] Error in generateWithCerebras:', err)
+      if (err instanceof Error && err.message.includes('JSON')) {
+        throw new Error(
+          `Cerebras API returned invalid JSON response. Please check the model's JSON generation capabilities. Original error: ${err.message}`,
+        )
+      }
+      throw err
+    }
   }
 
   private async generateWithGemini<T extends z.ZodTypeAny>(
@@ -203,6 +266,8 @@ export class Agent {
         type: 'object',
         properties,
         required: required.length > 0 ? required : undefined,
+        // Cerebras strict mode requires additionalProperties: false when required is present
+        additionalProperties: false,
       }
     } else if (def.typeName === 'ZodString') {
       return { type: 'string' }
@@ -230,7 +295,7 @@ export class Agent {
       }
     } else if (def.typeName === 'ZodUnion') {
       return {
-        oneOf: (def.options as z.ZodTypeAny[]).map((opt) => this.zodToJsonSchema(opt)),
+        anyOf: (def.options as z.ZodTypeAny[]).map((opt) => this.zodToJsonSchema(opt)),
       }
     } else {
       // Fallback for unsupported types

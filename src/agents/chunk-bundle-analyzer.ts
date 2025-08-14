@@ -70,7 +70,13 @@ export const bundleAnalysisSchema = z.object({
       opening: z.string().describe('物語の導入部分の要約'),
       development: z.string().describe('物語の展開部分の要約'),
       currentState: z.string().describe('現在の物語の状態'),
-      tension: z.number().min(1).max(10).describe('現在の緊張度（1-10）'),
+      tension: z.coerce
+        .number()
+        .transform((value) => {
+          const n = Number.isNaN(value) ? 0 : value
+          return Math.max(0, Math.min(10, n))
+        })
+        .describe('現在の緊張度（0-10）'),
     })
     .describe('物語の流れと現在の状態'),
 })

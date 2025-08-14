@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 import type { NextRequest } from 'next/server'
 import { getJobRepository } from '@/repositories'
 import {
@@ -33,11 +36,15 @@ export async function GET(
       throw new ApiError('Job not found', 404, 'NOT_FOUND')
     }
 
-    return createSuccessResponse({
+    // サーバー側の保険: レンダリング完了フラグが立っていれば completed として返す
+    const isCompleted =
+      job.status === 'completed' || (job.renderCompleted && job.currentStep === 'complete')
+
+    const res = createSuccessResponse({
       job: {
         id: job.id,
-        status: job.status,
-        currentStep: job.currentStep,
+        status: isCompleted ? 'completed' : job.status,
+        currentStep: isCompleted ? 'complete' : job.currentStep,
         splitCompleted: job.splitCompleted ?? false,
         analyzeCompleted: job.analyzeCompleted ?? false,
         episodeCompleted: job.episodeCompleted ?? false,
@@ -56,6 +63,9 @@ export async function GET(
         updatedAt: job.updatedAt,
       },
     })
+    // 明示的にキャッシュ無効化（ブラウザ/中間キャッシュ対策）
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+    return res
   } catch (error) {
     console.error('[job-status] Error fetching job status:', error)
     // テスト期待: data.error は常に 'Failed to fetch job status'、詳細には元エラー

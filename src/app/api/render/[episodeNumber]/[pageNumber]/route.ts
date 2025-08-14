@@ -1,5 +1,8 @@
 import type { NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createErrorResponse, handleApiError, validationError } from '@/utils/api-error'
+import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { validateJobId } from '@/utils/validators'
 
 interface RouteParams {
   episodeNumber: string
@@ -10,14 +13,26 @@ interface RouteParams {
  * GET /api/render/[episodeNumber]/[pageNumber]
  * 指定されたエピソードとページ番号でレンダリング済みの画像を取得
  */
-export async function GET(_request: NextRequest, { params }: { params: RouteParams }) {
+export async function GET(
+  _request: NextRequest,
+  ctx: { params: RouteParams | Promise<RouteParams> },
+) {
   try {
+    const url = new URL(_request.url)
+    const jobId = url.searchParams.get('jobId') || ''
+    const p = await ctx.params
+
+    if (!jobId) {
+      return validationError('jobIdが必要です')
+    }
+    validateJobId(jobId)
+
     // URL パラメータを数値に変換
-    const episodeNum = parseInt(params.episodeNumber, 10)
-    const pageNum = parseInt(params.pageNumber, 10)
+    const episodeNum = parseInt(p.episodeNumber, 10)
+    const pageNum = parseInt(p.pageNumber, 10)
 
     // パラメータのバリデーション
-    if (!params.episodeNumber || !params.pageNumber) {
+    if (!p.episodeNumber || !p.pageNumber) {
       return validationError('エピソード番号とページ番号が必要です')
     }
 
@@ -30,12 +45,36 @@ export async function GET(_request: NextRequest, { params }: { params: RoutePara
       return validationError('エピソード番号とページ番号は1以上である必要があります')
     }
 
-    // TODO: 実際の実装では、jobIdを特定する方法が必要
-    // 現在は開発中のため、501ステータスを返す
-    return createErrorResponse(
-      new Error('このエンドポイントは開発中です'),
-      'jobIdを特定する仕組みが必要です',
-    )
+    // 画像キーを構築してストレージから取得
+    const renderStorage = await StorageFactory.getRenderStorage()
+    const renderKey = StorageKeys.pageRender(jobId, episodeNum, pageNum)
+    const file = await renderStorage.get(renderKey)
+
+    if (!file) {
+      return createErrorResponse(new Error(`画像が見つかりません: ${renderKey}`))
+    }
+
+    // LocalFileStorageはBase64文字列を返す
+    try {
+      const buffer = Buffer.from(file.text, 'base64')
+      return new NextResponse(buffer, {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'public, max-age=3600',
+        },
+      })
+    } catch {
+      // もしテキストがそのままバイナリ内容（R2の文字列化など）の場合はUTF-8として扱わず返す
+      const buffer = Buffer.from(file.text, 'utf-8')
+      return new NextResponse(buffer, {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'public, max-age=3600',
+        },
+      })
+    }
   } catch (error) {
     console.error('Render GET API error:', error)
     return handleApiError(error)

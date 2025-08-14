@@ -200,8 +200,9 @@ export class DatabaseService {
       .update(jobs)
       .set({
         processedChunks: progress.processedChunks,
-        totalEpisodes: progress.episodes.length,
+        // 進捗フェーズを反映（UIが正しく追従するように）
         currentStep: progress.currentStep,
+        totalEpisodes: progress.episodes.length,
         updatedAt: new Date().toISOString(),
       })
       .where(eq(jobs.id, id))
@@ -463,6 +464,11 @@ export class DatabaseService {
   async createOutput(output: Omit<typeof outputs.$inferInsert, 'createdAt'>): Promise<string> {
     const result = await this.db.insert(outputs).values(output).returning({ id: outputs.id })
     return result[0].id
+  }
+
+  async getOutput(id: string): Promise<typeof outputs.$inferSelect | null> {
+    const result = await this.db.select().from(outputs).where(eq(outputs.id, id)).limit(1)
+    return (result[0] as typeof outputs.$inferSelect) || null
   }
 
   // レンダリング状態取得メソッド

@@ -35,6 +35,9 @@ const analyzeRequestSchema = z
   })
 
 export async function POST(request: NextRequest) {
+  let jobId: string | undefined
+  let dbService: ReturnType<typeof getDatabaseService> | undefined
+
   try {
     console.log('[/api/analyze] Request received')
 
@@ -78,7 +81,7 @@ export async function POST(request: NextRequest) {
     const { StorageFactory } = await import('@/utils/storage')
     const novelStorage = await StorageFactory.getNovelStorage()
     const jobRepo = getJobRepository()
-    const dbService = getDatabaseService()
+    dbService = getDatabaseService()
 
     let novelId = inputNovelId
     let novelText: string
@@ -138,7 +141,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const jobId = generateUUID()
+    jobId = generateUUID()
     const chunks = splitTextIntoChunks(novelText)
 
     // ジョブを作成
@@ -434,22 +437,32 @@ export async function POST(request: NextRequest) {
       await dbService.markJobStepCompleted(jobId, 'episode')
       await dbService.updateJobStep(jobId, 'layout', chunks.length, chunks.length)
 
-      // 本番フロー: レイアウト生成のキックを自動で行う（第1話）。
-      // UIが /api/layout/generate を叩く前にサーバー側で進め、"layout"で止まり続ける事象を回避。
+      // 全エピソードについてレイアウト生成→レンダリングを順次キック（サイレント・フォールバック禁止）
       try {
         const baseUrl = new URL(request.url).origin
-        const res = await fetch(`${baseUrl}/api/layout/generate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ jobId, episodeNumber: 1 }),
-        })
-        if (!res.ok) {
-          console.warn(`[/api/analyze] Auto layout kick failed: ${res.status} ${res.statusText}`)
-        } else {
-          console.log('[/api/analyze] Auto layout kick started for episode 1')
+        const episodeNumbers = boundaries.map((b) => b.episodeNumber).sort((a, b) => a - b)
+        for (const ep of episodeNumbers) {
+          const res = await fetch(`${baseUrl}/api/layout/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jobId, episodeNumber: ep }),
+          })
+          if (!res.ok) {
+            const text = await res.text().catch(() => '')
+            throw new Error(
+              `Auto layout for episode ${ep} failed: ${res.status} ${res.statusText} ${text}`,
+            )
+          }
         }
+        console.log('[/api/analyze] Auto layout kick started for all episodes:', episodeNumbers)
       } catch (autoLayoutErr) {
-        console.warn('[/api/analyze] Auto layout kick error:', autoLayoutErr)
+        // 明示的にDBへエラー記録し、以降の処理は中断
+        await dbService.updateJobError(
+          jobId,
+          `Auto layout kick failed: ${extractErrorMessage(autoLayoutErr)}`,
+          'layout',
+        )
+        throw autoLayoutErr
       }
     } catch (episodeError) {
       console.error('[/api/analyze] Episode analysis failed:', episodeError)
@@ -484,6 +497,17 @@ export async function POST(request: NextRequest) {
       '[/api/analyze] Error stack:',
       error instanceof Error ? error.stack : 'No stack trace',
     )
+
+    // Mark job as failed if jobId exists
+    if (jobId && dbService) {
+      try {
+        await dbService.updateJobStatus(jobId, 'failed')
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        await dbService.updateJobError(jobId, errorMessage, 'analyze')
+      } catch (updateError) {
+        console.error('[/api/analyze] Failed to update job status:', updateError)
+      }
+    }
 
     // Avoid leaking environment info in logs
 

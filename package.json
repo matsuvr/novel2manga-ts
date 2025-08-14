@@ -49,6 +49,7 @@
     "node": ">=20.9.0"
   },
   "dependencies": {
+    "@cerebras/cerebras_cloud_sdk": "^1.46.0",
     "@google/genai": "^1.13.0",
     "@tailwindcss/postcss": "^4.1.11",
     "@types/js-yaml": "^4.0.9",

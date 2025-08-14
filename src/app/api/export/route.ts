@@ -127,6 +127,51 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 }
 
+// ダウンロード用エンドポイント
+export async function GET(_request: NextRequest): Promise<Response> {
+  try {
+    const url = new URL(_request.url)
+    // 形式: /api/export/download/[outputId]
+    const segments = url.pathname.split('/').filter(Boolean)
+    const outputId = segments[segments.length - 1] || ''
+    if (!outputId) return validationError('outputIdが必要です')
+
+    // outputId -> outputs 内の実ファイルパスはDBに記録済み（OutputRepository）
+    const db = getDatabaseService()
+    // OutputRepository 経由ではgetByIdが未サポートのため DatabaseService を直接使用
+    const record = await db.getOutput(outputId as string)
+    if (!record) return validationError('出力が見つかりません')
+
+    const outputStorage = await StorageFactory.getOutputStorage()
+    const file = await outputStorage.get(record.outputPath)
+    if (!file) return validationError('ファイルが存在しません')
+
+    // 形式に応じてContent-Type
+    const isPdf = record.outputType === 'pdf'
+    const contentType = isPdf ? 'application/pdf' : 'application/zip'
+
+    // LocalFileStorageはBase64ではなくプレーン文字列(JSONなど)を返すケースがあるため、Buffer変換を試行
+    // LocalFileStorage.get はバイナリ保存時でも Base64 を返す設計
+    // ただし互換のため UTF-8 もフォールバック
+    let buffer: Buffer
+    buffer = Buffer.from(file.text, 'base64')
+    if (buffer.length === 0) {
+      buffer = Buffer.from(file.text)
+    }
+
+    return new Response(buffer, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Disposition': `attachment; filename="${outputId}.${isPdf ? 'pdf' : 'zip'}"`,
+        'Cache-Control': 'public, max-age=3600',
+      },
+    })
+  } catch (error) {
+    return handleApiError(error)
+  }
+}
+
 // isMangaLayout is imported from utils/type-guards (Zod-backed)
 
 async function exportToPDF(

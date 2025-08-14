@@ -108,7 +108,9 @@ export function getCurrentLLMProvider() {
 }
 
 // 特定のLLMプロバイダー設定を取得
-export function getLLMProviderConfig(provider: 'openai' | 'gemini' | 'groq' | 'openrouter') {
+export function getLLMProviderConfig(
+  provider: 'openai' | 'gemini' | 'groq' | 'openrouter' | 'cerebras',
+) {
   return getProviderConfig(provider)
 }
 
