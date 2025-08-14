@@ -29,7 +29,7 @@ export default defineConfig({
     clearMocks: true,
     restoreMocks: true,
     // 詳細なエラー出力
-    reporter: ['verbose'],
+    reporters: ['verbose'],
   },
   resolve: {
     alias: {
