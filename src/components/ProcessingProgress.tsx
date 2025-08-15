@@ -35,6 +35,9 @@ interface JobData {
     totalEpisodes?: number
     renderedPages?: number
     totalPages?: number
+    progress?: {
+      perEpisodePages?: Record<string, { planned: number; rendered: number; total?: number }>
+    }
   }
 }
 
@@ -94,6 +97,10 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
   const [showLogs, setShowLogs] = useState(process.env.NODE_ENV === 'development')
   const [lastJobData, setLastJobData] = useState<string>('')
   const [runtimeHints, setRuntimeHints] = useState<Record<string, string>>({})
+  const [perEpisodePages, setPerEpisodePages] = useState<
+    Record<number, { planned: number; rendered: number; total?: number }>
+  >({})
+  const [currentLayoutEpisode, setCurrentLayoutEpisode] = useState<number | null>(null)
 
   // ステップ名から詳細メッセージを生成
   const describeStep = useCallback((stepId: string): string => {
@@ -167,6 +174,22 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
       if (data.job.lastError) {
         const where = data.job.lastErrorStep ? describeStep(data.job.lastErrorStep) : '処理'
         addLog('error', `${where}に失敗: ${data.job.lastError}`)
+      }
+
+      // per-episode page counts (planned/rendered/total)
+      if (data.job.progress?.perEpisodePages) {
+        const normalized: Record<number, { planned: number; rendered: number; total?: number }> = {}
+        for (const [k, v] of Object.entries(data.job.progress.perEpisodePages)) {
+          const n = Number(k)
+          if (!Number.isNaN(n) && v && typeof v.planned === 'number') {
+            normalized[n] = {
+              planned: v.planned,
+              rendered: v.rendered ?? 0,
+              total: v.total,
+            }
+          }
+        }
+        setPerEpisodePages(normalized)
       }
 
       // 状態を直接更新
@@ -333,6 +356,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
         const layoutMatch = stepId.match(/^layout_episode_(\d+)$/)
         if (layoutMatch && !data.job.layoutCompleted) {
           const ep = Number(layoutMatch[1])
+          setCurrentLayoutEpisode(ep)
           const totalEp = data.job.totalEpisodes || 0
           hints.layout = `現在: エピソード ${Math.min(ep, totalEp || ep)} / ${totalEp || '?'} をレイアウト中`
         }
@@ -387,21 +411,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
           // 完了メッセージとダウンロード導線
           try {
             if (data.job.status === 'completed') {
-              addLog('info', '成果物のZIPを生成しています…')
-              const res = await fetch('/api/export', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ jobId, format: 'images_zip' }),
-              })
-              if (res.ok) {
-                const json = (await res.json()) as { downloadUrl?: string }
-                if (json.downloadUrl) {
-                  addLog('info', 'ZIPの準備ができました。ダウンロードを開始します')
-                  window.open(json.downloadUrl, '_blank')
-                }
-              } else {
-                addLog('warning', 'ZIP生成に失敗しました（後からエクスポート画面で再試行できます）')
-              }
+              addLog('info', '処理が完了しました。上部のエクスポートからダウンロードできます。')
             }
           } catch (e) {
             console.error(e)
@@ -570,6 +580,108 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
           ))}
         </div>
       </div>
+
+      {/* エピソード別ページ進捗 */}
+      {Object.keys(perEpisodePages).length > 0 && (
+        <div className="apple-card p-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">エピソード進捗</h4>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(perEpisodePages)
+              .map(([epStr, v]) => {
+                const ep = Number(epStr)
+                const planned = v.planned ?? 0
+                const rendered = v.rendered ?? 0
+                const total = v.total
+                const isCompleted =
+                  typeof total === 'number' && total > 0 && planned >= total && rendered >= total
+                const isCurrent = currentLayoutEpisode === ep
+                const isInProgress = !isCompleted && planned > 0
+                return {
+                  ep,
+                  planned,
+                  rendered,
+                  total,
+                  isCompleted,
+                  isCurrent,
+                  isInProgress,
+                }
+              })
+              .sort((a, b) => {
+                const score = (x: {
+                  isCurrent: boolean
+                  isInProgress: boolean
+                  isCompleted: boolean
+                }) => (x.isCurrent ? 0 : x.isInProgress ? 1 : x.isCompleted ? 3 : 2)
+                const sa = score(a)
+                const sb = score(b)
+                if (sa !== sb) return sa - sb
+                return a.ep - b.ep
+              })
+              .map(({ ep, planned, rendered, total, isCompleted, isCurrent }) => {
+                const plannedPct =
+                  typeof total === 'number' && total > 0
+                    ? Math.min(100, Math.round((planned / total) * 100))
+                    : undefined
+                const renderedPct =
+                  typeof total === 'number' && total > 0
+                    ? Math.min(100, Math.round((rendered / total) * 100))
+                    : undefined
+                return (
+                  <div
+                    key={ep}
+                    className={
+                      `px-3 py-2 rounded-xl border text-xs ` +
+                      (isCompleted
+                        ? 'bg-gray-50 border-gray-200 text-gray-500'
+                        : isCurrent
+                          ? 'bg-blue-50 border-blue-200 text-blue-800'
+                          : 'bg-gray-50 border-gray-200 text-gray-700')
+                    }
+                    title={`EP${ep}: planned=${planned}, rendered=${rendered}${
+                      typeof total === 'number' ? `, total=${total}` : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-[11px] font-semibold ${isCurrent ? 'text-blue-700' : ''}`}
+                      >
+                        EP{ep}
+                      </span>
+                      <span className="text-[11px]">
+                        {planned}
+                        {typeof total === 'number' ? `/${total}` : ''} 計画, {rendered} 描画
+                      </span>
+                    </div>
+                    {typeof total === 'number' && total > 0 && (
+                      <div className="mt-1 h-1.5 w-full bg-gray-200 rounded-full relative overflow-hidden">
+                        {/* planned */}
+                        <div
+                          className={`absolute left-0 top-0 h-full ${isCompleted ? 'bg-green-400' : 'bg-blue-400'}`}
+                          style={{ width: `${plannedPct}%` }}
+                        />
+                        {/* rendered overlay */}
+                        <div
+                          className="absolute left-0 top-0 h-full bg-green-500/80"
+                          style={{ width: `${renderedPct ?? 0}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+          </div>
+          <div className="mt-3 flex items-center gap-4 text-[11px] text-gray-600">
+            <div className="flex items-center gap-1">
+              <span className="inline-block w-3 h-2 rounded bg-blue-400" />
+              <span>計画済みページ</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="inline-block w-3 h-2 rounded bg-green-500" />
+              <span>描画済みページ</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 開発環境でのログ表示 */}
       {process.env.NODE_ENV === 'development' && showLogs && (

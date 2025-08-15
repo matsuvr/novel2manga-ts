@@ -8,9 +8,10 @@ import {
   type NewChunk,
   type NewEpisode,
   type NewNovel,
+  type NewOutput,
   type Novel,
 } from '@/db'
-import { chunks, episodes, jobs, novels, outputs, renderStatus } from '@/db/schema'
+import { chunks, episodes, jobs, novels, outputs, renderStatus, tokenUsage } from '@/db/schema'
 import type { TransactionPort, UnitOfWorkPort } from '@/repositories/ports'
 import type { JobProgress, JobStatus, JobStep } from '@/types/job'
 import { makeEpisodeId } from '@/utils/ids'
@@ -500,9 +501,50 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       .orderBy(asc(episodes.episodeNumber))
   }
 
-  async createOutput(output: Omit<typeof outputs.$inferInsert, 'createdAt'>): Promise<string> {
-    const result = await this.db.insert(outputs).values(output).returning({ id: outputs.id })
-    return result[0].id
+  async createOutput(output: Omit<NewOutput, 'id' | 'createdAt'>): Promise<string> {
+    const id = crypto.randomUUID()
+    const now = new Date().toISOString()
+
+    await this.db.insert(outputs).values({
+      id,
+      novelId: output.novelId,
+      jobId: output.jobId,
+      outputType: output.outputType,
+      outputPath: output.outputPath,
+      fileSize: output.fileSize,
+      pageCount: output.pageCount,
+      metadataPath: output.metadataPath,
+      createdAt: now,
+    })
+
+    return id
+  }
+
+  // トークン使用量記録メソッド
+  async recordTokenUsage(tokenUsageData: {
+    id: string
+    jobId: string
+    agentName: string
+    provider: string
+    model: string
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+    cost?: number
+    stepName?: string
+    chunkIndex?: number
+    episodeNumber?: number
+  }): Promise<void> {
+    await this.db.insert(tokenUsage).values(tokenUsageData)
+  }
+
+  // トークン使用量取得メソッド（API用）
+  async getTokenUsageByJobId(jobId: string): Promise<Array<typeof tokenUsage.$inferSelect>> {
+    return (await this.db
+      .select()
+      .from(tokenUsage)
+      .where(eq(tokenUsage.jobId, jobId))
+      .orderBy(tokenUsage.createdAt)) as Array<typeof tokenUsage.$inferSelect>
   }
 
   async getOutput(id: string): Promise<typeof outputs.$inferSelect | null> {

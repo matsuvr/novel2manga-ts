@@ -45,7 +45,7 @@ export const chunkAnalyzerAgent = {
 export async function analyzeChunkWithFallback<T extends z.ZodTypeAny>(
   prompt: string,
   schema: T,
-  options?: { maxRetries?: number },
+  options?: { maxRetries?: number; jobId?: string; chunkIndex?: number },
 ): Promise<{
   result: z.infer<T>
   usedProvider: string
@@ -67,11 +67,12 @@ export async function analyzeChunkWithFallback<T extends z.ZodTypeAny>(
         provider: provider,
         maxTokens: providerCfg.maxTokens,
       })
-      const result = await agent.generateObject(
-        [{ role: 'user', content: prompt }],
-        schema,
-        options,
-      )
+      const result = await agent.generateObject([{ role: 'user', content: prompt }], schema, {
+        maxRetries: 0,
+        jobId: options?.jobId,
+        stepName: 'analyze',
+        chunkIndex: options?.chunkIndex,
+      })
       if (fallbackFrom.length > 0) {
         logger.warn('LLM fallback succeeded', {
           from: fallbackFrom,
@@ -80,7 +81,7 @@ export async function analyzeChunkWithFallback<T extends z.ZodTypeAny>(
       }
       return { result, usedProvider: provider, fallbackFrom }
     } catch (error) {
-      // 次へフォールバック（最後のプロバイダで失敗したらthrow）
+      // 次へフォールバック（最後のプロバイダーで失敗したらthrow）
       if (provider !== chain[chain.length - 1]) {
         fallbackFrom.push(provider)
         logger.warn('LLM fallback: switching provider due to error', {

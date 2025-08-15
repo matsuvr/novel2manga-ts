@@ -15,6 +15,13 @@
       "when": 1755179417816,
       "tag": "0001_luxuriant_red_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1755273700852,
+      "tag": "0002_serious_paper_doll",
+      "breakpoints": true
     }
   ]
 }

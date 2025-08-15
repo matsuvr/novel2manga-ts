@@ -17,41 +17,41 @@ const textAnalysisOutputSchema = z.object({
   summary: z.string().describe('このチャンクの内容要約（100-200文字）'),
   characters: z.array(
     z.object({
-      name: z.string(),
-      description: z.string(),
+      name: z.string().nullable(),
+      description: z.string().nullable(),
       firstAppearance: z.number(),
     }),
   ),
   scenes: z.array(
     z.object({
-      location: z.string(),
-      time: z.string().optional(),
-      description: z.string(),
+      location: z.string().nullable(),
+      time: z.string().nullable().optional(),
+      description: z.string().nullable(),
       startIndex: z.number(),
       endIndex: z.number(),
     }),
   ),
   dialogues: z.array(
     z.object({
-      speakerId: z.string(),
-      text: z.string(),
-      emotion: z.string().optional(),
+      speaker: z.string().nullable(),
+      text: z.string().nullable(),
+      emotion: z.string().nullable().optional(),
       index: z.number(),
     }),
   ),
   highlights: z.array(
     z.object({
       type: z.enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence']),
-      description: z.string(),
+      description: z.string().nullable(),
       importance: z.number().min(1).max(10).describe('重要度を1-10に変更'),
       startIndex: z.number(),
       endIndex: z.number(),
-      text: z.string().optional().describe('該当部分のテキスト抜粋'),
+      text: z.string().nullable().optional().describe('該当部分のテキスト抜粋'),
     }),
   ),
   situations: z.array(
     z.object({
-      description: z.string(),
+      description: z.string().nullable(),
       index: z.number(),
     }),
   ),
@@ -116,7 +116,9 @@ export async function POST(request: NextRequest) {
       prompt,
       textAnalysisOutputSchema,
       {
-        maxRetries: 2,
+        maxRetries: 0,
+        jobId,
+        chunkIndex,
       },
     )
 

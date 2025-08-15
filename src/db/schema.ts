@@ -278,6 +278,34 @@ export const storageFiles = sqliteTable(
   }),
 )
 
+// トークン使用量テーブル（LLM API使用量の追跡）
+export const tokenUsage = sqliteTable(
+  'token_usage',
+  {
+    id: text('id').primaryKey(),
+    jobId: text('job_id')
+      .notNull()
+      .references(() => jobs.id, { onDelete: 'cascade' }),
+    agentName: text('agent_name').notNull(), // chunk-analyzer, layout-generator, etc.
+    provider: text('provider').notNull(), // cerebras, openai, gemini, etc.
+    model: text('model').notNull(),
+    promptTokens: integer('prompt_tokens').notNull(),
+    completionTokens: integer('completion_tokens').notNull(),
+    totalTokens: integer('total_tokens').notNull(),
+    cost: real('cost'), // 概算コスト（USD）
+    stepName: text('step_name'), // analyze, layout, etc.
+    chunkIndex: integer('chunk_index'), // チャンク分析の場合
+    episodeNumber: integer('episode_number'), // エピソード処理の場合
+    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    jobIdIdx: index('idx_token_usage_job_id').on(table.jobId),
+    agentNameIdx: index('idx_token_usage_agent_name').on(table.agentName),
+    providerIdx: index('idx_token_usage_provider').on(table.provider),
+    createdAtIdx: index('idx_token_usage_created_at').on(table.createdAt),
+  }),
+)
+
 // リレーション定義
 export const novelsRelations = relations(novels, ({ many }) => ({
   jobs: many(jobs),
@@ -299,6 +327,7 @@ export const jobsRelations = relations(jobs, ({ one, many }) => ({
   renderStatus: many(renderStatus),
   outputs: many(outputs),
   storageFiles: many(storageFiles),
+  tokenUsage: many(tokenUsage),
 }))
 
 export const jobStepHistoryRelations = relations(jobStepHistory, ({ one }) => ({
@@ -373,6 +402,13 @@ export const storageFilesRelations = relations(storageFiles, ({ one }) => ({
   }),
 }))
 
+export const tokenUsageRelations = relations(tokenUsage, ({ one }) => ({
+  job: one(jobs, {
+    fields: [tokenUsage.jobId],
+    references: [jobs.id],
+  }),
+}))
+
 // 型エクスポート
 export type Novel = typeof novels.$inferSelect
 export type NewNovel = typeof novels.$inferInsert
@@ -394,3 +430,5 @@ export type Output = typeof outputs.$inferSelect
 export type NewOutput = typeof outputs.$inferInsert
 export type StorageFile = typeof storageFiles.$inferSelect
 export type NewStorageFile = typeof storageFiles.$inferInsert
+export type TokenUsage = typeof tokenUsage.$inferSelect
+export type NewTokenUsage = typeof tokenUsage.$inferInsert
