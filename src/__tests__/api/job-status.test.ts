@@ -98,7 +98,7 @@ describe('/api/jobs/[jobId]/status', () => {
     const data = await res.json()
 
     expect(res.status).toBe(404)
-    expect(data.error).toBe('Job not found')
+    expect(data.error).toBe('ジョブが見つかりません')
   })
 
   it('DB例外: getJobWithProgress が例外を投げた場合は500と明示的エラー', async () => {

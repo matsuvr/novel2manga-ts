@@ -42,7 +42,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
     async createNovel(
       novel: Omit<schema.NewNovel, "id" | "createdAt" | "updatedAt">
     ): Promise<string> {
-      const id = `test-novel-${Date.now()}`;
+      const id = crypto.randomUUID();
       await db.insert(schema.novels).values({
         id,
         title: novel.title,
@@ -86,7 +86,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
       totalChunks?: number;
       status?: string;
     }) {
-      const id = payload.id || `test-job-${Date.now()}`;
+      const id = payload.id || crypto.randomUUID();
       await db.insert(schema.jobs).values({
         id,
         novelId: payload.novelId,
@@ -205,6 +205,24 @@ export async function createTestDatabase(): Promise<TestDatabase> {
         text: (r as any).text,
       }));
     },
+    async getEpisodesByJobId(jobId: string) {
+      const rows = await db
+        .select()
+        .from(schema.episodes)
+        .where(eq(schema.episodes.jobId, jobId))
+        .orderBy(asc(schema.episodes.episodeNumber));
+      return rows;
+    },
+    async updateJobError(id: string, error: string, errorStep?: string) {
+      await db
+        .update(schema.jobs)
+        .set({
+          status: 'error',
+          lastError: error,
+          lastErrorStep: errorStep,
+        })
+        .where(eq(schema.jobs.id, id));
+    },
   } as unknown as DatabaseService;
 
   return {
@@ -254,7 +272,7 @@ export class TestDataFactory {
     overrides: Partial<typeof schema.novels.$inferInsert> = {}
   ) {
     const novel = {
-      id: `test-novel-${Date.now()}`,
+      id: crypto.randomUUID(),
       title: "Test Novel",
       textLength: 1000,
       language: "ja" as const,
@@ -267,7 +285,7 @@ export class TestDataFactory {
 
   async createJob(overrides: Partial<typeof schema.jobs.$inferInsert> = {}) {
     const job = {
-      id: `test-job-${Date.now()}`,
+      id: crypto.randomUUID(),
       novelId: overrides.novelId || "test-novel-default",
       status: "processing" as const,
       currentStep: "initialized" as const,
@@ -282,7 +300,7 @@ export class TestDataFactory {
     overrides: Partial<typeof schema.chunks.$inferInsert> = {}
   ) {
     // スキーマ必須項目に合わせてデフォルト値を用意
-    const nowId = `test-chunk-${Date.now()}`;
+    const nowId = crypto.randomUUID();
     const novelId = (overrides as any).novelId || "test-novel-default";
     const jobId = (overrides as any).jobId || "test-job-default";
     const chunkIndex = overrides.chunkIndex ?? 0;
@@ -331,7 +349,7 @@ export class TestDataFactory {
   async createEpisode(
     overrides: Partial<typeof schema.episodes.$inferInsert> = {}
   ) {
-    const nowId = `test-episode-${Date.now()}`;
+    const nowId = crypto.randomUUID();
     const novelId = (overrides as any).novelId || "test-novel-default";
     const jobId = (overrides as any).jobId || "test-job-default";
 
