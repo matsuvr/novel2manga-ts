@@ -6,6 +6,7 @@ import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
 import { getDatabaseService } from '@/services/db-factory'
 import type { MangaLayout } from '@/types/panel-layout'
 import { isMangaLayout } from '@/utils/type-guards'
+import { appConfig } from '@/config/app.config'
 
 export interface BatchOptions {
   concurrency?: number
@@ -55,8 +56,8 @@ export async function renderBatchFromYaml(
   const validPages = targetPages.filter((p) => allPages.includes(p))
 
   const renderer = new MangaPageRenderer({
-    pageWidth: 842,
-    pageHeight: 595,
+    pageWidth: appConfig.rendering.defaultPageSize.width,
+    pageHeight: appConfig.rendering.defaultPageSize.height,
     margin: 20,
     panelSpacing: 10,
     defaultFont: 'sans-serif',
@@ -104,8 +105,8 @@ export async function renderBatchFromYaml(
         isRendered: true,
         imagePath: renderKey,
         thumbnailPath: thumbnailKey,
-        width: 842,
-        height: 595,
+        width: appConfig.rendering.defaultPageSize.width,
+        height: appConfig.rendering.defaultPageSize.height,
         fileSize: imageBuffer.length,
       })
 

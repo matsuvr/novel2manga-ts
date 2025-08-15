@@ -2,13 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CanvasRenderer } from '@/lib/canvas/canvas-renderer'
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import type { MangaLayout } from '@/types/panel-layout'
+import { appConfig } from '@/config/app.config'
 
 // CanvasRendererのモック
 vi.mock('@/lib/canvas/canvas-renderer', () => ({
   CanvasRenderer: vi.fn().mockImplementation(() => ({
     canvas: {
-      width: 842,
-      height: 595,
+      width: appConfig.rendering.defaultPageSize.width,
+      height: appConfig.rendering.defaultPageSize.height,
       getContext: vi.fn(),
     },
     renderMangaLayout: vi.fn(),
@@ -74,8 +75,8 @@ describe('MangaPageRenderer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     renderer = new MangaPageRenderer({
-      pageWidth: 842,
-      pageHeight: 595,
+      pageWidth: appConfig.rendering.defaultPageSize.width,
+      pageHeight: appConfig.rendering.defaultPageSize.height,
       margin: 20,
       panelSpacing: 10,
       defaultFont: 'sans-serif',
@@ -94,8 +95,8 @@ describe('MangaPageRenderer', () => {
     it('正しい設定で初期化できる', () => {
       expect(renderer).toBeDefined()
       expect(vi.mocked(CanvasRenderer)).toHaveBeenCalledWith({
-        width: 842,
-        height: 595,
+        width: appConfig.rendering.defaultPageSize.width,
+        height: appConfig.rendering.defaultPageSize.height,
         defaultFontSize: 14,
         font: 'sans-serif',
       })
@@ -105,8 +106,8 @@ describe('MangaPageRenderer', () => {
       renderer = new MangaPageRenderer()
       expect(vi.mocked(CanvasRenderer)).toHaveBeenCalledWith(
         expect.objectContaining({
-          width: 842,
-          height: 595,
+          width: appConfig.rendering.defaultPageSize.width,
+          height: appConfig.rendering.defaultPageSize.height,
         }),
       )
     })
@@ -117,8 +118,8 @@ describe('MangaPageRenderer', () => {
       const canvas = await renderer.renderToCanvas(mockLayout, 1)
 
       expect(canvas).toBeDefined()
-      expect(canvas.width).toBe(842)
-      expect(canvas.height).toBe(595)
+      expect(canvas.width).toBe(appConfig.rendering.defaultPageSize.width)
+      expect(canvas.height).toBe(appConfig.rendering.defaultPageSize.height)
       expect(mockCanvasRenderer.renderMangaLayout).toHaveBeenCalledWith(
         expect.objectContaining({
           pages: expect.arrayContaining([
