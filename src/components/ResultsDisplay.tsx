@@ -1,7 +1,21 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Episode } from '@/types/database-models'
+
+interface TokenUsage {
+  agentName: string
+  provider: string
+  model: string
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  cost?: number
+  stepName?: string
+  chunkIndex?: number
+  episodeNumber?: number
+  createdAt: string
+}
 
 interface ResultsDisplayProps {
   jobId: string
@@ -9,9 +23,53 @@ interface ResultsDisplayProps {
 }
 
 export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps) {
-  const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(episodes[0] || null)
+  const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null)
   const [isExporting, setIsExporting] = useState(false)
   const [exportFormat, setExportFormat] = useState<'pdf' | 'images_zip'>('pdf')
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage[]>([])
+  const [isLoadingTokenUsage, setIsLoadingTokenUsage] = useState(false)
+
+  // トークン使用量を取得
+  useEffect(() => {
+    const fetchTokenUsage = async () => {
+      if (!jobId) return
+
+      setIsLoadingTokenUsage(true)
+      try {
+        const response = await fetch(`/api/jobs/${jobId}/token-usage`)
+        if (response.ok) {
+          const data = (await response.json()) as { tokenUsage?: TokenUsage[] }
+          setTokenUsage(data.tokenUsage || [])
+        }
+      } catch (error) {
+        console.error('Failed to fetch token usage:', error)
+      } finally {
+        setIsLoadingTokenUsage(false)
+      }
+    }
+
+    fetchTokenUsage()
+  }, [jobId])
+
+  // トークン使用量の集計
+  const totalTokens = tokenUsage.reduce((sum, usage) => sum + usage.totalTokens, 0)
+  const totalCost = tokenUsage.reduce((sum, usage) => sum + (usage.cost || 0), 0)
+  const totalPromptTokens = tokenUsage.reduce((sum, usage) => sum + usage.promptTokens, 0)
+  const totalCompletionTokens = tokenUsage.reduce((sum, usage) => sum + usage.completionTokens, 0)
+
+  // プロバイダー別集計
+  const providerStats = tokenUsage.reduce(
+    (acc, usage) => {
+      if (!acc[usage.provider]) {
+        acc[usage.provider] = { tokens: 0, cost: 0, count: 0 }
+      }
+      acc[usage.provider].tokens += usage.totalTokens
+      acc[usage.provider].cost += usage.cost || 0
+      acc[usage.provider].count += 1
+      return acc
+    },
+    {} as Record<string, { tokens: number; cost: number; count: number }>,
+  )
 
   const handleExport = async () => {
     if (!jobId) return
@@ -62,145 +120,152 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
 
   return (
     <div className="space-y-6">
-      {/* Export Controls */}
-      <div className="apple-card p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xl font-semibold gradient-text">エクスポート設定</h3>
-          <div className="flex items-center space-x-4">
-            <select
-              value={exportFormat}
-              onChange={(e) => setExportFormat(e.target.value as 'pdf' | 'images_zip')}
-              className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-              disabled={isExporting}
-            >
-              <option value="pdf">PDF形式</option>
-              <option value="images_zip">画像ZIP形式</option>
-            </select>
-            <button
-              type="button"
-              onClick={handleExport}
-              disabled={isExporting}
-              className="btn-modern text-sm"
-            >
-              {isExporting ? (
-                <span className="flex items-center space-x-2">
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      fill="none"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                  </svg>
-                  <span>エクスポート中...</span>
-                </span>
-              ) : (
-                <span className="flex items-center space-x-2">
-                  <span>💾</span>
-                  <span>全エピソードをエクスポート</span>
-                </span>
-              )}
-            </button>
-          </div>
+      {/* ダウンロード導線 */}
+      <div className="apple-card p-4 flex flex-wrap items-center gap-3 justify-between">
+        <div>
+          <h3 className="text-base font-semibold">エクスポート</h3>
+          <p className="text-xs text-gray-500">完了後はここからダウンロードできます</p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={async () => {
+              const res = await fetch('/api/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jobId, format: 'pdf' }),
+              })
+              if (res.ok) {
+                const json = (await res.json()) as { downloadUrl?: string }
+                if (json.downloadUrl) window.open(json.downloadUrl, '_blank')
+              } else {
+                alert('PDFエクスポートに失敗しました')
+              }
+            }}
+          >
+            PDFダウンロード
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={async () => {
+              const res = await fetch('/api/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jobId, format: 'images_zip' }),
+              })
+              if (res.ok) {
+                const json = (await res.json()) as { downloadUrl?: string }
+                if (json.downloadUrl) window.open(json.downloadUrl, '_blank')
+              } else {
+                alert('ZIPエクスポートに失敗しました')
+              }
+            }}
+          >
+            画像ZIPダウンロード
+          </button>
         </div>
       </div>
 
-      {/* Episodes Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {episodes.map((episode) => (
-          <button
-            key={episode.id}
-            type="button"
-            className={`apple-card p-6 cursor-pointer transition-all glow-effect text-left w-full ${
-              selectedEpisode?.id === episode.id
-                ? 'ring-2 ring-blue-500 scale-[1.02]'
-                : 'hover:scale-[1.02]'
-            }`}
-            onClick={() => setSelectedEpisode(episode)}
-          >
-            {/* Episode Thumbnail */}
-            <div className="aspect-[3/4] bg-gradient-to-br from-blue-100 to-purple-100 rounded-2xl mb-4 flex items-center justify-center">
-              <div className="text-center">
-                <p className="text-6xl mb-2">📖</p>
-                <p className="text-2xl font-bold text-gray-700">Episode {episode.episodeNumber}</p>
-              </div>
+      {/* トークン使用量サマリー */}
+      {!isLoadingTokenUsage && tokenUsage.length > 0 && (
+        <div className="apple-card p-6">
+          <h3 className="text-xl font-semibold gradient-text mb-4">トークン使用量</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div className="text-center">
+              <p className="text-gray-500 text-sm">総トークン数</p>
+              <p className="font-bold text-lg">{totalTokens.toLocaleString()}</p>
             </div>
+            <div className="text-center">
+              <p className="text-gray-500 text-sm">概算コスト</p>
+              <p className="font-bold text-lg">${totalCost.toFixed(4)}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-gray-500 text-sm">プロンプト</p>
+              <p className="font-bold text-lg">{totalPromptTokens.toLocaleString()}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-gray-500 text-sm">生成</p>
+              <p className="font-bold text-lg">{totalCompletionTokens.toLocaleString()}</p>
+            </div>
+          </div>
 
-            {/* Episode Info */}
+          {/* プロバイダー別詳細 */}
+          <div className="mt-4">
+            <h4 className="font-medium mb-2">プロバイダー別使用量</h4>
             <div className="space-y-2">
-              <h4 className="font-semibold text-lg">
-                {episode.title || `エピソード ${episode.episodeNumber}`}
-              </h4>
-              {episode.summary && (
-                <p className="text-sm text-gray-600 line-clamp-3">{episode.summary}</p>
-              )}
-              <div className="flex items-center justify-between text-sm text-gray-500">
-                <span>📄 {episode.estimatedPages} ページ</span>
-                <span>🎯 信頼度 {Math.round(episode.confidence * 100)}%</span>
+              {Object.entries(providerStats).map(([provider, stats]) => (
+                <div key={provider} className="flex justify-between items-center text-sm">
+                  <span className="capitalize">{provider}</span>
+                  <div className="flex gap-4">
+                    <span>{stats.tokens.toLocaleString()} tokens</span>
+                    <span>${stats.cost.toFixed(4)}</span>
+                    <span>({stats.count} calls)</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* エピソード一覧 */}
+      <div className="apple-card p-6">
+        <h3 className="text-xl font-semibold gradient-text mb-4">エピソード一覧</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {episodes.map((episode) => (
+            <button
+              key={episode.id}
+              type="button"
+              className={`p-4 rounded-lg border-2 cursor-pointer transition-colors text-left ${
+                selectedEpisode?.id === episode.id
+                  ? 'border-blue-500 bg-blue-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+              onClick={() => setSelectedEpisode(episode)}
+            >
+              <div className="font-semibold">Episode {episode.episodeNumber}</div>
+              <div className="text-sm text-gray-600">{episode.title}</div>
+              <div className="text-sm text-gray-600 mt-1">📄 {episode.estimatedPages} ページ</div>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleViewEpisode(episode.episodeNumber)
+                  }}
+                  className="btn-secondary text-sm"
+                >
+                  プレビュー
+                </button>
               </div>
-            </div>
+            </button>
+          ))}
+        </div>
+      </div>
 
-            {/* Action Buttons */}
-            <div className="mt-4 flex space-x-2">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleViewEpisode(episode.episodeNumber)
-                }}
-                className="flex-1 btn-secondary text-sm"
-              >
-                👁️ プレビュー
-              </button>
-              <button
-                type="button"
-                onClick={async (e) => {
-                  e.stopPropagation()
-                  setSelectedEpisode(episode)
-                  setIsExporting(true)
-                  try {
-                    const response = await fetch('/api/export', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        jobId,
-                        format: exportFormat,
-                        episodeNumbers: [episode.episodeNumber],
-                      }),
-                    })
-
-                    if (!response.ok) throw new Error('Export failed')
-
-                    const data = (await response.json()) as {
-                      downloadUrl?: string
-                    }
-
-                    if (data.downloadUrl) {
-                      window.open(data.downloadUrl, '_blank')
-                    }
-                  } catch (error) {
-                    console.error('Export error:', error)
-                    alert('エクスポートに失敗しました')
-                  } finally {
-                    setIsExporting(false)
-                  }
-                }}
-                disabled={isExporting}
-                className="flex-1 btn-secondary text-sm"
-              >
-                💾 個別エクスポート
-              </button>
-            </div>
+      {/* エクスポート機能 */}
+      <div className="apple-card p-6">
+        <h3 className="text-xl font-semibold gradient-text mb-4">エクスポート</h3>
+        <div className="flex flex-wrap gap-4 items-center">
+          <select
+            value={exportFormat}
+            onChange={(e) => setExportFormat(e.target.value as 'pdf' | 'images_zip')}
+            className="px-3 py-2 border border-gray-300 rounded-md"
+          >
+            <option value="pdf">PDF</option>
+            <option value="images_zip">画像ZIP</option>
+          </select>
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={isExporting}
+            className="btn-primary disabled:opacity-50"
+          >
+            {isExporting ? 'エクスポート中...' : 'エクスポート'}
           </button>
-        ))}
+        </div>
       </div>
 
       {/* Selected Episode Details */}

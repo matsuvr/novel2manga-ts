@@ -28,6 +28,15 @@ export default async function NovelResultsPage({ params }: { params: Promise<Par
       <h1 className="text-2xl font-bold">
         解析結果（小説ID: {novelId} / Job: {latest.id}）
       </h1>
+      <div className="apple-card p-4 flex items-center justify-between">
+        <div>
+          <div className="font-semibold">エクスポート</div>
+          <div className="text-sm text-gray-600">全エピソードのYAMLとPNGをZIPでダウンロード</div>
+        </div>
+        <a className="btn-secondary" href={`/api/export/zip/${latest.id}`}>
+          画像ZIPをダウンロード
+        </a>
+      </div>
       <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {episodes.map((e) => (
           <li key={e.id} className="apple-card p-4">
@@ -36,8 +45,7 @@ export default async function NovelResultsPage({ params }: { params: Promise<Par
             <div className="text-sm text-gray-600 mt-1">📄 {e.estimatedPages} ページ</div>
             <div className="mt-2 flex gap-2">
               <a
-                href={`/api/render/${e.episodeNumber}/1?jobId=${latest.id}`}
-                target="_blank"
+                href={`/novel/${novelId}/results/${latest.id}/episode/${e.episodeNumber}`}
                 className="btn-secondary text-sm"
               >
                 プレビュー
