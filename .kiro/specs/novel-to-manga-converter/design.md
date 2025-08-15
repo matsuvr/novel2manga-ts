@@ -115,6 +115,35 @@
 - Workers 実行環境では Node の crypto.createHash が利用できないため、Cloudflare 用実装では subtle.digest 等の環境特有のAPIを使う必要があります。
 - idempotency ユーティリティの切り出しとユニットテストは未完了です（tasks.md に追記）。
 
+### 2025-08-15 追記: Agent Architecture 刷新
+
+本PRでは、Mastra Agentsから独自のAgent Architectureに移行し、より柔軟なLLM provider対応と型安全性を実現しました。
+
+**Agent Architecture 変更点:**
+
+- **Custom Agent Class**: `src/agents/agent.ts` に独自のAgent基盤を実装
+  - OpenAI, Cerebras, Gemini, Groq, OpenRouterの複数プロバイダーを統一インターフェースで対応
+  - Structured Outputsに対応し、Zodスキーマを各プロバイダーのJSON Schema形式に変換
+  - エラーハンドリングの統一化（`AgentError` クラスによる標準化）
+
+- **zod-to-json-schema Integration**: `zod-to-json-schema@3.24.6` を新規追加
+  - **導入理由**: Cerebras APIの厳格なJSON Schema要件に対応するため
+  - **主な用途**: Zodスキーマを各LLMプロバイダーの要求するJSON Schema形式に変換
+  - **Cerebras対応**: `transformForCerebrasCompatibility` 関数によるスキーマ変換
+    - Type arrays (`["string", "null"]`) を `anyOf` パターンに変換
+    - 全オブジェクトに `additionalProperties: false` を追加
+    - `nullable`, `minimum`, `maximum` フィールドの除去・変換
+  - **信頼性**: 36.6M週間ダウンロード、継続的メンテナンス、TypeScript完全対応
+
+- **BaseAgent**: 将来のログ・トレーシング機能の拡張ポイントとして `BaseAgent` クラスを配置
+
+- **Provider-specific 最適化**:
+  - OpenAI: `zodResponseFormat` による native structured outputs
+  - Cerebras: カスタムJSON Schema変換による strict mode 対応
+  - Gemini: テキストベース指示による柔軟な出力制御
+
+この変更により、Mastra依存を減らし、よりメンテナブルで拡張しやすいAgent実装を実現しています。
+
 ## Requirements Mapping
 
 ### Design Component Traceability
@@ -207,12 +236,12 @@ graph TB
 - **Frontend**: Next.js 15.3.3 (App Router) + TypeScript 5 + Tailwind CSS v4
 - **AI SDKs**: OpenAI SDK, Google GenAI SDK（直接呼び出し）
 - **絵コンテ生成**: Canvas API（枠線・テキスト・吹き出しのみ、イラストは含まない）。デフォルトページサイズはA4縦（595×842 px）
-- **Backend**: Next.js API Routes + Mastra Agents
+- **Backend**: Next.js API Routes + Custom Agent Architecture (moved from Mastra Agents)
 - **Database**: Cloudflare D1 (SQLite ベース) / SQLite (開発環境)
 - **Cache**: Cloudflare KV (APIレスポンスキャッシュ)
 - **File Storage**: Cloudflare R2 (プロダクション) / Local Storage (開発)
 - **LLM Providers**: OpenRouter (primary), Gemini, Claude（フォールバックチェーン。Gemini対応を追加）
-- **LLM Factory**: 動的プロバイダー選択とフォールバック機能実装済み（AI SDK v5との型差異により、一部一時的な型キャストでMastra Agentへ適合させています。後述のタスク参照）
+- **LLM Factory**: 動的プロバイダー選択とフォールバック機能実装済み（Custom Agent architecture with direct LLM provider integrations）
 - **Configuration**: app.config.ts による集中管理 + 環境変数 (シークレットのみ)
 - **Font**: Google Inter (next/font/google)
 - **Authentication**: NextAuth.js v5 (未実装)
@@ -231,7 +260,7 @@ graph TB
 
 ### 型互換性に関する注記（OpenAI/GenAI）
 
-- 現状、Vercel AI SDK v5 の LanguageModelV2 と Mastra Agent 側の期待型（LanguageModelV1）に差異があり、`src/agents/layout-generator.ts` では一時的に `as any` キャストで適合させています。
+- 現状、Custom Agent Architectureにより各LLM Providerの直接統合を実現し、型安全性を向上させています。
 - 恒久対策としては、Mastra側の更新または軽量アダプタ層（V1→V2ブリッジ）の導入を検討中（tasks.md: TASK-LLM-ADAPTER-001）。
 - **StorageFactory Pattern**: 環境別ストレージ抽象化、開発・本番環境の自動切り替え
 
@@ -243,7 +272,7 @@ graph TB
 sequenceDiagram
     participant User
     participant RSC as Server Component
-    participant Mastra as Mastra Agent
+    participant Agent as Custom Agent
     participant AI as AI Services
     participant DB as Database
     participant Storage as R2 Storage
@@ -296,7 +325,7 @@ sequenceDiagram
 ### Backend Services & Method Signatures
 
 ```typescript
-// Mastra Agent定義（実装済み）
+// Custom Agent定義（実装済み）
 // ChunkAnalyzerAgent - チャンク分析エージェント
 const chunkAnalyzerAgent = new Agent({
   name: "chunk-analyzer",

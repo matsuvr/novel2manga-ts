@@ -3,9 +3,10 @@
  * 複数のサービス層の協調動作をテスト
  */
 
+import crypto from "node:crypto"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // AnalyzePipeline は下のモック適用後に動的import
-import { resetAgentMocks, setupAgentMocks } from "./__helpers/test-agents";
+import { resetAgentMocks, setupAgentMocks, TEST_CHUNK_ANALYSIS, TEST_EPISODE_BOUNDARIES } from "./__helpers/test-agents";
 import type { TestDatabase } from "./__helpers/test-database";
 import {
   cleanupTestDatabase,
@@ -32,6 +33,18 @@ vi.mock("@/config", () => ({
       path: ":memory:",
     },
   })),
+  getLayoutGenerationConfig: vi.fn(() => ({
+    provider: "openai",
+    maxTokens: 1000,
+    systemPrompt: "テスト用レイアウト生成プロンプト",
+  })),
+  getLLMDefaultProvider: vi.fn(() => "openai"),
+  getEpisodeConfig: vi.fn(() => ({
+    targetCharsPerEpisode: 1000,
+    minCharsPerEpisode: 500,
+    maxCharsPerEpisode: 2000,
+    charsPerPage: 300,
+  })),
 }));
 
 // StorageFactoryのモック
@@ -41,13 +54,67 @@ vi.mock("@/utils/storage", () => ({
     getNovelStorage: () => testStorageFactory.getNovelStorage(),
     getChunkStorage: () => testStorageFactory.getChunkStorage(),
     getAnalysisStorage: () => testStorageFactory.getAnalysisStorage(),
+    getLayoutStorage: () => testStorageFactory.getLayoutStorage(),
+    getRenderStorage: () => testStorageFactory.getRenderStorage(),
+    getOutputStorage: () => testStorageFactory.getOutputStorage(),
   },
   StorageKeys: {
     chunk: (jobId: string, index: number) => `${jobId}/chunks/${index}.txt`,
     chunkAnalysis: (jobId: string, index: number) =>
       `${jobId}/analysis/chunk-${index}.json`,
+    episodeLayout: (jobId: string, episodeNumber: number) =>
+      `${jobId}/episode_${episodeNumber}.yaml`,
   },
-  saveEpisodeBoundaries: vi.fn(),
+  saveEpisodeBoundaries: vi.fn().mockImplementation(async (jobId: string, boundaries: any[]) => {
+    // モックエピソード境界をテストDBに保存
+    if (__testDbForFactory) {
+      // jobからnovelIdを取得
+      const job = await __testDbForFactory.service.getJob(jobId);
+      const novelId = job?.novelId || "test-novel-default";
+      
+      for (const boundary of boundaries) {
+        await __testDbForFactory.db.insert(
+          (await import("@/db/schema")).episodes
+        ).values({
+          id: crypto.randomUUID(),
+          novelId,
+          jobId,
+          episodeNumber: boundary.episodeNumber,
+          title: boundary.title || `Episode ${boundary.episodeNumber}`,
+          summary: boundary.summary || `Test episode ${boundary.episodeNumber}`,
+          startChunk: boundary.startChunk,
+          startCharIndex: boundary.startCharIndex,
+          endChunk: boundary.endChunk,
+          endCharIndex: boundary.endCharIndex,
+          estimatedPages: boundary.estimatedPages,
+          confidence: boundary.confidence,
+        });
+      }
+    }
+  }),
+}));
+
+// レイアウト生成エージェントのモック
+vi.mock("@/agents/layout-generator", () => ({
+  generateMangaLayout: vi.fn().mockResolvedValue({
+    success: true,
+    layoutPath: "test-layout.yaml",
+    layout: {
+      pages: [
+        {
+          pageNumber: 1,
+          panels: [
+            {
+              id: "panel1",
+              type: "dialogue",
+              content: "テスト対話",
+              position: { x: 0, y: 0, width: 100, height: 100 }
+            }
+          ]
+        }
+      ]
+    }
+  })
 }));
 
 // RepositoryFactory のモック（テストDBに委譲）
@@ -95,6 +162,10 @@ vi.mock("@/repositories/factory", () => {
         getChunksByJobId: (jobId: string) =>
           __testDbForFactory!.service.getChunksByJobId(jobId),
       },
+    }),
+    getEpisodeRepository: () => ({
+      getByJobId: (jobId: string) => 
+        __testDbForFactory!.service.getEpisodesByJobId(jobId),
     }),
   });
   return {
@@ -167,7 +238,6 @@ describe("Service Integration Tests", () => {
       // 実行: 分析パイプラインの実行
       const pipeline = new AnalyzePipeline();
       const result = await pipeline.runWithNovelId(novel.id, {
-        splitOnly: false, // 完全な分析を実行
         userEmail: "test@example.com",
         isDemo: true, // Use demo episodes to avoid "Episode not found" error
       });
@@ -198,56 +268,11 @@ describe("Service Integration Tests", () => {
       // expect(analysisStorage.has(`${result.jobId}/analysis/chunk-0.json`)).toBe(true);
     });
 
-    it("splitOnlyモードでは分析をスキップする", async () => {
-      // 準備: テスト用小説データ
-      const novel = await dataFactory.createNovel({
-        id: "test-novel-split",
-        title: "Split Only Test Novel",
-        textLength: 3000,
-      });
-
-      const novelText = "これはsplitOnlyテスト用のテキストです。".repeat(50);
-      await storageDataFactory.seedNovelText(novel.id, novelText, {
-        title: novel.title,
-      });
-
-      // 実行: splitOnlyモードでの実行
-      const pipeline = new AnalyzePipeline();
-      const result = await pipeline.runWithNovelId(novel.id, {
-        splitOnly: true,
-        userEmail: "test@example.com",
-      });
-
-      // 検証: パイプライン結果
-      expect(result.success ?? true).toBe(true);
-      expect(result.jobId).toBeDefined();
-      expect(result.chunkCount).toBeGreaterThan(0);
-
-      // 検証: ジョブのステータス
-      const job = await testDb.service.getJob(result.jobId);
-      expect(job?.status).toBe("completed");
-      // splitOnlyではDB上は'completed' + currentStepは'split'でよい（仕様に依存）
-      expect(["split", "split_complete"]).toContain(job?.currentStep);
-
-      // 検証: チャンクは作成されているが分析結果はない
-      const chunks = await testDb.service.getChunksByJobId(result.jobId);
-      expect(chunks.length).toBe(result.chunkCount);
-
-      const chunkStorage = await testStorageFactory.getChunkStorage();
-      expect(chunkStorage.has(`${result.jobId}/chunks/0.txt`)).toBe(true);
-
-      const analysisStorage = await testStorageFactory.getAnalysisStorage();
-      expect(analysisStorage.has(`${result.jobId}/analysis/chunk-0.json`)).toBe(
-        false
-      );
-    });
-
     it("存在しない小説IDでは適切なエラーが発生する", async () => {
       const pipeline = new AnalyzePipeline();
 
       await expect(
         pipeline.runWithNovelId("nonexistent-novel-id", {
-          splitOnly: false,
           userEmail: "test@example.com",
         })
       ).rejects.toThrow("小説ID がデータベースに見つかりません");
@@ -266,7 +291,6 @@ describe("Service Integration Tests", () => {
 
       await expect(
         pipeline.runWithNovelId(novel.id, {
-          splitOnly: false,
           userEmail: "test@example.com",
         })
       ).rejects.toThrow("小説のテキストがストレージに見つかりません");
@@ -287,7 +311,6 @@ describe("Service Integration Tests", () => {
       // 実行: パイプライン実行
       const pipeline = new AnalyzePipeline();
       const result = await pipeline.runWithNovelId(novel.id, {
-        splitOnly: false,
         userEmail: "test@example.com",
         isDemo: true, // Use demo episodes to avoid "Episode not found" error
       });
@@ -334,7 +357,6 @@ describe("Service Integration Tests", () => {
       // エラーが適切に伝播することを確認
       await expect(
         pipeline.runWithNovelId(novel.id, {
-          splitOnly: true,
           userEmail: "test@example.com",
         })
       ).rejects.toThrow();

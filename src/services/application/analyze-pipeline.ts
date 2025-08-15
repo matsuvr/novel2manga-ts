@@ -13,7 +13,6 @@ import { generateUUID } from '@/utils/uuid'
 
 export interface AnalyzeOptions {
   isDemo?: boolean
-  splitOnly?: boolean
   title?: string
 }
 
@@ -108,34 +107,6 @@ export class AnalyzePipeline {
     await jobRepo.updateStep(jobId, 'split', 0, chunks.length)
     await jobRepo.markStepCompleted(jobId, 'split')
 
-    if (options.splitOnly || options.isDemo) {
-      await saveEpisodeBoundaries(jobId, [
-        {
-          episodeNumber: 1,
-          title: 'Demo Episode',
-          summary: 'デモ用の自動作成エピソード',
-          startChunk: 0,
-          startCharIndex: 0,
-          endChunk: Math.max(0, chunks.length - 1),
-          endCharIndex: chunks.length > 0 ? chunks[Math.max(0, chunks.length - 1)].length : 0,
-          estimatedPages: 1,
-          confidence: 0.9,
-        },
-      ])
-      await jobRepo.markStepCompleted(jobId, 'split')
-      await jobRepo.updateStatus(jobId, 'completed')
-      const response: AnalyzeResponse = {
-        success: true,
-        id: jobId,
-        message: options.splitOnly
-          ? `splitOnly: テキストを${chunks.length}個のチャンクに分割しました（分析は未実行）`
-          : `demo: テキストを${chunks.length}個のチャンクに分割し、デモ用エピソードを作成しました（分析は未実行）`,
-        data: { jobId, chunkCount: chunks.length },
-        metadata: { timestamp: new Date().toISOString() },
-      }
-      return { jobId, chunkCount: chunks.length, response }
-    }
-
     // Analysis schema
     const nonEmptyObject = <T extends z.ZodRawShape>(schema: z.ZodObject<T>) =>
       schema.refine((obj) => Object.keys(obj).length > 0, {
@@ -148,9 +119,9 @@ export class AnalyzePipeline {
           nonEmptyObject(
             z
               .object({
-                name: z.string().optional(),
-                description: z.string().optional(),
-                firstAppearance: z.number().optional(),
+                name: z.string().nullable().optional(),
+                description: z.string().nullable().optional(),
+                firstAppearance: z.number().nullable().optional(),
               })
               .strip(),
           ),
@@ -159,11 +130,11 @@ export class AnalyzePipeline {
           nonEmptyObject(
             z
               .object({
-                location: z.string().optional(),
-                time: z.string().optional(),
-                description: z.string().optional(),
-                startIndex: z.number().optional(),
-                endIndex: z.number().optional(),
+                location: z.string().nullable().optional(),
+                time: z.string().nullable().optional(),
+                description: z.string().nullable().optional(),
+                startIndex: z.number().nullable().optional(),
+                endIndex: z.number().nullable().optional(),
               })
               .strip(),
           ),
@@ -172,10 +143,10 @@ export class AnalyzePipeline {
           nonEmptyObject(
             z
               .object({
-                speakerId: z.string().optional(),
-                text: z.string().optional(),
-                emotion: z.string().optional(),
-                index: z.number().optional(),
+                speakerId: z.string().nullable().optional(),
+                text: z.string().nullable().optional(),
+                emotion: z.string().nullable().optional(),
+                index: z.number().nullable().optional(),
               })
               .strip(),
           ),
@@ -186,12 +157,13 @@ export class AnalyzePipeline {
               .object({
                 type: z
                   .enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence'])
+                  .nullable()
                   .optional(),
-                description: z.string().optional(),
-                importance: z.number().min(1).max(10).optional(),
-                startIndex: z.number().optional(),
-                endIndex: z.number().optional(),
-                text: z.string().optional(),
+                description: z.string().nullable().optional(),
+                importance: z.number().min(1).max(10).nullable().optional(),
+                startIndex: z.number().nullable().optional(),
+                endIndex: z.number().nullable().optional(),
+                text: z.string().nullable().optional(),
               })
               .strip(),
           ),
@@ -200,8 +172,8 @@ export class AnalyzePipeline {
           nonEmptyObject(
             z
               .object({
-                description: z.string().optional(),
-                index: z.number().optional(),
+                description: z.string().nullable().optional(),
+                index: z.number().nullable().optional(),
               })
               .strip(),
           ),

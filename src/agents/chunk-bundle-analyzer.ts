@@ -50,7 +50,7 @@ export const bundleAnalysisSchema = z.object({
           'revelation',
         ]),
         importance: z.number().min(1).max(10).describe('重要度（1-10）'),
-        context: z.string().optional().describe('場面の文脈や意味'),
+        context: z.string().nullable().optional().describe('場面の文脈や意味'),
       }),
     )
     .describe('物語の見所となる重要な場面'),

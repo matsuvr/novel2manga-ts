@@ -13,7 +13,6 @@ const analyzeRequestSchema = z
     text: z.string().min(1).optional(),
     title: z.string().optional(),
     jobName: z.string().optional(),
-    splitOnly: z.boolean().optional(),
   })
   .refine((d) => !!d.novelId || !!d.text, {
     message: 'novelId か text のいずれかが必要です',
@@ -45,7 +44,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const { novelId: inputNovelId, text: inputText, title, splitOnly } = parsed.data
+    const { novelId: inputNovelId, text: inputText, title } = parsed.data
 
     let novelId = inputNovelId
     let novelText: string
@@ -66,12 +65,10 @@ export async function POST(request: NextRequest) {
       novelText === '__FETCH_FROM_STORAGE__'
         ? await pipeline.runWithNovelId(safeNovelId, {
             isDemo,
-            splitOnly,
             title,
           })
         : await pipeline.runWithText(safeNovelId, novelText, {
             isDemo,
-            splitOnly,
             title,
           })
     // 統一されたレスポンス形式を返す（テストとの互換性を保つため）
