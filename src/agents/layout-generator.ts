@@ -39,13 +39,23 @@ const layoutGenerationOutputSchema = z.object({
         z.object({
           content: z.string(),
           dialogues: z
-            .array(
-              z.object({
-                speaker: z.string(),
-                text: z.string(),
-              }),
-            )
-            .optional(),
+            .union([
+              z.array(
+                z.object({
+                  speaker: z.string(),
+                  text: z.string(),
+                }),
+              ),
+              z.null(),
+              z.string(),
+            ])
+            .optional()
+            .transform((val) => {
+              if (val === null || typeof val === 'string') {
+                return undefined
+              }
+              return val
+            }),
           sourceChunkIndex: z.number(),
           importance: z.number().min(1).max(10),
           suggestedSize: z.enum(['small', 'medium', 'large', 'extra-large']),

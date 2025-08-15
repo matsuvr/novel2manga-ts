@@ -119,9 +119,9 @@ export class AnalyzePipeline {
           nonEmptyObject(
             z
               .object({
-                name: z.string().optional(),
-                description: z.string().optional(),
-                firstAppearance: z.number().optional(),
+                name: z.string().nullable().optional(),
+                description: z.string().nullable().optional(),
+                firstAppearance: z.number().nullable().optional(),
               })
               .strip(),
           ),
@@ -130,11 +130,11 @@ export class AnalyzePipeline {
           nonEmptyObject(
             z
               .object({
-                location: z.string().optional(),
-                time: z.string().optional(),
-                description: z.string().optional(),
-                startIndex: z.number().optional(),
-                endIndex: z.number().optional(),
+                location: z.string().nullable().optional(),
+                time: z.string().nullable().optional(),
+                description: z.string().nullable().optional(),
+                startIndex: z.number().nullable().optional(),
+                endIndex: z.number().nullable().optional(),
               })
               .strip(),
           ),
@@ -143,10 +143,10 @@ export class AnalyzePipeline {
           nonEmptyObject(
             z
               .object({
-                speakerId: z.string().optional(),
-                text: z.string().optional(),
-                emotion: z.string().optional(),
-                index: z.number().optional(),
+                speakerId: z.string().nullable().optional(),
+                text: z.string().nullable().optional(),
+                emotion: z.string().nullable().optional(),
+                index: z.number().nullable().optional(),
               })
               .strip(),
           ),
@@ -157,12 +157,13 @@ export class AnalyzePipeline {
               .object({
                 type: z
                   .enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence'])
+                  .nullable()
                   .optional(),
-                description: z.string().optional(),
-                importance: z.number().min(1).max(10).optional(),
-                startIndex: z.number().optional(),
-                endIndex: z.number().optional(),
-                text: z.string().optional(),
+                description: z.string().nullable().optional(),
+                importance: z.number().min(1).max(10).nullable().optional(),
+                startIndex: z.number().nullable().optional(),
+                endIndex: z.number().nullable().optional(),
+                text: z.string().nullable().optional(),
               })
               .strip(),
           ),
@@ -171,8 +172,8 @@ export class AnalyzePipeline {
           nonEmptyObject(
             z
               .object({
-                description: z.string().optional(),
-                index: z.number().optional(),
+                description: z.string().nullable().optional(),
+                index: z.number().nullable().optional(),
               })
               .strip(),
           ),

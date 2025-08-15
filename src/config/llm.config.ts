@@ -34,7 +34,7 @@ export function getFallbackChain(): LLMProvider[] {
 export const providers: Record<LLMProvider, ProviderConfig> = {
   cerebras: {
     apiKey: process.env.CEREBRAS_API_KEY,
-    model: 'gpt-oss-120b',
+    model: 'qwen-3-235b-a22b-instruct-2507',
     maxTokens: 8192,
     timeout: 30_000,
     baseUrl: 'https://api.cerebras.ai/v1',
