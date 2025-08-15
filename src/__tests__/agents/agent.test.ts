@@ -138,9 +138,11 @@ describe('Agent', () => {
         { maxRetries: 0 },
       )
 
-      const error = await expect(promise).rejects.toBeInstanceOf(AgentError)
-      expect(error.provider).toBe('cerebras')
-      expect(error.type).toBe(AgentErrorType.JSON_PARSE_ERROR)
+      await expect(promise).rejects.toBeInstanceOf(AgentError)
+      await promise.catch((error) => {
+        expect((error as AgentError).provider).toBe('cerebras')
+        expect((error as AgentError).type).toBe(AgentErrorType.JSON_PARSE_ERROR)
+      })
     })
 
     it('should handle Cerebras schema validation errors without retries', async () => {
@@ -162,9 +164,11 @@ describe('Agent', () => {
         { maxRetries: 0 },
       )
 
-      const error = await expect(promise).rejects.toBeInstanceOf(AgentError)
-      expect(error.provider).toBe('cerebras')
-      expect(error.type).toBe(AgentErrorType.SCHEMA_VALIDATION_ERROR)
+      await expect(promise).rejects.toBeInstanceOf(AgentError)
+      await promise.catch((error) => {
+        expect((error as AgentError).provider).toBe('cerebras')
+        expect((error as AgentError).type).toBe(AgentErrorType.SCHEMA_VALIDATION_ERROR)
+      })
     })
 
     it('should handle Cerebras API errors without retries', async () => {
@@ -178,9 +182,11 @@ describe('Agent', () => {
         { maxRetries: 0 },
       )
 
-      const error = await expect(promise).rejects.toBeInstanceOf(AgentError)
-      expect(error.provider).toBe('cerebras')
-      expect(error.type).toBe(AgentErrorType.PROVIDER_ERROR)
+      await expect(promise).rejects.toBeInstanceOf(AgentError)
+      await promise.catch((error) => {
+        expect((error as AgentError).provider).toBe('cerebras')
+        expect((error as AgentError).type).toBe(AgentErrorType.PROVIDER_ERROR)
+      })
     })
 
     it('should handle network errors for Cerebras without retries', async () => {
@@ -194,9 +200,11 @@ describe('Agent', () => {
         { maxRetries: 0 },
       )
 
-      const error = await expect(promise).rejects.toBeInstanceOf(AgentError)
-      expect(error.provider).toBe('cerebras')
-      expect(error.type).toBe(AgentErrorType.PROVIDER_ERROR)
+      await expect(promise).rejects.toBeInstanceOf(AgentError)
+      await promise.catch((error) => {
+        expect((error as AgentError).provider).toBe('cerebras')
+        expect((error as AgentError).type).toBe(AgentErrorType.PROVIDER_ERROR)
+      })
     })
   })
 
