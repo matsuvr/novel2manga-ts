@@ -1,4 +1,5 @@
 import { load as yamlLoad } from 'js-yaml'
+import { appConfig } from '@/config/app.config'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
@@ -6,7 +7,6 @@ import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
 import { getDatabaseService } from '@/services/db-factory'
 import type { MangaLayout } from '@/types/panel-layout'
 import { isMangaLayout } from '@/utils/type-guards'
-import { appConfig } from '@/config/app.config'
 
 export interface BatchOptions {
   concurrency?: number

@@ -4,9 +4,105 @@ import OpenAI from 'openai'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import type { ChatCompletionCreateParams } from 'openai/resources/chat/completions'
 import { z } from 'zod'
+import { zodToJsonSchema } from 'zod-to-json-schema'
 import { getLLMProviderConfig } from '@/config'
 import type { LLMProvider } from '@/config/llm.config'
 import { AgentError } from './errors'
+
+/**
+ * JSON Schema object with possible type arrays that need transformation
+ */
+interface JsonSchemaNode {
+  type?: string | string[]
+  anyOf?: JsonSchemaNode[]
+  properties?: Record<string, JsonSchemaNode>
+  additionalProperties?: boolean
+  nullable?: boolean
+  minimum?: number
+  maximum?: number
+  items?: JsonSchemaNode
+  prefixItems?: JsonSchemaNode[]
+  [key: string]: unknown
+}
+
+/**
+ * Transforms JSON Schema for Cerebras compatibility.
+ * - Converts type arrays like {"type": ["string", "null"]} to {"anyOf": [{"type": "string"}, {"type": "null"}]}
+ * - Adds "additionalProperties: false" to all objects for Cerebras requirement
+ * - Removes unsupported "nullable" fields and converts to anyOf patterns
+ * - Removes unsupported "minimum" and "maximum" fields
+ * - Ensures arrays have required "items" property
+ * - Handles nullable arrays by converting to anyOf patterns
+ */
+function transformForCerebrasCompatibility(
+  schema: JsonSchemaNode | undefined,
+): JsonSchemaNode | undefined {
+  if (!schema || typeof schema !== 'object' || schema === null) {
+    return schema
+  }
+
+  if (Array.isArray(schema)) {
+    return schema.map((item) =>
+      transformForCerebrasCompatibility(item as JsonSchemaNode),
+    ) as unknown as JsonSchemaNode
+  }
+
+  const result = { ...schema } as JsonSchemaNode
+
+  // Handle type arrays - convert to anyOf
+  if (result.type && Array.isArray(result.type)) {
+    const types = result.type as string[]
+    delete result.type
+    result.anyOf = types.map((type: string) => ({ type }))
+  }
+
+  // Handle nullable arrays first - convert to anyOf pattern for better compatibility
+  if (result.nullable === true && result.type === 'array') {
+    delete result.nullable
+    delete result.type
+    const arraySchema = { type: 'array', items: result.items || {} }
+    result.anyOf = [arraySchema, { type: 'null' }]
+    delete result.items
+  }
+  // Handle other nullable fields - convert to anyOf pattern
+  else if (result.nullable === true && result.type && typeof result.type === 'string') {
+    const originalType = result.type
+    delete result.type
+    delete result.nullable
+    result.anyOf = [{ type: originalType }, { type: 'null' }]
+  } else if (result.nullable === true) {
+    // If nullable but no type, just remove nullable
+    delete result.nullable
+  }
+
+  // Add additionalProperties: false to all objects for Cerebras compatibility
+  if (result.type === 'object' || result.properties) {
+    result.additionalProperties = false
+  }
+
+  // Remove unsupported minimum and maximum fields
+  delete result.minimum
+  delete result.maximum
+
+  // Ensure arrays have required items property for Cerebras compatibility
+  if (result.type === 'array' && !result.items && !result.prefixItems) {
+    // Add a generic items schema if none exists
+    result.items = {}
+  }
+
+  // Recursively process all properties
+  for (const [key, value] of Object.entries(result)) {
+    if (typeof value === 'object' && value !== null) {
+      if (Array.isArray(value)) {
+        result[key] = value.map((item) => transformForCerebrasCompatibility(item as JsonSchemaNode))
+      } else {
+        result[key] = transformForCerebrasCompatibility(value as JsonSchemaNode)
+      }
+    }
+  }
+
+  return result
+}
 
 export interface AgentOptions {
   name: string
@@ -161,17 +257,33 @@ export class Agent {
     schema: T,
   ): Promise<z.infer<T>> {
     const client = this.client as Cerebras
+
+    // Convert Zod schema to JSON Schema using proper library
+    // Use $defs instead of definitions and force anyOf for Cerebras compatibility
+    const jsonSchema = zodToJsonSchema(schema, {
+      name: 'response_schema',
+      definitionPath: '$defs',
+      strictUnions: true,
+      target: 'openApi3', // Use OpenAPI3 target to force anyOf for unions and nullable
+      removeAdditionalStrategy: 'strict',
+      // Post-process to ensure Cerebras compatibility (no type arrays, additionalProperties: false)
+      postProcess: (schema) => {
+        return transformForCerebrasCompatibility(schema as JsonSchemaNode) as typeof schema
+      },
+    })
+
     try {
-      // First try: strict structured outputs
+      // Use Cerebras structured outputs with json_schema format
       const completion = await client.chat.completions.create({
         model: this.model,
         messages: messages,
+        max_tokens: this.maxTokens,
         response_format: {
           type: 'json_schema',
           json_schema: {
-            name: 'response',
+            name: 'response_schema',
             strict: true,
-            schema: this.zodToJsonSchema(schema),
+            schema: jsonSchema,
           },
         },
       })
@@ -186,7 +298,13 @@ export class Agent {
           .min(1),
       })
       const parsedCompletion = chatCompletionSchema.parse(completion)
-      const content = parsedCompletion.choices[0].message.content
+      let content = parsedCompletion.choices[0].message.content
+
+      // Clean up any markdown formatting
+      content = content
+        .replace(/```json\n?/g, '')
+        .replace(/```\n?/g, '')
+        .trim()
 
       // Try to parse JSON with better error handling
       let parsed: unknown
@@ -225,7 +343,17 @@ export class Agent {
     }))
 
     // Convert Zod schema to JSON Schema for Gemini
-    const jsonSchema = this.zodToJsonSchema(schema)
+    // Use $defs instead of definitions for better compatibility
+    const jsonSchema = zodToJsonSchema(schema, {
+      name: 'response_schema',
+      definitionPath: '$defs',
+      strictUnions: true,
+      target: 'openApi3',
+      removeAdditionalStrategy: 'strict',
+      postProcess: (schema) => {
+        return transformForCerebrasCompatibility(schema as JsonSchemaNode) as typeof schema
+      },
+    })
 
     // Include schema requirement as a final instruction to the model
     contents.push({
@@ -236,7 +364,7 @@ export class Agent {
             jsonSchema,
             null,
             2,
-          )}`,
+          )}\n\nDo NOT wrap your response in markdown code blocks. Return only the raw JSON.`,
         },
       ],
     })
@@ -246,10 +374,16 @@ export class Agent {
       contents,
     })
 
-    const text = response.text
+    let text = response.text
     if (!text) {
       throw AgentError.fromProviderError(new Error('Empty response from Gemini'), 'gemini')
     }
+
+    // Clean up markdown code blocks if present
+    text = text
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .trim()
 
     try {
       const parsed = JSON.parse(text)
@@ -264,65 +398,6 @@ export class Agent {
       }
       console.error('Failed to parse Gemini response:', text)
       throw AgentError.fromJsonParseError(error, 'gemini')
-    }
-  }
-
-  private zodToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
-    // Simple Zod to JSON Schema converter
-    // For production, consider using zod-to-json-schema library
-    const def = schema._def
-
-    if (def.typeName === 'ZodObject') {
-      const shape = def.shape()
-      const properties: Record<string, unknown> = {}
-      const required: string[] = []
-
-      for (const [key, value] of Object.entries(shape)) {
-        const valueSchema = value as z.ZodTypeAny
-        properties[key] = this.zodToJsonSchema(valueSchema)
-        const valueDef = (valueSchema as z.ZodTypeAny)._def
-        const isOptional = valueDef?.typeName === 'ZodOptional'
-        if (!isOptional) required.push(key)
-      }
-
-      return {
-        type: 'object',
-        properties,
-        required: required.length > 0 ? required : undefined,
-        // Cerebras strict mode requires additionalProperties: false when required is present
-        additionalProperties: false,
-      }
-    } else if (def.typeName === 'ZodString') {
-      return { type: 'string' }
-    } else if (def.typeName === 'ZodNumber') {
-      return { type: 'number' }
-    } else if (def.typeName === 'ZodBoolean') {
-      return { type: 'boolean' }
-    } else if (def.typeName === 'ZodArray') {
-      return {
-        type: 'array',
-        items: this.zodToJsonSchema(def.type as z.ZodTypeAny),
-      }
-    } else if (def.typeName === 'ZodEnum') {
-      return {
-        type: 'string',
-        enum: def.values as string[],
-      }
-    } else if (def.typeName === 'ZodOptional') {
-      return this.zodToJsonSchema(def.innerType as z.ZodTypeAny)
-    } else if (def.typeName === 'ZodNullable') {
-      const innerSchema = this.zodToJsonSchema(def.innerType as z.ZodTypeAny)
-      return {
-        ...innerSchema,
-        nullable: true,
-      }
-    } else if (def.typeName === 'ZodUnion') {
-      return {
-        anyOf: (def.options as z.ZodTypeAny[]).map((opt) => this.zodToJsonSchema(opt)),
-      }
-    } else {
-      // Fallback for unsupported types
-      return {}
     }
   }
 
@@ -356,6 +431,24 @@ export class Agent {
           })
 
           return completion.choices[0]?.message?.content || ''
+        } else if (this.client instanceof Cerebras) {
+          const completion = await this.client.chat.completions.create({
+            model: this.model,
+            messages: allMessages,
+            max_tokens: this.maxTokens,
+          })
+
+          const chatCompletionSchema = z.object({
+            choices: z
+              .array(
+                z.object({
+                  message: z.object({ content: z.string() }),
+                }),
+              )
+              .min(1),
+          })
+          const parsedCompletion = chatCompletionSchema.parse(completion)
+          return parsedCompletion.choices[0].message.content
         }
         throw new Error('Invalid client type')
       } catch (error) {

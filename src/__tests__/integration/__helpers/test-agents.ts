@@ -57,27 +57,30 @@ export const TEST_CHUNK_ANALYSIS = {
   ],
 };
 
-export const TEST_NARRATIVE_ARC = [
+export const TEST_EPISODE_BOUNDARIES = [
   {
-    arcType: "setup" as const,
-    startChunkIndex: 0,
-    endChunkIndex: 2,
-    description: "ストーリーのセットアップ部分",
-    keyEvents: ["キャラクター紹介", "設定の説明"],
+    episodeNumber: 1,
+    title: "テストエピソード1",
+    summary: "テスト用エピソード1の要約",
+    startChunk: 0,
+    startCharIndex: 0,
+    endChunk: 1,
+    endCharIndex: 500,
+    estimatedPages: 8,
+    confidence: 0.9,
+    plotPoints: ["キャラクター紹介", "設定の説明"],
   },
   {
-    arcType: "confrontation" as const,
-    startChunkIndex: 3,
-    endChunkIndex: 7,
-    description: "コンフリクト発生",
-    keyEvents: ["問題の発生", "困難の始まり"],
-  },
-  {
-    arcType: "resolution" as const,
-    startChunkIndex: 8,
-    endChunkIndex: 9,
-    description: "解決パート",
-    keyEvents: ["問題解決", "結末"],
+    episodeNumber: 2,
+    title: "テストエピソード2", 
+    summary: "テスト用エピソード2の要約",
+    startChunk: 2,
+    startCharIndex: 0,
+    endChunk: 3,
+    endCharIndex: 800,
+    estimatedPages: 10,
+    confidence: 0.85,
+    plotPoints: ["問題の発生", "困難の始まり"],
   },
 ];
 
@@ -94,7 +97,7 @@ export function createMockChunkAnalyzer() {
  * ナラティブアーク分析のモック
  */
 export function createMockNarrativeAnalyzer() {
-  return vi.fn().mockResolvedValue(TEST_NARRATIVE_ARC);
+  return vi.fn().mockResolvedValue(TEST_EPISODE_BOUNDARIES);
 }
 
 /**
@@ -138,7 +141,8 @@ export function setupAgentMocks() {
       userPromptTemplate: "テスト用プロンプト: {{chunkText}}",
     })),
     getLLMDefaultProvider: vi.fn(() => "openai"),
-    getLLMProviderConfig: vi.fn(() => ({ maxTokens: 1000 })),
+    getLLMProviderConfig: vi.fn(() => ({ maxTokens: 1000, apiKey: "test-key", model: "test-model" })),
+    getLLMFallbackChain: vi.fn(() => ["openai", "anthropic"]),
     getEpisodeConfig: vi.fn(() => ({
       targetCharsPerEpisode: 1000,
       minCharsPerEpisode: 500,
@@ -146,6 +150,16 @@ export function setupAgentMocks() {
       charsPerPage: 300,
     })),
     getDatabaseConfig: vi.fn(() => ({ sqlite: { path: ":memory:" } })),
+    getLayoutGenerationConfig: vi.fn(() => ({
+      provider: "openai",
+      maxTokens: 1000,
+      systemPrompt: "テスト用レイアウト生成プロンプト",
+    })),
+    getNarrativeAnalysisConfig: vi.fn(() => ({
+      provider: "openai",
+      maxTokens: 1000,
+      systemPrompt: "テスト用ナラティブ分析プロンプト",
+    })),
   }));
   // チャンクアナライザーのモック
   vi.mock("@/agents/chunk-analyzer", () => ({
@@ -165,6 +179,29 @@ export function setupAgentMocks() {
   // エピソード生成エージェントのモック
   vi.mock("@/agents/episode-generator", () => ({
     getEpisodeGeneratorAgent: vi.fn(() => createMockEpisodeGenerator()),
+  }));
+  
+  // レイアウト生成エージェントのモック
+  vi.mock("@/agents/layout-generator", () => ({
+    generateMangaLayout: vi.fn().mockResolvedValue({
+      success: true,
+      layoutPath: "test-layout.yaml",
+      layout: {
+        pages: [
+          {
+            pageNumber: 1,
+            panels: [
+              {
+                id: "panel1",
+                type: "dialogue",
+                content: "テスト対話",
+                position: { x: 0, y: 0, width: 100, height: 100 }
+              }
+            ]
+          }
+        ]
+      }
+    })
   }));
 
   // テキスト分割のモック

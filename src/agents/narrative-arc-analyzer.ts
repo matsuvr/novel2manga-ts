@@ -246,15 +246,15 @@ export async function analyzeNarrativeArc(
         episodeNumber: z
           .number()
           .describe(`エピソード番号（${input.startingEpisodeNumber || 1}から開始）`),
-        title: z.string().optional(),
-        summary: z.string().optional(),
+        title: z.string().nullable().optional(),
+        summary: z.string().nullable().optional(),
         estimatedPages: z.number(),
         confidence: z.number().min(0).max(1),
         reasoning: z.string(),
       }),
     ),
     overallAnalysis: z.string(),
-    suggestions: z.array(z.string()).optional(),
+    suggestions: z.array(z.string()).nullable().optional(),
   })
 
   try {
@@ -289,8 +289,15 @@ export async function analyzeNarrativeArc(
 
     // 文字位置からチャンク番号・位置を計算
     const previousTextLength = input.previousEpisodeEndText?.length || 0
+    // Convert nullable fields to undefined for type compatibility
+    const processedBoundaries = result.boundaries.map((boundary) => ({
+      ...boundary,
+      title: boundary.title ?? undefined,
+      summary: boundary.summary ?? undefined,
+    }))
+
     const boundaries = convertPositionsToBoundaries(
-      result.boundaries,
+      processedBoundaries,
       input.chunks,
       previousTextLength,
     )

@@ -43,7 +43,7 @@ jobs:
       - name: Unit Tests
         run: npm run test:unit -- --run
 
-      - name: Full Flow Integration (splitOnly)
+      - name: Full Flow Integration
         run: npm run test:full-flow --if-present
 
       - name: Start App (background) for E2E

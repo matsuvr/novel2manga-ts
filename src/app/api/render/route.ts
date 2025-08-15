@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server'
+import { appConfig } from '@/config/app.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { getStoragePorts } from '@/infrastructure/storage/ports'
 import { adaptAll } from '@/repositories/adapters'
@@ -8,7 +9,6 @@ import { renderBatchFromYaml } from '@/services/application/render'
 import { getDatabaseService } from '@/services/db-factory'
 import { ApiResponder } from '@/utils/api-responder'
 import { validateJobId } from '@/utils/validators'
-import { appConfig } from '@/config/app.config'
 
 interface RenderRequest {
   jobId: string
@@ -75,9 +75,9 @@ export async function POST(request: NextRequest) {
         episodeNumber: body.episodeNumber,
         pageNumber: body.pageNumber,
         fileSize: first.fileSize,
-        dimensions: { 
-          width: appConfig.rendering.defaultPageSize.width, 
-          height: appConfig.rendering.defaultPageSize.height 
+        dimensions: {
+          width: appConfig.rendering.defaultPageSize.width,
+          height: appConfig.rendering.defaultPageSize.height,
         },
         renderedAt: first.renderedAt,
       },
