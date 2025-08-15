@@ -119,7 +119,7 @@ describe('Agent', () => {
       }))
     })
 
-    it('should handle Cerebras JSON parse errors correctly', async () => {
+    it('should handle Cerebras JSON parse errors correctly without retries', async () => {
       const mockResponse = {
         choices: [
           {
@@ -138,14 +138,12 @@ describe('Agent', () => {
         { maxRetries: 0 },
       )
 
-      await expect(promise).rejects.toBeInstanceOf(AgentError)
-      await promise.catch((error) => {
-        expect((error as AgentError).provider).toBe('cerebras')
-        expect((error as AgentError).type).toBe(AgentErrorType.JSON_PARSE_ERROR)
-      })
+      const error = await expect(promise).rejects.toBeInstanceOf(AgentError)
+      expect(error.provider).toBe('cerebras')
+      expect(error.type).toBe(AgentErrorType.JSON_PARSE_ERROR)
     })
 
-    it('should handle Cerebras schema validation errors', async () => {
+    it('should handle Cerebras schema validation errors without retries', async () => {
       const mockResponse = {
         choices: [
           {
@@ -164,14 +162,12 @@ describe('Agent', () => {
         { maxRetries: 0 },
       )
 
-      await expect(promise).rejects.toBeInstanceOf(AgentError)
-      await promise.catch((error) => {
-        expect((error as AgentError).provider).toBe('cerebras')
-        expect((error as AgentError).type).toBe(AgentErrorType.SCHEMA_VALIDATION_ERROR)
-      })
+      const error = await expect(promise).rejects.toBeInstanceOf(AgentError)
+      expect(error.provider).toBe('cerebras')
+      expect(error.type).toBe(AgentErrorType.SCHEMA_VALIDATION_ERROR)
     })
 
-    it('should handle Cerebras API errors', async () => {
+    it('should handle Cerebras API errors without retries', async () => {
       const apiError = new Error('API rate limit exceeded')
       mockCerebrasCreate.mockRejectedValue(apiError)
 
@@ -182,14 +178,12 @@ describe('Agent', () => {
         { maxRetries: 0 },
       )
 
-      await expect(promise).rejects.toBeInstanceOf(AgentError)
-      await promise.catch((error) => {
-        expect((error as AgentError).provider).toBe('cerebras')
-        expect((error as AgentError).type).toBe(AgentErrorType.PROVIDER_ERROR)
-      })
+      const error = await expect(promise).rejects.toBeInstanceOf(AgentError)
+      expect(error.provider).toBe('cerebras')
+      expect(error.type).toBe(AgentErrorType.PROVIDER_ERROR)
     })
 
-    it('should handle network errors for Cerebras', async () => {
+    it('should handle network errors for Cerebras without retries', async () => {
       const networkError = new Error('Network error')
       mockCerebrasCreate.mockRejectedValue(networkError)
 
@@ -200,11 +194,9 @@ describe('Agent', () => {
         { maxRetries: 0 },
       )
 
-      await expect(promise).rejects.toBeInstanceOf(AgentError)
-      await promise.catch((error) => {
-        expect((error as AgentError).provider).toBe('cerebras')
-        expect((error as AgentError).type).toBe(AgentErrorType.PROVIDER_ERROR)
-      })
+      const error = await expect(promise).rejects.toBeInstanceOf(AgentError)
+      expect(error.provider).toBe('cerebras')
+      expect(error.type).toBe(AgentErrorType.PROVIDER_ERROR)
     })
   })
 
