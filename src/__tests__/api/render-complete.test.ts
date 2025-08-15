@@ -5,6 +5,7 @@ import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
 import { DatabaseService } from '@/services/database'
 import { StorageFactory } from '@/utils/storage'
+import { appConfig } from '@/config/app.config'
 
 // モック設定
 vi.mock('@/services/database')
@@ -118,8 +119,8 @@ describe('/api/render エンドポイント', () => {
           isRendered: true,
           imagePath: expect.any(String),
           thumbnailPath: expect.any(String),
-          width: 595,
-          height: 842,
+          width: appConfig.rendering.defaultPageSize.width,
+          height: appConfig.rendering.defaultPageSize.height,
           fileSize: expect.any(Number),
         }
       )

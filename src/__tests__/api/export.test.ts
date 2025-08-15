@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST } from '@/app/api/export/route'
 import { DatabaseService } from '@/services/database'
+import { appConfig } from '@/config/app.config'
 
 // ストレージとデータベースのモック
 vi.mock('@/utils/storage', () => ({
@@ -44,7 +45,7 @@ vi.mock('pdfkit', () => {
         setTimeout(callback, 0)
       }
     }),
-    page: { width: 595, height: 842 },
+    page: { width: appConfig.rendering.defaultPageSize.width, height: appConfig.rendering.defaultPageSize.height },
   }
   return {
     default: vi.fn(() => mockDoc),

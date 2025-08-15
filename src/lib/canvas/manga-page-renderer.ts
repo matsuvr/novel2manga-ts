@@ -8,6 +8,7 @@ import type {
   Page,
   Panel,
 } from '@/types/panel-layout'
+import { appConfig } from '@/config/app.config'
 import { CanvasRenderer, type NodeCanvas } from './canvas-renderer'
 import { PanelLayoutEngine } from './panel-layout-engine'
 import { SpeechBubblePlacer } from './speech-bubble-placer'
@@ -29,8 +30,8 @@ export class MangaPageRenderer {
 
   constructor(config?: Partial<MangaPageRendererConfig>) {
     this.config = {
-      pageWidth: 595, // A4縦
-      pageHeight: 842, // A4縦
+      pageWidth: appConfig.rendering.defaultPageSize.width,
+      pageHeight: appConfig.rendering.defaultPageSize.height,
       margin: 20,
       panelSpacing: 10,
       defaultFont: 'sans-serif',
