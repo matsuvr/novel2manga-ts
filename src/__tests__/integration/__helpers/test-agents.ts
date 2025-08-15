@@ -139,6 +139,7 @@ export function setupAgentMocks() {
     })),
     getLLMDefaultProvider: vi.fn(() => "openai"),
     getLLMProviderConfig: vi.fn(() => ({ maxTokens: 1000 })),
+    getLLMFallbackChain: vi.fn(() => ["openai", "anthropic"]),
     getEpisodeConfig: vi.fn(() => ({
       targetCharsPerEpisode: 1000,
       minCharsPerEpisode: 500,

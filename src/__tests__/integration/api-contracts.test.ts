@@ -45,11 +45,16 @@ vi.mock("@/utils/storage", () => ({
     getNovelStorage: () => testStorageFactory.getNovelStorage(),
     getChunkStorage: () => testStorageFactory.getChunkStorage(),
     getAnalysisStorage: () => testStorageFactory.getAnalysisStorage(),
+    getLayoutStorage: () => testStorageFactory.getLayoutStorage(),
+    getRenderStorage: () => testStorageFactory.getRenderStorage(),
+    getOutputStorage: () => testStorageFactory.getOutputStorage(),
   },
   StorageKeys: {
     chunk: (jobId: string, index: number) => `${jobId}/chunks/${index}.txt`,
     chunkAnalysis: (jobId: string, index: number) =>
       `${jobId}/analysis/chunk-${index}.json`,
+    episodeLayout: (jobId: string, episodeNumber: number) =>
+      `${jobId}/episode_${episodeNumber}.yaml`,
   },
   saveEpisodeBoundaries: vi.fn().mockResolvedValue(undefined),
 }));

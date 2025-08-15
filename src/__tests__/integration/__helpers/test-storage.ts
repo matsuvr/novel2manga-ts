@@ -69,6 +69,9 @@ export class TestStorageFactory {
   private novelStorage = new TestMemoryStorage()
   private chunkStorage = new TestMemoryStorage()
   private analysisStorage = new TestMemoryStorage()
+  private layoutStorage = new TestMemoryStorage()
+  private renderStorage = new TestMemoryStorage()
+  private outputStorage = new TestMemoryStorage()
 
   async getNovelStorage(): Promise<TestMemoryStorage> {
     return this.novelStorage
@@ -82,11 +85,26 @@ export class TestStorageFactory {
     return this.analysisStorage
   }
 
+  async getLayoutStorage(): Promise<TestMemoryStorage> {
+    return this.layoutStorage
+  }
+
+  async getRenderStorage(): Promise<TestMemoryStorage> {
+    return this.renderStorage
+  }
+
+  async getOutputStorage(): Promise<TestMemoryStorage> {
+    return this.outputStorage
+  }
+
   // テスト用ヘルパー
   clearAll(): void {
     this.novelStorage.clear()
     this.chunkStorage.clear()
     this.analysisStorage.clear()
+    this.layoutStorage.clear()
+    this.renderStorage.clear()
+    this.outputStorage.clear()
   }
 
   // デバッグ用
@@ -95,6 +113,9 @@ export class TestStorageFactory {
       novels: this.novelStorage.dump(),
       chunks: this.chunkStorage.dump(),
       analysis: this.analysisStorage.dump(),
+      layouts: this.layoutStorage.dump(),
+      renders: this.renderStorage.dump(),
+      outputs: this.outputStorage.dump(),
     }
   }
 }
