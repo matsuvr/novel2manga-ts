@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm'
-import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { index, integer, real, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core'
 
 // 小説テーブル（最上位エンティティ）
 export const novels = sqliteTable(
@@ -8,7 +8,7 @@ export const novels = sqliteTable(
     id: text('id').primaryKey(),
     title: text('title'),
     author: text('author'),
-    originalTextPath: text('original_text_path').notNull(),
+    originalTextPath: text('original_text_path'),
     textLength: integer('text_length').notNull(),
     language: text('language').default('ja'),
     metadataPath: text('metadata_path'),
@@ -174,7 +174,7 @@ export const episodes = sqliteTable(
   (table) => ({
     novelIdIdx: index('idx_episodes_novel_id').on(table.novelId),
     jobIdIdx: index('idx_episodes_job_id').on(table.jobId),
-    uniqueJobEpisode: index('unique_job_episode').on(table.jobId, table.episodeNumber),
+    uniqueJobEpisode: unique('unique_job_episode').on(table.jobId, table.episodeNumber),
   }),
 )
 

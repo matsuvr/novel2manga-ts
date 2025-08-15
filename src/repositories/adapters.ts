@@ -1,6 +1,7 @@
 import type { DatabaseService } from '@/services/database'
-import type { JobStatus } from '@/types/job'
+import type { JobProgress, JobStatus } from '@/types/job'
 import type {
+  ChunkDbPort,
   EpisodeDbPort,
   EpisodeDbPortRW,
   JobDbPort,
@@ -38,6 +39,18 @@ export function adaptJobPort(db: DatabaseService): JobDbPort {
     createJob: (payload) => db.createJob(payload),
     updateJobStatus: (id: string, status: JobStatus, error?: string) =>
       db.updateJobStatus(id, status, error),
+    updateJobStep: (
+      id: string,
+      currentStep,
+      processedChunks?: number,
+      totalChunks?: number,
+      error?: string,
+      errorStep?: string,
+    ) => db.updateJobStep(id, currentStep, processedChunks, totalChunks, error, errorStep),
+    markJobStepCompleted: (id, step) => db.markJobStepCompleted(id, step),
+    updateJobProgress: (id, progress: JobProgress) => db.updateJobProgress(id, progress),
+    updateJobError: (id, error, step, incrementRetry) =>
+      db.updateJobError(id, error, step, incrementRetry),
   }
 }
 
@@ -63,6 +76,7 @@ export function adaptOutputPort(db: DatabaseService): OutputDbPort {
     entity: 'output',
     mode: 'rw',
     createOutput: (payload) => db.createOutput(payload),
+    getOutput: (id) => db.getOutput(id),
   }
 }
 
@@ -72,5 +86,21 @@ export function adaptAll(db: DatabaseService) {
     job: adaptJobPort(db),
     novel: adaptNovelPort(db, true),
     output: adaptOutputPort(db),
+    chunk: adaptChunkPort(db),
+  }
+}
+
+export function adaptChunkPort(db: DatabaseService): ChunkDbPort {
+  return {
+    entity: 'chunk',
+    mode: 'rw',
+    createChunk: (payload) => db.createChunk(payload),
+    createChunksBatch: async (payloads) => {
+      // Fallback: sequential inserts (DatabaseService implements batch natively; tests may mock)
+      for (const item of payloads) {
+        // eslint-disable-next-line no-await-in-loop
+        await db.createChunk(item)
+      }
+    },
   }
 }

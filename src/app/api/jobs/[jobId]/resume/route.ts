@@ -1,5 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
+import { EpisodeWriteService } from '@/services/application/episode-write'
+import { JobProgressService } from '@/services/application/job-progress'
 import { getDatabaseService } from '@/services/db-factory'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
 import { getJobQueue } from '@/services/queue'
@@ -14,12 +16,12 @@ import { validateJobId } from '@/utils/validators'
 export async function POST(request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
     validateJobId(params.jobId)
-    const dbService = getDatabaseService()
+    const _dbService = getDatabaseService()
     const queue = getJobQueue()
 
     // ジョブが再開可能かチェック
     // 互換性のため既存のProcessorのcanResumeを使用（テストもこれをモック）
-    const processor = new JobNarrativeProcessor(dbService)
+    const processor = new JobNarrativeProcessor(new JobProgressService(), new EpisodeWriteService())
     const canResume = await processor.canResumeJob(params.jobId)
     if (!canResume) {
       // Match test expectation exactly

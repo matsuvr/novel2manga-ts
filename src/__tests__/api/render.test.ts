@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST } from '@/app/api/render/route'
 import { DatabaseService } from '@/services/database'
 import type { MangaLayout } from '@/types/panel-layout'
+import { appConfig } from '@/config/app.config'
 
 // ストレージとデータベースのモック
 vi.mock('@/utils/storage', () => {
@@ -67,8 +68,8 @@ vi.mock('canvas', () => ({
     toBuffer: vi.fn().mockImplementation((callback) => {
       callback(null, Buffer.from('mock-canvas-buffer'))
     }),
-    width: 842,
-    height: 595,
+    width: appConfig.rendering.defaultPageSize.width,
+    height: appConfig.rendering.defaultPageSize.height,
   }),
 }))
 

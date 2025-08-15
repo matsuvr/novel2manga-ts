@@ -26,7 +26,7 @@ Kiro is an agentic IDE (Integrated Development Environment) that helps developer
   - `#file`: Reference specific files
   - `#terminal`: Include terminal output
   - `#git diff`: Reference current Git changes
-- **Integration**: Works with Claude Sonnet 3.7 and 4 AI models
+ 
 
 ### 3. Hooks (Agent Hooks)
 - **Purpose**: Automate repetitive tasks with intelligent triggers

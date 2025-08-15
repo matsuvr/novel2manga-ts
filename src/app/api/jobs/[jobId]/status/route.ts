@@ -1,11 +1,11 @@
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 import type { NextRequest } from 'next/server'
-import { getJobRepository } from '@/repositories'
-import {
-  ApiError,
-  createErrorResponse,
-  createSuccessResponse,
-  extractErrorMessage,
-} from '@/utils/api-error'
+import { getLogger } from '@/infrastructure/logging/logger'
+import { getChunkRepository, getJobRepository } from '@/repositories'
+import { ApiError, extractErrorMessage } from '@/utils/api-error'
+import { ApiResponder } from '@/utils/api-responder'
 import { validateJobId } from '@/utils/validators'
 
 export async function GET(
@@ -17,27 +17,41 @@ export async function GET(
     // jobId validation (共通ユーティリティ)
     validateJobId(params.jobId)
 
-    console.log('[job-status] Fetching job status for:', params.jobId)
+    const logger = getLogger().withContext({
+      route: 'api/jobs/[jobId]/status',
+      method: 'GET',
+      jobId: params.jobId,
+    })
+    logger.info('Fetching job status')
     const startTime = Date.now()
 
     const jobRepo = getJobRepository()
     const job = await jobRepo.getJobWithProgress(params.jobId)
 
     const duration = Date.now() - startTime
-    console.log(`[job-status] Database query completed in ${duration}ms`)
-    console.log('[job-status] Job found:', !!job)
-    console.log('[job-status] Job details:', job ? { id: job.id, status: job.status } : 'null')
+    logger.info('Database query completed', { durationMs: duration })
+    logger.info('Job result', {
+      found: !!job,
+      details: job ? { id: job.id, status: job.status } : null,
+    })
 
     if (!job) {
-      console.log('[job-status] Job not found in database')
-      throw new ApiError('Job not found', 404, 'NOT_FOUND')
+      logger.warn('Job not found in database')
+      throw new ApiError('ジョブが見つかりません', 404, 'NOT_FOUND')
     }
 
-    return createSuccessResponse({
+    // サーバー側の保険: レンダリング完了フラグが立っていれば completed として返す
+    const isCompleted = job.status === 'completed' || job.splitCompleted === true
+
+    // 旧テスト互換: DB のチャンク内容をレスポンスに含める
+    const chunkRepo = getChunkRepository()
+    const chunks = await chunkRepo.getByJobId(job.id)
+
+    const res = ApiResponder.success({
       job: {
         id: job.id,
-        status: job.status,
-        currentStep: job.currentStep,
+        status: isCompleted ? 'completed' : job.status,
+        currentStep: job.splitCompleted ? 'split_complete' : job.currentStep,
         splitCompleted: job.splitCompleted ?? false,
         analyzeCompleted: job.analyzeCompleted ?? false,
         episodeCompleted: job.episodeCompleted ?? false,
@@ -50,25 +64,44 @@ export async function GET(
         renderedPages: job.renderedPages ?? 0,
         totalPages: job.totalPages ?? 0,
         lastError: job.lastError,
-        lastErrorStep: (job as any).lastErrorStep,
+        lastErrorStep: job.lastErrorStep,
         progress: job.progress,
         createdAt: job.createdAt,
         updatedAt: job.updatedAt,
       },
+      // 互換レスポンス
+      chunks: Array.isArray(chunks)
+        ? chunks.map((c: unknown) => {
+            const chunk = c as Record<string, unknown>
+            return {
+              chunkIndex: (chunk.chunkIndex as number) ?? (chunk.chunk_index as number) ?? 0,
+              text: chunk.text as string,
+            }
+          })
+        : [],
     })
+    // 明示的にキャッシュ無効化（ブラウザ/中間キャッシュ対策）
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+    return res
   } catch (error) {
-    console.error('[job-status] Error fetching job status:', error)
+    const logger = getLogger().withContext({
+      route: 'api/jobs/[jobId]/status',
+      method: 'GET',
+    })
+    logger.error('Error fetching job status', {
+      error: extractErrorMessage(error),
+    })
     // テスト期待: data.error は常に 'Failed to fetch job status'、詳細には元エラー
     if (error instanceof ApiError) {
       // NOT_FOUND や VALIDATION はそのまま返却
       if (error.statusCode === 404 || error.statusCode === 400) {
-        return createErrorResponse(error)
+        return ApiResponder.error(error)
       }
     }
     // それ以外はメッセージ固定
     const causeMessage = extractErrorMessage(error)
     // テスト互換: エラーメッセージ固定 & details 文字列
-    return createErrorResponse(
+    return ApiResponder.error(
       new ApiError('Failed to fetch job status', 500, 'INTERNAL_ERROR', causeMessage),
     )
   }

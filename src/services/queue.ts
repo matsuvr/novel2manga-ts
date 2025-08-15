@@ -1,4 +1,5 @@
-import { getDatabaseService } from './db-factory'
+import { EpisodeWriteService } from './application/episode-write'
+import { JobProgressService } from './application/job-progress'
 import { JobNarrativeProcessor } from './job-narrative-processor'
 import { getNotificationService } from './notifications'
 
@@ -16,8 +17,9 @@ class InProcessQueue implements JobQueue {
   async enqueue(message: JobQueueMessage): Promise<void> {
     // ローカル/開発用の簡易版。即時に非同期で処理を開始
     if (message.type !== 'PROCESS_NARRATIVE') return
-    const db = getDatabaseService()
-    const processor = new JobNarrativeProcessor(db)
+    const jobService = new JobProgressService()
+    const episodeService = new EpisodeWriteService()
+    const processor = new JobNarrativeProcessor(jobService, episodeService)
     const notifications = getNotificationService()
 
     processor
@@ -42,7 +44,7 @@ class InProcessQueue implements JobQueue {
         console.error('[Queue] Job processing failed', message.jobId, err)
         // 失敗時はDBステータスをfailedに更新
         try {
-          await db.updateJobError(
+          await jobService.updateError(
             message.jobId,
             err instanceof Error ? err.message : String(err),
             'processing',

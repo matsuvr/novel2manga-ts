@@ -184,6 +184,20 @@
   - [x] Cloudflareバインディング型定義
   - _Requirements: 設定管理とLLM統合_
 
+### 2025-08-14: PR#64 レビュー修正の反映
+
+- 次を本リポジトリで実装・反映済み:
+  - Scenario step.run で (input: unknown) を採用し Zod.parse を必須化（implicit any の排除）
+  - mapField の fan-out 処理を明確化し、要素単位の Zod 検証を run 内で行うパターンに統一
+  - インメモリランナーで mapField 出力要素を step.outputSchema で個別検証するように強化
+  - cf-executor の冪等キー生成を canonical JSON + SHA-256 に変更（短縮 16hex）
+  - デッドコード（promptGen）を削除
+
+- 未完の follow-up タスク（優先度高）:
+  - [ ] STEP-IDEMP-001: idempotency key を共通ユーティリティへ抽出しユニットテストを追加
+    - 理由: 現在は cf-executor 内の実装だが、Queue/DO 実装と共有するための安定した API が必要
+  - [ ] Cloudflare Workers 向けのハッシュ実装互換性テスト（subtle.digest など）
+
 ### 11. Queue/Worker 導入（新規）
 
 - [x] インプロセスキュー雛形追加（開発用）
@@ -244,6 +258,7 @@
   - [x] ThumbnailGeneratorの実装（サムネイル生成）
   - [x] DatabaseService.updateRenderStatusの実装（render_statusテーブル管理）
   - [x] 包括的なテスト作成（render-complete.test.ts）
+  - [x] デフォルトページサイズをA4縦（595×842 px）に変更
   - _Requirements: REQ-3 - マンガレイアウト生成_
 
 - [x] 16. シナリオオーケストレーター（DSL）骨格追加（2025-08-12追加）
@@ -494,6 +509,10 @@ PRレビューコメントからの重要修正を実施し、リポジトリ層
   - [ ] パフォーマンステスト（200万文字処理時間）
   - _Requirements: 全要件の統合テスト_
 
+  - 注記（CI方針）: 現時点では GitHub Actions 上で E2E は無効化（`ENABLE_E2E: 'false'`）。デプロイ準備完了後に `'true'` 化して再導入する。
+    - 有効化の手順: `.github/workflows/ci.yml` の `ENABLE_E2E` を `'true'` に変更、もしくはワークフロー入力/環境で上書き
+    - 実行ガード: `if: ${{ env.ENABLE_E2E == 'true' }}` でサーバー起動/Playwright/停止/テストを制御
+
 ## ⚠️ 現実的な開発計画
 
 **現在の完成率**: 15%
@@ -501,3 +520,15 @@ PRレビューコメントからの重要修正を実施し、リポジトリ層
 **完全機能達成**: 2-3ヶ月
 
 **重要**: 現在はデモ画面以上の価値を提供できない状態のため、Phase 1-3の緊急修正を最優先で実施する必要があります。
+
+## 2025-08-14 DB アクセス境界の標準化
+
+- [x] Port 拡張: `JobDbPort` に進捗/エラー更新API、`OutputDbPort#getOutput` を追加
+- [x] 新規 Port: `ChunkDbPort` を追加
+- [x] Repository 実装: `ChunkRepository` と `OutputRepository`
+- [x] Factory 拡張: 上記 Repository の getter と adaptAll の `chunk` 供給
+- [x] ルート修正: `/api/analyze` を Repository 経由に更新（`updateStep/markStepCompleted/updateError`、`ChunkRepository.create`）
+- [x] ルート修正: `/api/export` を Repository 経由に更新（成果物作成/取得）
+- [x] ルート修正: `/api/job/[id]` の環境分岐を削除し Repository 一貫化
+- [ ] 追加テスト: Output/Chunk Repository のユニットテスト
+- [ ] 影響範囲の回帰テスト実行（unit/integration/e2e）

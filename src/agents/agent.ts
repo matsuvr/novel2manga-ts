@@ -1,10 +1,13 @@
+import Cerebras from '@cerebras/cerebras_cloud_sdk'
 import { GoogleGenAI } from '@google/genai'
 import Groq from 'groq-sdk'
 import OpenAI from 'openai'
 import { zodResponseFormat } from 'openai/helpers/zod'
-import type { z } from 'zod'
+import type { ChatCompletionCreateParams } from 'openai/resources/chat/completions'
+import { z } from 'zod'
 import { getLLMProviderConfig } from '@/config'
 import type { LLMProvider } from '@/config/llm.config'
+import { AgentError } from './errors'
 
 export interface AgentOptions {
   name: string
@@ -64,11 +67,12 @@ export class Agent {
       throw new Error(`API key not found for provider: ${this.provider}`)
     }
 
-    // Claudeは未対応。型上の分岐に現れないよう as const 限定の union で扱う
-    type Supported = Exclude<LLMProvider, 'claude'>
-    const provider: Supported = this.provider as Supported
-
-    switch (provider) {
+    switch (this.provider) {
+      case 'cerebras':
+        this.client = new Cerebras({
+          apiKey: config.apiKey,
+        })
+        break
       case 'openai':
         this.client = new OpenAI({
           apiKey: config.apiKey,
@@ -144,13 +148,92 @@ export class Agent {
       response_format: zodResponseFormat(schema, 'response'),
     })
 
-    const content = completion.choices[0]?.message?.content
-    if (!content) {
-      throw new Error('No content in response')
-    }
 
-    const parsed = JSON.parse(content)
-    return schema.parse(parsed)
+    try {
+      const completion = await client.chat.completions.create({
+        model: this.model,
+        messages: messages as OpenAI.ChatCompletionMessageParam[],
+        max_tokens: this.maxTokens,
+        // For OpenAI-compatible SDKs
+        response_format: responseFormat as ChatCompletionCreateParams['response_format'],
+      })
+      const content = completion.choices[0]?.message?.content
+      if (!content) {
+        throw AgentError.fromProviderError(new Error('No content in response'), 'openai')
+      }
+
+      try {
+        const parsed = JSON.parse(content)
+        try {
+          return schema.parse(parsed)
+        } catch (schemaError) {
+          throw AgentError.fromSchemaValidationError(schemaError, 'openai')
+        }
+      } catch (jsonError) {
+        throw AgentError.fromJsonParseError(jsonError, 'openai')
+      }
+    } catch (error) {
+      if (error instanceof AgentError) {
+        throw error
+      }
+      throw AgentError.fromProviderError(error, 'openai')
+    }
+  }
+
+  private async generateWithCerebras<T extends z.ZodTypeAny>(
+    messages: Array<{ role: 'user' | 'system' | 'assistant'; content: string }>,
+    schema: T,
+  ): Promise<z.infer<T>> {
+    const client = this.client as Cerebras
+    try {
+      // First try: strict structured outputs
+      const completion = await client.chat.completions.create({
+        model: this.model,
+        messages: messages,
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'response',
+            strict: true,
+            schema: this.zodToJsonSchema(schema),
+          },
+        },
+      })
+
+      const chatCompletionSchema = z.object({
+        choices: z
+          .array(
+            z.object({
+              message: z.object({ content: z.string() }),
+            }),
+          )
+          .min(1),
+      })
+      const parsedCompletion = chatCompletionSchema.parse(completion)
+      const content = parsedCompletion.choices[0].message.content
+
+      // Try to parse JSON with better error handling
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(content)
+      } catch (jsonError) {
+        console.error('[Cerebras] Invalid JSON response content:', content.substring(0, 200))
+        throw AgentError.fromJsonParseError(jsonError, 'cerebras')
+      }
+
+      try {
+        return schema.parse(parsed)
+      } catch (schemaError) {
+        throw AgentError.fromSchemaValidationError(schemaError, 'cerebras')
+      }
+    } catch (err) {
+      // Re-throw AgentErrors as-is, wrap others
+      if (err instanceof AgentError) {
+        throw err
+      }
+      console.error('[Cerebras] Error in generateWithCerebras:', err)
+      throw AgentError.fromProviderError(err, 'cerebras')
+    }
   }
 
   private async generateWithGemini<T extends z.ZodTypeAny>(
@@ -189,15 +272,22 @@ export class Agent {
 
     const text = response.text
     if (!text) {
-      throw new Error('Empty response from Gemini')
+      throw AgentError.fromProviderError(new Error('Empty response from Gemini'), 'gemini')
     }
 
     try {
       const parsed = JSON.parse(text)
-      return schema.parse(parsed)
+      try {
+        return schema.parse(parsed)
+      } catch (schemaError) {
+        throw AgentError.fromSchemaValidationError(schemaError, 'gemini')
+      }
     } catch (error) {
+      if (error instanceof AgentError) {
+        throw error
+      }
       console.error('Failed to parse Gemini response:', text)
-      throw error
+      throw AgentError.fromJsonParseError(error, 'gemini')
     }
   }
 
@@ -223,6 +313,8 @@ export class Agent {
         type: 'object',
         properties,
         required: required.length > 0 ? required : undefined,
+        // Cerebras strict mode requires additionalProperties: false when required is present
+        additionalProperties: false,
       }
     } else if (def.typeName === 'ZodString') {
       return { type: 'string' }
@@ -238,7 +330,7 @@ export class Agent {
     } else if (def.typeName === 'ZodEnum') {
       return {
         type: 'string',
-        enum: def.values as unknown[] as unknown[],
+        enum: def.values as string[],
       }
     } else if (def.typeName === 'ZodOptional') {
       return this.zodToJsonSchema(def.innerType as z.ZodTypeAny)
@@ -250,7 +342,7 @@ export class Agent {
       }
     } else if (def.typeName === 'ZodUnion') {
       return {
-        oneOf: (def.options as z.ZodTypeAny[]).map((opt) => this.zodToJsonSchema(opt)),
+        anyOf: (def.options as z.ZodTypeAny[]).map((opt) => this.zodToJsonSchema(opt)),
       }
     } else {
       // Fallback for unsupported types

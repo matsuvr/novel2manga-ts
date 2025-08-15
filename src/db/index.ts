@@ -8,7 +8,7 @@ import * as schema from './schema'
 
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null
 
-export function getDatabase() {
+export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
   if (!db) {
     const dbConfig = getDatabaseConfig()
     const dbPath = dbConfig.sqlite.path || './database/novel2manga.db'
@@ -61,6 +61,9 @@ export function getDatabase() {
     }
   }
 
+  if (!db) {
+    throw new Error('Database not initialized')
+  }
   return db
 }
 

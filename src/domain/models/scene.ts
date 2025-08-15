@@ -1,3 +1,4 @@
+import type { ZodInvalidTypeIssue } from 'zod'
 import { ZodError, z } from 'zod'
 import { ERROR_CODES, ValidationError } from '@/utils/api-error'
 
@@ -62,7 +63,7 @@ export function normalizeToSceneCore(scene: unknown): Scene {
             if (issue.code === 'invalid_type') {
               // Zod invalid_type で received が undefined → 未指定
               // それ以外 (string 期待 number 提供等) → 型不一致
-              const received: unknown = (issue as any).received
+              const received: unknown = (issue as ZodInvalidTypeIssue).received
               if (received === 'undefined' || received === undefined) {
                 if (!missingFields.includes(String(key))) missingFields.push(String(key))
               } else {

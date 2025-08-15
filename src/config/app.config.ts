@@ -189,6 +189,22 @@ export const appConfig = {
     },
   },
 
+  // 画像・ページサイズ設定
+  rendering: {
+    // デフォルトページサイズ（A4縦）
+    defaultPageSize: {
+      width: 595, // A4縦の幅（px）
+      height: 842, // A4縦の高さ（px）
+    },
+    // サポートされているページサイズプリセット
+    pageSizePresets: {
+      a4Portrait: { width: 595, height: 842 },
+      a4Landscape: { width: 842, height: 595 },
+      b4Portrait: { width: 728, height: 1031 },
+      b4Landscape: { width: 1031, height: 728 },
+    },
+  },
+
   // API設定
   api: {
     // レート制限
@@ -316,10 +332,8 @@ export type AppConfig = typeof appConfig
 
 // 環境変数オーバーライド用の変更可能な型
 type MutableAppConfig = {
-  [K in keyof AppConfig]: AppConfig[K] extends Record<string, any>
-    ? {
-        [P in keyof AppConfig[K]]: AppConfig[K][P]
-      }
+  [K in keyof AppConfig]: AppConfig[K] extends Record<string, unknown>
+    ? { [P in keyof AppConfig[K]]: AppConfig[K][P] }
     : AppConfig[K]
 }
 
