@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignoreUnknown": false,
+    "ignoreUnknown": true,
     "experimentalScannerIgnores": [
       "**/node_modules/**",
       "**/dist/**",
