@@ -117,7 +117,7 @@ export async function demoAnalyze(
     id: z.string().optional(),
     jobId: z.string().optional(),
     data: z.object({ jobId: z.string().optional() }).partial().optional(),
-    mode: z.enum(['demo', 'splitOnly']).optional(),
+    mode: z.enum(['demo']).optional(),
     chunkCount: z.number().int().nonnegative().optional(),
   })
   const json = ResponseSchema.parse(await res.json())

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { appConfig } from '@/config/app.config'
 import { CanvasRenderer } from '@/lib/canvas/canvas-renderer'
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import type { MangaLayout } from '@/types/panel-layout'
-import { appConfig } from '@/config/app.config'
 
 // CanvasRendererのモック
 vi.mock('@/lib/canvas/canvas-renderer', () => ({

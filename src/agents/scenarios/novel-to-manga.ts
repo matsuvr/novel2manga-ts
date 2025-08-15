@@ -178,7 +178,7 @@ export function createDemoApiScenario() {
     outputSchema: z.object({
       baseUrl: z.string().url(),
       jobId: z.string(),
-      mode: z.enum(['demo', 'splitOnly']).optional(),
+      mode: z.enum(['demo']).optional(),
       chunkCount: z.number().int().nonnegative().optional(),
     }),
     retry: { maxAttempts: 3, backoffMs: 800, factor: 2, jitter: true },

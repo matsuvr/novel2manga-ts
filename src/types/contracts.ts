@@ -122,7 +122,7 @@ export const zDemoAnalyzeOutput = z.object({
   baseUrl: z.string().url(),
   jobId: z.string(),
   chunkCount: z.number().int().nonnegative().optional(),
-  mode: z.enum(['demo', 'splitOnly']).optional(),
+  mode: z.enum(['demo']).optional(),
 })
 
 export const zDemoLayoutInput = z.object({

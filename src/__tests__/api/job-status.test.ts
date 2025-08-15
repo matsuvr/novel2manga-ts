@@ -98,7 +98,6 @@ describe('/api/jobs/[jobId]/status', () => {
     const data = await res.json()
 
     expect(res.status).toBe(404)
-    // 実装は日本語メッセージを返す
     expect(data.error).toBe('ジョブが見つかりません')
   })
 
