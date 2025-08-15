@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST as BatchPOST } from '@/app/api/render/batch/route'
 import { POST } from '@/app/api/render/route'
+import { appConfig } from '@/config/app.config'
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
 import { DatabaseService } from '@/services/database'
 import { StorageFactory } from '@/utils/storage'
-import { appConfig } from '@/config/app.config'
 
 // モック設定
 vi.mock('@/services/database')

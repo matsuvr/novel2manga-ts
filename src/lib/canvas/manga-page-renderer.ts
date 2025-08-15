@@ -1,3 +1,4 @@
+import { appConfig } from '@/config/app.config'
 import { normalizeEmotion } from '@/domain/models/emotion'
 import type {
   ChunkAnalysisResult,
@@ -8,7 +9,6 @@ import type {
   Page,
   Panel,
 } from '@/types/panel-layout'
-import { appConfig } from '@/config/app.config'
 import { CanvasRenderer, type NodeCanvas } from './canvas-renderer'
 import { PanelLayoutEngine } from './panel-layout-engine'
 import { SpeechBubblePlacer } from './speech-bubble-placer'

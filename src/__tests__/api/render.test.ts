@@ -3,9 +3,9 @@ import path from 'node:path'
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST } from '@/app/api/render/route'
+import { appConfig } from '@/config/app.config'
 import { DatabaseService } from '@/services/database'
 import type { MangaLayout } from '@/types/panel-layout'
-import { appConfig } from '@/config/app.config'
 
 // ストレージとデータベースのモック
 vi.mock('@/utils/storage', () => {

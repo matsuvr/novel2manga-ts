@@ -1,4 +1,5 @@
-import { DatabaseService } from '@/services/database'
+import type { DatabaseService } from '@/services/database'
+import { getDatabaseService } from '@/services/db-factory'
 import { adaptAll } from './adapters'
 import { ChunkRepository } from './chunk-repository'
 import { EpisodeRepository } from './episode-repository'
@@ -37,7 +38,7 @@ export class RepositoryFactory {
   private chunkRepo: ChunkRepository | null = null
   private outputRepo: OutputRepository | null = null
 
-  constructor(private readonly dbService: DatabaseService = new DatabaseService()) {
+  constructor(private readonly dbService: DatabaseService = getDatabaseService()) {
     this.assertValidDbService(dbService)
   }
 

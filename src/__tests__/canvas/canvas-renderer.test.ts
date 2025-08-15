@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { appConfig } from '@/config/app.config'
 import { CanvasRenderer } from '@/lib/canvas/canvas-renderer'
 import type { MangaLayout, Panel } from '@/types/panel-layout'
-import { appConfig } from '@/config/app.config'
 
 // Canvas 2Dコンテキストのモック
 const createMockContext = () => ({
