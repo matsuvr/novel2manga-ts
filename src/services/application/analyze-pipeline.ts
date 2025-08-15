@@ -199,14 +199,18 @@ export class AnalyzePipeline {
       try {
         const { analyzeChunkWithFallback } = await import('@/agents/chunk-analyzer')
         const analysis = await analyzeChunkWithFallback(prompt, textAnalysisOutputSchema, {
-          maxRetries: 2,
+          maxRetries: 0,
+          jobId,
+          chunkIndex: i,
         })
         result = analysis.result
       } catch (_e) {
         await jobRepo.updateStep(jobId, `analyze_chunk_${i}_retry`, i, chunks.length)
         const { analyzeChunkWithFallback } = await import('@/agents/chunk-analyzer')
         const analysis = await analyzeChunkWithFallback(prompt, textAnalysisOutputSchema, {
-          maxRetries: 1,
+          maxRetries: 0,
+          jobId,
+          chunkIndex: i,
         })
         result = analysis.result
       }
@@ -234,8 +238,8 @@ export class AnalyzePipeline {
     const chunkRepository = new (
       await import('@/infrastructure/storage/chunk-repository')
     ).StorageChunkRepository()
-    const boundaries = await analyzeNarrativeArc(input, chunkRepository)
-    if (boundaries.length > 0) {
+    const boundaries = (await analyzeNarrativeArc(input, chunkRepository)) ?? []
+    if (Array.isArray(boundaries) && boundaries.length > 0) {
       await saveEpisodeBoundaries(jobId, boundaries)
       await jobRepo.markStepCompleted(jobId, 'episode')
       await jobRepo.updateStep(jobId, 'layout', chunks.length, chunks.length)
@@ -243,7 +247,41 @@ export class AnalyzePipeline {
       // Generate layout for each episode
       const episodeNumbers = boundaries.map((b) => b.episodeNumber).sort((a, b) => a - b)
       for (const ep of episodeNumbers) {
-        await generateEpisodeLayout(jobId, ep, { isDemo: options.isDemo })
+        await generateEpisodeLayout(jobId, ep, {
+          isDemo: options.isDemo,
+        })
+        // デモやテスト環境では重いレンダリングをスキップ
+        const shouldRender = !options.isDemo && process.env.NODE_ENV !== 'test'
+        if (shouldRender) {
+          // 直後にレンダリングを同期実行（プレビューで404を避ける）
+          try {
+            const ports = getStoragePorts()
+            const yamlContent = (await ports.layout.getEpisodeLayout(jobId, ep)) || ''
+            if (yamlContent) {
+              const { renderBatchFromYaml } = await import('@/services/application/render')
+              await renderBatchFromYaml(
+                jobId,
+                ep,
+                yamlContent,
+                undefined,
+                { concurrency: 3 },
+                ports,
+              )
+            }
+          } catch (e) {
+            getLogger().warn('Render kick failed after layout generation', {
+              episodeNumber: ep,
+              error: (e as Error).message,
+            })
+            throw e
+          }
+        } else {
+          getLogger().warn('Skipping render in demo/test environment', {
+            episodeNumber: ep,
+            isDemo: options.isDemo === true,
+            env: process.env.NODE_ENV,
+          })
+        }
       }
     } else {
       await jobRepo.markStepCompleted(jobId, 'episode')

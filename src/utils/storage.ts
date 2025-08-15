@@ -528,6 +528,10 @@ export const StorageKeys = {
     validateId(jobId, 'jobId')
     return `${jobId}/episode_${episodeNumber}.yaml`
   },
+  episodeLayoutProgress: (jobId: string, episodeNumber: number) => {
+    validateId(jobId, 'jobId')
+    return `${jobId}/episode_${episodeNumber}.progress.json`
+  },
   pageRender: (jobId: string, episodeNumber: number, pageNumber: number) => {
     validateId(jobId, 'jobId')
     return `${jobId}/episode_${episodeNumber}/page_${pageNumber}.png`

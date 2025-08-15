@@ -299,6 +299,32 @@ export type LayoutStatusModel = z.infer<typeof LayoutStatusModelSchema>
 export type RenderStatusModel = z.infer<typeof RenderStatusModelSchema>
 export type Output = z.infer<typeof OutputSchema>
 export type StorageFile = z.infer<typeof StorageFileSchema>
+export type NewStorageFile = z.infer<typeof StorageFileSchema>
+
+// TokenUsage - トークン使用量記録
+export const TokenUsageSchema = z.object({
+  id: z.string(),
+  jobId: z.string(),
+  agentName: z.string(), // chunk-analyzer, layout-generator, etc.
+  provider: z.string(), // cerebras, openai, gemini, etc.
+  model: z.string(),
+  promptTokens: z.number(),
+  completionTokens: z.number(),
+  totalTokens: z.number(),
+  cost: z.number().optional(), // 概算コスト（USD）
+  stepName: z.string().optional(), // analyze, layout, etc.
+  chunkIndex: z.number().optional(), // チャンク分析の場合
+  episodeNumber: z.number().optional(), // エピソード処理の場合
+  createdAt: z.date(),
+})
+
+export const NewTokenUsageSchema = TokenUsageSchema.omit({
+  id: true,
+  createdAt: true,
+})
+
+export type TokenUsage = z.infer<typeof TokenUsageSchema>
+export type NewTokenUsage = z.infer<typeof NewTokenUsageSchema>
 
 export type Character = z.infer<typeof CharacterSchema>
 export type Scene = z.infer<typeof SceneSchema>

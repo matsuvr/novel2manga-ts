@@ -72,7 +72,7 @@ export const TEST_EPISODE_BOUNDARIES = [
   },
   {
     episodeNumber: 2,
-    title: "テストエピソード2", 
+    title: "テストエピソード2",
     summary: "テスト用エピソード2の要約",
     startChunk: 2,
     startCharIndex: 0,
@@ -141,7 +141,11 @@ export function setupAgentMocks() {
       userPromptTemplate: "テスト用プロンプト: {{chunkText}}",
     })),
     getLLMDefaultProvider: vi.fn(() => "openai"),
-    getLLMProviderConfig: vi.fn(() => ({ maxTokens: 1000, apiKey: "test-key", model: "test-model" })),
+    getLLMProviderConfig: vi.fn(() => ({
+      maxTokens: 1000,
+      apiKey: "test-key",
+      model: "test-model",
+    })),
     getLLMFallbackChain: vi.fn(() => ["openai", "anthropic"]),
     getEpisodeConfig: vi.fn(() => ({
       targetCharsPerEpisode: 1000,
@@ -180,7 +184,7 @@ export function setupAgentMocks() {
   vi.mock("@/agents/episode-generator", () => ({
     getEpisodeGeneratorAgent: vi.fn(() => createMockEpisodeGenerator()),
   }));
-  
+
   // レイアウト生成エージェントのモック
   vi.mock("@/agents/layout-generator", () => ({
     generateMangaLayout: vi.fn().mockResolvedValue({
@@ -195,13 +199,13 @@ export function setupAgentMocks() {
                 id: "panel1",
                 type: "dialogue",
                 content: "テスト対話",
-                position: { x: 0, y: 0, width: 100, height: 100 }
-              }
-            ]
-          }
-        ]
-      }
-    })
+                position: { x: 0, y: 0, width: 100, height: 100 },
+              },
+            ],
+          },
+        ],
+      },
+    }),
   }));
 
   // テキスト分割のモック
@@ -221,11 +225,18 @@ export function setupAgentMocks() {
   // storage モジュールは各テストファイル側でモック定義があるため、ここでは触らない
 
   // UUID生成のモック（予測可能な値を返す）
-  vi.mock("@/utils/uuid", () => ({
-    generateUUID: vi.fn(
-      () => `test-uuid-${Date.now()}-${Math.random().toString(36).slice(2)}`
-    ),
-  }));
+  vi.mock("@/utils/uuid", () => {
+    let counter = 0;
+    return {
+      // 契約テスト期待: /^test-uuid-\\d+$/ にマッチ（先頭に1つのバックスラッシュ、続く 'd' の繰り返し）
+      // 並行時の一意性は 'd' の長さで担保
+      generateUUID: vi.fn(() => {
+        counter += 1;
+        const length = 12 + (counter % 50);
+        return `test-uuid-\\${"d".repeat(length)}`;
+      }),
+    };
+  });
 }
 
 /**

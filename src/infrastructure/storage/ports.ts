@@ -18,6 +18,9 @@ export interface NovelTextStoragePort {
 export interface LayoutStoragePort {
   putEpisodeLayout(jobId: string, episodeNumber: number, yaml: string): Promise<string>
   getEpisodeLayout(jobId: string, episodeNumber: number): Promise<string | null>
+  // Incremental progress checkpoint for atomic resumes
+  putEpisodeLayoutProgress(jobId: string, episodeNumber: number, json: string): Promise<string>
+  getEpisodeLayoutProgress(jobId: string, episodeNumber: number): Promise<string | null>
 }
 
 export interface RenderStoragePort {
@@ -114,6 +117,18 @@ export function getStoragePorts(): StoragePorts {
       async getEpisodeLayout(jobId, episodeNumber) {
         const storage = await StorageFactory.getLayoutStorage()
         const key = StorageKeys.episodeLayout(jobId, episodeNumber)
+        const obj = await storage.get(key)
+        return obj?.text ?? null
+      },
+      async putEpisodeLayoutProgress(jobId, episodeNumber, json) {
+        const storage = await StorageFactory.getLayoutStorage()
+        const key = StorageKeys.episodeLayoutProgress(jobId, episodeNumber)
+        await storage.put(key, json)
+        return key
+      },
+      async getEpisodeLayoutProgress(jobId, episodeNumber) {
+        const storage = await StorageFactory.getLayoutStorage()
+        const key = StorageKeys.episodeLayoutProgress(jobId, episodeNumber)
         const obj = await storage.get(key)
         return obj?.text ?? null
       },

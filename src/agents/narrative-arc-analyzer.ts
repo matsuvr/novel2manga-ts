@@ -266,7 +266,11 @@ export async function analyzeNarrativeArc(
     const result = await narrativeArcAnalyzer.generateObject(
       [{ role: 'user', content: userPrompt }],
       responseSchema,
-      { maxRetries: 2 },
+      {
+        maxRetries: 0,
+        jobId: input.jobId,
+        stepName: 'narrative-arc',
+      },
     )
 
     if (!result) {
