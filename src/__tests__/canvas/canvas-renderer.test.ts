@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CanvasRenderer } from '@/lib/canvas/canvas-renderer'
 import type { MangaLayout, Panel } from '@/types/panel-layout'
+import { appConfig } from '@/config/app.config'
 
 // Canvas 2Dコンテキストのモック
 const createMockContext = () => ({
@@ -161,8 +162,8 @@ describe('CanvasRenderer', () => {
   describe('マンガレイアウト描画', () => {
     beforeEach(() => {
       renderer = new CanvasRenderer({
-        width: 842,
-        height: 595,
+        width: appConfig.rendering.defaultPageSize.width,
+        height: appConfig.rendering.defaultPageSize.height,
       })
     })
 
@@ -200,9 +201,9 @@ describe('CanvasRenderer', () => {
       renderer.renderMangaLayout(layout)
 
       // 背景がクリアされる
-      expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, 842, 595)
+      expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, appConfig.rendering.defaultPageSize.width, appConfig.rendering.defaultPageSize.height)
       // 全体フレームが描画される
-      expect(ctx.strokeRect).toHaveBeenCalledWith(0, 0, 842, 595)
+      expect(ctx.strokeRect).toHaveBeenCalledWith(0, 0, appConfig.rendering.defaultPageSize.width, appConfig.rendering.defaultPageSize.height)
       // 各パネルが描画される（2つのパネル）
       expect(ctx.strokeRect).toHaveBeenCalledTimes(3) // 全体フレーム + 2パネル
     })
