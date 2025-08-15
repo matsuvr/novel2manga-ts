@@ -206,7 +206,7 @@ graph TB
 
 - **Frontend**: Next.js 15.3.3 (App Router) + TypeScript 5 + Tailwind CSS v4
 - **AI SDKs**: OpenAI SDK, Google GenAI SDK（直接呼び出し）
-- **絵コンテ生成**: Canvas API（枠線・テキスト・吹き出しのみ、イラストは含まない）
+- **絵コンテ生成**: Canvas API（枠線・テキスト・吹き出しのみ、イラストは含まない）。デフォルトページサイズはA4縦（595×842 px）
 - **Backend**: Next.js API Routes + Mastra Agents
 - **Database**: Cloudflare D1 (SQLite ベース) / SQLite (開発環境)
 - **Cache**: Cloudflare KV (APIレスポンスキャッシュ)
