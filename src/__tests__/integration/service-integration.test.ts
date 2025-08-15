@@ -167,7 +167,6 @@ describe("Service Integration Tests", () => {
       // 実行: 分析パイプラインの実行
       const pipeline = new AnalyzePipeline();
       const result = await pipeline.runWithNovelId(novel.id, {
-        splitOnly: false, // 完全な分析を実行
         userEmail: "test@example.com",
         isDemo: true, // Use demo episodes to avoid "Episode not found" error
       });
@@ -198,56 +197,11 @@ describe("Service Integration Tests", () => {
       // expect(analysisStorage.has(`${result.jobId}/analysis/chunk-0.json`)).toBe(true);
     });
 
-    it("splitOnlyモードでは分析をスキップする", async () => {
-      // 準備: テスト用小説データ
-      const novel = await dataFactory.createNovel({
-        id: "test-novel-split",
-        title: "Split Only Test Novel",
-        textLength: 3000,
-      });
-
-      const novelText = "これはsplitOnlyテスト用のテキストです。".repeat(50);
-      await storageDataFactory.seedNovelText(novel.id, novelText, {
-        title: novel.title,
-      });
-
-      // 実行: splitOnlyモードでの実行
-      const pipeline = new AnalyzePipeline();
-      const result = await pipeline.runWithNovelId(novel.id, {
-        splitOnly: true,
-        userEmail: "test@example.com",
-      });
-
-      // 検証: パイプライン結果
-      expect(result.success ?? true).toBe(true);
-      expect(result.jobId).toBeDefined();
-      expect(result.chunkCount).toBeGreaterThan(0);
-
-      // 検証: ジョブのステータス
-      const job = await testDb.service.getJob(result.jobId);
-      expect(job?.status).toBe("completed");
-      // splitOnlyではDB上は'completed' + currentStepは'split'でよい（仕様に依存）
-      expect(["split", "split_complete"]).toContain(job?.currentStep);
-
-      // 検証: チャンクは作成されているが分析結果はない
-      const chunks = await testDb.service.getChunksByJobId(result.jobId);
-      expect(chunks.length).toBe(result.chunkCount);
-
-      const chunkStorage = await testStorageFactory.getChunkStorage();
-      expect(chunkStorage.has(`${result.jobId}/chunks/0.txt`)).toBe(true);
-
-      const analysisStorage = await testStorageFactory.getAnalysisStorage();
-      expect(analysisStorage.has(`${result.jobId}/analysis/chunk-0.json`)).toBe(
-        false
-      );
-    });
-
     it("存在しない小説IDでは適切なエラーが発生する", async () => {
       const pipeline = new AnalyzePipeline();
 
       await expect(
         pipeline.runWithNovelId("nonexistent-novel-id", {
-          splitOnly: false,
           userEmail: "test@example.com",
         })
       ).rejects.toThrow("小説ID がデータベースに見つかりません");
@@ -266,7 +220,6 @@ describe("Service Integration Tests", () => {
 
       await expect(
         pipeline.runWithNovelId(novel.id, {
-          splitOnly: false,
           userEmail: "test@example.com",
         })
       ).rejects.toThrow("小説のテキストがストレージに見つかりません");
@@ -287,7 +240,6 @@ describe("Service Integration Tests", () => {
       // 実行: パイプライン実行
       const pipeline = new AnalyzePipeline();
       const result = await pipeline.runWithNovelId(novel.id, {
-        splitOnly: false,
         userEmail: "test@example.com",
         isDemo: true, // Use demo episodes to avoid "Episode not found" error
       });
@@ -334,7 +286,6 @@ describe("Service Integration Tests", () => {
       // エラーが適切に伝播することを確認
       await expect(
         pipeline.runWithNovelId(novel.id, {
-          splitOnly: true,
           userEmail: "test@example.com",
         })
       ).rejects.toThrow();

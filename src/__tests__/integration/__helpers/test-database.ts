@@ -217,7 +217,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
       await db
         .update(schema.jobs)
         .set({
-          status: 'error',
+          status: "error",
           lastError: error,
           lastErrorStep: errorStep,
         })

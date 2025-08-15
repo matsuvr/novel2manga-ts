@@ -218,76 +218,6 @@ describe('Workflow Integration Tests', () => {
       const analysisStorage = await testStorageFactory.getAnalysisStorage()
       expect(analysisStorage.has(`${jobId}/analysis/chunk-0.json`)).toBe(true)
     })
-
-    it('splitOnlyモードでの限定的なワークフロー', async () => {
-      const novelText = 'これはsplitOnlyモードのテスト用テキストです。'.repeat(100)
-
-      // Step 1: 小説をアップロード
-      const uploadRequest = new NextRequest('http://localhost:3000/api/novel', {
-        method: 'POST',
-        body: JSON.stringify({ text: novelText }),
-        headers: { 'Content-Type': 'application/json' },
-      })
-
-      const uploadResponse = await NovelPost(uploadRequest)
-      const uploadData = await uploadResponse.json()
-      const novelId = uploadData.uuid
-
-      // Step 2: splitOnlyで分析を実行
-      const analyzeRequest = new NextRequest('http://localhost:3000/api/analyze', {
-        method: 'POST',
-        body: JSON.stringify({ novelId, splitOnly: true }),
-        headers: { 'Content-Type': 'application/json' },
-      })
-
-      const analyzeResponse = await AnalyzePost(analyzeRequest)
-      const analyzeData = await analyzeResponse.json()
-      const jobId = analyzeData.jobId
-
-      if (isRateLimitAcceptable(analyzeResponse.status, analyzeData)) {
-        expect([429, 503]).toContain(analyzeResponse.status)
-        expect(explainRateLimit(analyzeData)).toBeTruthy()
-        return
-      }
-
-      expect([200, 201]).toContain(analyzeResponse.status)
-      expect(analyzeData.success).toBe(true)
-
-      // Step 3: ジョブステータスの確認（split完了状態）
-      const statusRequest = new NextRequest(`http://localhost:3000/api/jobs/${jobId}/status`, {
-        method: 'GET',
-      })
-
-      const statusResponse = await JobStatusGet(statusRequest, { params: { jobId } })
-      const statusData = await statusResponse.json()
-
-      expect(statusResponse.status).toBe(200)
-      expect(statusData.job.status).toBe('completed')
-      expect(statusData.job.currentStep).toBe('split_complete')
-      expect(statusData.chunks).toHaveLength(analyzeData.chunkCount)
-
-      // Step 4: エピソード情報の取得（splitOnlyでは作成されない or デモエピソード）
-      const episodesRequest = new NextRequest(`http://localhost:3000/api/jobs/${jobId}/episodes`, {
-        method: 'GET',
-      })
-
-      const episodesResponse = await EpisodesGet(episodesRequest, { params: { jobId } })
-
-      // splitOnlyの場合の動作は実装に依存（404 or デモエピソード）
-      if (episodesResponse.status === 200) {
-        const episodesData = await episodesResponse.json()
-        expect(episodesData.success).toBe(true)
-        expect(episodesData.episodes).toBeDefined()
-        // デモエピソードの場合
-        expect(episodesData.episodes[0]?.title).toContain('デモ')
-      } else {
-        expect(episodesResponse.status).toBe(404)
-      }
-
-      // 分析結果がストレージに保存されていないことを確認
-      const analysisStorage = await testStorageFactory.getAnalysisStorage()
-      expect(analysisStorage.has(`${jobId}/analysis/chunk-0.json`)).toBe(false)
-    })
   })
 
   describe('Error Handling Workflows', () => {
@@ -347,7 +277,7 @@ describe('Workflow Integration Tests', () => {
       const analyzePromises = uploadResults.map(async ({ novelId, index }) => {
         const request = new NextRequest('http://localhost:3000/api/analyze', {
           method: 'POST',
-          body: JSON.stringify({ novelId, splitOnly: true }),
+          body: JSON.stringify({ novelId }),
           headers: { 'Content-Type': 'application/json' },
         })
 
