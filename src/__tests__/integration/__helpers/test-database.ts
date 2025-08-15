@@ -40,34 +40,36 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   // 簡易実装のサービス（本番 DatabaseService の必要部分のみを再現）
   const service = {
     async createNovel(
-      novel: Omit<schema.NewNovel, "id" | "createdAt" | "updatedAt">
+      novel: Pick<schema.NewNovel, "title" | "textLength"> & 
+        Partial<Pick<schema.NewNovel, "author" | "originalTextPath" | "language" | "metadataPath">>
     ): Promise<string> {
       const id = crypto.randomUUID();
       await db.insert(schema.novels).values({
         id,
         title: novel.title,
-        author: (novel as any).author,
-        originalTextPath: (novel as any).originalTextPath,
+        author: novel.author || null,
+        originalTextPath: novel.originalTextPath || null,
         textLength: novel.textLength,
-        language: (novel as any).language || "ja",
-        metadataPath: (novel as any).metadataPath,
+        language: novel.language || "ja",
+        metadataPath: novel.metadataPath || null,
       });
       return id;
     },
     async ensureNovel(
       id: string,
-      novel: Omit<schema.NewNovel, "id" | "createdAt" | "updatedAt">
+      novel: Pick<schema.NewNovel, "title" | "textLength"> & 
+        Partial<Pick<schema.NewNovel, "author" | "originalTextPath" | "language" | "metadataPath">>
     ): Promise<void> {
       await db
         .insert(schema.novels)
         .values({
           id,
           title: novel.title,
-          author: (novel as any).author,
-          originalTextPath: (novel as any).originalTextPath,
+          author: novel.author || null,
+          originalTextPath: novel.originalTextPath || null,
           textLength: novel.textLength,
-          language: (novel as any).language || "ja",
-          metadataPath: (novel as any).metadataPath,
+          language: novel.language || "ja",
+          metadataPath: novel.metadataPath || null,
         })
         .onConflictDoNothing();
     },
@@ -82,16 +84,16 @@ export async function createTestDatabase(): Promise<TestDatabase> {
     async createJob(payload: {
       id?: string;
       novelId: string;
-      title?: string;
+      jobName?: string | null;
       totalChunks?: number;
-      status?: string;
+      status?: "pending" | "processing" | "completed" | "failed" | "paused";
     }) {
       const id = payload.id || crypto.randomUUID();
       await db.insert(schema.jobs).values({
         id,
         novelId: payload.novelId,
-        jobName: payload.title,
-        status: (payload.status as any) || "processing",
+        jobName: payload.jobName || null,
+        status: payload.status || "processing",
         currentStep: "initialized",
         totalChunks: payload.totalChunks || 0,
       });
@@ -99,7 +101,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
     },
     async updateJobStep(
       id: string,
-      step: any,
+      step: "initialized" | "split" | "analyze" | "episode" | "layout" | "render" | "complete",
       processed?: number,
       total?: number,
       error?: string,
@@ -110,15 +112,15 @@ export async function createTestDatabase(): Promise<TestDatabase> {
         totalChunks: total,
         lastError: error,
         lastErrorStep: errorStep,
-        currentStep: step as any,
-      } as any;
+        currentStep: step,
+      };
       await db
         .update(schema.jobs)
         .set(updateData)
         .where(eq(schema.jobs.id, id));
     },
-    async markJobStepCompleted(id: string, step: any) {
-      const updateData: Record<string, any> = {};
+    async markJobStepCompleted(id: string, step: "split" | "analyze" | "episode" | "layout" | "render") {
+      const updateData: Partial<schema.Job> = {};
       switch (step) {
         case "split":
           updateData.splitCompleted = true;
@@ -141,7 +143,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
         .set(updateData)
         .where(eq(schema.jobs.id, id));
     },
-    async updateJobStatus(id: string, status: any) {
+    async updateJobStatus(id: string, status: "pending" | "processing" | "completed" | "failed" | "paused") {
       await db
         .update(schema.jobs)
         .set({ status })
@@ -166,9 +168,9 @@ export async function createTestDatabase(): Promise<TestDatabase> {
       return {
         ...job,
         progress: {
-          currentStep: (job as any).currentStep || "initialized",
-          processedChunks: (job as any).processedChunks || 0,
-          totalChunks: (job as any).totalChunks || 0,
+          currentStep: job.currentStep || "initialized",
+          processedChunks: job.processedChunks || 0,
+          totalChunks: job.totalChunks || 0,
           episodes: [],
         },
       };
@@ -180,11 +182,11 @@ export async function createTestDatabase(): Promise<TestDatabase> {
       await db.insert(schema.chunks).values({ id, ...chunk });
       return id;
     },
-    async createChunksBatch(payloads: any[]) {
+    async createChunksBatch(payloads: Omit<schema.NewChunk, "id" | "createdAt">[]) {
       for (const p of payloads) {
         await db
           .insert(schema.chunks)
-          .values({ id: crypto.randomUUID(), ...(p as any) });
+          .values({ id: crypto.randomUUID(), ...p });
       }
     },
     async getChunksByJobId(jobId: string) {
@@ -200,9 +202,10 @@ export async function createTestDatabase(): Promise<TestDatabase> {
         .from(schema.chunks)
         .where(eq(schema.chunks.jobId, jobId))
         .orderBy(asc(schema.chunks.chunkIndex));
-      return rows.map((r: any) => ({
+      return rows.map((r) => ({
         chunkIndex: r.chunkIndex,
-        text: (r as any).text,
+        // Note: chunks table doesn't have text field, only contentPath
+        contentPath: r.contentPath,
       }));
     },
     async getEpisodesByJobId(jobId: string) {
@@ -301,13 +304,12 @@ export class TestDataFactory {
   ) {
     // スキーマ必須項目に合わせてデフォルト値を用意
     const nowId = crypto.randomUUID();
-    const novelId = (overrides as any).novelId || "test-novel-default";
-    const jobId = (overrides as any).jobId || "test-job-default";
+    const novelId = overrides.novelId || "test-novel-default";
+    const jobId = overrides.jobId || "test-job-default";
     const chunkIndex = overrides.chunkIndex ?? 0;
-    const contentPath =
-      (overrides as any).contentPath ?? `${jobId}/chunks/${chunkIndex}.txt`;
-    const startPosition = (overrides as any).startPosition ?? 0;
-    const endPosition = (overrides as any).endPosition ?? 100;
+    const contentPath = overrides.contentPath ?? `${jobId}/chunks/${chunkIndex}.txt`;
+    const startPosition = overrides.startPosition ?? 0;
+    const endPosition = overrides.endPosition ?? 100;
     const wordCount = overrides.wordCount ?? 100;
 
     // スキーマに存在しないキー（例: text）は含めない
@@ -337,8 +339,8 @@ export class TestDataFactory {
     ]);
 
     for (const [k, v] of Object.entries(overrides)) {
-      if (allowedKeys.has(k as keyof typeof chunk)) {
-        (chunk as any)[k] = v;
+      if (allowedKeys.has(k as keyof typeof chunk) && v !== undefined) {
+        (chunk as Record<string, unknown>)[k] = v;
       }
     }
 
@@ -350,22 +352,22 @@ export class TestDataFactory {
     overrides: Partial<typeof schema.episodes.$inferInsert> = {}
   ) {
     const nowId = crypto.randomUUID();
-    const novelId = (overrides as any).novelId || "test-novel-default";
-    const jobId = (overrides as any).jobId || "test-job-default";
+    const novelId = overrides.novelId || "test-novel-default";
+    const jobId = overrides.jobId || "test-job-default";
 
     const episode: typeof schema.episodes.$inferInsert = {
       id: nowId,
       novelId,
       jobId,
       episodeNumber: overrides.episodeNumber ?? 1,
-      title: (overrides as any).title ?? "Test Episode",
-      summary: (overrides as any).summary ?? "Test episode summary",
-      startChunk: (overrides as any).startChunk ?? 0,
-      startCharIndex: (overrides as any).startCharIndex ?? 0,
-      endChunk: (overrides as any).endChunk ?? 1,
-      endCharIndex: (overrides as any).endCharIndex ?? 100,
-      estimatedPages: (overrides as any).estimatedPages ?? 5,
-      confidence: (overrides as any).confidence ?? 0.9,
+      title: overrides.title ?? "Test Episode",
+      summary: overrides.summary ?? "Test episode summary",
+      startChunk: overrides.startChunk ?? 0,
+      startCharIndex: overrides.startCharIndex ?? 0,
+      endChunk: overrides.endChunk ?? 1,
+      endCharIndex: overrides.endCharIndex ?? 100,
+      estimatedPages: overrides.estimatedPages ?? 5,
+      confidence: overrides.confidence ?? 0.9,
       // createdAt はDBデフォルト
     };
 
@@ -386,8 +388,8 @@ export class TestDataFactory {
     ]);
 
     for (const [k, v] of Object.entries(overrides)) {
-      if (allowedKeys.has(k as keyof typeof episode)) {
-        (episode as any)[k] = v;
+      if (allowedKeys.has(k as keyof typeof episode) && v !== undefined) {
+        (episode as Record<string, unknown>)[k] = v;
       }
     }
 

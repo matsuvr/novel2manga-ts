@@ -3,11 +3,12 @@
  * エンドツーエンドの業務フローをテスト（サーバー起動不要）
  */
 
+import crypto from "node:crypto"
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { explainRateLimit, isRateLimitAcceptable } from './__helpers/rate-limit'
 // 依存モック適用後にルートを動的import
-import { resetAgentMocks, setupAgentMocks } from './__helpers/test-agents'
+import { resetAgentMocks, setupAgentMocks, TEST_CHUNK_ANALYSIS, TEST_EPISODE_BOUNDARIES } from './__helpers/test-agents'
 import type { TestDatabase } from './__helpers/test-database'
 import { cleanupTestDatabase, createTestDatabase, TestDataFactory } from './__helpers/test-database'
 import { TestStorageDataFactory, TestStorageFactory } from './__helpers/test-storage'
@@ -27,6 +28,18 @@ vi.mock('@/config', () => ({
       path: ':memory:',
     },
   })),
+  getLayoutGenerationConfig: vi.fn(() => ({
+    provider: 'openai',
+    maxTokens: 1000,
+    systemPrompt: 'テスト用レイアウト生成プロンプト',
+  })),
+  getLLMDefaultProvider: vi.fn(() => 'openai'),
+  getEpisodeConfig: vi.fn(() => ({
+    targetCharsPerEpisode: 1000,
+    minCharsPerEpisode: 500,
+    maxCharsPerEpisode: 2000,
+    charsPerPage: 300,
+  })),
 }))
 
 let testStorageFactory: TestStorageFactory
@@ -45,7 +58,69 @@ vi.mock('@/utils/storage', () => ({
     episodeLayout: (jobId: string, episodeNumber: number) =>
       `${jobId}/episode_${episodeNumber}.yaml`,
   },
-  saveEpisodeBoundaries: vi.fn(),
+  saveEpisodeBoundaries: vi.fn().mockImplementation(async (jobId: string, boundaries: any[]) => {
+    // モックエピソード境界をテストDBに保存
+    if (__testDbForFactory) {
+      // jobからnovelIdを取得
+      const job = await __testDbForFactory.service.getJob(jobId);
+      const novelId = job?.novelId || "test-novel-default";
+      
+      for (const boundary of boundaries) {
+        await __testDbForFactory.db.insert(
+          (await import("@/db/schema")).episodes
+        ).values({
+          id: crypto.randomUUID(),
+          novelId,
+          jobId,
+          episodeNumber: boundary.episodeNumber,
+          title: boundary.title || `Episode ${boundary.episodeNumber}`,
+          summary: boundary.summary || `Test episode ${boundary.episodeNumber}`,
+          startChunk: boundary.startChunk,
+          startCharIndex: boundary.startCharIndex,
+          endChunk: boundary.endChunk,
+          endCharIndex: boundary.endCharIndex,
+          estimatedPages: boundary.estimatedPages,
+          confidence: boundary.confidence,
+        });
+      }
+    }
+  }),
+}))
+
+// Agent のモック
+vi.mock("@/agents/chunk-analyzer", () => ({
+  analyzeChunkWithFallback: vi.fn().mockResolvedValue({
+    result: TEST_CHUNK_ANALYSIS,
+    usedProvider: "mock",
+    fallbackFrom: [],
+  }),
+}))
+
+vi.mock("@/agents/narrative-arc-analyzer", () => ({
+  analyzeNarrativeArc: vi.fn().mockResolvedValue(TEST_EPISODE_BOUNDARIES),
+}))
+
+// レイアウト生成エージェントのモック
+vi.mock("@/agents/layout-generator", () => ({
+  generateMangaLayout: vi.fn().mockResolvedValue({
+    success: true,
+    layoutPath: "test-layout.yaml",
+    layout: {
+      pages: [
+        {
+          pageNumber: 1,
+          panels: [
+            {
+              id: "panel1",
+              type: "dialogue",
+              content: "テスト対話",
+              position: { x: 0, y: 0, width: 100, height: 100 }
+            }
+          ]
+        }
+      ]
+    }
+  })
 }))
 
 // RepositoryFactory のモック（テストDBに委譲）
@@ -69,6 +144,10 @@ vi.mock('@/repositories/factory', () => {
       createBatch: (payloads: any[]) => __testDbForFactory!.service.createChunksBatch(payloads),
       getByJobId: (jobId: string) => __testDbForFactory!.service.getChunksByJobId(jobId) as any,
       db: { getChunksByJobId: (jobId: string) => __testDbForFactory!.service.getChunksByJobId(jobId) },
+    }),
+    getEpisodeRepository: () => ({
+      getByJobId: (jobId: string) => 
+        __testDbForFactory!.service.getEpisodesByJobId(jobId),
     }),
   })
   return {

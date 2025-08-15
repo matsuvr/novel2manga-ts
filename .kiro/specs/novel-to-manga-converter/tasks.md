@@ -28,12 +28,12 @@
   - [x] データベースサービスの拡張（src/services/database.ts）
   - _Requirements: REQ-6 - データ管理_
 
-- [x] 3. AI処理レイヤーの実装（Mastraエージェント）（2025-08-05完了）
+- [x] 3. AI処理レイヤーの実装（Custom Agent Architecture）（2025-08-15更新）
 - [x] 3.1 テキスト解析エージェント
   - [x] チャンク分割ユーティリティ実装（src/utils/chunk-splitter.ts）
   - [x] チャンクAPIエンドポイント実装（/api/novel/[uuid]/chunks）
   - [x] オーバーラップ付き分割ロジック（文脈保持）
-  - [x] Mastraエージェント実装（src/agents/chunk-analyzer.ts）
+  - [x] Custom Agent実装（src/agents/chunk-analyzer.ts）（2025-08-15: Mastraから独自実装に移行）
   - [x] 前後のチャンクを参照した文脈考慮型分析実装（2025-07-29）
   - _Requirements: REQ-1 - テキスト入力と解析_
 
@@ -97,7 +97,7 @@
 - [x] 6.2 テキスト解析とレイアウト生成API（部分実装）
   - [x] /api/analyzeエンドポイント実装（src/app/api/analyze/route.ts）
   - [x] テキストチャンク分割機能（src/utils/chunk-splitter.ts）
-  - [x] Mastraエージェント統合（テキスト解析、5要素抽出）（2025-07-29）
+  - [x] Custom Agent統合（テキスト解析、5要素抽出）（2025-08-15: Architecture刷新）
   - [x] /api/analyze/chunkエンドポイント実装（2025-07-29）
   - [x] 前後チャンク参照機能とキャッシュ実装（2025-07-29）
   - [x] /api/jobs/[jobId]/episodesエンドポイント実装（2025-07-31）
@@ -366,11 +366,23 @@
 
 ### 08-09 型適合タスク（新規）
 
-- [ ] TASK-LLM-ADAPTER-001: Mastra Agent が要求する LanguageModelV1 と Vercel AI SDK v5 の LanguageModelV2 の型差異を吸収する軽量アダプタの導入
-  - 背景: 現状 `src/agents/layout-generator.ts` で `as any` による一時回避を実施
-  - 受け入れ条件:
-    - `as any` を除去し、strict typesでビルド通過
-    - Agent.model に渡す関数の戻り型がMastra側の期待に完全一致
+- [x] TASK-LLM-ADAPTER-001: ~~Mastra Agent が要求する LanguageModelV1 と Vercel AI SDK v5 の LanguageModelV2 の型差異を吸収する軽量アダプタの導入~~ **完了（2025-08-15）**: Custom Agent Architectureに移行し、各LLMプロバイダーとの直接統合を実現
+
+### 08-15 Agent Architecture 刷新（新規）
+
+- [x] TASK-AGENT-ARCH-001: Custom Agent Architecture実装
+  - [x] Mastra Agentsから独自Agent実装への移行完了
+  - [x] `src/agents/agent.ts`: 統一Agent基盤実装（OpenAI, Cerebras, Gemini, Groq, OpenRouter対応）
+  - [x] `zod-to-json-schema@3.24.6` 導入とCerebras互換性対応
+  - [x] `transformForCerebrasCompatibility` 関数によるJSON Schema変換実装
+  - [x] `AgentError` によるエラーハンドリング統一化
+  - [x] 全`any`型使用を廃止し、strict TypeScript compliance達成
+  - [x] BaseAgent: 将来のログ・トレーシング拡張ポイント配置
+  - 受け入れ条件: ✅ 全て完了
+    - 複数LLMプロバイダーの統一インターフェース対応
+    - Zodスキーマを各プロバイダーのJSON Schema形式に変換
+    - 型安全なエラーハンドリング実装
+    - 全`any`型使用を廃止し、strict TypeScript compliance達成
     - 単体テスト: 既存のレイアウト生成テストがグリーンのまま
   - 参考: Mastra Agents / Vercel AI SDK 最新ドキュメント（MCPで検証済み）
 

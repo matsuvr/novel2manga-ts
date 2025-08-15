@@ -225,7 +225,7 @@ export class Agent {
       const completion = await client.chat.completions.create({
         model: this.model,
         messages: messages as OpenAI.ChatCompletionMessageParam[],
-        max_completion_tokens: this.maxTokens,
+        max_tokens: this.maxTokens,
         // For OpenAI-compatible SDKs
         response_format: responseFormat as ChatCompletionCreateParams['response_format'],
       })
@@ -277,7 +277,7 @@ export class Agent {
       const completion = await client.chat.completions.create({
         model: this.model,
         messages: messages,
-        max_completion_tokens: this.maxTokens,
+        max_tokens: this.maxTokens,
         response_format: {
           type: 'json_schema',
           json_schema: {
@@ -427,7 +427,7 @@ export class Agent {
           const completion = await this.client.chat.completions.create({
             model: this.model,
             messages: allMessages as OpenAI.ChatCompletionMessageParam[],
-            max_completion_tokens: this.maxTokens,
+            max_tokens: this.maxTokens,
           })
 
           return completion.choices[0]?.message?.content || ''
@@ -435,7 +435,7 @@ export class Agent {
           const completion = await this.client.chat.completions.create({
             model: this.model,
             messages: allMessages,
-            max_completion_tokens: this.maxTokens,
+            max_tokens: this.maxTokens,
           })
 
           const chatCompletionSchema = z.object({
