@@ -10,8 +10,40 @@
 - [ ] E2E: add a happy-path scenario for resume after one batch (progress present) then completion.
 - [ ] Documentation: update README usage notes if needed.
 
-Acceptance Criteria
+## Completed (2025-08-16): Service Layer Improvements
+
+- [x] **JobProgressService Enhancement**: Improved error handling and progress enrichment
+  - [x] Implement `safeOperation` pattern for graceful error handling
+  - [x] Add perEpisodePages enrichment with planned/rendered/total counts
+  - [x] Parallel processing of episode data for better performance
+  - [x] Comprehensive error logging without silencing failures
+  - [x] Robust JSON parsing with fallback mechanisms
+
+- [x] **Integration Test Coverage**: Comprehensive service-level testing
+  - [x] Test JobProgressService.getJobWithProgress with mock dependencies
+  - [x] Verify enrichment logic with real episode data
+  - [x] Test error scenarios: storage failures, parsing errors, database errors
+  - [x] Validate graceful degradation and fallback behavior
+
+- [x] **Documentation Fixes**: Critical infrastructure improvements
+  - [x] **CRITICAL**: Fix corrupted dependency_chart.md with proper Mermaid syntax
+  - [x] Remove massive duplication and broken code blocks
+  - [x] Regenerate clean dependency chart reflecting current architecture
+  - [x] Update design.md with service layer improvements
+
+## Quality Assurance Completed
+
+- [x] TypeScript: Zero `any` types, strict type enforcement maintained
+- [x] Linting: All Biome lint checks passing with no errors
+- [x] Error Handling: Comprehensive logging patterns implemented
+- [x] Test Coverage: Integration tests validate core enrichment logic
+- [x] DRY Principle: No code duplication introduced, shared utilities properly factored
+
+## Acceptance Criteria
 
 - Can resume from `.progress.json` with no data loss.
 - Minor back-edits within 2 pages replace prior YAML pages by page number.
 - Rendering waits until episode YAML complete; can render ep N while generating YAML for ep N+1.
+- **NEW**: JobProgressService enriches job data with per-episode page progress without breaking on errors.
+- **NEW**: All service errors are logged with full context for debugging, never silenced.
+- **NEW**: Dependency chart renders correctly in GitHub with clean, current architecture.
