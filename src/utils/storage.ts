@@ -34,9 +34,12 @@ const getStorageBase = () => {
 
 const LOCAL_STORAGE_BASE = getStorageBase()
 
-// ディレクトリ作成ヘルパー
+// ディレクトリ作成ヘルパー（成功したパスをキャッシュして不要なIOを削減）
+const createdDirs = new Set<string>()
 async function ensureDir(dirPath: string): Promise<void> {
+  if (createdDirs.has(dirPath)) return
   await fs.mkdir(dirPath, { recursive: true })
+  createdDirs.add(dirPath)
 }
 
 // ========================================
@@ -76,14 +79,18 @@ export class LocalFileStorage implements Storage {
         await fs.writeFile(metadataPath, JSON.stringify(metadataContent), 'utf-8')
       }
     } else {
-      // テキストデータの場合：シンプルなJSONで保存（インデントなし）
-      const data = {
-        content: value.toString(),
-        metadata: metadata || {},
+      // テキストデータの場合：拡張子に関わらずプレーンテキストとして保存
+      // 付随するメタデータは sidecar の .meta.json に保存（バイナリ/テキスト問わず統一）
+      const text = value.toString()
+      await fs.writeFile(filePath, text, 'utf-8')
+
+      const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
+      const metadataContent = {
+        ...(metadata || {}),
         createdAt: new Date().toISOString(),
         isBinary: false,
       }
-      await fs.writeFile(filePath, JSON.stringify(data), 'utf-8')
+      await fs.writeFile(metadataPath, JSON.stringify(metadataContent), 'utf-8')
     }
   }
 
@@ -96,6 +103,7 @@ export class LocalFileStorage implements Storage {
       let isBinary = false
       let metadata: Record<string, string> = {}
 
+      let preReadContent: string | undefined
       try {
         const metadataContent = await fs.readFile(metadataPath, 'utf-8')
         const metadataData = JSON.parse(metadataContent) as Record<string, unknown>
@@ -106,15 +114,24 @@ export class LocalFileStorage implements Storage {
         ) as Record<string, string>
         metadata = userMetadata
       } catch {
-        // メタデータファイルがない場合は、ファイル内容から判定
+        // メタデータファイルがない場合は、ファイル内容から判定（ここで一度だけ読む）
         const fileContent = await fs.readFile(filePath, 'utf-8')
+        preReadContent = fileContent
         try {
           const data = JSON.parse(fileContent)
-          isBinary = data.isBinary || false
-          metadata = data.metadata || {}
+          // 旧フォーマット（ラップされたJSON）をサポート
+          if (typeof data === 'object' && data && 'content' in data) {
+            isBinary = false
+            metadata = (data as { metadata?: Record<string, string> }).metadata || {}
+          } else {
+            // 純テキストJSONだった場合（ラップなし）
+            isBinary = false
+            metadata = {}
+          }
         } catch {
-          // JSON解析に失敗した場合はバイナリとして扱う
-          isBinary = true
+          // JSON解析に失敗した場合はプレーンテキストとして扱う
+          isBinary = false
+          metadata = {}
         }
       }
 
@@ -126,13 +143,22 @@ export class LocalFileStorage implements Storage {
           metadata,
         }
       } else {
-        // テキストファイルの場合：従来通り
-        const content = await fs.readFile(filePath, 'utf-8')
-        const data = JSON.parse(content)
-        return {
-          text: data.content,
-          metadata: data.metadata,
+        // テキストファイルの場合：
+        // - 新フォーマット: プレーンテキストをそのまま返す
+        // - 旧フォーマット: JSONラップから content を抽出
+        const content = preReadContent ?? (await fs.readFile(filePath, 'utf-8'))
+        try {
+          const data = JSON.parse(content)
+          if (typeof data === 'object' && data && 'content' in data) {
+            return {
+              text: (data as { content: string }).content,
+              metadata: (data as { metadata?: Record<string, string> }).metadata,
+            }
+          }
+        } catch {
+          // ignore
         }
+        return { text: content, metadata }
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -157,8 +183,10 @@ export class LocalFileStorage implements Storage {
     // メタデータファイルも削除（存在する場合）
     try {
       await fs.unlink(metadataPath)
-    } catch {
+    } catch (error) {
       // メタデータファイルがなくてもエラーにしない
+      // eslint-disable-next-line no-console
+      console.debug('Failed to delete metadata file:', error)
     }
   }
 
@@ -193,20 +221,23 @@ export class LocalFileStorage implements Storage {
 
     try {
       const stats = await fs.stat(filePath)
-      let metadata: Record<string, string> = {}
+      let userMetadata: Record<string, string> = {}
 
       // メタデータファイルが存在する場合は読み込む
       try {
         const metadataContent = await fs.readFile(metadataPath, 'utf8')
-        const metadataData = JSON.parse(metadataContent)
-        metadata = metadataData.metadata || {}
+        const metadataData = JSON.parse(metadataContent) as Record<string, unknown>
+        const INTERNAL_METADATA_KEYS = ['isBinary', 'createdAt']
+        userMetadata = Object.fromEntries(
+          Object.entries(metadataData).filter(([key]) => !INTERNAL_METADATA_KEYS.includes(key)),
+        ) as Record<string, string>
       } catch {
         // メタデータファイルがなくてもエラーにしない
       }
 
       return {
         size: stats.size,
-        metadata,
+        metadata: userMetadata,
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -321,10 +352,24 @@ export class R2Storage implements Storage {
     const valueToStore = typeof value === 'string' ? value : value.toString()
     const cacheHeaders = this.getCacheHeaders(key)
 
+    // content-type を推定（メタデータ指定があればそれを優先）
+    const inferContentType = (): string => {
+      const specified =
+        metadata && typeof metadata.contentType === 'string' ? metadata.contentType : ''
+      if (specified) return specified
+      const lower = key.toLowerCase()
+      if (lower.endsWith('.yaml') || lower.endsWith('.yml')) return 'text/yaml; charset=utf-8'
+      if (lower.endsWith('.json')) return 'application/json; charset=utf-8'
+      if (lower.endsWith('.txt')) return 'text/plain; charset=utf-8'
+      if (lower.endsWith('.png')) return 'image/png'
+      if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg'
+      return 'application/octet-stream'
+    }
+
     await this.retryableOperation(async () => {
       await this.bucket.put(key, valueToStore, {
         httpMetadata: {
-          contentType: 'application/json; charset=utf-8',
+          contentType: inferContentType(),
           ...cacheHeaders,
         },
         customMetadata: metadata,

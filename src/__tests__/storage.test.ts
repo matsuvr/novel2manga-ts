@@ -135,4 +135,48 @@ describe("Storage", () => {
       await fs.rm(baseDir, { recursive: true, force: true });
     });
   });
+
+  describe("YAML layout saving", () => {
+    const layoutsBase = path.join(process.cwd(), ".test-storage", "layouts");
+
+    beforeEach(async () => {
+      await fs.rm(layoutsBase, { recursive: true, force: true });
+      vi.mocked(isDevelopment).mockReturnValue(true);
+    });
+
+    it("saves .yaml as plain text and reads back unchanged", async () => {
+      const jobId = "testjob123";
+      const episode = 1;
+      const yamlText = [
+        "title: テストエピソード",
+        "created_at: '2025-08-16'",
+        "episodeNumber: 1",
+        "pages:",
+        "  - page_number: 1",
+        "    panels:",
+        "      - id: 1",
+        "        content: はじめてのページ",
+      ].join("\n");
+
+      const { getStoragePorts } = await import(
+        "@/infrastructure/storage/ports"
+      );
+      const layoutPorts = getStoragePorts().layout;
+      const key = await layoutPorts.putEpisodeLayout(jobId, episode, yamlText);
+
+      // Verify file content is exactly the YAML, not JSON-wrapped
+      const filePath = path.join(layoutsBase, key);
+      const saved = await fs.readFile(filePath, "utf-8");
+      expect(saved.startsWith("{")).toBe(false);
+      expect(saved).toBe(yamlText);
+
+      // And StoragePorts.get returns the same YAML
+      const loaded = await layoutPorts.getEpisodeLayout(jobId, episode);
+      expect(loaded).toBe(yamlText);
+    });
+
+    afterAll(async () => {
+      await fs.rm(layoutsBase, { recursive: true, force: true });
+    });
+  });
 });
