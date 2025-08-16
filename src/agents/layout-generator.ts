@@ -4,7 +4,7 @@ import { getLayoutGenerationConfig, getLLMDefaultProvider } from '@/config'
 import { Page } from '@/domain/models/page'
 import type { PageBatchPlan } from '@/types/page-splitting'
 import type { EpisodeData, LayoutGenerationConfig, MangaLayout, Panel } from '@/types/panel-layout'
-import { selectLayoutTemplate } from '@/utils/layout-templates'
+import { selectLayoutTemplateByCountRandom } from '@/utils/layout-templates'
 
 // LLMへの入力スキーマは現在使用していないが、将来のバリデーション用に保持
 // const layoutGenerationInputSchema = z.object({
@@ -31,37 +31,12 @@ import { selectLayoutTemplate } from '@/utils/layout-templates'
 //   }),
 // })
 
-// LLMからの出力スキーマ
-const layoutGenerationOutputSchema = z.object({
+// LLMからの出力スキーマ（簡素化: ページごとのコマ数のみ）
+const layoutPanelCountOutputSchema = z.object({
   pages: z.array(
     z.object({
       pageNumber: z.number(),
-      panels: z.array(
-        z.object({
-          content: z.string(),
-          dialogues: z
-            .union([
-              z.array(
-                z.object({
-                  speaker: z.string(),
-                  text: z.string(),
-                }),
-              ),
-              z.null(),
-              z.string(),
-            ])
-            .optional()
-            .transform((val) => {
-              if (val === null || typeof val === 'string') {
-                return undefined
-              }
-              return val
-            }),
-          sourceChunkIndex: z.number(),
-          importance: z.number().min(1).max(10),
-          suggestedSize: z.enum(['small', 'medium', 'large', 'extra-large']),
-        }),
-      ),
+      panelCount: z.number().int().min(1).max(6),
     }),
   ),
 })
@@ -101,7 +76,7 @@ export class LayoutGeneratorAgent extends BaseAgent {
 
     const llmResponseObject = await this.generateObject(
       [{ role: 'user', content: prompt }],
-      layoutGenerationOutputSchema,
+      layoutPanelCountOutputSchema,
       {
         maxRetries: 0,
         jobId: options?.jobId,
@@ -110,38 +85,29 @@ export class LayoutGeneratorAgent extends BaseAgent {
       },
     )
 
-    // LLMの出力を実際のレイアウトに変換
+    // LLMの出力（ページごとのコマ数）を実際のレイアウトに変換
     const pages: { page_number: number; panels: Panel[] }[] = []
 
     for (const pageData of llmResponseObject.pages) {
-      const panelCount = pageData.panels.length
-      type PanelType = {
-        importance: number
-        dialogues?: { speaker: string; text: string }[]
-      }
-      const hasHighlight = pageData.panels.some((p: PanelType) => p.importance >= 7)
-      const isClimax = pageData.panels.some((p: PanelType) => p.importance >= 9)
-      const hasDialogue = pageData.panels.some(
-        (p: PanelType) => p.dialogues && p.dialogues.length > 0,
-      )
-
-      // テンプレートを選択
-      const template = selectLayoutTemplate(panelCount, hasHighlight, isClimax, hasDialogue)
+      const panelCount = pageData.panelCount
+      const template = selectLayoutTemplateByCountRandom(panelCount)
 
       const page = new Page(pageData.pageNumber)
-
-      type PanelData = {
-        content: string
-        dialogues?: { speaker: string; text: string }[]
-        sourceChunkIndex: number
-        importance: number
-        suggestedSize: 'small' | 'medium' | 'large' | 'extra-large'
+      // そのままテンプレートを適用。内容は後工程で扱うためプレースホルダ。
+      for (let i = 0; i < panelCount; i++) {
+        page.addPanel(
+          {
+            content: '',
+            dialogues: undefined,
+            sourceChunkIndex: 0,
+            importance: 5,
+            suggestedSize: 'medium',
+          },
+          template,
+        )
       }
 
-      for (const panelData of pageData.panels as PanelData[]) {
-        page.addPanel(panelData, template)
-      }
-
+      // テンプレート適用のみ。微調整バリデーションは最小限に保持。
       page.validateLayout()
 
       pages.push({
@@ -186,117 +152,52 @@ export async function generateMangaLayout(
 // エイリアス（重複排除）
 export const generateLayoutWithAgent = generateMangaLayout
 
-// Incremental: generate only specified pages guided by a batch plan
-export async function generateMangaLayoutForPlan(
+// Helper function to create agent and options
+async function createAgentAndOptions(_config: LayoutGenerationConfig, jobId: string) {
+  const agent = new LayoutGeneratorAgent()
+  return { agent, jobId }
+}
+
+// Helper function to build user prompt
+function buildUserPrompt(
   episodeData: EpisodeData,
   plan: PageBatchPlan,
-  _config?: LayoutGenerationConfig,
-  options?: { jobId?: string },
-): Promise<MangaLayout> {
-  const agent = new LayoutGeneratorAgent()
+  config: LayoutGenerationConfig,
+): string {
+  return `エピソード${episodeData.episodeNumber}のレイアウトを生成してください。
+計画: ${JSON.stringify(plan, null, 2)}
+設定: ${JSON.stringify(config, null, 2)}
+各ページのコマ数のみを決定してください。`
+}
 
-  // Build an input that instructs the model to generate only given pages
-  const { buildLayoutLLMInput } = await import('@/agents/layout/input-adapter')
-  const layoutInput = buildLayoutLLMInput(episodeData)
-
-  const promptPlan = {
-    episodeNumber: plan.episodeNumber,
-    pages: plan.plannedPages.map((p) => ({
-      pageNumber: p.pageNumber,
-      summary: p.summary,
-      importance: p.importance,
-      segments: p.segments.map((s) => ({
-        hint: s.contentHint,
-        importance: s.importance,
-        source: s.source,
-      })),
-    })),
-  }
-
-  const configPrompts = getLayoutGenerationConfig()
-  const prompt = [
-    '次の通り、指定したページ番号のみを生成してください。',
-    '指定されたページ以外は絶対に出力しないこと。',
-    'プランのセグメントを尊重しつつ、パネル構成は最適化可。',
-  ].join('\n')
-
-  const userPrompt = configPrompts.userPromptTemplate
-    .replace('{{episodeNumber}}', episodeData.episodeNumber.toString())
-    .replace('{{layoutInputJson}}', `${JSON.stringify(layoutInput, null, 2)}\n${prompt}`)
-    .concat('\n指定ページ計画:\n')
-    .concat(JSON.stringify(promptPlan, null, 2))
-
-  // Reuse the same schema and mapper in generateLayout by calling the protected flow
-  // For simplicity we duplicate minimal logic here
-  const layoutGenerationOutputSchema = z.object({
-    pages: z.array(
-      z.object({
-        pageNumber: z.number(),
-        panels: z.array(
-          z.object({
-            content: z.string(),
-            dialogues: z
-              .union([
-                z.array(
-                  z.object({
-                    speaker: z.string(),
-                    text: z.string(),
-                  }),
-                ),
-                z.null(),
-                z.string(),
-              ])
-              .optional()
-              .transform((val) => {
-                if (val === null || typeof val === 'string') return undefined
-                return val
-              }),
-            sourceChunkIndex: z.number(),
-            importance: z.number().min(1).max(10),
-            suggestedSize: z.enum(['small', 'medium', 'large', 'extra-large']),
-          }),
-        ),
-      }),
-    ),
-  })
-
-  const llmResponseObject = await agent.generateObject(
-    [{ role: 'user', content: userPrompt }],
-    layoutGenerationOutputSchema,
-    {
-      maxRetries: 0,
-      jobId: options?.jobId,
-      stepName: 'layout-plan',
-      episodeNumber: episodeData.episodeNumber,
-    },
-  )
-
+// Helper function to map LLM output to layout
+function mapLayoutPanelCountToLayout(
+  llmOutput: z.infer<typeof layoutPanelCountOutputSchema>,
+  episodeData: EpisodeData,
+  _plan: PageBatchPlan,
+): MangaLayout {
   const pages: { page_number: number; panels: Panel[] }[] = []
-  for (const pageData of llmResponseObject.pages) {
-    const panelCount = pageData.panels.length
-    type PanelType = {
-      importance: number
-      dialogues?: { speaker: string; text: string }[]
-    }
-    const hasHighlight = pageData.panels.some((p: PanelType) => p.importance >= 7)
-    const isClimax = pageData.panels.some((p: PanelType) => p.importance >= 9)
-    const hasDialogue = pageData.panels.some(
-      (p: PanelType) => p.dialogues && p.dialogues.length > 0,
-    )
 
-    const template = selectLayoutTemplate(panelCount, hasHighlight, isClimax, hasDialogue)
+  for (const pageData of llmOutput.pages) {
+    const panelCount = pageData.panelCount
+    const template = selectLayoutTemplateByCountRandom(panelCount)
+
     const page = new Page(pageData.pageNumber)
-    type PanelData = {
-      content: string
-      dialogues?: { speaker: string; text: string }[]
-      sourceChunkIndex: number
-      importance: number
-      suggestedSize: 'small' | 'medium' | 'large' | 'extra-large'
+    for (let i = 0; i < panelCount; i++) {
+      page.addPanel(
+        {
+          content: '',
+          dialogues: undefined,
+          sourceChunkIndex: 0,
+          importance: 5,
+          suggestedSize: 'medium',
+        },
+        template,
+      )
     }
-    for (const panelData of pageData.panels as PanelData[]) {
-      page.addPanel(panelData, template)
-    }
+
     page.validateLayout()
+
     pages.push({
       page_number: page.pageNumber,
       panels: page.getPanels().map((p) => p.toJSON()),
@@ -310,4 +211,32 @@ export async function generateMangaLayoutForPlan(
     episodeTitle: episodeData.episodeTitle,
     pages,
   }
+}
+
+// Incremental: generate only specified pages guided by a batch plan
+export async function generateMangaLayoutForPlan(
+  episodeData: EpisodeData,
+  plan: PageBatchPlan,
+  config: LayoutGenerationConfig,
+  options: { jobId: string },
+): Promise<MangaLayout> {
+  const { agent } = await createAgentAndOptions(config, options.jobId)
+
+  const userPrompt = buildUserPrompt(episodeData, plan, config)
+
+  // Reuse the same schema and mapper in generateLayout by calling the protected flow
+  // For simplicity we duplicate minimal logic here
+
+  const llmResponseObject = await agent.generateObject(
+    [{ role: 'user', content: userPrompt }],
+    layoutPanelCountOutputSchema,
+    {
+      maxRetries: 0,
+      stepName: 'layout',
+      episodeNumber: episodeData.episodeNumber,
+    },
+  )
+
+  const layout = mapLayoutPanelCountToLayout(llmResponseObject, episodeData, plan)
+  return layout
 }

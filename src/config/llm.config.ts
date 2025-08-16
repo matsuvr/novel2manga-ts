@@ -84,7 +84,31 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
   if (!cfg) {
     throw new Error(`Unknown LLM provider: ${provider}`)
   }
-  return cfg
+
+  // IMPORTANT: Read API keys lazily at call time so tests can set env in beforeAll.
+  // Do not capture process.env at module load.
+  const dynamicApiKey = (() => {
+    switch (provider) {
+      case 'cerebras':
+        return process.env.CEREBRAS_API_KEY
+      case 'openai':
+        return process.env.OPENAI_API_KEY
+      case 'gemini':
+        return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
+      case 'groq':
+        return process.env.GROQ_API_KEY
+      case 'openrouter':
+        return process.env.OPENROUTER_API_KEY
+      default:
+        return undefined
+    }
+  })()
+
+  // Return a fresh object; keep model/token config from the static table.
+  return {
+    ...cfg,
+    apiKey: dynamicApiKey,
+  }
 }
 
 // Accessor for per-use-case parameters has been removed. Use provider config instead.

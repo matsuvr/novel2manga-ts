@@ -223,6 +223,7 @@ export class Agent {
       case 'openai':
         this.client = new OpenAI({
           apiKey: config.apiKey,
+          dangerouslyAllowBrowser: true,
         })
         break
 
@@ -236,6 +237,7 @@ export class Agent {
         this.client = new OpenAI({
           apiKey: config.apiKey,
           baseURL: 'https://api.groq.com/openai/v1',
+          dangerouslyAllowBrowser: true,
         })
         break
 
@@ -243,6 +245,7 @@ export class Agent {
         this.client = new OpenAI({
           apiKey: config.apiKey,
           baseURL: config.baseUrl || 'https://openrouter.ai/api/v1',
+          dangerouslyAllowBrowser: true,
         })
         break
 
