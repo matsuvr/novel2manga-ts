@@ -203,6 +203,18 @@ export const appConfig = {
       b4Portrait: { width: 728, height: 1031 },
       b4Landscape: { width: 1031, height: 728 },
     },
+    // 縦書きテキスト（セリフ）画像化の設定
+    verticalText: {
+      enabled: true,
+      defaults: {
+        fontSize: 24,
+        lineHeight: 1.6,
+        letterSpacing: 0.0,
+        padding: 12,
+        maxCharsPerLine: 14,
+      },
+      maxConcurrent: 4,
+    },
   },
 
   // API設定
@@ -371,6 +383,30 @@ export function getAppConfigWithOverrides(): AppConfig {
   if (process.env.NODE_ENV === 'development') {
     config.development.enableVerboseLogging = true
     config.development.enableErrorDetails = true
+  }
+
+  // Vertical text feature flags / overrides (no secrets here)
+  if (process.env.APP_RENDER_VERTICAL_TEXT_ENABLED !== undefined) {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-boolean-literal-compare
+    config.rendering.verticalText.enabled = process.env.APP_RENDER_VERTICAL_TEXT_ENABLED === 'true'
+  }
+  if (process.env.APP_RENDER_VERTICAL_TEXT_MAX_CONCURRENT) {
+    const n = parseInt(process.env.APP_RENDER_VERTICAL_TEXT_MAX_CONCURRENT, 10)
+    if (!Number.isNaN(n) && n > 0) {
+      config.rendering.verticalText.maxConcurrent = n
+    }
+  }
+  if (process.env.APP_RENDER_VERTICAL_TEXT_FONT_SIZE) {
+    const v = parseInt(process.env.APP_RENDER_VERTICAL_TEXT_FONT_SIZE, 10)
+    if (!Number.isNaN(v) && v > 0) {
+      config.rendering.verticalText.defaults.fontSize = v
+    }
+  }
+  if (process.env.APP_RENDER_VERTICAL_TEXT_MAX_CHARS_PER_LINE) {
+    const v = parseInt(process.env.APP_RENDER_VERTICAL_TEXT_MAX_CHARS_PER_LINE, 10)
+    if (!Number.isNaN(v) && v > 0) {
+      config.rendering.verticalText.defaults.maxCharsPerLine = v
+    }
   }
 
   return config
