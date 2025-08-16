@@ -26,12 +26,8 @@ export class JobProgressService {
       const { layout } = getStoragePorts()
 
       if (episodes && episodes.length > 0) {
-        const perEpisodePages: Record<
-          number,
-          { planned: number; rendered: number; total?: number }
-        > = {}
-
-        for (const episode of episodes) {
+        // Process episodes in parallel for better performance
+        const perEpisodePagesPromises = episodes.map(async (episode) => {
           const episodeNumber = episode.episodeNumber
           const total = episode.estimatedPages || 0
 
@@ -45,8 +41,22 @@ export class JobProgressService {
                 planned = parsedProgress.pages.length
               }
             }
-          } catch (_error) {
-            // Silently handle errors to avoid test interference
+          } catch (error) {
+            // NEVER SILENCE ERRORS - Always log with full context for debugging
+            const { getLogger } = await import('@/infrastructure/logging/logger')
+            const logger = getLogger().withContext({
+              service: 'JobProgressService',
+              method: 'getJobWithProgress',
+              operation: 'getEpisodeLayoutProgress',
+            })
+            logger.error('Failed to get episode layout progress', {
+              jobId: id,
+              episodeNumber,
+              error: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            })
+            // Set planned to 0 but continue processing other episodes
+            planned = 0
           }
 
           // Get rendered pages count (from database)
@@ -56,16 +66,40 @@ export class JobProgressService {
             if (renderStatus && Array.isArray(renderStatus)) {
               rendered = renderStatus.length
             }
-          } catch (_error) {
-            // Silently handle errors to avoid test interference
+          } catch (error) {
+            // NEVER SILENCE ERRORS - Always log with full context for debugging
+            const { getLogger } = await import('@/infrastructure/logging/logger')
+            const logger = getLogger().withContext({
+              service: 'JobProgressService',
+              method: 'getJobWithProgress',
+              operation: 'getRenderStatusByEpisode',
+            })
+            logger.error('Failed to get episode render status', {
+              jobId: id,
+              episodeNumber,
+              error: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            })
+            // Set rendered to 0 but continue processing other episodes
+            rendered = 0
           }
 
-          perEpisodePages[episodeNumber] = {
-            planned,
-            rendered,
-            total,
-          }
-        }
+          return [
+            episodeNumber,
+            {
+              planned,
+              rendered,
+              total,
+            },
+          ] as const
+        })
+
+        // Wait for all episode processing to complete
+        const perEpisodePagesEntries = await Promise.all(perEpisodePagesPromises)
+        const perEpisodePages: Record<
+          number,
+          { planned: number; rendered: number; total?: number }
+        > = Object.fromEntries(perEpisodePagesEntries)
 
         // Only enrich if we have episode data
         if (Object.keys(perEpisodePages).length > 0) {
@@ -81,8 +115,20 @@ export class JobProgressService {
           return enrichedJob
         }
       }
-    } catch (_error) {
-      // Return original job if enrichment fails
+    } catch (error) {
+      // NEVER SILENCE ERRORS - Always log the error with full context
+      const { getLogger } = await import('@/infrastructure/logging/logger')
+      const logger = getLogger().withContext({
+        service: 'JobProgressService',
+        method: 'getJobWithProgress',
+        operation: 'enrichWithPerEpisodePages',
+      })
+      logger.error('Failed to enrich job with episode progress data', {
+        jobId: id,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      })
+      // Return original job if enrichment fails completely
     }
 
     return job

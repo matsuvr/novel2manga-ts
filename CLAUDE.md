@@ -9,6 +9,7 @@ Non‑negotiables (do these every time):
 - Lint/Format: Resolve all linter errors and warnings. Do not merge with outstanding issues. Do not disable rules to “make it pass” unless there is a justified, documented rationale.
 - DRY: Eliminate duplication. Extract shared logic into reusable modules/functions. No copy-paste forks of similar code paths.
 - SOLID: Follow Single-responsibility, Open/closed, Liskov, Interface segregation, Dependency inversion. Prefer composition over inheritance and stable, testable boundaries.
+- ERROR HANDLING: NEVER silence errors with empty catch blocks or underscore variables. Always log errors with full context (jobId, operation, error message, stack trace) using the structured logger. Error silencing makes debugging impossible and is absolutely forbidden. When an error occurs, the code should log detailed information and gracefully handle the failure with appropriate fallback behavior.
 
 Project conventions you must follow:
 - Unit tests: Place all unit tests under src/__tests__ using the repository’s test runner (Vitest). Every new/changed public behavior must have tests.
