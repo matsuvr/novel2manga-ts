@@ -34,9 +34,12 @@ const getStorageBase = () => {
 
 const LOCAL_STORAGE_BASE = getStorageBase()
 
-// ディレクトリ作成ヘルパー
+// ディレクトリ作成ヘルパー（成功したパスをキャッシュして不要なIOを削減）
+const createdDirs = new Set<string>()
 async function ensureDir(dirPath: string): Promise<void> {
+  if (createdDirs.has(dirPath)) return
   await fs.mkdir(dirPath, { recursive: true })
+  createdDirs.add(dirPath)
 }
 
 // ========================================
@@ -100,6 +103,7 @@ export class LocalFileStorage implements Storage {
       let isBinary = false
       let metadata: Record<string, string> = {}
 
+      let preReadContent: string | undefined
       try {
         const metadataContent = await fs.readFile(metadataPath, 'utf-8')
         const metadataData = JSON.parse(metadataContent) as Record<string, unknown>
@@ -110,14 +114,15 @@ export class LocalFileStorage implements Storage {
         ) as Record<string, string>
         metadata = userMetadata
       } catch {
-        // メタデータファイルがない場合は、ファイル内容から判定
+        // メタデータファイルがない場合は、ファイル内容から判定（ここで一度だけ読む）
         const fileContent = await fs.readFile(filePath, 'utf-8')
+        preReadContent = fileContent
         try {
           const data = JSON.parse(fileContent)
           // 旧フォーマット（ラップされたJSON）をサポート
           if (typeof data === 'object' && data && 'content' in data) {
             isBinary = false
-            metadata = (data as Record<string, unknown>).metadata as Record<string, string>
+            metadata = (data as { metadata?: Record<string, string> }).metadata || {}
           } else {
             // 純テキストJSONだった場合（ラップなし）
             isBinary = false
@@ -141,7 +146,7 @@ export class LocalFileStorage implements Storage {
         // テキストファイルの場合：
         // - 新フォーマット: プレーンテキストをそのまま返す
         // - 旧フォーマット: JSONラップから content を抽出
-        const content = await fs.readFile(filePath, 'utf-8')
+        const content = preReadContent ?? (await fs.readFile(filePath, 'utf-8'))
         try {
           const data = JSON.parse(content)
           if (typeof data === 'object' && data && 'content' in data) {
@@ -178,8 +183,10 @@ export class LocalFileStorage implements Storage {
     // メタデータファイルも削除（存在する場合）
     try {
       await fs.unlink(metadataPath)
-    } catch {
+    } catch (error) {
       // メタデータファイルがなくてもエラーにしない
+      // eslint-disable-next-line no-console
+      console.debug('Failed to delete metadata file:', error)
     }
   }
 

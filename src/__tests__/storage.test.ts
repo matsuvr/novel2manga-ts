@@ -158,14 +158,16 @@ describe("Storage", () => {
         "        content: はじめてのページ",
       ].join("\n");
 
-      const { getStoragePorts } = await import("@/infrastructure/storage/ports");
+      const { getStoragePorts } = await import(
+        "@/infrastructure/storage/ports"
+      );
       const layoutPorts = getStoragePorts().layout;
       const key = await layoutPorts.putEpisodeLayout(jobId, episode, yamlText);
 
       // Verify file content is exactly the YAML, not JSON-wrapped
       const filePath = path.join(layoutsBase, key);
       const saved = await fs.readFile(filePath, "utf-8");
-      expect(saved.startsWith("{")) .toBe(false);
+      expect(saved.startsWith("{")).toBe(false);
       expect(saved).toBe(yamlText);
 
       // And StoragePorts.get returns the same YAML

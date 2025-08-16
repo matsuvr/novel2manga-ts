@@ -34,11 +34,10 @@
 
 ## 参考リンク
 
-- 最新ドキュメント（Mastra / Cloudflare / ライブラリ）の根拠URL
+- 最新ドキュメント（cloudflare / ライブラリ）の根拠URL
 
 ## チェックリスト（必須）
 
-- [ ] 最新の公式ドキュメントを確認し、根拠リンクを上記に記載
 - [ ] TypeScriptの`any`は未導入（やむを得ない例外は根拠コメントと追跡タスクあり）
 - [ ] Lint/Formatがクリーン（エラー0、無根拠なルール無効化なし）
 - [ ] DRY/SOLIDを満たす（重複排除・テストしやすい境界）
@@ -54,67 +53,3 @@
 <!--
 いずれかの項目を満たせない場合は、実装/マージを進めず先に解消してください。
 -->
-
-<!-- READ .github/copilot-instructions.md BEFORE THIS. DO NOT OPEN A PR IF ANY REQUIRED ITEM IS UNCHECKED. -->
-
-## Summary
-
-- What and why (concise):
-
-## Linked Issues
-
-- Closes #
-
-## Changes
-
-- Key changes and rationale:
-
-## Tests
-
-- [ ] Unit tests added/updated under `src/__tests__` (Vitest)
-  - Paste run output summary:
-- [ ] Integration tests (if applicable) passing
-
-## Docs / Specs / Tasks (MUST stay in sync in this PR)
-
-- [ ] Updated: `.kiro\specs\novel-to-manga-converter\design.md`
-- [ ] Updated: `.kiro\specs\novel-to-manga-converter\tasks.md`
-
-## Database & Storage
-
-- [ ] Drizzle schema updated: `src\db\schema.ts`
-- [ ] Migrations generated/applied alongside code changes
-- [ ] Storage contracts updated: `database\storage-structure.md`
-
-## Cloudflare Config (if used)
-
-- [ ] Wrangler config/bindings updated and documented
-- [ ] Version pins and limits verified against latest docs (MCP)
-
-## Quality Gates (NO EXCEPTIONS)
-
-- [ ] Build: zero TypeScript errors (no `any`), strict types only
-- [ ] Linter: 0 errors, no unexplained disables
-- [ ] DRY upheld: no duplicated logic; shared utilities factored
-- [ ] SOLID respected; stable/testable boundaries
-
-## Risk / Rollback
-
-- Risks and rollback plan:
-
-## Screenshots / Logs (optional)
-
----
-
-### PR Checklist — MUST be all checked before review
-
-- [ ] No `any` types introduced; strict types only. No unjustified `ts-ignore`/`ts-expect-error`.
-- [ ] Linter and formatter clean (0 errors). No rule disabling without justification.
-- [ ] DRY and SOLID upheld; no redundant implementations.
-- [ ] Unit tests added/updated in `src/__tests__` and passing.
-- [ ] Updated: `.kiro\specs\novel-to-manga-converter\design.md`
-- [ ] Updated: `.kiro\specs\novel-to-manga-converter\tasks.md`
-- [ ] Updated: `src\db\schema.ts` (+ migrations applied/generated as needed)
-- [ ] Updated: `database\storage-structure.md`
-
-> If any item cannot be satisfied, STOP and resolve it first. Do not proceed with implementation or merging until all conditions above are met.
