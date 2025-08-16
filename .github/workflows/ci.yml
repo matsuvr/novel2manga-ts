@@ -6,14 +6,15 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  # Toggle this to 'true' when deploying and ready to run E2E on CI.
+  # Can also be overridden via repository/organization variables or workflow_dispatch inputs.
+  ENABLE_E2E: "false"
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Toggle this to 'true' when deploying and ready to run E2E on CI.
-    # Alternatively, override via 'env' at workflow_dispatch or environment.
-    env:
-      ENABLE_E2E: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
