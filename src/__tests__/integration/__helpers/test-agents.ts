@@ -132,6 +132,83 @@ export function createMockEpisodeGenerator() {
  * 統合テスト用エージェントモックのセットアップ
  */
 export function setupAgentMocks() {
+  // 基底Agent クラスのOpenAI接続をモック
+  vi.mock("@/agents/agent", () => {
+    const originalModule = vi.importActual("@/agents/agent") as any;
+    return {
+      ...originalModule,
+      Agent: vi.fn().mockImplementation(() => ({
+        generateObject: vi.fn().mockResolvedValue({
+          pages: [
+            { pageNumber: 1, panelCount: 4 },
+            { pageNumber: 2, panelCount: 6 },
+          ],
+        }),
+        generate: vi.fn().mockResolvedValue("test response"),
+      })),
+    };
+  });
+
+  // PageSplitAgent の具体的なモック
+  vi.mock("@/agents/page-splitter", () => ({
+    PageSplitAgent: vi.fn().mockImplementation(() => {
+      let callCount = 0;
+      return {
+        planNextBatch: vi.fn().mockImplementation(async (episodeData, currentPages) => {
+          callCount++;
+          const currentPageCount = currentPages ? currentPages.length : 0;
+          
+          // 既に十分なページがある場合は終了
+          if (currentPageCount >= 8) {
+            return {
+              episodeNumber: 1,
+              startPage: currentPageCount + 1,
+              plannedPages: [],
+              mayAdjustPreviousPages: false,
+              remainingPagesEstimate: 0,
+            };
+          }
+          
+          // 最初の呼び出しでは全てのページを計画して終了とする
+          if (callCount === 1) {
+            const plannedPages = [];
+            for (let i = currentPageCount + 1; i <= 8; i++) {
+              plannedPages.push({
+                pageNumber: i,
+                summary: `test page ${i}`,
+                importance: 5,
+                segments: [
+                  {
+                    contentHint: `test content ${i}`,
+                    importance: 5,
+                    source: { chunkIndex: 0, startOffset: (i-1) * 100, endOffset: i * 100 },
+                  },
+                ],
+              });
+            }
+            
+            return {
+              episodeNumber: 1,
+              startPage: currentPageCount + 1,
+              plannedPages,
+              mayAdjustPreviousPages: false,
+              remainingPagesEstimate: 0, // 残りページを0にして生成を終了
+            };
+          }
+          
+          // 2回目以降の呼び出しでは空の計画を返して終了
+          return {
+            episodeNumber: 1,
+            startPage: currentPageCount + 1,
+            plannedPages: [],
+            mayAdjustPreviousPages: false,
+            remainingPagesEstimate: 0,
+          };
+        }),
+      };
+    }),
+  }));
+
   // config の部分モック（不足APIを補完）
   vi.mock("@/config", () => ({
     getTextAnalysisConfig: vi.fn(() => ({
@@ -187,6 +264,14 @@ export function setupAgentMocks() {
 
   // レイアウト生成エージェントのモック
   vi.mock("@/agents/layout-generator", () => ({
+    LayoutGeneratorAgent: vi.fn().mockImplementation(() => ({
+      generateObject: vi.fn().mockResolvedValue({
+        pages: [
+          { pageNumber: 1, panelCount: 4 },
+          { pageNumber: 2, panelCount: 6 },
+        ],
+      }),
+    })),
     generateMangaLayout: vi.fn().mockResolvedValue({
       success: true,
       layoutPath: "test-layout.yaml",
@@ -206,6 +291,17 @@ export function setupAgentMocks() {
           },
         ],
       },
+    }),
+    generateMangaLayoutForPlan: vi.fn().mockImplementation(async (episodeData, plan) => {
+      // planに含まれるページに基づいて動的にレイアウトを生成
+      const pages = plan.plannedPages.map(plannedPage => ({
+        page_number: plannedPage.pageNumber,
+        panels: Array.from({ length: 4 }, (_, i) => ({
+          position: { x: i % 2 * 0.5, y: Math.floor(i / 2) * 0.5 },
+          size: { width: 0.5, height: 0.5 },
+        })),
+      }));
+      return { pages };
     }),
   }));
 

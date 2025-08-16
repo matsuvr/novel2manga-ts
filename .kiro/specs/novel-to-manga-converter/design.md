@@ -25,6 +25,19 @@
     2. Loops: plan next batch (3 pages) → generate those pages only → merge (replace by page number; allows minor back-edits within window) → write progress JSON → rewrite YAML.
     3. After target pages reached, marks `layout` complete and advances to `render`.
 
+### Layout Strategy Update: Panel Count + Template Snap (2025-08-16)
+
+- Change: LLM now decides only the number of panels per page. It does not emit panel geometries or contents.
+- Template Source: For each page, the system selects a panel layout pattern that exactly matches the decided count from `public/docs/panel_layout_sample/<count>/*.json`. One is chosen at random and applied as-is.
+- Rationale: Greatly reduces failure modes and latency caused by geometry inference and overlap checks; leverages proven patterns extracted from famous manga.
+- Flow After Split: Unchanged. Downstream rendering and dialogue placement follow existing pipeline. Panel `content/dialogues` are placeholders at this stage and are enriched later.
+
+#### Validation Policy
+
+- Overlap/gap validation and reference fallback are bypassed during layout persistence in this mode.
+- `normalizeAndValidateLayout` supports `bypassValidation: true`, which clamps values only and returns empty issues.
+- Errors are not masked elsewhere; this change only removes geometry-overlap adjudication since input templates are trusted.
+
 ### Layout Validation & Reference Fallback (2025-08-16)
 
 - Added `src/utils/layout-normalizer.ts` executed at the YAML stage in `generateEpisodeLayout` (demo, batch snapshots, and final output):

@@ -1,5 +1,6 @@
+// Use absolute alias import to ensure single module instance (helps Vitest spies)
+import { Agent } from '@/agents/agent'
 import type { LLMProvider } from '@/config/llm.config'
-import { Agent } from './agent'
 
 export interface BaseAgentOptions {
   name: string

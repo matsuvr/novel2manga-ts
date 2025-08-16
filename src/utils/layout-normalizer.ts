@@ -311,7 +311,7 @@ export function applyReferenceFallback(page: { panels: Panel[] }): {
 
 export function normalizeAndValidateLayout(
   layout: MangaLayout,
-  options?: { allowFallback?: boolean; verboseIssues?: boolean },
+  options?: { allowFallback?: boolean; verboseIssues?: boolean; bypassValidation?: boolean },
 ): {
   layout: MangaLayout
   pageIssues: Record<number, Issue[]>
@@ -332,6 +332,11 @@ export function normalizeAndValidateLayout(
       }
       return out
     })
+    // Fast path: skip expensive overlap/gap validation entirely if requested
+    if (options?.bypassValidation) {
+      pageIssues[p.page_number] = []
+      return { page_number: p.page_number, panels: clampedPanels }
+    }
     const v1 = validatePanels(clampedPanels)
     if (!v1.valid) {
       const allowFallback = options?.allowFallback !== false // default allow

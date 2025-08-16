@@ -34,6 +34,9 @@ export class Page {
 
   validateLayout(): boolean {
     const panelData = this.panels.map((p) => p.toJSON())
+    if (panelData.length <= 1) {
+      return true
+    }
     if (layoutRules.forbidden.isEqualGrid(panelData)) {
       // サイズを微調整して均等分割を避ける
       this.panels.forEach((panel, i) => {

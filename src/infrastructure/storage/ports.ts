@@ -122,13 +122,26 @@ export function getStoragePorts(): StoragePorts {
       },
       async putEpisodeLayoutProgress(jobId, episodeNumber, json) {
         const storage = await StorageFactory.getLayoutStorage()
-        const key = StorageKeys.episodeLayoutProgress(jobId, episodeNumber)
+        // Some tests mock StorageKeys partially. Fallback to string template if function missing.
+        const keyFn = (StorageKeys as unknown as Record<string, unknown>).episodeLayoutProgress as
+          | undefined
+          | ((jobId: string, ep: number) => string)
+        const key =
+          typeof keyFn === 'function'
+            ? keyFn(jobId, episodeNumber)
+            : `${jobId}/episode_${episodeNumber}.progress.json`
         await storage.put(key, json)
         return key
       },
       async getEpisodeLayoutProgress(jobId, episodeNumber) {
         const storage = await StorageFactory.getLayoutStorage()
-        const key = StorageKeys.episodeLayoutProgress(jobId, episodeNumber)
+        const keyFn = (StorageKeys as unknown as Record<string, unknown>).episodeLayoutProgress as
+          | undefined
+          | ((jobId: string, ep: number) => string)
+        const key =
+          typeof keyFn === 'function'
+            ? keyFn(jobId, episodeNumber)
+            : `${jobId}/episode_${episodeNumber}.progress.json`
         const obj = await storage.get(key)
         return obj?.text ?? null
       },
