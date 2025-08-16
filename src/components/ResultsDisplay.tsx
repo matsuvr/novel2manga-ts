@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Episode } from '@/types/database-models'
 
 interface TokenUsage {
@@ -29,26 +29,46 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
   const [tokenUsage, setTokenUsage] = useState<TokenUsage[]>([])
   const [isLoadingTokenUsage, setIsLoadingTokenUsage] = useState(false)
 
+  // Ref to track component mount state for proper cleanup
+  const isMountedRef = useRef(true)
+
   // トークン使用量を取得
   useEffect(() => {
     const fetchTokenUsage = async () => {
       if (!jobId) return
+
+      // Check if component is still mounted before proceeding
+      if (!isMountedRef.current) return
 
       setIsLoadingTokenUsage(true)
       try {
         const response = await fetch(`/api/jobs/${jobId}/token-usage`)
         if (response.ok) {
           const data = (await response.json()) as { tokenUsage?: TokenUsage[] }
-          setTokenUsage(data.tokenUsage || [])
+          // Double-check mount state before updating component state
+          if (isMountedRef.current) {
+            setTokenUsage(data.tokenUsage || [])
+          }
         }
       } catch (error) {
-        console.error('Failed to fetch token usage:', error)
+        // Only log errors if component is still mounted
+        if (isMountedRef.current) {
+          console.error('Failed to fetch token usage:', error)
+        }
       } finally {
-        setIsLoadingTokenUsage(false)
+        // Only update loading state if component is still mounted
+        if (isMountedRef.current) {
+          setIsLoadingTokenUsage(false)
+        }
       }
     }
 
     fetchTokenUsage()
+
+    // Cleanup function to prevent memory leaks
+    return () => {
+      isMountedRef.current = false
+    }
   }, [jobId])
 
   // トークン使用量の集計
