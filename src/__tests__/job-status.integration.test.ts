@@ -39,32 +39,32 @@ let mockJobDbPort: Mocked<MockJobPort>;
 beforeEach(() => {
   vi.clearAllMocks();
 
-  // Mock database service with strictly typed vi.fn signatures, then deep-mock typing via vi.mocked (no assertions)
-  const dbBase: MockDb = {
-    getEpisodesByJobId: vi.fn<MockDb["getEpisodesByJobId"]>(),
-    getRenderStatusByEpisode: vi.fn<MockDb["getRenderStatusByEpisode"]>(),
-  };
-  mockDatabaseService = vi.mocked(dbBase, true);
+  // Mock database service concisely
+  mockDatabaseService = {
+    getEpisodesByJobId: vi.fn(),
+    getRenderStatusByEpisode: vi.fn(),
+  } as Mocked<MockDb>;
 
-  // Mock layout storage (typed)
-  const layoutBase: MockLayout = {
-    getEpisodeLayoutProgress: vi.fn<MockLayout["getEpisodeLayoutProgress"]>(),
-  };
-  mockLayoutStorage = vi.mocked(layoutBase, true);
+  // Mock layout storage concisely
+  mockLayoutStorage = {
+    getEpisodeLayoutProgress: vi.fn(),
+  } as Mocked<MockLayout>;
 
-  // Mock job database port (typed)
-  const jobPortBase: MockJobPort = {
-    getJobWithProgress: vi.fn<MockJobPort["getJobWithProgress"]>(),
-  };
-  mockJobDbPort = vi.mocked(jobPortBase, true);
+  // Mock job database port concisely
+  mockJobDbPort = {
+    getJobWithProgress: vi.fn(),
+  } as Mocked<MockJobPort>;
 });
 
 describe("JobProgressService Integration Tests", () => {
   describe("getJobWithProgress", () => {
     // Helper to build a fully-typed Job object with sensible defaults
+    // Consolidates job and progress data to avoid duplication
     const makeMockJob = (
-      overrides: Partial<Job>,
-      progressOverrides: Partial<JobProgress> = {}
+      jobOverrides: Partial<Job> = {},
+      progressOverrides: Partial<
+        Omit<JobProgress, "currentStep" | "processedChunks" | "totalChunks">
+      > = {}
     ): Job & { progress: JobProgress } => {
       const now = new Date().toISOString();
       const base: Job = {
@@ -98,7 +98,9 @@ describe("JobProgressService Integration Tests", () => {
         startedAt: now,
         completedAt: null,
       };
-      const job: Job = { ...base, ...overrides };
+      const job = { ...base, ...jobOverrides };
+
+      // Progress data is derived from job data to ensure consistency
       const progress: JobProgress = {
         currentStep: job.currentStep as JobProgress["currentStep"],
         processedChunks: job.processedChunks ?? 0,
