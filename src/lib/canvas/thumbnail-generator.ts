@@ -45,8 +45,7 @@ async function generateServerSideThumbnail(
   format: string,
 ): Promise<Blob> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createCanvas, loadImage } = require('canvas')
+    const { createCanvas, loadImage } = await import('canvas')
 
     const arrayBuffer = await sourceBlob.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
@@ -79,7 +78,9 @@ async function generateServerSideThumbnail(
 
     ctx.drawImage(image, offsetX, offsetY, drawWidth, drawHeight)
 
-    const outputBuffer = canvas.toBuffer(`image/${format}`, { quality })
+    const outputBuffer = (
+      canvas as { toBuffer: (format: string, options: { quality: number }) => Buffer }
+    ).toBuffer(`image/${format}`, { quality })
     return new Blob([outputBuffer], { type: `image/${format}` })
   } catch (error) {
     console.error('Server-side thumbnail generation failed:', error)

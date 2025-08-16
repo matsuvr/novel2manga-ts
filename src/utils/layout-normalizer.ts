@@ -168,7 +168,26 @@ function readingOrderComparator(a: Panel, b: Panel): number {
   return b.position.x - a.position.x
 }
 
+/**
+ * Optimized panel mapping with optional sorting
+ * For performance, only sort when panel counts differ
+ */
 function mapPanelsToTemplate(source: Panel[], template: Panel[]): Panel[] {
+  // OPTIMIZATION: Skip sorting when panel counts match exactly
+  // Assume same reading order when counts are equal
+  if (source.length === template.length) {
+    return source.map((s, i) => ({
+      id: s.id,
+      content: s.content,
+      dialogues: s.dialogues,
+      sourceChunkIndex: s.sourceChunkIndex,
+      importance: s.importance,
+      position: { x: template[i].position.x, y: template[i].position.y },
+      size: { width: template[i].size.width, height: template[i].size.height },
+    }))
+  }
+
+  // Only sort when counts differ (need proper alignment)
   const srcSorted = [...source].sort(readingOrderComparator)
   const tplSorted = [...template].sort(readingOrderComparator)
   const count = Math.min(srcSorted.length, tplSorted.length)
@@ -186,7 +205,6 @@ function mapPanelsToTemplate(source: Panel[], template: Panel[]): Panel[] {
       size: { width: t.size.width, height: t.size.height },
     })
   }
-  // If template has fewer panels, drop extras; if more, ignore extras
   return mapped
 }
 
@@ -197,7 +215,7 @@ function loadReferencePages(): RefPage[] {
   return embeddedReferencePages
 }
 
-function distancePanels(a: Panel[], b: Panel[]): number {
+function _distancePanels(a: Panel[], b: Panel[]): number {
   // If counts differ, penalize heavily
   if (a.length !== b.length) return Math.abs(a.length - b.length) * 10
   const sa = [...a].sort(readingOrderComparator)
@@ -214,13 +232,41 @@ function distancePanels(a: Panel[], b: Panel[]): number {
   return d
 }
 
+/**
+ * Lightweight reference selection using simple heuristics instead of expensive distance calculation
+ */
+function selectBestReferenceLight(panels: Panel[], candidates: RefPage[]): RefPage {
+  const panelCount = panels.length
+
+  // Strategy 1: Prefer exact panel count matches
+  const exactMatches = candidates.filter((c) => c.panels.length === panelCount)
+  if (exactMatches.length === 1) {
+    return exactMatches[0]
+  }
+
+  // Strategy 2: For multiple exact matches, prefer lower page numbers (simpler layouts first)
+  if (exactMatches.length > 1) {
+    return exactMatches.reduce((best, current) =>
+      current.page_number < best.page_number ? current : best,
+    )
+  }
+
+  // Strategy 3: If no exact matches, find the closest panel count
+  const closestCount = candidates.reduce((closest, current) => {
+    const currentDiff = Math.abs(current.panels.length - panelCount)
+    const closestDiff = Math.abs(closest.panels.length - panelCount)
+    return currentDiff < closestDiff ? current : closest
+  })
+
+  return closestCount
+}
+
 export function applyReferenceFallback(page: { panels: Panel[] }): {
   panels: Panel[]
   meta?: { referencePage?: number; score?: number }
 } {
   const refs = loadReferencePages()
 
-  // Add detailed logging for debugging
   if (refs.length === 0) {
     console.warn('applyReferenceFallback: No reference pages available, returning original panels')
     return { panels: page.panels }
@@ -234,39 +280,18 @@ export function applyReferenceFallback(page: { panels: Panel[] }): {
     return { panels: page.panels }
   }
 
-  // Log which panels we're trying to fix
+  const panelCount = page.panels.length
   const panelIds = page.panels.map((p) => p.id).join(', ')
   console.log(
     `applyReferenceFallback: Attempting fallback for panels [${panelIds}] with ${candidates.length} reference candidates`,
   )
 
-  let best = candidates[0]
-  let bestScore = Number.POSITIVE_INFINITY
-
-  for (const c of candidates) {
-    try {
-      const score = distancePanels(page.panels, c.panels)
-      if (score < bestScore) {
-        best = c
-        bestScore = score
-      }
-    } catch (error) {
-      console.error(
-        `applyReferenceFallback: Error calculating distance for reference page ${c.page_number}:`,
-        error,
-      )
-    }
-  }
-
-  if (bestScore === Number.POSITIVE_INFINITY) {
-    console.error(
-      'applyReferenceFallback: Failed to find any valid reference, returning original panels',
-    )
-    return { panels: page.panels }
-  }
+  // OPTIMIZATION: Use lightweight selection instead of expensive distance calculation
+  const best = selectBestReferenceLight(page.panels, candidates)
+  const score = best.panels.length === panelCount ? 1.0 : Math.abs(best.panels.length - panelCount)
 
   console.log(
-    `applyReferenceFallback: Using reference page ${best.page_number} with score ${bestScore.toFixed(3)}`,
+    `applyReferenceFallback: Using reference page ${best.page_number} with score ${score.toFixed(3)}`,
   )
 
   try {
@@ -276,11 +301,10 @@ export function applyReferenceFallback(page: { panels: Panel[] }): {
     )
     return {
       panels: mapped,
-      meta: { referencePage: best.page_number, score: bestScore },
+      meta: { referencePage: best.page_number, score },
     }
   } catch (error) {
     console.error('applyReferenceFallback: Error during panel mapping:', error)
-    // Return original panels if mapping fails
     return { panels: page.panels }
   }
 }
