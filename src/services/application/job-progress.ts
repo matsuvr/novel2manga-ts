@@ -13,6 +13,82 @@ export class JobProgressService {
     this.jobRepo = new JobRepository(job)
   }
 
+  /**
+   * Type guard for layout progress data
+   */
+  private isValidLayoutProgress(data: unknown): data is { pages: unknown[] } {
+    return (
+      typeof data === 'object' &&
+      data !== null &&
+      'pages' in data &&
+      Array.isArray((data as Record<string, unknown>).pages)
+    )
+  }
+
+  /**
+   * Safely execute an operation with proper error logging
+   */
+  private async safeOperation<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    context: { jobId: string; episodeNumber?: number },
+  ): Promise<T | null> {
+    try {
+      return await operation()
+    } catch (error) {
+      // NEVER SILENCE ERRORS - Always log with full context for debugging
+      const { getLogger } = await import('@/infrastructure/logging/logger')
+      const logger = getLogger().withContext({
+        service: 'JobProgressService',
+        method: 'getJobWithProgress',
+        operation: operationName,
+      })
+      logger.error(`Failed to execute ${operationName}`, {
+        ...context,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      })
+      return null
+    }
+  }
+
+  /**
+   * Parse layout progress with type safety
+   */
+  private parseLayoutProgress(layoutProgressJson: string): number {
+    try {
+      const parsedProgress = JSON.parse(layoutProgressJson)
+      if (this.isValidLayoutProgress(parsedProgress)) {
+        return parsedProgress.pages.length
+      }
+      return 0
+    } catch (error) {
+      // JSON parse error - log with structured logger and return 0
+      // Use async import to avoid circular dependencies
+      import('@/infrastructure/logging/logger')
+        .then(({ getLogger }) => {
+          const logger = getLogger().withContext({
+            service: 'JobProgressService',
+            method: 'parseLayoutProgress',
+            operation: 'JSON.parse',
+          })
+          logger.error('Failed to parse layout progress JSON', {
+            json: layoutProgressJson,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          })
+        })
+        .catch(() => {
+          // Fallback to console if logger fails
+          console.error('Failed to parse layout progress JSON', {
+            json: layoutProgressJson,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        })
+      return 0
+    }
+  }
+
   async getJobWithProgress(id: string) {
     const job = await this.jobRepo.getJobWithProgress(id)
     if (!job) {
@@ -32,57 +108,22 @@ export class JobProgressService {
           const total = episode.estimatedPages || 0
 
           // Get planned pages from layout progress
-          let planned = 0
-          try {
-            const layoutProgress = await layout.getEpisodeLayoutProgress(id, episodeNumber)
-            if (layoutProgress) {
-              const parsedProgress = JSON.parse(layoutProgress)
-              if (parsedProgress.pages && Array.isArray(parsedProgress.pages)) {
-                planned = parsedProgress.pages.length
-              }
-            }
-          } catch (error) {
-            // NEVER SILENCE ERRORS - Always log with full context for debugging
-            const { getLogger } = await import('@/infrastructure/logging/logger')
-            const logger = getLogger().withContext({
-              service: 'JobProgressService',
-              method: 'getJobWithProgress',
-              operation: 'getEpisodeLayoutProgress',
-            })
-            logger.error('Failed to get episode layout progress', {
-              jobId: id,
-              episodeNumber,
-              error: error instanceof Error ? error.message : String(error),
-              stack: error instanceof Error ? error.stack : undefined,
-            })
-            // Set planned to 0 but continue processing other episodes
-            planned = 0
-          }
+          const layoutProgress = await this.safeOperation(
+            () => layout.getEpisodeLayoutProgress(id, episodeNumber),
+            'getEpisodeLayoutProgress',
+            { jobId: id, episodeNumber },
+          )
+
+          const planned = layoutProgress ? this.parseLayoutProgress(layoutProgress) : 0
 
           // Get rendered pages count (from database)
-          let rendered = 0
-          try {
-            const renderStatus = await db.getRenderStatusByEpisode(id, episodeNumber)
-            if (renderStatus && Array.isArray(renderStatus)) {
-              rendered = renderStatus.length
-            }
-          } catch (error) {
-            // NEVER SILENCE ERRORS - Always log with full context for debugging
-            const { getLogger } = await import('@/infrastructure/logging/logger')
-            const logger = getLogger().withContext({
-              service: 'JobProgressService',
-              method: 'getJobWithProgress',
-              operation: 'getRenderStatusByEpisode',
-            })
-            logger.error('Failed to get episode render status', {
-              jobId: id,
-              episodeNumber,
-              error: error instanceof Error ? error.message : String(error),
-              stack: error instanceof Error ? error.stack : undefined,
-            })
-            // Set rendered to 0 but continue processing other episodes
-            rendered = 0
-          }
+          const renderStatus = await this.safeOperation(
+            () => db.getRenderStatusByEpisode(id, episodeNumber),
+            'getRenderStatusByEpisode',
+            { jobId: id, episodeNumber },
+          )
+
+          const rendered = renderStatus && Array.isArray(renderStatus) ? renderStatus.length : 0
 
           return [
             episodeNumber,

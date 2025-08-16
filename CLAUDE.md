@@ -23,7 +23,6 @@ Design, tasks, and data contracts — keep in sync in the same PR:
 - Storage layout: database\storage-structure.md defines storage contracts and layout. Update it when files, buckets/paths, or retention rules change.
 
 Technology‑specific directives:
-- Mastra: Before adding/updating pipelines, operators, or configs, retrieve the latest Mastra docs via MCP, confirm version compatibility, and reference the exact doc links in code comments or PR descriptions.
 - Cloudflare (Workers/Pages/D1/R2/Queues/etc.): Use MCP to verify the latest Cloudflare APIs and limits. Keep wrangler configuration accurate, document required bindings, and pin versions when possible.
 - Libraries: When introducing or upgrading dependencies, use web search + Context7 + Deepwiki to validate stability, maintenance status, and migration notes. Include justification and links in the PR.
 
@@ -32,6 +31,7 @@ Quality gates (must pass before merge):
 - Unit tests in src/__tests__ pass. E2E tests via Playwright MCP pass for core flows. Integration tests must pass if applicable.
 - Docs/specs/tasks updated in the same PR: design.md, tasks.md, schema.ts + migrations, storage-structure.md.
 - No duplicated code introduced; shared utilities factored appropriately.
+- エラーの隠蔽がないか。LLMコール以外のフォールバックが実装されていないか。スキップが無いか。一気通貫の分析サービスである以上、フォールバックやスキップで正常な分析結果が得られないことはシステムの重要な欠陥である。フォールバックは実装してはいけない。エラーは詳細なメッセージと共に明示し、そこで処理をストップすべき
 
 If any item cannot be satisfied, stop and resolve it first. Do not proceed with implementation or merging until all conditions above are met.
 ```
@@ -39,3 +39,17 @@ If any item cannot be satisfied, stop and resolve it first. Do not proceed with 
 - あなたはgh, jqのコマンドが利用可能です
 - grepではなく、git-grepを使って、関数の名称や関数全体を取得すると作業が楽になります
 - gpt-5, gpt-5-mini, gpt-5-nano は8月5日にリリースされたモデルです。指定間違いではありません。この3つについては、レビューで指摘しないでください。勝手に変更するのも禁止です
+
+PR checklist (copy into your PR and tick all):
+
+- [ ] Latest docs fetched via MCP (Cloudflare and relevant libs). Links included in PR.
+- [ ] No any types introduced; strict types only. No unjustified ts-ignore.
+- [ ] Linter and formatter clean (0 errors). No rule disabling without justification.
+- [ ] DRY and SOLID upheld; no redundant implementations.
+- [ ] Unit tests added/updated in src/**tests** and passing.
+- [ ] E2E scenarios added/updated and passing with Playwright MCP.
+- [ ] エラーの隠蔽がないか
+- [ ] Updated: .kiro\specs\novel-to-manga-converter\design.md
+- [ ] Updated: .kiro\specs\novel-to-manga-converter\tasks.md
+- [ ] Updated: src\db\schema.ts (+ migrations applied/generated as needed)
+- [ ] Updated: database\storage-structure.md
