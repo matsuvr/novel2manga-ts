@@ -82,7 +82,6 @@ Quality gates (must pass before merge):
 - No duplicated code introduced; shared utilities factored appropriately.
 
 PR checklist (copy into your PR and tick all):
-- [ ] Latest docs fetched via MCP (Cloudflare and relevant libs). Links included in PR.
 - [ ] No any types introduced; strict types only. No unjustified ts-ignore.
 - [ ] Linter and formatter clean (0 errors). No rule disabling without justification.
 - [ ] DRY and SOLID upheld; no redundant implementations.

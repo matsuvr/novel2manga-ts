@@ -14,6 +14,7 @@ Project conventions you must follow:
 - Unit tests: Place all unit tests under src/__tests__ using the repository’s test runner (Vitest). Every new/changed public behavior must have tests.
 - E2E tests: Implement and run end-to-end tests with Playwright MCP. Treat E2E as required for critical flows. Keep scenarios minimal, deterministic, and parallel‑safe.
 - Temporary scripts: Put any ad‑hoc verification or one‑off scripts in /tmp_test. Clearly mark them as temporary and remove or gate them before merging to main.
+- エラーを隠蔽しない。フォールバックは悪。LLMコール以外はフォールバックなしで、ちゃんとエラーメッセージの詳細を表示して止まること。スキップも禁止。一気通貫の分析サービスである以上、フォールバックやスキップで正常な分析結果が得られないことはシステムの重要な欠陥である。フォールバックは実装してはいけない。エラーは詳細なメッセージと共に明示し、そこで処理をストップすべき。
 
 Design, tasks, and data contracts — keep in sync in the same PR:
 - System design: .kiro\specs\novel-to-manga-converter\design.md must reflect the current architecture and decisions. Update it when introducing or changing components, flows, or boundaries.
@@ -22,7 +23,6 @@ Design, tasks, and data contracts — keep in sync in the same PR:
 - Storage layout: database\storage-structure.md defines storage contracts and layout. Update it when files, buckets/paths, or retention rules change.
 
 Technology‑specific directives:
-- Mastra: Before adding/updating pipelines, operators, or configs, retrieve the latest Mastra docs via MCP, confirm version compatibility, and reference the exact doc links in code comments or PR descriptions.
 - Cloudflare (Workers/Pages/D1/R2/Queues/etc.): Use MCP to verify the latest Cloudflare APIs and limits. Keep wrangler configuration accurate, document required bindings, and pin versions when possible.
 - Libraries: When introducing or upgrading dependencies, use web search + Context7 + Deepwiki to validate stability, maintenance status, and migration notes. Include justification and links in the PR.
 
@@ -33,12 +33,13 @@ Quality gates (must pass before merge):
 - No duplicated code introduced; shared utilities factored appropriately.
 
 PR checklist (copy into your PR and tick all):
-- [ ] Latest docs fetched via MCP (Mastra, Cloudflare, and relevant libs). Links included in PR.
+
 - [ ] No any types introduced; strict types only. No unjustified ts-ignore.
 - [ ] Linter and formatter clean (0 errors). No rule disabling without justification.
 - [ ] DRY and SOLID upheld; no redundant implementations.
-- [ ] Unit tests added/updated in src/__tests__ and passing.
+- [ ] Unit tests added/updated in src/**tests** and passing.
 - [ ] E2E scenarios added/updated and passing with Playwright MCP.
+- [ ] エラーの隠蔽がないか
 - [ ] Updated: .kiro\specs\novel-to-manga-converter\design.md
 - [ ] Updated: .kiro\specs\novel-to-manga-converter\tasks.md
 - [ ] Updated: src\db\schema.ts (+ migrations applied/generated as needed)
