@@ -69,6 +69,7 @@ Design, tasks, and data contracts — keep in sync in the same PR:
 - Task breakdown: .kiro\specs\novel-to-manga-converter\tasks.md must be updated alongside code to reflect the actual scope, status, and acceptance criteria.
 - Database: Use Drizzle. The schema source of truth is src\db\schema.ts. Update schema and generate/apply migrations together with code changes; never drift the runtime DB from the schema.
 - Storage layout: database\storage-structure.md defines storage contracts and layout. Update it when files, buckets/paths, or retention rules change.
+- エラーの隠蔽がないか。LLMコール以外のフォールバックが実装されていないか。スキップが無いか。一気通貫の分析サービスである以上、フォールバックやスキップで正常な分析結果が得られないことはシステムの重要な欠陥である。フォールバックは実装してはいけない。エラーは詳細なメッセージと共に明示し、そこで処理をストップすべき
 
 Technology‑specific directives:
 -- Cloudflare (Workers/Pages/D1/R2/Queues/etc.): Use MCP to verify the latest Cloudflare APIs and limits. Keep wrangler configuration accurate, document required bindings, and pin versions when possible.

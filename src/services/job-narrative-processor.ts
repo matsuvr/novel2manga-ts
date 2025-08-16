@@ -91,18 +91,30 @@ export class JobNarrativeProcessor {
       })
 
       // 既存の進捗を取得、または新規作成
-      let progress = job.progress || this.createInitialProgress(job.totalChunks || 0)
+      const baseProgress = job.progress || this.createInitialProgress(job.totalChunks || 0)
+      let progress: JobProgress = {
+        currentStep: baseProgress.currentStep || 'episode',
+        processedChunks: baseProgress.processedChunks || 0,
+        totalChunks: baseProgress.totalChunks || 0,
+        episodes: baseProgress.episodes || [],
+        perEpisodePages: baseProgress.perEpisodePages,
+        lastEpisodeEndPosition: baseProgress.lastEpisodeEndPosition,
+        lastProcessedText: baseProgress.lastProcessedText,
+        isCompleted: baseProgress.isCompleted || false,
+      }
 
       // ステータスを処理中に更新
       await this.jobService.updateStatus(jobId, 'processing')
       await this.jobService.updateStep(jobId, 'episode', 0, job.totalChunks || 0)
+
       while (!progress.isCompleted) {
         // 次のバッチ範囲を計算
         const startIndex = progress.processedChunks
-        const endIndex = Math.min(startIndex + this.config.chunksPerBatch, progress.totalChunks)
+        const totalChunks = progress.totalChunks
+        const endIndex = Math.min(startIndex + this.config.chunksPerBatch, totalChunks)
 
         this.logger.info('Processing chunks', { jobId, startIndex, endIndex })
-        await this.jobService.updateStep(jobId, `episode`, startIndex, progress.totalChunks)
+        await this.jobService.updateStep(jobId, `episode`, startIndex, totalChunks)
 
         // チャンクの存在確認のみ実行（実際のデータ読み込みはprepareNarrativeAnalysisInputで行う）
         for (let i = startIndex; i < endIndex; i++) {
@@ -297,6 +309,8 @@ export class JobNarrativeProcessor {
           }
         : progress.lastEpisodeEndPosition,
       isCompleted: newChunkIndex >= progress.totalChunks,
+      // Keep existing perEpisodePages if it exists
+      perEpisodePages: progress.perEpisodePages,
     }
   }
 
