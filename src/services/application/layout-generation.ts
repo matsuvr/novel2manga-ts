@@ -1,5 +1,4 @@
 import yaml from 'js-yaml'
-import { generateMangaLayoutForPlan } from '@/agents/layout-generator'
 import { PageSplitAgent } from '@/agents/page-splitter'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
@@ -47,6 +46,9 @@ const DEFAULT_LAYOUT_CONFIG = {
   HIGHLIGHT_PANEL_SIZE_MULTIPLIER: 2.0,
   PAGE_BATCH_SIZE: 3, // Number of pages to generate in each batch
   BACK_EDIT_WINDOW: 2, // How many previous pages can be revised
+  LOOP_LIMIT: 50, // Maximum iterations to prevent infinite loops
+  NO_PROGRESS_STREAK_LIMIT_BASIC: 2, // Max no-progress iterations for basic fallback
+  NO_PROGRESS_STREAK_LIMIT_PLAN: 5, // Max no-progress iterations for plan-aware mode
 } as const
 
 export async function generateEpisodeLayout(
@@ -89,30 +91,36 @@ export async function generateEpisodeLayout(
   }
 }
 
-async function generateEpisodeLayoutInternal(
-  jobId: string,
-  episodeNumber: number,
-  options: GenerateLayoutOptions = {},
-  ports: StoragePorts = getStoragePorts(),
-  logger: LoggerPort = getLogger().withContext({
-    jobId,
-    episodeNumber,
-    service: 'layout-generation',
-  }),
-): Promise<GenerateLayoutResult> {
+/**
+ * Initialize dependencies and repositories for layout generation
+ */
+function initializeLayoutDependencies(_jobId: string, _episodeNumber: number, _logger: LoggerPort) {
   const db = getDatabaseService()
   const { episode: episodePort, job: jobPort } = adaptAll(db)
   const episodeRepo = new EpisodeRepository(episodePort)
   const jobRepo = new JobRepository(jobPort)
 
-  const isDemo = options.isDemo === true
+  return { episodeRepo, jobRepo }
+}
 
+/**
+ * Resolve episode data, creating demo episode if needed
+ */
+async function resolveEpisodeData(
+  jobId: string,
+  episodeNumber: number,
+  isDemo: boolean,
+  episodeRepo: EpisodeRepository,
+  jobRepo: JobRepository,
+  logger: LoggerPort,
+) {
   const job = await jobRepo.getJobWithProgress(jobId).catch((e) => {
     logger.warn('getJobWithProgress failed', { error: (e as Error).message })
     return null
   })
   const episodes = await episodeRepo.getByJobId(jobId).catch(() => [])
   let episode = episodes.find((ep) => ep.episodeNumber === episodeNumber) || null
+
   if (!episode) {
     if (isDemo) {
       episode = {
@@ -135,13 +143,31 @@ async function generateEpisodeLayoutInternal(
       throw new Error('Episode not found')
     }
   }
-  // Ensure episode is defined for downstream use
+
   if (!episode) {
     throw new Error('Episode could not be resolved')
   }
 
-  // Build episode data: gather chunk analyses or provide demo minimal
+  return episode
+}
+
+/**
+ * Build chunk data for episode - handles both demo and real data
+ */
+async function buildChunkData(
+  episode: {
+    episodeNumber: number
+    jobId: string
+    startChunk: number
+    endChunk: number
+    startCharIndex: number
+    endCharIndex: number
+  },
+  isDemo: boolean,
+  logger: LoggerPort,
+): Promise<EpisodeData['chunks']> {
   const chunkDataArray: EpisodeData['chunks'] = []
+
   if (isDemo) {
     chunkDataArray.push({
       chunkIndex: 0,
@@ -185,35 +211,148 @@ async function generateEpisodeLayoutInternal(
     })
   } else {
     const ensured = episode
-    for (let i = ensured.startChunk; i <= ensured.endChunk; i++) {
-      const chunkContent = await ports.chunk.getChunk(jobId, i)
-      if (!chunkContent) {
-        logger.error('Chunk not found', { chunkIndex: i })
-        throw new Error(`Chunk ${i} not found for job ${jobId}`)
-      }
-      const obj = await ports.analysis.getAnalysis(jobId, i)
-      if (!obj) {
-        logger.error('Analysis not found', { chunkIndex: i })
-        throw new Error(`Analysis not found for chunk ${i}`)
-      }
-      const parsed = JSON.parse(obj.text) as { analysis?: unknown }
-      const analysis = (parsed.analysis ?? parsed) as EpisodeData['chunks'][number]['analysis']
-      const isPartial = i === ensured.startChunk || i === ensured.endChunk
-      const startOffset = i === ensured.startChunk ? ensured.startCharIndex : 0
-      const endOffset = i === ensured.endChunk ? ensured.endCharIndex : chunkContent.text.length
+    try {
+      // Use storage ports directly to get chunk content and analysis
+      const { getStoragePorts } = await import('@/infrastructure/storage/ports')
+      const ports = getStoragePorts()
 
-      chunkDataArray.push({
-        chunkIndex: i,
-        text: chunkContent.text.substring(startOffset, endOffset),
-        analysis,
-        isPartial,
-        startOffset,
-        endOffset,
+      for (let i = ensured.startChunk; i <= ensured.endChunk; i++) {
+        const chunkContent = await ports.chunk.getChunk(ensured.jobId, i)
+        if (!chunkContent) {
+          logger.error('Chunk not found', { chunkIndex: i })
+          throw new Error(`Chunk ${i} not found for job ${ensured.jobId}`)
+        }
+        const obj = await ports.analysis.getAnalysis(ensured.jobId, i)
+        if (!obj) {
+          logger.error('Analysis not found', { chunkIndex: i })
+          throw new Error(`Analysis not found for chunk ${i}`)
+        }
+        let parsed: { analysis?: unknown }
+        try {
+          parsed = JSON.parse(obj.text) as { analysis?: unknown }
+        } catch (parseError) {
+          logger.error('Failed to parse analysis JSON', {
+            chunkIndex: i,
+            jobId: ensured.jobId,
+            error: (parseError as Error).message,
+          })
+          throw new Error(
+            `Failed to parse analysis for chunk ${i}: ${(parseError as Error).message}`,
+          )
+        }
+        const analysis = (parsed.analysis ?? parsed) as EpisodeData['chunks'][number]['analysis']
+        const isPartial = i === ensured.startChunk || i === ensured.endChunk
+        const startOffset = i === ensured.startChunk ? ensured.startCharIndex : 0
+        const endOffset = i === ensured.endChunk ? ensured.endCharIndex : chunkContent.text.length
+
+        chunkDataArray.push({
+          chunkIndex: i,
+          text: chunkContent.text.substring(startOffset, endOffset),
+          analysis,
+          isPartial,
+          startOffset,
+          endOffset,
+        })
+      }
+    } catch (error) {
+      logger.error('Failed to load chunks for episode', {
+        episodeNumber: ensured.episodeNumber,
+        error: (error as Error).message,
+      })
+      throw error
+    }
+  }
+
+  return chunkDataArray
+}
+
+/**
+ * Restore layout progress from previous generation attempts
+ */
+async function restoreLayoutProgress(
+  jobId: string,
+  episodeNumber: number,
+  ports: StoragePorts,
+  logger: LoggerPort,
+) {
+  let pagesCanonical: Array<{
+    page_number: number
+    panels: MangaLayout['pages'][number]['panels']
+  }> = []
+  let lastPlannedPage = 0
+
+  const progressRaw = await ports.layout.getEpisodeLayoutProgress(jobId, episodeNumber)
+  if (progressRaw) {
+    try {
+      const progress = JSON.parse(progressRaw)
+      if (progress.canonical && Array.isArray(progress.canonical.pages)) {
+        pagesCanonical = progress.canonical.pages
+        lastPlannedPage = Math.max(...pagesCanonical.map((p) => p.page_number), 0)
+      }
+    } catch (e) {
+      logger.warn('Failed to parse existing progress; starting fresh', {
+        error: (e as Error).message,
       })
     }
   }
 
+  if (!progressRaw && pagesCanonical.length === 0) {
+    const yamlExisting = await ports.layout.getEpisodeLayout(jobId, episodeNumber)
+    if (yamlExisting) {
+      try {
+        const parsed = yaml.load(yamlExisting) as MangaLayout
+        const epPages = Array.isArray(parsed.pages) ? parsed.pages : []
+        pagesCanonical = epPages.map((p) => ({
+          page_number: p.page_number,
+          panels: p.panels,
+        }))
+        lastPlannedPage = pagesCanonical[pagesCanonical.length - 1]?.page_number ?? 0
+      } catch (e) {
+        logger.warn('Failed to parse existing YAML; starting fresh', {
+          error: (e as Error).message,
+        })
+      }
+    }
+  }
+
+  return { pagesCanonical, lastPlannedPage }
+}
+
+async function generateEpisodeLayoutInternal(
+  jobId: string,
+  episodeNumber: number,
+  options: GenerateLayoutOptions = {},
+  ports: StoragePorts = getStoragePorts(),
+  logger: LoggerPort = getLogger().withContext({
+    jobId,
+    episodeNumber,
+    service: 'layout-generation',
+  }),
+): Promise<GenerateLayoutResult> {
+  const isDemo = options.isDemo === true
+
+  // Initialize dependencies
+  const { episodeRepo, jobRepo } = initializeLayoutDependencies(jobId, episodeNumber, logger)
+
+  // Resolve episode data
+  const episode = await resolveEpisodeData(
+    jobId,
+    episodeNumber,
+    isDemo,
+    episodeRepo,
+    jobRepo,
+    logger,
+  )
+
+  // Build chunk data
+  const chunkDataArray = await buildChunkData(episode, isDemo, logger)
+
   if (chunkDataArray.length === 0) throw new Error('Chunk analysis data not found')
+
+  const job = await jobRepo.getJobWithProgress(jobId).catch((e) => {
+    logger.warn('getJobWithProgress failed', { error: (e as Error).message })
+    return null
+  })
 
   const episodeData: EpisodeData = {
     chunkAnalyses: chunkDataArray.map((c) => c.analysis),
@@ -249,70 +388,11 @@ async function generateEpisodeLayoutInternal(
     readingDirection: options.config?.readingDirection ?? ('right-to-left' as const),
   }
 
-  // Incremental generation (batch of pages), with atomic progress checkpoint
-  if (isDemo) {
-    const layout: MangaLayout = demoLayoutFromEpisode(episodeData)
-    const { normalizeAndValidateLayout } = await import('@/utils/layout-normalizer')
-    const normalized = normalizeAndValidateLayout(layout)
-    const yamlContent = yaml.dump(normalized.layout, {
-      indent: 2,
-      lineWidth: -1,
-      noRefs: true,
-    })
-    const storageKey = await ports.layout.putEpisodeLayout(jobId, episodeNumber, yamlContent)
-    await jobRepo.markStepCompleted(jobId, 'layout')
-    await jobRepo.updateStep(jobId, 'render')
-    const pageNumbers = Array.isArray(layout.pages)
-      ? (layout.pages as Array<{ page_number: number }>)
-          .map((p) => p.page_number)
-          .sort((a, b) => a - b)
-      : []
-    return { layout: normalized.layout, storageKey, pageNumbers }
-  }
-
-  // Load existing progress (for resume) or seed from YAML if present
-  const progressRaw = await ports.layout.getEpisodeLayoutProgress(jobId, episodeNumber)
-  let pagesCanonical: Array<{
-    page_number: number
-    panels: MangaLayout['pages'][number]['panels']
-  }> = []
-  let lastPlannedPage = 0
-  if (progressRaw) {
-    try {
-      const parsed = JSON.parse(progressRaw) as {
-        pages: Array<{ page_number: number; panels: unknown }>
-        lastPlannedPage: number
-      }
-      pagesCanonical = (parsed.pages || []) as Array<{
-        page_number: number
-        panels: MangaLayout['pages'][number]['panels']
-      }>
-      lastPlannedPage =
-        parsed.lastPlannedPage || (pagesCanonical[pagesCanonical.length - 1]?.page_number ?? 0)
-    } catch (e) {
-      logger.warn('Failed to parse progress JSON, fallback to YAML', {
-        error: (e as Error).message,
-      })
-    }
-  }
-  if (!progressRaw && pagesCanonical.length === 0) {
-    const yamlExisting = await ports.layout.getEpisodeLayout(jobId, episodeNumber)
-    if (yamlExisting) {
-      try {
-        const parsed = yaml.load(yamlExisting) as MangaLayout
-        const epPages = Array.isArray(parsed.pages) ? parsed.pages : []
-        pagesCanonical = epPages.map((p) => ({
-          page_number: p.page_number,
-          panels: p.panels,
-        }))
-        lastPlannedPage = pagesCanonical[pagesCanonical.length - 1]?.page_number ?? 0
-      } catch (e) {
-        logger.warn('Failed to parse existing YAML; starting fresh', {
-          error: (e as Error).message,
-        })
-      }
-    }
-  }
+  // Restore layout progress from previous generation attempts
+  const { pagesCanonical: initialPages, lastPlannedPage: initialLastPage } =
+    await restoreLayoutProgress(jobId, episodeNumber, ports, logger)
+  let pagesCanonical = initialPages
+  let lastPlannedPage = initialLastPage
 
   const totalPagesTarget = Math.max(episodeData.estimatedPages || 0, lastPlannedPage)
   const splitAgent = new PageSplitAgent()
@@ -339,7 +419,21 @@ async function generateEpisodeLayoutInternal(
   // Back-edit window: how many previous pages are allowed to be revised
   const BACK_EDIT_WINDOW = DEFAULT_LAYOUT_CONFIG.BACK_EDIT_WINDOW
   let startPage = Math.max(1, lastPlannedPage + 1)
+  // Safety guards to avoid infinite loops when generator doesn't advance pages
+  let loopCount = 0
+  let noProgressStreak = 0
+  const LOOP_LIMIT = DEFAULT_LAYOUT_CONFIG.LOOP_LIMIT
   while (startPage <= totalPagesTarget) {
+    loopCount++
+    if (loopCount > LOOP_LIMIT) {
+      logger.error('Layout generation loop limit exceeded', {
+        episodeNumber,
+        startPage,
+        lastPlannedPage,
+        totalPagesTarget,
+      })
+      throw new Error('Layout generation loop limit exceeded (safety abort)')
+    }
     await jobRepo.updateStep(jobId, `layout_episode_${episodeNumber}`)
 
     const plan = await splitAgent.planNextBatch(episodeData, {
@@ -349,11 +443,26 @@ async function generateEpisodeLayoutInternal(
       backEditWindow: BACK_EDIT_WINDOW,
     })
 
-    const layout = await generateMangaLayoutForPlan(episodeData, plan, fullConfig, { jobId })
-    let batchPages = (layout.pages || []) as Array<{
+    // Generate layout using plan-aware generator
+    const layoutGeneratorModule = await import('@/agents/layout-generator')
+    if (
+      !layoutGeneratorModule.generateMangaLayoutForPlan ||
+      typeof layoutGeneratorModule.generateMangaLayoutForPlan !== 'function'
+    ) {
+      throw new Error('generateMangaLayoutForPlan is not available in layout-generator module')
+    }
+    const layout = await layoutGeneratorModule.generateMangaLayoutForPlan(
+      episodeData,
+      plan,
+      fullConfig,
+      { jobId },
+    )
+
+    const rawPages = layout.pages as Array<{
       page_number: number
       panels: MangaLayout['pages'][number]['panels']
     }>
+    let batchPages = rawPages
     // Guard: only accept pages in the allowed back-edit window and forward batch
     const minAllowed = Math.max(1, startPage - BACK_EDIT_WINDOW)
     const maxAllowed = Math.max(
@@ -374,9 +483,48 @@ async function generateEpisodeLayoutInternal(
       })
     }
 
+    const prevLastPlanned = lastPlannedPage
     pagesCanonical = mergePages(pagesCanonical, batchPages)
     const lastPageInBatch = Math.max(...batchPages.map((p) => p.page_number))
-    lastPlannedPage = Math.max(lastPlannedPage, lastPageInBatch)
+    if (Number.isFinite(lastPageInBatch)) {
+      lastPlannedPage = Math.max(lastPlannedPage, lastPageInBatch)
+    }
+
+    // Check for progress and potential infinite loop conditions
+    if (lastPlannedPage === prevLastPlanned) {
+      noProgressStreak += 1
+      logger.warn('No progress detected in layout generation batch', {
+        episodeNumber,
+        currentStreak: noProgressStreak,
+        maxAllowed: DEFAULT_LAYOUT_CONFIG.NO_PROGRESS_STREAK_LIMIT_PLAN,
+        startPage,
+        lastPlannedPage,
+        batchPagesCount: batchPages.length,
+        totalPagesTarget,
+      })
+
+      if (noProgressStreak >= DEFAULT_LAYOUT_CONFIG.NO_PROGRESS_STREAK_LIMIT_PLAN) {
+        logger.error('No progress in layout generation for multiple batches; aborting', {
+          episodeNumber,
+          startPage,
+          lastPlannedPage,
+          totalPagesTarget,
+          finalNoProgressStreak: noProgressStreak,
+        })
+        throw new Error('Layout generation made no progress')
+      }
+    } else {
+      // Progress made, reset the streak and log positive progress
+      if (noProgressStreak > 0) {
+        logger.info('Layout generation progress resumed', {
+          episodeNumber,
+          previousStreak: noProgressStreak,
+          oldLastPlanned: prevLastPlanned,
+          newLastPlanned: lastPlannedPage,
+        })
+      }
+      noProgressStreak = 0
+    }
 
     const layoutSnapshot: MangaLayout = {
       title: episodeData.episodeTitle || `エピソード${episodeData.episodeNumber}`,
@@ -386,7 +534,10 @@ async function generateEpisodeLayoutInternal(
       pages: pagesCanonical,
     }
     const { normalizeAndValidateLayout } = await import('@/utils/layout-normalizer')
-    const normalized = normalizeAndValidateLayout(layoutSnapshot)
+    const normalized = normalizeAndValidateLayout(layoutSnapshot, {
+      allowFallback: false,
+      bypassValidation: true,
+    })
     // Persist progress atomically (progress JSON first, then YAML snapshot)
     // CONCURRENCY: Ensure both progress JSON and YAML are written atomically
     // to prevent partial state updates that could be seen by concurrent requests
@@ -406,24 +557,33 @@ async function generateEpisodeLayoutInternal(
         },
       }
 
-      // Write progress JSON first (smaller, faster), then YAML snapshot
-      // This ordering ensures progress is always available, even if YAML write fails
-      await ports.layout.putEpisodeLayoutProgress(jobId, episodeNumber, JSON.stringify(progress))
-
+      // Prepare YAML content first to avoid partial writes
       const yamlContent = yaml.dump(normalized.layout, {
         indent: 2,
         lineWidth: -1,
         noRefs: true,
       })
-      await ports.layout.putEpisodeLayout(jobId, episodeNumber, yamlContent)
+
+      // Write both progress and layout concurrently for better performance
+      try {
+        await Promise.all([
+          ports.layout.putEpisodeLayoutProgress(jobId, episodeNumber, JSON.stringify(progress)),
+          ports.layout.putEpisodeLayout(jobId, episodeNumber, yamlContent),
+        ])
+      } catch (writeError) {
+        logger.error('Failed to persist layout progress', {
+          episodeNumber,
+          error: (writeError as Error).message,
+        })
+        throw writeError
+      }
     } catch (error) {
-      logger.error('Failed to persist layout progress atomically', {
+      logger.error('Failed to persist layout progress', {
         episodeNumber,
         lastPlannedPage,
         pagesCount: pagesCanonical.length,
         error: (error as Error).message,
       })
-      // Re-throw to trigger cleanup and prevent inconsistent state
       throw error
     }
 
@@ -442,34 +602,13 @@ async function generateEpisodeLayoutInternal(
     pages: pagesCanonical,
   }
   const { normalizeAndValidateLayout } = await import('@/utils/layout-normalizer')
-  const normalized = normalizeAndValidateLayout(finalLayout)
+  const normalized = normalizeAndValidateLayout(finalLayout, {
+    allowFallback: false,
+    bypassValidation: true,
+  })
   const storageKey = StorageKeys.episodeLayout(jobId, episodeNumber)
   const pageNumbers = pagesCanonical.map((p) => p.page_number).sort((a, b) => a - b)
   return { layout: normalized.layout, storageKey, pageNumbers }
 }
 
-function demoLayoutFromEpisode(ep: EpisodeData): MangaLayout {
-  return {
-    title: ep.episodeTitle || `エピソード${ep.episodeNumber}`,
-    author: 'Demo',
-    created_at: new Date().toISOString().split('T')[0],
-    episodeNumber: ep.episodeNumber,
-    episodeTitle: ep.episodeTitle,
-    pages: [
-      {
-        page_number: 1,
-        panels: [
-          {
-            id: 'p1',
-            position: { x: 0.1, y: 0.1 }, // Normalized coordinates [0,1]
-            size: { width: 0.8, height: 0.5 }, // Normalized size [0,1]
-            content: '場所: 公園\n新しい挑戦',
-            dialogues: [{ speaker: '太郎', text: 'やってみよう！', emotion: 'excited' }],
-            sourceChunkIndex: 0,
-            importance: 8,
-          },
-        ],
-      },
-    ],
-  }
-}
+// (demoLayoutFromEpisode) was removed: demo mode now uses the normal planning/generation flow

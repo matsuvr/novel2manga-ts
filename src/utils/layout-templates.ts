@@ -1,4 +1,5 @@
 import type { LayoutTemplate } from '@/types/panel-layout'
+import { selectRandomTemplateByCount } from '@/utils/panel-sample-loader'
 
 // 日本式マンガでよく使われるレイアウトテンプレート
 // 重要: 均等なグリッド分割は読みにくいため避ける
@@ -7,15 +8,29 @@ export const layoutTemplates: LayoutTemplate[] = [
     name: 'single-panel',
     description: '1ページ1コマ（見開きや重要シーン用）',
     panelCount: 1,
-    panels: [{ position: { x: 0, y: 0 }, size: { width: 1.0, height: 1.0 }, priority: 1 }],
+    panels: [
+      {
+        position: { x: 0, y: 0 },
+        size: { width: 1.0, height: 1.0 },
+        priority: 1,
+      },
+    ],
   },
   {
     name: 'two-asymmetric-vertical',
     description: '縦2分割（非対称）',
     panelCount: 2,
     panels: [
-      { position: { x: 0, y: 0 }, size: { width: 1.0, height: 0.4 }, priority: 1 },
-      { position: { x: 0, y: 0.4 }, size: { width: 1.0, height: 0.6 }, priority: 2 },
+      {
+        position: { x: 0, y: 0 },
+        size: { width: 1.0, height: 0.4 },
+        priority: 1,
+      },
+      {
+        position: { x: 0, y: 0.4 },
+        size: { width: 1.0, height: 0.6 },
+        priority: 2,
+      },
     ],
   },
   {
@@ -23,9 +38,21 @@ export const layoutTemplates: LayoutTemplate[] = [
     description: '3コマ動的レイアウト（サンプルから抽出）',
     panelCount: 3,
     panels: [
-      { position: { x: 0.52, y: 0.05 }, size: { width: 0.48, height: 0.25 }, priority: 1 },
-      { position: { x: 0.0, y: 0.05 }, size: { width: 0.5, height: 0.48 }, priority: 2 },
-      { position: { x: 0.0, y: 0.53 }, size: { width: 1.0, height: 0.47 }, priority: 3 },
+      {
+        position: { x: 0.52, y: 0.05 },
+        size: { width: 0.48, height: 0.25 },
+        priority: 1,
+      },
+      {
+        position: { x: 0.0, y: 0.05 },
+        size: { width: 0.5, height: 0.48 },
+        priority: 2,
+      },
+      {
+        position: { x: 0.0, y: 0.53 },
+        size: { width: 1.0, height: 0.47 },
+        priority: 3,
+      },
     ],
   },
   {
@@ -33,10 +60,26 @@ export const layoutTemplates: LayoutTemplate[] = [
     description: '4コマ物語展開用（サンプルから抽出）',
     panelCount: 4,
     panels: [
-      { position: { x: 0.5, y: 0.05 }, size: { width: 0.5, height: 0.55 }, priority: 1 },
-      { position: { x: 0.0, y: 0.05 }, size: { width: 0.5, height: 0.2 }, priority: 2 },
-      { position: { x: 0.0, y: 0.25 }, size: { width: 0.5, height: 0.35 }, priority: 3 },
-      { position: { x: 0.0, y: 0.6 }, size: { width: 1.0, height: 0.4 }, priority: 4 },
+      {
+        position: { x: 0.5, y: 0.05 },
+        size: { width: 0.5, height: 0.55 },
+        priority: 1,
+      },
+      {
+        position: { x: 0.0, y: 0.05 },
+        size: { width: 0.5, height: 0.2 },
+        priority: 2,
+      },
+      {
+        position: { x: 0.0, y: 0.25 },
+        size: { width: 0.5, height: 0.35 },
+        priority: 3,
+      },
+      {
+        position: { x: 0.0, y: 0.6 },
+        size: { width: 1.0, height: 0.4 },
+        priority: 4,
+      },
     ],
   },
   {
@@ -44,11 +87,31 @@ export const layoutTemplates: LayoutTemplate[] = [
     description: '5コマ感情表現用（サンプルから抽出）',
     panelCount: 5,
     panels: [
-      { position: { x: 0.52, y: 0.05 }, size: { width: 0.48, height: 0.25 }, priority: 1 },
-      { position: { x: 0.0, y: 0.05 }, size: { width: 0.5, height: 0.48 }, priority: 2 },
-      { position: { x: 0.0, y: 0.3 }, size: { width: 0.5, height: 0.23 }, priority: 3 },
-      { position: { x: 0.0, y: 0.53 }, size: { width: 1.0, height: 0.2 }, priority: 4 },
-      { position: { x: 0.0, y: 0.73 }, size: { width: 1.0, height: 0.27 }, priority: 5 },
+      {
+        position: { x: 0.52, y: 0.05 },
+        size: { width: 0.48, height: 0.25 },
+        priority: 1,
+      },
+      {
+        position: { x: 0.0, y: 0.05 },
+        size: { width: 0.5, height: 0.48 },
+        priority: 2,
+      },
+      {
+        position: { x: 0.0, y: 0.3 },
+        size: { width: 0.5, height: 0.23 },
+        priority: 3,
+      },
+      {
+        position: { x: 0.0, y: 0.53 },
+        size: { width: 1.0, height: 0.2 },
+        priority: 4,
+      },
+      {
+        position: { x: 0.0, y: 0.73 },
+        size: { width: 1.0, height: 0.27 },
+        priority: 5,
+      },
     ],
   },
   {
@@ -56,12 +119,36 @@ export const layoutTemplates: LayoutTemplate[] = [
     description: '6コマ会話シーン用（サンプルから抽出）',
     panelCount: 6,
     panels: [
-      { position: { x: 0.53, y: 0.05 }, size: { width: 0.47, height: 0.23 }, priority: 1 },
-      { position: { x: 0.0, y: 0.05 }, size: { width: 0.48, height: 0.45 }, priority: 2 },
-      { position: { x: 0.0, y: 0.5 }, size: { width: 0.48, height: 0.18 }, priority: 3 },
-      { position: { x: 0.53, y: 0.28 }, size: { width: 0.47, height: 0.27 }, priority: 4 },
-      { position: { x: 0.35, y: 0.55 }, size: { width: 0.5, height: 0.18 }, priority: 5 },
-      { position: { x: 0.0, y: 0.73 }, size: { width: 1.0, height: 0.27 }, priority: 6 },
+      {
+        position: { x: 0.53, y: 0.05 },
+        size: { width: 0.47, height: 0.23 },
+        priority: 1,
+      },
+      {
+        position: { x: 0.0, y: 0.05 },
+        size: { width: 0.48, height: 0.45 },
+        priority: 2,
+      },
+      {
+        position: { x: 0.0, y: 0.5 },
+        size: { width: 0.48, height: 0.18 },
+        priority: 3,
+      },
+      {
+        position: { x: 0.53, y: 0.28 },
+        size: { width: 0.47, height: 0.27 },
+        priority: 4,
+      },
+      {
+        position: { x: 0.35, y: 0.55 },
+        size: { width: 0.5, height: 0.18 },
+        priority: 5,
+      },
+      {
+        position: { x: 0.0, y: 0.73 },
+        size: { width: 1.0, height: 0.27 },
+        priority: 6,
+      },
     ],
   },
   {
@@ -69,10 +156,26 @@ export const layoutTemplates: LayoutTemplate[] = [
     description: '4コマクライマックス用（感情の高まりを表現）',
     panelCount: 4,
     panels: [
-      { position: { x: 0.0, y: 0.05 }, size: { width: 1.0, height: 0.4 }, priority: 1 },
-      { position: { x: 0.58, y: 0.48 }, size: { width: 0.42, height: 0.17 }, priority: 2 },
-      { position: { x: 0.0, y: 0.65 }, size: { width: 0.6, height: 0.35 }, priority: 3 },
-      { position: { x: 0.6, y: 0.65 }, size: { width: 0.4, height: 0.35 }, priority: 4 },
+      {
+        position: { x: 0.0, y: 0.05 },
+        size: { width: 1.0, height: 0.4 },
+        priority: 1,
+      },
+      {
+        position: { x: 0.58, y: 0.48 },
+        size: { width: 0.42, height: 0.17 },
+        priority: 2,
+      },
+      {
+        position: { x: 0.0, y: 0.65 },
+        size: { width: 0.6, height: 0.35 },
+        priority: 3,
+      },
+      {
+        position: { x: 0.6, y: 0.65 },
+        size: { width: 0.4, height: 0.35 },
+        priority: 4,
+      },
     ],
   },
 ]
@@ -83,6 +186,7 @@ export const layoutRules = {
   forbidden: {
     // 均等分割は絶対NG
     isEqualGrid: (panels: Array<{ size: { width: number; height: number } }>) => {
+      if (!panels || panels.length <= 1) return false
       const widths = panels.map((p) => p.size.width)
       const heights = panels.map((p) => p.size.height)
       const widthVariance = Math.max(...widths) - Math.min(...widths)
@@ -91,6 +195,7 @@ export const layoutRules = {
     },
     // 縦または横が全て同じサイズもNG
     hasUniformDimension: (panels: Array<{ size: { width: number; height: number } }>) => {
+      if (!panels || panels.length <= 1) return false
       const widths = new Set(panels.map((p) => Math.round(p.size.width * 100)))
       const heights = new Set(panels.map((p) => Math.round(p.size.height * 100)))
       return widths.size === 1 || heights.size === 1
@@ -127,6 +232,10 @@ export function selectLayoutTemplate(
   isClimax: boolean,
   hasDialogue: boolean,
 ): LayoutTemplate {
+  // New behavior: Prefer sample patterns by exact panel count, randomly.
+  const sample = selectRandomTemplateByCount(panelCount)
+  if (sample) return sample
+
   // クライマックスシーンは大きなコマを使う
   if (isClimax) {
     if (panelCount <= 2) {
@@ -166,4 +275,13 @@ export function selectLayoutTemplate(
 
   // フォールバック
   return layoutTemplates[3] // four-narrative-flow
+}
+
+// Explicit selector that ignores scene attributes and uses random sample by count.
+export function selectLayoutTemplateByCountRandom(panelCount: number): LayoutTemplate {
+  const sample = selectRandomTemplateByCount(panelCount)
+  if (sample) return sample
+  // fallback to nearest from built-ins when samples missing
+  const candidates = layoutTemplates.filter((t) => Math.abs(t.panelCount - panelCount) <= 1)
+  return candidates[0] || layoutTemplates[0]
 }
