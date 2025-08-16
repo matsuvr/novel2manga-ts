@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useCallback, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 interface ProcessStep {
   id: string
@@ -60,8 +60,12 @@ interface LogEntry {
   data?: unknown
 }
 
-// Progress weight for the current in-flight episode during layout
-// DOCUMENT: Represents partial completion credit while an episode is being laid out.
+// CONFIGURATION: Progress weight for the current in-flight episode during layout
+// This value (0.5) represents the partial completion credit given to an episode
+// that is currently being processed. It helps provide more accurate progress
+// feedback by giving 50% credit for the episode being worked on, preventing
+// the progress bar from appearing stalled during long episode processing.
+// Range: 0.0 (no credit) to 1.0 (full credit for in-progress episodes)
 const CURRENT_EPISODE_PROGRESS_WEIGHT = 0.5 as const
 
 const INITIAL_STEPS: ProcessStep[] = [
@@ -129,6 +133,38 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
     >
   >({})
   const [currentLayoutEpisode, setCurrentLayoutEpisode] = useState<number | null>(null)
+
+  // Ref to track component mount state for proper cleanup
+  const isMountedRef = useRef(true)
+
+  // Type guard for episode page data to ensure type safety
+  const isValidEpisodePageData = useCallback(
+    (
+      data: unknown,
+    ): data is {
+      planned: number
+      rendered: number
+      total?: number
+      validation?: {
+        normalizedPages: number[]
+        pagesWithIssueCounts: Record<number, number> | Record<string, number>
+        issuesCount: number
+      }
+    } => {
+      if (typeof data !== 'object' || data === null) return false
+      const obj = data as Record<string, unknown>
+      return (
+        typeof obj.planned === 'number' &&
+        typeof obj.rendered === 'number' &&
+        (obj.total === undefined || typeof obj.total === 'number') &&
+        (obj.validation === undefined ||
+          (typeof obj.validation === 'object' &&
+            obj.validation !== null &&
+            Array.isArray((obj.validation as Record<string, unknown>).normalizedPages)))
+      )
+    },
+    [],
+  )
 
   // ステップ名から詳細メッセージを生成
   const describeStep = useCallback((stepId: string): string => {
@@ -220,11 +256,11 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
           }
         > = {}
         for (const [k, v] of Object.entries(data.job.progress.perEpisodePages)) {
-          const n = Number(k)
-          if (!Number.isNaN(n) && v && typeof v.planned === 'number') {
-            normalized[n] = {
+          const episodeNumber = Number(k)
+          if (!Number.isNaN(episodeNumber) && isValidEpisodePageData(v)) {
+            normalized[episodeNumber] = {
               planned: v.planned,
-              rendered: v.rendered ?? 0,
+              rendered: v.rendered,
               total: v.total,
               validation: v.validation,
             }
@@ -446,7 +482,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
         ? 'stop'
         : 'continue'
     },
-    [lastJobData, addLog, onComplete, describeStep, isDemoMode],
+    [lastJobData, addLog, onComplete, describeStep, isDemoMode, isValidEpisodePageData],
   )
 
   useEffect(() => {
@@ -460,10 +496,16 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
     addLog('info', `処理を開始しました。Job ID: ${jobId}`)
 
     let pollInterval: NodeJS.Timeout
-    let isPolling = true
+    const initialTimeout: NodeJS.Timeout = setTimeout(() => {
+      if (isMountedRef.current) {
+        poll()
+        pollInterval = setInterval(poll, 2000) // Increased to 2 seconds to reduce load
+      }
+    }, 1000)
 
     const poll = async () => {
-      if (!isPolling) return
+      // Check if component is still mounted before proceeding
+      if (!isMountedRef.current) return
 
       try {
         const response = await fetch(`/api/jobs/${jobId}/status`)
@@ -472,48 +514,53 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
         }
 
         const data: JobData = await response.json()
+
+        // Double-check mount state before updating component state
+        if (!isMountedRef.current) return
+
         const result = updateStepsFromJobData(data)
 
         if (result === 'stop') {
-          isPolling = false
-          clearInterval(pollInterval)
-          addLog('info', 'ポーリングを停止しました')
-          // 完了メッセージとダウンロード導線
-          try {
-            const uiCompleted =
-              data.job.status === 'completed' ||
-              data.job.currentStep === 'complete' ||
-              data.job.renderCompleted === true
-            if (uiCompleted) {
-              addLog('info', '処理が完了しました。上部のエクスポートからダウンロードできます。')
+          if (pollInterval) clearInterval(pollInterval)
+          if (isMountedRef.current) {
+            addLog('info', 'ポーリングを停止しました')
+            // 完了メッセージとダウンロード導線
+            try {
+              const uiCompleted =
+                data.job.status === 'completed' ||
+                data.job.currentStep === 'complete' ||
+                data.job.renderCompleted === true
+              if (uiCompleted) {
+                addLog('info', '処理が完了しました。上部のエクスポートからダウンロードできます。')
+              }
+            } catch (e) {
+              console.error('post-complete message handling failed', e)
+              addLog(
+                'error',
+                `完了処理メッセージの処理中にエラー: ${e instanceof Error ? e.message : String(e)}`,
+              )
             }
-          } catch (e) {
-            console.error('post-complete message handling failed', e)
-            addLog(
-              'error',
-              `完了処理メッセージの処理中にエラー: ${e instanceof Error ? e.message : String(e)}`,
-            )
           }
         } else if (result === null) {
           // データに変化がない場合はログ出力しない
         }
       } catch (error) {
-        addLog(
-          'error',
-          `Job状態の取得に失敗: ${error instanceof Error ? error.message : String(error)}`,
-        )
-        console.error('Error fetching job status:', error)
+        // Only log errors if component is still mounted
+        if (isMountedRef.current) {
+          addLog(
+            'error',
+            `Job状態の取得に失敗: ${error instanceof Error ? error.message : String(error)}`,
+          )
+          console.error('Error fetching job status:', error)
+        }
       }
     }
 
     // 最初のAPIコールを少し遅延させる
-    const initialTimeout = setTimeout(() => {
-      poll()
-      pollInterval = setInterval(poll, 1500) // 1.5秒間隔に短縮
-    }, 1000)
+    // (initialTimeout is already defined above)
 
     return () => {
-      isPolling = false
+      isMountedRef.current = false
       clearTimeout(initialTimeout)
       if (pollInterval) clearInterval(pollInterval)
     }
@@ -530,6 +577,42 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
     setOverallProgress(Math.round((0 / INITIAL_STEPS.length) * 100))
     addLog('info', '準備中: アップロードを開始しています')
   }, [jobId, addLog])
+
+  // Memoize heavy computation for episode progress cards
+  const episodeProgressCards = useMemo(() => {
+    return Object.entries(perEpisodePages)
+      .map(([epStr, v]) => {
+        const ep = Number(epStr)
+        const planned = v.planned ?? 0
+        const rendered = v.rendered ?? 0
+        const total = v.total
+        const normalizedPages = v.validation?.normalizedPages || []
+        const normalizedCount = normalizedPages.length
+        const isCompleted =
+          typeof total === 'number' && total > 0 && planned >= total && rendered >= total
+        const isCurrent = currentLayoutEpisode === ep
+        const isInProgress = !isCompleted && planned > 0
+        return {
+          ep,
+          planned,
+          rendered,
+          total,
+          normalizedCount,
+          normalizedPages,
+          isCompleted,
+          isCurrent,
+          isInProgress,
+        }
+      })
+      .sort((a, b) => {
+        const score = (x: { isCurrent: boolean; isInProgress: boolean; isCompleted: boolean }) =>
+          x.isCurrent ? 0 : x.isInProgress ? 1 : x.isCompleted ? 3 : 2
+        const sa = score(a)
+        const sb = score(b)
+        if (sa !== sb) return sa - sb
+        return a.ep - b.ep
+      })
+  }, [perEpisodePages, currentLayoutEpisode])
 
   return (
     <div className="space-y-6">
@@ -664,110 +747,75 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
         <div className="apple-card p-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-2">エピソード進捗</h4>
           <div className="flex flex-wrap gap-2">
-            {Object.entries(perEpisodePages)
-              .map(([epStr, v]) => {
-                const ep = Number(epStr)
-                const planned = v.planned ?? 0
-                const rendered = v.rendered ?? 0
-                const total = v.total
-                const normalizedPages = v.validation?.normalizedPages || []
-                const normalizedCount = normalizedPages.length
-                const isCompleted =
-                  typeof total === 'number' && total > 0 && planned >= total && rendered >= total
-                const isCurrent = currentLayoutEpisode === ep
-                const isInProgress = !isCompleted && planned > 0
-                return {
-                  ep,
-                  planned,
-                  rendered,
-                  total,
-                  normalizedCount,
-                  normalizedPages,
-                  isCompleted,
-                  isCurrent,
-                  isInProgress,
-                }
-              })
-              .sort((a, b) => {
-                const score = (x: {
-                  isCurrent: boolean
-                  isInProgress: boolean
-                  isCompleted: boolean
-                }) => (x.isCurrent ? 0 : x.isInProgress ? 1 : x.isCompleted ? 3 : 2)
-                const sa = score(a)
-                const sb = score(b)
-                if (sa !== sb) return sa - sb
-                return a.ep - b.ep
-              })
-              .map(
-                ({
-                  ep,
-                  planned,
-                  rendered,
-                  total,
-                  normalizedCount,
-                  normalizedPages,
-                  isCompleted,
-                  isCurrent,
-                }) => {
-                  const plannedPct =
-                    typeof total === 'number' && total > 0
-                      ? Math.min(100, Math.round((planned / total) * 100))
-                      : undefined
-                  const renderedPct =
-                    typeof total === 'number' && total > 0
-                      ? Math.min(100, Math.round((rendered / total) * 100))
-                      : undefined
-                  return (
-                    <div
-                      key={ep}
-                      className={
-                        `px-3 py-2 rounded-xl border text-xs ` +
-                        (isCompleted
-                          ? 'bg-gray-50 border-gray-200 text-gray-500'
-                          : isCurrent
-                            ? 'bg-blue-50 border-blue-200 text-blue-800'
-                            : 'bg-gray-50 border-gray-200 text-gray-700')
-                      }
-                      title={`EP${ep}: planned=${planned}, rendered=${rendered}${
-                        typeof total === 'number' ? `, total=${total}` : ''
-                      }${normalizedCount > 0 ? `, normalized=${normalizedCount} [pages: ${normalizedPages.join(',')}]` : ''}`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-[11px] font-semibold ${isCurrent ? 'text-blue-700' : ''}`}
-                        >
-                          EP{ep}
+            {episodeProgressCards.map(
+              ({
+                ep,
+                planned,
+                rendered,
+                total,
+                normalizedCount,
+                normalizedPages,
+                isCompleted,
+                isCurrent,
+              }) => {
+                const plannedPct =
+                  typeof total === 'number' && total > 0
+                    ? Math.min(100, Math.round((planned / total) * 100))
+                    : undefined
+                const renderedPct =
+                  typeof total === 'number' && total > 0
+                    ? Math.min(100, Math.round((rendered / total) * 100))
+                    : undefined
+                return (
+                  <div
+                    key={ep}
+                    className={
+                      `px-3 py-2 rounded-xl border text-xs ` +
+                      (isCompleted
+                        ? 'bg-gray-50 border-gray-200 text-gray-500'
+                        : isCurrent
+                          ? 'bg-blue-50 border-blue-200 text-blue-800'
+                          : 'bg-gray-50 border-gray-200 text-gray-700')
+                    }
+                    title={`EP${ep}: planned=${planned}, rendered=${rendered}${
+                      typeof total === 'number' ? `, total=${total}` : ''
+                    }${normalizedCount > 0 ? `, normalized=${normalizedCount} [pages: ${normalizedPages.join(',')}]` : ''}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-[11px] font-semibold ${isCurrent ? 'text-blue-700' : ''}`}
+                      >
+                        EP{ep}
+                      </span>
+                      <span className="text-[11px]">
+                        {planned}
+                        {typeof total === 'number' ? `/${total}` : ''} 計画, {rendered} 描画
+                      </span>
+                      {normalizedCount > 0 && (
+                        <span className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200 text-[10px]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                          Normalized {normalizedCount}
                         </span>
-                        <span className="text-[11px]">
-                          {planned}
-                          {typeof total === 'number' ? `/${total}` : ''} 計画, {rendered} 描画
-                        </span>
-                        {normalizedCount > 0 && (
-                          <span className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200 text-[10px]">
-                            <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
-                            Normalized {normalizedCount}
-                          </span>
-                        )}
-                      </div>
-                      {typeof total === 'number' && total > 0 && (
-                        <div className="mt-1 h-1.5 w-full bg-gray-200 rounded-full relative overflow-hidden">
-                          {/* planned */}
-                          <div
-                            className={`absolute left-0 top-0 h-full ${isCompleted ? 'bg-green-400' : 'bg-blue-400'}`}
-                            style={{ width: `${plannedPct}%` }}
-                          />
-                          {/* rendered overlay */}
-                          <div
-                            className="absolute left-0 top-0 h-full bg-green-500/80"
-                            style={{ width: `${renderedPct ?? 0}%` }}
-                          />
-                        </div>
                       )}
                     </div>
-                  )
-                },
-              )}
+                    {typeof total === 'number' && total > 0 && (
+                      <div className="mt-1 h-1.5 w-full bg-gray-200 rounded-full relative overflow-hidden">
+                        {/* planned */}
+                        <div
+                          className={`absolute left-0 top-0 h-full ${isCompleted ? 'bg-green-400' : 'bg-blue-400'}`}
+                          style={{ width: `${plannedPct}%` }}
+                        />
+                        {/* rendered overlay */}
+                        <div
+                          className="absolute left-0 top-0 h-full bg-green-500/80"
+                          style={{ width: `${renderedPct ?? 0}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              },
+            )}
           </div>
           <div className="mt-3 flex items-center gap-4 text-[11px] text-gray-600">
             <div className="flex items-center gap-1">
