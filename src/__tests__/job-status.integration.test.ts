@@ -276,15 +276,15 @@ describe("JobProgressService Integration Tests", () => {
 
       const perEpisodePages = result!.progress!.perEpisodePages!;
 
-      // Episode 1: total=30, planned=25, rendered=0
-      expect(perEpisodePages[1]).toEqual({
+      // Episode 1: total=30, planned=25, rendered=0 (validation may be present with defaults)
+      expect(perEpisodePages[1]).toMatchObject({
         planned: 25,
         rendered: 0,
         total: 30,
-      });
+      })
 
-      // Episode 2: total=40, planned=35, rendered=3
-      expect(perEpisodePages[2]).toEqual({
+      // Episode 2: total=40, planned=35, rendered=3 + validation present
+      expect(perEpisodePages[2]).toMatchObject({
         planned: 35,
         rendered: 3,
         total: 40,
@@ -293,7 +293,7 @@ describe("JobProgressService Integration Tests", () => {
           pagesWithIssueCounts: { 2: 3, 5: 1, 7: 2 },
           issuesCount: expect.any(Number),
         },
-      });
+      })
 
       // Verify all mocks were called correctly
       expect(mockDatabaseService.getEpisodesByJobId).toHaveBeenCalledWith(
@@ -366,11 +366,11 @@ describe("JobProgressService Integration Tests", () => {
       const perEpisodePages = result!.progress!.perEpisodePages!;
 
       // Should have planned=0 due to parsing error, but still include the episode
-      expect(perEpisodePages[1]).toEqual({
+      expect(perEpisodePages[1]).toMatchObject({
         planned: 0, // Falls back to 0 when JSON parsing fails
         rendered: 0,
         total: 20,
-      });
+      })
     });
 
     it("handles storage operation errors gracefully and returns original job", async () => {

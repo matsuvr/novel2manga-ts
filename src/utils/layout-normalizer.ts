@@ -52,27 +52,31 @@ function validateBandPartition(panels: Panel[], issues: Issue[]): void {
       .sort((a, b) => a.x - b.x)
     // Check coverage from 0 to 1 with minimal gaps/overlaps
     let cursor = 0
+    let encountered = false
     for (let j = 0; j < segs.length; j++) {
       const s = segs[j]
       if (j === 0 && Math.abs(s.x - 0) > 2 * EPS) {
         issues.push(`horizontal gap at y=[${y0.toFixed(2)},${y1.toFixed(2)}): starts at ${s.x}`)
+        encountered = true
       }
       if (s.x - cursor > 2 * EPS) {
         issues.push(
           `horizontal gap before segment at y=[${y0.toFixed(2)},${y1.toFixed(2)}): gap=${(s.x - cursor).toFixed(3)}`,
         )
+        encountered = true
       }
       if (cursor - s.x > 2 * EPS) {
         issues.push(
           `horizontal overlap at y=[${y0.toFixed(2)},${y1.toFixed(2)}): overlap=${(cursor - s.x).toFixed(3)}`,
         )
+        encountered = true
       }
       cursor = Math.max(cursor, s.x) + s.w
     }
-    if (Math.abs(cursor - 1) > 2 * EPS) {
-      issues.push(
-        `horizontal coverage != 1 at y=[${y0.toFixed(2)},${y1.toFixed(2)}): sum=${cursor.toFixed(3)}`,
-      )
+    const coverageNotOne = Math.abs(cursor - 1) > 2 * EPS
+    if (coverageNotOne || encountered) {
+      const detail = coverageNotOne ? `sum=${cursor.toFixed(3)}` : 'gaps/overlaps present'
+      issues.push(`horizontal coverage != 1 at y=[${y0.toFixed(2)},${y1.toFixed(2)}): ${detail}`)
     }
   }
 }
