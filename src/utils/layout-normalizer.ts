@@ -15,20 +15,6 @@ function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n))
 }
 
-function rectsOverlap(a: Panel, b: Panel): boolean {
-  const ax1 = a.position.x
-  const ay1 = a.position.y
-  const ax2 = a.position.x + a.size.width
-  const ay2 = a.position.y + a.size.height
-  const bx1 = b.position.x
-  const by1 = b.position.y
-  const bx2 = b.position.x + b.size.width
-  const by2 = b.position.y + b.size.height
-  const overlapX = Math.min(ax2, bx2) - Math.max(ax1, bx1)
-  const overlapY = Math.min(ay2, by2) - Math.max(ay1, by1)
-  return overlapX > EPS && overlapY > EPS
-}
-
 function validateBandPartition(panels: Panel[], issues: Issue[]): void {
   // Sweep-line by Y; for each vertical band, panels that cover that band should partition [0,1]
   const edges = new Set<number>()
@@ -98,13 +84,37 @@ export function validatePanels(panels: Panel[]): ValidationResult {
     if (x2 > 1 + EPS) issues.push(`x+width > 1 for panel ${String(p.id)}: ${x2}`)
     if (y2 > 1 + EPS) issues.push(`y+height > 1 for panel ${String(p.id)}: ${y2}`)
   }
-  // Overlaps
-  for (let i = 0; i < panels.length; i++) {
-    for (let j = i + 1; j < panels.length; j++) {
-      if (rectsOverlap(panels[i], panels[j])) {
-        issues.push(`panels overlap: ${String(panels[i].id)} and ${String(panels[j].id)}`)
+  // Overlaps (sweep-line by X to avoid O(n^2) in common cases)
+  type Aug = {
+    id: Panel['id']
+    x1: number
+    x2: number
+    y1: number
+    y2: number
+  }
+  const rects: Aug[] = panels.map((p) => ({
+    id: p.id,
+    x1: p.position.x,
+    x2: p.position.x + p.size.width,
+    y1: p.position.y,
+    y2: p.position.y + p.size.height,
+  }))
+  rects.sort((a, b) => a.x1 - b.x1)
+  const active: Aug[] = []
+  for (const cur of rects) {
+    // Remove intervals that end before the current starts (with tolerance)
+    for (let i = active.length - 1; i >= 0; i--) {
+      if (active[i].x2 <= cur.x1 + EPS) active.splice(i, 1)
+    }
+    // Among active (which all have X-overlap with current), check Y-overlap
+    for (const a of active) {
+      const overlapX = Math.min(cur.x2, a.x2) - Math.max(cur.x1, a.x1)
+      const overlapY = Math.min(cur.y2, a.y2) - Math.max(cur.y1, a.y1)
+      if (overlapX > EPS && overlapY > EPS) {
+        issues.push(`panels overlap: ${String(a.id)} and ${String(cur.id)}`)
       }
     }
+    active.push(cur)
   }
 
   // Partition check by vertical bands
@@ -203,13 +213,19 @@ export function normalizeAndValidateLayout(layout: MangaLayout): {
       }
       return out
     })
-    const { valid, issues } = validatePanels(clampedPanels)
-    if (!valid) {
-      pageIssues[p.page_number] = issues
+    const v1 = validatePanels(clampedPanels)
+    if (!v1.valid) {
       const mapped = applyReferenceFallback({ panels: clampedPanels })
       // Validate mapped; if still invalid, keep mapped anyway and record issues
       const v2 = validatePanels(mapped)
-      if (!v2.valid) pageIssues[p.page_number] = issues.concat(v2.issues)
+      // 最終状態のみを報告する: フォールバックで有効になった場合は空配列、
+      // 依然として無効な場合は最終状態の問題のみを記録する。
+      if (!v2.valid) {
+        pageIssues[p.page_number] = v2.issues
+      } else {
+        // 正規化・修正が適用されて有効になったページを示すために空配列を入れる
+        pageIssues[p.page_number] = []
+      }
       return { page_number: p.page_number, panels: mapped }
     }
     return { page_number: p.page_number, panels: clampedPanels }
