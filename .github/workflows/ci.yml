@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
 env:
   # Toggle this to 'true' when deploying and ready to run E2E on CI.
   # Can also be overridden via repository/organization variables or workflow_dispatch inputs.
@@ -86,6 +91,11 @@ jobs:
         with:
           files: |
             test-results/**/*.xml
+          # Avoid comparing to earlier commit to prevent 403 on forks or limited tokens
+          compare_to_earlier_commit: false
+          # Ensure it publishes a job summary and does not try to annotate existing check runs
+          check_run: false
+          job_summary: true
 
       - name: Stop Dev Server
         if: ${{ always() && env.ENABLE_E2E == 'true' }}
