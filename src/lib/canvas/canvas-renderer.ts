@@ -2,7 +2,13 @@ import type { MangaLayout, Panel } from '@/types/panel-layout'
 
 // Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
 const isServer = typeof window === 'undefined'
-let createCanvas: ((width: number, height: number) => HTMLCanvasElement | NodeCanvas) | undefined
+let createCanvas: ((width: number, height: number) => unknown) | undefined
+type NodeCanvasImageLike = {
+  src: Buffer | string
+  width: number
+  height: number
+}
+let NodeCanvasImageCtor: (new () => NodeCanvasImageLike) | undefined
 
 // node-canvas用の型定義
 interface NodeCanvasImpl {
@@ -20,15 +26,31 @@ interface NodeCanvasImpl {
 
 export type NodeCanvas = NodeCanvasImpl
 
-if (isServer) {
-  // サーバーサイドではnode-canvasを使用
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const canvasModule = require('canvas')
-    createCanvas = canvasModule.createCanvas
-  } catch {
-    console.warn('node-canvas not available, Canvas functionality will be limited')
-  }
+// Canvas module loading - async initialization needed for ES modules
+let canvasInitialized = false
+let canvasInitPromise: Promise<void> | null = null
+
+async function initializeCanvas(): Promise<void> {
+  if (canvasInitialized) return
+  if (canvasInitPromise) return canvasInitPromise
+
+  canvasInitPromise = (async () => {
+    if (isServer) {
+      // サーバーサイドではnode-canvasを使用
+      try {
+        const canvasModule = await import('canvas')
+        createCanvas = canvasModule.createCanvas
+        NodeCanvasImageCtor = canvasModule.Image
+        canvasInitialized = true
+      } catch (error) {
+        console.warn('node-canvas not available, Canvas functionality will be limited', error)
+      }
+    } else {
+      canvasInitialized = true
+    }
+  })()
+
+  return canvasInitPromise
 }
 
 export interface CanvasConfig {
@@ -48,6 +70,13 @@ export class CanvasRenderer {
   canvas: HTMLCanvasElement | NodeCanvas
   private ctx: CanvasRenderingContext2D
   private config: CanvasConfig
+  private dialogueAssets?: Record<string, { image: unknown; width: number; height: number }>
+
+  // Async factory method for proper initialization
+  static async create(config: CanvasConfig): Promise<CanvasRenderer> {
+    await initializeCanvas()
+    return new CanvasRenderer(config)
+  }
 
   constructor(config: CanvasConfig) {
     this.config = {
@@ -64,7 +93,7 @@ export class CanvasRenderer {
 
     // サーバーサイドとクライアントサイドの両方で動作するようにCanvas作成
     if (isServer && createCanvas) {
-      this.canvas = createCanvas(this.config.width, this.config.height)
+      this.canvas = createCanvas(this.config.width, this.config.height) as NodeCanvas
     } else if (typeof document !== 'undefined') {
       this.canvas = document.createElement('canvas')
       this.canvas.width = this.config.width
@@ -79,10 +108,10 @@ export class CanvasRenderer {
     }
     this.ctx = ctx
 
-    this.initializeCanvas()
+    this.setupCanvas()
   }
 
-  private initializeCanvas(): void {
+  private setupCanvas(): void {
     this.canvas.width = this.config.width
     this.canvas.height = this.config.height
 
@@ -96,6 +125,35 @@ export class CanvasRenderer {
     this.ctx.font = `${this.config.fontSize || 16}px ${this.config.fontFamily || 'Arial, sans-serif'}`
     this.ctx.strokeStyle = this.config.lineColor || '#000000'
     this.ctx.lineWidth = this.config.lineWidth || 2
+  }
+
+  /**
+   * Provide pre-rendered vertical text images for dialogues.
+   * Key convention: `${panelId}:${dialogueIndex}`
+   */
+  setDialogueAssets(
+    assets: Record<string, { image: unknown; width: number; height: number }>,
+  ): void {
+    this.dialogueAssets = assets
+  }
+
+  /** Create an Image from a PNG buffer (server only). */
+  static createImageFromBuffer(buffer: Buffer): {
+    image: unknown
+    width: number
+    height: number
+  } {
+    if (!isServer || !NodeCanvasImageCtor) {
+      throw new Error('createImageFromBuffer is only available on server with node-canvas')
+    }
+    const img = new NodeCanvasImageCtor()
+    // node-canvas Image type is not in DOM libs; assign via shim cast.
+    img.src = buffer
+    return {
+      image: img as unknown,
+      width: (img as NodeCanvasImageLike).width,
+      height: (img as NodeCanvasImageLike).height,
+    }
   }
 
   drawFrame(x: number, y: number, width: number, height: number): void {
@@ -122,20 +180,45 @@ export class CanvasRenderer {
       })
     }
 
-    // パネル内の対話を吹き出しとして描画
+    // パネル内の対話を吹き出しとして描画（縦書き画像が提供されている場合は画像を使用）
     if (panel.dialogues && panel.dialogues.length > 0) {
-      let bubbleY = y + height * 0.3 // 吹き出しの開始Y位置
-      for (const dialogue of panel.dialogues) {
-        this.drawSpeechBubble(
-          dialogue.text,
-          x + width * 0.7, // 右側に配置（日本式）
-          bubbleY,
-          {
-            maxWidth: width * 0.4,
-            style: dialogue.emotion === 'shout' ? 'shout' : 'normal',
-          },
-        )
-        bubbleY += 80 // 次の吹き出し位置
+      let bubbleY = y + height * 0.2 // 吹き出しの開始Y位置（やや上）
+      const maxAreaWidth = width * 0.45
+      const maxAreaHeightTotal = height * 0.7
+      const perBubbleMaxHeight = Math.max(60, maxAreaHeightTotal / panel.dialogues.length)
+      for (let i = 0; i < panel.dialogues.length; i++) {
+        const dialogue = panel.dialogues[i]
+        const key = `${panel.id}:${i}`
+        const asset = this.dialogueAssets?.[key]
+        if (!asset) {
+          throw new Error(`Vertical dialogue asset missing for ${key}`)
+        }
+        // scale to fit
+        const scale = Math.min(maxAreaWidth / asset.width, perBubbleMaxHeight / asset.height, 1)
+        const drawW = asset.width * scale
+        const drawH = asset.height * scale
+        const padding = 10
+        const bubbleW = drawW + padding * 2
+        const bubbleH = drawH + padding * 2
+        const bx = x + width - bubbleW - width * 0.05 // 右寄せ
+        const by = bubbleY
+
+        // 吹き出し背景
+        this.ctx.save()
+        this.ctx.strokeStyle = '#000000'
+        this.ctx.fillStyle = '#ffffff'
+        this.ctx.lineWidth = dialogue.emotion === 'shout' ? 3 : 2
+        this.drawRoundedRect(bx, by, bubbleW, bubbleH, 8)
+        this.ctx.restore()
+
+        // 画像貼り付け（中央揃え）
+        const imgX = bx + (bubbleW - drawW) / 2
+        const imgY = by + (bubbleH - drawH) / 2
+        // node-canvas: ctx.drawImage(Image, dx, dy, dWidth, dHeight)
+        // browser: HTMLImageElement でも同じ
+        this.ctx.drawImage(asset.image as unknown as CanvasImageSource, imgX, imgY, drawW, drawH)
+
+        bubbleY += bubbleH + 10 // 次の吹き出し位置
       }
     }
   }
@@ -228,6 +311,7 @@ export class CanvasRenderer {
     y: number,
     options?: { maxWidth?: number; style?: string },
   ): void {
+    // Legacy text-bubble drawer (kept for non-dialogue uses). Vertical text path uses pre-rendered images.
     const { maxWidth = 200, style = 'normal' } = options || {}
 
     // テキストサイズを測定して吹き出しサイズを決定
@@ -286,7 +370,7 @@ export class CanvasRenderer {
 
   renderMangaLayout(layout: MangaLayout): void {
     // 背景をクリア
-    this.initializeCanvas()
+    this.setupCanvas()
 
     // 全体のフレームを描画
     this.drawFrame(0, 0, this.config.width, this.config.height)
@@ -328,7 +412,11 @@ export class CanvasRenderer {
         const hasPngSignature = binaryBuffer.subarray(0, 8).equals(pngSignature)
         console.log('PNG signature valid:', hasPngSignature)
 
-        const blob = new Blob([binaryBuffer], { type })
+        const binaryAb = binaryBuffer.buffer.slice(
+          binaryBuffer.byteOffset,
+          binaryBuffer.byteOffset + binaryBuffer.byteLength,
+        ) as ArrayBuffer
+        const blob = new Blob([binaryAb], { type })
         console.log('Blob created successfully:', blob.size, 'bytes')
         return blob
       } catch (dataUrlError) {
@@ -352,7 +440,11 @@ export class CanvasRenderer {
                     reject(new Error('Buffer is null or undefined'))
                   } else {
                     console.log('Buffer created via toBuffer callback:', buffer.length, 'bytes')
-                    const blob = new Blob([buffer], { type })
+                    const ab = buffer.buffer.slice(
+                      buffer.byteOffset,
+                      buffer.byteOffset + buffer.byteLength,
+                    ) as ArrayBuffer
+                    const blob = new Blob([ab], { type })
                     resolve(blob)
                   }
                 },
