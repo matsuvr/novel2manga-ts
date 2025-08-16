@@ -52,6 +52,29 @@ export default async function EpisodePreviewPage({ params }: { params: Promise<P
   }
 
   const renderStorage = await StorageFactory.getRenderStorage()
+  // Load validation info from progress JSON to mark normalized pages
+  const layoutProgress = await layoutStorage.get(StorageKeys.episodeLayoutProgress(jobId, epNum))
+  let normalizedPages: number[] = []
+  let pagesWithIssueCounts: Record<number, number> = {}
+  try {
+    if (layoutProgress?.text) {
+      const parsed = JSON.parse(layoutProgress.text) as {
+        validation?: {
+          normalizedPages?: number[]
+          pagesWithIssueCounts?: Record<number | string, number>
+        }
+      }
+      if (Array.isArray(parsed.validation?.normalizedPages)) {
+        normalizedPages = parsed.validation!.normalizedPages!
+      }
+      if (parsed.validation?.pagesWithIssueCounts) {
+        const entries = Object.entries(parsed.validation.pagesWithIssueCounts)
+        pagesWithIssueCounts = Object.fromEntries(entries.map(([k, v]) => [Number(k), Number(v)]))
+      }
+    }
+  } catch {
+    // ignore parse errors
+  }
   const images: Array<{ page: number; src: string }> = []
   for (const p of pageNumbers) {
     const key = StorageKeys.pageRender(jobId, epNum, p)
@@ -67,14 +90,26 @@ export default async function EpisodePreviewPage({ params }: { params: Promise<P
         Episode {epNum} プレビュー（{images.length}ページ）
       </h1>
       <div className="space-y-6">
-        {images.map((img) => (
-          <div key={img.page} className="apple-card p-2">
-            <div className="text-sm text-gray-600 mb-1">Page {img.page}</div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {/* biome-ignore lint/performance/noImgElement: Using data URI preview; Next/Image is not ideal here */}
-            <img src={img.src} alt={`Page ${img.page}`} className="w-full h-auto" />
-          </div>
-        ))}
+        {images.map((img) => {
+          const isNormalized = normalizedPages.includes(img.page)
+          const issueCount = pagesWithIssueCounts[img.page] || 0
+          return (
+            <div key={img.page} className="apple-card p-2">
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-sm text-gray-600">Page {img.page}</div>
+                {isNormalized && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200 text-[11px]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" /> Normalized
+                    {issueCount > 0 ? ` (${issueCount})` : ''}
+                  </span>
+                )}
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {/* biome-ignore lint/performance/noImgElement: Using data URI preview; Next/Image is not ideal here */}
+              <img src={img.src} alt={`Page ${img.page}`} className="w-full h-auto" />
+            </div>
+          )
+        })}
         {images.length === 0 && (
           <div className="apple-card p-6 text-center text-gray-600">画像が見つかりませんでした</div>
         )}
