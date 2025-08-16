@@ -35,6 +35,16 @@
     - Never silences errors - all failures are logged with full context
     - Service-level integration tests validate enrichment logic and error scenarios
 
+### 2025-08-16 UI/Endpoint Progress Logic Normalization
+
+- Backend `GET /api/jobs/[jobId]/status` simplifies `currentStep` selection:
+  - `currentStep: isCompleted ? 'complete' : job.currentStep` where `isCompleted` includes `status==='completed' || renderCompleted===true || currentStep==='complete'`.
+- Frontend `ProcessingProgress` aligns completion detection with backend:
+  - UI considers completion when `status==='completed' || currentStep==='complete' || renderCompleted===true`.
+  - Added explicit radix to `parseInt(..., 10)` for episode parsing.
+  - Introduced `CURRENT_EPISODE_PROGRESS_WEIGHT = 0.5` constant to avoid magic numbers.
+  - Strengthened error logging in post-complete message handling (no silent catches).
+
 ## Invariants
 
 - YAML is always a full snapshot of all pages generated so far.
@@ -54,6 +64,12 @@
 - Error Scenarios: Comprehensive testing of storage failures, JSON parsing errors, and enrichment failures
 - Documentation: Dependency chart regenerated with correct Mermaid syntax and current architecture
 - Code Quality: Strict TypeScript enforcement, no 'any' types, comprehensive error logging
+
+## MCP Verification Notes (2025-08-16)
+
+- Scope: 本PRは UI の進捗表示および `/api/jobs/[jobId]/status` の整合性・型安全化に限定しており、Cloudflare Workers/D1/R2/Queues 設定の変更はありません。
+- Procedure: MCP Context7 で Cloudflare Workers のランタイム・HTTP リクエスト処理・キャッシュヘッダ関連の最新ドキュメントを確認し、本PRのエンドポイント設計（Next.js Route Handler 内での GET 実装）に影響する Breaking Changes が無いことを確認（2025-08-16）。
+- Outcome: 追加のAPI変更や wrangler 設定更新は不要。今後 Cloudflare バインディングや wrangler 更新を伴う変更時は、MCP で一次情報を再確認し、PR に引用を付記します。
 
 ## Risks & Mitigations
 
