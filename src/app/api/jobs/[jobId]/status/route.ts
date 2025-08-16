@@ -3,7 +3,8 @@ export const revalidate = 0
 
 import type { NextRequest } from 'next/server'
 import { getLogger } from '@/infrastructure/logging/logger'
-import { getChunkRepository, getJobRepository } from '@/repositories'
+import { getChunkRepository } from '@/repositories'
+import { JobProgressService } from '@/services/application/job-progress'
 import { ApiError, extractErrorMessage } from '@/utils/api-error'
 import { ApiResponder } from '@/utils/api-responder'
 import { validateJobId } from '@/utils/validators'
@@ -25,8 +26,8 @@ export async function GET(
     logger.info('Fetching job status')
     const startTime = Date.now()
 
-    const jobRepo = getJobRepository()
-    const job = await jobRepo.getJobWithProgress(params.jobId)
+    const jobProgressService = new JobProgressService()
+    const job = await jobProgressService.getJobWithProgress(params.jobId)
 
     const duration = Date.now() - startTime
     logger.info('Database query completed', { durationMs: duration })
