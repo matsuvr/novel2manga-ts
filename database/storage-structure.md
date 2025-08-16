@@ -1,5 +1,14 @@
 # ストレージ構造設計
 
+## 2025-08-16 更新（Service Layer Progress Enhancement）
+
+**JobProgressService** の機能強化により、ジョブ進捗データの充実化を実現しました:
+
+- perEpisodePages エンリッチメント: エピソード別ページ数（planned/rendered/total）を提供
+- 堅牢なエラーハンドリング: safeOperation パターンでエラーを隠蔽せずに適切にログ出力
+- 統合テスト強化: サービス層のロジックを包括的にテスト
+- 依存関係チャート修復: 破損していたMermaid記法を正常な構造に再生成
+
 ## 2025-08-12 更新（Legacy Service の現状とフラットキー方式）
 
 旧来の **階層ディレクトリ (novels/{novel_id}/jobs/{job_id}/...)** および `txt` ベース保存は廃止方向です。`src/services/storage.ts` のレガシー `StorageService` は現在も DEPRECATED として残置しており、参照が無いことを確認次第に削除します。現行の正規 API は `src/utils/storage.ts` の `StorageKeys` と各種 `get*Storage()` 群です。これにより以下を達成:
@@ -11,43 +20,65 @@
 
 ## 現行キー命名規則（実装済み StorageKeys）
 
-| 種別                 | 生成関数                                     | 形式例                                          |
-| -------------------- | -------------------------------------------- | ----------------------------------------------- |
-| 小説本文             | `StorageKeys.novel(novelId)`                 | `9174a2d4-... .json`                            |
-| チャンク本文         | `StorageKeys.chunk(jobId, index)`            | `{jobId}/chunk_0.txt`                           |
-| チャンク分析         | `StorageKeys.chunkAnalysis(jobId, index)`    | `{jobId}/chunk_0.json`                          |
-| 統合分析             | `StorageKeys.integratedAnalysis(jobId)`      | `{jobId}/integrated.json`                       |
-| 物語構造(エピソード) | `StorageKeys.narrativeAnalysis(jobId)`       | `{jobId}/narrative.json`                        |
-| エピソードレイアウト | `StorageKeys.episodeLayout(jobId, ep)`       | `{jobId}/episode_1.yaml`                        |
-| ページ画像           | `StorageKeys.pageRender(jobId, ep, page)`    | `{jobId}/episode_1/page_1.png`                  |
+| 種別                 | 生成関数                                       | 形式例                            |
+| -------------------- | ---------------------------------------------- | --------------------------------- |
+| 小説本文             | `StorageKeys.novel(novelId)`                   | `9174a2d4-... .json`              |
+| チャンク本文         | `StorageKeys.chunk(jobId, index)`              | `{jobId}/chunk_0.txt`             |
+| チャンク分析         | `StorageKeys.chunkAnalysis(jobId, index)`      | `{jobId}/chunk_0.json`            |
+| 統合分析             | `StorageKeys.integratedAnalysis(jobId)`        | `{jobId}/integrated.json`         |
+| 物語構造(エピソード) | `StorageKeys.narrativeAnalysis(jobId)`         | `{jobId}/narrative.json`          |
+| エピソードレイアウト | `StorageKeys.episodeLayout(jobId, ep)`         | `{jobId}/episode_1.yaml`          |
+| **エピソード進捗**   | `StorageKeys.episodeLayoutProgress(jobId, ep)` | `{jobId}/episode_1.progress.json` |
+| ページ画像           | `StorageKeys.pageRender(jobId, ep, page)`      | `{jobId}/episode_1/page_1.png`    |
 
 以下は設計済み（計画中）のキーで、コード実装は未着手です。
 
-| 種別（計画中）       | 生成関数                                     | 形式例                                          |
-| -------------------- | -------------------------------------------- | ----------------------------------------------- |
-| サムネイル           | `StorageKeys.pageThumbnail(jobId, ep, page)` | `{jobId}/episode_1/thumbnails/page_1_thumb.png` |
-| エクスポート成果物   | `StorageKeys.exportOutput(jobId, fmt)`       | `{jobId}/output.pdf`                            |
-| レンダリング状態     | `StorageKeys.renderStatus(jobId, ep, page)`  | `{jobId}/episode_1/page_1.json`                 |
+| 種別（計画中）     | 生成関数                                     | 形式例                                          |
+| ------------------ | -------------------------------------------- | ----------------------------------------------- |
+| サムネイル         | `StorageKeys.pageThumbnail(jobId, ep, page)` | `{jobId}/episode_1/thumbnails/page_1_thumb.png` |
+| エクスポート成果物 | `StorageKeys.exportOutput(jobId, fmt)`       | `{jobId}/output.pdf`                            |
+| レンダリング状態   | `StorageKeys.renderStatus(jobId, ep, page)`  | `{jobId}/episode_1/page_1.json`                 |
 
 注意: `getNovelStorage()` 等のストレージ取得関数でベースディレクトリ (`novels/`, `chunks/` など) が割り当てられるため、キー自体には上位カテゴリプレフィックスを含めません。
+
+## Service Layer Architecture (2025-08-16)
+
+### JobProgressService の構造化エラーハンドリング
+
+```typescript
+// パターン: safeOperation で操作をラップし、エラーを隠蔽せずログ出力
+private async safeOperation<T>(
+  operation: () => Promise<T>,
+  operationName: string,
+  context: { jobId: string; episodeNumber?: number }
+): Promise<T | null>
+```
+
+### Progress Data Enrichment
+
+- **perEpisodePages**: エピソード別の計画・レンダリング済み・総ページ数
+- **パフォーマンス**: エピソードデータの並列処理で高速化
+- **フォールバック**: JSON パース失敗時も処理継続、0値でフォールバック
+
+### Integration Test Coverage
+
+- JobProgressService.getJobWithProgress の全機能をテスト
+- エラーシナリオの包括的検証（ストレージ障害、JSON パースエラー等）
+- Mock依存関係を使用した分離テスト
 
 ## データ構造上の考慮
 
 - Novel と Job 関連ファイルは **jobId スコープ** のサブパスに集約し、ジョブ単位の削除を容易化
 - chunk 本文のみ暫定で `.txt` (元テキスト形式保持) を維持しつつ、分析/統合結果は `.json` で構造化
 - 将来のバージョン v2 で chunk も `.json` 化予定 (dual-write → 移行 → txt 削除)
+- **進捗データ**: JSON形式で構造化、パースエラー耐性を持つ実装
 
-## 旧ディレクトリ構造 (参考・廃止)
+## 品質保証
 
-下記構造は新設計では **直接表現されません**。StorageKeys により論理的に同等の名前空間を提供します。過去ドキュメント互換のため残します。
-
-```
-novels/{novel_id}/jobs/{job_id}/chunks/chunk_001.txt
-novels/{novel_id}/jobs/{job_id}/analyses/chunk_001.json
-... (REMOVED: nested prefix design)
-```
-
-## パス規則 / バリデーション
+- **TypeScript**: 厳格な型チェック、`any` 型の完全排除
+- **エラーハンドリング**: 全エラーの構造化ログ、隠蔽なし
+- **テストカバレッジ**: サービス統合レベルでの包括的テスト
+- **ドキュメント**: 依存関係図の修復、現行アーキテクチャの反映
 
 - ID: 英数字 + `_` `-` のみ許可
 - `..`, 先頭 `/`, `%00` (null byte) / URL エンコードされた文字を拒否
