@@ -64,8 +64,9 @@ export default async function EpisodePreviewPage({ params }: { params: Promise<P
           pagesWithIssueCounts?: Record<number | string, number>
         }
       }
-      if (Array.isArray(parsed.validation?.normalizedPages)) {
-        normalizedPages = parsed.validation!.normalizedPages!
+      const np = parsed.validation?.normalizedPages
+      if (Array.isArray(np)) {
+        normalizedPages = np as number[]
       }
       if (parsed.validation?.pagesWithIssueCounts) {
         const entries = Object.entries(parsed.validation.pagesWithIssueCounts)
