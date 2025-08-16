@@ -53,7 +53,8 @@ export async function GET(
       job: {
         id: job.id,
         status: isCompleted ? 'completed' : job.status,
-        currentStep: isCompleted ? 'complete' : job.renderCompleted ? 'complete' : job.currentStep,
+        // If any completes criteria met, surface 'complete'; otherwise pass through
+        currentStep: isCompleted ? 'complete' : job.currentStep,
         splitCompleted: job.splitCompleted ?? false,
         analyzeCompleted: job.analyzeCompleted ?? false,
         episodeCompleted: job.episodeCompleted ?? false,
@@ -73,13 +74,35 @@ export async function GET(
       },
       // 互換レスポンス
       chunks: Array.isArray(chunks)
-        ? chunks.map((c: unknown) => {
-            const chunk = c as Record<string, unknown>
-            return {
-              chunkIndex: (chunk.chunkIndex as number) ?? (chunk.chunk_index as number) ?? 0,
-              text: chunk.text as string,
-            }
-          })
+        ? chunks
+            .map((c: unknown) => {
+              // Narrow unknown to expected legacy row shape safely
+              const isChunkRow = (
+                x: unknown,
+              ): x is {
+                chunkIndex?: unknown
+                chunk_index?: unknown
+                text?: unknown
+              } =>
+                typeof x === 'object' &&
+                x !== null &&
+                ('chunkIndex' in (x as Record<string, unknown>) ||
+                  'chunk_index' in (x as Record<string, unknown>) ||
+                  'text' in (x as Record<string, unknown>))
+
+              if (!isChunkRow(c)) return null
+
+              const rawIndex =
+                (c as Record<string, unknown>).chunkIndex ??
+                (c as Record<string, unknown>).chunk_index
+              const idx = typeof rawIndex === 'number' ? rawIndex : Number(rawIndex)
+              const textVal = (c as Record<string, unknown>).text
+              return {
+                chunkIndex: Number.isFinite(idx) ? (idx as number) : 0,
+                text: typeof textVal === 'string' ? textVal : '',
+              }
+            })
+            .filter((v): v is { chunkIndex: number; text: string } => v !== null)
         : [],
     })
     // 明示的にキャッシュ無効化（ブラウザ/中間キャッシュ対策）
