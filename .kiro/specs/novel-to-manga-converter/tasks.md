@@ -29,6 +29,21 @@
 - [ ] E2E: add a happy-path scenario for resume after one batch (progress present) then completion.
 - [ ] E2E: assert Normalized badges appear when validation data exists
 - [ ] Documentation: update README usage notes if needed.
+- [ ] Vertical Dialogue Rendering: add E2E happy path with mocked API
+- [ ] Vertical Dialogue Rendering: update README with feature flag/env placeholders (no secrets)
+- [ ] Vertical Dialogue Rendering: cache tuning and concurrency guard if needed
+
+## New: Vertical Dialogue Rendering (2025-08-16)
+
+- [x] Design plan at `docs/vertical-text-integration-plan.md`
+- [x] Add client `src/services/vertical-text-client.ts` with zod validation
+- [x] Add types `src/types/vertical-text.ts`
+- [x] Add config `rendering.verticalText` (enabled + defaults)
+- [x] Integrate in `MangaPageRenderer` to request images per dialogue
+- [x] Extend `CanvasRenderer` to draw scaled vertical PNGs inside balloons, fitted to panel bounds
+- [x] Unit tests: client fetch success/error
+- [ ] Integration test: renderBatchFromYaml with mocked vertical API
+- [ ] E2E: basic flow using mocked API
 
 ## Completed (2025-08-16): Service Layer Improvements
 

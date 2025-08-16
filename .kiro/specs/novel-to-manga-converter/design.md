@@ -108,3 +108,13 @@ Rationale: LLM output and size multipliers can produce jitter and overlaps. Retr
 - Partial writes → atomic object writes; order: progress then YAML.
 - Versioning → batch plans validated with zod; incompatible changes fail early.
 - Service Failures → comprehensive error logging and graceful degradation patterns implemented.
+
+## 2025-08-16 Vertical Dialogue Rendering (Tategaki)
+
+- Dialogue balloons render using a dedicated Vertical Text Web API (HTML/CSS + headless Chrome) to produce high-quality vertical Japanese text PNGs with transparent backgrounds.
+- Integration points:
+  - Service client: `src/services/vertical-text-client.ts` (Bearer auth via `.env`, strict zod validation)
+  - Renderer pipeline: `MangaPageRenderer.renderToCanvas` prepares dialogue image assets per panel and passes them to `CanvasRenderer`.
+  - Canvas: `CanvasRenderer` draws rounded balloons and places scaled PNGs on the right side of the panel, ensuring they fit within panel bounds (scaled down when necessary).
+- Error policy: No fallback to horizontal text. If API fails or assets are missing for any dialogue, the page render fails explicitly and is reported upstream.
+- Config: `app.config.ts` adds `rendering.verticalText` with `enabled`, default typography settings, and `maxConcurrent` knob.
