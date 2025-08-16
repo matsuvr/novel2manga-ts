@@ -196,7 +196,14 @@ describe("JobProgressService Integration Tests", () => {
       ];
 
       const mockLayoutProgress1 = JSON.stringify({ pages: Array(25).fill({}) }); // 25 planned pages
-      const mockLayoutProgress2 = JSON.stringify({ pages: Array(35).fill({}) }); // 35 planned pages
+      const mockLayoutProgress2 = JSON.stringify({
+        pages: Array(35).fill({}),
+        validation: {
+          normalizedPages: [2, 5, 7],
+          pagesWithIssueCounts: { 2: 3, 5: 1, 7: 2 },
+          pageIssues: { 2: ["overlap"], 5: ["gap"], 7: ["coverage"] },
+        },
+      }); // 35 planned pages + validation
       const mockRenderStatus1: RenderStatus[] = []; // 0 rendered pages
       const mockRenderStatus2: RenderStatus[] = [
         {
@@ -281,6 +288,11 @@ describe("JobProgressService Integration Tests", () => {
         planned: 35,
         rendered: 3,
         total: 40,
+        validation: {
+          normalizedPages: [2, 5, 7],
+          pagesWithIssueCounts: { 2: 3, 5: 1, 7: 2 },
+          issuesCount: expect.any(Number),
+        },
       });
 
       // Verify all mocks were called correctly

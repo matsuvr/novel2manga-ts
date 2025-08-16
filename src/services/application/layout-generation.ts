@@ -190,7 +190,9 @@ export async function generateEpisodeLayout(
   // Incremental generation (batch of 3 pages), with atomic progress checkpoint
   if (isDemo) {
     const layout: MangaLayout = demoLayoutFromEpisode(episodeData)
-    const yamlContent = yaml.dump(layout, {
+    const { normalizeAndValidateLayout } = await import('@/utils/layout-normalizer')
+    const normalized = normalizeAndValidateLayout(layout)
+    const yamlContent = yaml.dump(normalized.layout, {
       indent: 2,
       lineWidth: -1,
       noRefs: true,
@@ -203,7 +205,7 @@ export async function generateEpisodeLayout(
           .map((p) => p.page_number)
           .sort((a, b) => a - b)
       : []
-    return { layout, storageKey, pageNumbers }
+    return { layout: normalized.layout, storageKey, pageNumbers }
   }
 
   // Load existing progress (for resume) or seed from YAML if present
@@ -311,14 +313,6 @@ export async function generateEpisodeLayout(
     const lastPageInBatch = Math.max(...batchPages.map((p) => p.page_number))
     lastPlannedPage = Math.max(lastPlannedPage, lastPageInBatch)
 
-    // Persist progress atomically (progress JSON first, then YAML snapshot)
-    const progress = {
-      pages: pagesCanonical,
-      lastPlannedPage,
-      updatedAt: new Date().toISOString(),
-    }
-    await ports.layout.putEpisodeLayoutProgress(jobId, episodeNumber, JSON.stringify(progress))
-
     const layoutSnapshot: MangaLayout = {
       title: episodeData.episodeTitle || `エピソード${episodeData.episodeNumber}`,
       created_at: new Date().toISOString().split('T')[0],
@@ -326,7 +320,25 @@ export async function generateEpisodeLayout(
       episodeTitle: episodeData.episodeTitle,
       pages: pagesCanonical,
     }
-    const yamlContent = yaml.dump(layoutSnapshot, {
+    const { normalizeAndValidateLayout } = await import('@/utils/layout-normalizer')
+    const normalized = normalizeAndValidateLayout(layoutSnapshot)
+    // Persist progress atomically (progress JSON first, then YAML snapshot)
+    const normalizedPages = Object.keys(normalized.pageIssues).map((k) => Number(k))
+    const pagesWithIssueCounts = Object.fromEntries(
+      Object.entries(normalized.pageIssues).map(([k, v]) => [Number(k), v.length]),
+    ) as Record<number, number>
+    const progress = {
+      pages: pagesCanonical,
+      lastPlannedPage,
+      updatedAt: new Date().toISOString(),
+      validation: {
+        pageIssues: normalized.pageIssues,
+        normalizedPages,
+        pagesWithIssueCounts,
+      },
+    }
+    await ports.layout.putEpisodeLayoutProgress(jobId, episodeNumber, JSON.stringify(progress))
+    const yamlContent = yaml.dump(normalized.layout, {
       indent: 2,
       lineWidth: -1,
       noRefs: true,
@@ -347,9 +359,11 @@ export async function generateEpisodeLayout(
     episodeTitle: episodeData.episodeTitle,
     pages: pagesCanonical,
   }
+  const { normalizeAndValidateLayout } = await import('@/utils/layout-normalizer')
+  const normalized = normalizeAndValidateLayout(finalLayout)
   const storageKey = StorageKeys.episodeLayout(jobId, episodeNumber)
   const pageNumbers = pagesCanonical.map((p) => p.page_number).sort((a, b) => a - b)
-  return { layout: finalLayout, storageKey, pageNumbers }
+  return { layout: normalized.layout, storageKey, pageNumbers }
 }
 
 function demoLayoutFromEpisode(ep: EpisodeData): MangaLayout {
