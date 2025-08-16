@@ -89,6 +89,41 @@ export class JobProgressService {
     }
   }
 
+  private parseLayoutValidation(layoutProgressJson: string): {
+    normalizedPages: number[]
+    pagesWithIssueCounts: Record<number, number>
+    issuesCount: number
+  } {
+    try {
+      const parsed = JSON.parse(layoutProgressJson) as {
+        validation?: {
+          normalizedPages?: number[]
+          pagesWithIssueCounts?: Record<string, number> | Record<number, number>
+          pageIssues?: Record<string, unknown[]>
+        }
+      }
+      const normalizedPages: number[] = Array.isArray(parsed.validation?.normalizedPages)
+        ? (parsed.validation?.normalizedPages as number[])
+        : []
+      const rawCounts = parsed.validation?.pagesWithIssueCounts ?? {}
+      const pagesWithIssueCounts: Record<number, number> = Object.fromEntries(
+        Object.entries(rawCounts).map(([k, v]) => [Number(k), Number(v)]),
+      )
+      // Derive issuesCount (sum of page issue counts)
+      let issuesCount = 0
+      if (parsed.validation?.pageIssues && typeof parsed.validation.pageIssues === 'object') {
+        for (const v of Object.values(parsed.validation.pageIssues)) {
+          if (Array.isArray(v)) issuesCount += v.length
+        }
+      } else {
+        issuesCount = Object.values(pagesWithIssueCounts).reduce((a, b) => a + (Number(b) || 0), 0)
+      }
+      return { normalizedPages, pagesWithIssueCounts, issuesCount }
+    } catch {
+      return { normalizedPages: [], pagesWithIssueCounts: {}, issuesCount: 0 }
+    }
+  }
+
   async getJobWithProgress(id: string) {
     const job = await this.jobRepo.getJobWithProgress(id)
     if (!job) {
@@ -115,6 +150,9 @@ export class JobProgressService {
           )
 
           const planned = layoutProgress ? this.parseLayoutProgress(layoutProgress) : 0
+          const validation = layoutProgress
+            ? this.parseLayoutValidation(layoutProgress)
+            : { normalizedPages: [], pagesWithIssueCounts: {}, issuesCount: 0 }
 
           // Get rendered pages count (from database)
           const renderStatus = await this.safeOperation(
@@ -131,6 +169,7 @@ export class JobProgressService {
               planned,
               rendered,
               total,
+              validation,
             },
           ] as const
         })
@@ -139,7 +178,16 @@ export class JobProgressService {
         const perEpisodePagesEntries = await Promise.all(perEpisodePagesPromises)
         const perEpisodePages: Record<
           number,
-          { planned: number; rendered: number; total?: number }
+          {
+            planned: number
+            rendered: number
+            total?: number
+            validation: {
+              normalizedPages: number[]
+              pagesWithIssueCounts: Record<number, number>
+              issuesCount: number
+            }
+          }
         > = Object.fromEntries(perEpisodePagesEntries)
 
         // Only enrich if we have episode data

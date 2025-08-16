@@ -96,8 +96,8 @@ export function getJapaneseReadingOrder(panels: Panel[]): ReadingOrder {
     // まずY座標で比較（上が優先）
     const yDiff = a.position.y - b.position.y
 
-    // Y座標が近い場合（20px以内）は同じ行とみなす
-    if (Math.abs(yDiff) <= 20) {
+    // Y座標が近い場合（0.02以内）は同じ行とみなす (normalized coordinates [0,1])
+    if (Math.abs(yDiff) <= 0.02) {
       // X座標で比較（右が優先 = 大きい値が先）
       return b.position.x - a.position.x
     }
