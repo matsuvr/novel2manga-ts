@@ -35,6 +35,16 @@
     - Never silences errors - all failures are logged with full context
     - Service-level integration tests validate enrichment logic and error scenarios
 
+### 2025-08-16 UI/Endpoint Progress Logic Normalization
+
+- Backend `GET /api/jobs/[jobId]/status` simplifies `currentStep` selection:
+  - `currentStep: isCompleted ? 'complete' : job.currentStep` where `isCompleted` includes `status==='completed' || renderCompleted===true || currentStep==='complete'`.
+- Frontend `ProcessingProgress` aligns completion detection with backend:
+  - UI considers completion when `status==='completed' || currentStep==='complete' || renderCompleted===true`.
+  - Added explicit radix to `parseInt(..., 10)` for episode parsing.
+  - Introduced `CURRENT_EPISODE_PROGRESS_WEIGHT = 0.5` constant to avoid magic numbers.
+  - Strengthened error logging in post-complete message handling (no silent catches).
+
 ## Invariants
 
 - YAML is always a full snapshot of all pages generated so far.

@@ -7,6 +7,10 @@
 - [x] Refactor `generateEpisodeLayout` to loop in batches, with atomic progress + YAML rewrite.
 - [ ] Back-edit guardrails: enforce max back-edit window (2 pages) at merge time, log violations.
 - [x] Job progress: expose per-episode page counts in job status for UI.
+- [x] Normalize progress completion logic between backend and frontend.
+- [x] Add radix to integer parsing in UI for robustness.
+- [x] Extract magic number for in-flight episode progress to `CURRENT_EPISODE_PROGRESS_WEIGHT`.
+- [x] Strengthen UI error handling (no silent catches; contextual logs).
 - [ ] E2E: add a happy-path scenario for resume after one batch (progress present) then completion.
 - [ ] Documentation: update README usage notes if needed.
 
@@ -36,6 +40,7 @@
 - [x] TypeScript: Zero `any` types, strict type enforcement maintained
 - [x] Linting: All Biome lint checks passing with no errors
 - [x] Error Handling: Comprehensive logging patterns implemented
+- [x] UI/Endpoint Consistency: Completion logic aligned; redundant conditions removed
 - [x] Test Coverage: Integration tests validate core enrichment logic
 - [x] DRY Principle: No code duplication introduced, shared utilities properly factored
 
