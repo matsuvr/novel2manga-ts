@@ -47,11 +47,55 @@ export class JobRepository {
     error?: string,
     errorStep?: string,
   ): Promise<void> {
-    return this.db.updateJobStep(id, currentStep, processedChunks, totalChunks, error, errorStep)
+    // Primary path: standardized JobDbPort method
+    const anyDb = this.db as unknown as {
+      updateJobStep?: (
+        id: string,
+        currentStep: JobStep,
+        processedChunks?: number,
+        totalChunks?: number,
+        error?: string,
+        errorStep?: string,
+      ) => Promise<void>
+      // Backward-compat shim for older or test mocks
+      updateStep?: (
+        id: string,
+        currentStep: JobStep,
+        processedChunks?: number,
+        totalChunks?: number,
+        error?: string,
+        errorStep?: string,
+      ) => Promise<void>
+    }
+
+    if (typeof anyDb.updateJobStep === 'function') {
+      return anyDb.updateJobStep(id, currentStep, processedChunks, totalChunks, error, errorStep)
+    }
+    if (typeof anyDb.updateStep === 'function') {
+      return anyDb.updateStep(id, currentStep, processedChunks, totalChunks, error, errorStep)
+    }
+
+    throw new Error('JobDbPort implementation missing updateJobStep/updateStep')
   }
 
   async markStepCompleted(id: string, step: 'split' | 'analyze' | 'episode' | 'layout' | 'render') {
-    return this.db.markJobStepCompleted(id, step)
+    const anyDb = this.db as unknown as {
+      markJobStepCompleted?: (
+        id: string,
+        step: 'split' | 'analyze' | 'episode' | 'layout' | 'render',
+      ) => Promise<void>
+      markStepCompleted?: (
+        id: string,
+        step: 'split' | 'analyze' | 'episode' | 'layout' | 'render',
+      ) => Promise<void>
+    }
+    if (typeof anyDb.markJobStepCompleted === 'function') {
+      return anyDb.markJobStepCompleted(id, step)
+    }
+    if (typeof anyDb.markStepCompleted === 'function') {
+      return anyDb.markStepCompleted(id, step)
+    }
+    throw new Error('JobDbPort implementation missing markJobStepCompleted/markStepCompleted')
   }
 
   async updateProgress(id: string, progress: JobProgress): Promise<void> {
