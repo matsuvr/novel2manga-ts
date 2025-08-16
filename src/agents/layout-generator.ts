@@ -152,84 +152,52 @@ export async function generateMangaLayout(
 // エイリアス（重複排除）
 export const generateLayoutWithAgent = generateMangaLayout
 
-// Incremental: generate only specified pages guided by a batch plan
-export async function generateMangaLayoutForPlan(
+// Helper function to create agent and options
+async function createAgentAndOptions(_config: LayoutGenerationConfig, jobId: string) {
+  const agent = new LayoutGeneratorAgent()
+  return { agent, jobId }
+}
+
+// Helper function to build user prompt
+function buildUserPrompt(
   episodeData: EpisodeData,
   plan: PageBatchPlan,
-  _config?: LayoutGenerationConfig,
-  options?: { jobId?: string },
-): Promise<MangaLayout> {
-  const agent = new LayoutGeneratorAgent()
+  config: LayoutGenerationConfig,
+): string {
+  return `エピソード${episodeData.episodeNumber}のレイアウトを生成してください。
+計画: ${JSON.stringify(plan, null, 2)}
+設定: ${JSON.stringify(config, null, 2)}
+各ページのコマ数のみを決定してください。`
+}
 
-  // Build an input that instructs the model to generate only given pages
-  const { buildLayoutLLMInput } = await import('@/agents/layout/input-adapter')
-  const layoutInput = buildLayoutLLMInput(episodeData)
-
-  const promptPlan = {
-    episodeNumber: plan.episodeNumber,
-    pages: plan.plannedPages.map((p) => ({
-      pageNumber: p.pageNumber,
-      summary: p.summary,
-      importance: p.importance,
-      // ヒントは与えるが、出力はページごとのコマ数のみ
-      segments: p.segments.map((s) => ({
-        hint: s.contentHint,
-        importance: s.importance,
-        source: s.source,
-      })),
-    })),
-  }
-
-  const configPrompts = getLayoutGenerationConfig()
-  const prompt = [
-    '次の通り、指定したページ番号のみを生成してください。',
-    '指定されたページ以外は絶対に出力しないこと。',
-    'プランのセグメントを尊重しつつ、パネル構成は最適化可。',
-  ].join('\n')
-
-  const userPrompt = configPrompts.userPromptTemplate
-    .replace('{{episodeNumber}}', episodeData.episodeNumber.toString())
-    .replace('{{layoutInputJson}}', `${JSON.stringify(layoutInput, null, 2)}\n${prompt}`)
-    .concat('\n指定ページ計画:\n')
-    .concat(JSON.stringify(promptPlan, null, 2))
-
-  // Reuse the same schema and mapper in generateLayout by calling the protected flow
-  // For simplicity we duplicate minimal logic here
-  const layoutPanelCountOutputSchema2 = layoutPanelCountOutputSchema
-
-  const llmResponseObject = await agent.generateObject(
-    [{ role: 'user', content: userPrompt }],
-    layoutPanelCountOutputSchema2,
-    {
-      maxRetries: 0,
-      jobId: options?.jobId,
-      stepName: 'layout-plan',
-      episodeNumber: episodeData.episodeNumber,
-    },
-  )
-
+// Helper function to map LLM output to layout
+function mapLayoutPanelCountToLayout(
+  llmOutput: z.infer<typeof layoutPanelCountOutputSchema>,
+  episodeData: EpisodeData,
+  _plan: PageBatchPlan,
+): MangaLayout {
   const pages: { page_number: number; panels: Panel[] }[] = []
-  for (const pageData of llmResponseObject.pages) {
+
+  for (const pageData of llmOutput.pages) {
     const panelCount = pageData.panelCount
     const template = selectLayoutTemplateByCountRandom(panelCount)
+
     const page = new Page(pageData.pageNumber)
-    const planned = plan.plannedPages.find((p) => p.pageNumber === pageData.pageNumber)
-    const segs = planned?.segments ?? []
     for (let i = 0; i < panelCount; i++) {
-      const idx = segs.length > 0 ? Math.min(i, segs.length - 1) : 0
-      const chunkIndex = segs[idx]?.source.chunkIndex ?? 0
       page.addPanel(
         {
           content: '',
           dialogues: undefined,
-          sourceChunkIndex: chunkIndex,
+          sourceChunkIndex: 0,
           importance: 5,
           suggestedSize: 'medium',
         },
         template,
       )
     }
+
     page.validateLayout()
+
     pages.push({
       page_number: page.pageNumber,
       panels: page.getPanels().map((p) => p.toJSON()),
@@ -243,4 +211,32 @@ export async function generateMangaLayoutForPlan(
     episodeTitle: episodeData.episodeTitle,
     pages,
   }
+}
+
+// Incremental: generate only specified pages guided by a batch plan
+export async function generateMangaLayoutForPlan(
+  episodeData: EpisodeData,
+  plan: PageBatchPlan,
+  config: LayoutGenerationConfig,
+  options: { jobId: string },
+): Promise<MangaLayout> {
+  const { agent } = await createAgentAndOptions(config, options.jobId)
+
+  const userPrompt = buildUserPrompt(episodeData, plan, config)
+
+  // Reuse the same schema and mapper in generateLayout by calling the protected flow
+  // For simplicity we duplicate minimal logic here
+
+  const llmResponseObject = await agent.generateObject(
+    [{ role: 'user', content: userPrompt }],
+    layoutPanelCountOutputSchema,
+    {
+      maxRetries: 0,
+      stepName: 'layout',
+      episodeNumber: episodeData.episodeNumber,
+    },
+  )
+
+  const layout = mapLayoutPanelCountToLayout(llmResponseObject, episodeData, plan)
+  return layout
 }

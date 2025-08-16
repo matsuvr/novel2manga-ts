@@ -84,7 +84,9 @@
       "Bash(export VERTICAL_TEXT_API_URL=\"https://vertical-text-api-16823586417.asia-northeast1.run.app\")",
       "Bash(VERTICAL_TEXT_API_URL=\"https://vertical-text-api-16823586417.asia-northeast1.run.app\" VERTICAL_TEXT_API_KEY=\"${VERTICAL_TEXT_API_KEY}\" npx tsx tmp_test/test-vertical-text-api.ts)",
       "Bash(npx biome:*)",
-      "Bash(npm ci:*)"
+      "Bash(npm ci:*)",
+      "mcp__serena__insert_before_symbol",
+      "Bash(npm ls:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
