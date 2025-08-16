@@ -42,7 +42,11 @@ jobs:
         run: npx biome lint .
 
       - name: Unit Tests
-        run: npm run test:unit -- --run
+        run: |
+          set -e
+          npm run test:unit -- --run --reporter=junit --outputFile=test-results/junit-unit.xml || TEST_FAILED=$?
+          echo "Unit test exit code: ${TEST_FAILED:-0}"
+          exit ${TEST_FAILED:-0}
 
       - name: Full Flow Integration
         run: npm run test:full-flow --if-present
@@ -75,6 +79,13 @@ jobs:
             test-results
             playwright-report
             coverage
+
+      - name: Publish Unit Test Results to Summary
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: |
+            test-results/**/*.xml
 
       - name: Stop Dev Server
         if: ${{ always() && env.ENABLE_E2E == 'true' }}
