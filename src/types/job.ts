@@ -17,7 +17,19 @@ export interface JobProgress {
   totalChunks: number
   episodes: EpisodeBoundary[]
   // Per-episode page progress: planned (YAML/generated), rendered (images), total (target/estimated)
-  perEpisodePages?: Record<number, { planned: number; rendered: number; total?: number }>
+  perEpisodePages?: Record<
+    number,
+    {
+      planned: number
+      rendered: number
+      total?: number
+      validation?: {
+        normalizedPages: number[]
+        pagesWithIssueCounts: Record<number, number>
+        issuesCount: number
+      }
+    }
+  >
   lastEpisodeEndPosition?: {
     chunkIndex: number
     charIndex: number

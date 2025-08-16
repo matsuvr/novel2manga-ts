@@ -36,7 +36,19 @@ interface JobData {
     renderedPages?: number
     totalPages?: number
     progress?: {
-      perEpisodePages?: Record<string, { planned: number; rendered: number; total?: number }>
+      perEpisodePages?: Record<
+        string,
+        {
+          planned: number
+          rendered: number
+          total?: number
+          validation?: {
+            normalizedPages: number[]
+            pagesWithIssueCounts: Record<number, number> | Record<string, number>
+            issuesCount: number
+          }
+        }
+      >
     }
   }
 }
@@ -102,7 +114,19 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
   const [lastJobData, setLastJobData] = useState<string>('')
   const [runtimeHints, setRuntimeHints] = useState<Record<string, string>>({})
   const [perEpisodePages, setPerEpisodePages] = useState<
-    Record<number, { planned: number; rendered: number; total?: number }>
+    Record<
+      number,
+      {
+        planned: number
+        rendered: number
+        total?: number
+        validation?: {
+          normalizedPages: number[]
+          pagesWithIssueCounts: Record<number, number>
+          issuesCount: number
+        }
+      }
+    >
   >({})
   const [currentLayoutEpisode, setCurrentLayoutEpisode] = useState<number | null>(null)
 
@@ -182,7 +206,19 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
 
       // per-episode page counts (planned/rendered/total)
       if (data.job.progress?.perEpisodePages) {
-        const normalized: Record<number, { planned: number; rendered: number; total?: number }> = {}
+        const normalized: Record<
+          number,
+          {
+            planned: number
+            rendered: number
+            total?: number
+            validation?: {
+              normalizedPages: number[]
+              pagesWithIssueCounts: Record<number, number>
+              issuesCount: number
+            }
+          }
+        > = {}
         for (const [k, v] of Object.entries(data.job.progress.perEpisodePages)) {
           const n = Number(k)
           if (!Number.isNaN(n) && v && typeof v.planned === 'number') {
@@ -190,6 +226,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
               planned: v.planned,
               rendered: v.rendered ?? 0,
               total: v.total,
+              validation: v.validation,
             }
           }
         }
@@ -633,6 +670,8 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
                 const planned = v.planned ?? 0
                 const rendered = v.rendered ?? 0
                 const total = v.total
+                const normalizedPages = v.validation?.normalizedPages || []
+                const normalizedCount = normalizedPages.length
                 const isCompleted =
                   typeof total === 'number' && total > 0 && planned >= total && rendered >= total
                 const isCurrent = currentLayoutEpisode === ep
@@ -642,6 +681,8 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
                   planned,
                   rendered,
                   total,
+                  normalizedCount,
+                  normalizedPages,
                   isCompleted,
                   isCurrent,
                   isInProgress,
@@ -658,58 +699,75 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
                 if (sa !== sb) return sa - sb
                 return a.ep - b.ep
               })
-              .map(({ ep, planned, rendered, total, isCompleted, isCurrent }) => {
-                const plannedPct =
-                  typeof total === 'number' && total > 0
-                    ? Math.min(100, Math.round((planned / total) * 100))
-                    : undefined
-                const renderedPct =
-                  typeof total === 'number' && total > 0
-                    ? Math.min(100, Math.round((rendered / total) * 100))
-                    : undefined
-                return (
-                  <div
-                    key={ep}
-                    className={
-                      `px-3 py-2 rounded-xl border text-xs ` +
-                      (isCompleted
-                        ? 'bg-gray-50 border-gray-200 text-gray-500'
-                        : isCurrent
-                          ? 'bg-blue-50 border-blue-200 text-blue-800'
-                          : 'bg-gray-50 border-gray-200 text-gray-700')
-                    }
-                    title={`EP${ep}: planned=${planned}, rendered=${rendered}${
-                      typeof total === 'number' ? `, total=${total}` : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-[11px] font-semibold ${isCurrent ? 'text-blue-700' : ''}`}
-                      >
-                        EP{ep}
-                      </span>
-                      <span className="text-[11px]">
-                        {planned}
-                        {typeof total === 'number' ? `/${total}` : ''} 計画, {rendered} 描画
-                      </span>
-                    </div>
-                    {typeof total === 'number' && total > 0 && (
-                      <div className="mt-1 h-1.5 w-full bg-gray-200 rounded-full relative overflow-hidden">
-                        {/* planned */}
-                        <div
-                          className={`absolute left-0 top-0 h-full ${isCompleted ? 'bg-green-400' : 'bg-blue-400'}`}
-                          style={{ width: `${plannedPct}%` }}
-                        />
-                        {/* rendered overlay */}
-                        <div
-                          className="absolute left-0 top-0 h-full bg-green-500/80"
-                          style={{ width: `${renderedPct ?? 0}%` }}
-                        />
+              .map(
+                ({
+                  ep,
+                  planned,
+                  rendered,
+                  total,
+                  normalizedCount,
+                  normalizedPages,
+                  isCompleted,
+                  isCurrent,
+                }) => {
+                  const plannedPct =
+                    typeof total === 'number' && total > 0
+                      ? Math.min(100, Math.round((planned / total) * 100))
+                      : undefined
+                  const renderedPct =
+                    typeof total === 'number' && total > 0
+                      ? Math.min(100, Math.round((rendered / total) * 100))
+                      : undefined
+                  return (
+                    <div
+                      key={ep}
+                      className={
+                        `px-3 py-2 rounded-xl border text-xs ` +
+                        (isCompleted
+                          ? 'bg-gray-50 border-gray-200 text-gray-500'
+                          : isCurrent
+                            ? 'bg-blue-50 border-blue-200 text-blue-800'
+                            : 'bg-gray-50 border-gray-200 text-gray-700')
+                      }
+                      title={`EP${ep}: planned=${planned}, rendered=${rendered}${
+                        typeof total === 'number' ? `, total=${total}` : ''
+                      }${normalizedCount > 0 ? `, normalized=${normalizedCount} [pages: ${normalizedPages.join(',')}]` : ''}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-[11px] font-semibold ${isCurrent ? 'text-blue-700' : ''}`}
+                        >
+                          EP{ep}
+                        </span>
+                        <span className="text-[11px]">
+                          {planned}
+                          {typeof total === 'number' ? `/${total}` : ''} 計画, {rendered} 描画
+                        </span>
+                        {normalizedCount > 0 && (
+                          <span className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200 text-[10px]">
+                            <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                            Normalized {normalizedCount}
+                          </span>
+                        )}
                       </div>
-                    )}
-                  </div>
-                )
-              })}
+                      {typeof total === 'number' && total > 0 && (
+                        <div className="mt-1 h-1.5 w-full bg-gray-200 rounded-full relative overflow-hidden">
+                          {/* planned */}
+                          <div
+                            className={`absolute left-0 top-0 h-full ${isCompleted ? 'bg-green-400' : 'bg-blue-400'}`}
+                            style={{ width: `${plannedPct}%` }}
+                          />
+                          {/* rendered overlay */}
+                          <div
+                            className="absolute left-0 top-0 h-full bg-green-500/80"
+                            style={{ width: `${renderedPct ?? 0}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )
+                },
+              )}
           </div>
           <div className="mt-3 flex items-center gap-4 text-[11px] text-gray-600">
             <div className="flex items-center gap-1">
@@ -719,6 +777,10 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
             <div className="flex items-center gap-1">
               <span className="inline-block w-3 h-2 rounded bg-green-500" />
               <span>描画済みページ</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="inline-block w-3 h-2 rounded bg-yellow-500" />
+              <span>Normalized（自動補正/参照適用）</span>
             </div>
           </div>
         </div>
