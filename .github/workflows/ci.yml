@@ -6,14 +6,20 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+env:
+  # Toggle this to 'true' when deploying and ready to run E2E on CI.
+  # Can also be overridden via repository/organization variables or workflow_dispatch inputs.
+  ENABLE_E2E: "false"
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Toggle this to 'true' when deploying and ready to run E2E on CI.
-    # Alternatively, override via 'env' at workflow_dispatch or environment.
-    env:
-      ENABLE_E2E: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,7 +47,11 @@ jobs:
         run: npx biome lint .
 
       - name: Unit Tests
-        run: npm run test:unit -- --run
+        run: |
+          set -e
+          npm run test:unit -- --run --reporter=junit --outputFile=test-results/junit-unit.xml || TEST_FAILED=$?
+          echo "Unit test exit code: ${TEST_FAILED:-0}"
+          exit ${TEST_FAILED:-0}
 
       - name: Full Flow Integration
         run: npm run test:full-flow --if-present
@@ -74,6 +84,18 @@ jobs:
             test-results
             playwright-report
             coverage
+
+      - name: Publish Unit Test Results to Summary
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: |
+            test-results/**/*.xml
+          # Avoid comparing to earlier commit to prevent 403 on forks or limited tokens
+          compare_to_earlier_commit: false
+          # Ensure it publishes a job summary and does not try to annotate existing check runs
+          check_run: false
+          job_summary: true
 
       - name: Stop Dev Server
         if: ${{ always() && env.ENABLE_E2E == 'true' }}

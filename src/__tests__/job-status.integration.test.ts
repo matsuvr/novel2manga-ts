@@ -1,6 +1,10 @@
+import type { Mocked } from "vitest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Episode, Job } from "@/db";
+import type { Episode, Job, RenderStatus } from "@/db";
+import type { LayoutStoragePort } from "@/infrastructure/storage/ports";
+import type { JobDbPort } from "@/repositories/ports";
 import { JobProgressService } from "@/services/application/job-progress";
+import type { DatabaseService } from "@/services/database";
 import type { JobProgress } from "@/types/job";
 
 // Mock dependencies
@@ -20,33 +24,92 @@ vi.mock("@/repositories/adapters", () => ({
   })),
 }));
 
-// Mock objects
-let mockDatabaseService: any;
-let mockLayoutStorage: any;
-let mockJobDbPort: any;
+// Mock objects (strictly typed)
+type MockDb = Pick<
+  DatabaseService,
+  "getEpisodesByJobId" | "getRenderStatusByEpisode"
+>;
+type MockLayout = Pick<LayoutStoragePort, "getEpisodeLayoutProgress">;
+type MockJobPort = Pick<JobDbPort, "getJobWithProgress">;
+
+let mockDatabaseService: Mocked<MockDb>;
+let mockLayoutStorage: Mocked<MockLayout>;
+let mockJobDbPort: Mocked<MockJobPort>;
 
 beforeEach(() => {
   vi.clearAllMocks();
 
-  // Mock database service
+  // Mock database service concisely
   mockDatabaseService = {
     getEpisodesByJobId: vi.fn(),
     getRenderStatusByEpisode: vi.fn(),
-  };
+  } as Mocked<MockDb>;
 
-  // Mock layout storage
+  // Mock layout storage concisely
   mockLayoutStorage = {
     getEpisodeLayoutProgress: vi.fn(),
-  };
+  } as Mocked<MockLayout>;
 
-  // Mock job database port
+  // Mock job database port concisely
   mockJobDbPort = {
     getJobWithProgress: vi.fn(),
-  };
+  } as Mocked<MockJobPort>;
 });
 
 describe("JobProgressService Integration Tests", () => {
   describe("getJobWithProgress", () => {
+    // Helper to build a fully-typed Job object with sensible defaults
+    // Consolidates job and progress data to avoid duplication
+    const makeMockJob = (
+      jobOverrides: Partial<Job> = {},
+      progressOverrides: Partial<
+        Omit<JobProgress, "currentStep" | "processedChunks" | "totalChunks">
+      > = {}
+    ): Job & { progress: JobProgress } => {
+      const now = new Date().toISOString();
+      const base: Job = {
+        id: "job-DEFAULT",
+        novelId: "novel-DEFAULT",
+        jobName: null,
+        status: "pending",
+        currentStep: "initialized",
+        splitCompleted: false,
+        analyzeCompleted: false,
+        episodeCompleted: false,
+        layoutCompleted: false,
+        renderCompleted: false,
+        chunksDirPath: null,
+        analysesDirPath: null,
+        episodesDataPath: null,
+        layoutsDirPath: null,
+        rendersDirPath: null,
+        totalChunks: 0,
+        processedChunks: 0,
+        totalEpisodes: 0,
+        processedEpisodes: 0,
+        totalPages: 0,
+        renderedPages: 0,
+        lastError: null,
+        lastErrorStep: null,
+        retryCount: 0,
+        resumeDataPath: null,
+        createdAt: now,
+        updatedAt: now,
+        startedAt: now,
+        completedAt: null,
+      };
+      const job = { ...base, ...jobOverrides };
+
+      // Progress data is derived from job data to ensure consistency
+      const progress: JobProgress = {
+        currentStep: job.currentStep as JobProgress["currentStep"],
+        processedChunks: job.processedChunks ?? 0,
+        totalChunks: job.totalChunks ?? 0,
+        episodes: [],
+        ...progressOverrides,
+      };
+      return { ...job, progress };
+    };
     it("returns null when job does not exist", async () => {
       // Arrange
       mockJobDbPort.getJobWithProgress.mockResolvedValue(null);
@@ -64,39 +127,14 @@ describe("JobProgressService Integration Tests", () => {
 
     it("returns original job when no episodes exist", async () => {
       // Arrange
-      const mockJob: Job & { progress: JobProgress } = {
+      const mockJob = makeMockJob({
         id: "job-1",
         novelId: "novel-1",
         status: "processing",
         currentStep: "analyze",
         totalChunks: 10,
         processedChunks: 5,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        progress: {
-          jobId: "job-1",
-          status: "processing",
-          currentStep: "analyze",
-          progress: 50,
-          stepProgress: {
-            split: { completed: true, progress: 100 },
-            analyze: { completed: false, progress: 50 },
-            episode: { completed: false, progress: 0 },
-            layout: { completed: false, progress: 0 },
-            render: { completed: false, progress: 0 },
-          },
-          stats: {
-            totalChunks: 10,
-            processedChunks: 5,
-            totalEpisodes: 0,
-            processedEpisodes: 0,
-            totalPages: 0,
-            renderedPages: 0,
-          },
-          startedAt: new Date(),
-          updatedAt: new Date(),
-        },
-      };
+      });
 
       mockJobDbPort.getJobWithProgress.mockResolvedValue(mockJob);
       mockDatabaseService.getEpisodesByJobId.mockResolvedValue([]);
@@ -115,73 +153,101 @@ describe("JobProgressService Integration Tests", () => {
 
     it("enriches job with perEpisodePages when episodes exist", async () => {
       // Arrange
-      const mockJob: Job & { progress: JobProgress } = {
+      const mockJob = makeMockJob({
         id: "job-1",
         novelId: "novel-1",
         status: "processing",
         currentStep: "layout",
         totalChunks: 10,
         processedChunks: 10,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        progress: {
-          jobId: "job-1",
-          status: "processing",
-          currentStep: "layout",
-          progress: 75,
-          stepProgress: {
-            split: { completed: true, progress: 100 },
-            analyze: { completed: true, progress: 100 },
-            episode: { completed: true, progress: 100 },
-            layout: { completed: false, progress: 50 },
-            render: { completed: false, progress: 0 },
-          },
-          stats: {
-            totalChunks: 10,
-            processedChunks: 10,
-            totalEpisodes: 2,
-            processedEpisodes: 2,
-            totalPages: 70,
-            renderedPages: 0,
-          },
-          startedAt: new Date(),
-          updatedAt: new Date(),
-        },
-      };
+      });
 
       const mockEpisodes: Episode[] = [
         {
           id: "ep1",
+          novelId: "novel-1",
           jobId: "job-1",
           episodeNumber: 1,
           title: "Episode 1",
+          summary: null,
           startChunk: 0,
           endChunk: 4,
           estimatedPages: 30,
           startCharIndex: 0,
           endCharIndex: 1000,
           confidence: 0.9,
-          createdAt: new Date(),
+          createdAt: new Date().toISOString(),
         },
         {
           id: "ep2",
+          novelId: "novel-1",
           jobId: "job-1",
           episodeNumber: 2,
           title: "Episode 2",
+          summary: null,
           startChunk: 5,
           endChunk: 9,
           estimatedPages: 40,
           startCharIndex: 1001,
           endCharIndex: 2000,
           confidence: 0.85,
-          createdAt: new Date(),
+          createdAt: new Date().toISOString(),
         },
       ];
 
       const mockLayoutProgress1 = JSON.stringify({ pages: Array(25).fill({}) }); // 25 planned pages
       const mockLayoutProgress2 = JSON.stringify({ pages: Array(35).fill({}) }); // 35 planned pages
-      const mockRenderStatus1 = []; // 0 rendered pages
-      const mockRenderStatus2 = Array(3).fill({}); // 3 rendered pages
+      const mockRenderStatus1: RenderStatus[] = []; // 0 rendered pages
+      const mockRenderStatus2: RenderStatus[] = [
+        {
+          id: "r-1",
+          jobId: "job-1",
+          episodeNumber: 2,
+          pageNumber: 1,
+          isRendered: true,
+          imagePath: null,
+          thumbnailPath: null,
+          width: null,
+          height: null,
+          fileSize: null,
+          renderedAt: null,
+          retryCount: 0,
+          lastError: null,
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: "r-2",
+          jobId: "job-1",
+          episodeNumber: 2,
+          pageNumber: 2,
+          isRendered: true,
+          imagePath: null,
+          thumbnailPath: null,
+          width: null,
+          height: null,
+          fileSize: null,
+          renderedAt: null,
+          retryCount: 0,
+          lastError: null,
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: "r-3",
+          jobId: "job-1",
+          episodeNumber: 2,
+          pageNumber: 3,
+          isRendered: true,
+          imagePath: null,
+          thumbnailPath: null,
+          width: null,
+          height: null,
+          fileSize: null,
+          renderedAt: null,
+          retryCount: 0,
+          lastError: null,
+          createdAt: new Date().toISOString(),
+        },
+      ];
 
       mockJobDbPort.getJobWithProgress.mockResolvedValue(mockJob);
       mockDatabaseService.getEpisodesByJobId.mockResolvedValue(mockEpisodes);
@@ -241,53 +307,30 @@ describe("JobProgressService Integration Tests", () => {
 
     it("handles layout progress parsing errors gracefully", async () => {
       // Arrange
-      const mockJob: Job & { progress: JobProgress } = {
+      const mockJob = makeMockJob({
         id: "job-1",
         novelId: "novel-1",
         status: "processing",
         currentStep: "layout",
         totalChunks: 5,
         processedChunks: 5,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        progress: {
-          jobId: "job-1",
-          status: "processing",
-          currentStep: "layout",
-          progress: 75,
-          stepProgress: {
-            split: { completed: true, progress: 100 },
-            analyze: { completed: true, progress: 100 },
-            episode: { completed: true, progress: 100 },
-            layout: { completed: false, progress: 50 },
-            render: { completed: false, progress: 0 },
-          },
-          stats: {
-            totalChunks: 5,
-            processedChunks: 5,
-            totalEpisodes: 1,
-            processedEpisodes: 1,
-            totalPages: 20,
-            renderedPages: 0,
-          },
-          startedAt: new Date(),
-          updatedAt: new Date(),
-        },
-      };
+      });
 
       const mockEpisodes: Episode[] = [
         {
           id: "ep1",
+          novelId: "novel-1",
           jobId: "job-1",
           episodeNumber: 1,
           title: "Episode 1",
+          summary: null,
           startChunk: 0,
           endChunk: 4,
           estimatedPages: 20,
           startCharIndex: 0,
           endCharIndex: 1000,
           confidence: 0.9,
-          createdAt: new Date(),
+          createdAt: new Date().toISOString(),
         },
       ];
 
@@ -320,39 +363,14 @@ describe("JobProgressService Integration Tests", () => {
 
     it("handles storage operation errors gracefully and returns original job", async () => {
       // Arrange
-      const mockJob: Job & { progress: JobProgress } = {
+      const mockJob = makeMockJob({
         id: "job-1",
         novelId: "novel-1",
         status: "processing",
         currentStep: "layout",
         totalChunks: 5,
         processedChunks: 5,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        progress: {
-          jobId: "job-1",
-          status: "processing",
-          currentStep: "layout",
-          progress: 75,
-          stepProgress: {
-            split: { completed: true, progress: 100 },
-            analyze: { completed: true, progress: 100 },
-            episode: { completed: true, progress: 100 },
-            layout: { completed: false, progress: 50 },
-            render: { completed: false, progress: 0 },
-          },
-          stats: {
-            totalChunks: 5,
-            processedChunks: 5,
-            totalEpisodes: 1,
-            processedEpisodes: 1,
-            totalPages: 20,
-            renderedPages: 0,
-          },
-          startedAt: new Date(),
-          updatedAt: new Date(),
-        },
-      };
+      });
 
       mockJobDbPort.getJobWithProgress.mockResolvedValue(mockJob);
       // Simulate error in getEpisodesByJobId that triggers the catch block
