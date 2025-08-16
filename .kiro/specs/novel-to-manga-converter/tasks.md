@@ -33,6 +33,15 @@
 - [ ] Vertical Dialogue Rendering: update README with feature flag/env placeholders (no secrets)
 - [ ] Vertical Dialogue Rendering: cache tuning and concurrency guard if needed
 
+## New (2025-08-16): Panel Count + Template Snap
+
+- [x] Loader: Read `public/docs/panel_layout_sample/<count>/*.json` and build `LayoutTemplate` candidates
+- [x] Selector: Prefer random sample template by exact `panelCount`, fallback to nearest built-in
+- [x] LLM Prompt: Change to output only `{ pages: [{ pageNumber, panelCount }] }`
+- [x] Agent: Map `panelCount` to selected template; create placeholder panels (content/dialogues empty) and keep downstream flow unchanged
+- [x] Validation: Add `bypassValidation` flag to normalization; service uses it to skip heavy overlap checks
+- [ ] Tests: Add E2E scenario verifying panel-count-only path produces pages without validation issues
+
 ## New: Vertical Dialogue Rendering (2025-08-16)
 
 - [x] Design plan at `docs/vertical-text-integration-plan.md`
