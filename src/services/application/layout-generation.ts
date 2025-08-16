@@ -227,7 +227,19 @@ async function buildChunkData(
           logger.error('Analysis not found', { chunkIndex: i })
           throw new Error(`Analysis not found for chunk ${i}`)
         }
-        const parsed = JSON.parse(obj.text) as { analysis?: unknown }
+        let parsed: { analysis?: unknown }
+        try {
+          parsed = JSON.parse(obj.text) as { analysis?: unknown }
+        } catch (parseError) {
+          logger.error('Failed to parse analysis JSON', {
+            chunkIndex: i,
+            jobId: ensured.jobId,
+            error: (parseError as Error).message,
+          })
+          throw new Error(
+            `Failed to parse analysis for chunk ${i}: ${(parseError as Error).message}`,
+          )
+        }
         const analysis = (parsed.analysis ?? parsed) as EpisodeData['chunks'][number]['analysis']
         const isPartial = i === ensured.startChunk || i === ensured.endChunk
         const startOffset = i === ensured.startChunk ? ensured.startCharIndex : 0
@@ -432,8 +444,19 @@ async function generateEpisodeLayoutInternal(
     })
 
     // Generate layout using plan-aware generator
-    const { generateMangaLayoutForPlan } = await import('@/agents/layout-generator')
-    const layout = await generateMangaLayoutForPlan(episodeData, plan, fullConfig, { jobId })
+    const layoutGeneratorModule = await import('@/agents/layout-generator')
+    if (
+      !layoutGeneratorModule.generateMangaLayoutForPlan ||
+      typeof layoutGeneratorModule.generateMangaLayoutForPlan !== 'function'
+    ) {
+      throw new Error('generateMangaLayoutForPlan is not available in layout-generator module')
+    }
+    const layout = await layoutGeneratorModule.generateMangaLayoutForPlan(
+      episodeData,
+      plan,
+      fullConfig,
+      { jobId },
+    )
 
     const rawPages = layout.pages as Array<{
       page_number: number
@@ -467,18 +490,39 @@ async function generateEpisodeLayoutInternal(
       lastPlannedPage = Math.max(lastPlannedPage, lastPageInBatch)
     }
 
+    // Check for progress and potential infinite loop conditions
     if (lastPlannedPage === prevLastPlanned) {
       noProgressStreak += 1
+      logger.warn('No progress detected in layout generation batch', {
+        episodeNumber,
+        currentStreak: noProgressStreak,
+        maxAllowed: DEFAULT_LAYOUT_CONFIG.NO_PROGRESS_STREAK_LIMIT_PLAN,
+        startPage,
+        lastPlannedPage,
+        batchPagesCount: batchPages.length,
+        totalPagesTarget,
+      })
+
       if (noProgressStreak >= DEFAULT_LAYOUT_CONFIG.NO_PROGRESS_STREAK_LIMIT_PLAN) {
         logger.error('No progress in layout generation for multiple batches; aborting', {
           episodeNumber,
           startPage,
           lastPlannedPage,
           totalPagesTarget,
+          finalNoProgressStreak: noProgressStreak,
         })
         throw new Error('Layout generation made no progress')
       }
     } else {
+      // Progress made, reset the streak and log positive progress
+      if (noProgressStreak > 0) {
+        logger.info('Layout generation progress resumed', {
+          episodeNumber,
+          previousStreak: noProgressStreak,
+          oldLastPlanned: prevLastPlanned,
+          newLastPlanned: lastPlannedPage,
+        })
+      }
       noProgressStreak = 0
     }
 
@@ -520,32 +564,26 @@ async function generateEpisodeLayoutInternal(
         noRefs: true,
       })
 
-      // Write both progress and layout atomically
-      // If either fails, the entire transaction should be rolled back
+      // Write both progress and layout concurrently for better performance
       try {
-        await ports.layout.putEpisodeLayout(jobId, episodeNumber, yamlContent)
-        await ports.layout.putEpisodeLayoutProgress(jobId, episodeNumber, JSON.stringify(progress))
+        await Promise.all([
+          ports.layout.putEpisodeLayoutProgress(jobId, episodeNumber, JSON.stringify(progress)),
+          ports.layout.putEpisodeLayout(jobId, episodeNumber, yamlContent),
+        ])
       } catch (writeError) {
-        // Clean up any partial writes to maintain consistency
-        try {
-          await ports.layout.putEpisodeLayout(jobId, episodeNumber, '')
-          await ports.layout.putEpisodeLayoutProgress(jobId, episodeNumber, '')
-        } catch (cleanupError) {
-          logger.error('Failed to cleanup partial writes', {
-            episodeNumber,
-            cleanupError: (cleanupError as Error).message,
-          })
-        }
+        logger.error('Failed to persist layout progress', {
+          episodeNumber,
+          error: (writeError as Error).message,
+        })
         throw writeError
       }
     } catch (error) {
-      logger.error('Failed to persist layout progress atomically', {
+      logger.error('Failed to persist layout progress', {
         episodeNumber,
         lastPlannedPage,
         pagesCount: pagesCanonical.length,
         error: (error as Error).message,
       })
-      // Re-throw to trigger cleanup and prevent inconsistent state
       throw error
     }
 
