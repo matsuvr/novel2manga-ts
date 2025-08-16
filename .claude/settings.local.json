@@ -79,7 +79,11 @@
       "WebSearch",
       "WebFetch(domain:github.com)",
       "Bash(git reset:*)",
-      "Bash(git branch:*)"
+      "Bash(git branch:*)",
+      "Bash(echo:*)",
+      "Bash(export VERTICAL_TEXT_API_URL=\"https://vertical-text-api-16823586417.asia-northeast1.run.app\")",
+      "Bash(VERTICAL_TEXT_API_URL=\"https://vertical-text-api-16823586417.asia-northeast1.run.app\" VERTICAL_TEXT_API_KEY=\"d85e469dfe0551ae45cc90413ddf9b5923eb5761ec24cf49b799bd08f3d8e264\" npx tsx tmp_test/test-vertical-text-api.ts)",
+      "Bash(npx biome:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

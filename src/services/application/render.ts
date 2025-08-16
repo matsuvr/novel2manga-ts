@@ -55,7 +55,7 @@ export async function renderBatchFromYaml(
   const targetPages = pages && pages.length > 0 ? pages : allPages
   const validPages = targetPages.filter((p) => allPages.includes(p))
 
-  const renderer = new MangaPageRenderer({
+  const renderer = await MangaPageRenderer.create({
     pageWidth: appConfig.rendering.defaultPageSize.width,
     pageHeight: appConfig.rendering.defaultPageSize.height,
     margin: 20,
