@@ -42,7 +42,8 @@ export async function GET(
     }
 
     // サーバー側の保険: レンダリング完了フラグが立っていれば completed として返す
-    const isCompleted = job.status === 'completed' || job.splitCompleted === true
+    const isCompleted =
+      job.status === 'completed' || job.renderCompleted === true || job.currentStep === 'complete'
 
     // 旧テスト互換: DB のチャンク内容をレスポンスに含める
     const chunkRepo = getChunkRepository()
@@ -52,7 +53,7 @@ export async function GET(
       job: {
         id: job.id,
         status: isCompleted ? 'completed' : job.status,
-        currentStep: job.splitCompleted ? 'split_complete' : job.currentStep,
+        currentStep: isCompleted ? 'complete' : job.renderCompleted ? 'complete' : job.currentStep,
         splitCompleted: job.splitCompleted ?? false,
         analyzeCompleted: job.analyzeCompleted ?? false,
         episodeCompleted: job.episodeCompleted ?? false,
