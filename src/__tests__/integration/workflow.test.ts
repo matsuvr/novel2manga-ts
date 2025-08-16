@@ -114,7 +114,8 @@ vi.mock("@/agents/layout-generator", () => ({
               id: "panel1",
               type: "dialogue",
               content: "テスト対話",
-              position: { x: 0, y: 0, width: 100, height: 100 }
+              position: { x: 0.0, y: 0.0 }, // Normalized coordinates [0,1]
+              size: { width: 0.25, height: 0.33 } // Normalized size [0,1]
             }
           ]
         }

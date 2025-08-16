@@ -20,7 +20,7 @@ export default function Logger({ logs }: LoggerProps) {
     if (logContainerRef.current) {
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight
     }
-  }, [])
+  }, [logs])
 
   const getLogColor = (level: LogEntry['level']) => {
     switch (level) {

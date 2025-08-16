@@ -36,6 +36,19 @@ export interface GenerateLayoutResult {
   pageNumbers: number[]
 }
 
+// CONFIGURATION: Layout generation defaults
+// These values define the default parameters for manga layout generation
+const DEFAULT_LAYOUT_CONFIG = {
+  PANELS_PER_PAGE_MIN: 3,
+  PANELS_PER_PAGE_MAX: 6,
+  PANELS_PER_PAGE_AVERAGE: 4.5,
+  DIALOGUE_DENSITY: 0.6,
+  VISUAL_COMPLEXITY: 0.7,
+  HIGHLIGHT_PANEL_SIZE_MULTIPLIER: 2.0,
+  PAGE_BATCH_SIZE: 3, // Number of pages to generate in each batch
+  BACK_EDIT_WINDOW: 2, // How many previous pages can be revised
+} as const
+
 export async function generateEpisodeLayout(
   jobId: string,
   episodeNumber: number,
@@ -223,17 +236,20 @@ async function generateEpisodeLayoutInternal(
   // Build full config with defaults
   const fullConfig = {
     panelsPerPage: {
-      min: options.config?.panelsPerPage?.min ?? 3,
-      max: options.config?.panelsPerPage?.max ?? 6,
-      average: options.config?.panelsPerPage?.average ?? 4.5,
+      min: options.config?.panelsPerPage?.min ?? DEFAULT_LAYOUT_CONFIG.PANELS_PER_PAGE_MIN,
+      max: options.config?.panelsPerPage?.max ?? DEFAULT_LAYOUT_CONFIG.PANELS_PER_PAGE_MAX,
+      average:
+        options.config?.panelsPerPage?.average ?? DEFAULT_LAYOUT_CONFIG.PANELS_PER_PAGE_AVERAGE,
     },
-    dialogueDensity: options.config?.dialogueDensity ?? 0.6,
-    visualComplexity: options.config?.visualComplexity ?? 0.7,
-    highlightPanelSizeMultiplier: options.config?.highlightPanelSizeMultiplier ?? 2.0,
+    dialogueDensity: options.config?.dialogueDensity ?? DEFAULT_LAYOUT_CONFIG.DIALOGUE_DENSITY,
+    visualComplexity: options.config?.visualComplexity ?? DEFAULT_LAYOUT_CONFIG.VISUAL_COMPLEXITY,
+    highlightPanelSizeMultiplier:
+      options.config?.highlightPanelSizeMultiplier ??
+      DEFAULT_LAYOUT_CONFIG.HIGHLIGHT_PANEL_SIZE_MULTIPLIER,
     readingDirection: options.config?.readingDirection ?? ('right-to-left' as const),
   }
 
-  // Incremental generation (batch of 3 pages), with atomic progress checkpoint
+  // Incremental generation (batch of pages), with atomic progress checkpoint
   if (isDemo) {
     const layout: MangaLayout = demoLayoutFromEpisode(episodeData)
     const { normalizeAndValidateLayout } = await import('@/utils/layout-normalizer')
@@ -321,13 +337,13 @@ async function generateEpisodeLayoutInternal(
   }
 
   // Back-edit window: how many previous pages are allowed to be revised
-  const BACK_EDIT_WINDOW = 2
+  const BACK_EDIT_WINDOW = DEFAULT_LAYOUT_CONFIG.BACK_EDIT_WINDOW
   let startPage = Math.max(1, lastPlannedPage + 1)
   while (startPage <= totalPagesTarget) {
     await jobRepo.updateStep(jobId, `layout_episode_${episodeNumber}`)
 
     const plan = await splitAgent.planNextBatch(episodeData, {
-      batchSize: 3,
+      batchSize: DEFAULT_LAYOUT_CONFIG.PAGE_BATCH_SIZE,
       allowMinorAdjustments: true,
       startPage,
       backEditWindow: BACK_EDIT_WINDOW,
@@ -340,7 +356,10 @@ async function generateEpisodeLayoutInternal(
     }>
     // Guard: only accept pages in the allowed back-edit window and forward batch
     const minAllowed = Math.max(1, startPage - BACK_EDIT_WINDOW)
-    const maxAllowed = Math.max(lastPlannedPage, startPage + 3 - 1)
+    const maxAllowed = Math.max(
+      lastPlannedPage,
+      startPage + DEFAULT_LAYOUT_CONFIG.PAGE_BATCH_SIZE - 1,
+    )
     const beforeFilterCount = batchPages.length
     batchPages = batchPages.filter(
       (p) => p.page_number >= minAllowed && p.page_number <= maxAllowed,
