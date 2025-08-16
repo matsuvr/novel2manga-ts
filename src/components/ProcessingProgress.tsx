@@ -16,6 +16,12 @@ interface ProcessingProgressProps {
   onComplete?: () => void
   modeHint?: string // テスト/デモなどの実行モード表示
   isDemoMode?: boolean // デモ/テストで分析をスキップする場合
+  /**
+   * 現在処理中エピソードに付与する進捗配点（0.0〜1.0）。
+   * 例: 0.5 -> 処理中エピソードを50%完了として扱う。
+   * 指定されない場合はデフォルト値を使用。
+   */
+  currentEpisodeProgressWeight?: number
 }
 
 interface JobData {
@@ -66,7 +72,7 @@ interface LogEntry {
 // feedback by giving 50% credit for the episode being worked on, preventing
 // the progress bar from appearing stalled during long episode processing.
 // Range: 0.0 (no credit) to 1.0 (full credit for in-progress episodes)
-const CURRENT_EPISODE_PROGRESS_WEIGHT = 0.5 as const
+const DEFAULT_CURRENT_EPISODE_PROGRESS_WEIGHT = 0.5 as const
 
 // CONFIGURATION: Maximum number of log entries to keep in memory
 // Keeps the last 50 log entries to prevent memory bloat while maintaining
@@ -75,8 +81,8 @@ const MAX_LOG_ENTRIES = 50 as const
 
 // CONFIGURATION: Polling intervals for job status updates
 // These values balance responsiveness with server load
-const POLLING_INTERVAL_MS = 2000 as const // 2 seconds between status checks
-const INITIAL_POLLING_DELAY_MS = 1000 as const // 1 second delay before first poll
+const POLLING_INTERVAL_MS: number = 2000 // 2 seconds between status checks
+const INITIAL_POLLING_DELAY_MS: number = 1000 // 1 second delay before first poll
 
 // CONFIGURATION: UI layout constants
 const MAX_VISIBLE_LOG_HEIGHT = 60 as const // vh units for log container height
@@ -121,7 +127,13 @@ const INITIAL_STEPS: ProcessStep[] = [
   },
 ]
 
-function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: ProcessingProgressProps) {
+function ProcessingProgress({
+  jobId,
+  onComplete,
+  modeHint,
+  isDemoMode,
+  currentEpisodeProgressWeight,
+}: ProcessingProgressProps) {
   const [steps, setSteps] = useState<ProcessStep[]>(() =>
     INITIAL_STEPS.map((step) => ({ ...step })),
   )
@@ -130,7 +142,8 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [showLogs, setShowLogs] = useState(process.env.NODE_ENV === 'development')
   const [lastJobData, setLastJobData] = useState<string>('')
-  const [runtimeHints, setRuntimeHints] = useState<Record<string, string>>({})
+  type HintStep = 'split' | 'analyze' | 'layout' | 'render'
+  const [runtimeHints, setRuntimeHints] = useState<Partial<Record<HintStep, string>>>({})
   const [perEpisodePages, setPerEpisodePages] = useState<
     Record<
       number,
@@ -150,6 +163,22 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
 
   // Ref to track component mount state for proper cleanup
   const isMountedRef = useRef(true)
+  // AbortController for in-flight fetch to avoid leaks on unmount/reschedule
+  const pollAbortRef = useRef<AbortController | null>(null)
+  // Pause polling when tab is hidden
+  const isPausedRef = useRef<boolean>(false)
+  // Recursive timeout driver for polling
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 進捗重み（クランプ）
+  const inProgressWeight = useMemo(() => {
+    const w =
+      typeof currentEpisodeProgressWeight === 'number'
+        ? currentEpisodeProgressWeight
+        : DEFAULT_CURRENT_EPISODE_PROGRESS_WEIGHT
+    if (Number.isNaN(w)) return DEFAULT_CURRENT_EPISODE_PROGRESS_WEIGHT
+    return Math.max(0, Math.min(1, w))
+  }, [currentEpisodeProgressWeight])
 
   // Type guard for episode page data to ensure type safety
   const isValidEpisodePageData = useCallback(
@@ -394,9 +423,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
               // 進捗計算：完了したエピソード数 + 現在のエピソードの進捗（0.5とする）
               const processedWithCurrent =
                 data.job.processedEpisodes +
-                (currentEpisodeNum > data.job.processedEpisodes
-                  ? CURRENT_EPISODE_PROGRESS_WEIGHT
-                  : 0)
+                (currentEpisodeNum > data.job.processedEpisodes ? inProgressWeight : 0)
               updatedSteps[4].progress = Math.round(
                 (processedWithCurrent / data.job.totalEpisodes) * 100,
               )
@@ -496,7 +523,15 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
         ? 'stop'
         : 'continue'
     },
-    [lastJobData, addLog, onComplete, describeStep, isDemoMode, isValidEpisodePageData],
+    [
+      lastJobData,
+      addLog,
+      onComplete,
+      describeStep,
+      isDemoMode,
+      isValidEpisodePageData,
+      inProgressWeight,
+    ],
   )
 
   useEffect(() => {
@@ -509,74 +544,90 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
     setOverallProgress(Math.round((1 / INITIAL_STEPS.length) * 100))
     addLog('info', `処理を開始しました。Job ID: ${jobId}`)
 
-    let pollInterval: NodeJS.Timeout
-    const initialTimeout: NodeJS.Timeout = setTimeout(() => {
-      if (isMountedRef.current) {
-        poll()
-        pollInterval = setInterval(poll, POLLING_INTERVAL_MS) // Increased to reduce load
-      }
-    }, INITIAL_POLLING_DELAY_MS)
+    // Visibility: pause when hidden
+    const onVisibility = () => {
+      isPausedRef.current = document.hidden
+    }
+    document.addEventListener('visibilitychange', onVisibility)
 
-    const poll = async () => {
-      // Check if component is still mounted before proceeding
+    const scheduleNext = (delay: number) => {
       if (!isMountedRef.current) return
+      if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current)
+      pollTimeoutRef.current = setTimeout(runOnce, delay)
+    }
 
+    const runOnce = async () => {
+      if (!isMountedRef.current) return
+      if (isPausedRef.current) {
+        scheduleNext(POLLING_INTERVAL_MS * 2)
+        return
+      }
+      if (pollAbortRef.current) pollAbortRef.current.abort()
+      const controller = new AbortController()
+      pollAbortRef.current = controller
       try {
-        const response = await fetch(`/api/jobs/${jobId}/status`)
+        const response = await fetch(`/api/jobs/${jobId}/status`, {
+          signal: controller.signal,
+        })
         if (!response.ok) {
           throw new Error(`API呼び出しに失敗: ${response.status} ${response.statusText}`)
         }
-
         const data: JobData = await response.json()
-
-        // Double-check mount state before updating component state
         if (!isMountedRef.current) return
 
         const result = updateStepsFromJobData(data)
-
         if (result === 'stop') {
-          if (pollInterval) clearInterval(pollInterval)
-          if (isMountedRef.current) {
-            addLog('info', 'ポーリングを停止しました')
-            // 完了メッセージとダウンロード導線
-            try {
-              const uiCompleted =
-                data.job.status === 'completed' ||
-                data.job.currentStep === 'complete' ||
-                data.job.renderCompleted === true
-              if (uiCompleted) {
-                addLog('info', '処理が完了しました。上部のエクスポートからダウンロードできます。')
-              }
-            } catch (e) {
-              console.error('post-complete message handling failed', e)
-              addLog(
-                'error',
-                `完了処理メッセージの処理中にエラー: ${e instanceof Error ? e.message : String(e)}`,
-              )
+          addLog('info', 'ポーリングを停止しました')
+          try {
+            const uiCompleted =
+              data.job.status === 'completed' ||
+              data.job.currentStep === 'complete' ||
+              data.job.renderCompleted === true
+            if (uiCompleted) {
+              addLog('info', '処理が完了しました。上部のエクスポートからダウンロードできます。')
             }
+          } catch (e) {
+            console.error('post-complete message handling failed', e)
+            addLog(
+              'error',
+              `完了処理メッセージの処理中にエラー: ${e instanceof Error ? e.message : String(e)}`,
+            )
           }
-        } else if (result === null) {
-          // データに変化がない場合はログ出力しない
+          return
         }
+
+        // Adaptive interval based on step
+        const step = data.job.currentStep || ''
+        let next = POLLING_INTERVAL_MS
+        if (step.startsWith('layout') || step.startsWith('analyze'))
+          next = POLLING_INTERVAL_MS * 1.5
+        if (step.startsWith('render')) next = Math.max(1000, POLLING_INTERVAL_MS * 0.75)
+        if (document.hidden) next = POLLING_INTERVAL_MS * 2
+        scheduleNext(next)
       } catch (error) {
-        // Only log errors if component is still mounted
+        if ((error as Error)?.name === 'AbortError') {
+          return
+        }
         if (isMountedRef.current) {
           addLog(
             'error',
             `Job状態の取得に失敗: ${error instanceof Error ? error.message : String(error)}`,
           )
-          console.error('Error fetching job status:', error)
         }
+        // Back off on error
+        scheduleNext(POLLING_INTERVAL_MS * 2)
       }
     }
 
-    // 最初のAPIコールを少し遅延させる
-    // (initialTimeout is already defined above)
+    // kick-off with initial delay
+    const startTimer = setTimeout(() => scheduleNext(0), INITIAL_POLLING_DELAY_MS)
 
     return () => {
       isMountedRef.current = false
-      clearTimeout(initialTimeout)
-      if (pollInterval) clearInterval(pollInterval)
+      document.removeEventListener('visibilitychange', onVisibility)
+      clearTimeout(startTimer)
+      if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current)
+      if (pollAbortRef.current) pollAbortRef.current.abort()
     }
   }, [jobId, addLog, updateStepsFromJobData])
 
@@ -725,9 +776,15 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
                   {step.name}
                 </h4>
                 <p className="text-sm text-gray-500 mt-1">{step.description}</p>
-                {step.status === 'processing' && runtimeHints[step.id] && (
-                  <p className="text-sm text-blue-600 mt-1">{runtimeHints[step.id]}</p>
-                )}
+                {step.status === 'processing' &&
+                  (() => {
+                    const isHintStep = (s: string): s is HintStep =>
+                      s === 'split' || s === 'analyze' || s === 'layout' || s === 'render'
+                    if (isHintStep(step.id) && runtimeHints[step.id]) {
+                      return <p className="text-sm text-blue-600 mt-1">{runtimeHints[step.id]}</p>
+                    }
+                    return null
+                  })()}
 
                 {step.status === 'processing' && step.progress !== undefined && (
                   <div className="mt-2">
