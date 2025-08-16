@@ -47,7 +47,11 @@ function validateBandPartition(panels: Panel[], issues: Issue[]): void {
     const bandPanelIds = bandPanels.map((p) => String(p.id)).join(', ')
 
     const segs = bandPanels
-      .map((p) => ({ x: clamp01(p.position.x), w: clamp01(p.size.width), id: p.id }))
+      .map((p) => ({
+        x: clamp01(p.position.x),
+        w: clamp01(p.size.width),
+        id: p.id,
+      }))
       .sort((a, b) => a.x - b.x)
     // Check coverage from 0 to 1 with minimal gaps/overlaps
     let cursor = 0
@@ -101,7 +105,7 @@ export function validatePanels(panels: Panel[]): ValidationResult {
     if (x2 > 1 + EPS) issues.push(`x+width > 1 for panel ${String(p.id)}: ${x2}`)
     if (y2 > 1 + EPS) issues.push(`y+height > 1 for panel ${String(p.id)}: ${y2}`)
   }
-  // Overlaps (sweep-line by X to avoid O(n^2) in common cases)
+  // Overlaps: spatial hashing grid to reduce comparisons from O(n^2)
   type Aug = {
     id: Panel['id']
     x1: number
@@ -116,24 +120,40 @@ export function validatePanels(panels: Panel[]): ValidationResult {
     y1: p.position.y,
     y2: p.position.y + p.size.height,
   }))
-  rects.sort((a, b) => a.x1 - b.x1)
-  const active: Aug[] = []
-  for (const cur of rects) {
-    // Remove intervals that end before the current starts (with tolerance)
-    // Use filter instead of splice to avoid O(n²) behavior
-    const newActive = active.filter((a) => a.x2 > cur.x1 + EPS)
-    active.length = 0
-    active.push(...newActive)
-    // Among active (which all have X-overlap with current), check Y-overlap
-    for (const a of active) {
-      const overlapX = Math.min(cur.x2, a.x2) - Math.max(cur.x1, a.x1)
-      const overlapY = Math.min(cur.y2, a.y2) - Math.max(cur.y1, a.y1)
-      if (overlapX > EPS && overlapY > EPS) {
-        issues.push(`panels overlap: ${String(a.id)} and ${String(cur.id)}`)
+  const GRID = 8 // 8x8 grid
+  const cellPairs = new Map<string, Aug[]>()
+  const clampIdx = (v: number) => Math.max(0, Math.min(GRID - 1, Math.floor(v * GRID)))
+  for (const r of rects) {
+    const cx1 = clampIdx(r.x1)
+    const cx2 = clampIdx(Math.max(0, Math.min(0.999999, r.x2)))
+    const cy1 = clampIdx(r.y1)
+    const cy2 = clampIdx(Math.max(0, Math.min(0.999999, r.y2)))
+    for (let cy = cy1; cy <= cy2; cy++) {
+      for (let cx = cx1; cx <= cx2; cx++) {
+        const key = `${cx},${cy}`
+        const arr = cellPairs.get(key)
+        if (arr) arr.push(r)
+        else cellPairs.set(key, [r])
       }
     }
-    active.push(cur)
   }
+  const seen = new Set<string>()
+  Array.from(cellPairs.values()).forEach((arr) => {
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = i + 1; j < arr.length; j++) {
+        const a = arr[i]
+        const b = arr[j]
+        const key = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        const overlapX = Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1)
+        const overlapY = Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1)
+        if (overlapX > EPS && overlapY > EPS) {
+          issues.push(`panels overlap: ${String(a.id)} and ${String(b.id)}`)
+        }
+      }
+    }
+  })
 
   // Partition check by vertical bands
   validateBandPartition(panels, issues)
@@ -194,13 +214,16 @@ function distancePanels(a: Panel[], b: Panel[]): number {
   return d
 }
 
-export function applyReferenceFallback(page: { panels: Panel[] }): Panel[] {
+export function applyReferenceFallback(page: { panels: Panel[] }): {
+  panels: Panel[]
+  meta?: { referencePage?: number; score?: number }
+} {
   const refs = loadReferencePages()
 
   // Add detailed logging for debugging
   if (refs.length === 0) {
     console.warn('applyReferenceFallback: No reference pages available, returning original panels')
-    return page.panels
+    return { panels: page.panels }
   }
 
   const candidates = refs.filter((rp) => Array.isArray(rp.panels) && rp.panels.length >= 1)
@@ -208,7 +231,7 @@ export function applyReferenceFallback(page: { panels: Panel[] }): Panel[] {
     console.warn(
       'applyReferenceFallback: No valid reference candidates found, returning original panels',
     )
-    return page.panels
+    return { panels: page.panels }
   }
 
   // Log which panels we're trying to fix
@@ -239,7 +262,7 @@ export function applyReferenceFallback(page: { panels: Panel[] }): Panel[] {
     console.error(
       'applyReferenceFallback: Failed to find any valid reference, returning original panels',
     )
-    return page.panels
+    return { panels: page.panels }
   }
 
   console.log(
@@ -251,15 +274,21 @@ export function applyReferenceFallback(page: { panels: Panel[] }): Panel[] {
     console.log(
       `applyReferenceFallback: Successfully mapped ${page.panels.length} panels to ${best.panels.length} template panels`,
     )
-    return mapped
+    return {
+      panels: mapped,
+      meta: { referencePage: best.page_number, score: bestScore },
+    }
   } catch (error) {
     console.error('applyReferenceFallback: Error during panel mapping:', error)
     // Return original panels if mapping fails
-    return page.panels
+    return { panels: page.panels }
   }
 }
 
-export function normalizeAndValidateLayout(layout: MangaLayout): {
+export function normalizeAndValidateLayout(
+  layout: MangaLayout,
+  options?: { allowFallback?: boolean; verboseIssues?: boolean },
+): {
   layout: MangaLayout
   pageIssues: Record<number, Issue[]>
 } {
@@ -281,16 +310,35 @@ export function normalizeAndValidateLayout(layout: MangaLayout): {
     })
     const v1 = validatePanels(clampedPanels)
     if (!v1.valid) {
-      const mapped = applyReferenceFallback({ panels: clampedPanels })
-      // Validate mapped; if still invalid, keep mapped anyway and record issues
+      const allowFallback = options?.allowFallback !== false // default allow
+      const verbose = options?.verboseIssues === true
+      if (!allowFallback) {
+        // フォールバック禁止: 問題を記録してそのまま返す
+        pageIssues[p.page_number] = v1.issues
+        return { page_number: p.page_number, panels: clampedPanels }
+      }
+      const result = applyReferenceFallback({ panels: clampedPanels })
+      const mapped = result.panels
       const v2 = validatePanels(mapped)
-      // 最終状態のみを報告する: フォールバックで有効になった場合は空配列、
-      // 依然として無効な場合は最終状態の問題のみを記録する。
       if (!v2.valid) {
-        pageIssues[p.page_number] = v2.issues
+        // 依然として無効。最終状態の問題を提示（verbose時はフォールバック情報も）
+        pageIssues[p.page_number] = verbose
+          ? [
+              `fallback_applied_but_invalid${result.meta?.referencePage ? ` (reference_page=${result.meta.referencePage})` : ''}`,
+              ...v2.issues,
+            ]
+          : v2.issues
       } else {
-        // 正規化・修正が適用されて有効になったページを示すために空配列を入れる
-        pageIssues[p.page_number] = []
+        // 有効化された場合: 既定では空配列（テスト互換）。verbose時のみメタを残す。
+        if (verbose) {
+          const meta = result.meta
+          const refInfo = meta?.referencePage
+            ? `reference_page=${meta.referencePage}`
+            : 'reference_page=unknown'
+          pageIssues[p.page_number] = [`fallback_applied: ${refInfo}`]
+        } else {
+          pageIssues[p.page_number] = []
+        }
       }
       return { page_number: p.page_number, panels: mapped }
     }
