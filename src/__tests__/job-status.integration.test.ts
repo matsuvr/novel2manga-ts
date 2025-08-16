@@ -39,21 +39,30 @@ let mockJobDbPort: Mocked<MockJobPort>;
 beforeEach(() => {
   vi.clearAllMocks();
 
-  // Mock database service
-  mockDatabaseService = {
-    getEpisodesByJobId: vi.fn(),
-    getRenderStatusByEpisode: vi.fn(),
-  } as unknown as Mocked<MockDb>;
+  // Mock database service (typed via vi.mocked to avoid unsafe casts)
+  mockDatabaseService = vi.mocked(
+    {
+      getEpisodesByJobId: vi.fn(),
+      getRenderStatusByEpisode: vi.fn(),
+    },
+    true
+  ) as Mocked<MockDb>;
 
   // Mock layout storage
-  mockLayoutStorage = {
-    getEpisodeLayoutProgress: vi.fn(),
-  } as unknown as Mocked<MockLayout>;
+  mockLayoutStorage = vi.mocked(
+    {
+      getEpisodeLayoutProgress: vi.fn(),
+    },
+    true
+  ) as Mocked<MockLayout>;
 
   // Mock job database port
-  mockJobDbPort = {
-    getJobWithProgress: vi.fn(),
-  } as unknown as Mocked<MockJobPort>;
+  mockJobDbPort = vi.mocked(
+    {
+      getJobWithProgress: vi.fn(),
+    },
+    true
+  ) as Mocked<MockJobPort>;
 });
 
 describe("JobProgressService Integration Tests", () => {
