@@ -232,7 +232,11 @@ export class MangaPageRenderer {
 
   /**
    * ページ内の全Dialogueについて縦書き画像を取得し、CanvasRendererにアセットを設定
+   *
    * フォールバックは実装しない（失敗時はエラーで停止）
+   * Rationale: 本システムは一気通貫の分析サービスであり、フォールバック実装により
+   * 正常な分析結果が得られないことは重要な欠陥である（CLAUDE.md参照）。
+   * エラーは詳細なメッセージと共に明示し、処理をストップする設計とする。
    */
   private async prepareAndAttachDialogueAssets(layout: MangaLayout): Promise<void> {
     const feature = appConfig.rendering.verticalText
@@ -266,11 +270,8 @@ export class MangaPageRenderer {
             maxCharsPerLine: feature.defaults.maxCharsPerLine,
           })
           // node-canvas Image 作成
-          const anyCanvas = CanvasRenderer as unknown as {
-            createImageFromBuffer?: (b: Buffer) => { image: unknown; width: number; height: number }
-          }
-          if (typeof anyCanvas.createImageFromBuffer === 'function') {
-            const created = anyCanvas.createImageFromBuffer(pngBuffer)
+          if (typeof CanvasRenderer.createImageFromBuffer === 'function') {
+            const created = CanvasRenderer.createImageFromBuffer(pngBuffer)
             imageObj = created.image
             w = Math.max(1, created.width || meta.width)
             h = Math.max(1, created.height || meta.height)
@@ -284,14 +285,7 @@ export class MangaPageRenderer {
       }
     }
 
-    const cr = this.canvasRenderer as unknown as {
-      setDialogueAssets?: (
-        a: Record<string, { image: unknown; width: number; height: number }>,
-      ) => void
-    }
-    if (typeof cr.setDialogueAssets === 'function') {
-      cr.setDialogueAssets(assets)
-    }
+    this.canvasRenderer.setDialogueAssets(assets)
   }
 
   /**
