@@ -118,6 +118,27 @@ vi.mock("@/agents/layout-generator", () => ({
   })
 }));
 
+// レイアウト生成サービス全体をモック
+vi.mock("@/services/application/layout-generation", () => ({
+  generateEpisodeLayout: vi.fn().mockResolvedValue({
+    success: true,
+    layout: {
+      pages: [
+        {
+          page_number: 1,
+          panels: [
+            {
+              position: { x: 0, y: 0 },
+              size: { width: 1, height: 1 },
+            },
+          ],
+        },
+      ],
+    },
+    layoutPath: "test-layout.yaml",
+  }),
+}));
+
 // RepositoryFactory のモック（テストDBに委譲）
 let __testDbForFactory: TestDatabase | undefined;
 vi.mock("@/repositories/factory", () => {
