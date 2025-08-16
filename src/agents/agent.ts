@@ -259,58 +259,6 @@ export class Agent {
     schema: T,
     options?: GenerateOptions,
   ): Promise<z.infer<T>> {
-    // Test-mode short-circuit to avoid real LLM calls. Allowed for LLM only.
-    if (process.env.NODE_ENV === 'test') {
-      // In integration tests, never call real LLM for layout steps.
-      const step = options?.stepName
-      if (step === 'layout' || step === 'layout-plan') {
-        const stub = {
-          pages: [
-            { pageNumber: 1, panelCount: 1 },
-            { pageNumber: 2, panelCount: 6 },
-          ],
-        } as unknown as z.infer<T>
-        return stub
-      }
-      // Also short-circuit page-split planning
-      if (step === 'page-split') {
-        const episodeNumber = options?.episodeNumber ?? 1
-        const stubPlan = {
-          episodeNumber,
-          startPage: 1,
-          plannedPages: [
-            {
-              pageNumber: 1,
-              summary: 'impact',
-              importance: 9,
-              segments: [
-                {
-                  contentHint: 'impact',
-                  importance: 9,
-                  source: { chunkIndex: 0, startOffset: 0, endOffset: 10 },
-                },
-              ],
-            },
-            {
-              pageNumber: 2,
-              summary: 'dialogue',
-              importance: 3,
-              segments: [
-                {
-                  contentHint: 'talk',
-                  importance: 3,
-                  source: { chunkIndex: 0, startOffset: 10, endOffset: 20 },
-                },
-              ],
-            },
-          ],
-          mayAdjustPreviousPages: false,
-          remainingPagesEstimate: 0,
-        } as unknown as z.infer<T>
-        return stubPlan
-      }
-    }
-
     const maxRetries = options?.maxRetries ?? 0
 
     // Add system prompt as first message
