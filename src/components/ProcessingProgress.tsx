@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useCallback, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 interface ProcessStep {
   id: string
@@ -16,6 +16,12 @@ interface ProcessingProgressProps {
   onComplete?: () => void
   modeHint?: string // テスト/デモなどの実行モード表示
   isDemoMode?: boolean // デモ/テストで分析をスキップする場合
+  /**
+   * 現在処理中エピソードに付与する進捗配点（0.0〜1.0）。
+   * 例: 0.5 -> 処理中エピソードを50%完了として扱う。
+   * 指定されない場合はデフォルト値を使用。
+   */
+  currentEpisodeProgressWeight?: number
 }
 
 interface JobData {
@@ -36,7 +42,19 @@ interface JobData {
     renderedPages?: number
     totalPages?: number
     progress?: {
-      perEpisodePages?: Record<string, { planned: number; rendered: number; total?: number }>
+      perEpisodePages?: Record<
+        string,
+        {
+          planned: number
+          rendered: number
+          total?: number
+          validation?: {
+            normalizedPages: number[]
+            pagesWithIssueCounts: Record<number, number> | Record<string, number>
+            issuesCount: number
+          }
+        }
+      >
     }
   }
 }
@@ -48,9 +66,27 @@ interface LogEntry {
   data?: unknown
 }
 
-// Progress weight for the current in-flight episode during layout
-// DOCUMENT: Represents partial completion credit while an episode is being laid out.
-const CURRENT_EPISODE_PROGRESS_WEIGHT = 0.5 as const
+// CONFIGURATION: Progress weight for the current in-flight episode during layout
+// This value (0.5) represents the partial completion credit given to an episode
+// that is currently being processed. It helps provide more accurate progress
+// feedback by giving 50% credit for the episode being worked on, preventing
+// the progress bar from appearing stalled during long episode processing.
+// Range: 0.0 (no credit) to 1.0 (full credit for in-progress episodes)
+const DEFAULT_CURRENT_EPISODE_PROGRESS_WEIGHT = 0.5 as const
+
+// CONFIGURATION: Maximum number of log entries to keep in memory
+// Keeps the last 50 log entries to prevent memory bloat while maintaining
+// sufficient history for debugging and user feedback
+const MAX_LOG_ENTRIES = 50 as const
+
+// CONFIGURATION: Polling intervals for job status updates
+// These values balance responsiveness with server load
+const POLLING_INTERVAL_MS: number = 2000 // 2 seconds between status checks
+const INITIAL_POLLING_DELAY_MS: number = 1000 // 1 second delay before first poll
+
+// CONFIGURATION: UI layout constants
+const MAX_VISIBLE_LOG_HEIGHT = 60 as const // vh units for log container height
+const DEFAULT_EPISODE_NUMBER = 1 as const // Fallback episode number when parsing fails
 
 const INITIAL_STEPS: ProcessStep[] = [
   {
@@ -91,7 +127,13 @@ const INITIAL_STEPS: ProcessStep[] = [
   },
 ]
 
-function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: ProcessingProgressProps) {
+function ProcessingProgress({
+  jobId,
+  onComplete,
+  modeHint,
+  isDemoMode,
+  currentEpisodeProgressWeight,
+}: ProcessingProgressProps) {
   const [steps, setSteps] = useState<ProcessStep[]>(() =>
     INITIAL_STEPS.map((step) => ({ ...step })),
   )
@@ -100,11 +142,72 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [showLogs, setShowLogs] = useState(process.env.NODE_ENV === 'development')
   const [lastJobData, setLastJobData] = useState<string>('')
-  const [runtimeHints, setRuntimeHints] = useState<Record<string, string>>({})
+  type HintStep = 'split' | 'analyze' | 'layout' | 'render'
+  const [runtimeHints, setRuntimeHints] = useState<Partial<Record<HintStep, string>>>({})
   const [perEpisodePages, setPerEpisodePages] = useState<
-    Record<number, { planned: number; rendered: number; total?: number }>
+    Record<
+      number,
+      {
+        planned: number
+        rendered: number
+        total?: number
+        validation?: {
+          normalizedPages: number[]
+          pagesWithIssueCounts: Record<number, number>
+          issuesCount: number
+        }
+      }
+    >
   >({})
   const [currentLayoutEpisode, setCurrentLayoutEpisode] = useState<number | null>(null)
+
+  // Ref to track component mount state for proper cleanup
+  const isMountedRef = useRef(true)
+  // AbortController for in-flight fetch to avoid leaks on unmount/reschedule
+  const pollAbortRef = useRef<AbortController | null>(null)
+  // Pause polling when tab is hidden
+  const isPausedRef = useRef<boolean>(false)
+  // Recursive timeout driver for polling
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 進捗重み（クランプ）
+  const inProgressWeight = useMemo(() => {
+    const w =
+      typeof currentEpisodeProgressWeight === 'number'
+        ? currentEpisodeProgressWeight
+        : DEFAULT_CURRENT_EPISODE_PROGRESS_WEIGHT
+    if (Number.isNaN(w)) return DEFAULT_CURRENT_EPISODE_PROGRESS_WEIGHT
+    return Math.max(0, Math.min(1, w))
+  }, [currentEpisodeProgressWeight])
+
+  // Type guard for episode page data to ensure type safety
+  const isValidEpisodePageData = useCallback(
+    (
+      data: unknown,
+    ): data is {
+      planned: number
+      rendered: number
+      total?: number
+      validation?: {
+        normalizedPages: number[]
+        pagesWithIssueCounts: Record<number, number> | Record<string, number>
+        issuesCount: number
+      }
+    } => {
+      if (typeof data !== 'object' || data === null) return false
+      const obj = data as Record<string, unknown>
+      return (
+        typeof obj.planned === 'number' &&
+        typeof obj.rendered === 'number' &&
+        (obj.total === undefined || typeof obj.total === 'number') &&
+        (obj.validation === undefined ||
+          (typeof obj.validation === 'object' &&
+            obj.validation !== null &&
+            Array.isArray((obj.validation as Record<string, unknown>).normalizedPages)))
+      )
+    },
+    [],
+  )
 
   // ステップ名から詳細メッセージを生成
   const describeStep = useCallback((stepId: string): string => {
@@ -142,7 +245,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
         if (lastLog && lastLog.message === message && lastLog.level === level) {
           return prev
         }
-        return [...prev.slice(-49), logEntry]
+        return [...prev.slice(-MAX_LOG_ENTRIES + 1), logEntry]
       })
     },
     [],
@@ -182,14 +285,27 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
 
       // per-episode page counts (planned/rendered/total)
       if (data.job.progress?.perEpisodePages) {
-        const normalized: Record<number, { planned: number; rendered: number; total?: number }> = {}
+        const normalized: Record<
+          number,
+          {
+            planned: number
+            rendered: number
+            total?: number
+            validation?: {
+              normalizedPages: number[]
+              pagesWithIssueCounts: Record<number, number>
+              issuesCount: number
+            }
+          }
+        > = {}
         for (const [k, v] of Object.entries(data.job.progress.perEpisodePages)) {
-          const n = Number(k)
-          if (!Number.isNaN(n) && v && typeof v.planned === 'number') {
-            normalized[n] = {
+          const episodeNumber = Number(k)
+          if (!Number.isNaN(episodeNumber) && isValidEpisodePageData(v)) {
+            normalized[episodeNumber] = {
               planned: v.planned,
-              rendered: v.rendered ?? 0,
+              rendered: v.rendered,
               total: v.total,
+              validation: v.validation,
             }
           }
         }
@@ -302,14 +418,12 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
               const currentEpisodeMatch = data.job.currentStep?.match(/layout_episode_(\d+)/)
               const currentEpisodeNum = currentEpisodeMatch
                 ? parseInt(currentEpisodeMatch[1], 10)
-                : 1
+                : DEFAULT_EPISODE_NUMBER
 
               // 進捗計算：完了したエピソード数 + 現在のエピソードの進捗（0.5とする）
               const processedWithCurrent =
                 data.job.processedEpisodes +
-                (currentEpisodeNum > data.job.processedEpisodes
-                  ? CURRENT_EPISODE_PROGRESS_WEIGHT
-                  : 0)
+                (currentEpisodeNum > data.job.processedEpisodes ? inProgressWeight : 0)
               updatedSteps[4].progress = Math.round(
                 (processedWithCurrent / data.job.totalEpisodes) * 100,
               )
@@ -409,7 +523,15 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
         ? 'stop'
         : 'continue'
     },
-    [lastJobData, addLog, onComplete, describeStep, isDemoMode],
+    [
+      lastJobData,
+      addLog,
+      onComplete,
+      describeStep,
+      isDemoMode,
+      isValidEpisodePageData,
+      inProgressWeight,
+    ],
   )
 
   useEffect(() => {
@@ -422,26 +544,40 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
     setOverallProgress(Math.round((1 / INITIAL_STEPS.length) * 100))
     addLog('info', `処理を開始しました。Job ID: ${jobId}`)
 
-    let pollInterval: NodeJS.Timeout
-    let isPolling = true
+    // Visibility: pause when hidden
+    const onVisibility = () => {
+      isPausedRef.current = document.hidden
+    }
+    document.addEventListener('visibilitychange', onVisibility)
 
-    const poll = async () => {
-      if (!isPolling) return
+    const scheduleNext = (delay: number) => {
+      if (!isMountedRef.current) return
+      if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current)
+      pollTimeoutRef.current = setTimeout(runOnce, delay)
+    }
 
+    const runOnce = async () => {
+      if (!isMountedRef.current) return
+      if (isPausedRef.current) {
+        scheduleNext(POLLING_INTERVAL_MS * 2)
+        return
+      }
+      if (pollAbortRef.current) pollAbortRef.current.abort()
+      const controller = new AbortController()
+      pollAbortRef.current = controller
       try {
-        const response = await fetch(`/api/jobs/${jobId}/status`)
+        const response = await fetch(`/api/jobs/${jobId}/status`, {
+          signal: controller.signal,
+        })
         if (!response.ok) {
           throw new Error(`API呼び出しに失敗: ${response.status} ${response.statusText}`)
         }
-
         const data: JobData = await response.json()
-        const result = updateStepsFromJobData(data)
+        if (!isMountedRef.current) return
 
+        const result = updateStepsFromJobData(data)
         if (result === 'stop') {
-          isPolling = false
-          clearInterval(pollInterval)
           addLog('info', 'ポーリングを停止しました')
-          // 完了メッセージとダウンロード導線
           try {
             const uiCompleted =
               data.job.status === 'completed' ||
@@ -457,28 +593,41 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
               `完了処理メッセージの処理中にエラー: ${e instanceof Error ? e.message : String(e)}`,
             )
           }
-        } else if (result === null) {
-          // データに変化がない場合はログ出力しない
+          return
         }
+
+        // Adaptive interval based on step
+        const step = data.job.currentStep || ''
+        let next = POLLING_INTERVAL_MS
+        if (step.startsWith('layout') || step.startsWith('analyze'))
+          next = POLLING_INTERVAL_MS * 1.5
+        if (step.startsWith('render')) next = Math.max(1000, POLLING_INTERVAL_MS * 0.75)
+        if (document.hidden) next = POLLING_INTERVAL_MS * 2
+        scheduleNext(next)
       } catch (error) {
-        addLog(
-          'error',
-          `Job状態の取得に失敗: ${error instanceof Error ? error.message : String(error)}`,
-        )
-        console.error('Error fetching job status:', error)
+        if ((error as Error)?.name === 'AbortError') {
+          return
+        }
+        if (isMountedRef.current) {
+          addLog(
+            'error',
+            `Job状態の取得に失敗: ${error instanceof Error ? error.message : String(error)}`,
+          )
+        }
+        // Back off on error
+        scheduleNext(POLLING_INTERVAL_MS * 2)
       }
     }
 
-    // 最初のAPIコールを少し遅延させる
-    const initialTimeout = setTimeout(() => {
-      poll()
-      pollInterval = setInterval(poll, 1500) // 1.5秒間隔に短縮
-    }, 1000)
+    // kick-off with initial delay
+    const startTimer = setTimeout(() => scheduleNext(0), INITIAL_POLLING_DELAY_MS)
 
     return () => {
-      isPolling = false
-      clearTimeout(initialTimeout)
-      if (pollInterval) clearInterval(pollInterval)
+      isMountedRef.current = false
+      document.removeEventListener('visibilitychange', onVisibility)
+      clearTimeout(startTimer)
+      if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current)
+      if (pollAbortRef.current) pollAbortRef.current.abort()
     }
   }, [jobId, addLog, updateStepsFromJobData])
 
@@ -493,6 +642,42 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
     setOverallProgress(Math.round((0 / INITIAL_STEPS.length) * 100))
     addLog('info', '準備中: アップロードを開始しています')
   }, [jobId, addLog])
+
+  // Memoize heavy computation for episode progress cards
+  const episodeProgressCards = useMemo(() => {
+    return Object.entries(perEpisodePages)
+      .map(([epStr, v]) => {
+        const ep = Number(epStr)
+        const planned = v.planned ?? 0
+        const rendered = v.rendered ?? 0
+        const total = v.total
+        const normalizedPages = v.validation?.normalizedPages || []
+        const normalizedCount = normalizedPages.length
+        const isCompleted =
+          typeof total === 'number' && total > 0 && planned >= total && rendered >= total
+        const isCurrent = currentLayoutEpisode === ep
+        const isInProgress = !isCompleted && planned > 0
+        return {
+          ep,
+          planned,
+          rendered,
+          total,
+          normalizedCount,
+          normalizedPages,
+          isCompleted,
+          isCurrent,
+          isInProgress,
+        }
+      })
+      .sort((a, b) => {
+        const score = (x: { isCurrent: boolean; isInProgress: boolean; isCompleted: boolean }) =>
+          x.isCurrent ? 0 : x.isInProgress ? 1 : x.isCompleted ? 3 : 2
+        const sa = score(a)
+        const sb = score(b)
+        if (sa !== sb) return sa - sb
+        return a.ep - b.ep
+      })
+  }, [perEpisodePages, currentLayoutEpisode])
 
   return (
     <div className="space-y-6">
@@ -591,9 +776,15 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
                   {step.name}
                 </h4>
                 <p className="text-sm text-gray-500 mt-1">{step.description}</p>
-                {step.status === 'processing' && runtimeHints[step.id] && (
-                  <p className="text-sm text-blue-600 mt-1">{runtimeHints[step.id]}</p>
-                )}
+                {step.status === 'processing' &&
+                  (() => {
+                    const isHintStep = (s: string): s is HintStep =>
+                      s === 'split' || s === 'analyze' || s === 'layout' || s === 'render'
+                    if (isHintStep(step.id) && runtimeHints[step.id]) {
+                      return <p className="text-sm text-blue-600 mt-1">{runtimeHints[step.id]}</p>
+                    }
+                    return null
+                  })()}
 
                 {step.status === 'processing' && step.progress !== undefined && (
                   <div className="mt-2">
@@ -627,38 +818,17 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
         <div className="apple-card p-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-2">エピソード進捗</h4>
           <div className="flex flex-wrap gap-2">
-            {Object.entries(perEpisodePages)
-              .map(([epStr, v]) => {
-                const ep = Number(epStr)
-                const planned = v.planned ?? 0
-                const rendered = v.rendered ?? 0
-                const total = v.total
-                const isCompleted =
-                  typeof total === 'number' && total > 0 && planned >= total && rendered >= total
-                const isCurrent = currentLayoutEpisode === ep
-                const isInProgress = !isCompleted && planned > 0
-                return {
-                  ep,
-                  planned,
-                  rendered,
-                  total,
-                  isCompleted,
-                  isCurrent,
-                  isInProgress,
-                }
-              })
-              .sort((a, b) => {
-                const score = (x: {
-                  isCurrent: boolean
-                  isInProgress: boolean
-                  isCompleted: boolean
-                }) => (x.isCurrent ? 0 : x.isInProgress ? 1 : x.isCompleted ? 3 : 2)
-                const sa = score(a)
-                const sb = score(b)
-                if (sa !== sb) return sa - sb
-                return a.ep - b.ep
-              })
-              .map(({ ep, planned, rendered, total, isCompleted, isCurrent }) => {
+            {episodeProgressCards.map(
+              ({
+                ep,
+                planned,
+                rendered,
+                total,
+                normalizedCount,
+                normalizedPages,
+                isCompleted,
+                isCurrent,
+              }) => {
                 const plannedPct =
                   typeof total === 'number' && total > 0
                     ? Math.min(100, Math.round((planned / total) * 100))
@@ -680,7 +850,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
                     }
                     title={`EP${ep}: planned=${planned}, rendered=${rendered}${
                       typeof total === 'number' ? `, total=${total}` : ''
-                    }`}
+                    }${normalizedCount > 0 ? `, normalized=${normalizedCount} [pages: ${normalizedPages.join(',')}]` : ''}`}
                   >
                     <div className="flex items-center gap-2">
                       <span
@@ -692,6 +862,12 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
                         {planned}
                         {typeof total === 'number' ? `/${total}` : ''} 計画, {rendered} 描画
                       </span>
+                      {normalizedCount > 0 && (
+                        <span className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200 text-[10px]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                          Normalized {normalizedCount}
+                        </span>
+                      )}
                     </div>
                     {typeof total === 'number' && total > 0 && (
                       <div className="mt-1 h-1.5 w-full bg-gray-200 rounded-full relative overflow-hidden">
@@ -709,7 +885,8 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
                     )}
                   </div>
                 )
-              })}
+              },
+            )}
           </div>
           <div className="mt-3 flex items-center gap-4 text-[11px] text-gray-600">
             <div className="flex items-center gap-1">
@@ -720,6 +897,10 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
               <span className="inline-block w-3 h-2 rounded bg-green-500" />
               <span>描画済みページ</span>
             </div>
+            <div className="flex items-center gap-1">
+              <span className="inline-block w-3 h-2 rounded bg-yellow-500" />
+              <span>Normalized（自動補正/参照適用）</span>
+            </div>
           </div>
         </div>
       )}
@@ -729,9 +910,12 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
         <div className="apple-card p-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
             <span className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
-            開発ログ ({logs.length}/50)
+            開発ログ ({logs.length}/{MAX_LOG_ENTRIES})
           </h4>
-          <div className="space-y-1 max-h-60 overflow-y-auto text-xs">
+          <div
+            className="space-y-1 overflow-y-auto text-xs"
+            style={{ maxHeight: `${MAX_VISIBLE_LOG_HEIGHT}vh` }}
+          >
             {logs.length === 0 ? (
               <p className="text-gray-500 italic">ログはまだありません</p>
             ) : (
