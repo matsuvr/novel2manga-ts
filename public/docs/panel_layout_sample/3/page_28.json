@@ -1,0 +1,25 @@
+{
+  "page_28": {
+    "panels_count": 3,
+    "panels": [
+      {
+        "id": 1,
+        "bbox": [0.05, 0.08, 0.9, 0.23],
+        "content": "PLACEHOLDER",
+        "dialogue": "PLACEHOLDER"
+      },
+      {
+        "id": 2,
+        "bbox": [0.05, 0.34, 0.9, 0.15],
+        "content": "PLACEHOLDER",
+        "dialogue": "PLACEHOLDER"
+      },
+      {
+        "id": 3,
+        "bbox": [0.05, 0.51, 0.9, 0.23],
+        "content": "PLACEHOLDER",
+        "dialogue": "PLACEHOLDER"
+      }
+    ]
+  }
+}
