@@ -199,7 +199,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
         let completedCount = 0
 
         // Map job status to steps
-        if (data.job.status === 'completed') {
+        if (data.job.status === 'completed' || data.job.currentStep === 'complete') {
           updatedSteps.forEach((step) => {
             step.status = 'completed'
             completedCount++
@@ -287,9 +287,18 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
             data.job.currentStep?.startsWith('layout_')
           ) {
             updatedSteps[4].status = 'processing'
+            // エピソード単位でのレイアウト進捗を表示
             if (data.job.totalEpisodes && data.job.processedEpisodes !== undefined) {
+              // 現在処理中のエピソード番号を取得
+              const currentEpisodeMatch = data.job.currentStep?.match(/layout_episode_(\d+)/)
+              const currentEpisodeNum = currentEpisodeMatch ? parseInt(currentEpisodeMatch[1]) : 1
+
+              // 進捗計算：完了したエピソード数 + 現在のエピソードの進捗（0.5とする）
+              const processedWithCurrent =
+                data.job.processedEpisodes +
+                (currentEpisodeNum > data.job.processedEpisodes ? 0.5 : 0)
               updatedSteps[4].progress = Math.round(
-                (data.job.processedEpisodes / data.job.totalEpisodes) * 100,
+                (processedWithCurrent / data.job.totalEpisodes) * 100,
               )
             }
             currentIndex = 4
@@ -359,6 +368,13 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
           setCurrentLayoutEpisode(ep)
           const totalEp = data.job.totalEpisodes || 0
           hints.layout = `現在: エピソード ${Math.min(ep, totalEp || ep)} / ${totalEp || '?'} をレイアウト中`
+        } else if (
+          (stepId === 'layout' || stepId.startsWith('layout_')) &&
+          !data.job.layoutCompleted
+        ) {
+          const processedEp = data.job.processedEpisodes || 0
+          const totalEp = data.job.totalEpisodes || 0
+          hints.layout = `現在: エピソード ${processedEp + 1} / ${totalEp || '?'} をレイアウト中`
         }
         if ((stepId === 'render' || stepId.startsWith('render_')) && !data.job.renderCompleted) {
           const done = (data.job.renderedPages ?? 0) + 1
@@ -374,7 +390,11 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
         return updatedSteps
       })
 
-      return data.job.status === 'completed' || data.job.status === 'failed' ? 'stop' : 'continue'
+      return data.job.status === 'completed' ||
+        data.job.status === 'failed' ||
+        data.job.currentStep === 'complete'
+        ? 'stop'
+        : 'continue'
     },
     [lastJobData, addLog, onComplete, describeStep, isDemoMode],
   )
@@ -410,7 +430,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
           addLog('info', 'ポーリングを停止しました')
           // 完了メッセージとダウンロード導線
           try {
-            if (data.job.status === 'completed') {
+            if (data.job.status === 'completed' || data.job.currentStep === 'complete') {
               addLog('info', '処理が完了しました。上部のエクスポートからダウンロードできます。')
             }
           } catch (e) {
