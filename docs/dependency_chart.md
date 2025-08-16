@@ -1,6 +1,9 @@
 # Dependency Chart
 
 ````mermaid
+# Dependency Chart
+
+```mermaid
 flowchart LR
 
 subgraph n0["src"]
@@ -12,12 +15,12 @@ n9["chunk-analyzer.ts"]
 ```mermaid
 flowchart LR
 
-subgraph n0["src"]
-subgraph n1["agents"]
-n2["agent.ts"]
-n7["errors.ts"]
-n8["base-agent.ts"]
-n9["chunk-analyzer.ts"]
+subgraph nn0["src"]
+subgraph nn1["agents"]
+nn2["agent.ts"]
+nn7["errors.ts"]
+nn8["base-agent.ts"]
+nn9["chunk-analyzer.ts"]
 D["chunk-bundle-analyzer.ts"]
 E["layout-generator.ts"]
 subgraph O["layout"]
@@ -34,48 +37,48 @@ subgraph n11["api"]
 subgraph n12["abtest"]
 subgraph n13["analyze"]
 n14["route.ts"]
-subgraph n10["app"]
-subgraph n11["api"]
-subgraph n12["abtest"]
-subgraph n13["analyze"]
-n14["route.ts"]
+subgraph nn10["app"]
+subgraph nn11["api"]
+subgraph nn12["abtest"]
+subgraph nn13["analyze"]
+nn14["route.ts"]
 end
 end
+subgraph nn15["analyze"]
+subgraph nn16["chunk"]
+nn17["route.ts"]
 subgraph n15["analyze"]
 subgraph n16["chunk"]
 n17["route.ts"]
-subgraph n15["analyze"]
-subgraph n16["chunk"]
-n17["route.ts"]
 end
-subgraph n1C["narrative-arc"]
-subgraph n1D["full"]
-n1E["route.ts"]
+subgraph nn1C["narrative-arc"]
+subgraph nn1D["full"]
+nn1E["route.ts"]
 subgraph n1C["narrative-arc"]
 subgraph n1D["full"]
 n1E["route.ts"]
 end
 n1N["route.ts"]
-n1N["route.ts"]
+nn1N["route.ts"]
 end
 n1T["route.ts"]
-n1T["route.ts"]
+nn1T["route.ts"]
 end
-subgraph n1X["docs"]
+subgraph nn1X["docs"]
 n1Y["route.ts"]
 subgraph n1X["docs"]
-n1Y["route.ts"]
+nn1Y["route.ts"]
 end
-subgraph n22["export"]
-n23["route.ts"]
-subgraph n25["zip"]
-subgraph n26["[jobId]"]
+subgraph nn22["export"]
+nn23["route.ts"]
+subgraph nn25["zip"]
+subgraph nn26["[jobId]"]
 n27["route.ts"]
 subgraph n22["export"]
 n23["route.ts"]
 subgraph n25["zip"]
 subgraph n26["[jobId]"]
-n27["route.ts"]
+nn27["route.ts"]
 end
 end
 end
