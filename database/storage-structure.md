@@ -80,6 +80,13 @@ private async safeOperation<T>(
 - **テストカバレッジ**: サービス統合レベルでの包括的テスト
 - **ドキュメント**: 依存関係図の修復、現行アーキテクチャの反映
 
+### 2025-08-16 付記: 進捗表現の一貫化
+
+- ストレージ構造の変更はありません。
+- API レスポンスの `currentStep` は完了時に必ず `'complete'` を返すよう単純化。
+- フロントエンドは `renderCompleted===true` も完了条件として扱います。
+- UI 側で進行中エピソードの部分加点は `CURRENT_EPISODE_PROGRESS_WEIGHT=0.5` 定数化。
+
 - ID: 英数字 + `_` `-` のみ許可
 - `..`, 先頭 `/`, `%00` (null byte) / URL エンコードされた文字を拒否
 - 拡張子 (export format 等): 英数字のみ
