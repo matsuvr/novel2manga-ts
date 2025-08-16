@@ -8,7 +8,16 @@ interface ValidationResult {
   issues: Issue[]
 }
 
-const EPS = 1e-3
+// CONFIGURATION: Tolerance for floating-point comparisons in layout validation
+// This epsilon value is used to handle floating-point precision issues when
+// comparing panel positions and sizes. A value of 1e-3 (0.001) allows for
+// minor rounding errors while still catching meaningful overlaps and gaps.
+const EPS = 1e-3 as const
+
+// CONFIGURATION: Stricter tolerance for gap/overlap detection
+// Uses 2x the base epsilon for more lenient validation of layout coverage.
+// This helps distinguish between minor floating-point errors and actual layout issues.
+const LAYOUT_TOLERANCE = 2 * EPS
 
 function clamp01(n: number): number {
   if (Number.isNaN(n)) return 0
@@ -33,36 +42,44 @@ function validateBandPartition(panels: Panel[], issues: Issue[]): void {
       (p) => p.position.y <= y0 + EPS && p.position.y + p.size.height >= y1 - EPS,
     )
     if (bandPanels.length === 0) continue
+
+    // Get panel IDs for debugging context
+    const bandPanelIds = bandPanels.map((p) => String(p.id)).join(', ')
+
     const segs = bandPanels
-      .map((p) => ({ x: clamp01(p.position.x), w: clamp01(p.size.width) }))
+      .map((p) => ({ x: clamp01(p.position.x), w: clamp01(p.size.width), id: p.id }))
       .sort((a, b) => a.x - b.x)
     // Check coverage from 0 to 1 with minimal gaps/overlaps
     let cursor = 0
     let encountered = false
     for (let j = 0; j < segs.length; j++) {
       const s = segs[j]
-      if (j === 0 && Math.abs(s.x - 0) > 2 * EPS) {
-        issues.push(`horizontal gap at y=[${y0.toFixed(2)},${y1.toFixed(2)}): starts at ${s.x}`)
-        encountered = true
-      }
-      if (s.x - cursor > 2 * EPS) {
+      if (j === 0 && Math.abs(s.x - 0) > LAYOUT_TOLERANCE) {
         issues.push(
-          `horizontal gap before segment at y=[${y0.toFixed(2)},${y1.toFixed(2)}): gap=${(s.x - cursor).toFixed(3)}`,
+          `horizontal gap at y=[${y0.toFixed(2)},${y1.toFixed(2)}): starts at ${s.x} (panels: ${bandPanelIds})`,
         )
         encountered = true
       }
-      if (cursor - s.x > 2 * EPS) {
+      if (s.x - cursor > LAYOUT_TOLERANCE) {
         issues.push(
-          `horizontal overlap at y=[${y0.toFixed(2)},${y1.toFixed(2)}): overlap=${(cursor - s.x).toFixed(3)}`,
+          `horizontal gap before segment at y=[${y0.toFixed(2)},${y1.toFixed(2)}): gap=${(s.x - cursor).toFixed(3)} (panels: ${bandPanelIds})`,
+        )
+        encountered = true
+      }
+      if (cursor - s.x > LAYOUT_TOLERANCE) {
+        issues.push(
+          `horizontal overlap at y=[${y0.toFixed(2)},${y1.toFixed(2)}): overlap=${(cursor - s.x).toFixed(3)} (affected panel: ${String(s.id)}, band panels: ${bandPanelIds})`,
         )
         encountered = true
       }
       cursor = Math.max(cursor, s.x) + s.w
     }
-    const coverageNotOne = Math.abs(cursor - 1) > 2 * EPS
+    const coverageNotOne = Math.abs(cursor - 1) > LAYOUT_TOLERANCE
     if (coverageNotOne || encountered) {
       const detail = coverageNotOne ? `sum=${cursor.toFixed(3)}` : 'gaps/overlaps present'
-      issues.push(`horizontal coverage != 1 at y=[${y0.toFixed(2)},${y1.toFixed(2)}): ${detail}`)
+      issues.push(
+        `horizontal coverage != 1 at y=[${y0.toFixed(2)},${y1.toFixed(2)}): ${detail} (panels: ${bandPanelIds})`,
+      )
     }
   }
 }
@@ -103,9 +120,10 @@ export function validatePanels(panels: Panel[]): ValidationResult {
   const active: Aug[] = []
   for (const cur of rects) {
     // Remove intervals that end before the current starts (with tolerance)
-    for (let i = active.length - 1; i >= 0; i--) {
-      if (active[i].x2 <= cur.x1 + EPS) active.splice(i, 1)
-    }
+    // Use filter instead of splice to avoid O(n²) behavior
+    const newActive = active.filter((a) => a.x2 > cur.x1 + EPS)
+    active.length = 0
+    active.push(...newActive)
     // Among active (which all have X-overlap with current), check Y-overlap
     for (const a of active) {
       const overlapX = Math.min(cur.x2, a.x2) - Math.max(cur.x1, a.x1)
@@ -178,19 +196,67 @@ function distancePanels(a: Panel[], b: Panel[]): number {
 
 export function applyReferenceFallback(page: { panels: Panel[] }): Panel[] {
   const refs = loadReferencePages()
-  if (refs.length === 0) return page.panels
+
+  // Add detailed logging for debugging
+  if (refs.length === 0) {
+    console.warn('applyReferenceFallback: No reference pages available, returning original panels')
+    return page.panels
+  }
+
   const candidates = refs.filter((rp) => Array.isArray(rp.panels) && rp.panels.length >= 1)
-  if (candidates.length === 0) return page.panels
+  if (candidates.length === 0) {
+    console.warn(
+      'applyReferenceFallback: No valid reference candidates found, returning original panels',
+    )
+    return page.panels
+  }
+
+  // Log which panels we're trying to fix
+  const panelIds = page.panels.map((p) => p.id).join(', ')
+  console.log(
+    `applyReferenceFallback: Attempting fallback for panels [${panelIds}] with ${candidates.length} reference candidates`,
+  )
+
   let best = candidates[0]
   let bestScore = Number.POSITIVE_INFINITY
+
   for (const c of candidates) {
-    const score = distancePanels(page.panels, c.panels)
-    if (score < bestScore) {
-      best = c
-      bestScore = score
+    try {
+      const score = distancePanels(page.panels, c.panels)
+      if (score < bestScore) {
+        best = c
+        bestScore = score
+      }
+    } catch (error) {
+      console.error(
+        `applyReferenceFallback: Error calculating distance for reference page ${c.page_number}:`,
+        error,
+      )
     }
   }
-  return mapPanelsToTemplate(page.panels, best.panels)
+
+  if (bestScore === Number.POSITIVE_INFINITY) {
+    console.error(
+      'applyReferenceFallback: Failed to find any valid reference, returning original panels',
+    )
+    return page.panels
+  }
+
+  console.log(
+    `applyReferenceFallback: Using reference page ${best.page_number} with score ${bestScore.toFixed(3)}`,
+  )
+
+  try {
+    const mapped = mapPanelsToTemplate(page.panels, best.panels)
+    console.log(
+      `applyReferenceFallback: Successfully mapped ${page.panels.length} panels to ${best.panels.length} template panels`,
+    )
+    return mapped
+  } catch (error) {
+    console.error('applyReferenceFallback: Error during panel mapping:', error)
+    // Return original panels if mapping fails
+    return page.panels
+  }
 }
 
 export function normalizeAndValidateLayout(layout: MangaLayout): {
