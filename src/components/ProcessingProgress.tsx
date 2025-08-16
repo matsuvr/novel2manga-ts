@@ -68,6 +68,20 @@ interface LogEntry {
 // Range: 0.0 (no credit) to 1.0 (full credit for in-progress episodes)
 const CURRENT_EPISODE_PROGRESS_WEIGHT = 0.5 as const
 
+// CONFIGURATION: Maximum number of log entries to keep in memory
+// Keeps the last 50 log entries to prevent memory bloat while maintaining
+// sufficient history for debugging and user feedback
+const MAX_LOG_ENTRIES = 50 as const
+
+// CONFIGURATION: Polling intervals for job status updates
+// These values balance responsiveness with server load
+const POLLING_INTERVAL_MS = 2000 as const // 2 seconds between status checks
+const INITIAL_POLLING_DELAY_MS = 1000 as const // 1 second delay before first poll
+
+// CONFIGURATION: UI layout constants
+const MAX_VISIBLE_LOG_HEIGHT = 60 as const // vh units for log container height
+const DEFAULT_EPISODE_NUMBER = 1 as const // Fallback episode number when parsing fails
+
 const INITIAL_STEPS: ProcessStep[] = [
   {
     id: 'upload',
@@ -202,7 +216,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
         if (lastLog && lastLog.message === message && lastLog.level === level) {
           return prev
         }
-        return [...prev.slice(-49), logEntry]
+        return [...prev.slice(-MAX_LOG_ENTRIES + 1), logEntry]
       })
     },
     [],
@@ -375,7 +389,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
               const currentEpisodeMatch = data.job.currentStep?.match(/layout_episode_(\d+)/)
               const currentEpisodeNum = currentEpisodeMatch
                 ? parseInt(currentEpisodeMatch[1], 10)
-                : 1
+                : DEFAULT_EPISODE_NUMBER
 
               // 進捗計算：完了したエピソード数 + 現在のエピソードの進捗（0.5とする）
               const processedWithCurrent =
@@ -499,9 +513,9 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
     const initialTimeout: NodeJS.Timeout = setTimeout(() => {
       if (isMountedRef.current) {
         poll()
-        pollInterval = setInterval(poll, 2000) // Increased to 2 seconds to reduce load
+        pollInterval = setInterval(poll, POLLING_INTERVAL_MS) // Increased to reduce load
       }
-    }, 1000)
+    }, INITIAL_POLLING_DELAY_MS)
 
     const poll = async () => {
       // Check if component is still mounted before proceeding
@@ -839,9 +853,12 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode }: Process
         <div className="apple-card p-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
             <span className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
-            開発ログ ({logs.length}/50)
+            開発ログ ({logs.length}/{MAX_LOG_ENTRIES})
           </h4>
-          <div className="space-y-1 max-h-60 overflow-y-auto text-xs">
+          <div
+            className="space-y-1 overflow-y-auto text-xs"
+            style={{ maxHeight: `${MAX_VISIBLE_LOG_HEIGHT}vh` }}
+          >
             {logs.length === 0 ? (
               <p className="text-gray-500 italic">ログはまだありません</p>
             ) : (

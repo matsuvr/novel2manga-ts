@@ -92,8 +92,8 @@ describe('Manga Models', () => {
         const panel: Panel = {
           id: 'panel_test',
           pageId: 'page_1',
-          position: { x: 100, y: 100 },
-          size: { width: 150, height: 200 },
+          position: { x: 0.25, y: 0.33 }, // Normalized coordinates [0,1]
+          size: { width: 0.375, height: 0.67 }, // Normalized size [0,1]
           panelType: type,
           content: {
             sceneId: 'scene_1',
@@ -108,8 +108,8 @@ describe('Manga Models', () => {
       const minimalPanel: Panel = {
         id: 'panel_2',
         pageId: 'page_1',
-        position: { x: 210, y: 0 },
-        size: { width: 190, height: 300 },
+        position: { x: 0.525, y: 0.0 }, // Normalized coordinates [0,1]
+        size: { width: 0.475, height: 1.0 }, // Normalized size [0,1]
         panelType: 'normal',
         content: {}, // all fields optional
         readingOrder: 2,
@@ -196,7 +196,7 @@ describe('Manga Models', () => {
           id: 'p1',
           pageId: 'page',
           position: { x: 0, y: 0 },
-          size: { width: 100, height: 100 },
+          size: { width: 0.25, height: 0.33 }, // Normalized size [0,1]
           panelType: 'normal',
           content: {},
           readingOrder: 0,
@@ -204,8 +204,8 @@ describe('Manga Models', () => {
         {
           id: 'p2',
           pageId: 'page',
-          position: { x: 200, y: 0 },
-          size: { width: 100, height: 100 },
+          position: { x: 0.5, y: 0.0 }, // Normalized coordinates [0,1]
+          size: { width: 0.25, height: 0.33 }, // Normalized size [0,1]
           panelType: 'normal',
           content: {},
           readingOrder: 0,
@@ -213,8 +213,8 @@ describe('Manga Models', () => {
         {
           id: 'p3',
           pageId: 'page',
-          position: { x: 0, y: 150 },
-          size: { width: 100, height: 100 },
+          position: { x: 0.0, y: 0.5 }, // Normalized coordinates [0,1]
+          size: { width: 0.25, height: 0.33 }, // Normalized size [0,1]
           panelType: 'normal',
           content: {},
           readingOrder: 0,
@@ -222,8 +222,8 @@ describe('Manga Models', () => {
         {
           id: 'p4',
           pageId: 'page',
-          position: { x: 200, y: 150 },
-          size: { width: 100, height: 100 },
+          position: { x: 0.5, y: 0.5 }, // Normalized coordinates [0,1]
+          size: { width: 0.25, height: 0.33 }, // Normalized size [0,1]
           panelType: 'normal',
           content: {},
           readingOrder: 0,
@@ -246,8 +246,8 @@ describe('Manga Models', () => {
         {
           id: 'p1',
           pageId: 'page',
-          position: { x: 0, y: 100 },
-          size: { width: 100, height: 100 },
+          position: { x: 0.0, y: 0.33 }, // Normalized coordinates [0,1]
+          size: { width: 0.25, height: 0.33 }, // Normalized size [0,1]
           panelType: 'normal',
           content: {},
           readingOrder: 0,
@@ -255,8 +255,8 @@ describe('Manga Models', () => {
         {
           id: 'p2',
           pageId: 'page',
-          position: { x: 150, y: 100 },
-          size: { width: 100, height: 100 },
+          position: { x: 0.375, y: 0.33 }, // Normalized coordinates [0,1]
+          size: { width: 0.25, height: 0.33 }, // Normalized size [0,1]
           panelType: 'normal',
           content: {},
           readingOrder: 0,
@@ -264,8 +264,8 @@ describe('Manga Models', () => {
         {
           id: 'p3',
           pageId: 'page',
-          position: { x: 300, y: 100 },
-          size: { width: 100, height: 100 },
+          position: { x: 0.75, y: 0.33 }, // Normalized coordinates [0,1]
+          size: { width: 0.25, height: 0.33 }, // Normalized size [0,1]
           panelType: 'normal',
           content: {},
           readingOrder: 0,
@@ -286,7 +286,7 @@ describe('Manga Models', () => {
           id: 'p1',
           pageId: 'page',
           position: { x: 0, y: 0 },
-          size: { width: 100, height: 100 },
+          size: { width: 0.25, height: 0.33 }, // Normalized size [0,1]
           panelType: 'normal',
           content: {},
           readingOrder: 3,
@@ -294,8 +294,8 @@ describe('Manga Models', () => {
         {
           id: 'p2',
           pageId: 'page',
-          position: { x: 200, y: 0 },
-          size: { width: 100, height: 100 },
+          position: { x: 0.5, y: 0.0 }, // Normalized coordinates [0,1]
+          size: { width: 0.25, height: 0.33 }, // Normalized size [0,1]
           panelType: 'normal',
           content: {},
           readingOrder: 1,
@@ -303,8 +303,8 @@ describe('Manga Models', () => {
         {
           id: 'p3',
           pageId: 'page',
-          position: { x: 100, y: 100 },
-          size: { width: 100, height: 100 },
+          position: { x: 0.25, y: 0.33 }, // Normalized coordinates [0,1]
+          size: { width: 0.25, height: 0.33 }, // Normalized size [0,1]
           panelType: 'normal',
           content: {},
           readingOrder: 2,
@@ -324,7 +324,7 @@ describe('Manga Models', () => {
           id: 'p1',
           pageId: 'page',
           position: { x: 0, y: 0 },
-          size: { width: 100, height: 100 },
+          size: { width: 0.25, height: 0.33 }, // Normalized size [0,1]
           panelType: 'normal',
           content: {},
           readingOrder: 0,
@@ -332,8 +332,8 @@ describe('Manga Models', () => {
         {
           id: 'p2',
           pageId: 'page',
-          position: { x: 200, y: 0 },
-          size: { width: 100, height: 100 },
+          position: { x: 0.5, y: 0.0 }, // Normalized coordinates [0,1]
+          size: { width: 0.25, height: 0.33 }, // Normalized size [0,1]
           panelType: 'normal',
           content: {},
           readingOrder: 0,
@@ -341,8 +341,8 @@ describe('Manga Models', () => {
         {
           id: 'p3',
           pageId: 'page',
-          position: { x: 100, y: 150 },
-          size: { width: 100, height: 100 },
+          position: { x: 0.25, y: 0.5 }, // Normalized coordinates [0,1]
+          size: { width: 0.25, height: 0.33 }, // Normalized size [0,1]
           panelType: 'normal',
           content: {},
           readingOrder: 0,
