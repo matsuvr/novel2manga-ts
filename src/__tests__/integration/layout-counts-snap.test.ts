@@ -127,7 +127,14 @@ describe('Layout generation: counts-only + template snap', () => {
       remainingPagesEstimate: 0,
     }
 
-    const layout = await generateMangaLayoutForPlan(episodeData, plan)
+    const layout = await generateMangaLayoutForPlan(episodeData, plan, {
+      provider: 'openai',
+      maxTokens: 1000,
+      systemPrompt: 'Test layout generation prompt',
+      readingDirection: 'right-to-left' as const,
+      visualComplexity: 0.5,
+      highlightPanelSizeMultiplier: 1.5,
+    }, { jobId: 'test-job-123' })
     expect(Array.isArray(layout.pages)).toBe(true)
     expect(layout.pages.length).toBe(2)
 
