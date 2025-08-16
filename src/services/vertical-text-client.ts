@@ -33,8 +33,10 @@ function readEnv() {
 
   try {
     return EnvSchema.parse({ url, token })
-  } catch (_e) {
-    const _missing = {
+  } catch (validationError) {
+    // Log validation error for debugging context
+    console.debug('Vertical text API validation failed:', validationError)
+    const _missingKeys = {
       url: triedUrlKeys.filter((k) => !process.env[k]).join(' | '),
       token: [...triedTokenKeys, 'API_TOKEN (fallback)'].filter((k) => !process.env[k]).join(' | '),
     }
