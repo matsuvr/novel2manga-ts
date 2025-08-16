@@ -10,6 +10,12 @@ import { getDatabaseService } from '@/services/db-factory'
 import type { EpisodeData, MangaLayout } from '@/types/panel-layout'
 import { StorageKeys } from '@/utils/storage'
 
+// CONCURRENCY: In-memory lock to prevent race conditions in layout generation
+// This map tracks active layout generation processes to prevent multiple
+// concurrent generations for the same episode, which could lead to data corruption
+// or inconsistent progress updates.
+const activeLayoutGenerations = new Map<string, Promise<GenerateLayoutResult>>()
+
 export interface LayoutGenerationConfig {
   panelsPerPage?: { min?: number; max?: number; average?: number }
   dialogueDensity?: number
@@ -31,6 +37,46 @@ export interface GenerateLayoutResult {
 }
 
 export async function generateEpisodeLayout(
+  jobId: string,
+  episodeNumber: number,
+  options: GenerateLayoutOptions = {},
+  ports: StoragePorts = getStoragePorts(),
+  logger: LoggerPort = getLogger().withContext({
+    jobId,
+    episodeNumber,
+    service: 'layout-generation',
+  }),
+): Promise<GenerateLayoutResult> {
+  // CONCURRENCY: Create unique key for this episode layout generation
+  const lockKey = `${jobId}:${episodeNumber}`
+
+  // Check if this episode is already being processed
+  const existingGeneration = activeLayoutGenerations.get(lockKey)
+  if (existingGeneration) {
+    logger.info('Layout generation already in progress, waiting for completion', { lockKey })
+    return existingGeneration
+  }
+
+  // Create and register the generation promise
+  const generationPromise = generateEpisodeLayoutInternal(
+    jobId,
+    episodeNumber,
+    options,
+    ports,
+    logger,
+  )
+  activeLayoutGenerations.set(lockKey, generationPromise)
+
+  try {
+    const result = await generationPromise
+    return result
+  } finally {
+    // Always clean up the lock when done (success or failure)
+    activeLayoutGenerations.delete(lockKey)
+  }
+}
+
+async function generateEpisodeLayoutInternal(
   jobId: string,
   episodeNumber: number,
   options: GenerateLayoutOptions = {},
@@ -323,27 +369,44 @@ export async function generateEpisodeLayout(
     const { normalizeAndValidateLayout } = await import('@/utils/layout-normalizer')
     const normalized = normalizeAndValidateLayout(layoutSnapshot)
     // Persist progress atomically (progress JSON first, then YAML snapshot)
-    const normalizedPages = Object.keys(normalized.pageIssues).map((k) => Number(k))
-    const pagesWithIssueCounts = Object.fromEntries(
-      Object.entries(normalized.pageIssues).map(([k, v]) => [Number(k), v.length]),
-    ) as Record<number, number>
-    const progress = {
-      pages: pagesCanonical,
-      lastPlannedPage,
-      updatedAt: new Date().toISOString(),
-      validation: {
-        pageIssues: normalized.pageIssues,
-        normalizedPages,
-        pagesWithIssueCounts,
-      },
+    // CONCURRENCY: Ensure both progress JSON and YAML are written atomically
+    // to prevent partial state updates that could be seen by concurrent requests
+    try {
+      const normalizedPages = Object.keys(normalized.pageIssues).map((k) => Number(k))
+      const pagesWithIssueCounts = Object.fromEntries(
+        Object.entries(normalized.pageIssues).map(([k, v]) => [Number(k), v.length]),
+      ) as Record<number, number>
+      const progress = {
+        pages: pagesCanonical,
+        lastPlannedPage,
+        updatedAt: new Date().toISOString(),
+        validation: {
+          pageIssues: normalized.pageIssues,
+          normalizedPages,
+          pagesWithIssueCounts,
+        },
+      }
+
+      // Write progress JSON first (smaller, faster), then YAML snapshot
+      // This ordering ensures progress is always available, even if YAML write fails
+      await ports.layout.putEpisodeLayoutProgress(jobId, episodeNumber, JSON.stringify(progress))
+
+      const yamlContent = yaml.dump(normalized.layout, {
+        indent: 2,
+        lineWidth: -1,
+        noRefs: true,
+      })
+      await ports.layout.putEpisodeLayout(jobId, episodeNumber, yamlContent)
+    } catch (error) {
+      logger.error('Failed to persist layout progress atomically', {
+        episodeNumber,
+        lastPlannedPage,
+        pagesCount: pagesCanonical.length,
+        error: (error as Error).message,
+      })
+      // Re-throw to trigger cleanup and prevent inconsistent state
+      throw error
     }
-    await ports.layout.putEpisodeLayoutProgress(jobId, episodeNumber, JSON.stringify(progress))
-    const yamlContent = yaml.dump(normalized.layout, {
-      indent: 2,
-      lineWidth: -1,
-      noRefs: true,
-    })
-    await ports.layout.putEpisodeLayout(jobId, episodeNumber, yamlContent)
 
     startPage = lastPlannedPage + 1
   }
@@ -379,8 +442,8 @@ function demoLayoutFromEpisode(ep: EpisodeData): MangaLayout {
         panels: [
           {
             id: 'p1',
-            position: { x: 40, y: 40 },
-            size: { width: 360, height: 220 },
+            position: { x: 0.1, y: 0.1 }, // Normalized coordinates [0,1]
+            size: { width: 0.8, height: 0.5 }, // Normalized size [0,1]
             content: '場所: 公園\n新しい挑戦',
             dialogues: [{ speaker: '太郎', text: 'やってみよう！', emotion: 'excited' }],
             sourceChunkIndex: 0,
