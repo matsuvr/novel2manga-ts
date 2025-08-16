@@ -134,19 +134,63 @@ describe('Service integration: generateEpisodeLayout (counts-only + template sna
         },
       },
       layout: {
-        async putEpisodeLayout(jobId, episodeNumber, y) {
-          writes.yaml = { key: `${jobId}/episode_${episodeNumber}.yaml`, yaml: y }
-          return writes.yaml.key
+        async putEpisodeLayout(jobOrKey, episodeNumberOrContent, yamlOrContent) {
+          // Handle both old signature and new temporary file signature
+          if (typeof episodeNumberOrContent === 'string' && yamlOrContent !== undefined) {
+            // New 3-param temporary file signature: putEpisodeLayout(tempKey, '', yamlContent)
+            const key = jobOrKey as string
+            const yaml = yamlOrContent as string
+            if (key.includes('temp_')) {
+              // Temporary file - don't track for assertion
+              return key
+            }
+            writes.yaml = { key, yaml }
+            return key
+          } else {
+            // Old signature: putEpisodeLayout(jobId, episodeNumber, yaml)
+            const jobId = jobOrKey as string
+            const episodeNumber = episodeNumberOrContent as number
+            const yaml = yamlOrContent as string
+            writes.yaml = { key: `${jobId}/episode_${episodeNumber}.yaml`, yaml }
+            return writes.yaml.key
+          }
         },
         async getEpisodeLayout() {
           return null
         },
-        async putEpisodeLayoutProgress(jobId, episodeNumber, json) {
-          writes.progress = {
-            key: `${jobId}/episode_${episodeNumber}.progress.json`,
-            json,
+        async putEpisodeLayoutProgress(jobOrKey, episodeNumberOrContent, content) {
+          // Handle both old signature and new temporary file signature
+          if (typeof episodeNumberOrContent === 'string' && content === undefined) {
+            // New temporary file signature: putEpisodeLayoutProgress(tempKey, '', json)
+            const key = jobOrKey as string
+            const json = episodeNumberOrContent
+            if (key.includes('temp_')) {
+              // Temporary file - don't track for assertion
+              return key
+            }
+            writes.progress = { key, json }
+            return key
+          } else if (typeof episodeNumberOrContent === 'string' && typeof content === 'string') {
+            // New 3-param temporary file signature: putEpisodeLayoutProgress(tempKey, '', json)
+            const key = jobOrKey as string
+            const json = content
+            if (key.includes('temp_')) {
+              // Temporary file - don't track for assertion
+              return key
+            }
+            writes.progress = { key, json }
+            return key
+          } else {
+            // Old signature: putEpisodeLayoutProgress(jobId, episodeNumber, json)
+            const jobId = jobOrKey as string
+            const episodeNumber = episodeNumberOrContent as number
+            const json = content as string
+            writes.progress = {
+              key: `${jobId}/episode_${episodeNumber}.progress.json`,
+              json,
+            }
+            return writes.progress.key
           }
-          return writes.progress.key
         },
         async getEpisodeLayoutProgress() {
           return null
