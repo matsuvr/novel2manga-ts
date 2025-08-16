@@ -11,6 +11,7 @@
 - [x] Add radix to integer parsing in UI for robustness.
 - [x] Extract magic number for in-flight episode progress to `CURRENT_EPISODE_PROGRESS_WEIGHT`.
 - [x] Strengthen UI error handling (no silent catches; contextual logs).
+- [x] MCP verification: Cloudflare/Workers docs cross-check (no breaking changes impacting this PR)
 - [ ] E2E: add a happy-path scenario for resume after one batch (progress present) then completion.
 - [ ] Documentation: update README usage notes if needed.
 
@@ -43,6 +44,7 @@
 - [x] UI/Endpoint Consistency: Completion logic aligned; redundant conditions removed
 - [x] Test Coverage: Integration tests validate core enrichment logic
 - [x] DRY Principle: No code duplication introduced, shared utilities properly factored
+- [x] MCP: 最新ドキュメント確認済（影響なし）
 
 ## Acceptance Criteria
 

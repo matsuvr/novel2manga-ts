@@ -65,6 +65,12 @@
 - Documentation: Dependency chart regenerated with correct Mermaid syntax and current architecture
 - Code Quality: Strict TypeScript enforcement, no 'any' types, comprehensive error logging
 
+## MCP Verification Notes (2025-08-16)
+
+- Scope: 本PRは UI の進捗表示および `/api/jobs/[jobId]/status` の整合性・型安全化に限定しており、Cloudflare Workers/D1/R2/Queues 設定の変更はありません。
+- Procedure: MCP Context7 で Cloudflare Workers のランタイム・HTTP リクエスト処理・キャッシュヘッダ関連の最新ドキュメントを確認し、本PRのエンドポイント設計（Next.js Route Handler 内での GET 実装）に影響する Breaking Changes が無いことを確認（2025-08-16）。
+- Outcome: 追加のAPI変更や wrangler 設定更新は不要。今後 Cloudflare バインディングや wrangler 更新を伴う変更時は、MCP で一次情報を再確認し、PR に引用を付記します。
+
 ## Risks & Mitigations
 
 - LLM drift across batches → provide compact prior context and keep back-edit window small.
