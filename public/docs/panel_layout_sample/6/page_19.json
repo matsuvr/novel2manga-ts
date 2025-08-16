@@ -1,0 +1,43 @@
+{
+  "page_19": {
+    "panels_count": 6,
+    "panels": [
+      {
+        "id": 1,
+        "bbox": [0.05, 0.1, 0.9, 0.2],
+        "content": "PLACEHOLDER",
+        "dialogue": "PLACEHOLDER"
+      },
+      {
+        "id": 2,
+        "bbox": [0.05, 0.32, 0.42, 0.17],
+        "content": "PLACEHOLDER",
+        "dialogue": "PLACEHOLDER"
+      },
+      {
+        "id": 3,
+        "bbox": [0.53, 0.32, 0.42, 0.17],
+        "content": "PLACEHOLDER",
+        "dialogue": "PLACEHOLDER"
+      },
+      {
+        "id": 4,
+        "bbox": [0.05, 0.51, 0.9, 0.12],
+        "content": "PLACEHOLDER",
+        "dialogue": "PLACEHOLDER"
+      },
+      {
+        "id": 5,
+        "bbox": [0.05, 0.65, 0.42, 0.2],
+        "content": "PLACEHOLDER",
+        "dialogue": "PLACEHOLDER"
+      },
+      {
+        "id": 6,
+        "bbox": [0.53, 0.65, 0.42, 0.2],
+        "content": "PLACEHOLDER",
+        "dialogue": "PLACEHOLDER"
+      }
+    ]
+  }
+}
