@@ -14,6 +14,21 @@
 - [x] MCP verification: Cloudflare/Workers docs cross-check (no breaking changes impacting this PR)
 - [ ] E2E: add a happy-path scenario for resume after one batch (progress present) then completion.
 - [ ] Documentation: update README usage notes if needed.
+- [x] Add YAML-stage layout validator and reference fallback
+  - [x] Implement panel bounds/overlap/band-partition checks
+  - [x] Clamp + normalize panels into [0,1]
+  - [x] Fallback to closest reference from docs when invalid
+  - [x] Map contents to reference layout by Japanese reading order
+  - [x] Unit tests for validator and fallback
+  - [x] Embed references in code (Workers-safe); remove runtime file I/O
+  - [x] Surface validation into episode progress JSON and job status API
+  - [x] UI: episode-level and per-page “Normalized” badges
+
+## Pending
+
+- [ ] E2E: add a happy-path scenario for resume after one batch (progress present) then completion.
+- [ ] E2E: assert Normalized badges appear when validation data exists
+- [ ] Documentation: update README usage notes if needed.
 
 ## Completed (2025-08-16): Service Layer Improvements
 

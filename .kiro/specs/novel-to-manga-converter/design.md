@@ -25,6 +25,37 @@
     2. Loops: plan next batch (3 pages) → generate those pages only → merge (replace by page number; allows minor back-edits within window) → write progress JSON → rewrite YAML.
     3. After target pages reached, marks `layout` complete and advances to `render`.
 
+### Layout Validation & Reference Fallback (2025-08-16)
+
+- Added `src/utils/layout-normalizer.ts` executed at the YAML stage in `generateEpisodeLayout` (demo, batch snapshots, and final output):
+  - Validates each page with strict checks:
+    - Bounds: positions and sizes stay within [0,1], and x+width / y+height <= 1.
+    - Overlap: no pairwise panel overlaps (EPS ≈ 1e-3).
+    - Band partition: vertical sweep-line ensures that, for every horizontal band delimited by panel y-edges, the active panels partition width ≈ 1 without gaps/overlaps.
+  - Normalizes by clamping and size adjustment to remain within page.
+  - If validation fails, applies a reference fallback layout selected from `docs/panel_layout_sample.yaml` and `docs/panel_layout_sample2.yaml`:
+    - Chooses the closest page by panel count and geometry distance.
+    - Maps existing panel contents to the reference geometry using Japanese reading order (top→bottom; within band right→left).
+  - Emits per-page issues for observability (currently not persisted; can be surfaced later in job progress).
+
+Rationale: LLM output and size multipliers can produce jitter and overlaps. Retrying does not guarantee correction; instead, we deterministically snap invalid pages onto battle-tested reference layouts (1–6 panels) while preserving content/dialogues.
+
+#### Workers Compatibility (Embedded References)
+
+- Introduced `src/utils/reference-layouts.ts` containing embedded reference panel geometries (1–6 panels).
+- `layout-normalizer` now imports these references (no `fs`/`js-yaml` reads in production), compatible with Cloudflare Workers/OpenNext.
+
+#### API and UI Surfacing
+
+- Service writes validation results to `episode_{n}.progress.json` under `validation` with:
+  - `pageIssues: Record<number, string[]>`
+  - `normalizedPages: number[]`
+  - `pagesWithIssueCounts: Record<number, number>`
+- Job status API enriches `job.progress.perEpisodePages[episode].validation` with `normalizedPages`, `pagesWithIssueCounts`, and aggregate `issuesCount`.
+- UI indicators:
+  - ProcessingProgress: Episode cards display a yellow “Normalized N” badge.
+  - Episode preview page: Per-page “Normalized” pill with issue count.
+
 - Service Layer Improvements (2025-08-16)
   - `JobProgressService`: Enhanced with robust error logging and perEpisodePages enrichment
     - Enriches job progress data with planned/rendered/total page counts per episode
