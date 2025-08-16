@@ -96,9 +96,10 @@ export class JobNarrativeProcessor {
       // ステータスを処理中に更新
       await this.jobService.updateStatus(jobId, 'processing')
       await this.jobService.updateStep(jobId, 'episode', 0, job.totalChunks || 0)
+
       while (!progress.isCompleted) {
         // 次のバッチ範囲を計算
-        const startIndex = progress.processedChunks
+        const startIndex = progress.processedChunks ?? 0
         const endIndex = Math.min(startIndex + this.config.chunksPerBatch, progress.totalChunks)
 
         this.logger.info('Processing chunks', { jobId, startIndex, endIndex })
@@ -297,6 +298,8 @@ export class JobNarrativeProcessor {
           }
         : progress.lastEpisodeEndPosition,
       isCompleted: newChunkIndex >= progress.totalChunks,
+      // Keep existing perEpisodePages if it exists
+      perEpisodePages: progress.perEpisodePages,
     }
   }
 
