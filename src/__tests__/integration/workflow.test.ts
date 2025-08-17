@@ -3,12 +3,17 @@
  * エンドツーエンドの業務フローをテスト（サーバー起動不要）
  */
 
-import crypto from "node:crypto"
+import crypto from 'node:crypto'
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { explainRateLimit, isRateLimitAcceptable } from './__helpers/rate-limit'
 // 依存モック適用後にルートを動的import
-import { resetAgentMocks, setupAgentMocks, TEST_CHUNK_ANALYSIS, TEST_EPISODE_BOUNDARIES } from './__helpers/test-agents'
+import {
+  resetAgentMocks,
+  setupAgentMocks,
+  TEST_CHUNK_ANALYSIS,
+  TEST_EPISODE_BOUNDARIES,
+} from './__helpers/test-agents'
 import type { TestDatabase } from './__helpers/test-database'
 import { cleanupTestDatabase, createTestDatabase, TestDataFactory } from './__helpers/test-database'
 import { TestStorageDataFactory, TestStorageFactory } from './__helpers/test-storage'
@@ -62,13 +67,11 @@ vi.mock('@/utils/storage', () => ({
     // モックエピソード境界をテストDBに保存
     if (__testDbForFactory) {
       // jobからnovelIdを取得
-      const job = await __testDbForFactory.service.getJob(jobId);
-      const novelId = job?.novelId || "test-novel-default";
-      
+      const job = await __testDbForFactory.service.getJob(jobId)
+      const novelId = job?.novelId || 'test-novel-default'
+
       for (const boundary of boundaries) {
-        await __testDbForFactory.db.insert(
-          (await import("@/db/schema")).episodes
-        ).values({
+        await __testDbForFactory.db.insert((await import('@/db/schema')).episodes).values({
           id: crypto.randomUUID(),
           novelId,
           jobId,
@@ -81,47 +84,47 @@ vi.mock('@/utils/storage', () => ({
           endCharIndex: boundary.endCharIndex,
           estimatedPages: boundary.estimatedPages,
           confidence: boundary.confidence,
-        });
+        })
       }
     }
   }),
 }))
 
 // Agent のモック
-vi.mock("@/agents/chunk-analyzer", () => ({
+vi.mock('@/agents/chunk-analyzer', () => ({
   analyzeChunkWithFallback: vi.fn().mockResolvedValue({
     result: TEST_CHUNK_ANALYSIS,
-    usedProvider: "mock",
+    usedProvider: 'mock',
     fallbackFrom: [],
   }),
 }))
 
-vi.mock("@/agents/narrative-arc-analyzer", () => ({
+vi.mock('@/agents/narrative-arc-analyzer', () => ({
   analyzeNarrativeArc: vi.fn().mockResolvedValue(TEST_EPISODE_BOUNDARIES),
 }))
 
 // レイアウト生成エージェントのモック
-vi.mock("@/agents/layout-generator", () => ({
+vi.mock('@/agents/layout-generator', () => ({
   generateMangaLayout: vi.fn().mockResolvedValue({
     success: true,
-    layoutPath: "test-layout.yaml",
+    layoutPath: 'test-layout.yaml',
     layout: {
       pages: [
         {
           pageNumber: 1,
           panels: [
             {
-              id: "panel1",
-              type: "dialogue",
-              content: "テスト対話",
+              id: 'panel1',
+              type: 'dialogue',
+              content: 'テスト対話',
               position: { x: 0.0, y: 0.0 }, // Normalized coordinates [0,1]
-              size: { width: 0.25, height: 0.33 } // Normalized size [0,1]
-            }
-          ]
-        }
-      ]
-    }
-  })
+              size: { width: 0.25, height: 0.33 }, // Normalized size [0,1]
+            },
+          ],
+        },
+      ],
+    },
+  }),
 }))
 
 // RepositoryFactory のモック（テストDBに委譲）
@@ -130,10 +133,26 @@ vi.mock('@/repositories/factory', () => {
   const factory = () => ({
     getJobRepository: () => ({
       create: (payload: any) => __testDbForFactory!.service.createJob(payload),
-      updateStep: (id: string, step: any, processed?: number, total?: number, error?: string, errorStep?: string) =>
-        (__testDbForFactory!.service as any).updateJobStep(id, step, processed, total, error, errorStep),
-      markStepCompleted: (id: string, step: any) => __testDbForFactory!.service.markJobStepCompleted(id, step),
-      updateStatus: (id: string, status: any) => __testDbForFactory!.service.updateJobStatus(id, status),
+      updateStep: (
+        id: string,
+        step: any,
+        processed?: number,
+        total?: number,
+        error?: string,
+        errorStep?: string,
+      ) =>
+        (__testDbForFactory!.service as any).updateJobStep(
+          id,
+          step,
+          processed,
+          total,
+          error,
+          errorStep,
+        ),
+      markStepCompleted: (id: string, step: any) =>
+        __testDbForFactory!.service.markJobStepCompleted(id, step),
+      updateStatus: (id: string, status: any) =>
+        __testDbForFactory!.service.updateJobStatus(id, status),
       getJobWithProgress: (id: string) => __testDbForFactory!.service.getJobWithProgress(id),
     }),
     getNovelRepository: () => ({
@@ -144,11 +163,12 @@ vi.mock('@/repositories/factory', () => {
       create: (payload: any) => __testDbForFactory!.service.createChunk(payload),
       createBatch: (payloads: any[]) => __testDbForFactory!.service.createChunksBatch(payloads),
       getByJobId: (jobId: string) => __testDbForFactory!.service.getChunksByJobId(jobId) as any,
-      db: { getChunksByJobId: (jobId: string) => __testDbForFactory!.service.getChunksByJobId(jobId) },
+      db: {
+        getChunksByJobId: (jobId: string) => __testDbForFactory!.service.getChunksByJobId(jobId),
+      },
     }),
     getEpisodeRepository: () => ({
-      getByJobId: (jobId: string) => 
-        __testDbForFactory!.service.getEpisodesByJobId(jobId),
+      getByJobId: (jobId: string) => __testDbForFactory!.service.getEpisodesByJobId(jobId),
     }),
   })
   return {
@@ -209,7 +229,8 @@ describe('Workflow Integration Tests', () => {
 
   describe('Novel Upload to Episode Generation Workflow', () => {
     it('小説アップロードから完全な分析・エピソード生成まで', async () => {
-      const novelText = '昔々、ある所に勇敢な騎士が住んでいました。彼の名前はアーサーといいました。'.repeat(200)
+      const novelText =
+        '昔々、ある所に勇敢な騎士が住んでいました。彼の名前はアーサーといいました。'.repeat(200)
 
       // Step 1: 小説をアップロード
       const uploadRequest = new NextRequest('http://localhost:3000/api/novel', {
@@ -244,13 +265,13 @@ describe('Workflow Integration Tests', () => {
       }
 
       expect([200, 201, 500]).toContain(analyzeResponse.status)
-      
+
       if (analyzeResponse.status === 500) {
         expect(analyzeData.success).toBe(false)
         expect(analyzeData.error).toBeDefined()
         return // Skip the rest of the test if analysis fails
       }
-      
+
       expect(analyzeData.success).toBe(true)
       expect(analyzeData.jobId).toBeDefined()
       expect(analyzeData.chunkCount).toBeGreaterThan(0)
@@ -322,11 +343,16 @@ describe('Workflow Integration Tests', () => {
     })
 
     it('存在しないジョブIDでのステータス確認エラーハンドリング', async () => {
-      const statusRequest = new NextRequest('http://localhost:3000/api/jobs/nonexistent-job/status', {
-        method: 'GET',
-      })
+      const statusRequest = new NextRequest(
+        'http://localhost:3000/api/jobs/nonexistent-job/status',
+        {
+          method: 'GET',
+        },
+      )
 
-      const statusResponse = await JobStatusGet(statusRequest, { params: { jobId: 'nonexistent-job' } })
+      const statusResponse = await JobStatusGet(statusRequest, {
+        params: { jobId: 'nonexistent-job' },
+      })
       expect(statusResponse.status).toBe(404)
 
       const statusData = await statusResponse.json()
@@ -368,13 +394,13 @@ describe('Workflow Integration Tests', () => {
 
         const response = await AnalyzePost(request)
         const data = await response.json()
-        
+
         // エラーレスポンスの場合はスキップ
         if (!data.success) {
           console.warn(`Analysis failed for novel ${novelId}:`, data.error)
           return { jobId: undefined, novelId, index, error: data.error }
         }
-        
+
         return { jobId: data.jobId, novelId, index }
       })
 
@@ -382,10 +408,10 @@ describe('Workflow Integration Tests', () => {
 
       // 全ての処理が成功していることを確認
       expect(analyzeResults).toHaveLength(3)
-      
+
       // 成功した結果のみをフィルタリング
-      const successfulResults = analyzeResults.filter(result => result.jobId)
-      
+      const successfulResults = analyzeResults.filter((result) => result.jobId)
+
       // 少なくとも1つは成功することを期待（エラーが発生してもテストは通す）
       if (successfulResults.length === 0) {
         console.warn('All parallel analysis failed, but test continues')
@@ -393,7 +419,7 @@ describe('Workflow Integration Tests', () => {
         expect(analyzeResults.length).toBeGreaterThan(0)
         return
       }
-      
+
       successfulResults.forEach((result) => {
         expect(result?.jobId).toBeDefined()
         expect(result?.novelId).toBeDefined()

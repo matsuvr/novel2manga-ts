@@ -54,3 +54,14 @@ binding = "OUTPUTS_STORAGE"
 bucket_name = "outputs-storage"
 
 # D1データベースの設定（開発環境ではローカルSQLiteを使用）
+
+# Cloudflare Queue設定
+[[queues.producers]]
+binding = "JOBS_QUEUE"
+queue = "novel2manga-jobs"
+
+[[queues.consumers]]
+queue = "novel2manga-jobs"
+max_batch_size = 1
+max_batch_timeout = 5
+max_retries = 3

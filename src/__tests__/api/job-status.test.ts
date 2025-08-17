@@ -21,7 +21,7 @@ describe('/api/jobs/[jobId]/status', () => {
   let mockDbService: any
 
   beforeEach(() => {
-  __resetDatabaseServiceForTest()
+    __resetDatabaseServiceForTest()
     vi.clearAllMocks()
 
     mockDbService = {
@@ -34,7 +34,7 @@ describe('/api/jobs/[jobId]/status', () => {
   })
 
   afterEach(() => {
-  __resetDatabaseServiceForTest()
+    __resetDatabaseServiceForTest()
   })
 
   it('正常系: 既存ジョブのステータスを返す(200)', async () => {

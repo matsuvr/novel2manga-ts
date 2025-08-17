@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { explainRateLimit, isRateLimitAcceptable } from '@/__tests__/integration/__helpers/rate-limit'
+import {
+  explainRateLimit,
+  isRateLimitAcceptable,
+} from '@/__tests__/integration/__helpers/rate-limit'
 import { POST } from '@/app/api/analyze/route'
 import { DatabaseService } from '@/services/database'
 import { __resetDatabaseServiceForTest } from '@/services/db-factory'
@@ -201,26 +204,26 @@ describe('/api/analyze', () => {
         },
       })
 
-    const response = await POST(request)
-    const data = await response.json()
+      const response = await POST(request)
+      const data = await response.json()
 
-    if (isRateLimitAcceptable(response.status, data)) {
-      expect([429, 503]).toContain(response.status)
-      expect(explainRateLimit(data)).toBeTruthy()
-      return
-    }
+      if (isRateLimitAcceptable(response.status, data)) {
+        expect([429, 503]).toContain(response.status)
+        expect(explainRateLimit(data)).toBeTruthy()
+        return
+      }
 
-    expect([201, 500]).toContain(response.status)
-    
-    if (response.status === 500) {
-      expect(data.success).toBe(false)
-      expect(data.error).toBeDefined()
-    } else {
-      expect(data.success).toBe(true)
-      expect(data.jobId).toBe('test-job-uuid')
-      expect(data.chunkCount).toBe(2)
-      expect(data.message).toContain('分析を完了しました')
-    }
+      expect([201, 500]).toContain(response.status)
+
+      if (response.status === 500) {
+        expect(data.success).toBe(false)
+        expect(data.error).toBeDefined()
+      } else {
+        expect(data.success).toBe(true)
+        expect(data.jobId).toBe('test-job-uuid')
+        expect(data.chunkCount).toBe(2)
+        expect(data.message).toContain('分析を完了しました')
+      }
     })
 
     it('novelIdが未指定の場合は400エラーを返す', async () => {

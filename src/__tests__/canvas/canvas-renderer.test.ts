@@ -201,9 +201,19 @@ describe('CanvasRenderer', () => {
       renderer.renderMangaLayout(layout)
 
       // 背景がクリアされる
-      expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, appConfig.rendering.defaultPageSize.width, appConfig.rendering.defaultPageSize.height)
+      expect(ctx.fillRect).toHaveBeenCalledWith(
+        0,
+        0,
+        appConfig.rendering.defaultPageSize.width,
+        appConfig.rendering.defaultPageSize.height,
+      )
       // 全体フレームが描画される
-      expect(ctx.strokeRect).toHaveBeenCalledWith(0, 0, appConfig.rendering.defaultPageSize.width, appConfig.rendering.defaultPageSize.height)
+      expect(ctx.strokeRect).toHaveBeenCalledWith(
+        0,
+        0,
+        appConfig.rendering.defaultPageSize.width,
+        appConfig.rendering.defaultPageSize.height,
+      )
       // 各パネルが描画される（2つのパネル）
       expect(ctx.strokeRect).toHaveBeenCalledTimes(3) // 全体フレーム + 2パネル
     })

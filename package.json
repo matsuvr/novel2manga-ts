@@ -17,17 +17,25 @@
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
-    "format": "biome format --write .",
-    "format:check": "biome format .",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,jsonc,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,jsonc,md,yml,yaml}\"",
     "format:json": "prettier --write \"**/*.{json,jsonc}\"",
     "format:json:check": "prettier --check \"**/*.{json,jsonc}\"",
     "lint": "biome lint --write .",
     "lint:check": "biome lint .",
-    "check": "biome check --write .",
-    "check:ci": "biome check .",
+    "check": "npm run lint && npm run format:check",
+    "check:ci": "npm run lint:check && npm run format:check",
     "typecheck": "tsc --noEmit",
     "generate:openapi": "node --loader ts-node/esm ./scripts/generate-openapi.ts",
     "test:e2e": "playwright test",
+    "tmp:llm": "node --experimental-specifier-resolution=node --loader ts-node/esm ./tmp_test/run-llm-connectivity.ts",
+    "tmp:llm:provider": "node --experimental-specifier-resolution=node --loader ts-node/esm ./tmp_test/run-llm-connectivity.ts $PROVIDER",
+    "tmp:llm:raw": "node ./tmp_test/run-llm-connectivity-raw.mjs",
+    "tmp:llm:raw:provider": "node ./tmp_test/run-llm-connectivity-raw.mjs $PROVIDER",
+    "manual:llm:raw": "node ./src/__tests__/manual/llm-connectivity.raw.mjs",
+    "manual:llm:raw:provider": "node ./src/__tests__/manual/llm-connectivity.raw.mjs $PROVIDER",
+    "manual:llm:compat": "tsx ./src/__tests__/manual/llm-compat-json.ts",
+    "manual:llm:compat:provider": "tsx ./src/__tests__/manual/llm-compat-json.ts $PROVIDER",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
@@ -100,16 +108,15 @@
     "playwright": "^1.44.0",
     "prettier": "^3.6.2",
     "ts-node": "^10.9.2",
+    "tsx": "^4.20.4",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4",
     "wrangler": "^4.26.0"
   },
   "lint-staged": {
-    "biome.json": [
-      "biome format --write"
-    ],
     "**/*.{ts,tsx,js,jsx}": [
-      "biome check --write --no-errors-on-unmatched"
+      "prettier --write",
+      "biome lint --write --no-errors-on-unmatched"
     ],
     "**/*.{json,jsonc,md,yml,yaml}": [
       "prettier --write"

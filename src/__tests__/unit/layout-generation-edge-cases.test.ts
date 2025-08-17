@@ -56,14 +56,20 @@ const createMockStoragePorts = (simulateFailures = false): StoragePorts => ({
     }),
     deleteEpisodeLayout: vi.fn(),
     getEpisodeLayoutProgress: vi.fn().mockResolvedValue(''),
-    putEpisodeLayoutProgress: vi.fn().mockImplementation(async (keyOrJobId, episodeNumberOrContent, content) => {
-      // Handle both old and new signatures
-      const contentToCheck = typeof content === 'string' ? content : 
-                            typeof episodeNumberOrContent === 'string' ? episodeNumberOrContent : '';
-      if (simulateFailures && contentToCheck.includes('test-fail')) {
-        throw new Error('Simulated progress storage failure')
-      }
-    }),
+    putEpisodeLayoutProgress: vi
+      .fn()
+      .mockImplementation(async (keyOrJobId, episodeNumberOrContent, content) => {
+        // Handle both old and new signatures
+        const contentToCheck =
+          typeof content === 'string'
+            ? content
+            : typeof episodeNumberOrContent === 'string'
+              ? episodeNumberOrContent
+              : ''
+        if (simulateFailures && contentToCheck.includes('test-fail')) {
+          throw new Error('Simulated progress storage failure')
+        }
+      }),
     deleteEpisodeLayoutProgress: vi.fn(),
     listLayouts: vi.fn(),
   },
@@ -138,12 +144,12 @@ function createMockPlanNextBatch() {
   const mockFn = vi.fn().mockImplementation(async (episodeData, options) => {
     planCallCount++
     // console.log(`[DEBUG] mockPlanNextBatch call ${planCallCount}, allowProgress: ${allowProgress}, startPage: ${options?.startPage}`)
-    
+
     // If allowProgress is true, return successful progress
     if (allowProgress) {
       const startPage = options?.startPage || 1
-      
-      // Return pages up to the estimated page limit  
+
+      // Return pages up to the estimated page limit
       if (startPage <= 4) {
         const pages = []
         for (let i = startPage; i <= Math.min(startPage + 1, 4); i++) {
@@ -155,12 +161,12 @@ function createMockPlanNextBatch() {
               {
                 contentHint: `test content ${i}`,
                 importance: 5,
-                source: { chunkIndex: 0, startOffset: (i-1) * 100, endOffset: i * 100 },
+                source: { chunkIndex: 0, startOffset: (i - 1) * 100, endOffset: i * 100 },
               },
             ],
           })
         }
-        
+
         return {
           episodeNumber: 1,
           startPage,
@@ -179,7 +185,7 @@ function createMockPlanNextBatch() {
         }
       }
     }
-    
+
     // Default: simulate no-progress scenario for infinite loop testing
     return {
       episodeNumber: 1,
@@ -191,9 +197,13 @@ function createMockPlanNextBatch() {
   })
 
   // Expose control methods
-  mockFn.setAllowProgress = (value: boolean) => { allowProgress = value }
-  mockFn.resetCallCount = () => { planCallCount = 0 }
-  
+  mockFn.setAllowProgress = (value: boolean) => {
+    allowProgress = value
+  }
+  mockFn.resetCallCount = () => {
+    planCallCount = 0
+  }
+
   return mockFn
 }
 
@@ -208,14 +218,14 @@ vi.mock('@/agents/page-splitter', () => ({
 // Mock layout generator
 let mockGenerateMangaLayoutForPlan = vi.fn().mockImplementation(async (episodeData, plan) => {
   // Return layouts based on the plan
-  const pages = plan.plannedPages.map(plannedPage => ({
+  const pages = plan.plannedPages.map((plannedPage) => ({
     page_number: plannedPage.pageNumber,
     panels: Array.from({ length: 4 }, (_, i) => ({
-      position: { x: i % 2 * 0.5, y: Math.floor(i / 2) * 0.5 },
+      position: { x: (i % 2) * 0.5, y: Math.floor(i / 2) * 0.5 },
       size: { width: 0.5, height: 0.5 },
     })),
   }))
-  
+
   return { pages }
 })
 
@@ -240,18 +250,12 @@ describe('Layout Generation Edge Cases', () => {
   describe('Race Condition Prevention', () => {
     it('should handle storage failures gracefully in atomic write operations', async () => {
       const mockPorts = createMockStoragePorts(true)
-      
+
       // This should fail due to simulated storage failure
       await expect(
-        generateEpisodeLayout(
-          'test-job',
-          1,
-          { isDemo: true },
-          mockPorts,
-          mockLogger,
-        )
+        generateEpisodeLayout('test-job', 1, { isDemo: true }, mockPorts, mockLogger),
       ).rejects.toThrow()
-      
+
       // Verify error was logged (layout generation will fail on no progress first)
       expect(mockLogger.error).toHaveBeenCalled()
     })
@@ -260,7 +264,7 @@ describe('Layout Generation Edge Cases', () => {
       // Allow progress for successful test
       mockPlanNextBatch.setAllowProgress(true)
       const mockPorts = createMockStoragePorts(false)
-      
+
       const result = await generateEpisodeLayout(
         'test-job',
         1,
@@ -268,7 +272,7 @@ describe('Layout Generation Edge Cases', () => {
         mockPorts,
         mockLogger,
       )
-      
+
       expect(result).toBeDefined()
       expect(result.layout).toBeDefined()
       expect(result.layout.pages).toHaveLength(4)
@@ -279,19 +283,13 @@ describe('Layout Generation Edge Cases', () => {
     it('should handle layout generator errors gracefully', async () => {
       // Mock function to throw error
       mockGenerateMangaLayoutForPlan.mockRejectedValueOnce(new Error('Layout generator failure'))
-      
+
       const mockPorts = createMockStoragePorts(false)
-      
+
       await expect(
-        generateEpisodeLayout(
-          'test-job',
-          1,
-          { isDemo: true },
-          mockPorts,
-          mockLogger,
-        )
+        generateEpisodeLayout('test-job', 1, { isDemo: true }, mockPorts, mockLogger),
       ).rejects.toThrow('Layout generator failure')
-      
+
       // Reset mock
       mockGenerateMangaLayoutForPlan.mockResolvedValue({
         pages: [
@@ -309,24 +307,18 @@ describe('Layout Generation Edge Cases', () => {
       // Reset to ensure no-progress scenario
       mockPlanNextBatch.resetCallCount()
       const mockPorts = createMockStoragePorts(false)
-      
+
       await expect(
-        generateEpisodeLayout(
-          'test-job',
-          1,
-          { isDemo: true },
-          mockPorts,
-          mockLogger,
-        )
+        generateEpisodeLayout('test-job', 1, { isDemo: true }, mockPorts, mockLogger),
       ).rejects.toThrow('Layout generation made no progress')
-      
+
       // Verify warning logs were generated for no-progress detection
       expect(mockLogger.warn).toHaveBeenCalledWith(
         'No progress detected in layout generation batch',
         expect.objectContaining({
           currentStreak: expect.any(Number),
           maxAllowed: expect.any(Number),
-        })
+        }),
       )
     })
 

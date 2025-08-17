@@ -126,7 +126,11 @@ export class TestStorageFactory {
 export class TestStorageDataFactory {
   constructor(private storageFactory: TestStorageFactory) {}
 
-  async seedNovelText(novelId: string, text: string, metadata: Record<string, unknown> = {}): Promise<void> {
+  async seedNovelText(
+    novelId: string,
+    text: string,
+    metadata: Record<string, unknown> = {},
+  ): Promise<void> {
     const storage = await this.storageFactory.getNovelStorage()
     await storage.put(`${novelId}.json`, {
       text: JSON.stringify({ text, metadata }),

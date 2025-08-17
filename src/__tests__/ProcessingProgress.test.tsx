@@ -6,7 +6,7 @@ import ProcessingProgress from '@/components/ProcessingProgress'
 // Mock the component to render episode progress immediately without polling
 vi.mock('@/components/ProcessingProgress', async () => {
   const actual = await vi.importActual('@/components/ProcessingProgress')
-  
+
   const MockProcessingProgress = ({ jobId }: { jobId: string }) => {
     // Simulate the episode progress data that would be fetched
     const perEpisodePages = {
@@ -94,4 +94,3 @@ describe('ProcessingProgress per-episode UI', () => {
     expect(screen.getByText(/3\/40 計画, 0 描画/)).toBeInTheDocument()
   })
 })
-

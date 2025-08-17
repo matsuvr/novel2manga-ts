@@ -4,11 +4,6 @@
       "command": "cmd",
       "args": ["/c", "npx", "mcp-remote", "https://docs.mcp.cloudflare.com/sse"]
     },
-    "mastra": {
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "@mastra/mcp-docs-server"],
-      "type": "stdio"
-    },
     "serena": {
       "command": "cmd",
       "args": [

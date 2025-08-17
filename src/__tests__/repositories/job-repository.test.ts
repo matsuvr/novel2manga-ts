@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
-import type { Job } from "@/db";
-import { type JobDbPort, JobRepository } from "@/repositories/job-repository";
+import { describe, expect, it, vi } from 'vitest'
+import type { Job } from '@/db'
+import { type JobDbPort, JobRepository } from '@/repositories/job-repository'
 
 function createMockPort() {
   const calls = {
@@ -30,7 +30,7 @@ function createMockPort() {
   return { mock: mock as JobDbPort, calls }
 }
 
-describe("JobRepository", () => {
+describe('JobRepository', () => {
   it('create delegates to db.createJob with provided id (deterministic)', async () => {
     const { mock, calls } = createMockPort()
     const repo = new JobRepository(mock)
@@ -42,8 +42,15 @@ describe("JobRepository", () => {
   it('create delegates to db.createJob without id and returns generated id', async () => {
     const { mock, calls } = createMockPort()
     const repo = new JobRepository(mock)
-    const id = await repo.create({ novelId: 'nid', title: 'Job', totalChunks: 10, status: 'pending' })
+    const id = await repo.create({
+      novelId: 'nid',
+      title: 'Job',
+      totalChunks: 10,
+      status: 'pending',
+    })
     expect(id).toBe('generated-id')
-    expect(calls.createPayload).toEqual([{ novelId: 'nid', title: 'Job', totalChunks: 10, status: 'pending' }])
+    expect(calls.createPayload).toEqual([
+      { novelId: 'nid', title: 'Job', totalChunks: 10, status: 'pending' },
+    ])
   })
-});
+})

@@ -6,9 +6,10 @@ Non‑negotiables (do these every time):
 - Cloudflare: Use MCP to obtain and cite the latest docs and APIs. Do not rely on memory or outdated snippets. If docs cannot be verified, do not proceed.
 	- Use Web search + Deepwiki to gather current library information. Prefer primary sources; cross‑check breaking changes and version constraints.
 - TypeScript: The any type is forbidden. Use precise types (unknown + type guards, generics, discriminated unions). No ts-ignore/ts-expect-error unless absolutely necessary and justified with a comment and a tracking task.
-- Lint/Format: Resolve all linter errors and warnings. Do not merge with outstanding issues. Do not disable rules to “make it pass” unless there is a justified, documented rationale.
+- Lint/Format: Resolve all linter errors and warnings. Do not merge with outstanding issues. Do not disable rules to "make it pass" unless there is a justified, documented rationale.
 - DRY: Eliminate duplication. Extract shared logic into reusable modules/functions. No copy-paste forks of similar code paths.
 - SOLID: Follow Single-responsibility, Open/closed, Liskov, Interface segregation, Dependency inversion. Prefer composition over inheritance and stable, testable boundaries.
+- CONFIG CENTRALIZATION: ALL configuration must be centralized in config files. NEVER hardcode models, API endpoints, tokens, or any other configuration values outside of src/config/. This is absolutely forbidden.
 - ERROR HANDLING: NEVER silence errors with empty catch blocks or underscore variables. Always log errors with full context (jobId, operation, error message, stack trace) using the structured logger. Error silencing makes debugging impossible and is absolutely forbidden. When an error occurs, the code should log detailed information and gracefully handle the failure with appropriate fallback behavior.
 
 Project conventions you must follow:

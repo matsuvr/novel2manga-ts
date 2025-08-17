@@ -38,6 +38,8 @@ describe('vertical-text-client', () => {
     delete process.env.VERTICAL_TEXT_API_TOKEN
     // @ts-expect-error vi
     global.fetch = vi.fn()
-    await expect(renderVerticalText({ text: 'x' })).rejects.toThrow('Vertical text API env not configured')
+    await expect(renderVerticalText({ text: 'x' })).rejects.toThrow(
+      'Vertical text API env not configured',
+    )
   })
 })

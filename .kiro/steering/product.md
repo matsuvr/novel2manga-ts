@@ -24,6 +24,7 @@ This framework is designed for software development teams and individual develop
 - **Integrate AI assistance** into established development workflows
 
 The system is particularly valuable for:
+
 - Complex feature development requiring multiple development sessions
 - Team environments where project knowledge needs to be shared
 - Long-term projects where architectural decisions need documentation
@@ -31,9 +32,10 @@ The system is particularly valuable for:
 
 ## Key Value Proposition
 
-**Bridging the gap between Kiro IDE's advanced spec-driven development and Claude Code's powerful AI assistance.** 
+**Bridging the gap between Kiro IDE's advanced spec-driven development and Claude Code's powerful AI assistance.**
 
 The framework provides:
+
 - **Structured AI Collaboration**: Transforms ad-hoc AI interactions into systematic development processes
 - **Knowledge Persistence**: Maintains project context across sessions through steering documents
 - **Quality Assurance**: Enforces human review at critical development phases

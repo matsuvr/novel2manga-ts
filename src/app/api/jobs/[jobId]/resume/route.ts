@@ -16,8 +16,7 @@ import { validateJobId } from '@/utils/validators'
 export async function POST(request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
     validateJobId(params.jobId)
-    const _dbService = getDatabaseService()
-    const queue = getJobQueue()
+    const dbService = getDatabaseService()
 
     // ジョブが再開可能かチェック
     // 互換性のため既存のProcessorのcanResumeを使用（テストもこれをモック）
@@ -36,14 +35,17 @@ export async function POST(request: NextRequest, { params }: { params: { jobId: 
     const EmailSchema = z.object({ userEmail: z.string().email().optional() })
     const { userEmail } = EmailSchema.parse(await request.json().catch(() => ({})))
 
-    // バックグラウンドキューに投入
-    // fire-and-forget（非同期実行）。戻り値は待たない
+    // ジョブキューを使用してバックグラウンド処理を実行
+    // Cloudflare Workersの場合、Queue Consumerが処理を担当
+    const queue = getJobQueue()
     void queue.enqueue({
       type: 'PROCESS_NARRATIVE',
       jobId: params.jobId,
       userEmail,
     })
-    // NOTE: ここではDB更新を行わない（テストのモック互換性維持）
+
+    // ステータスをprocessingに更新
+    await dbService.updateJobStatus(params.jobId, 'processing')
 
     return createSuccessResponse({
       message: 'Job resumed successfully',

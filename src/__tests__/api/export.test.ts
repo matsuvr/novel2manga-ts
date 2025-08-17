@@ -45,7 +45,10 @@ vi.mock('pdfkit', () => {
         setTimeout(callback, 0)
       }
     }),
-    page: { width: appConfig.rendering.defaultPageSize.width, height: appConfig.rendering.defaultPageSize.height },
+    page: {
+      width: appConfig.rendering.defaultPageSize.width,
+      height: appConfig.rendering.defaultPageSize.height,
+    },
   }
   return {
     default: vi.fn(() => mockDoc),
