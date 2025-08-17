@@ -41,20 +41,34 @@ export async function GET(
       throw new ApiError('ジョブが見つかりません', 404, 'NOT_FOUND')
     }
 
-    // サーバー側の保険: レンダリング完了フラグが立っていれば completed として返す
-    const isCompleted =
-      job.status === 'completed' || job.renderCompleted === true || job.currentStep === 'complete'
+    // 完了条件はレンダリング完了のみ（UIと厳密に同期させる）
+    const isCompleted = job.renderCompleted === true
 
     // 旧テスト互換: DB のチャンク内容をレスポンスに含める
     const chunkRepo = getChunkRepository()
     const chunks = await chunkRepo.getByJobId(job.id)
 
+    // レンダリング未完了なのにDBが completed を示している場合、APIでは processing として扱う
+    const effectiveStatus = isCompleted
+      ? 'completed'
+      : job.status === 'completed'
+        ? 'processing'
+        : job.status
+
+    // currentStep が complete でもレンダリング未完了なら render フェーズに巻き戻して見せる
+    const effectiveStep = isCompleted
+      ? 'complete'
+      : job.currentStep === 'complete' && !job.renderCompleted
+        ? job.layoutCompleted
+          ? 'render'
+          : job.currentStep
+        : job.currentStep
+
     const res = ApiResponder.success({
       job: {
         id: job.id,
-        status: isCompleted ? 'completed' : job.status,
-        // If any completes criteria met, surface 'complete'; otherwise pass through
-        currentStep: isCompleted ? 'complete' : job.currentStep,
+        status: effectiveStatus,
+        currentStep: effectiveStep,
         splitCompleted: job.splitCompleted ?? false,
         analyzeCompleted: job.analyzeCompleted ?? false,
         episodeCompleted: job.episodeCompleted ?? false,

@@ -1,3 +1,5 @@
+import type { z } from 'zod'
+import { zodToJsonSchema } from 'zod-to-json-schema'
 import type { LLMProvider } from '@/config/llm.config'
 import { createLlmClientFromConfig } from '@/llm'
 import { type AgentCore, createAgentCore } from './core'
@@ -47,7 +49,7 @@ export class CompatAgent {
    * 既存のgenerateObjectメソッドの互換性
    */
   async generateObject<T>(
-    schema: { parse(value: unknown): T },
+    schema: { parse(value: unknown): T } | z.ZodTypeAny,
     prompt: string,
     options: GenerateOptions = {},
   ): Promise<T> {
@@ -70,6 +72,31 @@ export class CompatAgent {
       temperature: 0.1, // 構造化出力のため低い温度
     }
 
+    // If Zod schema provided, pass JSON schema to providers that support response_format
+    try {
+      const zodSchemaCandidate: unknown = schema as unknown
+      const isZod = (s: unknown): s is z.ZodTypeAny =>
+        typeof (s as { safeParse?: unknown }).safeParse === 'function' &&
+        typeof (s as { parse?: unknown }).parse === 'function'
+      if (isZod(zodSchemaCandidate)) {
+        const jsonSchema = zodToJsonSchema(zodSchemaCandidate, {
+          name: this.name.replace(/\s+/g, '_'),
+        }) as unknown as { definitions?: unknown }
+        // zod-to-json-schema returns { $schema, definitions, ... }. We want the root schema.
+        const rootSchema = jsonSchema as unknown as Record<string, unknown>
+        agentOptions.responseFormat = {
+          type: 'json_schema',
+          json_schema: {
+            name: this.name.replace(/\s+/g, '_'),
+            strict: true,
+            schema: rootSchema,
+          },
+        }
+      }
+    } catch {
+      // If conversion fails, skip responseFormat; JSON enforcement still via instructions
+    }
+
     try {
       const result = await this.core.run(input, agentOptions)
 
@@ -84,11 +111,19 @@ export class CompatAgent {
             parsed = JSON.parse(jsonMatch[1])
           } else {
             // 直接JSONとして解析を試行
-            parsed = JSON.parse(lastMessage.content)
+            const trimmed = lastMessage.content.trim()
+            // Remove any accidental leading/trailing non-json characters
+            const firstBrace = trimmed.indexOf('{')
+            const lastBrace = trimmed.lastIndexOf('}')
+            const candidate =
+              firstBrace >= 0 && lastBrace >= firstBrace
+                ? trimmed.slice(firstBrace, lastBrace + 1)
+                : trimmed
+            parsed = JSON.parse(candidate)
           }
 
           // スキーマでバリデーション
-          return schema.parse(parsed)
+          return (schema as { parse(value: unknown): T }).parse(parsed)
         } catch (parseError) {
           throw new Error(
             `Failed to parse JSON response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`,

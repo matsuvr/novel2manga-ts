@@ -11,7 +11,16 @@ import {
   type NewOutput,
   type Novel,
 } from '@/db'
-import { chunks, episodes, jobs, novels, outputs, renderStatus, tokenUsage } from '@/db/schema'
+import {
+  chunks,
+  episodes,
+  jobs,
+  layoutStatus,
+  novels,
+  outputs,
+  renderStatus,
+  tokenUsage,
+} from '@/db/schema'
 import type { TransactionPort, UnitOfWorkPort } from '@/repositories/ports'
 import type { JobProgress, JobStatus, JobStep } from '@/types/job'
 import { makeEpisodeId } from '@/utils/ids'
@@ -614,9 +623,9 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
 
   async updateRenderStatus(
     jobId: string,
-    _episodeNumber: number,
-    _pageNumber: number,
-    _status: {
+    episodeNumber: number,
+    pageNumber: number,
+    status: {
       isRendered: boolean
       imagePath?: string
       thumbnailPath?: string
@@ -626,38 +635,127 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
     },
   ): Promise<void> {
     const now = new Date().toISOString()
+    // Upsert page render status
+    const existing = await this.db
+      .select({
+        isRendered: renderStatus.isRendered,
+      })
+      .from(renderStatus)
+      .where(
+        and(
+          eq(renderStatus.jobId, jobId),
+          eq(renderStatus.episodeNumber, episodeNumber),
+          eq(renderStatus.pageNumber, pageNumber),
+        ),
+      )
+      .limit(1)
 
-    // render_statusテーブルが存在しない場合は、jobsテーブルのrenderCompletedフラグを更新
-    const currentJob = await this.getJob(jobId)
-    if (currentJob) {
+    const wasRendered = Boolean(existing[0]?.isRendered)
+
+    await this.db
+      .insert(renderStatus)
+      .values({
+        id: crypto.randomUUID(),
+        jobId,
+        episodeNumber,
+        pageNumber,
+        isRendered: status.isRendered,
+        imagePath: status.imagePath,
+        thumbnailPath: status.thumbnailPath,
+        width: status.width,
+        height: status.height,
+        fileSize: status.fileSize,
+        renderedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [renderStatus.jobId, renderStatus.episodeNumber, renderStatus.pageNumber],
+        set: {
+          isRendered: status.isRendered,
+          imagePath: status.imagePath,
+          thumbnailPath: status.thumbnailPath,
+          width: status.width,
+          height: status.height,
+          fileSize: status.fileSize,
+          renderedAt: now,
+        },
+      })
+
+    // If this page transitioned to rendered, increment job.renderedPages
+    if (status.isRendered && !wasRendered) {
+      const jobRow = await this.getJob(jobId)
+      const newRenderedPages = (jobRow?.renderedPages || 0) + 1
+
+      // Update renderedPages counter
       await this.db
         .update(jobs)
-        .set({
-          renderedPages: (currentJob.renderedPages || 0) + 1,
-          updatedAt: now,
-        })
+        .set({ renderedPages: newRenderedPages, updatedAt: now })
         .where(eq(jobs.id, jobId))
-    }
 
-    // TODO: render_statusテーブルが実装されたら、以下のコードに置き換える
-    // await this.db.update(renderStatus)
-    //   .set({
-    //     isRendered: status.isRendered,
-    //     imagePath: status.imagePath,
-    //     thumbnailPath: status.thumbnailPath,
-    //     width: status.width,
-    //     height: status.height,
-    //     fileSize: status.fileSize,
-    //     renderedAt: now,
-    //   })
-    //   .where(
-    //     and(
-    //       eq(renderStatus.jobId, jobId),
-    //       eq(renderStatus.episodeNumber, episodeNumber),
-    //       eq(renderStatus.pageNumber, pageNumber)
-    //     )
-    //   )
-    //   .execute()
+      // If we know totalPages and all pages are rendered, mark job render completed
+      const totalPages = jobRow?.totalPages || 0
+      if (totalPages > 0 && newRenderedPages >= totalPages) {
+        await this.db
+          .update(jobs)
+          .set({
+            renderCompleted: true,
+            currentStep: 'complete',
+            status: 'completed',
+            completedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(jobs.id, jobId))
+      }
+    }
+  }
+
+  // Layout status upsert and job totalPages recompute helpers
+  async upsertLayoutStatus(params: {
+    jobId: string
+    episodeNumber: number
+    totalPages: number
+    totalPanels?: number
+    layoutPath?: string | null
+    error?: string | null
+  }): Promise<void> {
+    const now = new Date().toISOString()
+    await this.db
+      .insert(layoutStatus)
+      .values({
+        id: crypto.randomUUID(),
+        jobId: params.jobId,
+        episodeNumber: params.episodeNumber,
+        isGenerated: true,
+        layoutPath: params.layoutPath ?? null,
+        totalPages: params.totalPages,
+        totalPanels: params.totalPanels ?? null,
+        generatedAt: now,
+        lastError: params.error ?? null,
+      })
+      .onConflictDoUpdate({
+        target: [layoutStatus.jobId, layoutStatus.episodeNumber],
+        set: {
+          isGenerated: true,
+          layoutPath: params.layoutPath ?? null,
+          totalPages: params.totalPages,
+          totalPanels: params.totalPanels ?? null,
+          generatedAt: now,
+          lastError: params.error ?? null,
+        },
+      })
+  }
+
+  async recomputeJobTotalPages(jobId: string): Promise<number> {
+    // Sum total_pages from layout_status for this job
+    const rows = (await this.db
+      .select({ total: layoutStatus.totalPages })
+      .from(layoutStatus)
+      .where(eq(layoutStatus.jobId, jobId))) as Array<{ total: number | null }>
+    const sum = rows.reduce((acc, r) => acc + (r.total || 0), 0)
+    await this.db
+      .update(jobs)
+      .set({ totalPages: sum, updatedAt: new Date().toISOString() })
+      .where(eq(jobs.id, jobId))
+    return sum
   }
 
   async getJobsByNovelId(novelId: string): Promise<Job[]> {

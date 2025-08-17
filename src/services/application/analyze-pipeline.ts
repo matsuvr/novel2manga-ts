@@ -292,6 +292,8 @@ export class AnalyzePipeline {
         data: { jobId, chunkCount: chunks.length },
         metadata: { timestamp: new Date().toISOString() },
       }
+      // 完了ステップへ遷移（UIの完了判定を確実にする）
+      await jobRepo.updateStep(jobId, 'complete')
       await jobRepo.updateStatus(jobId, 'completed')
       return { jobId, chunkCount: chunks.length, response }
     }
@@ -303,6 +305,8 @@ export class AnalyzePipeline {
       data: { jobId, chunkCount: chunks.length },
       metadata: { timestamp: new Date().toISOString() },
     }
+    // 完了ステップへ遷移（UIの完了判定を確実にする）
+    await jobRepo.updateStep(jobId, 'complete')
     await jobRepo.updateStatus(jobId, 'completed')
     return { jobId, chunkCount: chunks.length, response }
   }

@@ -87,7 +87,9 @@
       "Bash(npm ci:*)",
       "mcp__serena__insert_before_symbol",
       "Bash(npm ls:*)",
-      "WebFetch(domain:opennext.js.org)"
+      "WebFetch(domain:opennext.js.org)",
+      "Bash(env)",
+      "Bash(npm run dev:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

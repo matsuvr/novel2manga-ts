@@ -14,6 +14,16 @@ export interface AgentOptions {
   temperature?: number
   maxTokens?: number
   streaming?: boolean
+  timeout?: number // タイムアウト（ミリ秒）
+  // Structured output preferences (passed to providers that support it)
+  responseFormat?: {
+    type: 'json_object' | 'json_schema'
+    json_schema?: {
+      name: string
+      strict?: boolean
+      schema: Record<string, unknown>
+    }
+  }
 }
 
 // ツール実行結果

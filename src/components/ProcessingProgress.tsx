@@ -318,11 +318,8 @@ function ProcessingProgress({
         let currentIndex = -1
         let completedCount = 0
 
-        // Map job status to steps (aligned with backend isCompleted)
-        const uiCompleted =
-          data.job.status === 'completed' ||
-          data.job.currentStep === 'complete' ||
-          data.job.renderCompleted === true
+        // 完了条件はレンダリング完了のみ
+        const uiCompleted = data.job.renderCompleted === true
 
         if (uiCompleted) {
           updatedSteps.forEach((step) => {
@@ -517,11 +514,7 @@ function ProcessingProgress({
         return updatedSteps
       })
 
-      return data.job.status === 'completed' ||
-        data.job.status === 'failed' ||
-        data.job.currentStep === 'complete'
-        ? 'stop'
-        : 'continue'
+      return data.job.renderCompleted === true || data.job.status === 'failed' ? 'stop' : 'continue'
     },
     [
       lastJobData,
@@ -579,11 +572,7 @@ function ProcessingProgress({
         if (result === 'stop') {
           addLog('info', 'ポーリングを停止しました')
           try {
-            const uiCompleted =
-              data.job.status === 'completed' ||
-              data.job.currentStep === 'complete' ||
-              data.job.renderCompleted === true
-            if (uiCompleted) {
+            if (data.job.renderCompleted === true) {
               addLog('info', '処理が完了しました。上部のエクスポートからダウンロードできます。')
             }
           } catch (e) {

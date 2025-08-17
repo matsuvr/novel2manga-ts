@@ -20,13 +20,13 @@ export function getDefaultProvider(): LLMProvider {
   if (process.env.NODE_ENV === 'test') {
     return 'gemini'
   }
-  return 'cerebras'
+  return 'groq'
 }
 
 // Provider fallback chain (first item is primary fallback)
 export function getFallbackChain(): LLMProvider[] {
   // Config-driven fallback order
-  const chain: LLMProvider[] = ['cerebras', 'openai', 'gemini', 'openrouter', 'groq']
+  const chain: LLMProvider[] = ['groq', 'cerebras', 'openai', 'gemini', 'openrouter']
   return chain
 }
 
@@ -42,7 +42,7 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
-    model: 'gpt-5-mini', // gpt-5-mini は5月5日に登場したモデルです。モデル指定を間違えているわけではありません
+    model: 'gpt-5-mini', // gpt-5-mini は8月5日に登場したモデルです。モデル指定を間違えているわけではありません
     maxTokens: 8192,
     timeout: 60_000,
   },

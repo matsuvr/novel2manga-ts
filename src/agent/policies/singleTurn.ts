@@ -42,6 +42,8 @@ export class SingleTurnPolicy implements AgentPolicy {
         temperature: options.temperature,
         maxTokens: options.maxTokens,
         tools: llmTools.length > 0 ? llmTools : undefined,
+        responseFormat: options.responseFormat,
+        timeout: options.timeout, // タイムアウトを渡す
       })
 
       // 結果を構築
