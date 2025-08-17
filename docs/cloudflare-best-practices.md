@@ -1,17 +1,20 @@
 # Cloudflare ベストプラクティス実装ガイド
 
 ## 概要
+
 本プロジェクトでは、Cloudflare D1、R2、KVを使用しています。各サービスのベストプラクティスに基づいた実装を行っています。
 
 ## D1 (データベース)
 
 ### 実装済みのベストプラクティス
+
 - ✅ インデックスの作成による読み取りパフォーマンスの最適化
 - ✅ バッチ操作によるWrite効率の向上
 - ✅ LIMIT句を使用した読み取り行数の削減
 - ✅ 開発環境とプロダクション環境の適切な切り替え
 
 ### 推奨事項
+
 1. **インデックスの活用**
    - 頻繁にクエリされるカラムにインデックスを作成
    - 複合インデックスで複数条件のクエリを最適化
@@ -28,12 +31,14 @@
 ## R2 (オブジェクトストレージ)
 
 ### 実装済みのベストプラクティス
+
 - ✅ Standard storageの適切な使用
 - ✅ メタデータとキャッシュ制御ヘッダーの設定
 - ✅ エラーハンドリングとリトライロジック
 - ✅ 階層的なストレージ構造
 
 ### 推奨事項
+
 1. **ストレージクラスの選択**
    - 頻繁にアクセス: Standard storage（分析結果、マンガデータ）
    - 低頻度アクセス: Infrequent Access（30日以上保存の元データ）
@@ -49,12 +54,14 @@
 ## KV (キーバリューストア)
 
 ### 実装済みのベストプラクティス
+
 - ✅ 最小60秒のcacheTTL設定
 - ✅ 25MBサイズ制限のチェック
 - ✅ 開発環境でのメモリキャッシュ実装
 - ✅ プレフィックスベースのキー管理
 
 ### 推奨事項
+
 1. **パフォーマンス最適化**
    - cacheTTLを長めに設定（分析結果: 1時間以上推奨）
    - データ型の選択: stream > arrayBuffer > text > json
@@ -70,27 +77,32 @@
 ## 実装例
 
 ### D1: バッチ挿入
+
 ```typescript
-await batchInsert(db, 'chunk_analyses', 
+await batchInsert(
+  db,
+  'chunk_analyses',
   ['id', 'chunk_id', 'analysis_file'],
   [
     [id1, chunkId1, file1],
     [id2, chunkId2, file2],
     // ...
-  ]
+  ],
 )
 ```
 
 ### R2: キャッシュ最適化
+
 ```typescript
 await uploadLargeFile(key, data, 'ANALYSIS_STORAGE', {
   contentType: 'application/json',
   cacheControl: 'public, max-age=86400',
-  metadata: { version: '1.0' }
+  metadata: { version: '1.0' },
 })
 ```
 
 ### KV: 高速読み取り
+
 ```typescript
 // 分析結果は1時間キャッシュ
 const ttl = getCacheTTL('analysis') // 3600秒

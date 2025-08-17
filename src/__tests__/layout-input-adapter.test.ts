@@ -24,9 +24,13 @@ describe('buildLayoutLLMInput', () => {
             chunkIndex: 0,
             summary: 'sum',
             characters: [{ name: 'A', role: 'protagonist', description: '' }],
-            scenes: [{ time: false, location: true, setting: 'room', mood: 'calm', visualElements: [] }],
+            scenes: [
+              { time: false, location: true, setting: 'room', mood: 'calm', visualElements: [] },
+            ],
             dialogues: [{ emotion: 'neutral', speaker: 'A', text: 'Hi', context: '' }],
-            highlights: [{ description: '', type: 'plot', text: 'boom', importance: 7, reason: '' }],
+            highlights: [
+              { description: '', type: 'plot', text: 'boom', importance: 7, reason: '' },
+            ],
             situations: [],
           },
         },
@@ -37,7 +41,9 @@ describe('buildLayoutLLMInput', () => {
             chunkIndex: 1,
             summary: 'sum2',
             characters: [{ name: 'B', role: 'supporting', description: '' }],
-            scenes: [{ time: true, location: false, setting: 'street', mood: 'tense', visualElements: [] }],
+            scenes: [
+              { time: true, location: false, setting: 'street', mood: 'tense', visualElements: [] },
+            ],
             dialogues: [],
             highlights: [],
             situations: [],

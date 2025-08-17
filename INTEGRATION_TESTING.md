@@ -59,22 +59,22 @@ vi.mock('@/config', () => ({ ... }))
 ```typescript
 beforeEach(async () => {
   // Arrange: テストデータセットアップ
-  testDb = await createTestDatabase();
-  testStorage = new TestStorageFactory();
-});
+  testDb = await createTestDatabase()
+  testStorage = new TestStorageFactory()
+})
 
-it("test case", async () => {
+it('test case', async () => {
   // Act: テスト対象実行
-  const result = await apiCall();
+  const result = await apiCall()
 
   // Assert: 結果検証
-  expect(result.success).toBe(true);
-});
+  expect(result.success).toBe(true)
+})
 
 afterEach(async () => {
   // Cleanup: テストデータクリーンアップ
-  await cleanupTestDatabase(testDb);
-});
+  await cleanupTestDatabase(testDb)
+})
 ```
 
 ## 新旧統合テスト比較

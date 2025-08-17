@@ -41,6 +41,7 @@ VS Codeのユーザー設定（`settings.json`）に以下を追加すること�
 ### 一時的な対処法
 
 VS Codeを再起動するか、以下のコマンドを実行：
+
 1. `Ctrl + Shift + P`
 2. `Developer: Reload Window` を実行
 

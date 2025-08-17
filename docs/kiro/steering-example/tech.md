@@ -1,9 +1,11 @@
 # Technology Stack
 
 ## Architecture
+
 Full-stack web application with containerized microservices architecture using Docker Compose.
 
 ## Frontend
+
 - **Framework**: React 18 with TypeScript
 - **PDF Rendering**: PDF.js for interactive PDF viewing
 - **HTTP Client**: Axios for API communication
@@ -11,6 +13,7 @@ Full-stack web application with containerized microservices architecture using D
 - **Testing**: Jest with React Testing Library
 
 ## Backend
+
 - **Framework**: FastAPI (Python)
 - **Server**: Uvicorn ASGI server
 - **PDF Processing**: pdfplumber + PyMuPDF (fitz)
@@ -22,6 +25,7 @@ Full-stack web application with containerized microservices architecture using D
 - **Testing**: pytest with pytest-asyncio
 
 ## Development Environment
+
 - **Containerization**: Docker + Docker Compose
 - **Database**: PostgreSQL 15
 - **Environment Management**: python-dotenv
@@ -29,6 +33,7 @@ Full-stack web application with containerized microservices architecture using D
 ## Common Commands
 
 ### Docker Development (Recommended)
+
 ```bash
 # Start all services
 docker-compose up -d
@@ -44,6 +49,7 @@ docker-compose up --build
 ```
 
 ### Manual Development
+
 ```bash
 # Backend
 cd backend
@@ -61,12 +67,14 @@ cd frontend && npm test
 ```
 
 ## Environment Variables
+
 - `REACT_APP_API_URL`: Frontend API endpoint (default: http://localhost:8000)
 - `DATABASE_URL`: PostgreSQL connection string
 - `UPLOAD_DIR`: File upload directory path
 - `OPENAI_API_KEY`: Required for AI explanations
 
 ## Port Configuration
+
 - Frontend: 3000
 - Backend API: 8000
 - PostgreSQL: 5432

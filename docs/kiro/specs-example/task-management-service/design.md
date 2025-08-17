@@ -19,6 +19,7 @@ graph TB
 ### Technology Stack
 
 **Frontend:**
+
 - React 18 with TypeScript
 - React Router for routing
 - Axios for API communication
@@ -26,6 +27,7 @@ graph TB
 - React Hook Form for form management
 
 **Backend:**
+
 - Node.js with Express.js
 - TypeScript for type safety
 - JWT for authentication
@@ -33,10 +35,12 @@ graph TB
 - nodemailer for email functionality
 
 **Database:**
+
 - PostgreSQL for data persistence
 - Prisma ORM for database operations
 
 **Development Tools:**
+
 - Vite for frontend build tool
 - ESLint + Prettier for code quality
 - Jest for testing
@@ -46,6 +50,7 @@ graph TB
 ### Frontend Components
 
 #### Core Components
+
 - `App`: メインアプリケーションコンポーネント
 - `TaskList`: タスク一覧表示コンポーネント
 - `TaskItem`: 個別タスク表示コンポーネント
@@ -54,6 +59,7 @@ graph TB
 - `SearchBar`: 検索・フィルタリングコンポーネント
 
 #### Authentication Components
+
 - `LoginForm`: ログインフォーム
 - `RegisterForm`: アカウント作成フォーム
 - `ProtectedRoute`: 認証が必要なルートの保護
@@ -61,12 +67,14 @@ graph TB
 ### Backend API Endpoints
 
 #### Authentication
+
 - `POST /api/auth/register` - アカウント作成
 - `POST /api/auth/login` - ログイン
 - `POST /api/auth/logout` - ログアウト
 - `GET /api/auth/me` - 現在のユーザー情報取得
 
 #### Tasks
+
 - `GET /api/tasks` - タスク一覧取得（フィルタリング対応）
 - `POST /api/tasks` - タスク作成
 - `GET /api/tasks/:id` - 特定タスク取得
@@ -75,6 +83,7 @@ graph TB
 - `PATCH /api/tasks/:id/complete` - タスク完了状態切り替え
 
 #### Projects
+
 - `GET /api/projects` - プロジェクト一覧取得
 - `POST /api/projects` - プロジェクト作成
 - `PUT /api/projects/:id` - プロジェクト更新
@@ -83,43 +92,46 @@ graph TB
 ## Data Models
 
 ### User Model
+
 ```typescript
 interface User {
-  id: string;
-  email: string;
-  password: string; // hashed
-  name: string;
-  createdAt: Date;
-  updatedAt: Date;
+  id: string
+  email: string
+  password: string // hashed
+  name: string
+  createdAt: Date
+  updatedAt: Date
 }
 ```
 
 ### Project Model
+
 ```typescript
 interface Project {
-  id: string;
-  name: string;
-  color: string;
-  userId: string;
-  createdAt: Date;
-  updatedAt: Date;
+  id: string
+  name: string
+  color: string
+  userId: string
+  createdAt: Date
+  updatedAt: Date
 }
 ```
 
 ### Task Model
+
 ```typescript
 interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  completed: boolean;
-  priority: 'low' | 'medium' | 'high';
-  dueDate?: Date;
-  completedAt?: Date;
-  projectId?: string;
-  userId: string;
-  createdAt: Date;
-  updatedAt: Date;
+  id: string
+  title: string
+  description?: string
+  completed: boolean
+  priority: 'low' | 'medium' | 'high'
+  dueDate?: Date
+  completedAt?: Date
+  projectId?: string
+  userId: string
+  createdAt: Date
+  updatedAt: Date
 }
 ```
 
@@ -165,12 +177,14 @@ CREATE TABLE tasks (
 ## Error Handling
 
 ### Frontend Error Handling
+
 - APIエラーレスポンスの統一的な処理
 - ユーザーフレンドリーなエラーメッセージ表示
 - ネットワークエラー時の再試行機能
 - フォームバリデーションエラーの表示
 
 ### Backend Error Handling
+
 - 統一されたエラーレスポンス形式
 - HTTPステータスコードの適切な使用
 - バリデーションエラーの詳細な情報提供
@@ -179,14 +193,15 @@ CREATE TABLE tasks (
 ```typescript
 interface ErrorResponse {
   error: {
-    message: string;
-    code: string;
-    details?: any;
-  };
+    message: string
+    code: string
+    details?: any
+  }
 }
 ```
 
 ### Error Types
+
 - `VALIDATION_ERROR` - 入力データの検証エラー
 - `AUTHENTICATION_ERROR` - 認証エラー
 - `AUTHORIZATION_ERROR` - 認可エラー
@@ -196,21 +211,25 @@ interface ErrorResponse {
 ## Testing Strategy
 
 ### Frontend Testing
+
 - **Unit Tests**: 個別コンポーネントのロジックテスト（Jest + React Testing Library）
 - **Integration Tests**: コンポーネント間の連携テスト
 - **E2E Tests**: ユーザーフローの完全なテスト（Cypress）
 
 ### Backend Testing
+
 - **Unit Tests**: 個別関数・メソッドのテスト（Jest）
 - **Integration Tests**: API エンドポイントのテスト（Supertest）
 - **Database Tests**: データベース操作のテスト
 
 ### Test Coverage Goals
+
 - Unit Tests: 80%以上のコードカバレッジ
 - Integration Tests: 主要なAPIエンドポイントの完全カバー
 - E2E Tests: 重要なユーザーフローの完全カバー
 
 ### Testing Environment
+
 - テスト用データベースの分離
 - モックデータの活用
 - CI/CDパイプラインでの自動テスト実行

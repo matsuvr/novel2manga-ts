@@ -20,7 +20,10 @@ function loadDotEnvFile(filePath) {
       if (eq === -1) continue
       const key = trimmed.slice(0, eq).trim()
       let val = trimmed.slice(eq + 1).trim()
-      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
         val = val.slice(1, -1)
       }
       if (!(key in process.env)) process.env[key] = val
@@ -78,7 +81,13 @@ async function testOpenAI() {
     }),
   })
   const text = await res.text()
-  return { provider: 'openai', status: res.status, ok: res.ok, preview: text.slice(0, 200), source: 'raw-openai' }
+  return {
+    provider: 'openai',
+    status: res.status,
+    ok: res.ok,
+    preview: text.slice(0, 200),
+    source: 'raw-openai',
+  }
 }
 
 async function testGemini() {
@@ -95,7 +104,13 @@ async function testGemini() {
     }),
   })
   const text = await res.text()
-  return { provider: 'gemini', status: res.status, ok: res.ok, preview: text.slice(0, 200), source: 'raw-gemini' }
+  return {
+    provider: 'gemini',
+    status: res.status,
+    ok: res.ok,
+    preview: text.slice(0, 200),
+    source: 'raw-gemini',
+  }
 }
 
 async function testCerebras() {
@@ -119,7 +134,13 @@ async function testCerebras() {
     }),
   })
   const text = await res.text()
-  return { provider: 'cerebras', status: res.status, ok: res.ok, preview: text.slice(0, 200), source: 'raw-cerebras' }
+  return {
+    provider: 'cerebras',
+    status: res.status,
+    ok: res.ok,
+    preview: text.slice(0, 200),
+    source: 'raw-cerebras',
+  }
 }
 
 async function testGroq() {
@@ -143,7 +164,13 @@ async function testGroq() {
     }),
   })
   const text = await res.text()
-  return { provider: 'groq', status: res.status, ok: res.ok, preview: text.slice(0, 200), source: 'raw-groq' }
+  return {
+    provider: 'groq',
+    status: res.status,
+    ok: res.ok,
+    preview: text.slice(0, 200),
+    source: 'raw-groq',
+  }
 }
 
 async function testOpenRouter() {
@@ -167,7 +194,13 @@ async function testOpenRouter() {
     }),
   })
   const text = await res.text()
-  return { provider: 'openrouter', status: res.status, ok: res.ok, preview: text.slice(0, 200), source: 'raw-openrouter' }
+  return {
+    provider: 'openrouter',
+    status: res.status,
+    ok: res.ok,
+    preview: text.slice(0, 200),
+    source: 'raw-openrouter',
+  }
 }
 
 async function main() {
@@ -175,7 +208,9 @@ async function main() {
   const targets = pickProviders(arg)
   if (targets.length === 0) {
     console.log('[INFO] No API keys detected. Skipping raw connectivity test.')
-    console.log('Set env: OPENAI_API_KEY / GEMINI_API_KEY|GOOGLE_API_KEY / CEREBRAS_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY')
+    console.log(
+      'Set env: OPENAI_API_KEY / GEMINI_API_KEY|GOOGLE_API_KEY / CEREBRAS_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY',
+    )
     process.exit(0)
   }
 
@@ -204,5 +239,3 @@ main().catch((e) => {
   console.error('Fatal:', e)
   process.exit(1)
 })
-
-

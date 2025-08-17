@@ -43,4 +43,3 @@ describe('Page domain model', () => {
     expect(new Set(widths).size).toBeGreaterThan(1)
   })
 })
-

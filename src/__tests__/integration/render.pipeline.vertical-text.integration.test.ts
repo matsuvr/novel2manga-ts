@@ -33,7 +33,12 @@ function makeMemoryRenderPorts() {
         renders[k] = data
         return `mem://renders/${k}.png`
       },
-      async putPageThumbnail(jobId: string, episodeNumber: number, pageNumber: number, data: Buffer) {
+      async putPageThumbnail(
+        jobId: string,
+        episodeNumber: number,
+        pageNumber: number,
+        data: Buffer,
+      ) {
         const k = `${jobId}/${episodeNumber}/${pageNumber}`
         thumbs[k] = data
         return `mem://thumbnails/${k}.jpg`
@@ -76,7 +81,7 @@ describe.skip('integration: renderBatchFromYaml with vertical text', () => {
       pngBuffer: Buffer.from('iVBOR', 'base64'),
     })
 
-    // Mock createImageFromBuffer 
+    // Mock createImageFromBuffer
     const canvasMod = await import('@/lib/canvas/canvas-renderer')
     // @ts-expect-error test shim
     canvasMod.CanvasRenderer.createImageFromBuffer = vi.fn().mockReturnValue({
@@ -102,4 +107,3 @@ describe.skip('integration: renderBatchFromYaml with vertical text', () => {
     expect(dump.renders['job/1/1']).toBeInstanceOf(Buffer)
   })
 })
-

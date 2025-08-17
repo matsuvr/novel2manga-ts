@@ -12,30 +12,35 @@ Documentation-driven framework built on Claude Code's native extensibility featu
 ## Core Technologies
 
 ### Claude Code Platform
+
 - **Base Platform**: Claude Code CLI (Anthropic's official Claude interface)
 - **Model**: Claude Sonnet 4 (claude-sonnet-4-20250514)
 - **Extension System**: Native hooks and slash commands support
 - **Context Management**: Built-in compaction with preservation hooks
 
 ### Command System
+
 - **Definition Format**: Markdown files with YAML frontmatter
 - **Dynamic Content**: Bash execution (`!command`) and file inclusion (`@file.md`)
 - **Argument Passing**: `$ARGUMENTS` variable for parameter handling
 - **Tool Restrictions**: `allowed-tools` specification for security
 
 ### Hook System
+
 - **Configuration**: JSON-based hook definitions in `.claude/settings.json`
 - **Execution Environment**: Python 3 scripts with JSON I/O
 - **Event Types**: PostToolUse, PreToolUse, PreCompact, Stop
 - **Performance**: Configurable timeouts (5-10 seconds typical)
 
 ### Web Framework
+
 - **Framework**: Next.js 15.4.4 (App Router)
 - **UI Library**: React 19.1.0
 - **Styling**: Tailwind CSS 4.1.11
 - **TypeScript**: 5.8.3
 
 ### Deployment Platform
+
 - **Runtime**: Cloudflare Workers (Edge Computing)
 - **Adapter**: @opennextjs/cloudflare 1.6.1
 - **CLI**: Wrangler 4.26.0
@@ -44,12 +49,14 @@ Documentation-driven framework built on Claude Code's native extensibility featu
 - **Image Optimization**: Cloudflare Images integration
 
 ### AI/ML Integration
+
 - **AI SDK**: @ai-sdk/openai 1.3.23
 - **Framework**: Mastra 0.10.15
 - **Vector DB**: Mastra Memory 0.11.5
 - **Database**: Mastra LibSQL 0.11.2
 
 ### Data Storage (Novel-to-Manga Project)
+
 - **Database**: Cloudflare D1 (SQLite at edge)
 - **Object Storage**: Cloudflare R2 (for text files, analysis results, YAML layouts)
 - **File Structure**:
@@ -61,6 +68,7 @@ Documentation-driven framework built on Claude Code's native extensibility featu
 ## Development Environment
 
 ### Required Tools
+
 - **Claude Code**: Latest version with hooks and slash commands support
 - **Python 3**: For hook scripts (progress tracking, validation)
 - **Git**: For version control and change detection
@@ -69,6 +77,7 @@ Documentation-driven framework built on Claude Code's native extensibility featu
 - **Wrangler CLI**: For Cloudflare Workers deployment
 
 ### Project Structure
+
 ```
 .claude/
 ├── commands/kiro/           # Slash command definitions
@@ -97,6 +106,7 @@ Documentation-driven framework built on Claude Code's native extensibility featu
 ## Common Commands
 
 ### Core Workflow Commands
+
 ```bash
 # Steering management (recommended unified command)
 /kiro:steering                    # Smart create/update steering documents
@@ -110,6 +120,7 @@ Documentation-driven framework built on Claude Code's native extensibility featu
 ```
 
 ### Cloudflare Workers Commands
+
 ```bash
 # Development
 npm run dev                       # Local Next.js development
@@ -127,6 +138,7 @@ opennextjs-cloudflare deploy     # Deploy to production
 ```
 
 ### Legacy Commands (Deprecated)
+
 ```bash
 # These commands are maintained for compatibility but not recommended
 /kiro:steering-init              # [DEPRECATED] Use /kiro:steering instead
@@ -135,6 +147,7 @@ opennextjs-cloudflare deploy     # Deploy to production
 ```
 
 ### Manual Operations
+
 ```bash
 # Project setup (one-time)
 cp -r .claude/ /your-project/     # Copy command definitions
@@ -148,16 +161,19 @@ cp CLAUDE.md /your-project/       # Copy project configuration
 ## Environment Variables
 
 ### Claude Code Configuration
+
 - **CLAUDE_HOOKS_ENABLED**: Enable hook system (default: true)
 - **CLAUDE_COMMAND_TIMEOUT**: Command execution timeout (default: 120s)
 - **CLAUDE_CONTEXT_PRESERVATION**: Enable context hooks (default: true)
 
 ### Project Configuration
+
 - **KIRO_LANGUAGE**: Default language for generated content (ja/en/zh-TW)
 - **KIRO_STEERING_MODE**: Steering inclusion mode (always/conditional/manual)
 - **KIRO_SPEC_VALIDATION**: Enable specification validation (default: true)
 
 ### Cloudflare Workers Configuration
+
 - **OPENAI_API_KEY**: OpenAI API key for AI generation (required)
 - **MASTRA_DB_URL**: Database connection URL (optional)
 - **NEXT_PUBLIC_APP_URL**: Public application URL (optional)
@@ -167,6 +183,7 @@ cp CLAUDE.md /your-project/       # Copy project configuration
 ## Hook Configuration Details
 
 ### PostToolUse Hooks
+
 ```json
 {
   "matcher": "Edit|MultiEdit|Write",
@@ -180,13 +197,14 @@ cp CLAUDE.md /your-project/       # Copy project configuration
 }
 ```
 
-### PreCompact Hooks  
+### PreCompact Hooks
+
 ```json
 {
   "matcher": ".*",
   "hooks": [
     {
-      "type": "command", 
+      "type": "command",
       "command": "python3 .claude/scripts/preserve-spec-context.py",
       "timeout": 5
     }
@@ -207,16 +225,19 @@ cp CLAUDE.md /your-project/       # Copy project configuration
 ## Integration Points
 
 ### Git Integration
+
 - Hook scripts detect file changes using git status
 - Commit messages can reference specification phases
 - Steering drift detection based on git diff analysis
 
 ### Documentation Systems
+
 - Compatible with standard markdown documentation workflows
 - Generates content suitable for wikis, README files, and technical documentation
 - Supports multi-language documentation maintenance
 
 ### CI/CD Compatibility
+
 - Hook scripts can be adapted for continuous integration
 - Specification compliance can be validated in automated pipelines
 - Progress tracking suitable for project management tool integration
@@ -224,6 +245,7 @@ cp CLAUDE.md /your-project/       # Copy project configuration
 - GitHub Actions integration for automated deployments
 
 ### Cloudflare Services Integration
+
 - **Workers KV**: For persistent caching and session storage
 - **D1 Database**: SQLite at the edge for structured data
   - Novel metadata, job tracking, chunk management

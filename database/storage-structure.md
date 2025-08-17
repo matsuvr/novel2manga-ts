@@ -175,9 +175,9 @@ private async safeOperation<T>(
 
 ```typescript
 // Non-invasive adaptation of existing DatabaseService
-const ports = adaptAll(dbService);
+const ports = adaptAll(dbService)
 // 各 repository は適切な port のみ受信
-const novelRepo = new NovelRepository(ports.novel); // NovelDbPortRW
+const novelRepo = new NovelRepository(ports.novel) // NovelDbPortRW
 ```
 
 **Repository Factory Caching:**
