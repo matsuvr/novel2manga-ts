@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* Tailwind v4: keep globals minimal and rely on utilities */
 :root {
@@ -29,8 +29,8 @@ body {
     Cantarell,
     Helvetica Neue,
     Arial,
-    "Apple Color Emoji",
-    "Segoe UI Emoji"
+    'Apple Color Emoji',
+    'Segoe UI Emoji'
   );
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;

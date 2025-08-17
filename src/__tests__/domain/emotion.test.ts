@@ -31,4 +31,3 @@ describe('domain/emotion', () => {
     expect(normalizeEmotion(undefined)).toBeUndefined()
   })
 })
-

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { BaseAgent } from '@/agents/base-agent'
+import { CompatAgent } from '@/agent/compat'
 import { getLLMDefaultProvider, getNarrativeAnalysisConfig } from '@/config'
 import type { ChunkAnalysisResult } from '@/types/chunk'
 import type { PageBatchPlan } from '@/types/page-splitting'
@@ -30,11 +30,13 @@ const pageBatchPlanSchema = z.object({
   remainingPagesEstimate: z.number().int().min(0),
 })
 
-export class PageSplitAgent extends BaseAgent {
+export class PageSplitAgent {
+  private compat: CompatAgent
+
   constructor() {
     const provider = getLLMDefaultProvider()
     const narrative = getNarrativeAnalysisConfig()
-    super({
+    this.compat = new CompatAgent({
       name: 'page-split-agent',
       instructions:
         narrative.systemPrompt +
@@ -110,9 +112,9 @@ ${JSON.stringify(compact, null, 2)}
 `
 
     console.log('[PageSplitAgent] About to call generateObject with pageBatchPlanSchema')
-    const result = await this.generateObject(
-      [{ role: 'user', content: userPrompt }],
+    const result = await this.compat.generateObject<PageBatchPlan>(
       pageBatchPlanSchema,
+      userPrompt,
       {
         maxRetries: 0,
         jobId: options.jobId,

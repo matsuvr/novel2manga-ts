@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { BaseAgent } from '@/agents/base-agent'
-import { getLayoutGenerationConfig, getLLMDefaultProvider } from '@/config'
+import { getLlmStructuredGenerator } from '@/agent/structured-generator'
+import { getLayoutGenerationConfig } from '@/config'
 import { Page } from '@/domain/models/page'
 import type { PageBatchPlan } from '@/types/page-splitting'
 import type { EpisodeData, LayoutGenerationConfig, MangaLayout, Panel } from '@/types/panel-layout'
@@ -41,20 +41,8 @@ const layoutPanelCountOutputSchema = z.object({
   ),
 })
 
-export class LayoutGeneratorAgent extends BaseAgent {
-  constructor() {
-    const config = getLayoutGenerationConfig()
-    const provider = getLLMDefaultProvider()
-
-    super({
-      name: 'layout-generator',
-      instructions: config.systemPrompt,
-      provider: provider,
-      maxTokens: config.maxTokens,
-    })
-
-    console.log(`[layout-generator] Using provider: ${provider}`)
-  }
+export class LayoutGeneratorAgent {
+  private generator = getLlmStructuredGenerator()
 
   async generateLayout(
     episodeData: EpisodeData,
@@ -74,16 +62,20 @@ export class LayoutGeneratorAgent extends BaseAgent {
       .replace('{{episodeNumber}}', episodeData.episodeNumber.toString())
       .replace('{{layoutInputJson}}', JSON.stringify(layoutInput, null, 2))
 
-    const llmResponseObject = await this.generateObject(
-      [{ role: 'user', content: prompt }],
-      layoutPanelCountOutputSchema,
-      {
+    const cfg = getLayoutGenerationConfig()
+    const { result: llmResponseObject } = await this.generator.generateObjectWithFallback({
+      name: 'layout-generator',
+      instructions: cfg.systemPrompt,
+      schema: layoutPanelCountOutputSchema,
+      prompt,
+      maxTokens: cfg.maxTokens,
+      options: {
         maxRetries: 0,
         jobId: options?.jobId,
         stepName: 'layout',
         episodeNumber: episodeData.episodeNumber,
       },
-    )
+    })
 
     // LLMの出力（ページごとのコマ数）を実際のレイアウトに変換
     const pages: { page_number: number; panels: Panel[] }[] = []
@@ -220,23 +212,28 @@ export async function generateMangaLayoutForPlan(
   config: LayoutGenerationConfig,
   options: { jobId: string },
 ): Promise<MangaLayout> {
-  const { agent } = await createAgentAndOptions(config, options.jobId)
+  await createAgentAndOptions(config, options.jobId)
 
   const userPrompt = buildUserPrompt(episodeData, plan, config)
 
   // Reuse the same schema and mapper in generateLayout by calling the protected flow
   // For simplicity we duplicate minimal logic here
 
-  const llmResponseObject = await agent.generateObject(
-    [{ role: 'user', content: userPrompt }],
-    layoutPanelCountOutputSchema,
-    {
+  const cfg = getLayoutGenerationConfig()
+  const { result } = await getLlmStructuredGenerator().generateObjectWithFallback({
+    name: 'layout-generator',
+    instructions: cfg.systemPrompt,
+    schema: layoutPanelCountOutputSchema,
+    prompt: userPrompt,
+    maxTokens: cfg.maxTokens,
+    options: {
       maxRetries: 0,
+      jobId: options.jobId,
       stepName: 'layout',
       episodeNumber: episodeData.episodeNumber,
     },
-  )
+  })
 
-  const layout = mapLayoutPanelCountToLayout(llmResponseObject, episodeData, plan)
+  const layout = mapLayoutPanelCountToLayout(result, episodeData, plan)
   return layout
 }

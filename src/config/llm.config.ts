@@ -1,6 +1,6 @@
 // Centralized LLM configuration: providers, defaults, and per-use-case parameters
 
-export type LLMProvider = 'openai' | 'gemini' | 'groq' | 'openrouter' | 'cerebras'
+export type LLMProvider = 'openai' | 'gemini' | 'groq' | 'openrouter' | 'cerebras' | 'fake'
 
 export interface ProviderConfig {
   apiKey?: string
@@ -34,14 +34,15 @@ export function getFallbackChain(): LLMProvider[] {
 export const providers: Record<LLMProvider, ProviderConfig> = {
   cerebras: {
     apiKey: process.env.CEREBRAS_API_KEY,
-    model: 'qwen-3-235b-a22b-instruct-2507',
+    model: 'qwen-3-235b-a22b-instruct-2507', // Use a known-valid Cerebras chat model to avoid 404
     maxTokens: 8192,
     timeout: 30_000,
-    baseUrl: 'https://api.cerebras.ai/v1',
+    // Note: Cerebras SDK may append "/v1" internally. Use root host here.
+    baseUrl: 'https://api.cerebras.ai',
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
-    model: 'gpt-5-mini', // gpt-5-mini はつい先日登場したモデルです。モデル指定を間違えているわけではありません
+    model: 'gpt-5-mini', // gpt-5-mini は5月5日に登場したモデルです。モデル指定を間違えているわけではありません
     maxTokens: 8192,
     timeout: 60_000,
   },
@@ -65,6 +66,12 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
     maxTokens: 8192,
     timeout: 30_000,
     preferCerebras: true,
+  },
+  fake: {
+    apiKey: 'fake-key',
+    model: 'fake-model',
+    maxTokens: 8192,
+    timeout: 30_000,
   },
 }
 
@@ -99,15 +106,35 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
         return process.env.GROQ_API_KEY
       case 'openrouter':
         return process.env.OPENROUTER_API_KEY
+      case 'fake':
+        return 'fake-key'
       default:
         return undefined
     }
   })()
 
   // Return a fresh object; keep model/token config from the static table.
+  const modelOverride = (() => {
+    switch (provider) {
+      case 'cerebras':
+        return process.env.CEREBRAS_MODEL
+      case 'openai':
+        return process.env.OPENAI_MODEL
+      case 'gemini':
+        return process.env.GEMINI_MODEL
+      case 'groq':
+        return process.env.GROQ_MODEL
+      case 'openrouter':
+        return process.env.OPENROUTER_MODEL
+      default:
+        return undefined
+    }
+  })()
+
   return {
     ...cfg,
     apiKey: dynamicApiKey,
+    model: modelOverride && modelOverride.trim().length > 0 ? modelOverride : cfg.model,
   }
 }
 

@@ -24,7 +24,7 @@ vi.mock('canvas', () => {
     save: vi.fn(),
     textAlign: 'left' as CanvasTextAlign,
     textBaseline: 'top' as CanvasTextBaseline,
-    measureText: (t: string) => ({ width: t.length * 10 } as TextMetrics),
+    measureText: (t: string) => ({ width: t.length * 10 }) as TextMetrics,
     fillText: vi.fn(),
     drawImage: drawImageSpy,
   }
@@ -101,4 +101,3 @@ describe('CanvasRenderer vertical dialogue scaling', () => {
     expect(dHeight).toBeGreaterThan(0)
   })
 })
-

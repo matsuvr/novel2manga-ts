@@ -1,28 +1,10 @@
 import { z } from 'zod'
-import { getChunkBundleAnalysisConfig, getLLMDefaultProvider } from '@/config'
+import { getLlmStructuredGenerator } from '@/agent/structured-generator'
+import { getChunkBundleAnalysisConfig } from '@/config'
 import type { ChunkAnalysisResult } from '@/types/chunk'
-import { BaseAgent } from './base-agent'
 
-// Singleton instance with lazy initialization
-let agentInstance: BaseAgent | null = null
-
-function getChunkBundleAnalyzer(): BaseAgent {
-  if (!agentInstance) {
-    const config = getChunkBundleAnalysisConfig()
-    const provider = getLLMDefaultProvider()
-
-    agentInstance = new BaseAgent({
-      name: 'Chunk Bundle Analyzer',
-      instructions: config.systemPrompt,
-      provider: provider,
-      maxTokens: config.maxTokens,
-    })
-
-    console.log(`[chunkBundleAnalyzer] Using provider: ${provider}`)
-  }
-
-  return agentInstance
-}
+// LLM structured generator (with LLM-only fallback)
+const generator = getLlmStructuredGenerator()
 
 // 統合分析の結果スキーマ
 export const bundleAnalysisSchema = z.object({
@@ -240,12 +222,15 @@ export async function analyzeChunkBundle(
     try {
       console.log('Sending to LLM for bundle analysis...')
 
-      const chunkBundleAnalyzer = getChunkBundleAnalyzer()
-      const result = await chunkBundleAnalyzer.generateObject(
-        [{ role: 'user', content: userPrompt }],
-        bundleAnalysisSchema,
-        { maxRetries: 2 },
-      )
+      const cfg = getChunkBundleAnalysisConfig()
+      const { result } = await generator.generateObjectWithFallback({
+        name: 'Chunk Bundle Analyzer',
+        instructions: cfg.systemPrompt,
+        schema: bundleAnalysisSchema,
+        prompt: userPrompt,
+        maxTokens: cfg.maxTokens,
+        options: { maxRetries: 2 },
+      })
 
       console.log('Bundle analysis successful')
       console.log('Summary length:', result.summary.length)

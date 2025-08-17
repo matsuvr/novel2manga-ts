@@ -39,4 +39,3 @@ describe('type-guards: isMangaLayout', () => {
     }
   })
 })
-

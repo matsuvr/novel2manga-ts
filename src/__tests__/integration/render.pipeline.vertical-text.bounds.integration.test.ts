@@ -26,7 +26,7 @@ vi.mock('canvas', () => {
     save: vi.fn(),
     textAlign: 'left' as CanvasTextAlign,
     textBaseline: 'top' as CanvasTextBaseline,
-    measureText: (t: string) => ({ width: t.length * 10 } as TextMetrics),
+    measureText: (t: string) => ({ width: t.length * 10 }) as TextMetrics,
     fillText: vi.fn(),
     drawImage: drawImageSpy,
   }
@@ -134,7 +134,10 @@ pages:
       maxInFlight = Math.max(maxInFlight, inFlight)
       await new Promise((r) => setTimeout(r, 10))
       inFlight--
-      return { meta: { image_base64: 'x', width: 120, height: 300 }, pngBuffer: Buffer.from('iVBOR', 'base64') }
+      return {
+        meta: { image_base64: 'x', width: 120, height: 300 },
+        pngBuffer: Buffer.from('iVBOR', 'base64'),
+      }
     })
 
     const canvasMod = await import('@/lib/canvas/canvas-renderer')
@@ -178,4 +181,3 @@ pages:
     expect(maxInFlight).toBeLessThanOrEqual(1)
   })
 })
-

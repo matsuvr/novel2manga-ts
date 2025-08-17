@@ -14,7 +14,7 @@ permissions:
 env:
   # Toggle this to 'true' when deploying and ready to run E2E on CI.
   # Can also be overridden via repository/organization variables or workflow_dispatch inputs.
-  ENABLE_E2E: "false"
+  ENABLE_E2E: 'false'
 
 jobs:
   build-and-test:
@@ -27,8 +27,8 @@ jobs:
       - name: Use Node version from .nvmrc
         uses: actions/setup-node@v4
         with:
-          node-version-file: ".nvmrc"
-          cache: "npm"
+          node-version-file: '.nvmrc'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci

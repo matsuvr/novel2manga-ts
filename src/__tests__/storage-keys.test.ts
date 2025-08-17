@@ -7,4 +7,3 @@ describe('StorageKeys', () => {
     expect(key).toBe('job123/episode_2.progress.json')
   })
 })
-

@@ -1,9 +1,10 @@
 # Project Structure
 
 ## Root Directory Organization
+
 ```
 ├── frontend/           # React TypeScript application
-├── backend/            # FastAPI Python application  
+├── backend/            # FastAPI Python application
 ├── uploads/            # PDF file storage directory
 ├── .kiro/              # Kiro AI assistant configuration
 ├── docker-compose.yml  # Multi-service container orchestration
@@ -11,6 +12,7 @@
 ```
 
 ## Frontend Structure (`frontend/`)
+
 ```
 frontend/
 ├── src/
@@ -26,6 +28,7 @@ frontend/
 ```
 
 ## Backend Structure (`backend/`)
+
 ```
 backend/
 ├── app/
@@ -44,25 +47,30 @@ backend/
 ## Code Organization Patterns
 
 ### Data Models
+
 - **Python**: Use dataclasses with type hints in `models.py`
 - **TypeScript**: Use interfaces in `types/index.ts`
 - **Enums**: Mirror between Python and TypeScript (ElementType, JobStatus)
 
 ### Validation
+
 - **Comprehensive validation**: Both frontend and backend have matching validation logic
 - **Error handling**: Custom ValidationError classes in both languages
 - **Assertion functions**: Strict validation with clear error messages
 
 ### File Naming Conventions
+
 - **Python**: snake_case for files and functions
 - **TypeScript**: camelCase for variables, PascalCase for types/interfaces
 - **Components**: PascalCase for React component files
 
 ### Import Organization
+
 - **Python**: Standard library, third-party, local imports (separated by blank lines)
 - **TypeScript**: External libraries, internal modules, relative imports
 
 ## Key Architectural Principles
+
 - **Type Safety**: Strong typing enforced in both Python and TypeScript
 - **Validation**: Dual validation on frontend and backend
 - **Separation of Concerns**: Clear separation between models, validation, and business logic

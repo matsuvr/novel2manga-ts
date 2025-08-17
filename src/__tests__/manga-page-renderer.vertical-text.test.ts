@@ -11,7 +11,7 @@ vi.mock('@/services/vertical-text-client', () => ({
 vi.mock('@/lib/canvas/canvas-renderer', async () => {
   const setDialogueAssetsSpy = vi.fn()
   const renderMangaLayoutSpy = vi.fn()
-  
+
   const mockCanvasInstance = {
     canvas: { width: 595, height: 842 },
     renderMangaLayout: renderMangaLayoutSpy,
@@ -19,7 +19,7 @@ vi.mock('@/lib/canvas/canvas-renderer', async () => {
     toBlob: vi.fn().mockResolvedValue(new Blob(['x'], { type: 'image/png' })),
     cleanup: vi.fn(),
   }
-  
+
   return {
     CanvasRenderer: {
       create: vi.fn().mockResolvedValue(mockCanvasInstance),
@@ -28,7 +28,7 @@ vi.mock('@/lib/canvas/canvas-renderer', async () => {
         width: 120,
         height: 300,
       }),
-    }
+    },
   }
 })
 
@@ -77,17 +77,20 @@ describe('MangaPageRenderer vertical text integration', () => {
     process.env.NODE_ENV = 'test'
     const { renderVerticalText } = await import('@/services/vertical-text-client')
     const canvasRendererMock = await getCanvasRendererMock()
-    
+
     const renderer = new MangaPageRenderer()
     // Create a mock canvas instance and assign it
     const mockInstance = await canvasRendererMock.create()
     renderer['canvasRenderer'] = mockInstance
-    
+
     await renderer.renderToCanvas(MockLayout, 1)
     expect(mockInstance.setDialogueAssets).toHaveBeenCalledTimes(1)
     expect(renderVerticalText as any).not.toHaveBeenCalled()
     // assets contain two entries for two dialogues
-    const callArg = mockInstance.setDialogueAssets.mock.calls[0][0] as Record<string, { width: number; height: number }>
+    const callArg = mockInstance.setDialogueAssets.mock.calls[0][0] as Record<
+      string,
+      { width: number; height: number }
+    >
     expect(Object.keys(callArg)).toEqual(['p1:0', 'p1:1'])
     expect(callArg['p1:0'].width).toBeGreaterThan(0)
     expect(callArg['p1:0'].height).toBeGreaterThan(0)
@@ -106,13 +109,15 @@ describe('MangaPageRenderer vertical text integration', () => {
     // Create a mock canvas instance and assign it
     const mockInstance = await canvasRendererMock.create()
     renderer['canvasRenderer'] = mockInstance
-    
+
     await renderer.renderToCanvas(MockLayout, 1)
     expect(renderVerticalText as any).toHaveBeenCalled()
     expect(mockInstance.setDialogueAssets).toHaveBeenCalledTimes(1)
-    const arg = mockInstance.setDialogueAssets.mock.calls[0][0] as Record<string, { width: number; height: number }>
+    const arg = mockInstance.setDialogueAssets.mock.calls[0][0] as Record<
+      string,
+      { width: number; height: number }
+    >
     expect(arg['p1:0'].width).toBe(120)
     expect(arg['p1:0'].height).toBe(300)
   })
 })
-
