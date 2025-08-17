@@ -81,7 +81,7 @@ async function generateServerSideThumbnail(
     const outputBuffer = (
       canvas as { toBuffer: (format: string, options: { quality: number }) => Buffer }
     ).toBuffer(`image/${format}`, { quality })
-    return new Blob([outputBuffer], { type: `image/${format}` })
+    return new Blob([new Uint8Array(outputBuffer)], { type: `image/${format}` })
   } catch (error) {
     console.error('Server-side thumbnail generation failed:', error)
     throw new Error('サムネイル生成に失敗しました')

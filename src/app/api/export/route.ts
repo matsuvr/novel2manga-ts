@@ -86,7 +86,7 @@ export async function GET(_request: NextRequest): Promise<Response> {
     // LocalFileStorageはBase64ではなくプレーン文字列(JSONなど)を返すケースがあるため、Buffer変換を試行
     // LocalFileStorage.get はバイナリ保存時でも Base64 を返す設計
     // ただし互換のため UTF-8 もフォールバック
-    return new Response(buffer, {
+    return new Response(new Uint8Array(buffer), {
       status: 200,
       headers: {
         'Content-Type': contentType,
