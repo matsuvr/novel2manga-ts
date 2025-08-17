@@ -140,15 +140,6 @@ export async function renderBatchFromYaml(
   }
 
   const duration = Date.now() - startTime
-  if (failedCount === 0) {
-    try {
-      await dbService.markJobStepCompleted(jobId, 'render')
-      await dbService.updateJobStep(jobId, 'complete')
-      await dbService.updateJobStatus(jobId, 'completed')
-    } catch {
-      // noop
-    }
-  }
 
   return {
     success: true,

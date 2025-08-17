@@ -58,8 +58,7 @@ jobs:
           echo "Unit test exit code: ${TEST_FAILED:-0}"
           exit ${TEST_FAILED:-0}
 
-      - name: Full Flow Integration
-        run: npm run test:full-flow --if-present
+      # Removed legacy full-flow test step; integration tests run via npm run test:integration
 
       - name: Start App (background) for E2E
         if: ${{ env.ENABLE_E2E == 'true' }}

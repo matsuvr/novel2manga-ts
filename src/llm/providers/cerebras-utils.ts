@@ -44,6 +44,27 @@ export function transformForCerebrasCompatibility(
 
   const result = { ...schema } as JsonSchemaNode
 
+  // 0. Rename unsupported 'definitions' to '$defs' and update $ref accordingly
+  const rewriteRefs = (node: unknown): unknown => {
+    if (typeof node === 'string') {
+      return node.replace(/#\/definitions\//g, '#\/$defs\/')
+    }
+    if (Array.isArray(node)) {
+      return node.map((item) => rewriteRefs(item))
+    }
+    if (node && typeof node === 'object') {
+      const copy: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+        const newKey = k === 'definitions' ? '$defs' : k
+        copy[newKey] = rewriteRefs(v)
+      }
+      return copy
+    }
+    return node
+  }
+  // Apply ref rewrite first so later steps see normalized keys
+  Object.assign(result, rewriteRefs(result))
+
   // 1. Type arrays を anyOf に変換
   if (result.type && Array.isArray(result.type)) {
     const types = result.type as string[]

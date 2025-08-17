@@ -286,6 +286,9 @@ describe('API Contract Tests', () => {
         novelId: novel.id,
         status: 'completed',
         currentStep: 'analysis_complete',
+        // 完了条件が renderCompleted に変更されたため、テストデータでも明示的に完了扱いにする
+        renderCompleted: true,
+        layoutCompleted: true,
       })
       jobId = job.id
 
