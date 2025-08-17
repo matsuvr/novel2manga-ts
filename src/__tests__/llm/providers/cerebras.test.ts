@@ -1,13 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { CerebrasClient } from '../../../llm/providers/cerebras'
-import type { LlmMessage, LlmClientOptions } from '../../../llm/client'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { LlmClientOptions, LlmMessage } from '../../../llm/client'
 import {
   InvalidRequestError,
   ProviderError,
   RateLimitError,
-  TokenLimitError,
   TimeoutError,
+  TokenLimitError,
 } from '../../../llm/client'
+import { CerebrasClient } from '../../../llm/providers/cerebras'
 
 // Mock the Cerebras SDK
 const mockCreate = vi.fn()

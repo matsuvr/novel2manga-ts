@@ -1,9 +1,9 @@
 import type { z } from 'zod'
 import { CompatAgent } from '@/agent/compat'
 import { getLLMDefaultProvider, getLLMFallbackChain } from '@/config'
+import type { LLMProvider } from '@/config/llm.config'
 import { getLLMProviderConfig } from '@/config/llm.config'
 import { getLogger } from '@/infrastructure/logging/logger'
-import type { LLMProvider } from '@/config/llm.config'
 
 export interface GenerateObjectArgs<TSchema extends z.ZodTypeAny> {
   name: string
