@@ -30,8 +30,16 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'npm'
 
+      - name: Clean npm cache and dependencies
+        run: |
+          rm -rf node_modules package-lock.json
+          npm cache clean --force
+
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm install
+          # Rollup optional dependencies workaround for CI
+          npm rebuild || true
 
       - name: Setup Biome CLI
         uses: biomejs/setup-biome@v2

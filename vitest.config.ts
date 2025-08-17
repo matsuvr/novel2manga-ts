@@ -38,4 +38,12 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  // Rollup optional dependencies workaround for CI environments
+  optimizeDeps: {
+    exclude: ['@rollup/rollup-linux-x64-gnu'],
+  },
+  define: {
+    // Prevent Rollup from trying to load platform-specific binaries in test environment
+    'process.env.NODE_ENV': '"test"',
+  },
 })
