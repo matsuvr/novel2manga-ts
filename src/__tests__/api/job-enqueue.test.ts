@@ -64,5 +64,3 @@ describe('/api/jobs/[jobId] enqueue', () => {
     expect(hoisted.mockQueue.enqueue).not.toHaveBeenCalled()
   })
 })
-
-

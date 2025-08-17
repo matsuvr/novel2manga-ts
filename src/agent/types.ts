@@ -1,0 +1,144 @@
+import type { LlmMessage, LlmTool } from '@/llm/client'
+
+// エージェント入力
+export interface AgentInput {
+  messages: LlmMessage[]
+  context?: Record<string, unknown>
+}
+
+// エージェントオプション
+export interface AgentOptions {
+  systemPrompt?: string
+  tools?: LlmTool[]
+  maxSteps?: number
+  temperature?: number
+  maxTokens?: number
+  streaming?: boolean
+}
+
+// ツール実行結果
+export interface ToolResult {
+  toolCallId: string
+  toolName: string
+  arguments: Record<string, unknown>
+  result?: unknown
+  error?: string
+}
+
+// エージェントステップ
+export interface AgentStep {
+  stepIndex: number
+  messages: LlmMessage[]
+  toolCalls?: Array<{
+    id: string
+    type: 'function'
+    function: {
+      name: string
+      arguments: string
+    }
+  }>
+  toolResults?: ToolResult[]
+  usage?: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+  }
+  timestamp: number
+}
+
+// エージェント結果
+export interface AgentResult {
+  messages: LlmMessage[]
+  toolResults?: ToolResult[]
+  trace: AgentStep[]
+  usage: {
+    totalPromptTokens: number
+    totalCompletionTokens: number
+    totalTokens: number
+  }
+  metadata?: {
+    steps: number
+    duration: number
+    provider: string
+  }
+}
+
+// エージェントエラー
+export class AgentError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly stepIndex?: number,
+    public readonly cause?: Error,
+  ) {
+    super(message)
+    this.name = 'AgentError'
+  }
+}
+
+// ツールエラー
+export class ToolError extends AgentError {
+  constructor(
+    message: string,
+    public readonly toolName: string,
+    public readonly toolCallId: string,
+    stepIndex?: number,
+    cause?: Error,
+  ) {
+    super(message, 'TOOL_ERROR', stepIndex, cause)
+    this.name = 'ToolError'
+  }
+}
+
+// ポリシーエラー
+export class PolicyError extends AgentError {
+  constructor(
+    message: string,
+    public readonly policy: string,
+    stepIndex?: number,
+    cause?: Error,
+  ) {
+    super(message, 'POLICY_ERROR', stepIndex, cause)
+    this.name = 'PolicyError'
+  }
+}
+
+// タイムアウトエラー
+export class AgentTimeoutError extends AgentError {
+  constructor(
+    message: string,
+    public readonly maxSteps: number,
+    public readonly actualSteps: number,
+    cause?: Error,
+  ) {
+    super(message, 'TIMEOUT', actualSteps, cause)
+    this.name = 'AgentTimeoutError'
+  }
+}
+
+// ツール定義
+export interface Tool {
+  name: string
+  description: string
+  schema: Record<string, unknown> // JSON Schema
+  handle: (args: Record<string, unknown>, context?: Record<string, unknown>) => Promise<unknown>
+}
+
+// ツールレジストリ
+export interface ToolRegistry {
+  register(tool: Tool): void
+  get(name: string): Tool | undefined
+  list(): Tool[]
+  validate(name: string, args: Record<string, unknown>): boolean
+  execute(
+    toolName: string,
+    args: Record<string, unknown>,
+    context?: Record<string, unknown>,
+  ): Promise<unknown>
+}
+
+// エージェントポリシー
+export interface AgentPolicy {
+  name: string
+  execute(input: AgentInput, options: AgentOptions, tools: ToolRegistry): Promise<AgentResult>
+}

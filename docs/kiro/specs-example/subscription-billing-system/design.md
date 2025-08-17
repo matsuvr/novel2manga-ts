@@ -15,26 +15,26 @@ graph TB
         A --> C[Billing Components]
         A --> D[Usage Components]
     end
-    
+
     subgraph "Application Layer"
         E[Auth Service] --> F[Subscription Service]
         F --> G[Usage Tracking Service]
         G --> H[Payment Service]
         E --> I[User Management Service]
     end
-    
+
     subgraph "Data Layer"
         J[(User Database)] --> K[(Subscription Database)]
         K --> L[(Usage Database)]
         L --> M[(Payment Database)]
     end
-    
+
     subgraph "External Services"
         N[Stripe API] --> H
         O[Email Service] --> I
         P[Analytics Service] --> G
     end
-    
+
     A --> E
     H --> N
     I --> O
@@ -55,6 +55,7 @@ The billing system will integrate with existing components:
 ### 1. Authentication System
 
 #### User Model
+
 ```python
 class User(BaseModel):
     id: str = Field(description="Unique user identifier")
@@ -67,6 +68,7 @@ class User(BaseModel):
 ```
 
 #### Authentication Service
+
 ```python
 class AuthService:
     async def register_user(self, email: str, password: str) -> AuthResult
@@ -80,6 +82,7 @@ class AuthService:
 ### 2. Subscription Management
 
 #### Subscription Plans
+
 ```python
 class SubscriptionPlan(BaseModel):
     id: str = Field(description="Plan identifier")
@@ -105,7 +108,7 @@ SUBSCRIPTION_PLANS = {
         stripe_price_id="price_starter_monthly"
     ),
     "professional": SubscriptionPlan(
-        id="professional", 
+        id="professional",
         name="プロフェッショナル",
         price_monthly=Decimal("79.00"),
         features={
@@ -121,7 +124,7 @@ SUBSCRIPTION_PLANS = {
     ),
     "enterprise": SubscriptionPlan(
         id="enterprise",
-        name="エンタープライズ", 
+        name="エンタープライズ",
         price_monthly=Decimal("199.00"),
         features={
             "max_monthly_analyses": -1,  # Unlimited
@@ -141,6 +144,7 @@ SUBSCRIPTION_PLANS = {
 ```
 
 #### Subscription Model
+
 ```python
 class Subscription(BaseModel):
     id: str = Field(description="Subscription identifier")
@@ -162,6 +166,7 @@ class SubscriptionStatus(str, Enum):
 ```
 
 #### Subscription Service
+
 ```python
 class SubscriptionService:
     async def create_subscription(self, user_id: str, plan_id: str, payment_method_id: str) -> Subscription
@@ -175,6 +180,7 @@ class SubscriptionService:
 ### 3. Usage Tracking System
 
 #### Usage Model
+
 ```python
 class UsageRecord(BaseModel):
     id: str = Field(description="Usage record identifier")
@@ -197,6 +203,7 @@ class UsageSummary(BaseModel):
 ```
 
 #### Usage Tracking Service
+
 ```python
 class UsageTrackingService:
     async def record_usage(self, user_id: str, analysis_data: Dict) -> UsageRecord
@@ -209,6 +216,7 @@ class UsageTrackingService:
 ### 4. Payment Processing
 
 #### Payment Service
+
 ```python
 class PaymentService:
     async def create_payment_intent(self, user_id: str, plan_id: str) -> PaymentIntent
@@ -222,11 +230,12 @@ class PaymentService:
 ### 5. Streamlit Integration Components
 
 #### Authentication Wrapper
+
 ```python
 class AuthWrapper:
     def __init__(self, auth_service: AuthService):
         self.auth_service = auth_service
-    
+
     def require_auth(self, func):
         """Decorator to require authentication for Streamlit pages"""
         def wrapper(*args, **kwargs):
@@ -235,13 +244,14 @@ class AuthWrapper:
                 return
             return func(*args, **kwargs)
         return wrapper
-    
+
     def _render_login_page(self):
         """Render login/registration form"""
         pass
 ```
 
 #### Billing Dashboard Component
+
 ```python
 class BillingDashboard:
     def render_subscription_status(self, user: User) -> None
@@ -255,6 +265,7 @@ class BillingDashboard:
 ### Database Schema
 
 #### Users Table
+
 ```sql
 CREATE TABLE users (
     id VARCHAR(36) PRIMARY KEY,
@@ -268,6 +279,7 @@ CREATE TABLE users (
 ```
 
 #### Subscriptions Table
+
 ```sql
 CREATE TABLE subscriptions (
     id VARCHAR(36) PRIMARY KEY,
@@ -284,6 +296,7 @@ CREATE TABLE subscriptions (
 ```
 
 #### Usage Records Table
+
 ```sql
 CREATE TABLE usage_records (
     id VARCHAR(36) PRIMARY KEY,
@@ -299,6 +312,7 @@ CREATE TABLE usage_records (
 ```
 
 #### Payment Records Table
+
 ```sql
 CREATE TABLE payment_records (
     id VARCHAR(36) PRIMARY KEY,
@@ -317,6 +331,7 @@ CREATE TABLE payment_records (
 ## Error Handling
 
 ### Error Types
+
 ```python
 class BillingError(Exception):
     """Base billing system error"""
@@ -340,6 +355,7 @@ class PaymentError(BillingError):
 ```
 
 ### Error Handling Strategy
+
 1. **Graceful Degradation**: Show appropriate error messages without breaking the UI
 2. **Retry Logic**: Implement exponential backoff for transient failures
 3. **Fallback Options**: Provide alternative actions when primary operations fail
@@ -349,6 +365,7 @@ class PaymentError(BillingError):
 ## Testing Strategy
 
 ### Unit Tests
+
 - Authentication service methods
 - Subscription management logic
 - Usage tracking calculations
@@ -356,6 +373,7 @@ class PaymentError(BillingError):
 - Database operations
 
 ### Integration Tests
+
 - Stripe webhook handling
 - Email notification delivery
 - End-to-end subscription flow
@@ -363,6 +381,7 @@ class PaymentError(BillingError):
 - Payment failure recovery
 
 ### UI Tests
+
 - Authentication forms
 - Subscription management interface
 - Usage dashboard display
@@ -370,6 +389,7 @@ class PaymentError(BillingError):
 - Error state handling
 
 ### Load Tests
+
 - Concurrent user authentication
 - High-volume usage tracking
 - Payment processing under load
@@ -378,6 +398,7 @@ class PaymentError(BillingError):
 ## Security Considerations
 
 ### Authentication Security
+
 - Password hashing using bcrypt with salt
 - JWT tokens with short expiration times
 - Session management with secure cookies
@@ -385,6 +406,7 @@ class PaymentError(BillingError):
 - Email verification for new accounts
 
 ### Payment Security
+
 - PCI compliance through Stripe integration
 - No storage of payment card data
 - Secure webhook signature verification
@@ -392,6 +414,7 @@ class PaymentError(BillingError):
 - Audit logging for all payment operations
 
 ### Data Protection
+
 - Encryption at rest for sensitive data
 - Secure API key management
 - User data anonymization options
@@ -401,6 +424,7 @@ class PaymentError(BillingError):
 ## Performance Optimization
 
 ### Database Optimization
+
 - Indexed queries for user lookups
 - Partitioned usage tables by billing period
 - Connection pooling for concurrent access
@@ -408,6 +432,7 @@ class PaymentError(BillingError):
 - Automated backup and recovery
 
 ### Caching Strategy
+
 - Redis cache for user sessions
 - Subscription status caching
 - Usage summary caching
@@ -415,6 +440,7 @@ class PaymentError(BillingError):
 - Cache invalidation on updates
 
 ### Monitoring and Analytics
+
 - Real-time usage metrics
 - Subscription churn analysis
 - Payment success rates

@@ -1,31 +1,12 @@
 import { z } from 'zod'
+import { getLlmStructuredGenerator } from '@/agent/structured-generator'
 import { analyzeChunkBundle, type BundleAnalysisResult } from '@/agents/chunk-bundle-analyzer'
-import { getEpisodeConfig, getLLMDefaultProvider, getNarrativeAnalysisConfig } from '@/config'
+import { getEpisodeConfig, getNarrativeAnalysisConfig } from '@/config'
 import type { IChunkRepository } from '@/domain/repositories/chunk-repository'
 import type { ChunkAnalysisResult } from '@/types/chunk'
 import type { EpisodeBoundary } from '@/types/episode'
-import { BaseAgent } from './base-agent'
 
-// Singleton instance with lazy initialization
-let agentInstance: BaseAgent | null = null
-
-function getNarrativeArcAnalyzer(): BaseAgent {
-  if (!agentInstance) {
-    const config = getNarrativeAnalysisConfig()
-    const provider = getLLMDefaultProvider()
-
-    agentInstance = new BaseAgent({
-      name: 'Narrative Arc Analyzer',
-      instructions: config.systemPrompt,
-      provider: provider,
-      maxTokens: config.maxTokens,
-    })
-
-    console.log(`[narrativeArcAnalyzer] Using provider: ${provider}`)
-  }
-
-  return agentInstance
-}
+const generator = getLlmStructuredGenerator()
 
 export async function analyzeNarrativeArc(
   input: {
@@ -221,7 +202,7 @@ export async function analyzeNarrativeArc(
 【重要な注意】
 - これは長編小説の一部です
 - エピソード番号は${input.startingEpisodeNumber || 1}から始めてください
-- テキストの冲頭は前のエピソードの続きから始まっています
+- テキストの冒頭は前のエピソードの続きから始まっています
 - テキストの最後がエピソードの途中で終わっている可能性があります
 `
     customizedPrompt = customizedPrompt.replace('【分析対象】', `【分析対象】${contextInfo}`)
@@ -262,16 +243,15 @@ export async function analyzeNarrativeArc(
     console.log('Text length:', fullText.length)
     console.log('Target pages:', targetPages)
 
-    const narrativeArcAnalyzer = getNarrativeArcAnalyzer()
-    const result = await narrativeArcAnalyzer.generateObject(
-      [{ role: 'user', content: userPrompt }],
-      responseSchema,
-      {
-        maxRetries: 0,
-        jobId: input.jobId,
-        stepName: 'narrative-arc',
-      },
-    )
+    const cfg = getNarrativeAnalysisConfig()
+    const { result } = await generator.generateObjectWithFallback({
+      name: 'Narrative Arc Analyzer',
+      instructions: cfg.systemPrompt,
+      schema: responseSchema,
+      prompt: userPrompt,
+      maxTokens: cfg.maxTokens,
+      options: { maxRetries: 0, jobId: input.jobId, stepName: 'narrative-arc' },
+    })
 
     if (!result) {
       const errorMsg = 'Failed to generate narrative analysis - LLM returned no object'

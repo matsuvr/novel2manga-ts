@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { loadSampleTemplatesByCount, selectRandomTemplateByCount } from '@/utils/panel-sample-loader'
+import {
+  loadSampleTemplatesByCount,
+  selectRandomTemplateByCount,
+} from '@/utils/panel-sample-loader'
 
 describe('panel-sample-loader', () => {
   it('loads sample templates for existing counts', () => {
@@ -27,4 +30,3 @@ describe('panel-sample-loader', () => {
     }
   })
 })
-

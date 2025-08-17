@@ -12,11 +12,13 @@ Generate detailed implementation tasks for feature: **$ARGUMENTS**
 **CRITICAL**: Tasks can only be generated after both requirements and design are reviewed and approved.
 
 ### Interactive Review Process
+
 - Requirements document: @.kiro/specs/$ARGUMENTS/requirements.md
 - Design document: @.kiro/specs/$ARGUMENTS/design.md
 - Spec metadata: @.kiro/specs/$ARGUMENTS/spec.json
 
 **Interactive Approval Process**:
+
 1. **Check if documents exist** - Verify that requirements.md and design.md have been generated
 2. **Prompt for requirements review** - Ask user: "requirements.mdをレビューしましたか？ [y/N]"
 3. **Prompt for design review** - Ask user: "design.mdをレビューしましたか？ [y/N]"
@@ -24,16 +26,17 @@ Generate detailed implementation tasks for feature: **$ARGUMENTS**
 5. **If any 'N' (no)**: Stop execution and instruct user to review respective documents first
 
 **Auto-approval update in spec.json when user confirms both reviews**:
+
 ```json
 {
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": true  // ← Automatically set to true when user confirms
+      "approved": true // ← Automatically set to true when user confirms
     },
     "design": {
       "generated": true,
-      "approved": true  // ← Automatically set to true when user confirms
+      "approved": true // ← Automatically set to true when user confirms
     }
   },
   "phase": "design-approved"
@@ -41,6 +44,7 @@ Generate detailed implementation tasks for feature: **$ARGUMENTS**
 ```
 
 **User Interaction Example**:
+
 ```
 📋 Requirements and Design review required before generating tasks.
 📄 Please review: .kiro/specs/feature-name/requirements.md
@@ -53,12 +57,14 @@ Generate detailed implementation tasks for feature: **$ARGUMENTS**
 ## Context Analysis
 
 ### Complete Spec Context (APPROVED)
+
 - Requirements: @.kiro/specs/$ARGUMENTS/requirements.md
 - Design: @.kiro/specs/$ARGUMENTS/design.md
 - Current tasks: @.kiro/specs/$ARGUMENTS/tasks.md
 - Spec metadata: @.kiro/specs/$ARGUMENTS/spec.json
 
 ### Steering Context
+
 - Architecture patterns: @.kiro/steering/structure.md
 - Development practices: @.kiro/steering/tech.md
 - Product constraints: @.kiro/steering/product.md
@@ -72,6 +78,7 @@ Generate detailed implementation tasks for feature: **$ARGUMENTS**
 Create implementation plan in the language specified in spec.json:
 
 ### 1. Code-Generation Tasks Structure
+
 Create tasks.md in the language specified in spec.json (check `@.kiro/specs/$ARGUMENTS/spec.json` for "language" field):
 
 ```markdown
@@ -174,6 +181,7 @@ Create tasks.md in the language specified in spec.json (check `@.kiro/specs/$ARG
 ```
 
 **Code-Generation Prompt Format Rules**:
+
 - Hierarchical numbering: Major phases (1, 2, 3) and sub-tasks (1.1, 1.2)
 - Each task is a prompt for a code-generation LLM that will implement the step
 - Specify what to create/modify but rely on design document for implementation details
@@ -186,6 +194,7 @@ Create tasks.md in the language specified in spec.json (check `@.kiro/specs/$ARG
 - Final task must wire everything together to prevent orphaned code
 
 ### 2. Code-Generation Quality Guidelines
+
 - **Prompt Optimization**: Each task is a clear prompt that a coding agent can execute
 - **Progressive Building**: Explicitly state which previous task outputs are used
 - **Test-First Approach**: Write tests before implementation when appropriate
@@ -196,7 +205,9 @@ Create tasks.md in the language specified in spec.json (check `@.kiro/specs/$ARG
 - **Design Document Reliance**: Tasks reference design for implementation details
 
 ### 3. Mandatory Task Categories (Coding Only)
+
 Include ONLY coding tasks for:
+
 - **Data Models**: Model classes with validation and tests
 - **Data Access**: Repository pattern implementation with tests
 - **API Services**: Backend service implementation with API tests
@@ -205,6 +216,7 @@ Include ONLY coding tasks for:
 - **End-to-End Testing**: Automated test implementation
 
 **EXCLUDED (Non-Coding Tasks):**
+
 - User acceptance testing or user feedback gathering
 - Production deployment or staging environments
 - Performance metrics gathering or analysis
@@ -212,19 +224,22 @@ Include ONLY coding tasks for:
 - Documentation creation (beyond code comments)
 
 ### 4. Granular Requirements Mapping
+
 For each task, reference specific EARS requirements from requirements.md:
+
 - Reference granular sub-requirements, not just user stories
 - Map to specific acceptance criteria (e.g., REQ-2.1.3: IF validation fails THEN...)
 - Ensure every EARS requirement is covered by implementation tasks
 - Use format: _Requirements: 2.1, 3.3, 1.2_ (refer to numbered requirements)
 
-
 ### 6. Document Generation Only
+
 Generate the tasks document content ONLY. Do not include any review or approval instructions in the actual document file.
 
 ### 7. Update Metadata
 
 Update spec.json with:
+
 ```json
 {
   "phase": "tasks-generated",
@@ -247,6 +262,7 @@ Update spec.json with:
 ```
 
 ### 8. Metadata Update
+
 Update the tracking metadata to reflect task generation completion.
 
 ---
@@ -256,6 +272,7 @@ Update the tracking metadata to reflect task generation completion.
 The following is for Claude Code conversation only - NOT for the generated document:
 
 ### Interactive Approval Process
+
 This command now implements interactive approval for the final phase:
 
 1. **Requirements & Design Review Prompts**: Automatically prompts user to confirm both documents are reviewed
@@ -264,9 +281,11 @@ This command now implements interactive approval for the final phase:
 4. **Ready for Implementation**: Tasks are generated and spec is ready for implementation phase
 
 ### Tasks Review for Implementation Phase
+
 After generating tasks.md, the implementation phase is ready to begin.
 
 **Final approval process for implementation**:
+
 ```
 📋 Tasks review completed. Ready for implementation.
 📄 Generated: .kiro/specs/feature-name/tasks.md
@@ -274,6 +293,7 @@ After generating tasks.md, the implementation phase is ready to begin.
 ```
 
 ### Review Checklist (for user reference):
+
 - [ ] Tasks are properly sized (2-4 hours each)
 - [ ] All requirements are covered by tasks
 - [ ] Task dependencies are correct

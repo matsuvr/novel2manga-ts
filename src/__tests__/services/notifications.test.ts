@@ -21,5 +21,3 @@ describe('NotificationService', () => {
     expect(console.log).toHaveBeenCalled()
   })
 })
-
-

@@ -71,4 +71,3 @@ describe('layout-normalizer', () => {
     expect(v.issues.some((m) => m.includes('coverage'))).toBe(true)
   })
 })
-

@@ -45,7 +45,7 @@
 ## CLI Tools
 
 - `gh` (GitHub CLI): create branches, push, open PRs from the terminal. Requires configured credentials and network access.
-- `rg` (ripgrep): fast recursive search for codebase auditing and refactors.
+- `git-grep`
 
 ```instructions
 MANDATORY RULES FOR THIS REPOSITORY — READ BEFORE CODING

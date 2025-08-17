@@ -500,7 +500,7 @@ describe('/api/layout/generate', () => {
       const { StorageFactory, getAnalysisStorage } = await import('@/utils/storage')
       vi.mocked(StorageFactory.getAnalysisStorage).mockResolvedValue(mockStorage as any)
       vi.mocked(getAnalysisStorage).mockResolvedValue(mockStorage as any)
-      
+
       const requestBody = {
         jobId: testJobId,
         episodeNumber: 1,
@@ -569,7 +569,7 @@ describe('/api/layout/generate', () => {
 
       expect(response.status).toBe(400)
       expect(data.error).toBe('No chunk analysis data found for this episode')
-      
+
       // Reset the mock back to the original for subsequent tests
       const { StorageFactory, getAnalysisStorage } = await import('@/utils/storage')
       vi.mocked(StorageFactory.getAnalysisStorage).mockResolvedValue({

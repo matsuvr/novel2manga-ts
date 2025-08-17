@@ -86,10 +86,11 @@
       "Bash(npx biome:*)",
       "Bash(npm ci:*)",
       "mcp__serena__insert_before_symbol",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "WebFetch(domain:opennext.js.org)"
     ]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": ["cloudflare", "mastra", "serena", "deepwiki"],
+  "enabledMcpjsonServers": ["cloudflare", "serena", "deepwiki"],
   "hooks": {}
 }

@@ -38,14 +38,16 @@ The scripts wait for `/api/health` on port 3001 and run the Vitest suite.
 
 ## Scenarios (current)
 
-1) Split-only smoke
+1. Split-only smoke
+
 - POST /api/novel → novelId
 - POST /api/analyze { splitOnly: true } → jobId, chunkCount
 - GET /api/jobs/:jobId/status → splitCompleted true
 - GET /api/jobs/:jobId/episodes → 404 (no episodes yet)
 - GET /api/render/status/:jobId → { status: "no_episodes" }
 
-2) Error paths (examples)
+2. Error paths (examples)
+
 - Invalid analyze payload → 400/422
 - Unknown jobId → 404
 - Storage read error → 500 with clear message (no retry/fallback hidden loops)
@@ -61,7 +63,8 @@ The scripts wait for `/api/health` on port 3001 and run the Vitest suite.
 - Port conflicts (3001): The orchestration attempts cleanup, but collisions can happen. Retry after a few seconds.
 - 60s timeouts: Remove any local retry loops; the API intentionally fails fast now.
 - Dynamic route params: Ensure Next.js App Router handlers await params before accessing `jobId`.
-✓ 統合テスト完了: 小説→漫画レイアウトまでの全工程が正常に動作
+  ✓ 統合テスト完了: 小説→漫画レイアウトまでの全工程が正常に動作
+
 ```
 
 ## トラブルシューティング
@@ -82,3 +85,4 @@ The scripts wait for `/api/health` on port 3001 and run the Vitest suite.
 - **エピソード数**: 2-5個程度
 
 このテストにより、システム全体の動作確認が完了します。
+```

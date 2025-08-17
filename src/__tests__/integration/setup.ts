@@ -9,10 +9,10 @@ beforeAll(() => {
   // 統合テスト用の環境変数設定
   process.env.NODE_ENV = 'test'
   process.env.DATABASE_URL = ':memory:' // インメモリSQLite使用
-  
+
   // ログレベルを警告以上に設定（テスト出力をクリーンに保つ）
   process.env.LOG_LEVEL = 'warn'
-  
+
   console.log('🧪 統合テスト環境を初期化しました')
 })
 

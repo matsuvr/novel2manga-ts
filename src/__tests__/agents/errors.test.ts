@@ -10,7 +10,7 @@ describe('AgentError', () => {
         AgentErrorType.API_ERROR,
         'Test error message',
         'openai',
-        originalError
+        originalError,
       )
 
       expect(agentError.message).toBe('Test error message')
@@ -25,7 +25,7 @@ describe('AgentError', () => {
       const agentError = new AgentError(
         AgentErrorType.NETWORK_ERROR,
         'Test error message',
-        'gemini'
+        'gemini',
       )
 
       expect(agentError.message).toBe('Test error message')

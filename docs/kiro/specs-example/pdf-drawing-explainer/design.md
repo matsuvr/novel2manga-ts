@@ -61,6 +61,7 @@ graph TB
 ### バックエンドサービス
 
 1. **PDFProcessingService**
+
    ```python
    class PDFProcessor:
        def extract_text(self, pdf_path: str) -> Dict
@@ -70,6 +71,7 @@ graph TB
    ```
 
 2. **ImageAnalysisService**
+
    ```python
    class ImageAnalyzer:
        def detect_shapes(self, image: Image) -> List[Shape]
@@ -79,6 +81,7 @@ graph TB
    ```
 
 3. **AIExplanationService**
+
    ```python
    class ExplanationGenerator:
        def generate_overview(self, elements: List[Element]) -> str
@@ -97,6 +100,7 @@ graph TB
 ## データモデル
 
 ### DrawingElement
+
 ```python
 @dataclass
 class DrawingElement:
@@ -109,6 +113,7 @@ class DrawingElement:
 ```
 
 ### AnalysisResult
+
 ```python
 @dataclass
 class AnalysisResult:
@@ -123,6 +128,7 @@ class AnalysisResult:
 ```
 
 ### ProcessingJob
+
 ```python
 @dataclass
 class ProcessingJob:
@@ -154,21 +160,25 @@ class ProcessingJob:
 ## テスト戦略
 
 ### 単体テスト
+
 - 各サービスクラスのメソッド単位でのテスト
 - モックを使用した外部依存関係の分離
 - エッジケースとエラーケースのカバレッジ
 
 ### 統合テスト
+
 - API エンドポイントのテスト
 - ファイルアップロードから結果出力までのフロー
 - 複数ファイル処理のテスト
 
 ### E2Eテスト
+
 - ブラウザ自動化によるユーザーシナリオテスト
 - 実際のPDF図面を使用した動作確認
 - パフォーマンステスト（大きなファイル、複数ファイル）
 
 ### テストデータ
+
 - 様々な種類の図面サンプル（機械図面、建築図面、電気図面）
 - 異なる品質・解像度のPDFファイル
 - エラーケース用の破損ファイル
