@@ -243,7 +243,7 @@ export class CanvasRenderer {
     this.ctx.textBaseline = 'top'
 
     if (maxWidth) {
-      const fontSize = parseInt(font.split('px')[0]) || 16
+      const fontSize = parseInt(font.split('px')[0], 10) || 16
       this.drawMultilineText(text, x, y, maxWidth, 1000, fontSize)
     } else {
       this.ctx.fillText(text, x, y)
