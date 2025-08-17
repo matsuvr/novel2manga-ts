@@ -320,7 +320,9 @@ function buildPanelFromAnalysis(
     segmentEnd >= segmentStart
   const safeText = typeof chunkText === 'string' ? chunkText : undefined
   const segmentText =
-    hasSegment && safeText ? safeText.slice(segmentStart!, segmentEnd!) : undefined
+    hasSegment && safeText && typeof segmentStart === 'number' && typeof segmentEnd === 'number'
+      ? safeText.slice(segmentStart, segmentEnd)
+      : undefined
   const firstScene = analysis.scenes?.[0]
   if (firstScene?.location) parts.push(`場所: ${firstScene.location}`)
   if (firstScene?.time) parts.push(`時間: ${firstScene.time}`)
@@ -393,5 +395,5 @@ function buildPanelFromAnalysis(
 
 function ellipsis(text: string, max: number): string {
   if (text.length <= max) return text
-  return text.slice(0, Math.max(0, max - 1)) + '…'
+  return `${text.slice(0, Math.max(0, max - 1))}…`
 }
