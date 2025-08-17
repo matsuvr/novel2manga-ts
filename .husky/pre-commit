@@ -26,6 +26,12 @@ delete_nul_files() {
 
 delete_nul_files
 
-# Run linters/formatters on staged files, then tests
+# Run linters/formatters on staged files, then quick checks
 echo "Running lint-staged..."
 npx lint-staged
+
+echo "Checking TypeScript types on staged files..."
+npm run -s typecheck || {
+  echo "TypeScript errors detected. Please fix before committing."
+  exit 1
+}

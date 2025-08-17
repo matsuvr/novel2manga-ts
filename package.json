@@ -22,6 +22,9 @@
     "format:json:check": "prettier --check \"**/*.{json,jsonc}\"",
     "lint": "biome lint --write .",
     "lint:check": "biome lint .",
+    "lint:unsafe": "biome lint --write --unsafe .",
+    "fix": "npm run format && npm run lint:unsafe",
+    "fix:staged": "lint-staged",
     "check": "npm run lint && npm run format:check",
     "check:ci": "npm run lint:check && npm run format:check",
     "typecheck": "tsc --noEmit",
@@ -49,7 +52,10 @@
   "license": "ISC",
   "description": "",
   "type": "module",
-  "repository": "matsuvrprojects/novel2manga-ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/matsuvrprojects/novel2manga-ts.git"
+  },
   "engines": {
     "node": ">=20.9.0"
   },
@@ -111,14 +117,5 @@
     "typescript": "^5.8.3",
     "vitest": "^3.2.4",
     "wrangler": "^4.26.0"
-  },
-  "lint-staged": {
-    "**/*.{ts,tsx,js,jsx}": [
-      "prettier --write",
-      "biome lint --write --no-errors-on-unmatched"
-    ],
-    "**/*.{json,jsonc,md,yml,yaml}": [
-      "prettier --write"
-    ]
   }
 }
