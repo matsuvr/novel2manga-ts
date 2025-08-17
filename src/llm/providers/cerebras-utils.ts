@@ -47,7 +47,7 @@ export function transformForCerebrasCompatibility(
   // 0. Rename unsupported 'definitions' to '$defs' and update $ref accordingly
   const rewriteRefs = (node: unknown): unknown => {
     if (typeof node === 'string') {
-      return node.replace(/#\/definitions\//g, '#\/$defs\/')
+      return node.replace(/#\/definitions\//g, '#/$defs/')
     }
     if (Array.isArray(node)) {
       return node.map((item) => rewriteRefs(item))

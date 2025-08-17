@@ -17,8 +17,6 @@ export class HttpError extends Error {
     this.details = options?.details
     if (options?.cause) {
       // Preserve error cause when supported by runtime
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore TS doesn't yet infer ErrorOptions in all targets
       this.cause = options.cause
     }
   }
