@@ -26,7 +26,7 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ jobId:
 
     logger.info('ZIP export generated for job')
 
-    return new Response(buffer, {
+    return new Response(new Uint8Array(buffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',
