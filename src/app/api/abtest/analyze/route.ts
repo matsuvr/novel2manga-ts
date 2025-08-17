@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { BaseAgent } from '@/agents/base-agent'
+import { CompatAgent } from '@/agent/compat'
 import { getTextAnalysisConfig } from '@/config'
 
 const zBody = z.object({
@@ -64,7 +64,7 @@ const textAnalysisOutputSchema = z.object({
 
 async function runWithModel(modelId: string, prompt: string) {
   const config = getTextAnalysisConfig()
-  const agent = new BaseAgent({
+  const agent = new CompatAgent({
     name: `abtest-${modelId}`,
     instructions: config.systemPrompt,
     provider: 'groq',
@@ -73,9 +73,9 @@ async function runWithModel(modelId: string, prompt: string) {
   })
 
   try {
-    const result = await agent.generateObject(
-      [{ role: 'user', content: prompt }],
+    const result = await agent.generateObject<z.infer<typeof textAnalysisOutputSchema>>(
       textAnalysisOutputSchema,
+      prompt,
       { maxRetries: 2 },
     )
     return { ok: true as const, model: modelId, object: result }

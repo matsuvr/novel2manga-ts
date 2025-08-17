@@ -4,7 +4,6 @@ import { EpisodeWriteService } from '@/services/application/episode-write'
 import { JobProgressService } from '@/services/application/job-progress'
 import { getDatabaseService } from '@/services/db-factory'
 import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
-import { getJobQueue } from '@/services/queue'
 import {
   ApiError,
   createErrorResponse,
@@ -17,7 +16,6 @@ export async function POST(request: NextRequest, { params }: { params: { jobId: 
   try {
     validateJobId(params.jobId)
     const _dbService = getDatabaseService()
-    const queue = getJobQueue()
 
     // ジョブが再開可能かチェック
     // 互換性のため既存のProcessorのcanResumeを使用（テストもこれをモック）
@@ -34,16 +32,21 @@ export async function POST(request: NextRequest, { params }: { params: { jobId: 
 
     // 任意の通知メール（同意済みの場合のみ）: emailをZodでバリデーション
     const EmailSchema = z.object({ userEmail: z.string().email().optional() })
-    const { userEmail } = EmailSchema.parse(await request.json().catch(() => ({})))
+    EmailSchema.parse(await request.json().catch(() => ({})))
 
-    // バックグラウンドキューに投入
-    // fire-and-forget（非同期実行）。戻り値は待たない
-    void queue.enqueue({
-      type: 'PROCESS_NARRATIVE',
-      jobId: params.jobId,
-      userEmail,
-    })
-    // NOTE: ここではDB更新を行わない（テストのモック互換性維持）
+    // バックグラウンド実行（直接処理を開始）。戻り値は待たない
+    void processor
+      .processJob(params.jobId, (progress) => {
+        // 簡易ロギング（実運用ではイベント配信やDB保存等に置換）
+        console.log('[Resume] progress', params.jobId, {
+          processedChunks: progress.processedChunks,
+          totalChunks: progress.totalChunks,
+          episodes: progress.episodes.length,
+        })
+      })
+      .catch((err) => {
+        console.error('[Resume] Job processing failed', params.jobId, err)
+      })
 
     return createSuccessResponse({
       message: 'Job resumed successfully',

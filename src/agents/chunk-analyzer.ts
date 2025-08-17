@@ -1,22 +1,18 @@
 import type { z } from 'zod'
-import {
-  getLLMDefaultProvider,
-  getLLMFallbackChain,
-  getLLMProviderConfig,
-  getTextAnalysisConfig,
-} from '@/config'
+import { CompatAgent } from '@/agent/compat'
+import { getLlmStructuredGenerator } from '@/agent/structured-generator'
+import { getLLMDefaultProvider, getTextAnalysisConfig } from '@/config'
 import { getLogger } from '@/infrastructure/logging/logger'
-import { BaseAgent } from './base-agent'
 
 // Singleton instance with lazy initialization
-let agentInstance: BaseAgent | null = null
+let agentInstance: CompatAgent | null = null
 
-export function getChunkAnalyzerAgent(): BaseAgent {
+export function getChunkAnalyzerAgent(): CompatAgent {
   if (!agentInstance) {
     const config = getTextAnalysisConfig()
     const provider = getLLMDefaultProvider()
 
-    agentInstance = new BaseAgent({
+    agentInstance = new CompatAgent({
       name: 'chunk-analyzer',
       instructions: config.systemPrompt,
       provider: provider,
@@ -53,47 +49,22 @@ export async function analyzeChunkWithFallback<T extends z.ZodTypeAny>(
 }> {
   const logger = getLogger().withContext({ agent: 'chunk-analyzer' })
   const config = getTextAnalysisConfig()
-  const primary = getLLMDefaultProvider()
-  // ユニークなチェーン（重複除去）
-  const chain = [primary, ...getLLMFallbackChain()].filter((p, i, arr) => arr.indexOf(p) === i)
-  const fallbackFrom: string[] = []
-
-  for (const provider of chain) {
-    try {
-      const providerCfg = getLLMProviderConfig(provider)
-      const agent = new BaseAgent({
-        name: 'chunk-analyzer',
-        instructions: config.systemPrompt,
-        provider: provider,
-        maxTokens: providerCfg.maxTokens,
-      })
-      const result = await agent.generateObject([{ role: 'user', content: prompt }], schema, {
-        maxRetries: 0,
-        jobId: options?.jobId,
-        stepName: 'analyze',
-        chunkIndex: options?.chunkIndex,
-      })
-      if (fallbackFrom.length > 0) {
-        logger.warn('LLM fallback succeeded', {
-          from: fallbackFrom,
-          to: provider,
-        })
-      }
-      return { result, usedProvider: provider, fallbackFrom }
-    } catch (error) {
-      // 次へフォールバック（最後のプロバイダーで失敗したらthrow）
-      if (provider !== chain[chain.length - 1]) {
-        fallbackFrom.push(provider)
-        logger.warn('LLM fallback: switching provider due to error', {
-          from: provider,
-          to: chain[chain.indexOf(provider) + 1],
-          reason: error instanceof Error ? error.message : String(error),
-        })
-        continue
-      }
-      throw error
-    }
+  const generator = getLlmStructuredGenerator()
+  const { result, usedProvider, fallbackFrom } = await generator.generateObjectWithFallback({
+    name: 'chunk-analyzer',
+    instructions: config.systemPrompt,
+    schema,
+    prompt,
+    maxTokens: config.maxTokens,
+    options: {
+      maxRetries: options?.maxRetries ?? 0,
+      jobId: options?.jobId,
+      stepName: 'analyze',
+      chunkIndex: options?.chunkIndex,
+    },
+  })
+  if (fallbackFrom.length > 0) {
+    logger.warn('LLM fallback succeeded', { from: fallbackFrom, to: usedProvider })
   }
-
-  throw new Error('LLM fallback failed for all providers')
+  return { result, usedProvider, fallbackFrom }
 }
