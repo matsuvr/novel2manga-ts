@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST } from '@/app/api/jobs/[jobId]/resume/route'
 import { DatabaseService } from '@/services/database'
+import { getDatabaseService } from '@/services/db-factory'
+import { getJobQueue } from '@/services/queue'
 
 // ストレージとデータベースのモック
 vi.mock('@/utils/storage', () => ({
@@ -14,7 +16,27 @@ vi.mock('@/services/database', () => ({
   DatabaseService: vi.fn().mockImplementation(() => ({
     createNovel: vi.fn(),
     createJob: vi.fn(),
+    updateJobStatus: vi.fn(),
   })),
+}))
+
+// db-factoryのモック
+vi.mock('@/services/db-factory', () => ({
+  getDatabaseService: vi.fn(),
+}))
+
+// キューサービスのモック
+vi.mock('@/services/queue', () => ({
+  getJobQueue: vi.fn(),
+}))
+
+// アプリケーションサービスのモック
+vi.mock('@/services/application/episode-write', () => ({
+  EpisodeWriteService: vi.fn().mockImplementation(() => ({})),
+}))
+
+vi.mock('@/services/application/job-progress', () => ({
+  JobProgressService: vi.fn().mockImplementation(() => ({})),
 }))
 
 // モック設定
@@ -32,6 +54,7 @@ describe('/api/jobs/[jobId]/resume', () => {
   let testJobId: string
   let testNovelId: string
   let mockDbService: any
+  let mockQueue: any
 
   beforeEach(async () => {
     vi.clearAllMocks()
@@ -43,9 +66,16 @@ describe('/api/jobs/[jobId]/resume', () => {
     mockDbService = {
       createNovel: vi.fn().mockResolvedValue(testNovelId),
       createJob: vi.fn(),
+      updateJobStatus: vi.fn().mockResolvedValue(undefined),
+    }
+
+    mockQueue = {
+      enqueue: vi.fn().mockResolvedValue(undefined),
     }
 
     vi.mocked(DatabaseService).mockReturnValue(mockDbService)
+    vi.mocked(getDatabaseService).mockReturnValue(mockDbService)
+    vi.mocked(getJobQueue).mockReturnValue(mockQueue)
 
     // デフォルトでは再開可能な状態にする
     mockCanResumeJob.mockResolvedValue(true)
@@ -60,6 +90,10 @@ describe('/api/jobs/[jobId]/resume', () => {
     it('再開可能なジョブの場合、正常に再開する', async () => {
       const request = new NextRequest(`http://localhost:3000/api/jobs/${testJobId}/resume`, {
         method: 'POST',
+        body: JSON.stringify({}),
+        headers: {
+          'Content-Type': 'application/json',
+        },
       })
       const params = { jobId: testJobId }
 
@@ -70,7 +104,12 @@ describe('/api/jobs/[jobId]/resume', () => {
       expect(data.message).toBe('Job resumed successfully')
       expect(data.jobId).toBe(testJobId)
       expect(mockCanResumeJob).toHaveBeenCalledWith(testJobId)
-      expect(mockProcessJob).toHaveBeenCalledWith(testJobId, expect.any(Function))
+      expect(mockQueue.enqueue).toHaveBeenCalledWith({
+        type: 'PROCESS_NARRATIVE',
+        jobId: testJobId,
+        userEmail: undefined,
+      })
+      expect(mockDbService.updateJobStatus).toHaveBeenCalledWith(testJobId, 'processing')
     })
 
     it('再開不可能なジョブの場合は400エラーを返す', async () => {
@@ -127,12 +166,40 @@ describe('/api/jobs/[jobId]/resume', () => {
       expect(mockProcessJob).not.toHaveBeenCalled()
     })
 
-    it('processJobでエラーが発生してもレスポンスは正常に返す（バックグラウンド処理）', async () => {
-      // processJobでエラーを発生させるが、これはバックグラウンド処理なのでレスポンスには影響しない
-      mockProcessJob.mockRejectedValue(new Error('処理エラー'))
+    it('データベースステータス更新に失敗した場合は500エラーを返す', async () => {
+      // データベースのupdateJobStatusでエラーを発生させる
+      mockDbService.updateJobStatus.mockRejectedValue(new Error('Database update error'))
 
       const request = new NextRequest(`http://localhost:3000/api/jobs/${testJobId}/resume`, {
         method: 'POST',
+        body: JSON.stringify({}),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      const params = { jobId: testJobId }
+
+      const response = await POST(request, { params })
+      const data = await response.json()
+
+      expect(response.status).toBe(500)
+      expect(data.error).toBe('Failed to resume job')
+      expect(mockCanResumeJob).toHaveBeenCalledWith(testJobId)
+      expect(mockQueue.enqueue).toHaveBeenCalledWith({
+        type: 'PROCESS_NARRATIVE',
+        jobId: testJobId,
+        userEmail: undefined,
+      })
+    })
+
+    it('userEmailが提供された場合、キューに正しく渡される', async () => {
+      const userEmail = 'test@example.com'
+      const request = new NextRequest(`http://localhost:3000/api/jobs/${testJobId}/resume`, {
+        method: 'POST',
+        body: JSON.stringify({ userEmail }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
       })
       const params = { jobId: testJobId }
 
@@ -142,36 +209,12 @@ describe('/api/jobs/[jobId]/resume', () => {
       expect(response.status).toBe(200)
       expect(data.message).toBe('Job resumed successfully')
       expect(data.jobId).toBe(testJobId)
-      expect(mockCanResumeJob).toHaveBeenCalledWith(testJobId)
-      expect(mockProcessJob).toHaveBeenCalledWith(testJobId, expect.any(Function))
-    })
-
-    it('プログレスコールバックが正しく呼ばれることを確認する', async () => {
-      // processJobの実装をより詳細にモック
-      mockProcessJob.mockImplementation((_jobId, progressCallback) => {
-        // プログレス報告をシミュレート
-        progressCallback({
-          processedChunks: 5,
-          totalChunks: 10,
-          episodes: [
-            { episodeNumber: 1, title: 'エピソード1' },
-            { episodeNumber: 2, title: 'エピソード2' },
-          ],
-        })
-        return Promise.resolve()
+      expect(mockQueue.enqueue).toHaveBeenCalledWith({
+        type: 'PROCESS_NARRATIVE',
+        jobId: testJobId,
+        userEmail,
       })
-
-      const request = new NextRequest(`http://localhost:3000/api/jobs/${testJobId}/resume`, {
-        method: 'POST',
-      })
-      const params = { jobId: testJobId }
-
-      const response = await POST(request, { params })
-      const data = await response.json()
-
-      expect(response.status).toBe(200)
-      expect(data.message).toBe('Job resumed successfully')
-      expect(mockProcessJob).toHaveBeenCalledWith(testJobId, expect.any(Function))
+      expect(mockDbService.updateJobStatus).toHaveBeenCalledWith(testJobId, 'processing')
     })
   })
 })
