@@ -90,9 +90,33 @@ export async function renderVerticalText(
     }
     const json = await res.json()
     const meta = VerticalTextRenderResponseSchema.parse(json)
+
+    // Add stronger validation for the response from the API
+    if (typeof meta.image_base64 !== 'string' || meta.image_base64.length < 10) {
+      throw new Error(
+        `vertical-text API returned invalid image_base64 (length: ${meta.image_base64?.length ?? 'undefined'})`,
+      )
+    }
+
     // Decode base64 PNG
     const pngBuffer = Buffer.from(meta.image_base64, 'base64')
-    if (pngBuffer.length === 0) throw new Error('vertical-text API returned empty image')
+
+    // Validate buffer is a valid PNG
+    const isPng =
+      pngBuffer.length > 8 &&
+      pngBuffer[0] === 0x89 &&
+      pngBuffer[1] === 0x50 &&
+      pngBuffer[2] === 0x4e &&
+      pngBuffer[3] === 0x47 &&
+      pngBuffer[4] === 0x0d &&
+      pngBuffer[5] === 0x0a &&
+      pngBuffer[6] === 0x1a &&
+      pngBuffer[7] === 0x0a
+
+    if (!isPng) {
+      throw new Error('vertical-text API did not return a valid PNG image')
+    }
+
     return { meta, pngBuffer }
   } finally {
     clearTimeout(timeout)

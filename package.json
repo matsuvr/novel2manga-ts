@@ -10,7 +10,6 @@
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:integration:watch": "vitest --config vitest.integration.config.ts",
-    "test:full-flow": "npm run test:integration",
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start",

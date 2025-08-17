@@ -593,6 +593,23 @@ async function generateEpisodeLayoutInternal(
   // Episode complete: mark layout done and advance to render
   await jobRepo.markStepCompleted(jobId, 'layout')
   await jobRepo.updateStep(jobId, 'render')
+  // Persist per-episode layout totals and recompute job total pages
+  try {
+    const db = getDatabaseService()
+    const totalPagesForEpisode = pagesCanonical.length
+    await db.upsertLayoutStatus({
+      jobId,
+      episodeNumber,
+      totalPages: totalPagesForEpisode,
+      layoutPath: StorageKeys.episodeLayout(jobId, episodeNumber),
+    })
+    await db.recomputeJobTotalPages(jobId)
+  } catch (e) {
+    logger.warn('Failed to persist layout totals', {
+      error: (e as Error).message,
+      episodeNumber,
+    })
+  }
 
   const finalLayout: MangaLayout = {
     title: episodeData.episodeTitle || `エピソード${episodeData.episodeNumber}`,

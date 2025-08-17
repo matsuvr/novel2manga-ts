@@ -50,13 +50,7 @@ export async function GET(
     // エピソード一覧を取得
     const episodes = await episodeRepo.getByJobId(params.jobId)
 
-    // エピソード未作成の場合は明示的に空を返す（フォールバックしない）
-
-    if (episodes.length === 0) {
-      // エピソードが存在しない場合は404を返し、上位が異常を検知できるようにする
-      throw new ApiError('No episodes found for this job', 404, 'NOT_FOUND')
-    }
-
+    // エピソード未作成の場合も200で空配列を返す（UIは空とみなして表示を続行）
     return createSuccessResponse({
       jobId: params.jobId,
       totalEpisodes: episodes.length,

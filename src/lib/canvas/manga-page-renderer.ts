@@ -1,5 +1,6 @@
 import { appConfig } from '@/config/app.config'
 import { normalizeEmotion } from '@/domain/models/emotion'
+import { getLogger } from '@/infrastructure/logging/logger'
 import { renderVerticalText } from '@/services/vertical-text-client'
 import type {
   ChunkAnalysisResult,
@@ -110,6 +111,29 @@ export class MangaPageRenderer {
     chunks: ChunkAnalysisResult[],
     pageIndex: number,
   ): Promise<Panel[]> {
+    // --- DEBUG LOG ---
+    console.log(
+      `[MangaPageRenderer] Creating panels for page ${pageIndex}. Received ${chunks.length} chunks.`,
+    )
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i]
+      console.log(
+        `Chunk ${i}:`,
+        JSON.stringify(
+          {
+            chunkIndex: chunk.chunkIndex,
+            dialoguesCount: (chunk.dialogues || []).length,
+            situationsCount: (chunk.situations || []).length,
+            highlightsCount: (chunk.highlights || []).length,
+            scenesCount: (chunk.scenes || []).length,
+          },
+          null,
+          2,
+        ),
+      )
+    }
+    // --- END DEBUG LOG ---
+
     // パネルレイアウトを計算
     const panelLayouts = this.layoutEngine.calculatePanelLayout(chunks)
 
@@ -239,14 +263,37 @@ export class MangaPageRenderer {
    * エラーは詳細なメッセージと共に明示し、処理をストップする設計とする。
    */
   private async prepareAndAttachDialogueAssets(layout: MangaLayout): Promise<void> {
+    const logger = getLogger().withContext({
+      service: 'MangaPageRenderer',
+      method: 'prepareAndAttachDialogueAssets',
+    })
+
     const feature = appConfig.rendering.verticalText
     if (!feature?.enabled) {
-      throw new Error('Vertical text rendering is disabled by configuration')
+      const error = 'Vertical text rendering is disabled by configuration'
+      logger.error(error, { feature })
+      throw new Error(error)
     }
+
+    logger.info('Starting dialogue assets preparation', {
+      pagesCount: layout.pages.length,
+      verticalTextConfig: feature,
+    })
+
     const page = layout.pages[0]
     const assets: Record<string, { image: unknown; width: number; height: number }> = {}
 
     const isTest = process.env.NODE_ENV === 'test'
+    let totalDialogues = 0
+    let processedDialogues = 0
+
+    // Count total dialogues for progress tracking
+    for (const panel of page.panels) {
+      totalDialogues += (panel.dialogues || []).length
+    }
+
+    logger.info('Processing dialogues', { totalDialogues, isTest })
+
     for (const panel of page.panels) {
       const dialogues = panel.dialogues || []
       for (let i = 0; i < dialogues.length; i++) {
@@ -254,36 +301,109 @@ export class MangaPageRenderer {
         let imageObj: unknown
         let w = 1
         let h = 1
-        if (isTest) {
-          // In unit tests, avoid network. Provide deterministic placeholder sizes.
-          w = feature.defaults.fontSize + feature.defaults.padding * 2
-          h = Math.max(40, Math.ceil(d.text.length * (feature.defaults.fontSize * 0.9)))
-          imageObj = { __test_placeholder: true }
-        } else {
-          // APIコール
-          const { meta, pngBuffer } = await renderVerticalText({
-            text: d.text,
-            fontSize: feature.defaults.fontSize,
-            lineHeight: feature.defaults.lineHeight,
-            letterSpacing: feature.defaults.letterSpacing,
-            padding: feature.defaults.padding,
-            maxCharsPerLine: feature.defaults.maxCharsPerLine,
-          })
-          // node-canvas Image 作成
-          if (typeof CanvasRenderer.createImageFromBuffer === 'function') {
-            const created = CanvasRenderer.createImageFromBuffer(pngBuffer)
-            imageObj = created.image
-            w = Math.max(1, created.width || meta.width)
-            h = Math.max(1, created.height || meta.height)
+
+        try {
+          if (isTest) {
+            // In unit tests, avoid network. Provide deterministic placeholder sizes.
+            w = feature.defaults.fontSize + feature.defaults.padding * 2
+            h = Math.max(40, Math.ceil(d.text.length * (feature.defaults.fontSize * 0.9)))
+            imageObj = { __test_placeholder: true }
+            logger.debug('Created test placeholder', {
+              panelId: panel.id,
+              dialogueIndex: i,
+              text: d.text,
+            })
           } else {
-            // 非想定だが、型の都合でnode-canvasへ到達できない場合
-            throw new Error('Canvas image creation not available')
+            // API コール
+            logger.debug('Calling vertical text API', {
+              panelId: panel.id,
+              dialogueIndex: i,
+              text: d.text,
+              apiParams: {
+                fontSize: feature.defaults.fontSize,
+                lineHeight: feature.defaults.lineHeight,
+                letterSpacing: feature.defaults.letterSpacing,
+                padding: feature.defaults.padding,
+                maxCharsPerLine: feature.defaults.maxCharsPerLine,
+              },
+            })
+
+            const apiStartTime = Date.now()
+            const { meta, pngBuffer } = await renderVerticalText({
+              text: d.text,
+              fontSize: feature.defaults.fontSize,
+              lineHeight: feature.defaults.lineHeight,
+              letterSpacing: feature.defaults.letterSpacing,
+              padding: feature.defaults.padding,
+              maxCharsPerLine: feature.defaults.maxCharsPerLine,
+            })
+            const apiDuration = Date.now() - apiStartTime
+
+            logger.debug('Vertical text API call completed', {
+              panelId: panel.id,
+              dialogueIndex: i,
+              duration: apiDuration,
+              metaWidth: meta.width,
+              metaHeight: meta.height,
+              bufferSize: pngBuffer.length,
+            })
+
+            // node-canvas Image 作成
+            if (typeof CanvasRenderer.createImageFromBuffer === 'function') {
+              const created = CanvasRenderer.createImageFromBuffer(pngBuffer)
+              imageObj = created.image
+              w = Math.max(1, created.width || meta.width)
+              h = Math.max(1, created.height || meta.height)
+
+              logger.debug('Canvas image created', {
+                panelId: panel.id,
+                dialogueIndex: i,
+                finalWidth: w,
+                finalHeight: h,
+              })
+            } else {
+              // 非想定だが、型の都合でnode-canvasへ到達できない場合
+              const error = 'Canvas image creation not available'
+              logger.error(error, {
+                panelId: panel.id,
+                dialogueIndex: i,
+                createImageFromBufferType: typeof CanvasRenderer.createImageFromBuffer,
+              })
+              throw new Error(error)
+            }
           }
+
+          const key = `${panel.id}:${i}`
+          assets[key] = { image: imageObj, width: w, height: h }
+          processedDialogues++
+
+          logger.debug('Dialogue asset created', {
+            key,
+            width: w,
+            height: h,
+            progress: `${processedDialogues}/${totalDialogues}`,
+          })
+        } catch (error: unknown) {
+          logger.error('Failed to create dialogue asset', {
+            panelId: panel.id,
+            dialogueIndex: i,
+            text: d.text,
+            error: error instanceof Error ? error.message : 'Unknown error occurred',
+            stack: error instanceof Error ? error.stack : undefined,
+            progress: `${processedDialogues}/${totalDialogues}`,
+          })
+          throw new Error(
+            `Failed to create dialogue asset for panel ${panel.id}, dialogue ${i}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          )
         }
-        const key = `${panel.id}:${i}`
-        assets[key] = { image: imageObj, width: w, height: h }
       }
     }
+
+    logger.info('Dialogue assets preparation completed', {
+      totalAssets: Object.keys(assets).length,
+      processedDialogues,
+      totalDialogues,
+    })
 
     this.canvasRenderer.setDialogueAssets(assets)
   }

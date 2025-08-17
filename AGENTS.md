@@ -1,3 +1,5 @@
+think in English, output in Japanese
+
 # Repository Guidelines
 
 ## Project Structure & Module Organization

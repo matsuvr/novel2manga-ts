@@ -57,6 +57,7 @@ export interface LlmClientOptions {
   topP?: number
   frequencyPenalty?: number
   presencePenalty?: number
+  timeout?: number // タイムアウト（ミリ秒）
   tools?: LlmTool[]
   toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } }
   responseFormat?: {

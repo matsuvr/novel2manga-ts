@@ -5,6 +5,12 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // 環境変数をサーバーサイドで確実に利用できるように設定
+  env: {
+    VERTICAL_TEXT_API_URL: process.env.VERTICAL_TEXT_API_URL,
+    VERTICAL_TEXT_API_KEY: process.env.VERTICAL_TEXT_API_KEY,
+    VERTICAL_TEXT_API_TOKEN: process.env.VERTICAL_TEXT_API_TOKEN,
+  },
   // Fast Refreshの最適化
   webpack: (config, { dev, isServer }) => {
     if (dev && !isServer) {
