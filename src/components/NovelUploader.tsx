@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useId } from 'react'
 
 interface NovelResponse {
   preview: string
@@ -9,6 +9,7 @@ interface NovelResponse {
 }
 
 export default function NovelUploader() {
+  const textareaId = useId()
   const [novelText, setNovelText] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [response, setResponse] = useState<NovelResponse | null>(null)
@@ -47,11 +48,11 @@ export default function NovelUploader() {
         <h2 className="text-2xl font-bold mb-4">小説テキストアップロード</h2>
 
         <div className="mb-4">
-          <label htmlFor="novel-text" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor={textareaId} className="block text-sm font-medium text-gray-700 mb-2">
             小説テキスト
           </label>
           <textarea
-            id="novel-text"
+            id={textareaId}
             value={novelText}
             onChange={(e) => setNovelText(e.target.value)}
             placeholder="ここに長文の小説テキストを入力してください..."

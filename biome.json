@@ -30,7 +30,11 @@
       "**/jest.*",
       "**/cypress/**",
       "**/e2e/**",
-
+      "**/*.css",
+      "**/*.scss",
+      "**/*.sass",
+      "**/*.less",
+      "**/globals.css",
       "biome-report.json"
     ]
   },
@@ -113,6 +117,11 @@
     "enabled": true
   },
   "overrides": [
+    {
+      "includes": ["**/*.css", "**/*.scss", "**/*.sass", "**/*.less"],
+      "linter": { "enabled": false },
+      "formatter": { "enabled": false }
+    },
     {
       "includes": ["**/*.jsonc", "**/tsconfig*.json"],
       "linter": { "enabled": false },
