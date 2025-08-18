@@ -174,8 +174,48 @@ export function createMockLayoutGenerator(): AgentCore {
       {
         content: JSON.stringify({
           pages: [
-            { pageNumber: 1, panelCount: 4 },
-            { pageNumber: 2, panelCount: 6 },
+            {
+              pageNumber: 1,
+              panelCount: 4,
+              panels: [
+                {
+                  panelIndex: 1,
+                  content: 'テスト内容1',
+                  dialogue: [{ speaker: 'キャラクター1', lines: 'こんにちは' }],
+                },
+                {
+                  panelIndex: 2,
+                  content: 'テスト内容2',
+                  dialogue: [{ speaker: 'キャラクター2', lines: 'こんにちは' }],
+                },
+                { panelIndex: 3, content: 'テスト内容3', dialogue: [] },
+                {
+                  panelIndex: 4,
+                  content: 'テスト内容4',
+                  dialogue: [{ speaker: 'ナレーション', lines: '場面が変わる' }],
+                },
+              ],
+            },
+            {
+              pageNumber: 2,
+              panelCount: 6,
+              panels: [
+                { panelIndex: 1, content: 'テスト内容5', dialogue: [] },
+                {
+                  panelIndex: 2,
+                  content: 'テスト内容6',
+                  dialogue: [{ speaker: 'キャラクター1', lines: 'さようなら' }],
+                },
+                { panelIndex: 3, content: 'テスト内容7', dialogue: [] },
+                { panelIndex: 4, content: 'テスト内容8', dialogue: [] },
+                {
+                  panelIndex: 5,
+                  content: 'テスト内容9',
+                  dialogue: [{ speaker: 'キャラクター2', lines: 'また明日' }],
+                },
+                { panelIndex: 6, content: 'テスト内容10', dialogue: [] },
+              ],
+            },
           ],
         }),
         role: 'assistant',
@@ -253,8 +293,28 @@ export function setupAgentMocks() {
       Agent: vi.fn().mockImplementation(() => ({
         generateObject: vi.fn().mockResolvedValue({
           pages: [
-            { pageNumber: 1, panelCount: 4 },
-            { pageNumber: 2, panelCount: 6 },
+            {
+              pageNumber: 1,
+              panelCount: 4,
+              panels: [
+                { panelIndex: 1, content: 'テスト内容1', dialogue: [] },
+                { panelIndex: 2, content: 'テスト内容2', dialogue: [] },
+                { panelIndex: 3, content: 'テスト内容3', dialogue: [] },
+                { panelIndex: 4, content: 'テスト内容4', dialogue: [] },
+              ],
+            },
+            {
+              pageNumber: 2,
+              panelCount: 6,
+              panels: [
+                { panelIndex: 1, content: 'テスト内容5', dialogue: [] },
+                { panelIndex: 2, content: 'テスト内容6', dialogue: [] },
+                { panelIndex: 3, content: 'テスト内容7', dialogue: [] },
+                { panelIndex: 4, content: 'テスト内容8', dialogue: [] },
+                { panelIndex: 5, content: 'テスト内容9', dialogue: [] },
+                { panelIndex: 6, content: 'テスト内容10', dialogue: [] },
+              ],
+            },
           ],
         }),
         generate: vi.fn().mockResolvedValue('test response'),
