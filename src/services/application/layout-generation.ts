@@ -1,5 +1,6 @@
 import yaml from 'js-yaml'
 import { appConfig } from '@/config/app.config'
+import type { Episode } from '@/db'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
 import { adaptAll } from '@/repositories/adapters'
@@ -7,7 +8,6 @@ import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
 import { getDatabaseService } from '@/services/db-factory'
 import type { EpisodeData, MangaLayout } from '@/types/panel-layout'
-import type { Episode } from '@/db'
 import { StorageKeys } from '@/utils/storage'
 
 // CONCURRENCY: In-memory lock to prevent race conditions in layout generation
