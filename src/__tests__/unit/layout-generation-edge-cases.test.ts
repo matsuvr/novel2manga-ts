@@ -8,6 +8,141 @@ import type { LoggerPort } from '@/infrastructure/logging/logger'
 import type { StoragePorts } from '@/infrastructure/storage/ports'
 import { generateEpisodeLayout } from '@/services/application/layout-generation'
 
+// Mock LLM modules to avoid API key requirements
+vi.mock('@/agents/script/script-converter', () => ({
+  convertEpisodeTextToScript: vi.fn().mockResolvedValue({
+    script: [
+      {
+        index: 0,
+        type: 'stage',
+        text: 'Mock script line for testing',
+      },
+    ],
+  }),
+}))
+
+vi.mock('@/agent/structured-generator', () => ({
+  getLlmStructuredGenerator: vi.fn().mockReturnValue({
+    generateObjectWithFallback: vi.fn().mockResolvedValue({}),
+  }),
+}))
+
+vi.mock('@/agents/script/page-break-estimator', () => ({
+  estimatePageBreaks: vi.fn().mockResolvedValue({
+    pages: [
+      {
+        pageNumber: 1,
+        startIndex: 0,
+        endIndex: 0,
+      },
+    ],
+  }),
+}))
+
+vi.mock('@/agents/llm/router', () => ({
+  createClientForProvider: vi.fn().mockReturnValue({
+    generateStructured: vi.fn().mockResolvedValue({}),
+  }),
+}))
+
+// Mock panel assignment with configurable behavior
+let mockPanelAssignmentBehavior: 'success' | 'empty' | 'insufficient' = 'success'
+
+vi.mock('@/agents/script/panel-assignment', () => ({
+  assignPanels: vi.fn().mockImplementation(async () => {
+    if (mockPanelAssignmentBehavior === 'empty') {
+      return { pages: [] }
+    }
+    if (mockPanelAssignmentBehavior === 'insufficient') {
+      return {
+        pages: [
+          {
+            pageNumber: 1,
+            panelCount: 4,
+            panels: [],
+          },
+        ],
+      }
+    }
+    // Default success case - return 4 pages as expected
+    return {
+      pages: [
+        {
+          pageNumber: 1,
+          panelCount: 4,
+          panels: [],
+        },
+        {
+          pageNumber: 2,
+          panelCount: 3,
+          panels: [],
+        },
+        {
+          pageNumber: 3,
+          panelCount: 5,
+          panels: [],
+        },
+        {
+          pageNumber: 4,
+          panelCount: 4,
+          panels: [],
+        },
+      ],
+    }
+  }),
+  buildLayoutFromAssignment: vi.fn().mockImplementation((script, assignment) => {
+    if (
+      mockPanelAssignmentBehavior === 'empty' ||
+      !assignment?.pages ||
+      assignment.pages.length === 0
+    ) {
+      return {
+        title: 'Test Episode',
+        created_at: '2025-08-18',
+        episodeNumber: 1,
+        pages: [],
+      }
+    }
+    if (mockPanelAssignmentBehavior === 'insufficient') {
+      return {
+        title: 'Test Episode',
+        created_at: '2025-08-18',
+        episodeNumber: 1,
+        pages: [
+          {
+            page_number: 1,
+            panels: [],
+          },
+        ],
+      }
+    }
+    // Success case - return the expected 4 pages
+    return {
+      title: 'Test Episode',
+      created_at: '2025-08-18',
+      episodeNumber: 1,
+      pages: [
+        {
+          page_number: 1,
+          panels: [],
+        },
+        {
+          page_number: 2,
+          panels: [],
+        },
+        {
+          page_number: 3,
+          panels: [],
+        },
+        {
+          page_number: 4,
+          panels: [],
+        },
+      ],
+    }
+  }),
+}))
+
 // Mock logger
 const mockLogger: LoggerPort = {
   info: vi.fn(),
@@ -50,7 +185,7 @@ const createMockStoragePorts = (simulateFailures = false): StoragePorts => ({
   layout: {
     getEpisodeLayout: vi.fn().mockResolvedValue(''),
     putEpisodeLayout: vi.fn().mockImplementation(async (jobId, episodeNumber, content) => {
-      if (simulateFailures && content.includes('test-fail')) {
+      if (simulateFailures) {
         throw new Error('Simulated storage failure')
       }
     }),
@@ -59,14 +194,7 @@ const createMockStoragePorts = (simulateFailures = false): StoragePorts => ({
     putEpisodeLayoutProgress: vi
       .fn()
       .mockImplementation(async (keyOrJobId, episodeNumberOrContent, content) => {
-        // Handle both old and new signatures
-        const contentToCheck =
-          typeof content === 'string'
-            ? content
-            : typeof episodeNumberOrContent === 'string'
-              ? episodeNumberOrContent
-              : ''
-        if (simulateFailures && contentToCheck.includes('test-fail')) {
+        if (simulateFailures) {
           throw new Error('Simulated progress storage failure')
         }
       }),
@@ -90,7 +218,8 @@ const createMockStoragePorts = (simulateFailures = false): StoragePorts => ({
 // Mock database dependencies
 vi.mock('@/services/db-factory', () => ({
   getDatabaseService: vi.fn(() => ({
-    // Mock database service
+    upsertLayoutStatus: vi.fn().mockResolvedValue(undefined),
+    recomputeJobTotalPages: vi.fn().mockResolvedValue(undefined),
   })),
 }))
 
@@ -245,6 +374,7 @@ describe('Layout Generation Edge Cases', () => {
     vi.clearAllMocks()
     mockPlanNextBatch.resetCallCount()
     mockPlanNextBatch.setAllowProgress(false)
+    mockPanelAssignmentBehavior = 'success'
   })
 
   describe('Race Condition Prevention', () => {
@@ -254,15 +384,19 @@ describe('Layout Generation Edge Cases', () => {
       // This should fail due to simulated storage failure
       await expect(
         generateEpisodeLayout('test-job', 1, { isDemo: true }, mockPorts, mockLogger),
-      ).rejects.toThrow()
+      ).rejects.toThrow('Storage operation failed')
 
-      // Verify error was logged (layout generation will fail on no progress first)
-      expect(mockLogger.error).toHaveBeenCalled()
+      // Verify error was logged
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        'Failed to persist layout and progress - atomic write failed',
+        expect.objectContaining({
+          episodeNumber: 1,
+          error: 'Simulated storage failure',
+        }),
+      )
     })
 
     it('should complete successfully when storage operations succeed', async () => {
-      // Allow progress for successful test
-      mockPlanNextBatch.setAllowProgress(true)
       const mockPorts = createMockStoragePorts(false)
 
       const result = await generateEpisodeLayout(
@@ -280,60 +414,88 @@ describe('Layout Generation Edge Cases', () => {
   })
 
   describe('Error Handling', () => {
-    it('should handle layout generator errors gracefully', async () => {
-      // Mock function to throw error
-      mockGenerateMangaLayoutForPlan.mockRejectedValueOnce(new Error('Layout generator failure'))
+    it('should handle panel assignment errors gracefully', async () => {
+      // Set mock to return empty panel assignment
+      mockPanelAssignmentBehavior = 'empty'
 
       const mockPorts = createMockStoragePorts(false)
 
       await expect(
         generateEpisodeLayout('test-job', 1, { isDemo: true }, mockPorts, mockLogger),
-      ).rejects.toThrow('Layout generator failure')
+      ).rejects.toThrow('Panel assignment failed to produce valid assignment')
 
-      // Reset mock
-      mockGenerateMangaLayoutForPlan.mockResolvedValue({
-        pages: [
-          {
-            page_number: 1,
-            panels: [{ position: { x: 0, y: 0 }, size: { width: 1, height: 1 } }],
-          },
-        ],
-      })
-    })
-  })
-
-  describe('Infinite Loop Prevention', () => {
-    it('should detect and abort when no progress is made for multiple batches', async () => {
-      // Reset to ensure no-progress scenario
-      mockPlanNextBatch.resetCallCount()
-      const mockPorts = createMockStoragePorts(false)
-
-      await expect(
-        generateEpisodeLayout('test-job', 1, { isDemo: true }, mockPorts, mockLogger),
-      ).rejects.toThrow('Layout generation made no progress')
-
-      // Verify warning logs were generated for no-progress detection
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        'No progress detected in layout generation batch',
+      // Verify error was logged
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        'Panel assignment failed to produce valid assignment',
         expect.objectContaining({
-          currentStreak: expect.any(Number),
-          maxAllowed: expect.any(Number),
+          episodeNumber: 1,
         }),
       )
     })
 
-    it('should reset progress streak when actual progress is made', async () => {
-      // This test is complex due to mock state management across test isolation
-      // The functionality is verified in integration tests where the full flow works
-      expect(true).toBe(true) // Placeholder for now
+    it('should handle insufficient page generation', async () => {
+      // Set mock to return insufficient pages (1 page instead of 4)
+      mockPanelAssignmentBehavior = 'insufficient'
+
+      const mockPorts = createMockStoragePorts(false)
+
+      await expect(
+        generateEpisodeLayout('test-job', 1, { isDemo: true }, mockPorts, mockLogger),
+      ).rejects.toThrow('Layout building failed to produce sufficient pages')
+
+      // Verify error was logged
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        'Layout building failed to produce sufficient pages',
+        expect.objectContaining({
+          episodeNumber: 1,
+          expectedPages: 4, // Based on episode mock estimatedPages
+          actualPages: 1,
+        }),
+      )
+    })
+  })
+
+  describe('Progress Validation', () => {
+    it('should validate script conversion produces valid results', async () => {
+      // Mock script converter to return empty script
+      const { convertEpisodeTextToScript } = await import('@/agents/script/script-converter')
+      vi.mocked(convertEpisodeTextToScript).mockResolvedValueOnce({ script: [] })
+
+      const mockPorts = createMockStoragePorts(false)
+
+      await expect(
+        generateEpisodeLayout('test-job', 1, { isDemo: true }, mockPorts, mockLogger),
+      ).rejects.toThrow('Script conversion failed to produce valid script')
+
+      // Verify error was logged
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        'Script conversion failed to produce valid script',
+        expect.objectContaining({
+          episodeNumber: 1,
+        }),
+      )
     })
   })
 
   describe('Concurrency Control', () => {
     it('should prevent multiple concurrent layout generations for the same episode', async () => {
-      // This test is temporarily skipped due to complex mock state management
-      // The concurrency control functionality works as verified by the integration tests
-      expect(true).toBe(true)
+      const mockPorts = createMockStoragePorts(false)
+
+      // Start two concurrent layout generations for the same episode
+      const promise1 = generateEpisodeLayout('test-job', 1, { isDemo: true }, mockPorts, mockLogger)
+      const promise2 = generateEpisodeLayout('test-job', 1, { isDemo: true }, mockPorts, mockLogger)
+
+      // Both should complete successfully, but the second should wait for the first
+      const [result1, result2] = await Promise.all([promise1, promise2])
+
+      // Both should return the same result (second one waited for first)
+      expect(result1).toEqual(result2)
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        'Layout generation already in progress, waiting for completion',
+        expect.objectContaining({
+          lockKey: 'test-job:1',
+        }),
+      )
     })
   })
 })

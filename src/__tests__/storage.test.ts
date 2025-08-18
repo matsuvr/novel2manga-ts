@@ -2,16 +2,19 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { isDevelopment } from '@/config'
-import { LocalFileStorage, StorageFactory, StorageKeys } from '../utils/storage'
+import { clearStorageCache, LocalFileStorage, StorageFactory, StorageKeys } from '../utils/storage'
 
 // モック設定
 vi.mock('@/config', () => ({
   isDevelopment: vi.fn(),
 }))
 
+const mockIsDevelopment = vi.mocked(isDevelopment)
+
 describe('Storage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clearStorageCache()
   })
 
   describe('StorageKeys', () => {
@@ -29,7 +32,7 @@ describe('Storage', () => {
 
   describe('StorageFactory', () => {
     it('should throw error when storage is not configured in production', async () => {
-      vi.mocked(isDevelopment).mockReturnValue(false)
+      mockIsDevelopment.mockReturnValue(false)
       delete (globalThis as any).NOVEL_STORAGE
       delete (globalThis as any).CHUNKS_STORAGE
       delete (globalThis as any).ANALYSIS_STORAGE
@@ -50,7 +53,7 @@ describe('Storage', () => {
     })
 
     it('should return storage instances in development mode', async () => {
-      vi.mocked(isDevelopment).mockReturnValue(true)
+      mockIsDevelopment.mockReturnValue(true)
 
       // StorageFactoryは実際の実装を使うため、
       // 開発モードではLocalFileStorageのインスタンスが返されることだけを確認
@@ -68,7 +71,7 @@ describe('Storage', () => {
     })
 
     it('should return storage instances in production mode with bindings', async () => {
-      vi.mocked(isDevelopment).mockReturnValue(false)
+      mockIsDevelopment.mockReturnValue(false)
 
       // R2バインディングのモック
       ;(globalThis as any).NOVEL_STORAGE = {
@@ -121,7 +124,7 @@ describe('Storage', () => {
 
     beforeEach(async () => {
       await fs.rm(layoutsBase, { recursive: true, force: true })
-      vi.mocked(isDevelopment).mockReturnValue(true)
+      mockIsDevelopment.mockReturnValue(true)
     })
 
     it('saves .yaml as plain text and reads back unchanged', async () => {

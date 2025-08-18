@@ -9,57 +9,47 @@ const zBody = z.object({
 })
 
 const textAnalysisOutputSchema = z.object({
-  summary: z.string().default(''),
-  characters: z
-    .array(
-      z.object({
-        name: z.string(),
-        description: z.string(),
-        firstAppearance: z.number(),
-      }),
-    )
-    .default([]),
-  scenes: z
-    .array(
-      z.object({
-        location: z.string(),
-        time: z.string().optional(),
-        description: z.string(),
-        startIndex: z.number(),
-        endIndex: z.number(),
-      }),
-    )
-    .default([]),
-  dialogues: z
-    .array(
-      z.object({
-        speakerId: z.string(),
-        text: z.string(),
-        emotion: z.string().optional(),
-        index: z.number(),
-      }),
-    )
-    .default([]),
-  highlights: z
-    .array(
-      z.object({
-        type: z.enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence']),
-        description: z.string(),
-        importance: z.number().min(1).max(10),
-        startIndex: z.number(),
-        endIndex: z.number(),
-        text: z.string().optional(),
-      }),
-    )
-    .default([]),
-  situations: z
-    .array(
-      z.object({
-        description: z.string(),
-        index: z.number(),
-      }),
-    )
-    .default([]),
+  summary: z.string(),
+  characters: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string(),
+      firstAppearance: z.number(),
+    }),
+  ),
+  scenes: z.array(
+    z.object({
+      location: z.string(),
+      time: z.string().optional(),
+      description: z.string(),
+      startIndex: z.number(),
+      endIndex: z.number(),
+    }),
+  ),
+  dialogues: z.array(
+    z.object({
+      speakerId: z.string(),
+      text: z.string(),
+      emotion: z.string().optional(),
+      index: z.number(),
+    }),
+  ),
+  highlights: z.array(
+    z.object({
+      type: z.enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence']),
+      description: z.string(),
+      importance: z.number().min(1).max(10),
+      startIndex: z.number(),
+      endIndex: z.number(),
+      text: z.string().optional(),
+    }),
+  ),
+  situations: z.array(
+    z.object({
+      description: z.string(),
+      index: z.number(),
+    }),
+  ),
 })
 
 async function runWithModel(modelId: string, prompt: string) {
@@ -73,11 +63,12 @@ async function runWithModel(modelId: string, prompt: string) {
   })
 
   try {
-    const result = await agent.generateObject<z.infer<typeof textAnalysisOutputSchema>>(
-      textAnalysisOutputSchema,
-      prompt,
-      { maxRetries: 2 },
-    )
+    const result = await agent.generateObject<z.infer<typeof textAnalysisOutputSchema>>({
+      userPrompt: prompt,
+      schema: textAnalysisOutputSchema,
+      schemaName: 'TextAnalysisOutput',
+      options: { maxRetries: 2 },
+    })
     return { ok: true as const, model: modelId, object: result }
   } catch (error) {
     return {

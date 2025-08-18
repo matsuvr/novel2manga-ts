@@ -10,14 +10,10 @@ export default {
   ],
 
   // JSON and other config files
-  '**/*.{json,jsonc}': [
-    'prettier --write',
-  ],
+  '**/*.{json,jsonc}': ['prettier --write'],
 
   // Markdown and YAML files
-  '**/*.{md,yml,yaml}': [
-    'prettier --write',
-  ],
+  '**/*.{md,yml,yaml}': ['prettier --write'],
 
   // Package.json specific handling
   'package.json': [

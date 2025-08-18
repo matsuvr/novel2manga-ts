@@ -1,5 +1,6 @@
 import yaml from 'js-yaml'
-import { PageSplitAgent } from '@/agents/page-splitter'
+import { appConfig } from '@/config/app.config'
+import type { Episode } from '@/db'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
 import { adaptAll } from '@/repositories/adapters'
@@ -37,7 +38,7 @@ export interface GenerateLayoutResult {
 
 // CONFIGURATION: Layout generation defaults
 // These values define the default parameters for manga layout generation
-const DEFAULT_LAYOUT_CONFIG = {
+const _DEFAULT_LAYOUT_CONFIG = {
   PANELS_PER_PAGE_MIN: 3,
   PANELS_PER_PAGE_MAX: 6,
   PANELS_PER_PAGE_AVERAGE: 4.5,
@@ -118,7 +119,18 @@ async function resolveEpisodeData(
     logger.warn('getJobWithProgress failed', { error: (e as Error).message })
     return null
   })
-  const episodes = await episodeRepo.getByJobId(jobId).catch(() => [])
+  let episodes: Episode[]
+  try {
+    episodes = await episodeRepo.getByJobId(jobId)
+  } catch (error) {
+    logger.error('Failed to retrieve episodes for job', {
+      jobId,
+      error: (error as Error).message,
+      stack: (error as Error).stack,
+    })
+    // Repository policy: do not fallback on infrastructure/db errors
+    throw error
+  }
   let episode = episodes.find((ep) => ep.episodeNumber === episodeNumber) || null
 
   if (!episode) {
@@ -269,7 +281,7 @@ async function buildChunkData(
 /**
  * Restore layout progress from previous generation attempts
  */
-async function restoreLayoutProgress(
+async function _restoreLayoutProgress(
   jobId: string,
   episodeNumber: number,
   ports: StoragePorts,
@@ -300,7 +312,8 @@ async function restoreLayoutProgress(
     const yamlExisting = await ports.layout.getEpisodeLayout(jobId, episodeNumber)
     if (yamlExisting) {
       try {
-        const parsed = yaml.load(yamlExisting) as MangaLayout
+        const { parseMangaLayoutFromYaml } = await import('@/utils/layout-parser')
+        const parsed = parseMangaLayoutFromYaml(yamlExisting)
         const epPages = Array.isArray(parsed.pages) ? parsed.pages : []
         pagesCanonical = epPages.map((p) => ({
           page_number: p.page_number,
@@ -329,6 +342,7 @@ async function generateEpisodeLayoutInternal(
     service: 'layout-generation',
   }),
 ): Promise<GenerateLayoutResult> {
+  logger.info('LayoutGeneration: start', { jobId, episodeNumber })
   const isDemo = options.isDemo === true
 
   // Initialize dependencies
@@ -372,260 +386,185 @@ async function generateEpisodeLayoutInternal(
   // Step update: layout in progress
   await jobRepo.updateStep(jobId, `layout_episode_${episodeNumber}`)
 
-  // Build full config with defaults
-  const fullConfig = {
-    panelsPerPage: {
-      min: options.config?.panelsPerPage?.min ?? DEFAULT_LAYOUT_CONFIG.PANELS_PER_PAGE_MIN,
-      max: options.config?.panelsPerPage?.max ?? DEFAULT_LAYOUT_CONFIG.PANELS_PER_PAGE_MAX,
-      average:
-        options.config?.panelsPerPage?.average ?? DEFAULT_LAYOUT_CONFIG.PANELS_PER_PAGE_AVERAGE,
-    },
-    dialogueDensity: options.config?.dialogueDensity ?? DEFAULT_LAYOUT_CONFIG.DIALOGUE_DENSITY,
-    visualComplexity: options.config?.visualComplexity ?? DEFAULT_LAYOUT_CONFIG.VISUAL_COMPLEXITY,
-    highlightPanelSizeMultiplier:
-      options.config?.highlightPanelSizeMultiplier ??
-      DEFAULT_LAYOUT_CONFIG.HIGHLIGHT_PANEL_SIZE_MULTIPLIER,
-    readingDirection: options.config?.readingDirection ?? ('right-to-left' as const),
-  }
+  // ===== New script-based flow: script -> page-breaks -> panel assignment =====
+  try {
+    const episodeText = episodeData.chunks.map((c) => c.text).join('\n')
 
-  // Restore layout progress from previous generation attempts
-  const { pagesCanonical: initialPages, lastPlannedPage: initialLastPage } =
-    await restoreLayoutProgress(jobId, episodeNumber, ports, logger)
-  let pagesCanonical = initialPages
-  let lastPlannedPage = initialLastPage
-
-  const totalPagesTarget = Math.max(episodeData.estimatedPages || 0, lastPlannedPage)
-  const splitAgent = new PageSplitAgent()
-
-  const mergePages = (
-    existing: Array<{
-      page_number: number
-      panels: MangaLayout['pages'][number]['panels']
-    }>,
-    incoming: Array<{
-      page_number: number
-      panels: MangaLayout['pages'][number]['panels']
-    }>,
-  ) => {
-    const map = new Map<
-      number,
-      { page_number: number; panels: MangaLayout['pages'][number]['panels'] }
-    >()
-    for (const p of existing) map.set(p.page_number, p)
-    for (const p of incoming) map.set(p.page_number, p) // replace on same number (minor adjustments)
-    return Array.from(map.values()).sort((a, b) => a.page_number - b.page_number)
-  }
-
-  // Back-edit window: how many previous pages are allowed to be revised
-  const BACK_EDIT_WINDOW = DEFAULT_LAYOUT_CONFIG.BACK_EDIT_WINDOW
-  let startPage = Math.max(1, lastPlannedPage + 1)
-  // Safety guards to avoid infinite loops when generator doesn't advance pages
-  let loopCount = 0
-  let noProgressStreak = 0
-  const LOOP_LIMIT = DEFAULT_LAYOUT_CONFIG.LOOP_LIMIT
-  while (startPage <= totalPagesTarget) {
-    loopCount++
-    if (loopCount > LOOP_LIMIT) {
-      logger.error('Layout generation loop limit exceeded', {
-        episodeNumber,
-        startPage,
-        lastPlannedPage,
-        totalPagesTarget,
-      })
-      throw new Error('Layout generation loop limit exceeded (safety abort)')
+    // Progress validation: Ensure minimum content exists
+    if (!episodeText.trim()) {
+      logger.error('No episode text content available for layout generation', { episodeNumber })
+      throw new Error('No episode text content available for layout generation')
     }
-    await jobRepo.updateStep(jobId, `layout_episode_${episodeNumber}`)
 
-    const plan = await splitAgent.planNextBatch(episodeData, {
-      batchSize: DEFAULT_LAYOUT_CONFIG.PAGE_BATCH_SIZE,
-      allowMinorAdjustments: true,
-      startPage,
-      backEditWindow: BACK_EDIT_WINDOW,
+    const { convertEpisodeTextToScript } = await import('@/agents/script/script-converter')
+    const script = await convertEpisodeTextToScript(episodeText, {
+      jobId,
+      episodeNumber: episode.episodeNumber,
     })
 
-    // Generate layout using plan-aware generator
-    const layoutGeneratorModule = await import('@/agents/layout-generator')
-    if (
-      !layoutGeneratorModule.generateMangaLayoutForPlan ||
-      typeof layoutGeneratorModule.generateMangaLayoutForPlan !== 'function'
-    ) {
-      throw new Error('generateMangaLayoutForPlan is not available in layout-generator module')
+    // Progress validation: Script conversion must produce results
+    if (!script?.script || script.script.length === 0) {
+      logger.error('Script conversion failed to produce valid script', { episodeNumber })
+      throw new Error('Script conversion failed to produce valid script')
     }
-    const layout = await layoutGeneratorModule.generateMangaLayoutForPlan(
-      episodeData,
-      plan,
-      fullConfig,
-      { jobId },
-    )
 
-    const rawPages = layout.pages as Array<{
-      page_number: number
-      panels: MangaLayout['pages'][number]['panels']
-    }>
-    let batchPages = rawPages
-    // Guard: only accept pages in the allowed back-edit window and forward batch
-    const minAllowed = Math.max(1, startPage - BACK_EDIT_WINDOW)
-    const maxAllowed = Math.max(
-      lastPlannedPage,
-      startPage + DEFAULT_LAYOUT_CONFIG.PAGE_BATCH_SIZE - 1,
+    const { estimatePageBreaks } = await import('@/agents/script/page-break-estimator')
+    const targetPages = Math.max(
+      episodeData.estimatedPages || 0,
+      Math.ceil(episodeText.length / (appConfig.processing.episode.charsPerPage || 400)),
+      1,
     )
-    const beforeFilterCount = batchPages.length
-    batchPages = batchPages.filter(
-      (p) => p.page_number >= minAllowed && p.page_number <= maxAllowed,
+    const avgLines = Math.max(
+      4,
+      Math.floor((script.script.length || 12) / Math.max(1, targetPages)),
     )
-    if (batchPages.length !== beforeFilterCount) {
-      logger.warn('Filtered pages outside allowed window', {
+    const pageBreaks = await estimatePageBreaks(script, {
+      targetPages,
+      avgLinesPerPage: avgLines,
+      jobId,
+      episodeNumber: episode.episodeNumber,
+    })
+
+    // Progress validation: Page breaks must be estimated
+    if (!pageBreaks?.pages || pageBreaks.pages.length === 0) {
+      logger.error('Page break estimation failed to produce valid page breaks', {
         episodeNumber,
-        startPage,
-        backEditWindow: BACK_EDIT_WINDOW,
-        before: beforeFilterCount,
-        after: batchPages.length,
+        targetPages,
+        scriptLength: script.script.length,
       })
+      throw new Error('Page break estimation failed to produce valid page breaks')
     }
 
-    const prevLastPlanned = lastPlannedPage
-    pagesCanonical = mergePages(pagesCanonical, batchPages)
-    const lastPageInBatch = Math.max(...batchPages.map((p) => p.page_number))
-    if (Number.isFinite(lastPageInBatch)) {
-      lastPlannedPage = Math.max(lastPlannedPage, lastPageInBatch)
-    }
+    const { assignPanels, buildLayoutFromAssignment } = await import(
+      '@/agents/script/panel-assignment'
+    )
+    const assignment = await assignPanels(script, pageBreaks, {
+      jobId,
+      episodeNumber: episode.episodeNumber,
+    })
 
-    // Check for progress and potential infinite loop conditions
-    if (lastPlannedPage === prevLastPlanned) {
-      noProgressStreak += 1
-      logger.warn('No progress detected in layout generation batch', {
+    // Progress validation: Panel assignment must produce results
+    if (!assignment?.pages || assignment.pages.length === 0) {
+      logger.error('Panel assignment failed to produce valid assignment', {
         episodeNumber,
-        currentStreak: noProgressStreak,
-        maxAllowed: DEFAULT_LAYOUT_CONFIG.NO_PROGRESS_STREAK_LIMIT_PLAN,
-        startPage,
-        lastPlannedPage,
-        batchPagesCount: batchPages.length,
-        totalPagesTarget,
+        pageBreaksCount: pageBreaks.pages.length,
       })
-
-      if (noProgressStreak >= DEFAULT_LAYOUT_CONFIG.NO_PROGRESS_STREAK_LIMIT_PLAN) {
-        logger.error('No progress in layout generation for multiple batches; aborting', {
-          episodeNumber,
-          startPage,
-          lastPlannedPage,
-          totalPagesTarget,
-          finalNoProgressStreak: noProgressStreak,
-        })
-        throw new Error('Layout generation made no progress')
-      }
-    } else {
-      // Progress made, reset the streak and log positive progress
-      if (noProgressStreak > 0) {
-        logger.info('Layout generation progress resumed', {
-          episodeNumber,
-          previousStreak: noProgressStreak,
-          oldLastPlanned: prevLastPlanned,
-          newLastPlanned: lastPlannedPage,
-        })
-      }
-      noProgressStreak = 0
+      throw new Error('Panel assignment failed to produce valid assignment')
     }
 
-    const layoutSnapshot: MangaLayout = {
-      title: episodeData.episodeTitle || `エピソード${episodeData.episodeNumber}`,
-      created_at: new Date().toISOString().split('T')[0],
-      episodeNumber: episodeData.episodeNumber,
+    const layoutBuilt = buildLayoutFromAssignment(script, assignment, {
+      title: episodeData.title,
+      episodeNumber: episode.episodeNumber,
       episodeTitle: episodeData.episodeTitle,
-      pages: pagesCanonical,
+    })
+
+    // Progress validation: Layout building must produce expected page count
+    if (!layoutBuilt?.pages || layoutBuilt.pages.length < targetPages) {
+      logger.error('Layout building failed to produce sufficient pages', {
+        episodeNumber,
+        expectedPages: targetPages,
+        actualPages: layoutBuilt?.pages?.length || 0,
+      })
+      throw new Error('Layout building failed to produce sufficient pages')
     }
+
     const { normalizeAndValidateLayout } = await import('@/utils/layout-normalizer')
-    const normalized = normalizeAndValidateLayout(layoutSnapshot, {
+    const normalized = normalizeAndValidateLayout(layoutBuilt, {
       allowFallback: false,
       bypassValidation: true,
     })
-    // Persist progress atomically (progress JSON first, then YAML snapshot)
-    // CONCURRENCY: Ensure both progress JSON and YAML are written atomically
-    // to prevent partial state updates that could be seen by concurrent requests
-    try {
-      const normalizedPages = Object.keys(normalized.pageIssues).map((k) => Number(k))
-      const pagesWithIssueCounts = Object.fromEntries(
-        Object.entries(normalized.pageIssues).map(([k, v]) => [Number(k), v.length]),
-      ) as Record<number, number>
-      const progress = {
-        pages: pagesCanonical,
-        lastPlannedPage,
-        updatedAt: new Date().toISOString(),
-        validation: {
-          pageIssues: normalized.pageIssues,
-          normalizedPages,
-          pagesWithIssueCounts,
-        },
-      }
 
-      // Prepare YAML content first to avoid partial writes
-      const yamlContent = yaml.dump(normalized.layout, {
+    // 分布ログ: ページごとのパネル数・空content枚数
+    try {
+      const summary = normalized.layout.pages.map((p) => ({
+        page: p.page_number,
+        panels: p.panels.length,
+        emptyContent: p.panels.filter((x) => !x.content || x.content.trim().length === 0).length,
+      }))
+      logger.info('Layout distribution summary', {
+        episodeNumber: episode.episodeNumber,
+        pages: summary,
+      })
+    } catch (summaryError) {
+      logger.warn('Failed to generate layout summary', {
+        episodeNumber,
+        error: (summaryError as Error).message,
+      })
+    }
+
+    // 保存（bbox形式）- with atomic error handling
+    try {
+      const { toBBoxLayout } = await import('@/utils/layout-parser')
+      const yamlContent = yaml.dump(toBBoxLayout(normalized.layout), {
         indent: 2,
         lineWidth: -1,
         noRefs: true,
       })
 
-      // Write both progress and layout concurrently for better performance
-      try {
-        await Promise.all([
-          ports.layout.putEpisodeLayoutProgress(jobId, episodeNumber, JSON.stringify(progress)),
-          ports.layout.putEpisodeLayout(jobId, episodeNumber, yamlContent),
-        ])
-      } catch (writeError) {
-        logger.error('Failed to persist layout progress', {
+      // Atomic write operations - must both succeed or both fail
+      await Promise.all([
+        ports.layout.putEpisodeLayout(jobId, episodeNumber, yamlContent),
+        ports.layout.putEpisodeLayoutProgress(
+          jobId,
           episodeNumber,
-          error: (writeError as Error).message,
-        })
-        throw writeError
-      }
-    } catch (error) {
-      logger.error('Failed to persist layout progress', {
+          JSON.stringify({
+            pages: normalized.layout.pages,
+            lastPlannedPage: Math.max(...normalized.layout.pages.map((p) => p.page_number)),
+            updatedAt: new Date().toISOString(),
+            validation: { pageIssues: normalized.pageIssues },
+          }),
+        ),
+      ])
+    } catch (storageError) {
+      logger.error('Failed to persist layout and progress - atomic write failed', {
         episodeNumber,
-        lastPlannedPage,
-        pagesCount: pagesCanonical.length,
-        error: (error as Error).message,
+        error: (storageError as Error).message,
+        stack: (storageError as Error).stack,
       })
-      throw error
+      throw new Error(`Storage operation failed: ${(storageError as Error).message}`)
     }
 
-    startPage = lastPlannedPage + 1
-  }
+    // ステータス更新
+    try {
+      await jobRepo.markStepCompleted(jobId, 'layout')
+      await jobRepo.updateStep(jobId, 'render')
+    } catch (statusError) {
+      logger.error('Failed to update job status after successful layout generation', {
+        episodeNumber,
+        error: (statusError as Error).message,
+      })
+      throw new Error(`Job status update failed: ${(statusError as Error).message}`)
+    }
 
-  // Episode complete: mark layout done and advance to render
-  await jobRepo.markStepCompleted(jobId, 'layout')
-  await jobRepo.updateStep(jobId, 'render')
-  // Persist per-episode layout totals and recompute job total pages
-  try {
-    const db = getDatabaseService()
-    const totalPagesForEpisode = pagesCanonical.length
-    await db.upsertLayoutStatus({
-      jobId,
-      episodeNumber,
-      totalPages: totalPagesForEpisode,
-      layoutPath: StorageKeys.episodeLayout(jobId, episodeNumber),
-    })
-    await db.recomputeJobTotalPages(jobId)
-  } catch (e) {
-    logger.warn('Failed to persist layout totals', {
-      error: (e as Error).message,
-      episodeNumber,
-    })
-  }
+    try {
+      const db = getDatabaseService()
+      await db.upsertLayoutStatus({
+        jobId,
+        episodeNumber,
+        totalPages: normalized.layout.pages.length,
+        layoutPath: StorageKeys.episodeLayout(jobId, episodeNumber),
+      })
+      await db.recomputeJobTotalPages(jobId)
+    } catch (dbError) {
+      logger.error('Failed to persist layout totals to database', {
+        error: (dbError as Error).message,
+        episodeNumber,
+      })
+      throw new Error(`Database update failed: ${(dbError as Error).message}`)
+    }
 
-  const finalLayout: MangaLayout = {
-    title: episodeData.episodeTitle || `エピソード${episodeData.episodeNumber}`,
-    created_at: new Date().toISOString().split('T')[0],
-    episodeNumber: episodeData.episodeNumber,
-    episodeTitle: episodeData.episodeTitle,
-    pages: pagesCanonical,
+    const storageKey = StorageKeys.episodeLayout(jobId, episodeNumber)
+    const pageNumbers = normalized.layout.pages.map((p) => p.page_number).sort((a, b) => a - b)
+    logger.info('LayoutGeneration: success', { jobId, episodeNumber, pages: pageNumbers.length })
+    return { layout: normalized.layout, storageKey, pageNumbers }
+  } catch (scriptFlowError) {
+    logger.error('Script-based layout generation failed', {
+      error: (scriptFlowError as Error).message,
+      episodeNumber,
+      stack: (scriptFlowError as Error).stack,
+    })
+    throw scriptFlowError
   }
-  const { normalizeAndValidateLayout } = await import('@/utils/layout-normalizer')
-  const normalized = normalizeAndValidateLayout(finalLayout, {
-    allowFallback: false,
-    bypassValidation: true,
-  })
-  const storageKey = StorageKeys.episodeLayout(jobId, episodeNumber)
-  const pageNumbers = pagesCanonical.map((p) => p.page_number).sort((a, b) => a - b)
-  return { layout: normalized.layout, storageKey, pageNumbers }
 }
 
 // (demoLayoutFromEpisode) was removed: demo mode now uses the normal planning/generation flow

@@ -473,33 +473,65 @@ async function resolveStorage(
 }
 
 // Novel Storage
+let _novelStorage: Promise<Storage> | null = null
 export async function getNovelStorage(): Promise<Storage> {
-  return resolveStorage('novels', 'NOVEL_STORAGE', 'Novel storage not configured')
+  if (_novelStorage) return _novelStorage
+  _novelStorage = resolveStorage('novels', 'NOVEL_STORAGE', 'Novel storage not configured')
+  return _novelStorage
 }
 
 // Chunk Storage
+let _chunkStorage: Promise<Storage> | null = null
 export async function getChunkStorage(): Promise<Storage> {
-  return resolveStorage('chunks', 'CHUNKS_STORAGE', 'Chunk storage not configured')
+  if (_chunkStorage) return _chunkStorage
+  _chunkStorage = resolveStorage('chunks', 'CHUNKS_STORAGE', 'Chunk storage not configured')
+  return _chunkStorage
 }
 
 // Analysis Storage
+let _analysisStorage: Promise<Storage> | null = null
 export async function getAnalysisStorage(): Promise<Storage> {
-  return resolveStorage('analysis', 'ANALYSIS_STORAGE', 'Analysis storage not configured')
+  if (_analysisStorage) return _analysisStorage
+  _analysisStorage = resolveStorage(
+    'analysis',
+    'ANALYSIS_STORAGE',
+    'Analysis storage not configured',
+  )
+  return _analysisStorage
 }
 
 // Layout Storage
+let _layoutStorage: Promise<Storage> | null = null
 export async function getLayoutStorage(): Promise<Storage> {
-  return resolveStorage('layouts', 'LAYOUTS_STORAGE', 'Layout storage not configured')
+  if (_layoutStorage) return _layoutStorage
+  _layoutStorage = resolveStorage('layouts', 'LAYOUTS_STORAGE', 'Layout storage not configured')
+  return _layoutStorage
 }
 
 // Render Storage
+let _renderStorage: Promise<Storage> | null = null
 export async function getRenderStorage(): Promise<Storage> {
-  return resolveStorage('renders', 'RENDERS_STORAGE', 'Render storage not configured')
+  if (_renderStorage) return _renderStorage
+  _renderStorage = resolveStorage('renders', 'RENDERS_STORAGE', 'Render storage not configured')
+  return _renderStorage
 }
 
 // Output Storage
+let _outputStorage: Promise<Storage> | null = null
 export async function getOutputStorage(): Promise<Storage> {
-  return resolveStorage('outputs', 'OUTPUTS_STORAGE', 'Output storage not configured')
+  if (_outputStorage) return _outputStorage
+  _outputStorage = resolveStorage('outputs', 'OUTPUTS_STORAGE', 'Output storage not configured')
+  return _outputStorage
+}
+
+// テスト用：ストレージキャッシュをクリア
+export function clearStorageCache(): void {
+  _novelStorage = null
+  _chunkStorage = null
+  _analysisStorage = null
+  _layoutStorage = null
+  _renderStorage = null
+  _outputStorage = null
 }
 
 // Database

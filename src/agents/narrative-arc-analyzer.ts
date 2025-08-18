@@ -244,13 +244,12 @@ export async function analyzeNarrativeArc(
     console.log('Target pages:', targetPages)
 
     const cfg = getNarrativeAnalysisConfig()
-    const { result } = await generator.generateObjectWithFallback({
+    const result = await generator.generateObjectWithFallback({
       name: 'Narrative Arc Analyzer',
-      instructions: cfg.systemPrompt,
+      systemPrompt: cfg.systemPrompt,
+      userPrompt: userPrompt,
       schema: responseSchema,
-      prompt: userPrompt,
-      maxTokens: cfg.maxTokens,
-      options: { maxRetries: 0, jobId: input.jobId, stepName: 'narrative-arc' },
+      schemaName: 'NarrativeArcAnalysis',
     })
 
     if (!result) {
