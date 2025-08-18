@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { CompatAgent } from '@/agent/compat'
-import { getNarrativeAnalysisConfig, getTextAnalysisConfig } from '@/config'
-import { getScriptConversionConfig, getPageBreakEstimationConfig } from '@/config'
+import {
+  getNarrativeAnalysisConfig,
+  getPageBreakEstimationConfig,
+  getScriptConversionConfig,
+  getTextAnalysisConfig,
+} from '@/config'
 
 function assertNoPlaceholders(str: string) {
   expect(str).toBeTypeOf('string')
