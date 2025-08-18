@@ -1,5 +1,10 @@
 import Cerebras from '@cerebras/cerebras_cloud_sdk'
 import { zodToJsonSchema } from 'zod-to-json-schema'
+import {
+  transformForCerebrasCompatibility,
+  validateCerebrasSchema,
+  type JsonSchemaNode,
+} from '../../llm/providers/cerebras-utils'
 import type { GenerateStructuredParams, LlmClient } from './types'
 
 export interface CerebrasClientConfig {
@@ -47,7 +52,18 @@ export class CerebrasClient implements LlmClient {
     })
 
     // Convert Zod schema to JSON Schema for structured outputs
-    const jsonSchema = zodToJsonSchema(spec.schema, { name: spec.schemaName || 'response' })
+    // Cerebras要件に合わせて `$defs` を使用し、互換変換を適用
+    const jsonSchemaRaw = zodToJsonSchema(spec.schema, {
+      name: spec.schemaName || 'response',
+      definitionPath: '$defs',
+    }) as Record<string, unknown>
+    const jsonSchema = transformForCerebrasCompatibility(
+      jsonSchemaRaw as unknown as Record<string, unknown>,
+    ) as Record<string, unknown>
+    const validationErrors = validateCerebrasSchema(jsonSchema as JsonSchemaNode)
+    if (validationErrors.length > 0) {
+      throw new Error(`cerebras: schema incompatible: ${validationErrors.join('; ')}`)
+    }
 
     try {
       const chatCompletion = await this.client.chat.completions.create({

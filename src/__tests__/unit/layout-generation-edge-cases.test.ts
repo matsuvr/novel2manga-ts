@@ -90,6 +90,57 @@ vi.mock('@/agents/script/panel-assignment', () => ({
       ],
     }
   }),
+  buildLayoutFromPageBreaks: vi.fn().mockImplementation((pageBreaks, episodeMeta) => {
+    if (
+      mockPanelAssignmentBehavior === 'empty' ||
+      !pageBreaks?.pages ||
+      pageBreaks.pages.length === 0
+    ) {
+      return {
+        title: episodeMeta.title || 'Test Episode',
+        created_at: '2025-08-18',
+        episodeNumber: episodeMeta.episodeNumber,
+        pages: [],
+      }
+    }
+    if (mockPanelAssignmentBehavior === 'insufficient') {
+      return {
+        title: episodeMeta.title || 'Test Episode',
+        created_at: '2025-08-18',
+        episodeNumber: episodeMeta.episodeNumber,
+        pages: [
+          {
+            page_number: 1,
+            panels: [],
+          },
+        ],
+      }
+    }
+    // Success case - return the expected 4 pages
+    return {
+      title: episodeMeta.title || 'Test Episode',
+      created_at: '2025-08-18',
+      episodeNumber: episodeMeta.episodeNumber,
+      pages: [
+        {
+          page_number: 1,
+          panels: [],
+        },
+        {
+          page_number: 2,
+          panels: [],
+        },
+        {
+          page_number: 3,
+          panels: [],
+        },
+        {
+          page_number: 4,
+          panels: [],
+        },
+      ],
+    }
+  }),
   buildLayoutFromAssignment: vi.fn().mockImplementation((script, assignment) => {
     if (
       mockPanelAssignmentBehavior === 'empty' ||
@@ -414,19 +465,19 @@ describe('Layout Generation Edge Cases', () => {
   })
 
   describe('Error Handling', () => {
-    it('should handle panel assignment errors gracefully', async () => {
-      // Set mock to return empty panel assignment
+    it('should handle layout building errors gracefully', async () => {
+      // Set mock to return empty layout (no pages)
       mockPanelAssignmentBehavior = 'empty'
 
       const mockPorts = createMockStoragePorts(false)
 
       await expect(
         generateEpisodeLayout('test-job', 1, { isDemo: true }, mockPorts, mockLogger),
-      ).rejects.toThrow('Panel assignment failed to produce valid assignment')
+      ).rejects.toThrow('Layout building failed to produce sufficient pages')
 
       // Verify error was logged
       expect(mockLogger.error).toHaveBeenCalledWith(
-        'Panel assignment failed to produce valid assignment',
+        'Layout building failed to produce sufficient pages',
         expect.objectContaining({
           episodeNumber: 1,
         }),

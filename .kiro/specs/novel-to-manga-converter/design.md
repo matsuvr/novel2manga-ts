@@ -258,6 +258,16 @@ const result = await agent.run({
 
 システムは Analyze/Layout/Render の3 APIでオーケストレーションされる。Analyzeが上記の分析・境界・台本・ページ/コマ割り・YAML保存までを担当し，Layoutは指定エピソードのレイアウト再生成，Renderはページ単位の描画を行う。
 
+### Emotion（感情表現）の扱い（更新）
+
+- 感情は enum で分類しない。自由記述の `string` として受け入れる。
+- システムによる正規化・シノニム折りたたみは行わない（例: `think → thought` などを廃止）。
+- レンダリング時の吹き出しスタイル（`normal|thought|shout`）は、emotion 文字列に依存せず、テキストの記号のみから推定する。
+  - `！/!` を含む → `shout`
+  - 先頭が `（/(` → `thought`
+  - それ以外 → `normal`
+- これにより、英語の固定語彙やフォールバックを排除し、日本語の自由記述に完全対応する。
+
 ### 呼び出しシーケンスの概要（番号付き）
 
 1. Analyze API
