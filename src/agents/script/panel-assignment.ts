@@ -1,7 +1,6 @@
 import type { z } from 'zod'
 import { getLlmStructuredGenerator } from '@/agent/structured-generator'
 import { getPanelAssignmentConfig } from '@/config'
-import { normalizeEmotion } from '@/domain/models/emotion'
 import type { Dialogue, MangaLayout, Panel } from '@/types/panel-layout'
 import {
   type PageBreakPlan,
@@ -52,7 +51,6 @@ export function buildLayoutFromAssignment(
       const dialogues: Dialogue[] = speeches.map((d) => ({
         speaker: d.speaker || '',
         text: d.text,
-        emotion: normalizeEmotion(undefined),
       }))
 
       // 空コマ禁止: content が空の場合は対話テキストの一部を content にも反映
@@ -78,6 +76,60 @@ export function buildLayoutFromAssignment(
         importance: Math.min(
           10,
           Math.max(3, dialogues.length >= 2 ? 7 : narratives.length >= 1 ? 6 : 5),
+        ),
+      }
+    })
+
+    return { page_number: p.pageNumber, panels }
+  })
+
+  return {
+    title: episodeMeta.episodeTitle || `エピソード${episodeMeta.episodeNumber}`,
+    created_at: new Date().toISOString().split('T')[0],
+    episodeNumber: episodeMeta.episodeNumber,
+    episodeTitle: episodeMeta.episodeTitle,
+    pages,
+  }
+}
+
+export function buildLayoutFromPageBreaks(
+  pageBreaks: PageBreakPlan,
+  episodeMeta: { title: string; episodeNumber: number; episodeTitle?: string },
+): MangaLayout {
+  const pages = pageBreaks.pages.map((p) => {
+    const template = selectLayoutTemplateByCountRandom(Math.max(1, p.panelCount))
+    let nextId = 1
+    const panels: Panel[] = p.panels.map((pp, idx) => {
+      // 新しい形式からcontentとdialogueを直接取得
+      let content = pp.content || ''
+      const dialogues: Dialogue[] = pp.dialogue.map((d) => ({
+        speaker: d.speaker,
+        text: d.lines,
+      }))
+
+      // 空コマ禁止: content が空の場合は対話テキストの一部を content にも反映
+      if (!content || content.trim().length === 0) {
+        if (dialogues.length > 0) {
+          content = dialogues
+            .slice(0, 2)
+            .map((d) => (d.speaker ? `${d.speaker}: ${d.text}` : d.text))
+            .join('\n')
+        } else {
+          content = '…'
+        }
+      }
+
+      const shape = template.panels[idx % template.panels.length]
+      return {
+        id: nextId++,
+        position: shape.position,
+        size: shape.size,
+        content,
+        dialogues,
+        sourceChunkIndex: 0,
+        importance: Math.min(
+          10,
+          Math.max(3, dialogues.length >= 2 ? 7 : content.length >= 50 ? 6 : 5),
         ),
       }
     })

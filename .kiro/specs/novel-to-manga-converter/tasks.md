@@ -108,3 +108,12 @@
 - **NEW**: JobProgressService enriches job data with per-episode page progress without breaking on errors.
 - **NEW**: All service errors are logged with full context for debugging, never silenced.
 - **NEW**: Dependency chart renders correctly in GitHub with clean, current architecture.
+
+## New (2025-08-19): Emotion as Free-text String
+
+- [x] Remove `normalizeEmotion` implementation and all usages
+- [x] Ensure `EmotionSchema = z.string()` and `type Emotion = string`
+- [x] Do not inject or transform `emotion` values during layout/rendering
+- [x] Bubble style decision uses only text punctuation, not `emotion`
+- [x] Update unit tests to remove normalization expectations
+- [x] Update design.md to document free-text policy and style heuristics

@@ -226,7 +226,8 @@ export async function createTestDatabase(): Promise<TestDatabase> {
 /**
  * テスト用データベースのクリーンアップ
  */
-export async function cleanupTestDatabase(testDb: TestDatabase): Promise<void> {
+export async function cleanupTestDatabase(testDb?: TestDatabase): Promise<void> {
+  if (!testDb) return
   try {
     // 全テーブルをクリア（外部キー制約を考慮した順序）
     await testDb.db.delete(schema.episodes)
@@ -242,7 +243,11 @@ export async function cleanupTestDatabase(testDb: TestDatabase): Promise<void> {
   } catch (error) {
     console.warn('Database cleanup warning:', error)
   } finally {
-    testDb.cleanup()
+    try {
+      testDb.cleanup()
+    } catch (e) {
+      console.warn('Database cleanup finalizer warning:', e)
+    }
   }
 }
 
