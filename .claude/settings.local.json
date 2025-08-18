@@ -75,7 +75,6 @@
       "Bash(npm run typecheck:*)",
       "mcp__context7__resolve-library-id",
       "mcp__context7__get-library-docs",
-      "mcp__serena__replace_symbol_body",
       "WebSearch",
       "WebFetch(domain:github.com)",
       "Bash(git reset:*)",
@@ -89,7 +88,9 @@
       "Bash(npm ls:*)",
       "WebFetch(domain:opennext.js.org)",
       "Bash(env)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(dir:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

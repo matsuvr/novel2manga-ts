@@ -18,15 +18,15 @@ export interface ProviderConfig {
 export function getDefaultProvider(): LLMProvider {
   // Tests should use Gemini to avoid expensive or flaky external calls
   if (process.env.NODE_ENV === 'test') {
-    return 'gemini'
+    return 'cerebras'
   }
-  return 'groq'
+  return 'cerebras'
 }
 
 // Provider fallback chain (first item is primary fallback)
 export function getFallbackChain(): LLMProvider[] {
   // Config-driven fallback order
-  const chain: LLMProvider[] = ['groq', 'cerebras', 'openai', 'gemini', 'openrouter']
+  const chain: LLMProvider[] = ['cerebras', 'groq', 'openrouter', 'openai']
   return chain
 }
 
@@ -37,21 +37,18 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
     model: 'qwen-3-235b-a22b-instruct-2507', // Use a known-valid Cerebras chat model to avoid 404
     maxTokens: 8192,
     timeout: 30_000,
-    // Note: Cerebras SDK may append "/v1" internally. Use root host here.
-    baseUrl: 'https://api.cerebras.ai',
+  },
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY,
+    model: 'gemini-2.5-flash',
+    maxTokens: 8192,
+    timeout: 30_000,
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
     model: 'gpt-5-mini', // gpt-5-mini は8月5日に登場したモデルです。モデル指定を間違えているわけではありません
     maxTokens: 8192,
     timeout: 60_000,
-  },
-  gemini: {
-    apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY,
-    model: 'gemini-2.5-flash',
-    // Native SDK uses default Gemini API; baseUrl override not required
-    maxTokens: 8192,
-    timeout: 30_000,
   },
   groq: {
     apiKey: process.env.GROQ_API_KEY,
@@ -100,12 +97,12 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
         return process.env.CEREBRAS_API_KEY
       case 'openai':
         return process.env.OPENAI_API_KEY
-      case 'gemini':
-        return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
       case 'groq':
         return process.env.GROQ_API_KEY
       case 'openrouter':
         return process.env.OPENROUTER_API_KEY
+      case 'gemini':
+        return process.env.GEMINI_API_KEY
       case 'fake':
         return 'fake-key'
       default:
@@ -120,12 +117,12 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
         return process.env.CEREBRAS_MODEL
       case 'openai':
         return process.env.OPENAI_MODEL
-      case 'gemini':
-        return process.env.GEMINI_MODEL
       case 'groq':
         return process.env.GROQ_MODEL
       case 'openrouter':
         return process.env.OPENROUTER_MODEL
+      case 'gemini':
+        return process.env.GEMINI_MODEL
       default:
         return undefined
     }

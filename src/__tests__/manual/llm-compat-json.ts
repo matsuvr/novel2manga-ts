@@ -92,8 +92,11 @@ function getNarrativeAnalysisConfig(): SimplePromptConfig {
     userPromptTemplate: prompts.userPromptTemplate,
   }
 }
-function getLayoutGenerationConfig(): SimplePromptConfig {
-  const prompts = appConfig.llm.layoutGeneration
+function getScriptConversionConfig(): SimplePromptConfig {
+  const prompts = (appConfig.llm as unknown as Record<string, any>).scriptConversion || {
+    systemPrompt: '',
+    userPromptTemplate: '',
+  }
   const provider = resolveProvider()
   const providerConfig = getLLMProviderConfig(provider)
   return {
@@ -103,8 +106,11 @@ function getLayoutGenerationConfig(): SimplePromptConfig {
     userPromptTemplate: prompts.userPromptTemplate,
   }
 }
-function getChunkBundleAnalysisConfig(): SimplePromptConfig {
-  const prompts = appConfig.llm.chunkBundleAnalysis
+function getPageBreakEstimationConfig(): SimplePromptConfig {
+  const prompts = (appConfig.llm as unknown as Record<string, any>).pageBreakEstimation || {
+    systemPrompt: '',
+    userPromptTemplate: '',
+  }
   const provider = resolveProvider()
   const providerConfig = getLLMProviderConfig(provider)
   return {
@@ -200,11 +206,20 @@ const NarrativeArcSchema = z
   .strict()
   .or(z.record(z.any()))
 
-const LayoutPanelCountSchema = z.object({
+// Script/PageBreak schemas (reuse from app types; lightweight copy here to avoid import issues)
+const ScriptLineSchema = z.object({
+  index: z.number().int().nonnegative(),
+  type: z.string(),
+  speaker: z.string().optional(),
+  text: z.string(),
+})
+const ScriptSchema = z.object({ script: z.array(ScriptLineSchema) })
+const PageBreakSchema = z.object({
   pages: z.array(
     z.object({
-      pageNumber: z.number(),
-      panelCount: z.number().int().min(1).max(6),
+      pageNumber: z.number().int().min(1),
+      startIndex: z.number().int().nonnegative(),
+      endIndex: z.number().int().nonnegative(),
     }),
   ),
 })
@@ -317,32 +332,23 @@ async function runNarrativeArc(): Promise<NamedResult> {
   }
 }
 
-async function runLayoutGeneration(): Promise<NamedResult> {
-  const cfg = getLayoutGenerationConfig()
-  const prompt = cfg.userPromptTemplate.replace('{{episodeNumber}}', '1').replace(
-    '{{layoutInputJson}}',
-    JSON.stringify(
-      {
-        pages: [
-          { pageNumber: 1, importance: 5 },
-          { pageNumber: 2, importance: 3 },
-        ],
-      },
-      null,
-      2,
-    ),
+async function runScriptConversion(): Promise<NamedResult> {
+  const cfg = getScriptConversionConfig()
+  const prompt = (cfg.userPromptTemplate || 'Episode text: {{episodeText}}').replace(
+    '{{episodeText}}',
+    '太郎は走った。花子は笑った。二人は空を見上げた。',
   )
 
   try {
     const agent = new CompatAgent({
-      name: 'manual-layout',
+      name: 'manual-script',
       instructions: cfg.systemPrompt,
       provider: cfg.provider,
       maxTokens: cfg.maxTokens,
     })
-    const obj = await agent.generateObject(LayoutPanelCountSchema, prompt)
+    const obj = await agent.generateObject(ScriptSchema, prompt)
     return {
-      name: 'layoutGeneration',
+      name: 'scriptConversion',
       ok: true,
       provider: cfg.provider,
       preview: JSON.stringify(obj).slice(0, 200),
@@ -350,7 +356,7 @@ async function runLayoutGeneration(): Promise<NamedResult> {
     }
   } catch (e) {
     return {
-      name: 'layoutGeneration',
+      name: 'scriptConversion',
       ok: false,
       provider: cfg.provider,
       error: (e as Error).message,
@@ -358,25 +364,31 @@ async function runLayoutGeneration(): Promise<NamedResult> {
   }
 }
 
-async function runChunkBundle(): Promise<NamedResult> {
-  const cfg = getChunkBundleAnalysisConfig()
-  const prompt = cfg.userPromptTemplate
-    .replace('{{characterList}}', '- 太郎 (登場回数: 3)')
-    .replace('{{sceneList}}', '- 学校の屋上')
-    .replace('{{dialogueList}}', '- 太郎: 「走れ！」')
-    .replace('{{highlightList}}', '- [climax] 告白シーン (重要度: 9)')
-    .replace('{{situationList}}', '- 雨が降っている')
+async function runPageBreakEstimation(): Promise<NamedResult> {
+  const cfg = getPageBreakEstimationConfig()
+  const script = {
+    script: [
+      { index: 0, type: 'dialogue', speaker: '太郎', text: '行くぞ！' },
+      { index: 1, type: 'narration', text: '雨が強くなる。' },
+      { index: 2, type: 'dialogue', speaker: '花子', text: '待って！' },
+      { index: 3, type: 'stage', text: '二人は走り出す。' },
+    ],
+  }
+  const prompt = (cfg.userPromptTemplate || '')
+    .replace('{{scriptJson}}', JSON.stringify(script))
+    .replace('{{targetPages}}', '4')
+    .replace('{{avgLinesPerPage}}', '8')
 
   try {
     const agent = new CompatAgent({
-      name: 'manual-bundle',
+      name: 'manual-pagebreak',
       instructions: cfg.systemPrompt,
       provider: cfg.provider,
       maxTokens: cfg.maxTokens,
     })
-    const obj = await agent.generateObject(ChunkBundleSchema, prompt)
+    const obj = await agent.generateObject(PageBreakSchema, prompt)
     return {
-      name: 'chunkBundle',
+      name: 'pageBreakEstimation',
       ok: true,
       provider: cfg.provider,
       preview: JSON.stringify(obj).slice(0, 200),
@@ -384,7 +396,7 @@ async function runChunkBundle(): Promise<NamedResult> {
     }
   } catch (e) {
     return {
-      name: 'chunkBundle',
+      name: 'pageBreakEstimation',
       ok: false,
       provider: cfg.provider,
       error: (e as Error).message,
@@ -400,8 +412,8 @@ async function main() {
   const results = [] as NamedResult[]
   results.push(await runTextAnalysis())
   results.push(await runNarrativeArc())
-  results.push(await runLayoutGeneration())
-  results.push(await runChunkBundle())
+  results.push(await runScriptConversion())
+  results.push(await runPageBreakEstimation())
   console.log(JSON.stringify({ results }, null, 2))
 }
 

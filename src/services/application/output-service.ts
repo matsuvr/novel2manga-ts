@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import { load as yamlLoad } from 'js-yaml'
 import JSZip from 'jszip'
 import PDFDocument from 'pdfkit'
 import type { Episode, NewOutput } from '@/db'
@@ -9,9 +8,8 @@ import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
 import { OutputRepository } from '@/repositories/output-repository'
 import { getDatabaseService } from '@/services/db-factory'
-import type { MangaLayout } from '@/types/panel-layout'
+import { parseMangaLayoutFromYaml } from '@/utils/layout-parser'
 // StorageKeys は内部で直接使用しない
-import { isMangaLayout } from '@/utils/type-guards'
 
 export class OutputService {
   private readonly outputRepo: OutputRepository
@@ -139,9 +137,7 @@ export class OutputService {
     for (const episode of episodes.sort((a, b) => a.episodeNumber - b.episodeNumber)) {
       const layoutDataText = await this.ports.layout.getEpisodeLayout(jobId, episode.episodeNumber)
       if (!layoutDataText) continue
-      const parsed = yamlLoad(layoutDataText)
-      if (!isMangaLayout(parsed)) continue
-      const mangaLayout = parsed as MangaLayout
+      const mangaLayout = parseMangaLayoutFromYaml(layoutDataText)
       if (mangaLayout.pages) {
         for (const page of mangaLayout.pages.sort((a, b) => a.page_number - b.page_number)) {
           const base64Image = await this.ports.render.getPageRender(
@@ -196,9 +192,8 @@ export class OutputService {
       const layoutText = await this.ports.layout.getEpisodeLayout(jobId, episode.episodeNumber)
       if (layoutText) {
         episodeFolder.file('layout.yaml', layoutText)
-        const parsed = yamlLoad(layoutText)
-        if (isMangaLayout(parsed)) {
-          const mangaLayout = parsed as MangaLayout
+        try {
+          const mangaLayout = parseMangaLayoutFromYaml(layoutText)
           if (mangaLayout.pages) {
             for (const page of mangaLayout.pages.sort((a, b) => a.page_number - b.page_number)) {
               const base64Image = await this.ports.render.getPageRender(
@@ -213,6 +208,8 @@ export class OutputService {
               totalPages++
             }
           }
+        } catch {
+          // 読み取り不能な場合はスキップ（画像は出力可能な範囲で続行）
         }
       }
     }

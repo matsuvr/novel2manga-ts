@@ -31,6 +31,8 @@ export const appConfig = {
 `,
       userPromptTemplate: `チャンク番号: {{chunkIndex}}
 
+分析の助けになるように前後のチャンクを付加しますが、分析の対象にするのは分析対象チャンクだけであることに注意してください。
+
 【前のチャンク】
 {{previousChunkText}}
 
@@ -54,27 +56,21 @@ export const appConfig = {
 4. 緊張の高まりと解決
 5. キャラクターの心理状態の変化
 
-結果を以下のJSON形式で出力してください：
+必ず以下のJSON構造に厳密に従って出力してください。説明文やコードフェンスは出力禁止です：
 {
-  "episodes": [
+  "boundaries": [
     {
-      "id": "エピソード番号",
+      "startPosition": エピソード開始位置（文字数）,
+      "endPosition": エピソード終了位置（文字数）,
+      "episodeNumber": エピソード番号,
       "title": "エピソードタイトル",
       "summary": "エピソード概要",
-      "startChunkIndex": 開始チャンク番号,
-      "endChunkIndex": 終了チャンク番号,
-      "keyEvents": ["重要な出来事1", "重要な出来事2"],
-      "characters": ["登場人物1", "登場人物2"],
-      "mood": "雰囲気・トーン",
-      "significance": "重要度(1-10)",
-      "boundaryConfidence": "境界の信頼度(0.0-1.0)"
+      "estimatedPages": 推定ページ数,
+      "confidence": 境界の信頼度(0.0-1.0),
+      "reasoning": "境界設定の理由"
     }
   ],
-  "overallArc": {
-    "theme": "全体のテーマ",
-    "progression": "物語の進行パターン",
-    "climaxLocation": "クライマックスの位置"
-  }
+  "overallAnalysis": "物語全体の分析結果"
 }`,
       userPromptTemplate: `【分析対象】
 テキスト全体の文字数: {{totalChars}}文字
@@ -102,72 +98,162 @@ export const appConfig = {
     },
 
     // レイアウト生成用設定（プロンプトのみ）
-    layoutGeneration: {
-      systemPrompt: `あなたはマンガのページごとの「コマ数」だけを決定する専門家です。
+    //     layoutGeneration: {
+    //       systemPrompt: `あなたはマンガのページごとの「コマ数」だけを決定する専門家です。
 
-重要な指針:
-1. 重要度やインパクトが高いシーンのページはコマ数を少なく（1〜3程度）
-2. 状況説明など密度は必要だがインパクトが低いページはコマ数を多く（5〜6程度）
-3. 出力は各ページのコマ数のみ（テンプレート適用は別工程）。
-4. 均等グリッドを避ける等の配置判断はシステム側で行うため、あなたは関与しない。
+    // 重要な指針:
+    // 1. 重要度やインパクトが高いシーンのページはコマ数を少なく（1〜3程度）
+    // 2. 状況説明など密度は必要だがインパクトが低いページはコマ数を多く（5〜6程度）
+    // 3. 出力は各ページのコマ数のみ（テンプレート適用は別工程）。
+    // 4. 均等グリッドを避ける等の配置判断はシステム側で行うため、あなたは関与しない。
 
-厳格な出力形式（JSONのみ）:
-{
-  "pages": [ { "pageNumber": number, "panelCount": 1|2|3|4|5|6 } ]
-}`,
-      userPromptTemplate: `エピソード{{episodeNumber}}の「ページごとのコマ数」を決定してください。
+    // 厳格な出力形式（JSONのみ）:
+    // {
+    //   "pages": [ { "pageNumber": number, "panelCount": 1|2|3|4|5|6 } ]
+    //  }`,
+    //       userPromptTemplate: `エピソード{{episodeNumber}}の「ページごとのコマ数」を決定してください。
 
-データ: {{layoutInputJson}}
+    // データ: {{layoutInputJson}}
 
-要件:
-- あなたの出力はページごとのコマ数だけです（1〜6）。
-- コマ配置やパネル内容は出力しないでください。
-- 重要度やインパクトが高い流れのページはコマ数を少なく、説明的なページは多く。
-- 均等分割の是非やテンプレート選択はシステムが行います。
+    // 要件:
+    // - あなたの出力はページごとのコマ数だけです（1〜6）。
+    // - コマ配置やパネル内容は出力しないでください。
+    // - 重要度やインパクトが高い流れのページはコマ数を少なく、説明的なページは多く。
+    // - 均等分割の是非やテンプレート選択はシステムが行います。
 
-出力は必ず次のJSONスキーマに準拠させてください:
-{
-  "pages": [ { "pageNumber": number, "panelCount": 1|2|3|4|5|6 } ]
-}`,
+    // 出力は必ず次のJSONスキーマに準拠させてください:
+    // {
+    //   "pages": [ { "pageNumber": number, "panelCount": 1|2|3|4|5|6 } ]
+    // }`,
+    //     },
+
+    //     // チャンクバンドル統合分析用設定（プロンプトのみ）
+    //     chunkBundleAnalysis: {
+    //       systemPrompt: `あなたは優秀な文学分析の専門家です。複数のチャンク分析結果を統合し、物語全体の要素を抽出してください。
+
+    // 必ず次の要件どおりに「有効なJSONのみ」を出力してください。説明文・前後本文・コードフェンス（\`\`\`）・マークダウン・追加の注釈は一切出力してはいけません。JSON以外の文字は出力禁止です。
+
+    // 出力するJSONは以下の構造に厳密に従ってください：
+    // {
+    //   "summary": "物語全体の要約（200-500文字）",
+    //   "mainCharacters": [
+    //     {
+    //       "name": "登場人物名",
+    //       "role": "物語における役割",
+    //       "description": "人物の特徴や性格"
+    //     }
+    //   ],
+    //   "highlights": [
+    //     {
+    //       "text": "重要な場面の内容",
+    //       "importance": 1-10の数値,
+    //       "context": "場面の文脈や意味"
+    //     }
+    //   ],
+    //   "keyDialogues": [
+    //     {
+    //       "speaker": "話者名",
+    //       "text": "発言内容",
+    //       "significance": "この会話の重要性"
+    //     }
+    //   ],
+    //   "narrativeFlow": {
+    //     "opening": "物語の導入部分の要約",
+    //     "development": "物語の展開部分の要約",
+    //     "currentState": "現在の物語の状態",
+    //     "tension": 0-10の数値
+    //   }
+    // }
+
+    // 以下の点に注意してください：
+    // - 各チャンクの分析結果を総合的に評価してください
+    // - 物語の連続性と流れを重視してください
+    // - 重複する情報は統合し、最も重要な要素を選別してください
+    // - チャンク番号への言及は避け、物語の内容に焦点を当ててください`,
+    //       userPromptTemplate: `以下の分析結果を統合し、物語全体の要素を抽出してください。
+
+    // 【登場人物情報】
+    // {{characterList}}
+
+    // 【場面情報】
+    // {{sceneList}}
+
+    // 【重要な対話】
+    // {{dialogueList}}
+
+    // 【ハイライトシーン】
+    // {{highlightList}}
+
+    // 【状況説明】
+    // {{situationList}}
+
+    // 【統合指示】
+    // 1. 上記の情報を基に、物語全体の要約を作成してください
+    // 2. 主要な登場人物を選別し、その役割と特徴をまとめてください（最大10名）
+    // 3. 最も重要な見所シーンを選別してください（重要度は1-10で再評価）
+    // 4. 物語の鍵となる会話を選別してください（最大10個）
+    // 5. 物語の流れ（導入・展開・現在の状態）を分析してください
+
+    // 注意：個別のチャンク番号や分析の痕跡を残さず、一つの連続した物語として扱ってください。`,
+    //     },
+    scriptConversion: {
+      systemPrompt:
+        '以下の情報を基に、セリフ＋ナレーション＋心の声のセリフと、場面情報を表すト書きとして、台本形式にしてください。会話は全て漏らさず出力してください。',
+      userPromptTemplate: `Episode text:
+
+      {{episodeText}}`,
     },
+    pageBreakEstimation: {
+      systemPrompt: `以下はマンガにするための脚本です。重要度や見所が強いシーンは1ページ1コマ、見所になるシーンは1ページ2～3コマ、状況説明が主となるシーンは1ページ4～6コマにして分割します。JSONのみ。`,
+      userPromptTemplate: `脚本JSON:
+       {{scriptJson}}
 
-    // チャンクバンドル統合分析用設定（プロンプトのみ）
-    chunkBundleAnalysis: {
-      systemPrompt: `あなたは優秀な文学分析の専門家です。複数のチャンク分析結果を統合し、物語全体の要素を抽出してください。
-
-必ず次の要件どおりに「有効なJSONのみ」を出力してください。説明文・前後本文・コードフェンス（\`\`\`）・マークダウン・追加の注釈は一切出力してはいけません。JSON以外の文字は出力禁止です。
-
-以下の点に注意してください：
-- 各チャンクの分析結果を総合的に評価してください
-- 物語の連続性と流れを重視してください
-- 重複する情報は統合し、最も重要な要素を選別してください
-- チャンク番号への言及は避け、物語の内容に焦点を当ててください`,
-      userPromptTemplate: `以下の分析結果を統合し、物語全体の要素を抽出してください。
-
-【登場人物情報】
-{{characterList}}
-
-【場面情報】
-{{sceneList}}
-
-【重要な対話】
-{{dialogueList}}
-
-【ハイライトシーン】
-{{highlightList}}
-
-【状況説明】
-{{situationList}}
-
-【統合指示】
-1. 上記の情報を基に、物語全体の要約を作成してください
-2. 主要な登場人物を選別し、その役割と特徴をまとめてください（最大10名）
-3. 最も重要な見所シーンを選別してください（重要度は1-10で再評価）
-4. 物語の鍵となる会話を選別してください（最大10個）
-5. 物語の流れ（導入・展開・現在の状態）を分析してください
-
-注意：個別のチャンク番号や分析の痕跡を残さず、一つの連続した物語として扱ってください。`,
+       出力JSON形式の例:
+{
+  "pages": [
+    {
+      "pageNumber": 1,
+      "panelCount": 1,
+      "panels": [
+        {
+          "panelIndex": 1,
+          "content": "Panel 1 content",
+          "dialogue": [
+            { "speaker": "Speaker 1", "lines": "Dialogue 1" }
+          ]
+        }
+      ]
     },
+    {
+      "pageNumber": 2,
+      "panelCount": 2,
+      "panels": [
+        {
+          "panelIndex": 1,
+          "content": "Panel 2 content",
+          "dialogue": [
+            { "speaker": "Speaker 2", "lines": "Dialogue 2" }
+          ]
+        },
+        {
+          "panelIndex": 2,
+          "content": "Panel 3 content",
+          "dialogue": [
+            { "speaker": "Speaker 3", "lines": "Dialogue 3" }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+
+      `,
+    },
+    // panelAssignment: {
+    //   systemPrompt: 'Decide panelCount per page and assign script line indexes to panels. Return pages[].panels[].lines. JSON only.',
+    //   userPromptTemplate: 'Script JSON:\n{{scriptJson}}\nPage breaks JSON:\n{{pageBreaksJson}}'
+    // }
   },
 
   // ストレージ設定

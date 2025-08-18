@@ -42,6 +42,21 @@
 - [x] Validation: Add `bypassValidation` flag to normalization; service uses it to skip heavy overlap checks
 - [ ] Tests: Add E2E scenario verifying panel-count-only path produces pages without validation issues
 
+## New (2025-08-18): Prompt Cleanup for New Flow
+
+- [x] Remove usage of commented-out `layoutGeneration` prompt from tests/scenarios
+- [x] Remove usage of commented-out `chunkBundleAnalysis` prompt from manual/prompt-wire tests
+- [x] Add prompt-wire checks for `scriptConversion` and `pageBreakEstimation`
+- [x] Ensure integration tests pass with script→page-break→render flow
+
+## New (2025-08-18): Orchestrator refresh + Sliding chunks
+
+- [x] Replace DSL scenario with API-driven ideal flow (analyze → layout → render)
+- [x] Add mechanical sliding chunk splitter + unit tests
+- [x] Inject prev/next chunk context into analysis prompt
+- [x] Update `/api/scenario/run` to use refreshed DSL input/output
+- [x] E2E (demo path): scenario run endpoint returns render key successfully
+
 ## New: Vertical Dialogue Rendering (2025-08-16)
 
 - [x] Design plan at `docs/vertical-text-integration-plan.md`

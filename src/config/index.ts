@@ -70,27 +70,86 @@ export function getTextAnalysisConfig() {
 
 // レイアウト生成設定を取得
 export function getLayoutGenerationConfig() {
-  const prompts = getAppConfig().llm.layoutGeneration
+  const prompts = getAppConfig().llm as unknown as Record<
+    string,
+    { systemPrompt?: string; userPromptTemplate?: string }
+  >
+  const lg = prompts.layoutGeneration || { systemPrompt: '', userPromptTemplate: '' }
   const provider = getDefaultProvider()
   const providerConfig = getProviderConfig(provider as LLMProvider)
   return {
-    provider: provider,
+    provider,
     maxTokens: providerConfig.maxTokens,
-    systemPrompt: prompts.systemPrompt,
-    userPromptTemplate: prompts.userPromptTemplate,
+    systemPrompt: lg.systemPrompt as string,
+    userPromptTemplate: lg.userPromptTemplate as string,
   }
 }
 
 // チャンクバンドル統合分析設定を取得
 export function getChunkBundleAnalysisConfig() {
-  const prompts = getAppConfig().llm.chunkBundleAnalysis
+  const prompts = getAppConfig().llm as unknown as Record<
+    string,
+    { systemPrompt?: string; userPromptTemplate?: string }
+  >
+  const cb = prompts.chunkBundleAnalysis || { systemPrompt: '', userPromptTemplate: '' }
   const provider = getDefaultProvider()
   const providerConfig = getProviderConfig(provider as LLMProvider)
   return {
     provider: provider,
     maxTokens: providerConfig.maxTokens,
-    systemPrompt: prompts.systemPrompt,
-    userPromptTemplate: prompts.userPromptTemplate,
+    systemPrompt: cb.systemPrompt as string,
+    userPromptTemplate: cb.userPromptTemplate as string,
+  }
+}
+
+// 劇台本化設定を取得
+export function getScriptConversionConfig() {
+  const prompts = getAppConfig().llm as unknown as Record<
+    string,
+    { systemPrompt?: string; userPromptTemplate?: string }
+  >
+  const sc = prompts.scriptConversion || { systemPrompt: '', userPromptTemplate: '' }
+  const provider = getDefaultProvider()
+  const providerConfig = getProviderConfig(provider as LLMProvider)
+  return {
+    provider,
+    maxTokens: providerConfig.maxTokens,
+    systemPrompt: sc.systemPrompt as string,
+    userPromptTemplate: sc.userPromptTemplate as string,
+  }
+}
+
+// ページ切れ目推定設定を取得
+export function getPageBreakEstimationConfig() {
+  const prompts = getAppConfig().llm as unknown as Record<
+    string,
+    { systemPrompt?: string; userPromptTemplate?: string }
+  >
+  const pb = prompts.pageBreakEstimation || { systemPrompt: '', userPromptTemplate: '' }
+  const provider = getDefaultProvider()
+  const providerConfig = getProviderConfig(provider as LLMProvider)
+  return {
+    provider,
+    maxTokens: providerConfig.maxTokens,
+    systemPrompt: pb.systemPrompt as string,
+    userPromptTemplate: pb.userPromptTemplate as string,
+  }
+}
+
+// コマ割り割当設定を取得
+export function getPanelAssignmentConfig() {
+  const prompts = getAppConfig().llm as unknown as Record<
+    string,
+    { systemPrompt?: string; userPromptTemplate?: string }
+  >
+  const pa = prompts.panelAssignment || { systemPrompt: '', userPromptTemplate: '' }
+  const provider = getDefaultProvider()
+  const providerConfig = getProviderConfig(provider as LLMProvider)
+  return {
+    provider,
+    maxTokens: providerConfig.maxTokens,
+    systemPrompt: pa.systemPrompt as string,
+    userPromptTemplate: pa.userPromptTemplate as string,
   }
 }
 

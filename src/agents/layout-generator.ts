@@ -55,7 +55,7 @@ export class LayoutGeneratorAgent {
   async generateLayout(
     episodeData: EpisodeData,
     _config: LayoutGenerationConfig,
-    options?: { jobId?: string },
+    _options?: { jobId?: string },
   ): Promise<MangaLayout> {
     // エピソードデータをLLM用に簡略化
     // 入力アダプタを使用してLLM入力データを構築
@@ -70,18 +70,12 @@ export class LayoutGeneratorAgent {
       .replace('{{layoutInputJson}}', JSON.stringify(layoutInput, null, 2))
 
     const cfg = getLayoutGenerationConfig()
-    const { result: llmResponseObject } = await this.generator.generateObjectWithFallback({
+    const llmResponseObject = await this.generator.generateObjectWithFallback({
       name: 'layout-generator',
-      instructions: cfg.systemPrompt,
+      systemPrompt: cfg.systemPrompt,
+      userPrompt: prompt,
       schema: layoutPanelCountOutputSchema,
-      prompt,
-      maxTokens: cfg.maxTokens,
-      options: {
-        maxRetries: 0,
-        jobId: options?.jobId,
-        stepName: 'layout',
-        episodeNumber: episodeData.episodeNumber,
-      },
+      schemaName: 'LayoutPanelCount',
     })
 
     // LLMの出力（ページごとのコマ数）を実際のレイアウトに変換
@@ -252,18 +246,12 @@ export async function generateMangaLayoutForPlan(
   // For simplicity we duplicate minimal logic here
 
   const cfg = getLayoutGenerationConfig()
-  const { result } = await getLlmStructuredGenerator().generateObjectWithFallback({
+  const result = await getLlmStructuredGenerator().generateObjectWithFallback({
     name: 'layout-generator',
-    instructions: cfg.systemPrompt,
+    systemPrompt: cfg.systemPrompt,
+    userPrompt: userPrompt,
     schema: layoutPanelCountOutputSchema,
-    prompt: userPrompt,
-    maxTokens: cfg.maxTokens,
-    options: {
-      maxRetries: 0,
-      jobId: options.jobId,
-      stepName: 'layout',
-      episodeNumber: episodeData.episodeNumber,
-    },
+    schemaName: 'LayoutPanelCount',
   })
 
   const layout = mapLayoutPanelCountToLayout(result, episodeData, plan)
