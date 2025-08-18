@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CompatAgent } from '@/agent/compat'
-import {
-  getChunkBundleAnalysisConfig,
-  getLayoutGenerationConfig,
-  getNarrativeAnalysisConfig,
-  getTextAnalysisConfig,
-} from '@/config'
+import { getNarrativeAnalysisConfig, getTextAnalysisConfig } from '@/config'
+import { getScriptConversionConfig, getPageBreakEstimationConfig } from '@/config'
 
 function assertNoPlaceholders(str: string) {
   expect(str).toBeTypeOf('string')
@@ -67,20 +63,18 @@ describe('LLM prompt wiring (temporary)', () => {
     expect(out.length).toBeGreaterThan(0)
   })
 
-  it('layoutGeneration prompt/systemPrompt が展開され、エージェントが実行できる', async () => {
-    const cfg = getLayoutGenerationConfig()
-    const prompt = cfg.userPromptTemplate
-      .replace('{{episodeNumber}}', '1')
-      .replace(
-        '{{layoutInputJson}}',
-        JSON.stringify({ pages: [{ pageNumber: 1, importance: 5 }] }, null, 2),
-      )
+  it('scriptConversion prompt/systemPrompt が展開され、エージェントが実行できる', async () => {
+    const cfg = getScriptConversionConfig()
+    const prompt = (cfg.userPromptTemplate || 'Episode text: {{episodeText}}').replace(
+      '{{episodeText}}',
+      '太郎は走った。花子は笑った。',
+    )
 
     assertNoPlaceholders(prompt)
     assertNoPlaceholders(cfg.systemPrompt)
 
     const agent = new CompatAgent({
-      name: 'prompt-wire-layout',
+      name: 'prompt-wire-script',
       instructions: cfg.systemPrompt,
       provider: 'fake',
       maxTokens: cfg.maxTokens,
@@ -91,20 +85,25 @@ describe('LLM prompt wiring (temporary)', () => {
     expect(out.length).toBeGreaterThan(0)
   })
 
-  it('chunkBundleAnalysis prompt/systemPrompt が展開され、エージェントが実行できる', async () => {
-    const cfg = getChunkBundleAnalysisConfig()
-    const prompt = cfg.userPromptTemplate
-      .replace('{{characterList}}', '- 太郎 (登場回数: 3)')
-      .replace('{{sceneList}}', '- 学校の屋上')
-      .replace('{{dialogueList}}', '- 太郎: 「走れ！」')
-      .replace('{{highlightList}}', '- [climax] 告白シーン (重要度: 9)')
-      .replace('{{situationList}}', '- 雨が降っている')
+  it('pageBreakEstimation prompt/systemPrompt が展開され、エージェントが実行できる', async () => {
+    const cfg = getPageBreakEstimationConfig()
+    const scriptJson = JSON.stringify({
+      script: [
+        { index: 0, type: 'dialogue', speaker: '太郎', text: '行くぞ！' },
+        { index: 1, type: 'narration', text: '雨が強くなる。' },
+        { index: 2, type: 'dialogue', speaker: '花子', text: '待って！' },
+      ],
+    })
+    const prompt = (cfg.userPromptTemplate || '')
+      .replace('{{scriptJson}}', scriptJson)
+      .replace('{{targetPages}}', '4')
+      .replace('{{avgLinesPerPage}}', '8')
 
     assertNoPlaceholders(prompt)
     assertNoPlaceholders(cfg.systemPrompt)
 
     const agent = new CompatAgent({
-      name: 'prompt-wire-bundle',
+      name: 'prompt-wire-pagebreak',
       instructions: cfg.systemPrompt,
       provider: 'fake',
       maxTokens: cfg.maxTokens,

@@ -238,6 +238,46 @@ const result = await agent.run({
 ### 完了した対応
 
 - ✅ `src/__tests__/integration/__helpers/test-agents.ts`の更新
+
+---
+
+## Novel → Manga Orchestration（理想フロー）
+
+本サービスの最終的な一気通貫フローは次の通り。
+
+- 読み込み（ID or テキスト）
+- 機械的チャンク分割（固定長＋オーバーラップ）
+- チャンク要素抽出（登場人物/シーン/対話/ハイライト/状況）
+- チャンク束の統合分析（重複統合・重要要素抽出）
+- 物語弧分析でエピソード境界決定
+- 台本化（セリフ/ナレーション/ト書きに正規化）
+- ページ分割（重要度に応じたページ配分）
+- コマ割り割当（ページ内の行割当）
+- レイアウト（YAML化，テンプレート適用とバリデーション）
+- レンダリング（画像生成は将来，現状はレイアウトの描画）
+
+システムは Analyze/Layout/Render の3 APIでオーケストレーションされる。Analyzeが上記の分析・境界・台本・ページ/コマ割り・YAML保存までを担当し，Layoutは指定エピソードのレイアウト再生成，Renderはページ単位の描画を行う。
+
+### プロンプト方針（更新）
+
+- 「コマ割りだけ（ページごとの panelCount のみ）を推定するプロンプト」は撤廃。
+- 新フローでは以下の2段構え:
+  - 脚本化（scriptConversion）でセリフ/ナレーション/ト書きを正規化
+  - ページ分割推定（pageBreakEstimation）でページ境界を決める（panelCountの決定はテンプレート選択ロジックへ委譲）
+- コマの配置・サイズはシステム側のテンプレート選択/正規化ロジックで決定する（LLMは関与しない）。
+
+### Orchestrator（Scenario DSL）
+
+`createNovelToMangaScenario()` を API 駆動へ刷新。実行順は `analyze → layout → render`。UI/CLI/Playwright から `/api/scenario/run` に `kind: 'dsl'` で投入し，同順で進行。デモ・本番の差はアダプターの呼び先のみで統一。
+
+### チャンク分割ポリシー
+
+`splitTextIntoSlidingChunks(text, chunkSize, overlap, { minChunkSize, maxChunkSize, maxOverlapRatio })` を採用。前後チャンクのテキストをプロンプトへ文脈として渡しつつ，分析対象は中央チャンクに限定するプロンプトで統一。
+
+### エラー処理方針
+
+フォールバックで隠蔽せず，失敗時は詳細を記録して停止。分析未取得やYAML検証失敗などは致命として扱う。
+
 - ✅ `FakeLlmClient`を使用したモックの実装
 - ✅ 新しいLLMエージェントアーキテクチャとの互換性確保
 - ✅ すべての統合テストが正常に動作
