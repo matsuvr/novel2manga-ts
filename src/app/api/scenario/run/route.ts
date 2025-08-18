@@ -7,25 +7,19 @@ import {
   createTestApiScenario,
 } from '@/agents/scenarios/novel-to-manga'
 import { runScenario } from '@/services/orchestrator/scenario'
-import {
-  zChunkOutput,
-  zComposeOutput,
-  zImageResult,
-  zIngestOutput,
-  zReduceOutput,
-  zStoryboardOutput,
-  zWindowAnalysis,
-} from '@/types/contracts'
+
+// No longer using internal stub contracts here; scenario now API-driven
 
 const zRunInput = z.union([
-  z.object({
-    kind: z.literal('dsl'),
-    novelR2Key: z.string().min(1),
-    settings: z.object({
-      windowTokens: z.number().int().positive(),
-      strideTokens: z.number().int().positive(),
-    }),
-  }),
+  z
+    .object({
+      kind: z.literal('dsl'),
+      baseUrl: z.string().url(),
+      text: z.string().optional(),
+      novelId: z.string().optional(),
+      title: z.string().optional(),
+    })
+    .refine((v) => !!v.text || !!v.novelId, { message: 'text or novelId required' }),
   z.object({
     kind: z.enum(['demo', 'prod', 'test']),
     baseUrl: z.string().url(),
@@ -53,11 +47,18 @@ export async function POST(req: Request) {
     const initialInput =
       input.kind === 'demo'
         ? { baseUrl: input.baseUrl, text: input.text, novelId: input.novelId }
-        : input
+        : input.kind === 'dsl'
+          ? { baseUrl: input.baseUrl, text: input.text, novelId: input.novelId, title: input.title }
+          : input
     const outputs = await runScenario(scenario, { initialInput })
     const elapsedMs = Date.now() - started
 
-    if (input.kind === 'demo' || input.kind === 'test' || input.kind === 'prod') {
+    if (
+      input.kind === 'demo' ||
+      input.kind === 'test' ||
+      input.kind === 'prod' ||
+      input.kind === 'dsl'
+    ) {
       // Demo summary
       const key =
         input.kind === 'demo' ? 'render-demo' : input.kind === 'test' ? 'render-test' : 'render'
@@ -72,31 +73,6 @@ export async function POST(req: Request) {
         result: renderOutput,
         elapsedMs,
       })
-    } else {
-      const ingestParsed = zIngestOutput.safeParse(outputs.ingest)
-      const chunkParsed = zChunkOutput.safeParse(outputs.chunk)
-      const windowArray = Array.isArray(outputs.analyzeWindow)
-        ? z.array(zWindowAnalysis).safeParse(outputs.analyzeWindow)
-        : { success: false as const }
-      const reduceParsed = zReduceOutput.safeParse(outputs.reduce)
-      const storyboardParsed = zStoryboardOutput.safeParse(outputs.storyboard)
-      const imageParsed = Array.isArray(outputs.image)
-        ? z.array(zImageResult).safeParse(outputs.image)
-        : { success: false as const }
-      const composeParsed = zComposeOutput.safeParse(outputs.compose)
-
-      const summary = {
-        ingest: ingestParsed.success ? ingestParsed.data : undefined,
-        chunk: chunkParsed.success ? chunkParsed.data : undefined,
-        analyzeCount: windowArray.success ? windowArray.data.length : 0,
-        scenes: reduceParsed.success ? reduceParsed.data.scenes.length : 0,
-        panels: storyboardParsed.success ? storyboardParsed.data.panels.length : 0,
-        images: imageParsed.success ? imageParsed.data.length : 0,
-        pages: composeParsed.success ? composeParsed.data.pages.length : 0,
-        publish: outputs.publish,
-        elapsedMs,
-      }
-      return NextResponse.json({ ok: true, kind: 'dsl', summary })
     }
   } catch (err) {
     if (err instanceof z.ZodError) {

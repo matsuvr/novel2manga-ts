@@ -111,16 +111,16 @@ ${JSON.stringify(pageBatchPlanSchema.shape, null, 2)}
 `
 
     try {
-      const result = await this.compat.generateObject<PageBatchPlan>(
-        pageBatchPlanSchema,
+      const result = await this.compat.generateObject<PageBatchPlan>({
         userPrompt,
-        {
+        schema: pageBatchPlanSchema,
+        schemaName: 'PageBatchPlan',
+        options: {
           maxRetries: 0,
           jobId: options.jobId,
           stepName: 'page-split',
-          episodeNumber: episodeData.episodeNumber,
         },
-      )
+      })
       return result
     } catch (error) {
       console.error('[PageSplitAgentNew] Error in planNextBatch:', error)

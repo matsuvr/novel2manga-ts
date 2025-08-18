@@ -21,6 +21,13 @@ vi.mock('@/config', () => ({
   getTextAnalysisConfig: vi.fn(() => ({
     userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
   })),
+  getChunkingConfig: vi.fn(() => ({
+    defaultChunkSize: 2000,
+    defaultOverlapSize: 200,
+    maxChunkSize: 10000,
+    minChunkSize: 100,
+    maxOverlapRatio: 0.5,
+  })),
   getLLMProviderConfig: vi.fn(() => ({
     apiKey: 'test-key',
     model: 'test-model',

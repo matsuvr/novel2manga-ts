@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
-import { getTextAnalysisConfig } from '@/config'
+import { getChunkingConfig, getTextAnalysisConfig } from '@/config'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
 import { getChunkRepository, getJobRepository, getNovelRepository } from '@/repositories'
@@ -8,7 +8,7 @@ import { generateEpisodeLayout } from '@/services/application/layout-generation'
 import type { AnalyzeResponse } from '@/types/job'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { saveEpisodeBoundaries } from '@/utils/storage'
-import { splitTextIntoChunks } from '@/utils/text-splitter'
+import { splitTextIntoSlidingChunks } from '@/utils/text-splitter'
 import { generateUUID } from '@/utils/uuid'
 
 export interface AnalyzeOptions {
@@ -44,6 +44,8 @@ export class AnalyzePipeline {
   }
 
   async runWithText(novelId: string, novelText: string, options: AnalyzeOptions = {}) {
+    const logger = getLogger().withContext({ service: 'analyze-pipeline' })
+    logger.info('AnalyzePipeline.runWithText: start', { novelId, textLength: novelText.length })
     const jobRepo = getJobRepository()
     const chunkRepo = getChunkRepository()
     const novelRepo = getNovelRepository()
@@ -51,19 +53,13 @@ export class AnalyzePipeline {
     const jobId = generateUUID()
     const title = options.title || 'Novel'
 
-    await jobRepo.create({
-      id: jobId,
-      novelId,
-      title: `Analysis Job for ${title}`,
-    })
-
-    // 入力小説テキストを Novel ストレージにも保存（idempotent）
+    // まず小説を DB に保存してから job を作成する（FOREIGN KEY制約のため）
     try {
       await this.ports.novel.putNovelText(
         novelId,
         JSON.stringify({ text: novelText, title: title || '' }),
       )
-      // DB にノベルの存在を保証（エラーは握り潰し）
+      // DB にノベルの存在を保証（jobの外部キー制約を満たすため）
       await novelRepo.ensure(novelId, {
         title: title || `Novel ${novelId.slice(0, 8)}`,
         author: 'Unknown',
@@ -73,14 +69,34 @@ export class AnalyzePipeline {
         metadataPath: null,
       })
     } catch (e) {
-      // ストレージ/DB への保存失敗は致命ではないので継続
-      getLogger().warn('Failed to persist novel text or ensure novel; continue', {
-        error: e instanceof Error ? e.message : String(e),
+      // ストレージ/DB への保存失敗は致命的エラーとして扱う（jobが作成できないため）
+      const message = e instanceof Error ? e.message : String(e)
+      getLogger().error('Failed to persist novel text or ensure novel before job creation', {
+        error: message,
         novelId,
       })
+      throw new Error(`Failed to create novel before job: ${message}`)
     }
 
-    const chunks = splitTextIntoChunks(novelText)
+    // 小説が存在することを確認してからjobを作成
+    await jobRepo.create({
+      id: jobId,
+      novelId,
+      title: `Analysis Job for ${title}`,
+    })
+
+    // 機械的な固定長チャンク分割（オーバーラップ付き）
+    const chunkCfg = getChunkingConfig()
+    const chunks = splitTextIntoSlidingChunks(
+      novelText,
+      chunkCfg.defaultChunkSize,
+      chunkCfg.defaultOverlapSize,
+      {
+        minChunkSize: chunkCfg.minChunkSize,
+        maxChunkSize: chunkCfg.maxChunkSize,
+        maxOverlapRatio: chunkCfg.maxOverlapRatio,
+      },
+    )
     await jobRepo.updateStep(jobId, 'split', 0, chunks.length)
 
     // Persist chunks to storage and collect DB rows
@@ -189,11 +205,13 @@ export class AnalyzePipeline {
       if (!config?.userPromptTemplate) {
         throw new Error('Text analysis config is invalid: userPromptTemplate is missing')
       }
+      const prevText = i > 0 ? chunks[i - 1] : ''
+      const nextText = i + 1 < chunks.length ? chunks[i + 1] : ''
       const prompt = config.userPromptTemplate
         .replace('{{chunkIndex}}', i.toString())
         .replace('{{chunkText}}', chunkText)
-        .replace('{{previousChunkText}}', '')
-        .replace('{{nextChunkText}}', '')
+        .replace('{{previousChunkText}}', prevText)
+        .replace('{{nextChunkText}}', nextText)
 
       let result: z.infer<typeof textAnalysisOutputSchema>
       try {
@@ -283,6 +301,9 @@ export class AnalyzePipeline {
           })
         }
       }
+      // すべてのエピソードのレンダリング完了後、ステップ/ステータスを確定
+      await jobRepo.updateStep(jobId, 'complete')
+      await jobRepo.updateStatus(jobId, 'completed')
     } else {
       await jobRepo.markStepCompleted(jobId, 'episode')
       const response: AnalyzeResponse = {
@@ -308,6 +329,7 @@ export class AnalyzePipeline {
     // 完了ステップへ遷移（UIの完了判定を確実にする）
     await jobRepo.updateStep(jobId, 'complete')
     await jobRepo.updateStatus(jobId, 'completed')
+    logger.info('AnalyzePipeline.runWithText: completed', { jobId, chunkCount: chunks.length })
     return { jobId, chunkCount: chunks.length, response }
   }
 }

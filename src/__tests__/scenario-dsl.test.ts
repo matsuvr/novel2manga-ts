@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { createNovelToMangaScenario } from '@/agents/scenarios/novel-to-manga'
 import { runScenario, ScenarioBuilder } from '@/services/orchestrator/scenario'
@@ -12,6 +12,35 @@ import {
   zWindowAnalysis,
 } from '@/types/contracts'
 
+// 外部API呼び出しを行うアダプタをモック（シナリオ実行を純粋化）
+vi.mock('@/services/adapters', () => ({
+  prodAnalyze: vi.fn(async (_args: { baseUrl: string; text?: string; novelId?: string }) => ({
+    baseUrl: 'http://localhost:3000',
+    jobId: 'job-test-1',
+    chunkCount: 3,
+  })),
+  prodLayout: vi.fn(async (_args: { baseUrl: string; jobId: string; episodeNumber: number }) => ({
+    baseUrl: 'http://localhost:3000',
+    jobId: 'job-test-1',
+    episodeNumber: 1,
+    storageKey: 'layouts/job-test-1/episode_1.yaml',
+  })),
+  prodRender: vi.fn(
+    async (_args: {
+      baseUrl: string
+      jobId: string
+      episodeNumber: number
+      pageNumber: number
+    }) => ({
+      jobId: 'job-test-1',
+      episodeNumber: 1,
+      pageNumber: 1,
+      renderKey: 'renders/job-test-1/ep1/page_1.png',
+      thumbnailKey: 'renders/job-test-1/ep1/page_1_thumb.png',
+    }),
+  ),
+}))
+
 describe('Scenario DSL', () => {
   it('builds and runs the novel-to-manga flow in memory', async () => {
     const scenario = createNovelToMangaScenario()
@@ -19,44 +48,42 @@ describe('Scenario DSL', () => {
     // Basic shape assertions
     expect(scenario.id).toBe('novel-to-manga')
     const stepIds = new Set(scenario.steps.map((s) => s.id))
-    for (const id of [
-      'ingest',
-      'chunk',
-      'analyzeWindow',
-      'reduce',
-      'storyboard',
-      'prompt',
-      'image',
-      'compose',
-      'publish',
-    ]) {
+    for (const id of ['analyze', 'layout', 'render']) {
       expect(stepIds.has(id)).toBe(true)
     }
 
     // Execute with a small initial input
     const outputs = await runScenario(scenario, {
       initialInput: {
-        novelR2Key: 'novels/example.txt',
-        settings: { windowTokens: 512, strideTokens: 256 },
+        baseUrl: 'http://localhost:3000',
+        text: 'テスト本文',
       },
     })
 
-    // Ensure key stages produced outputs
-    const ingestOut = zIngestOutput.parse(outputs['ingest'])
-    expect(ingestOut.totalChars).toBeGreaterThan(0)
-    const chunkOut = zChunkOutput.parse(outputs['chunk'])
-    expect(chunkOut.windows.length).toBeGreaterThan(0)
-    const windowAnalyses = z.array(zWindowAnalysis).parse(outputs['analyzeWindow'])
-    expect(windowAnalyses.length).toBe(chunkOut.windows.length)
-    const reduceOut = zReduceOutput.parse(outputs['reduce'])
-    expect(reduceOut.scenes.length).toBeGreaterThan(0)
-    const storyboardOut = zStoryboardOutput.parse(outputs['storyboard'])
-    expect(storyboardOut.panels.length).toBeGreaterThan(0)
-    const imageOut = z.array(zImageResult).parse(outputs['image'])
-    expect(imageOut.length).toBeGreaterThan(0)
-    const composeOut = zComposeOutput.parse(outputs['compose'])
-    expect(composeOut.pages.length).toBeGreaterThan(0)
-    expect(outputs['publish']).toMatchObject({ ok: true })
+    // Ensure key stages produced outputs (現行APIオーケストレーション版の検証)
+    const analyzeOut = z
+      .object({ baseUrl: z.string().url(), jobId: z.string(), chunkCount: z.number().optional() })
+      .parse(outputs['analyze'])
+    expect(analyzeOut.jobId.length).toBeGreaterThan(0)
+    const layoutOut = z
+      .object({
+        baseUrl: z.string().url(),
+        jobId: z.string(),
+        episodeNumber: z.number().int().positive(),
+        storageKey: z.string(),
+      })
+      .parse(outputs['layout'])
+    expect(layoutOut.storageKey.length).toBeGreaterThan(0)
+    const renderOut = z
+      .object({
+        jobId: z.string(),
+        episodeNumber: z.number().int().positive(),
+        pageNumber: z.number().int().positive(),
+        renderKey: z.string(),
+        thumbnailKey: z.string().optional(),
+      })
+      .parse(outputs['render'])
+    expect(renderOut.renderKey.length).toBeGreaterThan(0)
   })
 
   it('detects cycle in scenario definition', () => {

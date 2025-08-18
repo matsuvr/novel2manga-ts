@@ -1,58 +1,32 @@
 import { z } from 'zod'
 
-// 共通の感情語彙（レイアウト/解析で共有）
-// 許容語彙には一部シノニムも含め、将来的に正規化で集約可能にする
-export const EmotionSchema = z.enum([
-  'neutral',
-  'normal',
-  'happy',
-  'sad',
-  'angry',
-  'surprised',
-  'fear',
-  'disgust',
-  'question',
-  'shout',
-  'thought',
-  'think', // synonym of thought
-  'inner', // synonym of thought
-  'excited',
-])
+// 感情は任意文字列を受け入れる（分類は行わない）
+export const EmotionSchema = z.string()
 
-export type Emotion = z.infer<typeof EmotionSchema>
+export type Emotion = string
 
-// シノニムを正規形へマップ
-const NORMALIZATION_MAP: Record<string, Emotion> = {
-  // base
-  neutral: 'neutral',
-  normal: 'normal',
-  happy: 'happy',
-  sad: 'sad',
-  angry: 'angry',
-  surprised: 'surprised',
-  fear: 'fear',
-  disgust: 'disgust',
-  question: 'question',
-  shout: 'shout',
-  thought: 'thought',
-  excited: 'excited',
-  // synonyms
-  think: 'thought',
-  inner: 'thought',
-}
-
+// 任意文字列をそのまま返す（空・未定義は undefined）
 export function normalizeEmotion(value: string | undefined | null): Emotion | undefined {
-  if (!value) return undefined
-  const key = String(value).toLowerCase().trim()
-  // Gemini review (PR#63 medium): Treat whitespace-only same as empty -> undefined
-  if (key === '') return undefined
-  // 未知値は安全側で 'normal' にフォールバック
-  if (!(key in NORMALIZATION_MAP)) {
-    // Warn in dev/test only to avoid noisy production logs (env heuristic)
-    if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console -- domain data quality warning
-      console.warn(`[emotion] Unknown emotion value "${value}" -> falling back to 'normal'`)
+  if (value == null) return undefined
+  const v = String(value).trim()
+  if (v === '') return undefined
+
+  // シノニム辞書による正規化
+  const synonymMap: Record<string, Emotion> = {
+    think: 'thought',
+    inner: 'thought',
+  }
+
+  const normalized = synonymMap[v.toLowerCase()]
+  if (normalized) return normalized
+
+  // 未知の値は 'normal' にフォールバック（非本番環境では警告）
+  if (process.env.NODE_ENV !== 'production') {
+    if (!['normal', 'happy', 'sad', 'angry', 'surprised', 'fear', 'thought'].includes(v)) {
+      console.warn(`Unknown emotion value: ${v}, falling back to 'normal'`)
+      return 'normal'
     }
   }
-  return NORMALIZATION_MAP[key] ?? 'normal'
+
+  return v
 }

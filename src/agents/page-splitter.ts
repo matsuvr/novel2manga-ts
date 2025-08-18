@@ -112,16 +112,16 @@ ${JSON.stringify(compact, null, 2)}
 `
 
     console.log('[PageSplitAgent] About to call generateObject with pageBatchPlanSchema')
-    const result = await this.compat.generateObject<PageBatchPlan>(
-      pageBatchPlanSchema,
+    const result = await this.compat.generateObject<PageBatchPlan>({
       userPrompt,
-      {
+      schema: pageBatchPlanSchema,
+      schemaName: 'PageBatchPlan',
+      options: {
         maxRetries: 0,
         jobId: options.jobId,
         stepName: 'page-split',
-        episodeNumber: episodeData.episodeNumber,
       },
-    )
+    })
 
     return result
   }
