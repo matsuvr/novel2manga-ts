@@ -41,30 +41,27 @@ export const chunkAnalyzerAgent = {
 export async function analyzeChunkWithFallback<T extends z.ZodTypeAny>(
   prompt: string,
   schema: T,
-  options?: { maxRetries?: number; jobId?: string; chunkIndex?: number },
+  _options?: { maxRetries?: number; jobId?: string; chunkIndex?: number },
 ): Promise<{
   result: z.infer<T>
   usedProvider: string
   fallbackFrom: string[]
 }> {
-  const logger = getLogger().withContext({ agent: 'chunk-analyzer' })
+  const _logger = getLogger().withContext({ agent: 'chunk-analyzer' })
   const config = getTextAnalysisConfig()
   const generator = getLlmStructuredGenerator()
-  const { result, usedProvider, fallbackFrom } = await generator.generateObjectWithFallback({
+  const result = await generator.generateObjectWithFallback({
     name: 'chunk-analyzer',
-    instructions: config.systemPrompt,
+    systemPrompt: config.systemPrompt,
+    userPrompt: prompt,
     schema,
-    prompt,
-    maxTokens: config.maxTokens,
-    options: {
-      maxRetries: options?.maxRetries ?? 0,
-      jobId: options?.jobId,
-      stepName: 'analyze',
-      chunkIndex: options?.chunkIndex,
-    },
+    schemaName: 'ChunkAnalysis',
   })
-  if (fallbackFrom.length > 0) {
-    logger.warn('LLM fallback succeeded', { from: fallbackFrom, to: usedProvider })
+
+  // 戻り値を元の形式に合わせる
+  return {
+    result,
+    usedProvider: 'unknown', // 現在のインターフェースでは取得不可
+    fallbackFrom: [], // 現在のインターフェースでは取得不可
   }
-  return { result, usedProvider, fallbackFrom }
 }

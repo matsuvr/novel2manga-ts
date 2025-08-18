@@ -1,81 +1,110 @@
 import type { z } from 'zod'
-import { CompatAgent } from '@/agent/compat'
-import { getLLMDefaultProvider, getLLMFallbackChain } from '@/config'
-import type { LLMProvider } from '@/config/llm.config'
-import { getLLMProviderConfig } from '@/config/llm.config'
-import { getLogger } from '@/infrastructure/logging/logger'
+import { createClientForProvider, selectProviderOrder } from '../agents/llm/router'
+import type { LlmClient, LlmProvider } from '../agents/llm/types'
+import { getLLMProviderConfig } from '../config/llm.config'
 
-export interface GenerateObjectArgs<TSchema extends z.ZodTypeAny> {
-  name: string
-  instructions: string
-  schema: TSchema
-  prompt: string
-  maxTokens?: number
-  options?: {
-    maxRetries?: number
-    jobId?: string
-    stepName?: string
-    chunkIndex?: number
-    episodeNumber?: number
+export interface GenerateArgs<T> {
+  name?: string
+  systemPrompt?: string
+  userPrompt: string
+  schema: z.ZodType<T>
+  schemaName: string
+}
+
+export class DefaultLlmStructuredGenerator {
+  private readonly providerOrder: LlmProvider[]
+  constructor(providerOrder?: LlmProvider[]) {
+    this.providerOrder =
+      providerOrder && providerOrder.length > 0 ? providerOrder : selectProviderOrder()
   }
-}
 
-export interface LlmStructuredGenerator {
-  generateObjectWithFallback<TSchema extends z.ZodTypeAny>(
-    args: GenerateObjectArgs<TSchema>,
-  ): Promise<{ result: z.infer<TSchema>; usedProvider: LLMProvider; fallbackFrom: LLMProvider[] }>
-}
-
-class DefaultLlmStructuredGenerator implements LlmStructuredGenerator {
-  async generateObjectWithFallback<TSchema extends z.ZodTypeAny>(
-    args: GenerateObjectArgs<TSchema>,
-  ): Promise<{ result: z.infer<TSchema>; usedProvider: LLMProvider; fallbackFrom: LLMProvider[] }> {
-    const logger = getLogger().withContext({ service: 'llm-structured-generator', name: args.name })
-    const primary = getLLMDefaultProvider()
-    const chain = [primary, ...getLLMFallbackChain()].filter((p, i, arr) => arr.indexOf(p) === i)
-    const fallbackFrom: LLMProvider[] = []
-
-    for (const provider of chain) {
+  // 接続/HTTP 5xx のみフォールバック許可。応答後(JSON/検証)や4xxは即停止。
+  async generateObjectWithFallback<T>(args: GenerateArgs<T>): Promise<T> {
+    const { name = 'Structured Generator' } = args
+    let lastError: unknown
+    for (let i = 0; i < this.providerOrder.length; i++) {
+      const provider = this.providerOrder[i]
+      const client = this.createClient(provider)
       try {
-        const providerCfg = getLLMProviderConfig(provider)
-        const agent = new CompatAgent({
-          name: args.name,
-          instructions: args.instructions,
-          provider,
-          maxTokens: args.maxTokens ?? providerCfg.maxTokens,
-        })
-        const result = await agent.generateObject(args.schema, args.prompt, {
-          maxRetries: args.options?.maxRetries ?? 0,
-          jobId: args.options?.jobId,
-          stepName: args.options?.stepName,
-          chunkIndex: args.options?.chunkIndex,
-          episodeNumber: args.options?.episodeNumber,
-        })
-        if (fallbackFrom.length > 0) {
-          logger.warn('LLM fallback succeeded', { from: fallbackFrom, to: provider })
+        return await this.generateWithClient(client, args)
+      } catch (e) {
+        lastError = e
+        const reason = e instanceof Error ? e.message : String(e)
+        if (this.isPostResponseError(reason)) {
+          throw e
         }
-        return { result, usedProvider: provider, fallbackFrom }
-      } catch (error) {
-        if (provider !== chain[chain.length - 1]) {
-          fallbackFrom.push(provider)
-          logger.warn('LLM fallback: switching provider due to error', {
+        const next = this.providerOrder[i + 1]
+        if (!next) throw e
+        console.warn(
+          JSON.stringify({
+            ts: new Date().toISOString(),
+            level: 'warn',
+            msg: 'LLM provider switch due to connectivity error',
+            service: 'llm-structured-generator',
+            name,
             from: provider,
-            to: chain[chain.indexOf(provider) + 1],
-            reason: error instanceof Error ? error.message : String(error),
-          })
-          continue
-        }
-        throw error
+            to: next,
+            reason: truncate(reason, 500),
+          }),
+        )
       }
     }
+    throw lastError instanceof Error ? lastError : new Error(String(lastError))
+  }
 
-    throw new Error('LLM fallback failed for all providers')
+  private async generateWithClient<T>(client: LlmClient, args: GenerateArgs<T>): Promise<T> {
+    const { systemPrompt, userPrompt, schema, schemaName } = args
+    const prov = client.provider
+    const cfg = getLLMProviderConfig(prov)
+    const maxTokens = cfg?.maxTokens
+    if (typeof maxTokens !== 'number' || !Number.isFinite(maxTokens) || maxTokens <= 0) {
+      throw new Error(`Missing maxTokens in llm.config.ts for provider: ${prov}`)
+    }
+    return client.generateStructured<T>({
+      systemPrompt,
+      userPrompt,
+      spec: { schema, schemaName },
+      options: { maxTokens },
+    })
+  }
+
+  private createClient(provider: LlmProvider): LlmClient {
+    return createClientForProvider(provider)
+  }
+
+  private isPostResponseError(message: string): boolean {
+    const postMarkers = [
+      'schema validation failed',
+      'does not contain a valid JSON',
+      'Unexpected end of JSON input',
+      'Failed to parse JSON response',
+      'empty or non-text response',
+    ]
+    const connectivity = [
+      'ECONNRESET',
+      'ENOTFOUND',
+      'ETIMEDOUT',
+      'fetch failed',
+      'network error',
+      'HTTP 5',
+      'TLS',
+    ]
+    const hasMarker = postMarkers.some((m) => message.includes(m))
+    const hasConnectivity = connectivity.some((m) => message.includes(m))
+    if (hasMarker) return true
+    if (/HTTP\s+4\d{2}/.test(message)) return true
+    if (hasConnectivity) return false
+    return true
   }
 }
 
-let singleton: LlmStructuredGenerator | null = null
+function truncate(s: string, n: number): string {
+  return s.length > n ? `${s.slice(0, n)}…` : s
+}
 
-export function getLlmStructuredGenerator(): LlmStructuredGenerator {
-  if (!singleton) singleton = new DefaultLlmStructuredGenerator()
-  return singleton
+let _singleton: DefaultLlmStructuredGenerator | null = null
+export function getLlmStructuredGenerator(): DefaultLlmStructuredGenerator {
+  if (_singleton) return _singleton
+  _singleton = new DefaultLlmStructuredGenerator()
+  return _singleton
 }

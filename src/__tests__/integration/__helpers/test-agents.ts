@@ -334,6 +334,13 @@ export function setupAgentMocks() {
       systemPrompt: 'system',
       userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
     })),
+    getChunkingConfig: vi.fn(() => ({
+      defaultChunkSize: 2000,
+      defaultOverlapSize: 200,
+      maxChunkSize: 10000,
+      minChunkSize: 100,
+      maxOverlapRatio: 0.5,
+    })),
     getLLMDefaultProvider: vi.fn(() => 'fake'),
     getLLMProviderConfig: vi.fn(() => ({
       maxTokens: 1000,
@@ -435,6 +442,26 @@ export function setupAgentMocks() {
       }
       return chunks
     }),
+    splitTextIntoSlidingChunks: vi.fn(
+      (
+        text: string,
+        chunkSize: number,
+        overlap: number,
+        _bounds?: { minChunkSize?: number; maxChunkSize?: number; maxOverlapRatio?: number },
+      ) => {
+        const len = text.length
+        if (len === 0) return []
+        const size = Math.max(1, Math.floor(chunkSize))
+        const ov = Math.max(0, Math.min(Math.floor(overlap), size - 1))
+        const stride = Math.max(1, size - ov)
+        const chunks: string[] = []
+        for (let start = 0; start < len; start += stride) {
+          const end = Math.min(len, start + size)
+          chunks.push(text.slice(start, end))
+        }
+        return chunks
+      },
+    ),
   }))
 
   // storage モジュールは各テストファイル側でモック定義があるため、ここでは触らない

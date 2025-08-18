@@ -1,12 +1,10 @@
-import { load as yamlLoad } from 'js-yaml'
 import { appConfig } from '@/config/app.config'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
 import { getDatabaseService } from '@/services/db-factory'
-import type { MangaLayout } from '@/types/panel-layout'
-import { isMangaLayout } from '@/utils/type-guards'
+import { parseMangaLayoutFromYaml } from '@/utils/layout-parser'
 
 export interface BatchOptions {
   concurrency?: number
@@ -47,10 +45,8 @@ export async function renderBatchFromYaml(
   const startTime = Date.now()
   const dbService = getDatabaseService()
 
-  // parse & validate layout
-  const parsed = yamlLoad(layoutYaml)
-  if (!isMangaLayout(parsed)) throw new Error('Invalid YAML layout')
-  const mangaLayout = parsed as MangaLayout
+  // parse & validate layout (supports canonical and bbox formats)
+  const mangaLayout = parseMangaLayoutFromYaml(layoutYaml)
   const allPages = mangaLayout.pages.map((p) => p.page_number)
   const targetPages = pages && pages.length > 0 ? pages : allPages
   const validPages = targetPages.filter((p) => allPages.includes(p))
@@ -82,6 +78,20 @@ export async function renderBatchFromYaml(
     }
 
     try {
+      // 事前検証: パネルの存在とサイズ
+      const panels = targetPage.panels || []
+      if (panels.length === 0) {
+        throw new Error(`Page ${pageNumber} has no panels in layout`)
+      }
+      const invalid = panels.filter((p) => !p || p.size.width <= 0 || p.size.height <= 0)
+      if (invalid.length > 0) {
+        throw new Error(
+          `Page ${pageNumber} contains zero-size panels: ${invalid
+            .map((p) => String(p.id))
+            .join(', ')}`,
+        )
+      }
+
       const imageBlob = await renderer.renderToImage(mangaLayout, pageNumber, 'png')
       const imageBuffer = Buffer.from(await imageBlob.arrayBuffer())
 

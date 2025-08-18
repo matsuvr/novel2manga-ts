@@ -24,13 +24,6 @@ export const bundleAnalysisSchema = z.object({
     .array(
       z.object({
         text: z.string().describe('重要な場面の内容'),
-        type: z.enum([
-          'climax',
-          'turning_point',
-          'emotional_peak',
-          'action_sequence',
-          'revelation',
-        ]),
         importance: z.number().min(1).max(10).describe('重要度（1-10）'),
         context: z.string().nullable().optional().describe('場面の文脈や意味'),
       }),
@@ -92,7 +85,6 @@ export async function analyzeChunkBundle(
         highlights: [
           {
             text: sample?.text.slice(0, 40) || 'テキストなし',
-            type: 'climax',
             importance: 7,
             context: '物語の転換点（モック）',
           },
@@ -223,13 +215,12 @@ export async function analyzeChunkBundle(
       console.log('Sending to LLM for bundle analysis...')
 
       const cfg = getChunkBundleAnalysisConfig()
-      const { result } = await generator.generateObjectWithFallback({
+      const result = await generator.generateObjectWithFallback({
         name: 'Chunk Bundle Analyzer',
-        instructions: cfg.systemPrompt,
+        systemPrompt: cfg.systemPrompt,
+        userPrompt: userPrompt,
         schema: bundleAnalysisSchema,
-        prompt: userPrompt,
-        maxTokens: cfg.maxTokens,
-        options: { maxRetries: 2 },
+        schemaName: 'BundleAnalysis',
       })
 
       console.log('Bundle analysis successful')
