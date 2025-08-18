@@ -7,6 +7,7 @@ import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
 import { getDatabaseService } from '@/services/db-factory'
 import type { EpisodeData, MangaLayout } from '@/types/panel-layout'
+import type { Episode } from '@/db'
 import { StorageKeys } from '@/utils/storage'
 
 // CONCURRENCY: In-memory lock to prevent race conditions in layout generation
@@ -118,7 +119,18 @@ async function resolveEpisodeData(
     logger.warn('getJobWithProgress failed', { error: (e as Error).message })
     return null
   })
-  const episodes = await episodeRepo.getByJobId(jobId).catch(() => [])
+  let episodes: Episode[]
+  try {
+    episodes = await episodeRepo.getByJobId(jobId)
+  } catch (error) {
+    logger.error('Failed to retrieve episodes for job', {
+      jobId,
+      error: (error as Error).message,
+      stack: (error as Error).stack,
+    })
+    // Repository policy: do not fallback on infrastructure/db errors
+    throw error
+  }
   let episode = episodes.find((ep) => ep.episodeNumber === episodeNumber) || null
 
   if (!episode) {

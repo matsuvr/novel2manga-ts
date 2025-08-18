@@ -86,6 +86,9 @@ export class AnalyzePipeline {
     })
 
     // 機械的な固定長チャンク分割（オーバーラップ付き）
+    // Rationale: sentence-based splitting caused instability across languages and inconsistent
+    // segment sizes; sliding window chunking yields predictable boundaries and better LLM context
+    // continuity, especially for Japanese text without clear punctuation.
     const chunkCfg = getChunkingConfig()
     const chunks = splitTextIntoSlidingChunks(
       novelText,

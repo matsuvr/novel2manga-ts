@@ -20,13 +20,29 @@ export function normalizeEmotion(value: string | undefined | null): Emotion | un
   const normalized = synonymMap[v.toLowerCase()]
   if (normalized) return normalized
 
-  // 未知の値は 'normal' にフォールバック（非本番環境では警告）
-  if (process.env.NODE_ENV !== 'production') {
-    if (!['normal', 'happy', 'sad', 'angry', 'surprised', 'fear', 'thought'].includes(v)) {
-      console.warn(`Unknown emotion value: ${v}, falling back to 'normal'`)
-      return 'normal'
+  const lower = v.toLowerCase()
+  const knownEmotions = [
+    'neutral',
+    'normal',
+    'happy',
+    'sad',
+    'angry',
+    'surprised',
+    'fear',
+    'thought',
+    'excited',
+    'question',
+    'shout',
+    'disgust',
+  ]
+
+  if (!knownEmotions.includes(lower)) {
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console -- domain data quality warning (non-prod)
+      console.warn(`Unknown emotion value: "${v}", falling back to 'normal'`)
     }
+    return 'normal'
   }
 
-  return v
+  return lower
 }

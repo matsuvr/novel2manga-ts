@@ -1,5 +1,5 @@
 import Cerebras from '@cerebras/cerebras_cloud_sdk'
-import { z } from 'zod'
+import { zodToJsonSchema } from 'zod-to-json-schema'
 import type { GenerateStructuredParams, LlmClient } from './types'
 
 export interface CerebrasClientConfig {
@@ -18,74 +18,9 @@ export class CerebrasClient implements LlmClient {
     })
     this.model = cfg.model
   }
-  private zodToJsonSchema(schema: z.ZodTypeAny, _name?: string): Record<string, unknown> {
-    // Convert common Zod types to JSON Schema
-    if (schema instanceof z.ZodObject) {
-      const shape = schema.shape
-      const properties: Record<string, Record<string, unknown>> = {}
-      const required: string[] = []
-
-      for (const [key, value] of Object.entries(shape)) {
-        properties[key] = this.zodToJsonSchema(value as z.ZodTypeAny)
-
-        // Check if field is required (not optional)
-        if (!(value as z.ZodTypeAny).isOptional?.()) {
-          required.push(key)
-        }
-      }
-
-      return {
-        type: 'object',
-        properties,
-        required,
-        additionalProperties: false,
-      }
-    }
-
-    if (schema instanceof z.ZodArray) {
-      return {
-        type: 'array',
-        items: this.zodToJsonSchema(schema.element),
-      }
-    }
-
-    if (schema instanceof z.ZodString) {
-      return { type: 'string' }
-    }
-
-    if (schema instanceof z.ZodNumber) {
-      return { type: 'number' }
-    }
-
-    if (schema instanceof z.ZodBoolean) {
-      return { type: 'boolean' }
-    }
-
-    if (schema instanceof z.ZodEnum) {
-      return {
-        type: 'string',
-        enum: schema.options,
-      }
-    }
-
-    if (schema instanceof z.ZodUnion) {
-      return {
-        anyOf: schema.options.map((option: z.ZodTypeAny) => this.zodToJsonSchema(option)),
-      }
-    }
-
-    if (schema instanceof z.ZodOptional) {
-      return this.zodToJsonSchema(schema.unwrap())
-    }
-
-    if (schema instanceof z.ZodEffects) {
-      // For transforms and other effects, use the input schema
-      return this.zodToJsonSchema(schema.innerType())
-    }
-
-    // Fallback for unknown types
-    return { type: 'object' }
-  }
+  // Use zod-to-json-schema for accurate JSON Schema generation.
+  // Note: If environment constraints ever forbid this dep (e.g. Workers size),
+  // we must document a reduced custom converter's limitations (descriptions, refinements, etc.).
 
   async generateStructured<T>({
     systemPrompt,
@@ -112,7 +47,7 @@ export class CerebrasClient implements LlmClient {
     })
 
     // Convert Zod schema to JSON Schema for structured outputs
-    const jsonSchema = this.zodToJsonSchema(spec.schema, spec.schemaName)
+    const jsonSchema = zodToJsonSchema(spec.schema, { name: spec.schemaName || 'response' })
 
     try {
       const chatCompletion = await this.client.chat.completions.create({

@@ -1,6 +1,7 @@
 /**
  * E2Eテスト用のテストデータとヘルパー関数
  */
+import type { ConsoleMessage, Page, Request, Response } from '@playwright/test'
 
 export const TEST_NOVELS = {
   SHORT: `短い物語
@@ -182,7 +183,7 @@ export class E2ETestHelpers {
   /**
    * テスト結果のスクリーンショットを撮影
    */
-  static async captureTestEvidence(page: any, testName: string, step: string): Promise<void> {
+  static async captureTestEvidence(page: Page, testName: string, step: string): Promise<void> {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
     const filename = `test-results/${testName}-${step}-${timestamp}.png`
     await page.screenshot({ path: filename, fullPage: true })
@@ -192,18 +193,18 @@ export class E2ETestHelpers {
   /**
    * ネットワーク活動を監視
    */
-  static setupNetworkMonitoring(page: any): {
-    requests: any[]
-    responses: any[]
-    errors: any[]
+  static setupNetworkMonitoring(page: Page): {
+    requests: Array<{ url: string; method: string; timestamp: number }>
+    responses: Array<{ url: string; status: number; timestamp: number }>
+    errors: Array<{ url: string; error: string | null; timestamp: number }>
   } {
     const monitoring = {
-      requests: [] as any[],
-      responses: [] as any[],
-      errors: [] as any[],
+      requests: [] as Array<{ url: string; method: string; timestamp: number }>,
+      responses: [] as Array<{ url: string; status: number; timestamp: number }>,
+      errors: [] as Array<{ url: string; error: string | null; timestamp: number }>,
     }
 
-    page.on('request', (request: any) => {
+    page.on('request', (request: Request) => {
       monitoring.requests.push({
         url: request.url(),
         method: request.method(),
@@ -211,7 +212,7 @@ export class E2ETestHelpers {
       })
     })
 
-    page.on('response', (response: any) => {
+    page.on('response', (response: Response) => {
       monitoring.responses.push({
         url: response.url(),
         status: response.status(),
@@ -219,10 +220,12 @@ export class E2ETestHelpers {
       })
     })
 
-    page.on('requestfailed', (request: any) => {
+    page.on('requestfailed', (request: Request) => {
+      const failure = request.failure()
       monitoring.errors.push({
         url: request.url(),
-        error: request.failure(),
+        error:
+          failure && 'errorText' in failure ? (failure as { errorText: string }).errorText : null,
         timestamp: Date.now(),
       })
     })
@@ -233,16 +236,16 @@ export class E2ETestHelpers {
   /**
    * テスト環境の準備
    */
-  static async setupTestEnvironment(page: any): Promise<void> {
+  static async setupTestEnvironment(page: Page): Promise<void> {
     // コンソールログの監視
-    page.on('console', (msg: any) => {
+    page.on('console', (msg: ConsoleMessage) => {
       if (msg.type() === 'error') {
         console.error(`Browser console error: ${msg.text()}`)
       }
     })
 
     // 未処理のエラーをキャッチ
-    page.on('pageerror', (error: any) => {
+    page.on('pageerror', (error: Error) => {
       console.error(`Page error: ${error.message}`)
     })
 

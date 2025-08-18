@@ -258,6 +258,23 @@ const result = await agent.run({
 
 システムは Analyze/Layout/Render の3 APIでオーケストレーションされる。Analyzeが上記の分析・境界・台本・ページ/コマ割り・YAML保存までを担当し，Layoutは指定エピソードのレイアウト再生成，Renderはページ単位の描画を行う。
 
+### 呼び出しシーケンスの概要（番号付き）
+
+1. Analyze API
+   1.1 チャンク分割（固定長＋オーバーラップ）
+   1.2 チャンク分析（LLM）とストレージ保存
+   1.3 物語弧分析でエピソード境界決定
+   1.4 台本化（scriptConversion）
+   1.5 ページ分割推定（pageBreakEstimation）
+   1.6 コマ割り割当（panel assignment）
+   1.7 レイアウトYAML保存
+2. Layout API（任意）
+   2.1 特定エピソードの再計画・再生成
+3. Render API（任意）
+   3.1 レイアウトYAMLを元にページ画像描画
+
+注: 将来的にシーケンス図（Mermaid）を追加予定。
+
 ### プロンプト方針（更新）
 
 - 「コマ割りだけ（ページごとの panelCount のみ）を推定するプロンプト」は撤廃。
