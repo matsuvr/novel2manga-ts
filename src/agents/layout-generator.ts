@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import { getLlmStructuredGenerator } from '@/agent/structured-generator'
 import { getLayoutGenerationConfig } from '@/config'
-import { normalizeEmotion } from '@/domain/models/emotion'
 import { Page } from '@/domain/models/page'
 import type { PageBatchPlan } from '@/types/page-splitting'
 import type {
@@ -363,7 +362,7 @@ function buildPanelFromAnalysis(
   }
   const dialogues: Dialogue[] = dialogs
     .slice(0, maxDialogs)
-    .map((d) => ({ speaker: d.speaker, text: d.text, emotion: normalizeEmotion(d.emotion) }))
+    .map((d) => ({ speaker: d.speaker, text: d.text, emotion: d.emotion }))
 
   // importance heuristic
   const maxImp = analysis.highlights?.length

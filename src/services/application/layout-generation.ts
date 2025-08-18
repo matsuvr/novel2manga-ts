@@ -435,24 +435,8 @@ async function generateEpisodeLayoutInternal(
       throw new Error('Page break estimation failed to produce valid page breaks')
     }
 
-    const { assignPanels, buildLayoutFromAssignment } = await import(
-      '@/agents/script/panel-assignment'
-    )
-    const assignment = await assignPanels(script, pageBreaks, {
-      jobId,
-      episodeNumber: episode.episodeNumber,
-    })
-
-    // Progress validation: Panel assignment must produce results
-    if (!assignment?.pages || assignment.pages.length === 0) {
-      logger.error('Panel assignment failed to produce valid assignment', {
-        episodeNumber,
-        pageBreaksCount: pageBreaks.pages.length,
-      })
-      throw new Error('Panel assignment failed to produce valid assignment')
-    }
-
-    const layoutBuilt = buildLayoutFromAssignment(script, assignment, {
+    const { buildLayoutFromPageBreaks } = await import('@/agents/script/panel-assignment')
+    const layoutBuilt = buildLayoutFromPageBreaks(pageBreaks, {
       title: episodeData.title,
       episodeNumber: episode.episodeNumber,
       episodeTitle: episodeData.episodeTitle,

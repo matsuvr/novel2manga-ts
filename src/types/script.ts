@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const NonNullString = z.preprocess((val) => (val == null ? '' : val), z.string())
+// Cerebras-compatible schema: avoid z.preprocess() which creates complex $defs references
 export const ScriptLineSchema = z.object({
   index: z.number().int().nonnegative(),
   type: z.enum(['dialogue', 'thought', 'narration', 'stage']).or(
@@ -11,8 +11,8 @@ export const ScriptLineSchema = z.object({
       return 'stage'
     }),
   ),
-  speaker: NonNullString.optional(),
-  text: NonNullString,
+  speaker: z.string().default('').optional(),
+  text: z.string().default(''),
 })
 
 export const ScriptSchema = z.object({ script: z.array(ScriptLineSchema) })
@@ -24,8 +24,19 @@ export const PageBreakSchema = z.object({
   pages: z.array(
     z.object({
       pageNumber: z.number().int().min(1),
-      startIndex: z.number().int().nonnegative(),
-      endIndex: z.number().int().nonnegative(),
+      panelCount: z.number().int().min(1).max(6),
+      panels: z.array(
+        z.object({
+          panelIndex: z.number().int().min(1),
+          content: z.string(),
+          dialogue: z.array(
+            z.object({
+              speaker: z.string(),
+              lines: z.string(),
+            }),
+          ),
+        }),
+      ),
     }),
   ),
 })

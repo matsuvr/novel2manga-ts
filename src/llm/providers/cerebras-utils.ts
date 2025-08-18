@@ -3,7 +3,7 @@
  * Based on documentation in docs/cerebras_tips.md
  */
 
-interface JsonSchemaNode {
+export interface JsonSchemaNode {
   type?: string | string[]
   anyOf?: JsonSchemaNode[]
   properties?: Record<string, JsonSchemaNode>

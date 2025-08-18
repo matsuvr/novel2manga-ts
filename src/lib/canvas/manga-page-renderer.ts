@@ -1,5 +1,4 @@
 import { appConfig } from '@/config/app.config'
-import { normalizeEmotion } from '@/domain/models/emotion'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { renderVerticalText } from '@/services/vertical-text-client'
 import type {
@@ -153,7 +152,7 @@ export class MangaPageRenderer {
         (d: DialogueElement): Dialogue => ({
           speaker: d.speaker,
           text: d.text,
-          emotion: normalizeEmotion(d.emotion),
+          emotion: d.emotion,
         }),
       )
       const dialogues = this.bubblePlacer.placeDialogues(normalizedDialogues, layout)
