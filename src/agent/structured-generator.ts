@@ -53,19 +53,60 @@ export class DefaultLlmStructuredGenerator {
   }
 
   private async generateWithClient<T>(client: LlmClient, args: GenerateArgs<T>): Promise<T> {
-    const { systemPrompt, userPrompt, schema, schemaName } = args
+    const { systemPrompt, userPrompt, schema, schemaName, name = 'Structured Generator' } = args
     const prov = client.provider
     const cfg = getLLMProviderConfig(prov)
     const maxTokens = cfg?.maxTokens
     if (typeof maxTokens !== 'number' || !Number.isFinite(maxTokens) || maxTokens <= 0) {
       throw new Error(`Missing maxTokens in llm.config.ts for provider: ${prov}`)
     }
-    return client.generateStructured<T>({
-      systemPrompt,
-      userPrompt,
-      spec: { schema, schemaName },
-      options: { maxTokens },
-    })
+
+    const maxRetries = 3
+    let lastError: unknown
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await client.generateStructured<T>({
+          systemPrompt,
+          userPrompt,
+          spec: { schema, schemaName },
+          options: { maxTokens },
+        })
+      } catch (error) {
+        lastError = error
+        const errorMessage = error instanceof Error ? error.message : String(error)
+
+        // JSON生成関連のエラーのみリトライ対象とする
+        const isRetryableJsonError = this.isRetryableJsonError(errorMessage)
+
+        if (!isRetryableJsonError || attempt === maxRetries) {
+          // リトライ対象外、または最大試行回数に達した場合は即座にエラーを投げる
+          throw error
+        }
+
+        // リトライ実行をログ出力
+        console.warn(
+          JSON.stringify({
+            ts: new Date().toISOString(),
+            level: 'warn',
+            msg: 'LLM JSON generation failed, retrying',
+            service: 'llm-structured-generator',
+            name,
+            provider: prov,
+            attempt,
+            maxRetries,
+            reason: truncate(errorMessage, 300),
+          }),
+        )
+
+        // 少し待ってからリトライ（指数バックオフ）
+        if (attempt < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, 1000 * attempt))
+        }
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error(String(lastError))
   }
 
   private createClient(provider: LlmProvider): LlmClient {
@@ -95,6 +136,18 @@ export class DefaultLlmStructuredGenerator {
     if (/HTTP\s+4\d{2}/.test(message)) return true
     if (hasConnectivity) return false
     return true
+  }
+
+  private isRetryableJsonError(message: string): boolean {
+    // Groqの特定のJSONエラーをリトライ対象とする
+    const retryableErrors = [
+      'json_validate_failed',
+      'Failed to generate JSON',
+      'JSON parse failed',
+      'Unexpected end of JSON input',
+      'does not contain a valid JSON',
+    ]
+    return retryableErrors.some((error) => message.includes(error))
   }
 }
 

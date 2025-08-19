@@ -89,7 +89,10 @@
       "Bash(env:*)",
       "Bash(npm run dev:*)",
       "Bash(npx playwright test:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(npm rebuild:*)",
+      "WebFetch(domain:console.groq.com)",
+      "Bash(sqlite3:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

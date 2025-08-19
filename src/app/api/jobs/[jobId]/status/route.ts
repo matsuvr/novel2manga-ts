@@ -5,6 +5,7 @@ import type { NextRequest } from 'next/server'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { getChunkRepository } from '@/repositories'
 import { JobProgressService } from '@/services/application/job-progress'
+import { getDatabaseService } from '@/services/db-factory'
 import { ApiError, extractErrorMessage } from '@/utils/api-error'
 import { ApiResponder } from '@/utils/api-responder'
 import { validateJobId } from '@/utils/validators'
@@ -42,7 +43,30 @@ export async function GET(
     }
 
     // 完了条件はレンダリング完了のみ（UIと厳密に同期させる）
-    const isCompleted = job.renderCompleted === true
+    // フォールバック: totalPages > 0 かつ perEpisodeのrendered合計 >= totalPages なら完了とみなす
+    let derivedCompleted = false
+    try {
+      const total = Number(job.totalPages || 0)
+      if (total > 0) {
+        const perEp =
+          job.progress && typeof job.progress === 'object'
+            ? (job.progress as Record<string, unknown>).perEpisodePages
+            : undefined
+        let renderedSum = Number(job.renderedPages || 0)
+        if (perEp && typeof perEp === 'object') {
+          const values = Object.values(perEp as Record<string | number, unknown>)
+          renderedSum = values.reduce<number>((acc, v) => {
+            const r = (v as { rendered?: unknown })?.rendered
+            return acc + (typeof r === 'number' ? r : 0)
+          }, 0)
+        }
+        derivedCompleted = renderedSum >= total
+      }
+    } catch {
+      // フォールバック計算失敗時は無視（既存ロジックに委ねる）
+    }
+
+    const isCompleted = job.renderCompleted === true || derivedCompleted
 
     // 旧テスト互換: DB のチャンク内容をレスポンスに含める
     const chunkRepo = getChunkRepository()
@@ -64,6 +88,20 @@ export async function GET(
           : job.currentStep
         : job.currentStep
 
+    // ベストエフォート自己修復: APIアクセス時に完了が導出されたらDBも更新
+    if (derivedCompleted && !job.renderCompleted) {
+      try {
+        const db = getDatabaseService()
+        // render完了フラグとステータス/ステップを確定
+        await db.markJobStepCompleted(job.id, 'render')
+        await db.updateJobStep(job.id, 'complete')
+        await db.updateJobStatus(job.id, 'completed')
+        logger.info('Self-healed job completion state based on derived render progress')
+      } catch (e) {
+        logger.warn('Failed to self-heal job completion state', { error: extractErrorMessage(e) })
+      }
+    }
+
     const res = ApiResponder.success({
       job: {
         id: job.id,
@@ -73,7 +111,8 @@ export async function GET(
         analyzeCompleted: job.analyzeCompleted ?? false,
         episodeCompleted: job.episodeCompleted ?? false,
         layoutCompleted: job.layoutCompleted ?? false,
-        renderCompleted: job.renderCompleted ?? false,
+        // フォールバック完了を反映（DB未更新でもUIに完了を返す）
+        renderCompleted: (job.renderCompleted ?? false) || derivedCompleted,
         processedChunks: job.processedChunks ?? 0,
         totalChunks: job.totalChunks ?? 0,
         processedEpisodes: job.processedEpisodes ?? 0,

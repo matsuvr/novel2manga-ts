@@ -19,7 +19,7 @@ vi.mock('@/agents/layout-generator', () => ({
         page_number: 1,
         panels: [
           {
-            id: 1,
+            id: 'scene1',
             position: { x: 0.1, y: 0.1 },
             size: { width: 0.8, height: 0.4 },
             content: 'テスト状況説明',

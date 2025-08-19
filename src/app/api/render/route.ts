@@ -8,6 +8,8 @@ import { JobRepository } from '@/repositories/job-repository'
 import { renderBatchFromYaml } from '@/services/application/render'
 import { getDatabaseService } from '@/services/db-factory'
 import { ApiResponder } from '@/utils/api-responder'
+import { detectDemoMode } from '@/utils/request-mode'
+import { StorageFactory, StorageKeys } from '@/utils/storage'
 import { validateJobId } from '@/utils/validators'
 
 interface RenderRequest {
@@ -24,6 +26,55 @@ export async function POST(request: NextRequest) {
       method: 'POST',
     })
     const body = (await request.json()) as Partial<RenderRequest>
+
+    // Demoモード: 依存（DB, layout YAML）をスキップし、プレースホルダーPNGを生成
+    const isDemo = detectDemoMode(request, body)
+    if (isDemo) {
+      if (!body.jobId) return ApiResponder.validation('jobIdが必要です（demoモード）')
+      validateJobId(body.jobId)
+      if (typeof body.episodeNumber !== 'number' || body.episodeNumber < 1)
+        return ApiResponder.validation('有効なepisodeNumberが必要です（demoモード）')
+      if (typeof body.pageNumber !== 'number' || body.pageNumber < 1)
+        return ApiResponder.validation('有効なpageNumberが必要です（demoモード）')
+
+      // 1x1 PNG（透明）のベース64（最小）
+      const base64Png =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII='
+      const buffer = Buffer.from(base64Png, 'base64')
+
+      const renderKey = StorageKeys.pageRender(body.jobId, body.episodeNumber, body.pageNumber)
+      const thumbnailKey = StorageKeys.pageThumbnail(
+        body.jobId,
+        body.episodeNumber,
+        body.pageNumber,
+      )
+      const storage = await StorageFactory.getRenderStorage()
+      await storage.put(renderKey, buffer, {
+        'content-type': 'image/png',
+      })
+      await storage.put(thumbnailKey, buffer, {
+        'content-type': 'image/png',
+      })
+
+      return ApiResponder.success(
+        {
+          success: true,
+          renderKey,
+          thumbnailKey,
+          message: 'デモ画像を生成しました',
+          jobId: body.jobId,
+          episodeNumber: body.episodeNumber,
+          pageNumber: body.pageNumber,
+          fileSize: buffer.byteLength,
+          dimensions: {
+            width: 1,
+            height: 1,
+          },
+          renderedAt: new Date().toISOString(),
+        },
+        201,
+      )
+    }
 
     // 入力バリデーション
     if (!body.jobId) return ApiResponder.validation('jobIdが必要です')

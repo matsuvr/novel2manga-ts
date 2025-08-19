@@ -319,7 +319,12 @@ function ProcessingProgress({
         let completedCount = 0
 
         // 完了条件はレンダリング完了のみ
-        const uiCompleted = data.job.renderCompleted === true
+        // 念押しフォールバック: job.statusがcompleted かつ renderedPages>=totalPages>0 でも完了扱い
+        const totalPages = Number(data.job.totalPages || 0)
+        const renderedPages = Number(data.job.renderedPages || 0)
+        const fallbackCompleted =
+          data.job.status === 'completed' && totalPages > 0 && renderedPages >= totalPages
+        const uiCompleted = data.job.renderCompleted === true || fallbackCompleted
 
         if (uiCompleted) {
           updatedSteps.forEach((step) => {
@@ -428,7 +433,7 @@ function ProcessingProgress({
             currentIndex = 4
           }
 
-          if (data.job.renderCompleted) {
+          if (data.job.renderCompleted || fallbackCompleted) {
             updatedSteps[5].status = 'completed'
             completedCount++
           } else if (
