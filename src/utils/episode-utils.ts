@@ -1,33 +1,9 @@
-// エピソード設定の型
-interface EpisodeConfig {
-  targetCharsPerEpisode: number
-  minCharsPerEpisode: number
-  maxCharsPerEpisode: number
-  charsPerPage: number
-}
-
-// 遅延インポートでモック欠落に耐性を持たせる
-async function getEpisodeConfigSafe(): Promise<EpisodeConfig> {
-  try {
-    const mod = (await import('@/config')) as {
-      getEpisodeConfig?: () => EpisodeConfig
-    }
-    if (typeof mod.getEpisodeConfig === 'function') {
-      return mod.getEpisodeConfig()
-    }
-  } catch {
-    // ignore
-  }
-  return {
-    targetCharsPerEpisode: 1000,
-    minCharsPerEpisode: 500,
-    maxCharsPerEpisode: 2000,
-    charsPerPage: 300,
-  }
-}
-
+import { getEpisodeConfig } from '@/config'
 import type { ChunkAnalysisResult, ChunkData } from '@/types/chunk'
 import type { NarrativeAnalysisInput } from '@/types/episode'
+import type { Storage } from '@/utils/storage'
+
+const MAX_CHUNKS_PER_EPISODE = 20
 
 export interface PrepareNarrativeInputOptions {
   jobId: string
@@ -37,79 +13,80 @@ export interface PrepareNarrativeInputOptions {
   maxChars?: number
 }
 
-export async function prepareNarrativeAnalysisInput(
-  options: PrepareNarrativeInputOptions,
-): Promise<NarrativeAnalysisInput | null> {
-  const episodeConfig = await getEpisodeConfigSafe()
-  const {
-    jobId,
-    startChunkIndex,
-    targetChars = episodeConfig.targetCharsPerEpisode,
-    minChars = episodeConfig.minCharsPerEpisode,
-    maxChars = episodeConfig.maxCharsPerEpisode,
-  } = options
+interface StorageBundle {
+  chunkStorage: Storage
+  analysisStorage: Storage
+  StorageKeys: typeof import('@/utils/storage').StorageKeys
+}
 
+function transformAnalysisResult(
+  analysisResult: ChunkAnalysisResult | null,
+): NarrativeAnalysisInput['chunks'][0]['analysis'] {
+  return {
+    summary: '',
+    characters:
+      analysisResult?.characters?.map((c) => ({
+        name: c.name,
+        role: c.role,
+      })) || [],
+    dialogues: analysisResult?.dialogues || [],
+    scenes: analysisResult?.scenes || [],
+    highlights:
+      analysisResult?.highlights?.map((h) => ({
+        text: h.content,
+        importance: h.importance,
+        description: h.description,
+        startIndex: h.startIndex ?? 0,
+        endIndex: h.endIndex ?? 0,
+      })) || [],
+  }
+}
+
+async function loadChunkInput(
+  jobId: string,
+  chunkIndex: number,
+  storages: StorageBundle,
+): Promise<NarrativeAnalysisInput['chunks'][0] | null> {
+  const { chunkStorage, analysisStorage, StorageKeys } = storages
+  const chunkObj = await chunkStorage.get(StorageKeys.chunk(jobId, chunkIndex))
+  const chunkData = chunkObj ? { text: chunkObj.text } : null
+  if (!chunkData) return null
+
+  const analysisObj = await analysisStorage.get(StorageKeys.chunkAnalysis(jobId, chunkIndex))
+  const analysisResult = analysisObj ? (JSON.parse(analysisObj.text) as ChunkAnalysisResult) : null
+
+  return {
+    chunkIndex,
+    text: chunkData.text,
+    analysis: transformAnalysisResult(analysisResult),
+  }
+}
+
+async function gatherChunkInputs(params: {
+  jobId: string
+  startChunkIndex: number
+  targetChars: number
+  minChars: number
+  maxChars: number
+  storages: StorageBundle
+}): Promise<NarrativeAnalysisInput['chunks']> {
+  const { jobId, startChunkIndex, targetChars, minChars, maxChars, storages } = params
   const chunks: NarrativeAnalysisInput['chunks'] = []
   let totalChars = 0
   let currentChunkIndex = startChunkIndex
 
-  // 動的にストレージAPIを取得（テストの部分モック互換）
-  const { StorageFactory, StorageKeys } = await import('@/utils/storage')
-  const chunkStorage = await StorageFactory.getChunkStorage()
-  const analysisStorage = await StorageFactory.getAnalysisStorage()
-
-  while (totalChars < targetChars && chunks.length < 20) {
-    const chunkObj = await chunkStorage.get(StorageKeys.chunk(jobId, currentChunkIndex))
-    const chunkData = chunkObj ? { text: chunkObj.text } : null
-    if (!chunkData) {
-      break
-    }
-
-    const analysisObj = await analysisStorage.get(
-      StorageKeys.chunkAnalysis(jobId, currentChunkIndex),
-    )
-    const analysisResult = analysisObj
-      ? (JSON.parse(analysisObj.text) as ChunkAnalysisResult)
-      : null
-
-    const chunkInput: NarrativeAnalysisInput['chunks'][0] = {
-      chunkIndex: currentChunkIndex,
-      text: chunkData.text,
-      analysis: {
-        // summary は ChunkAnalysisResult 型に存在しないため、空文字に固定
-        summary: '',
-        characters:
-          analysisResult?.characters?.map((c: { name: string; role: string }) => ({
-            name: c.name,
-            role: c.role,
-          })) || [],
-        dialogues: (analysisResult?.dialogues as ChunkAnalysisResult['dialogues']) || [],
-        scenes: (analysisResult?.scenes as ChunkAnalysisResult['scenes']) || [],
-        highlights:
-          analysisResult?.highlights?.map(
-            (h: {
-              text?: string
-              description: string
-              importance: number
-              startIndex?: number
-              endIndex?: number
-            }) => ({
-              text: h.text || h.description,
-              importance: h.importance,
-              description: h.description,
-              startIndex: h.startIndex || 0,
-              endIndex: h.endIndex || 0,
-            }),
-          ) || [],
-      },
-    }
+  while (totalChars < targetChars && chunks.length < MAX_CHUNKS_PER_EPISODE) {
+    const chunkInput = await loadChunkInput(jobId, currentChunkIndex, storages)
+    if (!chunkInput) break
 
     chunks.push(chunkInput)
-    totalChars += chunkData.text.length
+    totalChars += chunkInput.text.length
     currentChunkIndex++
 
     if (totalChars >= minChars && totalChars <= maxChars) {
-      const nextObj = await chunkStorage.get(StorageKeys.chunk(jobId, currentChunkIndex))
+      const nextObj = await storages.chunkStorage.get(
+        storages.StorageKeys.chunk(jobId, currentChunkIndex),
+      )
       if (!nextObj) break
 
       const potentialTotal = totalChars + nextObj.text.length
@@ -119,13 +96,41 @@ export async function prepareNarrativeAnalysisInput(
     }
   }
 
-  // チャンクが見つからない場合のみnullを返す
+  return chunks
+}
+
+export async function prepareNarrativeAnalysisInput(
+  options: PrepareNarrativeInputOptions,
+): Promise<NarrativeAnalysisInput | null> {
+  const episodeConfig = getEpisodeConfig()
+  const {
+    jobId,
+    startChunkIndex,
+    targetChars = episodeConfig.targetCharsPerEpisode,
+    minChars = episodeConfig.minCharsPerEpisode,
+    maxChars = episodeConfig.maxCharsPerEpisode,
+  } = options
+
+  // 動的にストレージAPIを取得（テストの部分モック互換）
+  const { StorageFactory, StorageKeys } = await import('@/utils/storage')
+  const storages: StorageBundle = {
+    StorageKeys,
+    chunkStorage: await StorageFactory.getChunkStorage(),
+    analysisStorage: await StorageFactory.getAnalysisStorage(),
+  }
+
+  const chunks = await gatherChunkInputs({
+    jobId,
+    startChunkIndex,
+    targetChars,
+    minChars,
+    maxChars,
+    storages,
+  })
+
   if (chunks.length === 0) {
     return null
   }
-
-  // 文字数が少なくても、利用可能なチャンクがあれば処理を続ける
-  // （呼び出し側で前のエピソードと結合するかどうかを判断）
 
   return {
     jobId,
@@ -140,24 +145,7 @@ export async function prepareNarrativeAnalysisInput(
 }
 
 export function calculateEstimatedPages(charCount: number): number {
-  // 同様に安全に取得
-  const defaultCfg: EpisodeConfig = {
-    targetCharsPerEpisode: 1000,
-    minCharsPerEpisode: 500,
-    maxCharsPerEpisode: 2000,
-    charsPerPage: 300,
-  }
-  const cfgPromise = getEpisodeConfigSafe().catch(() => defaultCfg)
-  // 注意: 同期関数だが、ここではデフォルト値で推定しつつ副作用なく対応
-  // 厳密な値が必要なコードパスでは非同期版を使用
-  const globalWithConfig = globalThis as typeof globalThis & {
-    __episodeCfg?: EpisodeConfig
-  }
-  const cfg: EpisodeConfig = globalWithConfig.__episodeCfg || defaultCfg
-  void cfgPromise.then((c) => {
-    globalWithConfig.__episodeCfg = c
-  })
-  const charsPerPage = cfg.charsPerPage ?? 300
+  const { charsPerPage } = getEpisodeConfig()
   return Math.round(charCount / charsPerPage)
 }
 
