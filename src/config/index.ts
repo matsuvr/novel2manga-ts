@@ -85,7 +85,9 @@ export function getLayoutGenerationConfig() {
   }
 }
 
-// チャンクバンドル統合分析設定を取得
+// DEPRECATED: チャンクバンドル統合分析設定を取得
+// This function is deprecated and should not be used in the current flow
+// The correct flow is: textAnalysis → narrativeArcAnalysis → scriptConversion → pageBreakEstimation
 export function getChunkBundleAnalysisConfig() {
   const prompts = getAppConfig().llm as unknown as Record<
     string,

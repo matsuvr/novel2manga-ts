@@ -51,29 +51,11 @@ export default defineConfig({
   /* テスト結果とアーティファクト出力 */
   outputDir: 'test-results/',
 
-  /* プロジェクト設定 - 複数ブラウザでのテスト */
+  /* プロジェクト設定 - chromium のみ実行 */
   projects: [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-    },
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-
-    /* モバイルテスト */
-    {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
-    },
-    {
-      name: 'Mobile Safari',
-      use: { ...devices['iPhone 12'] },
     },
   ],
 
