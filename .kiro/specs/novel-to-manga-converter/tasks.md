@@ -12,6 +12,7 @@
 - [x] Extract magic number for in-flight episode progress to `CURRENT_EPISODE_PROGRESS_WEIGHT`.
 - [x] Strengthen UI error handling (no silent catches; contextual logs).
 - [x] MCP verification: Cloudflare/Workers docs cross-check (no breaking changes impacting this PR)
+- [x] E2E: rendering API returns page image via renderKey
 - [ ] E2E: add a happy-path scenario for resume after one batch (progress present) then completion.
 - [x] Documentation: update README usage notes if needed.
 - [x] Add YAML-stage layout validator and reference fallback
