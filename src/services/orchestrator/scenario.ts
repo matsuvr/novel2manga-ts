@@ -8,6 +8,21 @@ import type { Edge, RetryPolicy, ScenarioData, StepDefinition } from '@/types/co
 // opaquely (runtime schemas should validate if enforced later).
 type ErasedStep = StepDefinition<unknown, unknown>
 
+/**
+ * ScenarioBuilder - DAG-based workflow orchestration engine
+ *
+ * 責務: APIチェーンの実行とワークフロー管理
+ * 用途: 開発・デモ・テスト用のAPIオーケストレーション
+ * フロー: demoAnalyze → demoLayout → demoRender (HTTP API チェーン)
+ *
+ * 使用箇所: /api/scenario/run (デモ・開発用エンドポイント)
+ * UI: ScenarioViewer.tsx (開発用デモ画面)
+ * テスト: src/__tests__/e2e/api-scenario-demo.e2e.spec.ts など
+ *
+ * Note: AnalyzePipeline とは異なる責務を持つ
+ * - AnalyzePipeline: ビジネスロジックの実装
+ * - Orchestrator: APIチェーンの実行エンジン（開発・デモ用）
+ */
 export class ScenarioBuilder {
   private id: string
   private version: string

@@ -7,6 +7,7 @@ export interface JsonSchemaNode {
   type?: string | string[]
   anyOf?: JsonSchemaNode[]
   properties?: Record<string, JsonSchemaNode>
+  required?: string[]
   additionalProperties?: boolean
   nullable?: boolean
   minimum?: number
@@ -93,6 +94,14 @@ export function transformForCerebrasCompatibility(
   // 4. additionalProperties を追加
   if (result.type === 'object' || result.properties) {
     result.additionalProperties = false
+    // Cerebras strict mode 要件: properties に列挙されたキーはすべて required に含める
+    if (result.properties) {
+      const propKeys = Object.keys(result.properties)
+      // 既存 required がある場合は和集合化して順序を安定
+      const existing = Array.isArray(result.required) ? result.required : []
+      const merged = Array.from(new Set([...existing, ...propKeys]))
+      result.required = merged
+    }
   }
 
   // 5. サポートされていないフィールドを削除
@@ -141,6 +150,18 @@ export function validateCerebrasSchema(schema: JsonSchemaNode): string[] {
     // Check for missing additionalProperties on objects
     if ((node.type === 'object' || node.properties) && node.additionalProperties !== false) {
       errors.push(`${path}: Objects must have additionalProperties set to false.`)
+    }
+
+    // Strict mode前提: propertiesの全キーがrequiredに含まれていることを強制
+    if (node.properties) {
+      const keys = Object.keys(node.properties)
+      const req = Array.isArray(node.required) ? node.required : []
+      const missing = keys.filter((k) => !req.includes(k))
+      if (missing.length > 0) {
+        errors.push(
+          `${path}: All properties must be listed in required. Missing: ${missing.join(', ')}`,
+        )
+      }
     }
 
     // Check for unsupported fields
