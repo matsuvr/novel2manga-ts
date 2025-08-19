@@ -56,6 +56,11 @@
 - [x] Update `/api/scenario/run` to use refreshed DSL input/output
 - [x] E2E (demo path): scenario run endpoint returns render key successfully
 
+## New (2025-08-18): Route responsibility separation
+
+- [x] Extract health check logic from API route into service layer
+- [x] Add HealthCheckService unit tests and structured error context
+
 ## New: Vertical Dialogue Rendering (2025-08-16)
 
 - [x] Design plan at `docs/vertical-text-integration-plan.md`
