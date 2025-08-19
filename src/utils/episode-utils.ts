@@ -28,6 +28,7 @@ async function getEpisodeConfigSafe(): Promise<EpisodeConfig> {
 
 import type { ChunkAnalysisResult, ChunkData } from '@/types/chunk'
 import type { NarrativeAnalysisInput } from '@/types/episode'
+import type { Storage } from '@/utils/storage'
 
 export interface PrepareNarrativeInputOptions {
   jobId: string
@@ -35,6 +36,100 @@ export interface PrepareNarrativeInputOptions {
   targetChars?: number
   minChars?: number
   maxChars?: number
+}
+
+interface StorageBundle {
+  chunkStorage: Storage
+  analysisStorage: Storage
+  StorageKeys: typeof import('@/utils/storage').StorageKeys
+}
+
+interface AnalysisHighlight {
+  text?: string
+  description: string
+  importance: number
+  startIndex?: number
+  endIndex?: number
+}
+
+function transformAnalysisResult(
+  analysisResult: ChunkAnalysisResult | null,
+): NarrativeAnalysisInput['chunks'][0]['analysis'] {
+  return {
+    summary: '',
+    characters:
+      analysisResult?.characters?.map((c) => ({
+        name: c.name,
+        role: c.role,
+      })) || [],
+    dialogues: (analysisResult?.dialogues as ChunkAnalysisResult['dialogues']) || [],
+    scenes: (analysisResult?.scenes as ChunkAnalysisResult['scenes']) || [],
+    highlights:
+      (analysisResult?.highlights as AnalysisHighlight[] | undefined)?.map((h) => ({
+        text: h.text ?? h.description,
+        importance: h.importance,
+        description: h.description,
+        startIndex: h.startIndex ?? 0,
+        endIndex: h.endIndex ?? 0,
+      })) || [],
+  }
+}
+
+async function loadChunkInput(
+  jobId: string,
+  chunkIndex: number,
+  storages: StorageBundle,
+): Promise<NarrativeAnalysisInput['chunks'][0] | null> {
+  const { chunkStorage, analysisStorage, StorageKeys } = storages
+  const chunkObj = await chunkStorage.get(StorageKeys.chunk(jobId, chunkIndex))
+  const chunkData = chunkObj ? { text: chunkObj.text } : null
+  if (!chunkData) return null
+
+  const analysisObj = await analysisStorage.get(StorageKeys.chunkAnalysis(jobId, chunkIndex))
+  const analysisResult = analysisObj ? (JSON.parse(analysisObj.text) as ChunkAnalysisResult) : null
+
+  return {
+    chunkIndex,
+    text: chunkData.text,
+    analysis: transformAnalysisResult(analysisResult),
+  }
+}
+
+async function gatherChunkInputs(params: {
+  jobId: string
+  startChunkIndex: number
+  targetChars: number
+  minChars: number
+  maxChars: number
+  storages: StorageBundle
+}): Promise<NarrativeAnalysisInput['chunks']> {
+  const { jobId, startChunkIndex, targetChars, minChars, maxChars, storages } = params
+  const chunks: NarrativeAnalysisInput['chunks'] = []
+  let totalChars = 0
+  let currentChunkIndex = startChunkIndex
+
+  while (totalChars < targetChars && chunks.length < 20) {
+    const chunkInput = await loadChunkInput(jobId, currentChunkIndex, storages)
+    if (!chunkInput) break
+
+    chunks.push(chunkInput)
+    totalChars += chunkInput.text.length
+    currentChunkIndex++
+
+    if (totalChars >= minChars && totalChars <= maxChars) {
+      const nextObj = await storages.chunkStorage.get(
+        storages.StorageKeys.chunk(jobId, currentChunkIndex),
+      )
+      if (!nextObj) break
+
+      const potentialTotal = totalChars + nextObj.text.length
+      if (potentialTotal > maxChars) {
+        break
+      }
+    }
+  }
+
+  return chunks
 }
 
 export async function prepareNarrativeAnalysisInput(
@@ -49,83 +144,26 @@ export async function prepareNarrativeAnalysisInput(
     maxChars = episodeConfig.maxCharsPerEpisode,
   } = options
 
-  const chunks: NarrativeAnalysisInput['chunks'] = []
-  let totalChars = 0
-  let currentChunkIndex = startChunkIndex
-
   // 動的にストレージAPIを取得（テストの部分モック互換）
   const { StorageFactory, StorageKeys } = await import('@/utils/storage')
-  const chunkStorage = await StorageFactory.getChunkStorage()
-  const analysisStorage = await StorageFactory.getAnalysisStorage()
-
-  while (totalChars < targetChars && chunks.length < 20) {
-    const chunkObj = await chunkStorage.get(StorageKeys.chunk(jobId, currentChunkIndex))
-    const chunkData = chunkObj ? { text: chunkObj.text } : null
-    if (!chunkData) {
-      break
-    }
-
-    const analysisObj = await analysisStorage.get(
-      StorageKeys.chunkAnalysis(jobId, currentChunkIndex),
-    )
-    const analysisResult = analysisObj
-      ? (JSON.parse(analysisObj.text) as ChunkAnalysisResult)
-      : null
-
-    const chunkInput: NarrativeAnalysisInput['chunks'][0] = {
-      chunkIndex: currentChunkIndex,
-      text: chunkData.text,
-      analysis: {
-        // summary は ChunkAnalysisResult 型に存在しないため、空文字に固定
-        summary: '',
-        characters:
-          analysisResult?.characters?.map((c: { name: string; role: string }) => ({
-            name: c.name,
-            role: c.role,
-          })) || [],
-        dialogues: (analysisResult?.dialogues as ChunkAnalysisResult['dialogues']) || [],
-        scenes: (analysisResult?.scenes as ChunkAnalysisResult['scenes']) || [],
-        highlights:
-          analysisResult?.highlights?.map(
-            (h: {
-              text?: string
-              description: string
-              importance: number
-              startIndex?: number
-              endIndex?: number
-            }) => ({
-              text: h.text || h.description,
-              importance: h.importance,
-              description: h.description,
-              startIndex: h.startIndex || 0,
-              endIndex: h.endIndex || 0,
-            }),
-          ) || [],
-      },
-    }
-
-    chunks.push(chunkInput)
-    totalChars += chunkData.text.length
-    currentChunkIndex++
-
-    if (totalChars >= minChars && totalChars <= maxChars) {
-      const nextObj = await chunkStorage.get(StorageKeys.chunk(jobId, currentChunkIndex))
-      if (!nextObj) break
-
-      const potentialTotal = totalChars + nextObj.text.length
-      if (potentialTotal > maxChars) {
-        break
-      }
-    }
+  const storages: StorageBundle = {
+    StorageKeys,
+    chunkStorage: await StorageFactory.getChunkStorage(),
+    analysisStorage: await StorageFactory.getAnalysisStorage(),
   }
 
-  // チャンクが見つからない場合のみnullを返す
+  const chunks = await gatherChunkInputs({
+    jobId,
+    startChunkIndex,
+    targetChars,
+    minChars,
+    maxChars,
+    storages,
+  })
+
   if (chunks.length === 0) {
     return null
   }
-
-  // 文字数が少なくても、利用可能なチャンクがあれば処理を続ける
-  // （呼び出し側で前のエピソードと結合するかどうかを判断）
 
   return {
     jobId,
