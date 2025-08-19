@@ -40,7 +40,7 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY,
-    model: 'gemma3-27b',
+    model: 'gemini-2.5-flash-lite',
     maxTokens: 8192,
     timeout: 30_000,
   },
