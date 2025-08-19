@@ -19,14 +19,6 @@ interface StorageBundle {
   StorageKeys: typeof import('@/utils/storage').StorageKeys
 }
 
-interface AnalysisHighlight {
-  text?: string
-  description: string
-  importance: number
-  startIndex?: number
-  endIndex?: number
-}
-
 function transformAnalysisResult(
   analysisResult: ChunkAnalysisResult | null,
 ): NarrativeAnalysisInput['chunks'][0]['analysis'] {
@@ -37,11 +29,11 @@ function transformAnalysisResult(
         name: c.name,
         role: c.role,
       })) || [],
-    dialogues: (analysisResult?.dialogues as ChunkAnalysisResult['dialogues']) || [],
-    scenes: (analysisResult?.scenes as ChunkAnalysisResult['scenes']) || [],
+    dialogues: analysisResult?.dialogues || [],
+    scenes: analysisResult?.scenes || [],
     highlights:
-      (analysisResult?.highlights as AnalysisHighlight[] | undefined)?.map((h) => ({
-        text: h.text ?? h.description,
+      analysisResult?.highlights?.map((h) => ({
+        text: h.content,
         importance: h.importance,
         description: h.description,
         startIndex: h.startIndex ?? 0,
