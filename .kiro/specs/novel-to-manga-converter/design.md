@@ -52,7 +52,7 @@ src/
 │   └── index.ts               # エクスポート
 └── services/                  # サービス層（DI経由で使用）
     └── application/
-        └── health-check.ts    # APIヘルスチェックのビジネスロジック
+        └── health-check.ts    # APIヘルスチェックのビジネスロジック（DB/Storageを軽量 probe）
 ```
 
 ## パブリックAPI
@@ -306,6 +306,8 @@ const result = await agent.run({
 ### エラー処理方針
 
 フォールバックで隠蔽せず，失敗時は詳細を記録して停止。分析未取得やYAML検証失敗などは致命として扱う。
+
+HealthCheckService では DB と Storage をそれぞれ軽量 probe し、失敗時は操作名とタイムスタンプを含む構造化ログを出力する。
 
 - ✅ `FakeLlmClient`を使用したモックの実装
 - ✅ 新しいLLMエージェントアーキテクチャとの互換性確保

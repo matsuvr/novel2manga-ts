@@ -60,6 +60,7 @@
 ## New (2025-08-18): Route responsibility separation
 
 - [x] Extract health check logic from API route into service layer
+- [x] Add HealthCheckService unit tests and structured error context
 
 ## New: Vertical Dialogue Rendering (2025-08-16)
 

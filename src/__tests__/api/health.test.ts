@@ -55,6 +55,7 @@ describe('/api/health', () => {
     expect(data.status).toBe('error')
     expect(data.components.database.status).toBe('error')
     expect(data.components.database.error).toContain('DB down')
+    expect(data.components.database.context.operation).toBe('database_health_check')
   })
 
   it('Storage エラー時は503 と error ステータスを返す', async () => {
@@ -68,5 +69,6 @@ describe('/api/health', () => {
     expect(data.status).toBe('error')
     expect(data.components.storage.status).toBe('error')
     expect(data.components.storage.error).toContain('Storage down')
+    expect(data.components.storage.context.operation).toBe('storage_health_check')
   })
 })
