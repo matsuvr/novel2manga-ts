@@ -51,6 +51,8 @@ src/
 │   ├── compat.ts              # 後方互換性レイヤー
 │   └── index.ts               # エクスポート
 └── services/                  # サービス層（DI経由で使用）
+    └── application/
+        └── health-check.ts    # APIヘルスチェックのビジネスロジック
 ```
 
 ## パブリックAPI
