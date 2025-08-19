@@ -19,15 +19,55 @@ export function extractFirstJsonChunk(text: string): string {
   try {
     JSON.parse(trimmed)
     return trimmed
-  } catch {
+  } catch (jsonError) {
     // Invalid JSON, continue to try extracting balanced JSON
+    console.debug('Initial JSON parse failed, trying balanced extraction', {
+      error: jsonError instanceof Error ? jsonError.message : String(jsonError),
+      contentPreview: text.slice(0, 100),
+    })
   }
 
   const chunk = tryExtractBalanced(trimmed)
   if (chunk) return chunk
 
+  // 最終的にJSONが見つからない場合の詳細エラー
+  console.error(
+    JSON.stringify({
+      ts: new Date().toISOString(),
+      level: 'error',
+      service: 'llm-utils',
+      operation: 'extractFirstJsonChunk',
+      msg: 'LLMレスポンスから有効なJSONを抽出できませんでした。',
+      contentPreview: text.slice(0, 300),
+      contentLength: text.length,
+    }),
+  )
   throw new Error('LLM response does not contain a valid JSON object/array')
 }
+
+/**
+ * Sanitizes LLM JSON responses by removing empty strings from arrays.
+ * This handles cases where LLMs generate malformed arrays with empty string elements.
+ */
+function sanitizeLlmJsonResponse(obj: unknown): unknown {
+  if (Array.isArray(obj)) {
+    return obj
+      .filter((item) => item !== '' && item !== null && item !== undefined)
+      .map(sanitizeLlmJsonResponse)
+  }
+
+  if (obj && typeof obj === 'object') {
+    const result: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = sanitizeLlmJsonResponse(value)
+    }
+    return result
+  }
+
+  return obj
+}
+
+export { sanitizeLlmJsonResponse }
 
 function tryExtractBalanced(text: string): string | null {
   const startIdx = findFirstJsonStart(text)
@@ -65,7 +105,11 @@ function tryExtractBalanced(text: string): string | null {
       try {
         JSON.parse(candidate)
         return candidate
-      } catch {
+      } catch (balanceError) {
+        console.debug('Balanced JSON candidate failed to parse', {
+          error: balanceError instanceof Error ? balanceError.message : String(balanceError),
+          candidatePreview: candidate.slice(0, 100),
+        })
         return null
       }
     }

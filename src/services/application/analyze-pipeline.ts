@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
+import type { EpisodeBoundary } from '@/types/episode'
 import { getChunkingConfig, getTextAnalysisConfig } from '@/config'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
@@ -14,8 +15,27 @@ import { generateUUID } from '@/utils/uuid'
 export interface AnalyzeOptions {
   isDemo?: boolean
   title?: string
+  /**
+   * 事前に発行済みの jobId を指定する場合に使用。
+   * 指定された場合、本クラス内では新規ジョブ作成（create）は行わず、
+   * 以降のステップ更新のみを実施します。
+   */
+  existingJobId?: string
 }
 
+/**
+ * AnalyzePipeline - Main production analysis service
+ *
+ * 責務: 小説テキストの分析からレイアウト生成・レンダリングまでの一連の処理
+ * フロー: チャンク分割 → textAnalysis → narrativeArcAnalysis → scriptConversion → pageBreakEstimation → layout → render
+ *
+ * 使用箇所: /api/analyze (プロダクションメインエンドポイント)
+ * テスト: src/__tests__/integration/service-integration.test.ts など多数
+ *
+ * Note: Orchestrator (scenario.ts) とは異なる責務を持つ
+ * - AnalyzePipeline: ビジネスロジックの実装
+ * - Orchestrator: APIチェーンの実行エンジン（開発・デモ用）
+ */
 export class AnalyzePipeline {
   constructor(
     private readonly ports: StoragePorts = getStoragePorts(),
@@ -50,7 +70,8 @@ export class AnalyzePipeline {
     const chunkRepo = getChunkRepository()
     const novelRepo = getNovelRepository()
 
-    const jobId = generateUUID()
+    // 既存の jobId が指定されていればそれを使用。なければ新規発行
+    const jobId = options.existingJobId ?? generateUUID()
     const title = options.title || 'Novel'
 
     // まず小説を DB に保存してから job を作成する（FOREIGN KEY制約のため）
@@ -78,12 +99,15 @@ export class AnalyzePipeline {
       throw new Error(`Failed to create novel before job: ${message}`)
     }
 
-    // 小説が存在することを確認してからjobを作成
-    await jobRepo.create({
-      id: jobId,
-      novelId,
-      title: `Analysis Job for ${title}`,
-    })
+    // 既にジョブが作成済みの場合は新規作成をスキップ
+    if (!options.existingJobId) {
+      // 小説が存在することを確認してからjobを作成
+      await jobRepo.create({
+        id: jobId,
+        novelId,
+        title: `Analysis Job for ${title}`,
+      })
+    }
 
     // 機械的な固定長チャンク分割（オーバーラップ付き）
     // Rationale: sentence-based splitting caused instability across languages and inconsistent
@@ -225,17 +249,42 @@ export class AnalyzePipeline {
           chunkIndex: i,
         })
         result = analysis.result
-      } catch (_e) {
-        await jobRepo.updateStep(jobId, `analyze_chunk_${i}_retry`, i, chunks.length)
-        const { analyzeChunkWithFallback } = await import('@/agents/chunk-analyzer')
-        const analysis = await analyzeChunkWithFallback(prompt, textAnalysisOutputSchema, {
-          maxRetries: 0,
+      } catch (firstError) {
+        logger.warn('Chunk analysis failed, retrying', {
           jobId,
           chunkIndex: i,
+          error: firstError instanceof Error ? firstError.message : String(firstError),
         })
-        result = analysis.result
+        await jobRepo.updateStep(jobId, `analyze_chunk_${i}_retry`, i, chunks.length)
+
+        try {
+          const { analyzeChunkWithFallback } = await import('@/agents/chunk-analyzer')
+          const analysis = await analyzeChunkWithFallback(prompt, textAnalysisOutputSchema, {
+            maxRetries: 0,
+            jobId,
+            chunkIndex: i,
+          })
+          result = analysis.result
+        } catch (retryError) {
+          const errorMessage = retryError instanceof Error ? retryError.message : String(retryError)
+          logger.error('Chunk analysis failed after retry', {
+            jobId,
+            chunkIndex: i,
+            firstError: firstError instanceof Error ? firstError.message : String(firstError),
+            retryError: errorMessage,
+          })
+
+          // ジョブステータスを失敗に更新
+          await jobRepo.updateStatus(jobId, 'failed', `Chunk ${i} analysis failed: ${errorMessage}`)
+          throw retryError
+        }
       }
-      if (!result) throw new Error('Failed to generate analysis result')
+      if (!result) {
+        const errorMessage = `Failed to generate analysis result for chunk ${i}`
+        logger.error(errorMessage, { jobId, chunkIndex: i })
+        await jobRepo.updateStatus(jobId, 'failed', errorMessage)
+        throw new Error(errorMessage)
+      }
 
       const analysisData = {
         chunkIndex: i,
@@ -259,7 +308,45 @@ export class AnalyzePipeline {
     const chunkRepository = new (
       await import('@/infrastructure/storage/chunk-repository')
     ).StorageChunkRepository()
-    const boundaries = (await analyzeNarrativeArc(input, chunkRepository)) ?? []
+
+    let boundaries: EpisodeBoundary[]
+    try {
+      boundaries = (await analyzeNarrativeArc(input, chunkRepository)) ?? []
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logger.error('Narrative arc analysis failed', {
+        jobId,
+        error: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined,
+      })
+
+      // コンソールにも構造化ログを出力
+      console.error(
+        JSON.stringify({
+          ts: new Date().toISOString(),
+          level: 'error',
+          service: 'analyze-pipeline',
+          operation: 'narrative-arc-analysis',
+          msg: 'Narrative arc analysis failed',
+          jobId,
+          error: errorMessage,
+          stack: error instanceof Error ? error.stack?.slice(0, 500) : undefined,
+        }),
+      )
+
+      // ジョブステータスを失敗に更新
+      try {
+        await jobRepo.updateStatus(jobId, 'failed', errorMessage)
+      } catch (statusError) {
+        logger.error('Failed to update job status after narrative analysis failure', {
+          jobId,
+          originalError: errorMessage,
+          statusError: statusError instanceof Error ? statusError.message : String(statusError),
+        })
+      }
+
+      throw error
+    }
     if (Array.isArray(boundaries) && boundaries.length > 0) {
       await saveEpisodeBoundaries(jobId, boundaries)
       await jobRepo.markStepCompleted(jobId, 'episode')
@@ -268,9 +355,27 @@ export class AnalyzePipeline {
       // Generate layout for each episode
       const episodeNumbers = boundaries.map((b) => b.episodeNumber).sort((a, b) => a - b)
       for (const ep of episodeNumbers) {
-        await generateEpisodeLayout(jobId, ep, {
-          isDemo: options.isDemo,
-        })
+        try {
+          await generateEpisodeLayout(jobId, ep, {
+            isDemo: options.isDemo,
+          })
+        } catch (layoutError) {
+          const errorMessage =
+            layoutError instanceof Error ? layoutError.message : String(layoutError)
+          logger.error('Episode layout generation failed', {
+            jobId,
+            episodeNumber: ep,
+            error: errorMessage,
+          })
+
+          // ジョブステータスを失敗に更新
+          await jobRepo.updateStatus(
+            jobId,
+            'failed',
+            `Episode ${ep} layout generation failed: ${errorMessage}`,
+          )
+          throw layoutError
+        }
         // デモやテスト環境では重いレンダリングをスキップ
         const shouldRender = !options.isDemo && process.env.NODE_ENV !== 'test'
         if (shouldRender) {

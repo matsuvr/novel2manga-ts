@@ -66,7 +66,7 @@ describe('CanvasRenderer vertical dialogue scaling', () => {
           page_number: 1,
           panels: [
             {
-              id: 1,
+              id: 'scene1',
               position: { x: 0, y: 0 },
               size: { width: 0.5, height: 0.5 },
               content: 'c',

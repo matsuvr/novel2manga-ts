@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 // Cerebras-compatible schema: avoid z.preprocess() which creates complex $defs references
 export const ScriptLineSchema = z.object({
-  index: z.number().int().nonnegative(),
+  index: z.number().int().nonnegative().optional(), // LLM output may not include index
   type: z.enum(['dialogue', 'thought', 'narration', 'stage']).or(
     z.string().transform((v) => {
       const t = String(v).toLowerCase()
@@ -12,10 +12,23 @@ export const ScriptLineSchema = z.object({
     }),
   ),
   speaker: z.string().default('').optional(),
+  character: z.string().optional(), // LLM uses 'character' instead of 'speaker'
   text: z.string().default(''),
 })
 
-export const ScriptSchema = z.object({ script: z.array(ScriptLineSchema) })
+export const ScriptSchema = z.object({
+  title: z.string().optional(),
+  scenes: z.array(
+    z.object({
+      id: z.string().optional(), // LLM output includes string scene IDs like "scene1"
+      setting: z.string().optional(),
+      description: z.string().optional(),
+      script: z.array(ScriptLineSchema).optional(),
+      lines: z.array(ScriptLineSchema).optional(), // 互換性のため両方サポート
+      content: z.array(ScriptLineSchema).optional(), // LLM output uses 'content' instead of 'script'/'lines'
+    }),
+  ),
+})
 
 export type Script = z.infer<typeof ScriptSchema>
 export type ScriptLine = z.infer<typeof ScriptLineSchema>

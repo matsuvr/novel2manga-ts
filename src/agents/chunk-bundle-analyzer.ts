@@ -63,6 +63,8 @@ interface ChunkWithAnalysis {
   analysis: ChunkAnalysisResult
 }
 
+// DEPRECATED: This function is no longer used in the current flow
+// The correct flow is: textAnalysis → narrativeArcAnalysis → scriptConversion → pageBreakEstimation
 export async function analyzeChunkBundle(
   chunksWithAnalyses: ChunkWithAnalysis[],
 ): Promise<BundleAnalysisResult> {

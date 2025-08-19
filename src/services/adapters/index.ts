@@ -162,7 +162,8 @@ export async function demoLayout(
 export async function demoRender(
   input: z.infer<typeof zDemoRenderInput>,
 ): Promise<z.infer<typeof zDemoRenderOutput>> {
-  const res = await fetch(`${input.baseUrl}/api/render`, {
+  // デモ用ルートは render API に demo=1 を付与して、DB/YAML 依存を避ける
+  const res = await fetch(`${input.baseUrl}/api/render?demo=1`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

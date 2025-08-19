@@ -21,6 +21,7 @@ import {
   renderStatus,
   tokenUsage,
 } from '@/db/schema'
+import { getLogger } from '@/infrastructure/logging/logger'
 import type { TransactionPort, UnitOfWorkPort } from '@/repositories/ports'
 import type { JobProgress, JobStatus, JobStep } from '@/types/job'
 import { makeEpisodeId } from '@/utils/ids'
@@ -634,6 +635,13 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       fileSize?: number
     },
   ): Promise<void> {
+    const logger = getLogger().withContext({
+      service: 'DatabaseService',
+      method: 'updateRenderStatus',
+      jobId,
+      episodeNumber,
+      pageNumber,
+    })
     const now = new Date().toISOString()
     // Upsert page render status
     const existing = await this.db
@@ -651,6 +659,12 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       .limit(1)
 
     const wasRendered = Boolean(existing[0]?.isRendered)
+    logger.info('updateRenderStatus: upsert begin', {
+      previousRendered: wasRendered,
+      newRendered: status.isRendered,
+      hasImage: !!status.imagePath,
+      hasThumb: !!status.thumbnailPath,
+    })
 
     await this.db
       .insert(renderStatus)
@@ -690,9 +704,16 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
         .update(jobs)
         .set({ renderedPages: newRenderedPages, updatedAt: now })
         .where(eq(jobs.id, jobId))
+      logger.info('updateRenderStatus: incremented renderedPages', {
+        from: jobRow?.renderedPages || 0,
+        to: newRenderedPages,
+      })
 
       // If we know totalPages and all pages are rendered, mark job render completed
       const totalPages = jobRow?.totalPages || 0
+      if (totalPages === 0) {
+        logger.warn('updateRenderStatus: totalPages is 0; cannot determine completion yet')
+      }
       if (totalPages > 0 && newRenderedPages >= totalPages) {
         await this.db
           .update(jobs)
@@ -704,8 +725,32 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
             updatedAt: now,
           })
           .where(eq(jobs.id, jobId))
+        logger.info('updateRenderStatus: job render completed (threshold reached)', {
+          totalPages,
+          renderedPages: newRenderedPages,
+        })
       }
     }
+  }
+
+  // 補助: renderCompleted=false かつ totalPages>0 の候補ジョブを取得（簡易版: 全件からフィルタ）
+  async getIncompleteRenderJobs(): Promise<Job[]> {
+    const all = (await this.db.select().from(jobs).orderBy(desc(jobs.createdAt))) as Job[]
+    return all.filter((j) => !j.renderCompleted && (j.totalPages || 0) > 0)
+  }
+
+  // 補助: ジョブ単位の描画済みページ数を算出（render_statusでisRendered=trueの件数）
+  async countRenderedPagesByJob(jobId: string): Promise<number> {
+    const rows = await this.getAllRenderStatusByJob(jobId)
+    return rows.reduce((acc, r) => acc + (r.isRendered ? 1 : 0), 0)
+  }
+
+  // 補助: renderedPages を上書き
+  async setJobRenderedPages(jobId: string, renderedPagesCount: number): Promise<void> {
+    await this.db
+      .update(jobs)
+      .set({ renderedPages: renderedPagesCount, updatedAt: new Date().toISOString() })
+      .where(eq(jobs.id, jobId))
   }
 
   // Layout status upsert and job totalPages recompute helpers
