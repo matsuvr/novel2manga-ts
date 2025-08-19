@@ -1,34 +1,9 @@
-// エピソード設定の型
-interface EpisodeConfig {
-  targetCharsPerEpisode: number
-  minCharsPerEpisode: number
-  maxCharsPerEpisode: number
-  charsPerPage: number
-}
-
-// 遅延インポートでモック欠落に耐性を持たせる
-async function getEpisodeConfigSafe(): Promise<EpisodeConfig> {
-  try {
-    const mod = (await import('@/config')) as {
-      getEpisodeConfig?: () => EpisodeConfig
-    }
-    if (typeof mod.getEpisodeConfig === 'function') {
-      return mod.getEpisodeConfig()
-    }
-  } catch {
-    // ignore
-  }
-  return {
-    targetCharsPerEpisode: 1000,
-    minCharsPerEpisode: 500,
-    maxCharsPerEpisode: 2000,
-    charsPerPage: 300,
-  }
-}
-
+import { getEpisodeConfig } from '@/config'
 import type { ChunkAnalysisResult, ChunkData } from '@/types/chunk'
 import type { NarrativeAnalysisInput } from '@/types/episode'
 import type { Storage } from '@/utils/storage'
+
+const MAX_CHUNKS_PER_EPISODE = 20
 
 export interface PrepareNarrativeInputOptions {
   jobId: string
@@ -108,7 +83,7 @@ async function gatherChunkInputs(params: {
   let totalChars = 0
   let currentChunkIndex = startChunkIndex
 
-  while (totalChars < targetChars && chunks.length < 20) {
+  while (totalChars < targetChars && chunks.length < MAX_CHUNKS_PER_EPISODE) {
     const chunkInput = await loadChunkInput(jobId, currentChunkIndex, storages)
     if (!chunkInput) break
 
@@ -135,7 +110,7 @@ async function gatherChunkInputs(params: {
 export async function prepareNarrativeAnalysisInput(
   options: PrepareNarrativeInputOptions,
 ): Promise<NarrativeAnalysisInput | null> {
-  const episodeConfig = await getEpisodeConfigSafe()
+  const episodeConfig = getEpisodeConfig()
   const {
     jobId,
     startChunkIndex,
@@ -178,24 +153,7 @@ export async function prepareNarrativeAnalysisInput(
 }
 
 export function calculateEstimatedPages(charCount: number): number {
-  // 同様に安全に取得
-  const defaultCfg: EpisodeConfig = {
-    targetCharsPerEpisode: 1000,
-    minCharsPerEpisode: 500,
-    maxCharsPerEpisode: 2000,
-    charsPerPage: 300,
-  }
-  const cfgPromise = getEpisodeConfigSafe().catch(() => defaultCfg)
-  // 注意: 同期関数だが、ここではデフォルト値で推定しつつ副作用なく対応
-  // 厳密な値が必要なコードパスでは非同期版を使用
-  const globalWithConfig = globalThis as typeof globalThis & {
-    __episodeCfg?: EpisodeConfig
-  }
-  const cfg: EpisodeConfig = globalWithConfig.__episodeCfg || defaultCfg
-  void cfgPromise.then((c) => {
-    globalWithConfig.__episodeCfg = c
-  })
-  const charsPerPage = cfg.charsPerPage ?? 300
+  const { charsPerPage } = getEpisodeConfig()
   return Math.round(charCount / charsPerPage)
 }
 
