@@ -17,7 +17,18 @@ const isScenarioOutput = (data: unknown): data is ScenarioOutput => {
   return res.renderKey === undefined || typeof res.renderKey === 'string'
 }
 
-test.describe('Rendering API', () => {
+const isScenarioOutput = (data: unknown): data is ScenarioOutput => {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    (!('result' in data) ||
+      (typeof (data as { result: unknown }).result === 'object' &&
+        (data as { result: unknown }).result !== null &&
+        'renderKey' in (data as { result: unknown }).result &&
+        typeof (data as { result: { renderKey: unknown } }).result.renderKey ===
+          'string'))
+  )
+}
   test('returns rendered image for demo scenario', async ({ request, baseURL }) => {
     const scenarioRes = await request.post('/api/scenario/run', {
       data: {
