@@ -10,5 +10,7 @@ export interface Env {
   RENDERS_STORAGE: R2Bucket
   OUTPUTS_STORAGE: R2Bucket
   CACHE: KVNamespace
+  NEXT_INC_CACHE_KV: KVNamespace
+  NEXT_TAG_CACHE_D1: D1Database
   ENVIRONMENT: string
 }

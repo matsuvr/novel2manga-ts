@@ -22,9 +22,19 @@ binding = "CACHE"
 id = "45024d55bd654f8fad87d854c4171868"
 preview_id = "5d1480c30cd04fdc95ed18d741c9531b"
 
+[[kv_namespaces]]
+binding = "NEXT_INC_CACHE_KV"
+id = "45024d55bd654f8fad87d854c4171868"
+preview_id = "5d1480c30cd04fdc95ed18d741c9531b"
+
 # D1データベースの設定（必要に応じて）
 [[d1_databases]]
 binding = "DB"
+database_name = "novel2manga"
+database_id = "f920ec55-c48d-4f3a-85e3-c1a8032962a7"
+
+[[d1_databases]]
+binding = "NEXT_TAG_CACHE_D1"
 database_name = "novel2manga"
 database_id = "f920ec55-c48d-4f3a-85e3-c1a8032962a7"
 

@@ -122,3 +122,10 @@
 - [x] Bubble style decision uses only text punctuation, not `emotion`
 - [x] Update unit tests to remove normalization expectations
 - [x] Update design.md to document free-text policy and style heuristics
+
+## New (2025-08-19): Cloudflare Performance Tuning
+
+- [x] Configure KV-based incremental cache via OpenNext
+- [x] Enable D1 tag cache for revalidation tracking
+- [x] Turn on cache interception in OpenNext config
+- [x] Add matching bindings to wrangler.toml and env types

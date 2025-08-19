@@ -19,6 +19,7 @@
       "**/wrangler-*.log",
       "**/logs/**",
       "**/*.log",
+      "cloudflare-env.d.ts",
       "**/*.jsonc",
       "**/tsconfig*.json",
       "**/test/**",
@@ -151,6 +152,11 @@
           }
         }
       }
+    },
+    {
+      "includes": ["cloudflare-env.d.ts"],
+      "linter": { "enabled": false },
+      "formatter": { "enabled": false }
     }
   ]
 }

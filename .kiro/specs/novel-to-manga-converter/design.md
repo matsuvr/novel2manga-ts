@@ -330,6 +330,10 @@ HealthCheckService では DB と Storage をそれぞれ軽量 probe し、失�
 
 **合計: 23 passed, 3 skipped**
 
+## Cloudflareデプロイのパフォーマンス最適化
+
+OpenNextのCloudflareアダプター設定でKVインクリメンタルキャッシュとD1タグキャッシュを採用し、`enableCacheInterception`を有効化してエッジでのキャッシュヒット率を向上させる。
+
 ## トラブルシューティング
 
 ### よくある問題

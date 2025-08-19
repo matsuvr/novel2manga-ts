@@ -9,6 +9,7 @@
 **/.local-storage/**
 **/logs/**
 **/*.log
+cloudflare-env.d.ts
 
 # テスト関連ファイル（再帰）
 **/test/**
