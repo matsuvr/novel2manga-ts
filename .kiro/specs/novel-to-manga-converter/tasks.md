@@ -13,7 +13,7 @@
 - [x] Strengthen UI error handling (no silent catches; contextual logs).
 - [x] MCP verification: Cloudflare/Workers docs cross-check (no breaking changes impacting this PR)
 - [ ] E2E: add a happy-path scenario for resume after one batch (progress present) then completion.
-- [ ] Documentation: update README usage notes if needed.
+- [x] Documentation: update README usage notes if needed.
 - [x] Add YAML-stage layout validator and reference fallback
   - [x] Implement panel bounds/overlap/band-partition checks
   - [x] Clamp + normalize panels into [0,1]
@@ -28,7 +28,6 @@
 
 - [ ] E2E: add a happy-path scenario for resume after one batch (progress present) then completion.
 - [ ] E2E: assert Normalized badges appear when validation data exists
-- [ ] Documentation: update README usage notes if needed.
 - [ ] Vertical Dialogue Rendering: add E2E happy path with mocked API
 - [ ] Vertical Dialogue Rendering: update README with feature flag/env placeholders (no secrets)
 - [ ] Vertical Dialogue Rendering: cache tuning and concurrency guard if needed
