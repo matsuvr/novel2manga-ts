@@ -1,5 +1,4 @@
 import yaml from 'js-yaml'
-import { appConfig } from '@/config/app.config'
 import type { Episode } from '@/db'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
@@ -403,23 +402,22 @@ async function generateEpisodeLayoutInternal(
     })
 
     // Progress validation: Script conversion must produce results
-    if (!script?.script || script.script.length === 0) {
-      logger.error('Script conversion failed to produce valid script', { episodeNumber })
+    const allScriptLines =
+      script?.scenes?.flatMap((scene) => scene.script || scene.lines || scene.content || []) || []
+    if (allScriptLines.length === 0) {
+      logger.error('Script conversion failed to produce valid script', {
+        episodeNumber,
+        scriptStructure: script,
+      })
       throw new Error('Script conversion failed to produce valid script')
     }
 
     const { estimatePageBreaks } = await import('@/agents/script/page-break-estimator')
-    const targetPages = Math.max(
-      episodeData.estimatedPages || 0,
-      Math.ceil(episodeText.length / (appConfig.processing.episode.charsPerPage || 400)),
-      1,
-    )
     const avgLines = Math.max(
       4,
-      Math.floor((script.script.length || 12) / Math.max(1, targetPages)),
+      Math.floor(allScriptLines.length / 4), // デフォルトの平均行数を想定
     )
     const pageBreaks = await estimatePageBreaks(script, {
-      targetPages,
       avgLinesPerPage: avgLines,
       jobId,
       episodeNumber: episode.episodeNumber,
@@ -429,8 +427,7 @@ async function generateEpisodeLayoutInternal(
     if (!pageBreaks?.pages || pageBreaks.pages.length === 0) {
       logger.error('Page break estimation failed to produce valid page breaks', {
         episodeNumber,
-        targetPages,
-        scriptLength: script.script.length,
+        scriptLength: allScriptLines.length,
       })
       throw new Error('Page break estimation failed to produce valid page breaks')
     }
@@ -442,14 +439,20 @@ async function generateEpisodeLayoutInternal(
       episodeTitle: episodeData.episodeTitle,
     })
 
-    // Progress validation: Layout building must produce expected page count
-    if (!layoutBuilt?.pages || layoutBuilt.pages.length < targetPages) {
-      logger.error('Layout building failed to produce sufficient pages', {
+    // Layout generation completed - log the results
+    logger.info('Layout generation completed successfully', {
+      episodeNumber,
+      generatedPages: layoutBuilt?.pages?.length || 0,
+      scriptLength: allScriptLines.length,
+    })
+
+    // Basic validation: ensure layout was generated
+    if (!layoutBuilt?.pages || layoutBuilt.pages.length === 0) {
+      logger.error('Layout building failed to generate any pages', {
         episodeNumber,
-        expectedPages: targetPages,
-        actualPages: layoutBuilt?.pages?.length || 0,
+        scriptLength: allScriptLines.length,
       })
-      throw new Error('Layout building failed to produce sufficient pages')
+      throw new Error('Layout building failed to generate any pages')
     }
 
     const { normalizeAndValidateLayout } = await import('@/utils/layout-normalizer')

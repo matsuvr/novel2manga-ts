@@ -1,9 +1,9 @@
 import Cerebras from '@cerebras/cerebras_cloud_sdk'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import {
+  type JsonSchemaNode,
   transformForCerebrasCompatibility,
   validateCerebrasSchema,
-  type JsonSchemaNode,
 } from '../../llm/providers/cerebras-utils'
 import type { GenerateStructuredParams, LlmClient } from './types'
 
@@ -66,42 +66,93 @@ export class CerebrasClient implements LlmClient {
     }
 
     try {
-      const chatCompletion = await this.client.chat.completions.create({
-        model: this.model,
-        messages,
-        max_tokens: options.maxTokens,
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: spec.schemaName || 'response',
-            strict: true,
-            schema: jsonSchema,
+      let completion: unknown
+      try {
+        completion = await this.client.chat.completions.create({
+          model: this.model,
+          messages,
+          max_tokens: options.maxTokens,
+          response_format: {
+            type: 'json_schema',
+            json_schema: {
+              name: spec.schemaName || 'response',
+              strict: true,
+              schema: jsonSchema,
+            },
           },
-        },
-      })
+        })
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        // Structured output state machine の更新タイムアウトなど 4xx エラー時は JSON モードへフォールバック
+        if (
+          /Timed out while updating the structured output state machine/i.test(msg) ||
+          /BadRequest|HTTP\s*400/.test(msg)
+        ) {
+          // UI方針: フォールバックは必ず明示。ここではログで通知し、上位のUI連携は別チケットで追加する。
+          console.warn(
+            JSON.stringify({
+              ts: new Date().toISOString(),
+              level: 'warn',
+              service: 'llm-cerebras',
+              msg: 'Structured output failed; falling back to json_object mode',
+              error: msg,
+            }),
+          )
+          const jsonMode = await this.client.chat.completions.create({
+            model: this.model,
+            messages,
+            max_tokens: options.maxTokens,
+            response_format: { type: 'json_object' },
+          })
+          completion = jsonMode
+        } else {
+          throw e
+        }
+      }
 
       // Type safety: ensure choices exists and has elements
-      if (
-        !chatCompletion.choices ||
-        !Array.isArray(chatCompletion.choices) ||
-        chatCompletion.choices.length === 0
-      ) {
+      type ChoicesLike = Array<{ message?: { content?: string | null } }>
+      const choices = (completion as unknown as { choices?: ChoicesLike | null | undefined })
+        ?.choices
+      if (!Array.isArray(choices) || choices.length === 0) {
         throw new Error('cerebras: no choices in response')
       }
 
-      const choice = chatCompletion.choices[0]
-      if (!choice?.message?.content) {
+      const choice = choices[0]
+      const contentRaw = choice?.message?.content
+      if (typeof contentRaw !== 'string' || !contentRaw) {
         throw new Error('cerebras: empty or non-text response')
       }
-      const content = choice.message.content
+      const content = contentRaw as string
 
-      const parsed = JSON.parse(content)
       try {
-        return spec.schema.parse(parsed)
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
+        const parsed = JSON.parse(content)
+        try {
+          return spec.schema.parse(parsed)
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e)
+          throw new Error(
+            `cerebras: schema validation failed: ${msg}. Raw: ${truncate(content, 400)}`,
+          )
+        }
+      } catch (jsonError) {
+        // JSON パースエラー時に詳細なエラー情報をログ出力
+        const errorMsg = jsonError instanceof Error ? jsonError.message : String(jsonError)
+        console.error(
+          JSON.stringify({
+            ts: new Date().toISOString(),
+            level: 'error',
+            service: 'llm-cerebras',
+            operation: 'JSON.parse',
+            msg: 'JSONパースエラーが発生しました。LLMレスポンスの形式を確認してください。',
+            error: errorMsg,
+            rawContent: truncate(content, 500),
+            contentLength: content.length,
+            model: this.model,
+          }),
+        )
         throw new Error(
-          `cerebras: schema validation failed: ${msg}. Raw: ${truncate(content, 400)}`,
+          `cerebras: JSON parse failed: ${errorMsg}. Content preview: ${truncate(content, 200)}`,
         )
       }
     } catch (e) {

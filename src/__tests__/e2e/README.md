@@ -65,16 +65,14 @@ npm run test:e2e
 
 ### 特定のブラウザでのテスト実行
 
+現在の既定設定では Chromium（Desktop Chrome）のみ実行対象です。
+
 ```bash
-# Chrome でのみ実行
+# 既定（Chromium のみ）
 npx playwright test --project=chromium
-
-# Firefox でのみ実行
-npx playwright test --project=firefox
-
-# Safari (WebKit) でのみ実行
-npx playwright test --project=webkit
 ```
+
+他ブラウザ（Firefox / WebKit）での実行はコスト削減のため無効化しています。必要な場合は、一時的に `playwright.config.ts` の `projects` に対象ブラウザを追加してください。
 
 ### 特定のテストファイルの実行
 
@@ -153,8 +151,7 @@ npm run dev
 
 ### 4. クロスブラウザテスト
 
-- Chrome、Firefox、Safari での動作確認
-- モバイル端末での動作確認
+コスト最適化のため、デフォルトでは Chromium のみをサポートしています。クロスブラウザ検証が必要な場合は、ローカルブランチで `playwright.config.ts` の `projects` に `firefox` / `webkit`（および必要なモバイルデバイス）を一時追加して実行してください。
 
 ### 5. パフォーマンステスト
 

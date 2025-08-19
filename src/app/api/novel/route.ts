@@ -1,4 +1,6 @@
 import type { NextRequest } from 'next/server'
+export const runtime = 'nodejs'
+
 import { adaptAll } from '@/repositories/adapters'
 import { NovelRepository } from '@/repositories/novel-repository'
 import { getDatabaseService } from '@/services/db-factory'

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Storage } from '@/utils/storage'
 import type { ChunkAnalysisResult } from '@/types/chunk'
+import type { Storage } from '@/utils/storage'
 
 const analysisResult: ChunkAnalysisResult = {
   chunkIndex: 0,

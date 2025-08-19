@@ -40,8 +40,10 @@ export function buildLayoutFromAssignment(
     const template = selectLayoutTemplateByCountRandom(Math.max(1, p.panelCount))
     let nextId = 1
     const panels: Panel[] = p.panels.map((pp, idx) => {
+      const allScriptLines =
+        script.scenes?.flatMap((scene) => scene.script || scene.lines || []) || []
       const lines: ScriptLine[] = pp.lines
-        .map((i) => script.script.find((s) => s.index === i))
+        .map((i) => allScriptLines.find((s) => s.index === i))
         .filter((v): v is ScriptLine => !!v)
 
       const narratives = lines.filter((l) => l.type === 'narration' || l.type === 'stage')
