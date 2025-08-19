@@ -130,10 +130,12 @@ describe('cerebras-utils', () => {
       expect(result).toEqual({
         type: 'object',
         additionalProperties: false,
+        required: ['user', 'items'],
         properties: {
           user: {
             type: 'object',
             additionalProperties: false,
+            required: ['name', 'tags'],
             properties: {
               name: {
                 anyOf: [{ type: 'string' }, { type: 'null' }],
@@ -149,6 +151,7 @@ describe('cerebras-utils', () => {
             items: {
               type: 'object',
               additionalProperties: false,
+              required: ['id'],
               properties: {
                 id: {
                   anyOf: [{ type: 'string' }, { type: 'number' }],
@@ -197,7 +200,7 @@ describe('cerebras-utils', () => {
           name: { type: 'string' },
           age: { type: 'number' },
         },
-        required: ['name'],
+        required: ['name', 'age'],
         additionalProperties: false,
       }
 
@@ -324,7 +327,7 @@ describe('cerebras-utils', () => {
                 type: 'number',
               },
             },
-            required: ['name'],
+            required: ['name', 'age'],
           },
         },
       })

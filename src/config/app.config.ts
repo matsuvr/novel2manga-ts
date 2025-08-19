@@ -204,7 +204,11 @@ export const appConfig = {
       {{episodeText}}`,
     },
     pageBreakEstimation: {
-      systemPrompt: `以下はマンガにするための脚本です。重要度や見所が強いシーンは1ページ1コマ、見所になるシーンは1ページ2～3コマ、状況説明が主となるシーンは1ページ4～6コマにして分割します。JSONのみ。`,
+      systemPrompt: `以下はマンガにするための脚本です。重要度や見所が強いシーンは1ページ1コマ、見所になるシーンは1ページ2～3コマ、状況説明が主となるシーンは1ページ4～6コマにして分割します。
+
+CRITICAL: You must return a single JSON object with a "pages" property containing an array of pages. Do NOT return an array of objects. The response must start with { and end with }, not [ and ].
+
+Output format: {"pages": [...]}, not [{"pages": [...]}]. JSONのみ。`,
       userPromptTemplate: `脚本JSON:
        {{scriptJson}}
 
@@ -217,9 +221,9 @@ export const appConfig = {
       "panels": [
         {
           "panelIndex": 1,
-          "content": "Panel 1 content",
+          "content": "Panel 1 の内容",
           "dialogue": [
-            { "speaker": "Speaker 1", "lines": "Dialogue 1" }
+            { "speaker": "話者1", "lines": "発話1" }
           ]
         }
       ]
@@ -230,16 +234,16 @@ export const appConfig = {
       "panels": [
         {
           "panelIndex": 1,
-          "content": "Panel 2 content",
+          "content": "Panel 2 内容",
           "dialogue": [
-            { "speaker": "Speaker 2", "lines": "Dialogue 2" }
+            { "speaker": "話者 2", "lines": "セリフ 2" }
           ]
         },
         {
           "panelIndex": 2,
-          "content": "Panel 3 content",
+          "content": "Panel 3 内容",
           "dialogue": [
-            { "speaker": "Speaker 3", "lines": "Dialogue 3" }
+            { "speaker": "話者 3", "lines": "セリフ 3" }
           ]
         }
       ]
@@ -247,13 +251,10 @@ export const appConfig = {
   ]
 }
 
+IMPORTANT: Return exactly one JSON object starting with { "pages": and ending with }. Do NOT wrap it in an array.
 
       `,
     },
-    // panelAssignment: {
-    //   systemPrompt: 'Decide panelCount per page and assign script line indexes to panels. Return pages[].panels[].lines. JSON only.',
-    //   userPromptTemplate: 'Script JSON:\n{{scriptJson}}\nPage breaks JSON:\n{{pageBreaksJson}}'
-    // }
   },
 
   // ストレージ設定

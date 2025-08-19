@@ -11,11 +11,18 @@ import { generateEpisodeLayout } from '@/services/application/layout-generation'
 // Mock LLM modules to avoid API key requirements
 vi.mock('@/agents/script/script-converter', () => ({
   convertEpisodeTextToScript: vi.fn().mockResolvedValue({
-    script: [
+    title: 'Test Script',
+    scenes: [
       {
-        index: 0,
-        type: 'stage',
-        text: 'Mock script line for testing',
+        id: 'scene1',
+        description: 'Mock scene',
+        content: [
+          {
+            index: 0,
+            type: 'stage',
+            text: 'Mock script line for testing',
+          },
+        ],
       },
     ],
   }),
@@ -473,11 +480,11 @@ describe('Layout Generation Edge Cases', () => {
 
       await expect(
         generateEpisodeLayout('test-job', 1, { isDemo: true }, mockPorts, mockLogger),
-      ).rejects.toThrow('Layout building failed to produce sufficient pages')
+      ).rejects.toThrow('Layout building failed to generate any pages')
 
       // Verify error was logged
       expect(mockLogger.error).toHaveBeenCalledWith(
-        'Layout building failed to produce sufficient pages',
+        'Layout building failed to generate any pages',
         expect.objectContaining({
           episodeNumber: 1,
         }),
@@ -485,22 +492,30 @@ describe('Layout Generation Edge Cases', () => {
     })
 
     it('should handle insufficient page generation', async () => {
-      // Set mock to return insufficient pages (1 page instead of 4)
+      // Set mock to return insufficient pages (1 page instead of expected)
+      // With our changes, this should now succeed (no longer throws error)
       mockPanelAssignmentBehavior = 'insufficient'
 
       const mockPorts = createMockStoragePorts(false)
 
-      await expect(
-        generateEpisodeLayout('test-job', 1, { isDemo: true }, mockPorts, mockLogger),
-      ).rejects.toThrow('Layout building failed to produce sufficient pages')
+      const result = await generateEpisodeLayout(
+        'test-job',
+        1,
+        { isDemo: true },
+        mockPorts,
+        mockLogger,
+      )
 
-      // Verify error was logged
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        'Layout building failed to produce sufficient pages',
+      // Should succeed and return the generated layout
+      expect(result).toBeDefined()
+      expect(result.layout.pages).toHaveLength(1)
+
+      // Verify info log was called (no longer error)
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        'Layout generation completed successfully',
         expect.objectContaining({
           episodeNumber: 1,
-          expectedPages: 4, // Based on episode mock estimatedPages
-          actualPages: 1,
+          generatedPages: 1,
         }),
       )
     })

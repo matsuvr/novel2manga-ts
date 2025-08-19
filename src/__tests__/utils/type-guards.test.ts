@@ -18,7 +18,7 @@ describe('type-guards: isMangaLayout', () => {
           page_number: 1,
           panels: [
             {
-              id: 1,
+              id: 'scene1',
               position: { x: 0, y: 0 },
               size: { width: 1, height: 1 },
               content: 'desc',

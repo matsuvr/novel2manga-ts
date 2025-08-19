@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { getLlmStructuredGenerator } from '@/agent/structured-generator'
-import { analyzeChunkBundle, type BundleAnalysisResult } from '@/agents/chunk-bundle-analyzer'
 import { getEpisodeConfig, getNarrativeAnalysisConfig } from '@/config'
 import type { IChunkRepository } from '@/domain/repositories/chunk-repository'
 import type { ChunkAnalysisResult } from '@/types/chunk'
@@ -161,35 +160,59 @@ export async function analyzeNarrativeArc(
 
   console.log(`Successfully prepared ${chunksWithAnalyses.length} chunk analyses`)
 
-  let bundleAnalysis: BundleAnalysisResult
-  try {
-    bundleAnalysis = await analyzeChunkBundle(chunksWithAnalyses)
-  } catch (error) {
-    console.error('Bundle analysis failed:', error)
-    throw new Error('Failed to perform bundle analysis before narrative arc analysis')
-  }
+  console.log('Proceeding directly to narrative arc analysis using chunk analyses...')
 
-  console.log('Bundle analysis completed, proceeding to narrative arc analysis...')
+  // チャンクの分析結果から直接キャラクターや重要な場面を抽出
+  const allCharacters = new Map<string, { role: string; descriptions: string[] }>()
+  const allHighlights: Array<{ text: string; importance: number; description: string }> = []
+  const allDialogues: Array<{ speaker: string; text: string }> = []
 
-  // 統合分析結果を使用してプロンプトを作成
-  const characterList = bundleAnalysis.mainCharacters
-    // レポート指摘: 'char' が implicitly any。型を明示（BundleAnalysisResultのmainCharacters要素型）。
-    .map((char: BundleAnalysisResult['mainCharacters'][number]) => `${char.name}（${char.role}）`)
+  // 各チャンクの分析結果を集約
+  chunksWithAnalyses.forEach((chunk) => {
+    // キャラクター情報の集約
+    chunk.analysis.characters.forEach((char) => {
+      if (!allCharacters.has(char.name)) {
+        allCharacters.set(char.name, { role: char.role, descriptions: [] })
+      }
+      const charData = allCharacters.get(char.name)
+      if (charData && char.description) {
+        charData.descriptions.push(char.description)
+      }
+    })
+
+    // ハイライトの集約
+    chunk.analysis.highlights.forEach((highlight) => {
+      allHighlights.push({
+        text: highlight.content,
+        importance: highlight.importance,
+        description: highlight.description,
+      })
+    })
+
+    // 対話の集約
+    chunk.analysis.dialogues.forEach((dialogue) => {
+      allDialogues.push({
+        speaker: dialogue.speakerId,
+        text: dialogue.text,
+      })
+    })
+  })
+
+  // プロンプト用にフォーマット
+  const characterList = Array.from(allCharacters.entries())
+    .map(([name, data]) => `${name}（${data.role}）`)
     .join('、')
 
-  const highlightsInfo = bundleAnalysis.highlights
-    .filter((h: BundleAnalysisResult['highlights'][number]) => h.importance >= 6)
-    .map(
-      (h: BundleAnalysisResult['highlights'][number]) =>
-        `- ${h.text} (重要度: ${h.importance})${h.context ? `\n  ${h.context}` : ''}`,
-    )
+  const highlightsInfo = allHighlights
+    .filter((h) => h.importance >= 6)
+    .sort((a, b) => b.importance - a.importance)
+    .slice(0, 10)
+    .map((h) => `- ${h.text} (重要度: ${h.importance})\n  ${h.description}`)
     .join('\n')
 
-  const characterActions = bundleAnalysis.keyDialogues
-    .map(
-      (d: BundleAnalysisResult['keyDialogues'][number]) =>
-        `${d.speaker}: 「${d.text}」\n  意味: ${d.significance}`,
-    )
+  const characterActions = allDialogues
+    .slice(0, 8)
+    .map((d) => `${d.speaker}: 「${d.text}」`)
     .join('\n\n')
 
   // プロンプトのカスタマイズ
@@ -214,7 +237,7 @@ export async function analyzeNarrativeArc(
     .replace('{{minPages}}', minPages.toString())
     .replace('{{maxPages}}', maxPages.toString())
     .replace('{{characterList}}', characterList || 'なし')
-    .replace('{{overallSummary}}', bundleAnalysis.summary || 'なし')
+    .replace('{{overallSummary}}', 'チャンク分析結果から抽出された情報')
     .replace('{{highlightsInfo}}', highlightsInfo || 'なし')
     .replace('{{characterActions}}', characterActions || 'なし')
     .replace('{{fullText}}', fullText)

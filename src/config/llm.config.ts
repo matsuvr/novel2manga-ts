@@ -18,15 +18,15 @@ export interface ProviderConfig {
 export function getDefaultProvider(): LLMProvider {
   // Tests should use Gemini to avoid expensive or flaky external calls
   if (process.env.NODE_ENV === 'test') {
-    return 'cerebras'
+    return 'groq'
   }
-  return 'cerebras'
+  return 'groq'
 }
 
 // Provider fallback chain (first item is primary fallback)
 export function getFallbackChain(): LLMProvider[] {
   // Config-driven fallback order
-  const chain: LLMProvider[] = ['cerebras', 'groq', 'openrouter', 'openai']
+  const chain: LLMProvider[] = ['groq', 'openai']
   return chain
 }
 
@@ -34,14 +34,15 @@ export function getFallbackChain(): LLMProvider[] {
 export const providers: Record<LLMProvider, ProviderConfig> = {
   cerebras: {
     apiKey: process.env.CEREBRAS_API_KEY,
-    model: 'qwen-3-235b-a22b-instruct-2507', // Use a known-valid Cerebras chat model to avoid 404
+    // Structured outputs対応が安定している公開モデルに合わせる（ドキュメント例に準拠）
+    model: 'llama-4-scout-17b-16e-instruct',
     maxTokens: 8192,
     timeout: 30_000,
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY,
     model: 'gemini-2.5-flash-lite',
-    maxTokens: 8192,
+    maxTokens: 4096,
     timeout: 30_000,
   },
   openai: {
@@ -53,12 +54,12 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
   groq: {
     apiKey: process.env.GROQ_API_KEY,
     model: 'openai/gpt-oss-120b',
-    maxTokens: 8192,
+    maxTokens: 65536,
     timeout: 30_000,
   },
   openrouter: {
     apiKey: process.env.OPENROUTER_API_KEY,
-    model: 'openai/gpt-oss-120b',
+    model: 'mistralai/mistral-small-3.2-24b-instruct:free',
     baseUrl: 'https://openrouter.ai/api/v1',
     maxTokens: 8192,
     timeout: 30_000,
