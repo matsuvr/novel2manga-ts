@@ -5,7 +5,7 @@ import { defineConfig, devices } from '@playwright/test'
  * Tests the complete user workflow from novel input to manga layout generation
  */
 export default defineConfig({
-  testDir: './src/__tests__/e2e',
+  testDir: './tests/integration/e2e',
 
   /* 長時間の処理を考慮したタイムアウト設定 */
   timeout: 5 * 60 * 1000, // 5分
