@@ -20,4 +20,4 @@ Notes
 - Local pre-push hooks are not used; CI gates the merge.
 - JSON/JSONC are formatted by Prettier; biome.json is formatted by Biome.
 - AI呼び出しは Mastra/ai-sdk を使用せず、OpenAI SDK と Google GenAI SDK を直接利用します。
-- モデル指定について: `gpt-5-mini` は直近のリリースで追加されたモデルです。レビューで古い情報が示される場合がありますが、最新のOpenAI SDKで利用可能です。
+- モデル指定について: `gpt-5-nano` は直近のリリースで追加されたモデルです。レビューで古い情報が示される場合がありますが、最新のOpenAI SDKで利用可能です。

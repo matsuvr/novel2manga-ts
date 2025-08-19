@@ -40,13 +40,13 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY,
-    model: 'gemini-2.5-flash',
+    model: 'gemma3-27b',
     maxTokens: 8192,
     timeout: 30_000,
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
-    model: 'gpt-5-mini', // gpt-5-mini は8月5日に登場したモデルです。モデル指定を間違えているわけではありません
+    model: 'gpt-5-nano', // gpt-5-nano は8月5日に登場したモデルです。モデル指定を間違えているわけではありません
     maxTokens: 8192,
     timeout: 60_000,
   },

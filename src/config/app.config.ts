@@ -339,7 +339,7 @@ export const appConfig = {
     // タイムアウト設定
     timeout: {
       default: 30000, // デフォルトタイムアウト（ミリ秒）
-      textAnalysis: 180000, // テキスト分析タイムアウト（gpt-5-mini-2025-08-07用に3分に増加）
+      textAnalysis: 180000, // テキスト分析タイムアウト（gpt-5-nano-2025-08-07用に3分に増加）
       narrativeAnalysis: 90000, // 物語弧分析タイムアウト
       layoutGeneration: 45000, // レイアウト生成タイムアウト
       imageGeneration: 120000, // 画像生成タイムアウト
