@@ -140,10 +140,10 @@ export default function HomeClient() {
         episodes?: Episode[]
       }
       setEpisodes(data.episodes || [])
-      // 永続URLへ遷移（小説IDが利用可能な場合）。
+      // 永続URLへ遷移（小説IDとジョブIDが利用可能な場合）。
       // ただしブラウザのポップアップ/ナビブロック対策で、遷移待ちビューを出す。
-      if (novelIdState) {
-        const url = `/novel/${encodeURIComponent(novelIdState)}/results`
+      if (novelIdState && jobId) {
+        const url = `/novel/${encodeURIComponent(novelIdState)}/results/${encodeURIComponent(jobId)}`
         setPendingRedirect(url)
         setViewMode('redirecting')
         // 自動遷移を試みる

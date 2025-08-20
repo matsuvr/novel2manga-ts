@@ -19,5 +19,13 @@ export async function estimatePageBreaks(
     schema: PageBreakSchema as unknown as z.ZodTypeAny,
     schemaName: 'PageBreakPlan',
   })
-  return result as PageBreakPlan
+
+  // Handle case where LLM returns an array instead of object
+  let pageBreakPlan = result as PageBreakPlan
+  if (Array.isArray(result)) {
+    // If LLM returned an array, assume it's the pages array and wrap it in an object
+    pageBreakPlan = { pages: result as PageBreakPlan['pages'] }
+  }
+
+  return pageBreakPlan
 }

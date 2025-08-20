@@ -1,3 +1,4 @@
+import type { GenerateStructuredParams, LlmProvider } from '@/agents/llm/types'
 import type {
   LlmClient,
   LlmClientOptions,
@@ -33,6 +34,7 @@ export interface FakeLlmConfig {
 }
 
 export class FakeLlmClient implements LlmClient {
+  readonly provider: LlmProvider = 'fake'
   private config: FakeLlmConfig
   private responseIndex = 0
 
@@ -61,6 +63,32 @@ export class FakeLlmClient implements LlmClient {
 
     const response = this.getNextResponse()
     return this.normalizeResponse(response)
+  }
+
+  async generateStructured<T>({
+    systemPrompt,
+    userPrompt,
+    spec,
+    options: _options,
+  }: GenerateStructuredParams<T>): Promise<T> {
+    if (this.config.shouldThrow) {
+      throw new ProviderError(
+        this.config.errorMessage || 'Fake LLM generateStructured error',
+        'fake',
+      )
+    }
+
+    if (this.config.delay) {
+      await new Promise((resolve) => setTimeout(resolve, this.config.delay))
+    }
+
+    // テスト用の構造化レスポンス生成
+    return this.generateTestStructuredResponse(
+      spec.schemaName,
+      systemPrompt,
+      userPrompt,
+      spec.schema,
+    )
   }
 
   async embeddings(
@@ -128,6 +156,88 @@ export class FakeLlmClient implements LlmClient {
 
   setDelay(delay: number): void {
     this.config.delay = delay
+  }
+
+  // 構造化レスポンス生成のヘルパーメソッド
+  private generateTestStructuredResponse<T>(
+    schemaName: string,
+    _systemPrompt?: string,
+    _userPrompt?: string,
+    schema?: unknown,
+  ): T {
+    // schemaNameに基づいてテスト用の適切なレスポンスを生成
+    switch (schemaName) {
+      case 'Script':
+        return {
+          title: 'Test Script',
+          scenes: [
+            {
+              id: 'scene-1',
+              location: 'テスト場所',
+              time: '昼',
+              description: 'テスト用シーン',
+              script: [
+                { index: 1, type: 'narration', text: 'テストナレーション', speaker: null },
+                { index: 2, type: 'dialogue', text: 'テストセリフ', speaker: 'テストキャラ' },
+              ],
+            },
+          ],
+        } as T
+      case 'PageBreakPlan':
+        return {
+          pages: [
+            {
+              pageNumber: 1,
+              panelCount: 2,
+              panels: [
+                {
+                  panelIndex: 1,
+                  content: 'テストパネル1',
+                  dialogue: [{ speaker: 'テストキャラ', lines: 'テストセリフ1' }],
+                },
+                {
+                  panelIndex: 2,
+                  content: 'テストパネル2',
+                  dialogue: [{ speaker: 'テストキャラ', lines: 'テストセリフ2' }],
+                },
+              ],
+            },
+          ],
+        } as T
+      case 'PanelAssignmentPlan':
+        return {
+          pages: [
+            {
+              pageNumber: 1,
+              panelCount: 2,
+              panels: [
+                { panelIndex: 1, lines: [1, 2] },
+                { panelIndex: 2, lines: [3, 4] },
+              ],
+            },
+          ],
+        } as T
+      default: {
+        // 汎用的なテストオブジェクト
+        const testObj = {
+          message: 'test response',
+          success: true,
+          data: { test: true },
+        }
+
+        // schemaが提供されている場合は、そのスキーマに合わせようとする
+        if (schema && typeof (schema as { parse?: unknown }).parse === 'function') {
+          try {
+            return (schema as { parse: (obj: unknown) => T }).parse(testObj)
+          } catch {
+            // パースに失敗した場合は空のオブジェクトを返す
+            return {} as T
+          }
+        }
+
+        return testObj as T
+      }
+    }
   }
 }
 

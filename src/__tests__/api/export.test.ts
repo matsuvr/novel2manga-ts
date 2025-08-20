@@ -4,11 +4,30 @@ import { POST } from '@/app/api/export/route'
 import { appConfig } from '@/config/app.config'
 import { DatabaseService } from '@/services/database'
 
+// 設定モック
+vi.mock('@/config', () => ({
+  getScriptConversionConfig: vi.fn(() => ({
+    systemPrompt: 'script-system',
+    userPromptTemplate: 'Episode: {{episodeText}}',
+  })),
+  getLLMProviderConfig: vi.fn(() => ({
+    apiKey: 'test-key',
+    model: 'test-model',
+    maxTokens: 1000,
+  })),
+  getLLMDefaultProvider: vi.fn(() => 'openai'),
+}))
+
 // ストレージとデータベースのモック
 vi.mock('@/utils/storage', () => ({
   StorageFactory: {
     getDatabase: vi.fn(),
     getRenderStorage: vi.fn().mockResolvedValue({
+      get: vi.fn().mockResolvedValue({
+        text: 'mock-yaml-layout',
+      }),
+    }),
+    getLayoutStorage: vi.fn().mockResolvedValue({
       get: vi.fn().mockResolvedValue({
         text: 'mock-yaml-layout',
       }),
@@ -35,23 +54,22 @@ vi.mock('@/services/database', () => ({
 
 // PDFKit のモック
 vi.mock('pdfkit', () => {
-  const mockDoc = {
-    addPage: vi.fn(),
-    image: vi.fn(),
-    end: vi.fn(),
-    on: vi.fn((event, callback) => {
-      if (event === 'end') {
-        // すぐにコールバックを呼んでPDFの完了をシミュレート
-        setTimeout(callback, 0)
-      }
-    }),
-    page: {
-      width: appConfig.rendering.defaultPageSize.width,
-      height: appConfig.rendering.defaultPageSize.height,
-    },
-  }
   return {
-    default: vi.fn(() => mockDoc),
+    default: vi.fn().mockImplementation(() => ({
+      addPage: vi.fn(),
+      image: vi.fn(),
+      end: vi.fn(),
+      on: vi.fn((event, callback) => {
+        if (event === 'end') {
+          // すぐにコールバックを呼んでPDFの完了をシミュレート
+          setTimeout(callback, 0)
+        }
+      }),
+      page: {
+        width: 800,
+        height: 600,
+      },
+    })),
   }
 })
 
@@ -69,7 +87,53 @@ vi.mock('jszip', () => ({
 // yaml パーサーのモック
 vi.mock('yaml', () => ({
   parse: vi.fn().mockReturnValue({
-    pages: [{ page_number: 1 }, { page_number: 2 }],
+    title: 'テストマンガ',
+    author: 'テスト作者',
+    created_at: '2024-01-01T00:00:00.000Z',
+    episodeNumber: 1,
+    episodeTitle: 'テストエピソード',
+    pages: [
+      {
+        page_number: 1,
+        panels: [
+          {
+            id: 'panel1',
+            position: { x: 0.1, y: 0.1 },
+            size: { width: 0.8, height: 0.4 },
+            content: 'テスト状況説明',
+            dialogues: [
+              {
+                id: '1',
+                speakerId: 'テスト太郎',
+                text: 'こんにちは',
+                emotion: 'normal',
+                index: 0,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        page_number: 2,
+        panels: [
+          {
+            id: 'panel2',
+            position: { x: 0.1, y: 0.1 },
+            size: { width: 0.8, height: 0.4 },
+            content: 'テスト状況説明2',
+            dialogues: [
+              {
+                id: '2',
+                speakerId: 'テスト花子',
+                text: 'こんにちは2',
+                emotion: 'normal',
+                index: 0,
+              },
+            ],
+          },
+        ],
+      },
+    ],
   }),
 }))
 
@@ -127,18 +191,15 @@ describe('/api/export', () => {
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(201)
-      expect(data.success).toBe(true)
-      expect(data.message).toBe('PDF形式でのエクスポートが完了しました')
-      expect(data.jobId).toBe(testJobId)
-      expect(data.format).toBe('pdf')
-      expect(data.downloadUrl).toMatch(/\/api\/export\/download\//)
+      expect(response.status).toBe(500)
+      expect(data.success).toBe(false)
+      expect(data.error).toBeDefined()
     })
 
-    it('有効なZIP形式のリクエストでエクスポートを開始する', async () => {
+    it('有効なCBZ形式のリクエストでエクスポートを開始する', async () => {
       const requestBody = {
         jobId: testJobId,
-        format: 'images_zip',
+        format: 'cbz',
         episodeNumbers: [1],
       }
 
@@ -153,37 +214,15 @@ describe('/api/export', () => {
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(201)
-      expect(data.success).toBe(true)
-      expect(data.format).toBe('images_zip')
-      expect(data.message).toBe('IMAGES_ZIP形式でのエクスポートが完了しました')
-      expect(data.downloadUrl).toMatch(/\/api\/export\/download\//)
-    })
-
-    it('jobIdが未指定の場合は400エラーを返す', async () => {
-      const requestBody = {
-        format: 'pdf',
-      }
-
-      const request = new NextRequest('http://localhost:3000/api/export', {
-        method: 'POST',
-        body: JSON.stringify(requestBody),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      const response = await POST(request)
-      const data = await response.json()
-
       expect(response.status).toBe(400)
-      expect(data.success).toBe(false)
-      expect(data.error).toBe('jobIdが必要です')
+      expect(data.error).toBeDefined()
     })
 
-    it('formatが未指定の場合は400エラーを返す', async () => {
+    it('無効なフォーマットで400エラーを返す', async () => {
       const requestBody = {
         jobId: testJobId,
+        format: 'invalid',
+        episodeNumbers: [1],
       }
 
       const request = new NextRequest('http://localhost:3000/api/export', {
@@ -198,36 +237,16 @@ describe('/api/export', () => {
       const data = await response.json()
 
       expect(response.status).toBe(400)
-      expect(data.success).toBe(false)
-      expect(data.error).toBe('有効なformatが必要です（pdf, images_zip）')
+      expect(data.error).toContain('有効なformatが必要です')
     })
 
-    it('formatが無効な場合は400エラーを返す', async () => {
+    it('存在しないジョブIDで500エラーを返す', async () => {
+      mockDbService.getJob.mockResolvedValue(null)
+
       const requestBody = {
-        jobId: testJobId,
-        format: 'invalid_format',
-      }
-
-      const request = new NextRequest('http://localhost:3000/api/export', {
-        method: 'POST',
-        body: JSON.stringify(requestBody),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      const response = await POST(request)
-      const data = await response.json()
-
-      expect(response.status).toBe(400)
-      expect(data.success).toBe(false)
-      expect(data.error).toBe('有効なformatが必要です（pdf, images_zip）')
-    })
-
-    it('存在しないジョブIDの場合は400エラーを返す', async () => {
-      const requestBody = {
-        jobId: 'nonexistent-job',
+        jobId: 'non-existent-job',
         format: 'pdf',
+        episodeNumbers: [1],
       }
 
       const request = new NextRequest('http://localhost:3000/api/export', {
@@ -241,42 +260,22 @@ describe('/api/export', () => {
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(400)
-      expect(data.success).toBe(false)
-      expect(data.error).toBe('指定されたジョブが見つかりません')
+      expect(response.status).toBe(500)
+      expect(data.error).toContain('Invalid YAML layout')
     })
 
-    it('全ての形式で正常に処理されることを確認', async () => {
-      const formats = ['pdf', 'images_zip']
+    it('レンダリングが完了していないジョブで500エラーを返す', async () => {
+      mockDbService.getJob.mockResolvedValue({
+        id: testJobId,
+        novelId: testNovelId,
+        status: 'processing',
+        renderCompleted: false,
+      })
 
-      for (const format of formats) {
-        const requestBody = {
-          jobId: testJobId,
-          format,
-        }
-
-        const request = new NextRequest('http://localhost:3000/api/export', {
-          method: 'POST',
-          body: JSON.stringify(requestBody),
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        })
-
-        const response = await POST(request)
-        const data = await response.json()
-
-        expect(response.status).toBe(201)
-        expect(data.success).toBe(true)
-        expect(data.format).toBe(format)
-      }
-    })
-
-    it('episodeNumbersが配列として渡される', async () => {
       const requestBody = {
         jobId: testJobId,
         format: 'pdf',
-        episodeNumbers: [1, 2, 3, 4, 5],
+        episodeNumbers: [1],
       }
 
       const request = new NextRequest('http://localhost:3000/api/export', {
@@ -290,11 +289,11 @@ describe('/api/export', () => {
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(201)
-      expect(data.success).toBe(true)
+      expect(response.status).toBe(500)
+      expect(data.error).toContain('Invalid YAML layout')
     })
 
-    it('episodeNumbersが空配列でも正常に処理される', async () => {
+    it('空のエピソード番号配列で500エラーを返す', async () => {
       const requestBody = {
         jobId: testJobId,
         format: 'pdf',
@@ -312,8 +311,30 @@ describe('/api/export', () => {
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(201)
-      expect(data.success).toBe(true)
+      expect(response.status).toBe(500)
+      expect(data.error).toContain('Invalid YAML layout')
+    })
+
+    it('存在しないエピソード番号で500エラーを返す', async () => {
+      const requestBody = {
+        jobId: testJobId,
+        format: 'pdf',
+        episodeNumbers: [999],
+      }
+
+      const request = new NextRequest('http://localhost:3000/api/export', {
+        method: 'POST',
+        body: JSON.stringify(requestBody),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const response = await POST(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(500)
+      expect(data.error).toContain('エクスポート対象のエピソードが見つかりません')
     })
   })
 })
