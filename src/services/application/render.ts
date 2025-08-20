@@ -1,9 +1,12 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { appConfig } from '@/config/app.config'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
 import { getDatabaseService } from '@/services/db-factory'
+import type { PageBreakPlan } from '@/types/script'
 import { parseMangaLayoutFromYaml } from '@/utils/layout-parser'
 
 export interface BatchOptions {
@@ -156,6 +159,260 @@ export async function renderBatchFromYaml(
     jobId,
     episodeNumber,
     totalPages: validPages.length,
+    renderedPages: renderedCount,
+    skippedPages: skippedCount,
+    failedPages: failedCount,
+    results,
+    duration,
+  }
+}
+
+// Panel layout sample loader functions
+interface PanelLayout {
+  panels_count: number
+  panels: Array<{
+    id: number
+    bbox: [number, number, number, number]
+    content: string
+    dialogue: string
+  }>
+}
+
+// Utility function to convert Blob to base64
+async function blobToBase64(blob: Blob): Promise<string> {
+  const arrayBuffer = await blob.arrayBuffer()
+  const buffer = Buffer.from(arrayBuffer)
+  return buffer.toString('base64')
+}
+
+function loadPanelLayoutSamples(panelCount: number): PanelLayout[] {
+  const samplesDir = path.join(
+    process.cwd(),
+    'public',
+    'docs',
+    'panel_layout_sample',
+    panelCount.toString(),
+  )
+
+  if (!fs.existsSync(samplesDir)) {
+    throw new Error(`Panel layout samples not found for ${panelCount} panels`)
+  }
+
+  const sampleFiles = fs.readdirSync(samplesDir).filter((f) => f.endsWith('.json'))
+  const layouts: PanelLayout[] = []
+
+  for (const file of sampleFiles) {
+    const filePath = path.join(samplesDir, file)
+    const content = fs.readFileSync(filePath, 'utf-8')
+    const data = JSON.parse(content)
+
+    // Extract the first (and typically only) page layout from the sample
+    const pageKey = Object.keys(data)[0]
+    layouts.push(data[pageKey])
+  }
+
+  return layouts
+}
+
+function getRandomPanelLayout(panelCount: number): PanelLayout {
+  const layouts = loadPanelLayoutSamples(panelCount)
+  if (layouts.length === 0) {
+    throw new Error(`No panel layout samples found for ${panelCount} panels`)
+  }
+
+  const randomIndex = Math.floor(Math.random() * layouts.length)
+  return layouts[randomIndex]
+}
+
+// PageBreakPlan based rendering function
+export async function renderFromPageBreakPlan(
+  jobId: string,
+  episodeNumber: number,
+  pageBreakPlan: PageBreakPlan,
+  ports: StoragePorts,
+  options: BatchOptions = {},
+): Promise<{
+  success: boolean
+  jobId: string
+  episodeNumber: number
+  totalPages: number
+  renderedPages: number
+  skippedPages: number
+  failedPages: number
+  results: BatchResultItem[]
+  duration: number
+}> {
+  const logger = getLogger().withContext({
+    service: 'render',
+    method: 'renderFromPageBreakPlan',
+    jobId,
+    episodeNumber,
+  })
+
+  const startTime = Date.now()
+  const results: BatchResultItem[] = []
+  let renderedCount = 0
+  let skippedCount = 0
+  let failedCount = 0
+
+  logger.info('Starting pageBreakPlan based rendering', {
+    totalPages: pageBreakPlan.pages.length,
+  })
+
+  // Initialize renderer with proper async initialization
+  const renderer = await MangaPageRenderer.create({
+    pageWidth: appConfig.rendering.defaultPageSize.width,
+    pageHeight: appConfig.rendering.defaultPageSize.height,
+    margin: 20,
+    panelSpacing: 10,
+    defaultFont: 'Arial',
+    fontSize: 12,
+  })
+
+  try {
+    for (const page of pageBreakPlan.pages) {
+      try {
+        // Check if page already exists
+        if (options.skipExisting) {
+          const existingImage = await ports.render.getPageRender(
+            jobId,
+            episodeNumber,
+            page.pageNumber,
+          )
+          if (existingImage) {
+            logger.debug('Skipping existing page', { pageNumber: page.pageNumber })
+            skippedCount++
+            results.push({
+              pageNumber: page.pageNumber,
+              status: 'skipped',
+            })
+            continue
+          }
+        }
+
+        // Get random panel layout for this page's panel count
+        const panelLayout = getRandomPanelLayout(page.panelCount)
+
+        // Create layout data by combining panel layout with page content
+        const layoutData = {
+          page_number: page.pageNumber,
+          panels_count: page.panelCount,
+          panels: page.panels.map((panel, index) => {
+            const layoutPanel = panelLayout.panels[index]
+            return {
+              id: panel.panelIndex,
+              bbox: layoutPanel.bbox,
+              content: panel.content,
+              dialogue: panel.dialogue.map((d) => `${d.speaker}: ${d.lines}`).join('\n'),
+            }
+          }),
+        }
+
+        // Convert layout data to YAML format for compatibility with existing renderer
+        const yamlContent = `page_${page.pageNumber}:
+  panels_count: ${layoutData.panels_count}
+  panels:
+${layoutData.panels
+  .map(
+    (panel) =>
+      `    - id: ${panel.id}
+      bbox: [${panel.bbox.join(', ')}]
+      content: "${panel.content.replace(/"/g, '\\"')}"
+      dialogue: "${panel.dialogue.replace(/"/g, '\\"')}"`,
+  )
+  .join('\n')}`
+
+        // Parse YAML content to MangaLayout
+        const layout = parseMangaLayoutFromYaml(yamlContent)
+
+        // Render the page using the existing renderer
+        const imageBlob = await renderer.renderToImage(layout, page.pageNumber, 'png')
+        const base64Image = await blobToBase64(imageBlob)
+
+        // Generate thumbnail
+        const imageBlobForThumbnail = new Blob([Buffer.from(base64Image, 'base64')], {
+          type: 'image/png',
+        })
+        const thumbnailBlob = await ThumbnailGenerator.generateThumbnail(imageBlobForThumbnail, {
+          width: 200,
+          height: 280,
+          quality: 0.8,
+        })
+        const thumbnailBase64 = await blobToBase64(thumbnailBlob)
+
+        // Store the rendered images
+        const renderKey = await ports.render.putPageRender(
+          jobId,
+          episodeNumber,
+          page.pageNumber,
+          Buffer.from(base64Image, 'base64'),
+        )
+
+        const thumbnailKey = await ports.render.putPageThumbnail(
+          jobId,
+          episodeNumber,
+          page.pageNumber,
+          Buffer.from(thumbnailBase64, 'base64'),
+        )
+
+        // Update render status in database
+        const db = getDatabaseService()
+        await db.updateRenderStatus(jobId, episodeNumber, page.pageNumber, {
+          isRendered: true,
+          imagePath: renderKey,
+          thumbnailPath: thumbnailKey,
+          width: appConfig.rendering.defaultPageSize.width,
+          height: appConfig.rendering.defaultPageSize.height,
+          fileSize: Buffer.from(base64Image, 'base64').length,
+        })
+
+        renderedCount++
+        results.push({
+          pageNumber: page.pageNumber,
+          status: 'success',
+          renderKey,
+          thumbnailKey,
+          fileSize: Buffer.from(base64Image, 'base64').length,
+        })
+
+        logger.debug('Page rendered successfully', {
+          pageNumber: page.pageNumber,
+          panelCount: page.panelCount,
+        })
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        logger.error('Failed to render page', {
+          pageNumber: page.pageNumber,
+          error: errorMessage,
+        })
+
+        failedCount++
+        results.push({
+          pageNumber: page.pageNumber,
+          status: 'failed',
+          error: errorMessage,
+        })
+      }
+    }
+  } finally {
+    renderer.cleanup()
+  }
+
+  const duration = Date.now() - startTime
+
+  logger.info('PageBreakPlan rendering completed', {
+    totalPages: pageBreakPlan.pages.length,
+    renderedPages: renderedCount,
+    skippedPages: skippedCount,
+    failedPages: failedCount,
+    duration,
+  })
+
+  return {
+    success: true,
+    jobId,
+    episodeNumber,
+    totalPages: pageBreakPlan.pages.length,
     renderedPages: renderedCount,
     skippedPages: skippedCount,
     failedPages: failedCount,

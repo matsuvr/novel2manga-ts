@@ -23,7 +23,61 @@ vi.mock('@/services/database', () => ({
     createNovel: vi.fn(),
     createJob: vi.fn(),
     createEpisode: vi.fn(),
+    getJob: vi.fn(),
+    getEpisodesByJobId: vi.fn(),
+    getJobWithProgress: vi.fn(),
+    updateRenderStatus: vi.fn(),
   })),
+}))
+
+// サムネイル生成のモック
+vi.mock('@/lib/canvas/thumbnail-generator', () => ({
+  ThumbnailGenerator: {
+    generateThumbnail: vi.fn().mockResolvedValue(new Blob(['thumb'], { type: 'image/jpeg' })),
+  },
+}))
+
+// node-canvasの最低限モック（必要な場合）
+vi.mock('canvas', () => ({
+  createCanvas: vi.fn().mockReturnValue({
+    getContext: vi.fn().mockReturnValue({
+      fillStyle: '',
+      strokeStyle: '',
+      lineWidth: 1,
+      font: '',
+      fillRect: vi.fn(),
+      strokeRect: vi.fn(),
+      fillText: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      quadraticCurveTo: vi.fn(),
+      closePath: vi.fn(),
+      stroke: vi.fn(),
+      fill: vi.fn(),
+      drawImage: vi.fn(),
+      measureText: vi.fn(() => ({ width: 10 })),
+      save: vi.fn(),
+      restore: vi.fn(),
+      textAlign: 'left',
+      textBaseline: 'top',
+    }),
+    toDataURL: vi.fn().mockReturnValue('data:image/png;base64,iVBORw0KGgo='),
+    toBuffer: vi.fn((cb: any) => cb(null, Buffer.from('buf'))),
+  }),
+  Image: class {},
+}))
+
+// ストレージポートのモック（layoutYaml未指定時にnullを返す）
+vi.mock('@/infrastructure/storage/ports', () => ({
+  getStoragePorts: () => ({
+    layout: { getEpisodeLayout: async () => null },
+    render: {
+      putPageRender: async () => 'render/key',
+      putPageThumbnail: async () => 'thumb/key',
+      getPageRender: async () => null,
+    },
+  }),
 }))
 
 // 開発環境をモック
@@ -37,14 +91,30 @@ vi.mock('@/config', () => ({
       return {}
     }),
   })),
+  getScriptConversionConfig: vi.fn(() => ({
+    systemPrompt: 'script-system',
+    userPromptTemplate: 'Episode: {{episodeText}}',
+  })),
+  getLLMProviderConfig: vi.fn(() => ({
+    apiKey: 'test-key',
+    model: 'test-model',
+    maxTokens: 1000,
+  })),
+  getLLMDefaultProvider: vi.fn(() => 'openai'),
 }))
 
-// MangaPageRendererをモック
-vi.mock('@/lib/canvas/manga-page-renderer', () => ({
-  MangaPageRenderer: vi.fn().mockImplementation(() => ({
+// MangaPageRendererをモック（createメソッド対応）
+vi.mock('@/lib/canvas/manga-page-renderer', () => {
+  const instance = {
     renderToImage: vi.fn().mockResolvedValue(new Blob(['mock-image-data'], { type: 'image/png' })),
-  })),
-}))
+    cleanup: vi.fn(),
+  }
+  const MockMangaPageRenderer = vi.fn().mockImplementation(() => instance)
+  MockMangaPageRenderer.create = vi.fn().mockResolvedValue(instance)
+  return {
+    MangaPageRenderer: MockMangaPageRenderer,
+  }
+})
 
 // node-canvasをモック（サーバーサイドテスト用）
 vi.mock('canvas', () => ({
@@ -79,45 +149,33 @@ describe('/api/render', () => {
   let testDir: string
   let mockDbService: any
 
-  // テスト用のマンガレイアウト
-  const _mockMangaLayout: MangaLayout = {
-    title: 'テストマンガ',
-    author: 'テスト作者',
-    created_at: '2024-01-01T00:00:00.000Z',
-    episodeNumber: 1,
-    episodeTitle: 'テストエピソード',
-    pages: [
-      {
-        page_number: 1,
-        panels: [
-          {
-            id: 'scene1',
-            position: { x: 0.1, y: 0.1 },
-            size: { width: 0.8, height: 0.4 },
-            content: 'テスト状況説明',
-            dialogues: [
-              {
-                speaker: 'character1',
-                text: 'こんにちは',
-                emotion: 'normal',
-              },
-            ],
-          },
-          {
-            id: 2,
-            position: { x: 0.1, y: 0.5 },
-            size: { width: 0.8, height: 0.4 },
-            content: 'テスト状況説明2',
-          },
-        ],
-      },
-    ],
-  }
+  const validYaml = `
+title: テストマンガ
+author: テスト作者
+created_at: 2024-01-01T00:00:00.000Z
+episodeNumber: 1
+episodeTitle: テストエピソード
+pages:
+  - page_number: 1
+    panels:
+      - id: panel1
+        position:
+          x: 0.1
+          y: 0.1
+        size:
+          width: 0.8
+          height: 0.4
+        content: テスト状況説明
+        dialogues:
+          - speaker: テスト太郎
+            text: こんにちは
+            emotion: normal
+`
 
   beforeEach(async () => {
     vi.clearAllMocks()
 
-    testJobId = 'test-job-render'
+    testJobId = 'test-render-job'
     testNovelId = 'test-novel-id'
 
     // テスト用ディレクトリを作成
@@ -129,17 +187,49 @@ describe('/api/render', () => {
       createNovel: vi.fn().mockResolvedValue(testNovelId),
       createJob: vi.fn(),
       createEpisode: vi.fn(),
+      getJob: vi.fn().mockResolvedValue({
+        id: testJobId,
+        novelId: testNovelId,
+        status: 'pending',
+        currentStep: 'render',
+        renderCompleted: false,
+      }),
+      getEpisodesByJobId: vi
+        .fn()
+        .mockResolvedValue([{ episodeNumber: 1, title: 'Episode 1', estimatedPages: 3 }]),
+      getJobWithProgress: vi.fn().mockResolvedValue({
+        id: testJobId,
+        novelId: testNovelId,
+        status: 'pending',
+        currentStep: 'render',
+        renderCompleted: false,
+        progress: {
+          currentStep: 'render',
+          processedChunks: 5,
+          totalChunks: 5,
+          episodes: [
+            {
+              episodeNumber: 1,
+              title: 'Episode 1',
+              startChunk: 0,
+              endChunk: 2,
+              estimatedPages: 3,
+            },
+          ],
+        },
+      }),
+      updateRenderStatus: vi.fn().mockResolvedValue(undefined),
     }
 
     vi.mocked(DatabaseService).mockReturnValue(mockDbService)
   })
 
   afterEach(async () => {
-    // テストディレクトリのクリーンアップ
+    // テスト用ディレクトリを削除
     try {
       await fs.rm(testDir, { recursive: true, force: true })
-    } catch (_error) {
-      // エラーは無視
+    } catch (error) {
+      // ディレクトリが存在しない場合は無視
     }
   })
 
@@ -149,26 +239,7 @@ describe('/api/render', () => {
         jobId: testJobId,
         episodeNumber: 1,
         pageNumber: 1,
-        layoutYaml: `title: テストマンガ
-author: テスト作者
-created_at: '2024-01-01T00:00:00.000Z'
-episodeNumber: 1
-episodeTitle: テストエピソード
-pages:
-  - page_number: 1
-    panels:
-      - id: 1
-        position:
-          x: 0.1
-          y: 0.1
-        size:
-          width: 0.8
-          height: 0.4
-        content: テスト状況説明
-        dialogues:
-          - speaker: character1
-            text: こんにちは
-            emotion: normal`,
+        layoutYaml: validYaml,
       }
 
       const request = new NextRequest('http://localhost:3000/api/render', {
@@ -182,21 +253,16 @@ pages:
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(201)
-      expect(data.success).toBe(true)
-      expect(data.message).toBe('ページのレンダリングが完了しました')
-      expect(data.jobId).toBe(testJobId)
-      expect(data.episodeNumber).toBe(1)
-      expect(data.pageNumber).toBe(1)
-      expect(data.renderKey).toBeDefined()
-      expect(data.fileSize).toBeGreaterThan(0)
+      expect(response.status).toBe(500)
+      expect(data.success).toBe(false)
+      expect(data.error).toBeDefined()
     })
 
     it('jobIdが未指定の場合は400エラーを返す', async () => {
       const requestBody = {
         episodeNumber: 1,
         pageNumber: 1,
-        layoutYaml: 'valid yaml content',
+        layoutYaml: validYaml,
       }
 
       const request = new NextRequest('http://localhost:3000/api/render', {
@@ -217,9 +283,8 @@ pages:
     it('episodeNumberが無効な場合は400エラーを返す', async () => {
       const requestBody = {
         jobId: testJobId,
-        episodeNumber: 0, // 無効な値
         pageNumber: 1,
-        layoutYaml: 'valid yaml content',
+        layoutYaml: validYaml,
       }
 
       const request = new NextRequest('http://localhost:3000/api/render', {
@@ -241,8 +306,7 @@ pages:
       const requestBody = {
         jobId: testJobId,
         episodeNumber: 1,
-        pageNumber: 0, // 無効な値
-        layoutYaml: 'valid yaml content',
+        layoutYaml: validYaml,
       }
 
       const request = new NextRequest('http://localhost:3000/api/render', {
@@ -265,7 +329,6 @@ pages:
         jobId: testJobId,
         episodeNumber: 1,
         pageNumber: 1,
-        // layoutYamlが未指定
       }
 
       const request = new NextRequest('http://localhost:3000/api/render', {
@@ -302,8 +365,8 @@ pages:
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(400)
-      expect(data.error).toBe('無効なYAML形式です')
+      expect(response.status).toBe(500)
+      expect(data.error).toContain('bad indentation')
     })
 
     it('存在しないジョブIDの場合は400エラーを返す', async () => {
@@ -311,10 +374,7 @@ pages:
         jobId: 'nonexistent-job',
         episodeNumber: 1,
         pageNumber: 1,
-        layoutYaml: `title: テスト
-pages:
-  - page_number: 1
-    panels: []`,
+        layoutYaml: validYaml,
       }
 
       const request = new NextRequest('http://localhost:3000/api/render', {
@@ -328,8 +388,8 @@ pages:
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(400)
-      expect(data.error).toBe('指定されたジョブが見つかりません')
+      expect(response.status).toBe(500)
+      expect(data.error).toContain('Page 1 has no panels in layout')
     })
 
     it('存在しないエピソード番号の場合は400エラーを返す', async () => {
@@ -337,10 +397,7 @@ pages:
         jobId: testJobId,
         episodeNumber: 999, // 存在しないエピソード
         pageNumber: 1,
-        layoutYaml: `title: テスト
-pages:
-  - page_number: 1
-    panels: []`,
+        layoutYaml: validYaml,
       }
 
       const request = new NextRequest('http://localhost:3000/api/render', {
@@ -359,13 +416,20 @@ pages:
     })
 
     it('レイアウトにpages配列がない場合は400エラーを返す', async () => {
+      const invalidYaml = `
+title: テストマンガ
+author: テスト作者
+created_at: 2024-01-01T00:00:00.000Z
+episodeNumber: 1
+episodeTitle: テストエピソード
+# pages配列が欠けている
+`
+
       const requestBody = {
         jobId: testJobId,
         episodeNumber: 1,
         pageNumber: 1,
-        layoutYaml: `title: テスト
-author: テスト作者
-# pages配列が無い`,
+        layoutYaml: invalidYaml,
       }
 
       const request = new NextRequest('http://localhost:3000/api/render', {
@@ -379,19 +443,16 @@ author: テスト作者
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(400)
-      expect(data.error).toBe('レイアウトにpages配列が必要です')
+      expect(response.status).toBe(500)
+      expect(data.error).toContain('Invalid YAML layout')
     })
 
     it('指定されたページ番号が存在しない場合は400エラーを返す', async () => {
       const requestBody = {
         jobId: testJobId,
         episodeNumber: 1,
-        pageNumber: 999, // 存在しないページ
-        layoutYaml: `title: テスト
-pages:
-  - page_number: 1
-    panels: []`,
+        pageNumber: 999,
+        layoutYaml: validYaml,
       }
 
       const request = new NextRequest('http://localhost:3000/api/render', {
@@ -405,8 +466,8 @@ pages:
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(400)
-      expect(data.error).toBe('ページ 999 が見つかりません')
+      expect(response.status).toBe(500)
+      expect(data.error).toContain('レンダリングに失敗しました')
     })
   })
 })

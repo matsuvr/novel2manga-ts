@@ -394,11 +394,12 @@ export function setupAgentMocks() {
       systemPrompt: 'system',
       userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
     })),
+    // テストでは短いテキストでも複数チャンク（少なくとも4つ）に分割されるよう小さめに設定
     getChunkingConfig: vi.fn(() => ({
-      defaultChunkSize: 2000,
-      defaultOverlapSize: 200,
+      defaultChunkSize: 150,
+      defaultOverlapSize: 30,
       maxChunkSize: 10000,
-      minChunkSize: 100,
+      minChunkSize: 50,
       maxOverlapRatio: 0.5,
     })),
     getLLMDefaultProvider: vi.fn(() => 'fake'),

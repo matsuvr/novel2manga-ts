@@ -78,6 +78,10 @@ export class JobRepository {
     throw new Error('JobDbPort implementation missing updateJobStep/updateStep')
   }
 
+  async updateJobTotalPages(id: string, totalPages: number): Promise<void> {
+    return this.db.updateJobTotalPages(id, totalPages)
+  }
+
   async markStepCompleted(id: string, step: 'split' | 'analyze' | 'episode' | 'layout' | 'render') {
     const anyDb = this.db as unknown as {
       markJobStepCompleted?: (

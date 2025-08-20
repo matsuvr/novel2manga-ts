@@ -47,11 +47,13 @@ export async function POST(request: NextRequest) {
       config,
     })
 
-    // 自動でレンダリングをキック（非同期・結果は待たない）
+    // 自動レンダリングはデモ時スキップ（DB未整備のため）
     try {
-      const ports = getStoragePorts()
-      const yamlContent = (await ports.layout.getEpisodeLayout(jobId, episodeNumber)) || ''
-      await renderBatchFromYaml(jobId, episodeNumber, yamlContent, undefined, undefined, ports)
+      if (!isDemo) {
+        const ports = getStoragePorts()
+        const yamlContent = (await ports.layout.getEpisodeLayout(jobId, episodeNumber)) || ''
+        await renderBatchFromYaml(jobId, episodeNumber, yamlContent, undefined, undefined, ports)
+      }
     } catch (e) {
       console.warn('[/api/layout/generate] Render kick failed:', e)
     }

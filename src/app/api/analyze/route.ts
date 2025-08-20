@@ -51,9 +51,30 @@ export async function POST(request: NextRequest) {
     const { novelId: inputNovelId, text: inputText, title } = parsed.data
     const isTestEnv = process.env.NODE_ENV === 'test'
 
-    // DEMOモード: LLMや重い処理を避けて即時にジョブIDを返す
+    // DEMOモード: LLM/分析はスキップ。ただし後続のAPIでFK制約が問題にならないよう
+    // 最小限の Novel/Job をDBに作成して返す。
     if (isDemo) {
+      const db = getDatabaseService()
+      const { job, novel } = adaptAll(db)
+      const jobRepo = new JobRepository(job)
+      const novelRepo = new NovelRepository(novel)
+
+      const novelId = generateUUID()
+      await novelRepo.ensure(novelId, {
+        title: `Demo Novel ${novelId.slice(0, 8)}`,
+        author: 'Demo',
+        originalTextPath: `${novelId}.json`,
+        textLength:
+          (typeof (rawBody as { text?: string })?.text === 'string'
+            ? ((rawBody as { text?: string }).text as string).length
+            : 0) || 1,
+        language: 'ja',
+        metadataPath: null,
+      })
+
       const jobId = generateUUID()
+      await jobRepo.create({ id: jobId, novelId, title: 'Demo Analyze Job', status: 'processing' })
+
       return ApiResponder.success(
         {
           success: true,
