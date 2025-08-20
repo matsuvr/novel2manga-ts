@@ -1,6 +1,5 @@
-import fs from 'node:fs'
-import path from 'node:path'
 import { appConfig } from '@/config/app.config'
+import { getRandomPanelLayout } from '@/data/panel-layout-samples'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
@@ -167,16 +166,7 @@ export async function renderBatchFromYaml(
   }
 }
 
-// Panel layout sample loader functions
-interface PanelLayout {
-  panels_count: number
-  panels: Array<{
-    id: number
-    bbox: [number, number, number, number]
-    content: string
-    dialogue: string
-  }>
-}
+// Panel layout sample loader functions (bundled at build time)
 
 // Utility function to convert Blob to base64
 async function blobToBase64(blob: Blob): Promise<string> {
@@ -185,44 +175,7 @@ async function blobToBase64(blob: Blob): Promise<string> {
   return buffer.toString('base64')
 }
 
-function loadPanelLayoutSamples(panelCount: number): PanelLayout[] {
-  const samplesDir = path.join(
-    process.cwd(),
-    'public',
-    'docs',
-    'panel_layout_sample',
-    panelCount.toString(),
-  )
-
-  if (!fs.existsSync(samplesDir)) {
-    throw new Error(`Panel layout samples not found for ${panelCount} panels`)
-  }
-
-  const sampleFiles = fs.readdirSync(samplesDir).filter((f) => f.endsWith('.json'))
-  const layouts: PanelLayout[] = []
-
-  for (const file of sampleFiles) {
-    const filePath = path.join(samplesDir, file)
-    const content = fs.readFileSync(filePath, 'utf-8')
-    const data = JSON.parse(content)
-
-    // Extract the first (and typically only) page layout from the sample
-    const pageKey = Object.keys(data)[0]
-    layouts.push(data[pageKey])
-  }
-
-  return layouts
-}
-
-function getRandomPanelLayout(panelCount: number): PanelLayout {
-  const layouts = loadPanelLayoutSamples(panelCount)
-  if (layouts.length === 0) {
-    throw new Error(`No panel layout samples found for ${panelCount} panels`)
-  }
-
-  const randomIndex = Math.floor(Math.random() * layouts.length)
-  return layouts[randomIndex]
-}
+// getRandomPanelLayout is provided by the bundled data module
 
 // PageBreakPlan based rendering function
 export async function renderFromPageBreakPlan(
