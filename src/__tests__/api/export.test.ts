@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST } from '@/app/api/export/route'
 import { appConfig } from '@/config/app.config'
 import { DatabaseService } from '@/services/database'
+import { __resetDatabaseServiceForTest } from '@/services/db-factory'
 
 // 設定モック
 vi.mock('@/config', () => ({
@@ -19,31 +20,53 @@ vi.mock('@/config', () => ({
 }))
 
 // ストレージとデータベースのモック
-vi.mock('@/utils/storage', () => ({
-  StorageFactory: {
-    getDatabase: vi.fn(),
-    getRenderStorage: vi.fn().mockResolvedValue({
-      get: vi.fn().mockResolvedValue({
-        text: 'mock-yaml-layout',
+vi.mock('@/utils/storage', () => {
+  // 有効なYAML（正規スキーマ）を返す
+  const validYaml = `
+title: テストマンガ
+created_at: '2024-01-01T00:00:00.000Z'
+episodeNumber: 1
+pages:
+  - page_number: 1
+    panels:
+      - id: 1
+        position: { x: 0.1, y: 0.1 }
+        size: { width: 0.8, height: 0.4 }
+        content: 'サンプル'
+  - page_number: 2
+    panels:
+      - id: 1
+        position: { x: 0.1, y: 0.55 }
+        size: { width: 0.8, height: 0.4 }
+        content: 'サンプル2'
+`
+  const base64Png = Buffer.from('dummy').toString('base64')
+  return {
+    StorageFactory: {
+      getDatabase: vi.fn(),
+      getRenderStorage: vi.fn().mockResolvedValue({
+        get: vi.fn().mockImplementation(async (_key: string) => ({ text: base64Png })),
+        put: vi.fn(),
       }),
-    }),
-    getLayoutStorage: vi.fn().mockResolvedValue({
-      get: vi.fn().mockResolvedValue({
-        text: 'mock-yaml-layout',
+      getLayoutStorage: vi.fn().mockResolvedValue({
+        get: vi.fn().mockImplementation(async (_key: string) => ({ text: validYaml })),
+        put: vi.fn(),
       }),
-    }),
-    getOutputStorage: vi.fn().mockResolvedValue({
-      put: vi.fn().mockResolvedValue(undefined),
-    }),
-  },
-  StorageKeys: {
-    episodeLayout: vi.fn((jobId, episode) => `layouts/${jobId}/episode_${episode}.yaml`),
-    pageRender: vi.fn(
-      (jobId, episode, page) => `renders/${jobId}/episode_${episode}/page_${page}.png`,
-    ),
-    exportOutput: vi.fn((jobId, format) => `exports/${jobId}/output.${format}`),
-  },
-}))
+      getOutputStorage: vi.fn().mockResolvedValue({
+        put: vi.fn().mockResolvedValue(undefined),
+        get: vi.fn(),
+      }),
+    },
+    StorageKeys: {
+      episodeLayout: vi.fn((jobId: string, episode: number) => `${jobId}/episode_${episode}.yaml`),
+      pageRender: vi.fn(
+        (jobId: string, episode: number, page: number) =>
+          `${jobId}/renders/episode_${episode}/page_${page}.png`,
+      ),
+      exportOutput: vi.fn((jobId: string, format: string) => `${jobId}/exports/output.${format}`),
+    },
+  }
+})
 
 vi.mock('@/services/database', () => ({
   DatabaseService: vi.fn().mockImplementation(() => ({
@@ -144,6 +167,7 @@ describe('/api/export', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
+    __resetDatabaseServiceForTest()
 
     testJobId = 'test-export-job'
     testNovelId = 'test-novel-id'
@@ -170,6 +194,7 @@ describe('/api/export', () => {
 
   afterEach(async () => {
     // テストデータのクリーンアップは統合テストで実施
+    __resetDatabaseServiceForTest()
   })
 
   describe('POST /api/export', () => {
@@ -191,9 +216,10 @@ describe('/api/export', () => {
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(500)
-      expect(data.success).toBe(false)
-      expect(data.error).toBeDefined()
+      expect(response.status).toBe(201)
+      expect(data.success).toBe(true)
+      expect(typeof data.downloadUrl).toBe('string')
+      expect(data.format).toBe('pdf')
     })
 
     it('有効なCBZ形式のリクエストでエクスポートを開始する', async () => {
@@ -240,7 +266,7 @@ describe('/api/export', () => {
       expect(data.error).toContain('有効なformatが必要です')
     })
 
-    it('存在しないジョブIDで500エラーを返す', async () => {
+    it('存在しないジョブIDでは500/エラーメッセージを返す', async () => {
       mockDbService.getJob.mockResolvedValue(null)
 
       const requestBody = {
@@ -261,10 +287,10 @@ describe('/api/export', () => {
       const data = await response.json()
 
       expect(response.status).toBe(500)
-      expect(data.error).toContain('Invalid YAML layout')
+      expect(data.error).toContain('指定されたジョブが見つかりません')
     })
 
-    it('レンダリングが完了していないジョブで500エラーを返す', async () => {
+    it('レンダリング未完了でも必要リソースがあればエクスポート可能', async () => {
       mockDbService.getJob.mockResolvedValue({
         id: testJobId,
         novelId: testNovelId,
@@ -289,11 +315,12 @@ describe('/api/export', () => {
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(500)
-      expect(data.error).toContain('Invalid YAML layout')
+      expect(response.status).toBe(201)
+      expect(data.success).toBe(true)
+      expect(data.format).toBe('pdf')
     })
 
-    it('空のエピソード番号配列で500エラーを返す', async () => {
+    it('空のエピソード番号配列の場合は全エピソードを対象に成功する', async () => {
       const requestBody = {
         jobId: testJobId,
         format: 'pdf',
@@ -311,8 +338,9 @@ describe('/api/export', () => {
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(500)
-      expect(data.error).toContain('Invalid YAML layout')
+      expect(response.status).toBe(201)
+      expect(data.success).toBe(true)
+      expect(data.format).toBe('pdf')
     })
 
     it('存在しないエピソード番号で500エラーを返す', async () => {

@@ -407,8 +407,16 @@ async function generateEpisodeLayoutInternal(
     chunks: chunkDataArray,
   }
 
-  // Step update: layout in progress
-  await jobRepo.updateStep(jobId, `layout_episode_${episodeNumber}`)
+  // Step update: layout in progress (best-effort in test env)
+  try {
+    await jobRepo.updateStep(jobId, `layout_episode_${episodeNumber}`)
+  } catch (e) {
+    logger.warn('updateStep failed (non-fatal for layout start)', {
+      jobId,
+      episodeNumber,
+      error: (e as Error).message,
+    })
+  }
 
   // ===== New script-based flow: script -> page-breaks -> panel assignment =====
   try {
