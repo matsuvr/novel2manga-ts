@@ -205,8 +205,18 @@ export async function POST(
           currentStep: progress.currentStep,
         })
       })
-      .catch((error) => {
+      .catch(async (error) => {
         console.error(`Error processing episode analysis job ${params.jobId}:`, error)
+        try {
+          const dbService = getDatabaseService()
+          const { job: jobPort } = adaptAll(dbService)
+          const jobRepo = new JobRepository(jobPort)
+          const message = error instanceof Error ? error.message : String(error)
+          await jobRepo.updateStatus(params.jobId, 'failed', message)
+          await jobRepo.updateError(params.jobId, message, 'episode', true)
+        } catch (updateErr) {
+          console.error('Failed to update job status after episode analysis error:', updateErr)
+        }
       })
 
     return createSuccessResponse({

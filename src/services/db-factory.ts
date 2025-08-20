@@ -4,7 +4,8 @@ import { DatabaseService } from './database'
 let instance: DatabaseService | null = null
 
 export function getDatabaseService(): DatabaseService {
-  if (!instance) instance = new DatabaseService()
+  // テスト環境では毎回新規インスタンスを返してモック差し替えを確実にする
+  if (!instance || process.env.NODE_ENV === 'test') instance = new DatabaseService()
   return instance
 }
 

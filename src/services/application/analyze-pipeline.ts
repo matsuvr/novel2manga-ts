@@ -253,8 +253,10 @@ export class AnalyzePipeline {
       })
       .strip()
 
-    // Analyze each chunk
-    for (let i = 0; i < chunks.length; i++) {
+    // Analyze chunks with limited concurrency
+    const DEFAULT_MAX_CONCURRENT = 5
+    const maxConcurrent = Math.max(1, Math.min(DEFAULT_MAX_CONCURRENT, chunks.length))
+    const runOne = async (i: number) => {
       // ここで「DBのジョブ進捗を更新（analyze_chunk_i ステップ）」
       await jobRepo.updateStep(jobId, `analyze_chunk_${i}`, i, chunks.length)
       const chunkText = chunks[i]
@@ -274,8 +276,6 @@ export class AnalyzePipeline {
       let result: z.infer<typeof textAnalysisOutputSchema>
       try {
         const { analyzeChunkWithFallback } = await import('@/agents/chunk-analyzer')
-        // ここで「LLM を呼び出してチャンクを分析（analyzeChunkWithFallback）」
-        //   - prompt を LLM に渡す
         const analysis = await analyzeChunkWithFallback(prompt, textAnalysisOutputSchema, {
           maxRetries: 0,
           jobId,
@@ -288,12 +288,10 @@ export class AnalyzePipeline {
           chunkIndex: i,
           error: firstError instanceof Error ? firstError.message : String(firstError),
         })
-        // ここで「DBのジョブ進捗を更新（リトライの記録）」
         await jobRepo.updateStep(jobId, `analyze_chunk_${i}_retry`, i, chunks.length)
 
         try {
           const { analyzeChunkWithFallback } = await import('@/agents/chunk-analyzer')
-          // ここで「LLM を再度呼び出してチャンクを分析（リトライ）」
           const analysis = await analyzeChunkWithFallback(prompt, textAnalysisOutputSchema, {
             maxRetries: 0,
             jobId,
@@ -308,9 +306,6 @@ export class AnalyzePipeline {
             firstError: firstError instanceof Error ? firstError.message : String(firstError),
             retryError: errorMessage,
           })
-
-          // ジョブステータスを失敗に更新
-          // ここで「DBのジョブステータスを failed に更新（書き込み）」
           await jobRepo.updateStatus(jobId, 'failed', `Chunk ${i} analysis failed: ${errorMessage}`)
           throw retryError
         }
@@ -318,7 +313,6 @@ export class AnalyzePipeline {
       if (!result) {
         const errorMessage = `Failed to generate analysis result for chunk ${i}`
         logger.error(errorMessage, { jobId, chunkIndex: i })
-        // ここで「DBのジョブステータスを failed に更新（書き込み）」
         await jobRepo.updateStatus(jobId, 'failed', errorMessage)
         throw new Error(errorMessage)
       }
@@ -329,11 +323,20 @@ export class AnalyzePipeline {
         analysis: result,
         analyzedAt: new Date().toISOString(),
       }
-      // ここで「ストレージ（ファイル）にチャンク分析結果を書き込む」
       await this.ports.analysis.putAnalysis(jobId, i, JSON.stringify(analysisData, null, 2))
-      // ここで「DBのジョブ進捗を更新（analyze_chunk_i 完了）」
       await jobRepo.updateStep(jobId, `analyze_chunk_${i}_done`, i + 1, chunks.length)
+      return true as const
     }
+    // Use a queue to avoid race conditions with shared nextIndex
+    const chunkIndices = Array.from({ length: chunks.length }, (_, i) => i)
+    const worker = async () => {
+      while (true) {
+        const i = chunkIndices.shift()
+        if (i === undefined) break
+        await runOne(i)
+      }
+    }
+    await Promise.all(Array.from({ length: maxConcurrent }, () => worker()))
 
     // ここで「DBのジョブ進捗を完了（analyze ステップ完了）」
     await jobRepo.markStepCompleted(jobId, 'analyze')
@@ -629,7 +632,26 @@ export class AnalyzePipeline {
 
       // Update totalPages based on pageBreakEstimation results
       // ここで「DBに総ページ数を保存（書き込み）」
-      await jobRepo.updateJobTotalPages(jobId, totalPages)
+      // Type guard for updateJobTotalPages (backward compatibility)
+      const hasUpdateJobTotalPages = (
+        repo: unknown,
+      ): repo is { updateJobTotalPages: (id: string, pages: number) => Promise<void> } => {
+        return (
+          typeof repo === 'object' &&
+          repo !== null &&
+          'updateJobTotalPages' in repo &&
+          typeof (repo as { updateJobTotalPages: unknown }).updateJobTotalPages === 'function'
+        )
+      }
+
+      if (hasUpdateJobTotalPages(jobRepo)) {
+        await jobRepo.updateJobTotalPages(jobId, totalPages)
+      } else {
+        logger.warn('JobRepository missing updateJobTotalPages; skipping totalPages persist', {
+          jobId,
+          totalPages,
+        })
+      }
       // ここで「DBのジョブ進捗を完了（layout ステップ完了）」
       await jobRepo.markStepCompleted(jobId, 'layout')
       // ここで「DBのジョブ進捗を更新（render ステップの総数＝総ページ数）」

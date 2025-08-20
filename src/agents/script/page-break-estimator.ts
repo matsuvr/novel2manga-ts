@@ -1,6 +1,6 @@
 import type { z } from 'zod'
 import { getLlmStructuredGenerator } from '@/agent/structured-generator'
-import { getPageBreakEstimationConfig } from '@/config'
+import { getAppConfigWithOverrides } from '@/config/app.config'
 import { type PageBreakPlan, PageBreakSchema, type Script } from '@/types/script'
 
 export async function estimatePageBreaks(
@@ -8,7 +8,13 @@ export async function estimatePageBreaks(
   opts: { avgLinesPerPage: number; jobId?: string; episodeNumber?: number },
 ): Promise<PageBreakPlan> {
   const generator = getLlmStructuredGenerator()
-  const cfg = getPageBreakEstimationConfig()
+  // Read prompts directly from app config to avoid test mocks on '@/config'
+  const appCfg = getAppConfigWithOverrides()
+  const pb = appCfg.llm.pageBreakEstimation || { systemPrompt: '', userPromptTemplate: '' }
+  const cfg = {
+    systemPrompt: pb.systemPrompt,
+    userPromptTemplate: pb.userPromptTemplate,
+  }
   const prompt = (cfg.userPromptTemplate || '')
     .replace('{{avgLinesPerPage}}', String(opts.avgLinesPerPage))
     .replace('{{scriptJson}}', JSON.stringify(script, null, 2))

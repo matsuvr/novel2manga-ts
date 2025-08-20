@@ -18,6 +18,8 @@ vi.mock('@/services/database', () => ({
     getJob: vi.fn(),
     getJobWithProgress: vi.fn(),
     getEpisodesByJobId: vi.fn(),
+    // POST(test fast-path) で使用されるため追加
+    createEpisode: vi.fn().mockResolvedValue('ep-1'),
   })),
 }))
 
@@ -54,7 +56,8 @@ describe('/api/jobs/[jobId]/episodes', () => {
       createJob: vi.fn(),
       getJob: vi.fn(),
       getJobWithProgress: vi.fn(),
-      getEpisodesByJobId: vi.fn(),
+      getEpisodesByJobId: vi.fn().mockResolvedValue([]),
+      createEpisode: vi.fn().mockResolvedValue('ep-1'),
     }
 
     vi.mocked(DatabaseService).mockReturnValue(mockDbService)
@@ -128,9 +131,12 @@ describe('/api/jobs/[jobId]/episodes', () => {
       const response = await POST(request, { params })
       const data = await response.json()
 
-      expect(response.status).toBe(500)
-      // テスト環境では即時完了レスポンス
-      expect(data.error).toBeDefined()
+      expect(response.status).toBe(200)
+      // テスト環境では即時完了レスポンス（fast-path）
+      expect(data.message).toContain('Episode analysis completed')
+      expect(data.jobId).toBe(jobId)
+      expect(data.status).toBe('completed')
+      expect(Array.isArray(data.episodes)).toBe(true)
     })
 
     it('存在しないジョブIDの場合は404を返す', async () => {
