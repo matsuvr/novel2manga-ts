@@ -753,6 +753,14 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       .where(eq(jobs.id, jobId))
   }
 
+  // 補助: totalPages を修正
+  async updateJobTotalPages(jobId: string, totalPagesCount: number): Promise<void> {
+    await this.db
+      .update(jobs)
+      .set({ totalPages: totalPagesCount, updatedAt: new Date().toISOString() })
+      .where(eq(jobs.id, jobId))
+  }
+
   // Layout status upsert and job totalPages recompute helpers
   async upsertLayoutStatus(params: {
     jobId: string

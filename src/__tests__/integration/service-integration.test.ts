@@ -16,41 +16,51 @@ import type { TestDatabase } from './__helpers/test-database'
 import { cleanupTestDatabase, createTestDatabase, TestDataFactory } from './__helpers/test-database'
 import { TestStorageDataFactory, TestStorageFactory } from './__helpers/test-storage'
 
-// テスト用設定のモック
-vi.mock('@/config', () => ({
-  getTextAnalysisConfig: vi.fn(() => ({
-    userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
-  })),
-  getChunkingConfig: vi.fn(() => ({
-    defaultChunkSize: 2000,
-    defaultOverlapSize: 200,
-    maxChunkSize: 10000,
-    minChunkSize: 100,
-    maxOverlapRatio: 0.5,
-  })),
-  getLLMProviderConfig: vi.fn(() => ({
-    apiKey: 'test-key',
-    model: 'test-model',
-    maxTokens: 1000,
-  })),
-  getDatabaseConfig: vi.fn(() => ({
-    sqlite: {
-      path: ':memory:',
-    },
-  })),
-  getLayoutGenerationConfig: vi.fn(() => ({
-    provider: 'openai',
-    maxTokens: 1000,
-    systemPrompt: 'テスト用レイアウト生成プロンプト',
-  })),
-  getLLMDefaultProvider: vi.fn(() => 'openai'),
-  getEpisodeConfig: vi.fn(() => ({
-    targetCharsPerEpisode: 1000,
-    minCharsPerEpisode: 500,
-    maxCharsPerEpisode: 2000,
-    charsPerPage: 300,
-  })),
-}))
+// 設定モック
+vi.mock('@/config', async (importOriginal) => {
+  const actual = (await importOriginal()) as any
+  return {
+    ...actual,
+    getTextAnalysisConfig: vi.fn(() => ({
+      userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
+    })),
+    getScriptConversionConfig: vi.fn(() => ({
+      systemPrompt: 'script-system',
+      userPromptTemplate: 'Episode: {{episodeText}}',
+    })),
+    // 短いテキストでも十分なチャンク数ができるように調整（エピソード境界の2..3に一致させる）
+    getChunkingConfig: vi.fn(() => ({
+      defaultChunkSize: 150,
+      defaultOverlapSize: 30,
+      maxChunkSize: 10000,
+      minChunkSize: 50,
+      maxOverlapRatio: 0.5,
+    })),
+    getLLMProviderConfig: vi.fn(() => ({
+      apiKey: 'test-key',
+      model: 'test-model',
+      maxTokens: 1000,
+    })),
+    getDatabaseConfig: vi.fn(() => ({
+      sqlite: {
+        path: ':memory:',
+      },
+    })),
+    getLayoutGenerationConfig: vi.fn(() => ({
+      provider: 'openai',
+      maxTokens: 1000,
+      systemPrompt: 'テスト用レイアウト生成プロンプト',
+    })),
+    getLLMDefaultProvider: vi.fn(() => 'openai'),
+    getEpisodeConfig: vi.fn(() => ({
+      targetCharsPerEpisode: 1000,
+      minCharsPerEpisode: 500,
+      maxCharsPerEpisode: 2000,
+      charsPerPage: 300,
+    })),
+    isDevelopment: vi.fn(() => true),
+  }
+})
 
 // StorageFactoryのモック
 let testStorageFactory: TestStorageFactory
@@ -147,6 +157,8 @@ vi.mock('@/repositories/factory', () => {
   const factory = () => ({
     getJobRepository: () => ({
       create: (payload: any) => __testDbForFactory!.service.createJob(payload),
+      updateJobTotalPages: (id: string, totalPages: number) =>
+        (__testDbForFactory!.service as any).updateJobTotalPages?.(id, totalPages),
       updateStep: (
         id: string,
         step: any,
@@ -222,6 +234,51 @@ describe('Service Integration Tests', () => {
 
     // エージェントモックのセットアップ
     setupAgentMocks()
+
+    // setupAgentMocks内の '@/config' モックでは scriptConversion 設定が未定義のため、上書きする
+    vi.doMock('@/config', () => ({
+      getTextAnalysisConfig: vi.fn(() => ({
+        userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
+      })),
+      getScriptConversionConfig: vi.fn(() => ({
+        systemPrompt: 'script-system',
+        userPromptTemplate: 'Episode: {{episodeText}}',
+      })),
+      getChunkingConfig: vi.fn(() => ({
+        // テストでは短い本文でも4チャンク以上になるよう小さめに設定
+        defaultChunkSize: 150,
+        defaultOverlapSize: 30,
+        maxChunkSize: 10000,
+        minChunkSize: 50,
+        maxOverlapRatio: 0.5,
+      })),
+      getLLMProviderConfig: vi.fn(() => ({
+        apiKey: 'test-key',
+        model: 'test-model',
+        maxTokens: 1000,
+      })),
+      getLLMDefaultProvider: vi.fn(() => 'openai'),
+      getEpisodeConfig: vi.fn(() => ({
+        targetCharsPerEpisode: 1000,
+        minCharsPerEpisode: 500,
+        maxCharsPerEpisode: 2000,
+        charsPerPage: 300,
+      })),
+      getDatabaseConfig: vi.fn(() => ({ sqlite: { path: ':memory:' } })),
+      getLayoutGenerationConfig: vi.fn(() => ({
+        provider: 'openai',
+        maxTokens: 1000,
+        systemPrompt: 'テスト用レイアウト生成プロンプト',
+      })),
+      getPageBreakEstimationConfig: vi.fn(() => ({
+        provider: 'openai',
+        maxTokens: 1000,
+        systemPrompt: 'ページ切れ目推定system',
+        userPromptTemplate:
+          'avgLinesPerPage={{avgLinesPerPage}}; avgCharsPerLine={{avgCharsPerLine}}; episodeSummary={{episodeSummary}}; chunkSnippets={{chunkSnippets}}',
+      })),
+      isDevelopment: vi.fn(() => true),
+    }))
     ;({ AnalyzePipeline } = await import('@/services/application/analyze-pipeline'))
   })
 
