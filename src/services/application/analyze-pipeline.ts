@@ -153,6 +153,7 @@ export class AnalyzePipeline {
     // Persist chunks to storage and collect DB rows
     let currentPosition = 0
     const rows: Array<Parameters<typeof chunkRepo.create>[0]> = []
+    const FLUSH_BATCH_SIZE = 100
     for (let i = 0; i < chunks.length; i++) {
       const content = chunks[i]
       // ここで「ストレージ（ファイル）にチャンク本文を書き込む」
@@ -170,9 +171,15 @@ export class AnalyzePipeline {
         wordCount: content.length,
       })
       currentPosition = endPos
+      if (rows.length >= FLUSH_BATCH_SIZE) {
+        // ここで「DBにチャンクメタデータをバッチ挿入（書き込み）」
+        await chunkRepo.createBatch(rows.splice(0, rows.length))
+      }
     }
-    // ここで「DBにチャンクメタデータをバルク挿入（書き込み）」
-    await chunkRepo.createBatch(rows)
+    // 残りをフラッシュ
+    if (rows.length > 0) {
+      await chunkRepo.createBatch(rows.splice(0, rows.length))
+    }
 
     // ここで「DBのジョブ進捗を更新（split ステップの進行度更新）」
     await jobRepo.updateStep(jobId, 'split', 0, chunks.length)
