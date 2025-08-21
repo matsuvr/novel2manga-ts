@@ -18,25 +18,19 @@ import type { TestDatabase } from './__helpers/test-database'
 import { cleanupTestDatabase, createTestDatabase, TestDataFactory } from './__helpers/test-database'
 import { TestStorageDataFactory, TestStorageFactory } from './__helpers/test-storage'
 
-// テスト用設定とモックの設定
+// 設定モック
 vi.mock('@/config', () => ({
   getTextAnalysisConfig: vi.fn(() => ({
     userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
+  })),
+  getScriptConversionConfig: vi.fn(() => ({
+    systemPrompt: 'script-system',
+    userPromptTemplate: 'Episode: {{episodeText}}',
   })),
   getLLMProviderConfig: vi.fn(() => ({
     apiKey: 'test-key',
     model: 'test-model',
     maxTokens: 1000,
-  })),
-  getDatabaseConfig: vi.fn(() => ({
-    sqlite: {
-      path: ':memory:',
-    },
-  })),
-  getLayoutGenerationConfig: vi.fn(() => ({
-    provider: 'openai',
-    maxTokens: 1000,
-    systemPrompt: 'テスト用レイアウト生成プロンプト',
   })),
   getLLMDefaultProvider: vi.fn(() => 'openai'),
   getEpisodeConfig: vi.fn(() => ({
@@ -45,6 +39,7 @@ vi.mock('@/config', () => ({
     maxCharsPerEpisode: 2000,
     charsPerPage: 300,
   })),
+  isDevelopment: vi.fn(() => true),
 }))
 
 let testStorageFactory: TestStorageFactory

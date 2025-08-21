@@ -87,6 +87,8 @@ export interface JobDbPort {
     id: string,
     stepType: 'split' | 'analyze' | 'episode' | 'layout' | 'render',
   ): Promise<void>
+  /** Update job total pages */
+  updateJobTotalPages(id: string, totalPages: number): Promise<void>
   /** Update consolidated job progress model */
   updateJobProgress(id: string, progress: JobProgress): Promise<void>
   /** Set lastError and optionally increment retry */

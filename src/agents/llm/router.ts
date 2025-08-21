@@ -3,6 +3,7 @@ import {
   getLLMFallbackChain,
   getLLMProviderConfig,
 } from '../../config/llm.config'
+import { FakeLlmClient } from '../../llm/fake'
 import { CerebrasClient, type CerebrasClientConfig } from './cerebras'
 import { OpenAICompatibleClient } from './openai-compatible'
 import type { LlmClient, LlmProvider, OpenAICompatibleConfig } from './types'
@@ -13,6 +14,7 @@ export type ProviderConfig =
       'provider'
     >)
   | ({ provider: 'cerebras' } & CerebrasClientConfig)
+  | { provider: 'fake' }
 
 export function createLlmClient(cfg: ProviderConfig): LlmClient {
   switch (cfg.provider) {
@@ -23,6 +25,8 @@ export function createLlmClient(cfg: ProviderConfig): LlmClient {
       return new OpenAICompatibleClient({ ...cfg, provider: cfg.provider })
     case 'cerebras':
       return new CerebrasClient(cfg)
+    case 'fake':
+      return new FakeLlmClient()
     default:
       throw new Error(`Unsupported provider: ${(cfg as ProviderConfig).provider}`)
   }
@@ -38,6 +42,10 @@ export function selectProviderOrder(): LlmProvider[] {
 }
 
 export function createClientForProvider(provider: LlmProvider): LlmClient {
+  if (provider === 'fake') {
+    return createLlmClient({ provider: 'fake' })
+  }
+
   const cfg = getLLMProviderConfig(provider)
   if (!cfg || typeof cfg.model !== 'string' || !cfg.model) {
     throw new Error(`Missing or invalid model for provider: ${provider}`)
@@ -56,7 +64,7 @@ export function createClientForProvider(provider: LlmProvider): LlmClient {
   const oc: Omit<OpenAICompatibleConfig, 'provider'> = {
     apiKey: cfg.apiKey,
     model: cfg.model,
-    baseUrl: cfg.baseUrl ?? defaultBaseUrl(provider as Exclude<LlmProvider, 'cerebras'>),
+    baseUrl: cfg.baseUrl ?? defaultBaseUrl(provider as Exclude<LlmProvider, 'cerebras' | 'fake'>),
     useChatCompletions: true,
   }
   return createLlmClient({
@@ -81,7 +89,7 @@ function _requireConfigured<T>(value: T | undefined, label: string): T {
   return value
 }
 
-function defaultBaseUrl(provider: Exclude<LlmProvider, 'cerebras'>): string {
+function defaultBaseUrl(provider: Exclude<LlmProvider, 'cerebras' | 'fake'>): string {
   switch (provider) {
     case 'groq':
       return 'https://api.groq.com/openai/v1'
