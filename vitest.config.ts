@@ -13,22 +13,8 @@ export default defineConfig({
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
-      // 単体テストのみ実行するために、tests/ 配下（統合/E2E）と一時テストを除外
-      '**/tests/**', // tests/integration/**（E2E は tests/integration/e2e/）をまとめて除外
-      '**/src/__tests__/e2e/**', // E2EテストはPlaywrightで実行するため除外
-      // API の重いルート依存テスト（Next サーバやCanvas等が必要）
-      '**/src/__tests__/api/render*.test.ts',
-      '**/src/__tests__/api/render-complete.test.ts',
-      '**/src/__tests__/api/layout-generate.test.ts',
-      '**/src/__tests__/api/share.test.ts',
-      '**/src/__tests__/api/export.test.ts',
-      '**/src/__tests__/api/llm-fallback.test.ts',
-      // DOM/Canvas 実描画に依存
-      '**/src/__tests__/canvas/**',
-      // 参照先が存在しない古い型テスト
-      '**/src/types/__tests__/novel-models.test.ts',
-      // 不安定/WIP なユーティリティテスト
-      '**/src/__tests__/cache-kv.test.ts',
+      '**/tests/**', // 統合テストを除外
+      '**/src/__tests__/e2e/**', // E2Eテストを除外（Playwrightで実行）
       '**/tmp_test/**', // 一時テストファイルを除外
       '**/.{idea,git,cache,output,temp}/**',
       '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*',

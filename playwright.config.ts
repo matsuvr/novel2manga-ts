@@ -8,7 +8,7 @@ export default defineConfig({
   testDir: './tests/integration/e2e',
 
   /* 長時間の処理を考慮したタイムアウト設定 */
-  timeout: 5 * 60 * 1000, // 5分
+  timeout: process.env.NODE_ENV === 'test' ? 45 * 1000 : 5 * 60 * 1000, // テスト環境: 45秒, 通常: 5分
   expect: {
     timeout: 30 * 1000, // 30秒
   },

@@ -51,6 +51,7 @@ export function adaptJobPort(db: DatabaseService): JobDbPort {
     updateJobProgress: (id, progress: JobProgress) => db.updateJobProgress(id, progress),
     updateJobError: (id, error, step, incrementRetry) =>
       db.updateJobError(id, error, step, incrementRetry),
+    updateJobTotalPages: (id, totalPages) => db.updateJobTotalPages(id, totalPages),
   }
 }
 

@@ -16,9 +16,9 @@ export interface ProviderConfig {
 
 // Default provider (config-driven only; no environment variable overrides)
 export function getDefaultProvider(): LLMProvider {
-  // Tests should use Gemini to avoid expensive or flaky external calls
+  // Tests should use fake provider to avoid expensive or flaky external calls
   if (process.env.NODE_ENV === 'test') {
-    return 'groq'
+    return 'fake'
   }
   return 'groq'
 }
@@ -26,7 +26,7 @@ export function getDefaultProvider(): LLMProvider {
 // Provider fallback chain (first item is primary fallback)
 export function getFallbackChain(): LLMProvider[] {
   // Config-driven fallback order
-  const chain: LLMProvider[] = ['groq', 'openai']
+  const chain: LLMProvider[] = ['groq', 'openrouter', 'openai']
   return chain
 }
 
@@ -48,7 +48,7 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
     model: 'gpt-5-nano', // gpt-5-nano は8月5日に登場したモデルです。モデル指定を間違えているわけではありません
-    maxTokens: 8192,
+    maxTokens: 128000,
     timeout: 60_000,
   },
   groq: {

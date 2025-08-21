@@ -30,7 +30,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     if (!body.jobId) return validationError('jobIdが必要です')
     validateJobId(body.jobId)
 
-    const expiresIn = body.expiresIn || 72 // デフォルト72時間
+    const expiresIn = body.expiresIn !== undefined ? body.expiresIn : 72 // デフォルト72時間
 
     // 有効期限の範囲チェック（1時間〜1週間）
     if (expiresIn < 1 || expiresIn > 168) {
