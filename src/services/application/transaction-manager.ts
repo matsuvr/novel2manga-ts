@@ -126,20 +126,54 @@ export class TransactionManager {
         const db = getDatabase()
         drizzleDb = db
 
-        // Drizzleトランザクション開始
-        await db.transaction(async (tx) => {
-          for (const dbOp of this.dbOps) {
-            // DB操作に取引オブジェクトを渡す（後方互換性のためoptional）
-            await dbOp.execute(tx)
-          }
+        // better-sqlite3 は async コールバック非対応のため、$client があり exec が使える場合は手動境界
+        const anyDb = db as unknown as { $client?: { exec?: (sql: string) => void } }
+        const canManualTx = !!anyDb.$client?.exec
 
-          // Phase 3: ストレージ追跡（DB操作と同一トランザクション内）
-          for (const trackingOp of this.trackingOps) {
-            await recordStorageFile(trackingOp.params, tx)
+        if (canManualTx) {
+          // 手動トランザクション境界
+          const exec = anyDb.$client?.exec ? anyDb.$client.exec.bind(anyDb.$client) : undefined
+          if (!exec) {
+            throw new Error('Database client does not support manual transactions')
           }
-        })
-
-        this.committed = true
+          exec('BEGIN IMMEDIATE')
+          try {
+            for (const dbOp of this.dbOps) {
+              await dbOp.execute(db as unknown as DrizzleTransaction)
+            }
+            for (const trackingOp of this.trackingOps) {
+              await recordStorageFile(trackingOp.params, db as unknown as DrizzleTransaction)
+            }
+            exec('COMMIT')
+            this.committed = true
+          } catch (e) {
+            try {
+              exec('ROLLBACK')
+            } catch (rollbackError) {
+              console.error('Manual transaction rollback failed:', rollbackError)
+            }
+            throw e
+          }
+        } else {
+          // Drizzle標準のトランザクションAPI
+          await db.transaction((tx) => {
+            let errorInAsync: unknown | null = null
+            ;(async () => {
+              try {
+                for (const dbOp of this.dbOps) {
+                  await dbOp.execute(tx as unknown as DrizzleTransaction)
+                }
+                for (const trackingOp of this.trackingOps) {
+                  await recordStorageFile(trackingOp.params, tx as unknown as DrizzleTransaction)
+                }
+              } catch (err) {
+                errorInAsync = err
+              }
+            })()
+            if (errorInAsync) throw errorInAsync
+          })
+          this.committed = true
+        }
       } else {
         // DB操作がない場合でも追跡は実行
         for (const trackingOp of this.trackingOps) {
