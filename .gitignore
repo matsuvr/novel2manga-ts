@@ -88,6 +88,7 @@ null
 # Project specific
 output.txt
 .local-storage/
+.test-storage/
 tmp_test/
 
 # log files
