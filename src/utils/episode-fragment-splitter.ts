@@ -146,9 +146,13 @@ export function getFragmentContext(
   const previous = targetIndex > 0 ? fragments[targetIndex - 1] : null
   const next = targetIndex < fragments.length - 1 ? fragments[targetIndex + 1] : null
 
+  const { getChunkingConfig } = require('@/config')
+  const config = getChunkingConfig()
+  const contextSize = config.scriptConversion?.contextSize ?? 200
+
   return {
-    previousFragment: previous?.text.slice(-200) || '', // 前のフラグメントの末尾200文字
+    previousFragment: previous?.text.slice(-contextSize) || '', // 前のフラグメントの末尾文字
     currentFragment: current?.text || '',
-    nextFragment: next?.text.slice(0, 200) || '', // 次のフラグメントの先頭200文字
+    nextFragment: next?.text.slice(0, contextSize) || '', // 次のフラグメントの先頭文字
   }
 }

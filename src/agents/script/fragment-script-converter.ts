@@ -187,7 +187,7 @@ async function convertSingleFragment(
       name: 'fragment-script-conversion',
       systemPrompt: fragmentConfig.systemPrompt,
       userPrompt: prompt,
-      schema: FragmentScriptSchema as unknown as z.ZodTypeAny,
+      schema: FragmentScriptSchema,
       schemaName: 'FragmentScript',
     })
 
@@ -295,5 +295,9 @@ function shouldMergeScenes(scene1: Scene, scene2: Scene): boolean {
     0,
   )
 
-  return scene1Length < 200 || scene2Length < 200
+  const { getChunkingConfig } = require('@/config')
+  const config = getChunkingConfig()
+  const minSceneLength = config.scriptConversion?.minSceneLength ?? 200
+
+  return scene1Length < minSceneLength || scene2Length < minSceneLength
 }
