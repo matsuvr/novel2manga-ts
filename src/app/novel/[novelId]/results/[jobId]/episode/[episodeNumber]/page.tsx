@@ -43,7 +43,12 @@ export default async function EpisodePreviewPage({ params }: { params: Promise<P
         pageNumbers = parsed.pages.map((p) => p.page_number).sort((a, b) => a - b)
       }
     }
-  } catch (_e) {
+  } catch (e) {
+    console.error('Failed to parse layout YAML for episode', {
+      jobId,
+      episodeNumber: epNum,
+      error: e instanceof Error ? e.message : String(e),
+    })
     // YAML parse failure - layout data is required
   }
   if (pageNumbers.length === 0) {

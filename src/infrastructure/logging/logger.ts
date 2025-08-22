@@ -95,16 +95,24 @@ class FileLogger implements LoggerPort {
 class MultiLogger implements LoggerPort {
   constructor(private readonly loggers: LoggerPort[]) {}
   debug(msg: string, meta?: Record<string, unknown>): void {
-    this.loggers.forEach((l) => l.debug(msg, meta))
+    for (const l of this.loggers) {
+      l.debug(msg, meta)
+    }
   }
   info(msg: string, meta?: Record<string, unknown>): void {
-    this.loggers.forEach((l) => l.info(msg, meta))
+    for (const l of this.loggers) {
+      l.info(msg, meta)
+    }
   }
   warn(msg: string, meta?: Record<string, unknown>): void {
-    this.loggers.forEach((l) => l.warn(msg, meta))
+    for (const l of this.loggers) {
+      l.warn(msg, meta)
+    }
   }
   error(msg: string, meta?: Record<string, unknown>): void {
-    this.loggers.forEach((l) => l.error(msg, meta))
+    for (const l of this.loggers) {
+      l.error(msg, meta)
+    }
   }
   withContext(ctx: Record<string, unknown>): LoggerPort {
     return new MultiLogger(this.loggers.map((l) => l.withContext(ctx)))
