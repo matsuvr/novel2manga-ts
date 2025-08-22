@@ -31,7 +31,9 @@ export async function convertEpisodeTextToScript(
   }
 
   // フラグメント変換を使用する場合
-  if (options?.useFragmentConversion && input.episodeText.length > 4000) {
+  const appCfg = getAppConfigWithOverrides()
+  const fragmentConversionThreshold = appCfg.chunking.scriptConversion.fragmentConversionThreshold
+  if (options?.useFragmentConversion && input.episodeText.length > fragmentConversionThreshold) {
     const { convertEpisodeTextToScriptWithFragments } = await import('./fragment-script-converter')
     return convertEpisodeTextToScriptWithFragments(input, {
       jobId: options.jobId,
@@ -72,7 +74,6 @@ export async function convertEpisodeTextToScript(
 
   const generator = getLlmStructuredGenerator()
   // Read prompts directly from app config to avoid test mocks on '@/config'
-  const appCfg = getAppConfigWithOverrides()
   const sc = appCfg.llm.scriptConversion || { systemPrompt: '', userPromptTemplate: '' }
   const cfg = {
     systemPrompt: sc.systemPrompt,

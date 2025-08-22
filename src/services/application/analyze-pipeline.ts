@@ -250,8 +250,9 @@ export class AnalyzePipeline {
       .strip()
 
     // Analyze chunks with limited concurrency
-    const DEFAULT_MAX_CONCURRENT = 3
-    const maxConcurrent = Math.max(1, Math.min(DEFAULT_MAX_CONCURRENT, chunks.length))
+    const { getProcessingConfig } = await import('@/config')
+    const processingConfig = getProcessingConfig()
+    const maxConcurrent = Math.max(1, Math.min(processingConfig.maxConcurrentChunks, chunks.length))
     const runOne = async (i: number) => {
       // ここで「DBのジョブ進捗を更新（analyze_chunk_i ステップ）」
       await jobRepo.updateStep(jobId, `analyze_chunk_${i}`, i, chunks.length)
