@@ -25,6 +25,7 @@ function hasUpdateEpisodeTextPath(service: unknown): service is {
     typeof (service as Record<string, unknown>).updateEpisodeTextPath === 'function'
   )
 }
+
 import type { PageBreakPlan } from '@/types/script'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { saveEpisodeBoundaries } from '@/utils/storage'
@@ -606,46 +607,42 @@ export class AnalyzePipeline {
             episodePreview: `${episodeText.substring(0, 100)}...`,
           })
 
-          // Persist episode text to storage using specialized port and update database atomically
-          const episodeTextKey = await this.ports.episodeText.putEpisodeText(jobId, ep, episodeText)
+          // Persist episode text to storage and update database atomically
+          const { StorageFactory, StorageKeys } = await import('@/utils/storage')
+          const { executeStorageWithDbOperation } = await import(
+            '@/services/application/transaction-manager'
+          )
 
-          // Use TransactionManager for atomic database update with storage tracking
-          try {
-            const { executeStorageWithTracking } = await import(
-              '@/services/application/transaction-manager'
-            )
+          const storage = await StorageFactory.getAnalysisStorage()
+          const keyFn = (StorageKeys as unknown as Record<string, unknown>).episodeText as
+            | undefined
+            | ((jobId: string, ep: number) => string)
+          const episodeTextKey =
+            typeof keyFn === 'function' ? keyFn(jobId, ep) : `${jobId}/episode_${ep}.txt`
 
-            // Since episode text is already saved, we use tracking-only operation for consistency
-            await executeStorageWithTracking({
-              storage: await (await import('@/utils/storage')).StorageFactory.getAnalysisStorage(),
-              key: episodeTextKey,
-              value: episodeText,
-              metadata: {
-                contentType: 'text/plain; charset=utf-8',
-                jobId,
-                episode: String(ep),
-              },
-              tracking: {
-                filePath: episodeTextKey,
-                fileCategory: 'episode',
-                fileType: 'txt',
-                jobId,
-                mimeType: 'text/plain; charset=utf-8',
-              },
-            })
-
-            // Update database with episode text path
-            const dbService = getDatabaseService()
-            if (hasUpdateEpisodeTextPath(dbService)) {
-              await dbService.updateEpisodeTextPath(jobId, ep, episodeTextKey)
-            }
-          } catch (e) {
-            logger.warn('Failed to update episodeTextPath in DB; continuing', {
+          await executeStorageWithDbOperation({
+            storage,
+            key: episodeTextKey,
+            value: episodeText,
+            metadata: {
+              contentType: 'text/plain; charset=utf-8',
               jobId,
-              episodeNumber: ep,
-              error: e instanceof Error ? e.message : String(e),
-            })
-          }
+              episode: String(ep),
+            },
+            dbOperation: async () => {
+              const dbService = getDatabaseService()
+              if (hasUpdateEpisodeTextPath(dbService)) {
+                await dbService.updateEpisodeTextPath(jobId, ep, episodeTextKey)
+              }
+            },
+            tracking: {
+              filePath: episodeTextKey,
+              fileCategory: 'episode',
+              fileType: 'txt',
+              jobId,
+              mimeType: 'text/plain; charset=utf-8',
+            },
+          })
 
           // Extract structured data from narrative arc analysis for the current episode
           const currentEpisodeBoundary = boundaries.find((b) => b.episodeNumber === ep)
