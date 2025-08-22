@@ -9,7 +9,6 @@ const zBody = z.object({
 })
 
 const textAnalysisOutputSchema = z.object({
-  summary: z.string(),
   characters: z.array(
     z.object({
       name: z.string(),
@@ -20,7 +19,6 @@ const textAnalysisOutputSchema = z.object({
   scenes: z.array(
     z.object({
       location: z.string(),
-      time: z.string().optional(),
       description: z.string(),
       startIndex: z.number(),
       endIndex: z.number(),
@@ -30,7 +28,7 @@ const textAnalysisOutputSchema = z.object({
     z.object({
       speakerId: z.string(),
       text: z.string(),
-      emotion: z.string().optional(),
+      emotion: z.string(),
       index: z.number(),
     }),
   ),
@@ -41,7 +39,6 @@ const textAnalysisOutputSchema = z.object({
       importance: z.number().min(1).max(10),
       startIndex: z.number(),
       endIndex: z.number(),
-      text: z.string().optional(),
     }),
   ),
   situations: z.array(

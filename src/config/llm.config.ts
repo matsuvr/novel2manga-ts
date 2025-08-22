@@ -54,7 +54,8 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
   groq: {
     apiKey: process.env.GROQ_API_KEY,
     model: 'openai/gpt-oss-120b',
-    maxTokens: 65536,
+    // プロンプト簡素化により削減
+    maxTokens: 60000,
     timeout: 30_000,
   },
   openrouter: {
@@ -137,3 +138,45 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
 }
 
 // Accessor for per-use-case parameters has been removed. Use provider config instead.
+
+// Model limits configuration (integrated from llm.limits.ts)
+export type ModelLimits = {
+  hardCap: number
+  softCapDefault: number
+  minCompletion: number
+}
+
+// 集中管理: モデルごとの出力上限や既定ソフト上限をここで定義
+export function getModelLimits(provider: string, model: string): ModelLimits {
+  // 既定値（環境で上書き可）
+  const _defaultSoftCap = toNum(process.env.GROQ_SOFT_CAP) ?? 60000
+  const defaultMin = toNum(process.env.GROQ_MIN_COMPLETION) ?? 1024
+
+  if (provider === 'groq') {
+    // GPT-OSS 120B は理論上 65535
+    if (/gpt-oss-120b/i.test(model)) {
+      return {
+        hardCap: 65535,
+        softCapDefault: toNum(process.env.GROQ_SOFT_CAP) ?? 60000,
+        minCompletion: defaultMin,
+      }
+    }
+    // GPT-OSS 20B などその他Groqモデル
+    return {
+      hardCap: toNum(process.env.GROQ_MAX_TOKENS) ?? 8192,
+      softCapDefault: toNum(process.env.GROQ_SOFT_CAP) ?? 8192,
+      minCompletion: defaultMin,
+    }
+  }
+  return {
+    hardCap: toNum(process.env.LLM_MAX_TOKENS) ?? Number.MAX_SAFE_INTEGER,
+    softCapDefault: toNum(process.env.LLM_SOFT_CAP) ?? 8192,
+    minCompletion: toNum(process.env.LLM_MIN_COMPLETION) ?? 512,
+  }
+}
+
+function toNum(v: string | undefined): number | undefined {
+  if (!v) return undefined
+  const n = Number(v)
+  return Number.isFinite(n) && n > 0 ? n : undefined
+}

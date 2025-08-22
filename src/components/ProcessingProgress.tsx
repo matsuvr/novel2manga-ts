@@ -342,7 +342,18 @@ function ProcessingProgress({
             layout: 4,
             render: 5,
           }
-          const failedIndex = failedStepMap[data.job.currentStep] || 0
+          // 正規化: analyze_chunk_*, layout_episode_*, render_* などの派生ステップを親ステップにマップ
+          const rawStep = data.job.currentStep || ''
+          const normalizedStep = rawStep.startsWith('analyze_')
+            ? 'analyze'
+            : rawStep.startsWith('layout')
+              ? 'layout'
+              : rawStep.startsWith('render')
+                ? 'render'
+                : rawStep.startsWith('episode')
+                  ? 'episode'
+                  : rawStep
+          const failedIndex = failedStepMap[normalizedStep] || 0
 
           updatedSteps.forEach((step, index) => {
             if (index < failedIndex) {
