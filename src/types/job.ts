@@ -16,13 +16,12 @@ export interface JobProgress {
   processedChunks: number
   totalChunks: number
   episodes: EpisodeBoundary[]
-  // Per-episode page progress: planned (YAML/generated), rendered (images), total (target/estimated)
+  // Per-episode page progress: actualPages (YAML/generated), rendered (images)
   perEpisodePages?: Record<
     number,
     {
-      planned: number
+      actualPages: number
       rendered: number
-      total?: number
       validation?: {
         normalizedPages: number[]
         pagesWithIssueCounts: Record<number, number>
@@ -48,7 +47,6 @@ export interface EpisodeBoundary {
   summary?: string
   startCharIndex: number
   endCharIndex: number
-  estimatedPages: number
 }
 
 // RetryableError は '@/errors/retryable-error' のクラスを使用します

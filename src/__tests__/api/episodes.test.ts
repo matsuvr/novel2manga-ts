@@ -105,7 +105,6 @@ describe('/api/jobs/[jobId]/episodes', () => {
               title: 'Episode 1',
               startChunk: 0,
               endChunk: 2,
-              estimatedPages: 3,
             },
           ],
         },

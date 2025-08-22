@@ -35,7 +35,6 @@ describe('EpisodeRepository', () => {
         startCharIndex: 0,
         endChunk: 1,
         endCharIndex: 0,
-        estimatedPages: 1,
         confidence: 0.5 as unknown as number,
       } as Omit<NewEpisode, 'id' | 'createdAt'>,
     ])
@@ -57,7 +56,6 @@ describe('EpisodeRepository', () => {
         startCharIndex: 0,
         endChunk: 1,
         endCharIndex: 0,
-        estimatedPages: 1,
         confidence: 0.5 as unknown as number,
       },
     ]
@@ -83,7 +81,6 @@ describe('EpisodeRepository', () => {
           startCharIndex: 0,
           endChunk: 1,
           endCharIndex: 0,
-          estimatedPages: 1,
           confidence: 0.5 as unknown as number,
         } as Omit<NewEpisode, 'id' | 'createdAt'>,
       ]),

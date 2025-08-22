@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { getLlmStructuredGenerator } from '@/agent/structured-generator'
-import { getEpisodeConfig, getNarrativeAnalysisConfig } from '@/config'
+import { getNarrativeAnalysisConfig } from '@/config'
 import type { IChunkRepository } from '@/domain/repositories/chunk-repository'
 import type { ChunkAnalysisResult } from '@/types/chunk'
 import type { EpisodeBoundary } from '@/types/episode'
@@ -43,10 +43,7 @@ export async function analyzeNarrativeArc(
     isMiddleOfNovel: input.isMiddleOfNovel || false,
   })
 
-  const episodeConfig = getEpisodeConfig()
-  const targetPages = Math.round(input.targetCharsPerEpisode / episodeConfig.charsPerPage)
-  const minPages = Math.round(input.minCharsPerEpisode / episodeConfig.charsPerPage)
-  const maxPages = Math.round(input.maxCharsPerEpisode / episodeConfig.charsPerPage)
+  // Remove page-based calculations as we now rely on advanced LLM for intelligent page estimation
 
   // チャンクを完全に繋げて、一つの連続したテキストとして扱う
   // 前回のエピソードの終わり部分があれば、それを先頭に追加
@@ -233,9 +230,6 @@ export async function analyzeNarrativeArc(
 
   const userPrompt = customizedPrompt
     .replace('{{totalChars}}', fullText.length.toString())
-    .replace('{{targetPages}}', targetPages.toString())
-    .replace('{{minPages}}', minPages.toString())
-    .replace('{{maxPages}}', maxPages.toString())
     .replace('{{characterList}}', characterList || 'なし')
     .replace('{{overallSummary}}', 'チャンク分析結果から抽出された情報')
     .replace('{{highlightsInfo}}', highlightsInfo || 'なし')
@@ -252,9 +246,15 @@ export async function analyzeNarrativeArc(
           .describe(`エピソード番号（${input.startingEpisodeNumber || 1}から開始）`),
         title: z.string().nullable().optional(),
         summary: z.string().nullable().optional(),
-        estimatedPages: z.number(),
         confidence: z.number().min(0).max(1),
         reasoning: z.string(),
+        characterList: z
+          .array(z.string())
+          .describe('入力されたキャラクター名のリストをまとめたもの'),
+        sceneList: z.array(z.string()).describe('入力されたシーンのリストをまとめたもの'),
+        dialogueList: z.array(z.string()).describe('入力されたセリフのリストをまとめたもの'),
+        highlightList: z.array(z.string()).describe('入力したハイライトのリストをまとめたもの'),
+        situationList: z.array(z.string()).describe('入力した状況のリストをまとめたもの'),
       }),
     ),
     overallAnalysis: z.string(),
@@ -264,7 +264,6 @@ export async function analyzeNarrativeArc(
   try {
     console.log('Sending to LLM for analysis...')
     console.log('Text length:', fullText.length)
-    console.log('Target pages:', targetPages)
 
     const cfg = getNarrativeAnalysisConfig()
     const result = await generator.generateObjectWithFallback({
@@ -283,23 +282,65 @@ export async function analyzeNarrativeArc(
     }
 
     console.log('LLM analysis successful')
-    console.log('Found boundaries:', result.boundaries.length)
-    console.log('Overall analysis:', result.overallAnalysis)
+    // Defensive guard: some tests may stub generator and omit boundaries
+    type RawBoundary = {
+      startPosition: number
+      endPosition: number
+      episodeNumber: number
+      title?: string | null
+      summary?: string | null
+      confidence: number
+      reasoning: string
+      characterList: string[]
+      sceneList: string[]
+      dialogueList: string[]
+      highlightList: string[]
+      situationList: string[]
+    }
+    const boundariesArr: RawBoundary[] = Array.isArray(
+      (result as unknown as { boundaries?: unknown }).boundaries,
+    )
+      ? (result as unknown as { boundaries: RawBoundary[] }).boundaries
+      : []
+    console.log('Found boundaries:', boundariesArr.length)
+    console.log('Overall analysis:', (result as { overallAnalysis?: unknown }).overallAnalysis)
 
     // バウンダリーが空の場合の警告
-    if (result.boundaries.length === 0) {
+    if (boundariesArr.length === 0) {
       console.warn('WARNING: No episode boundaries found by LLM')
-      console.warn('Suggestions:', result.suggestions)
+      console.warn('Suggestions:', (result as { suggestions?: unknown }).suggestions)
       return []
     }
 
     // 文字位置からチャンク番号・位置を計算
     const previousTextLength = input.previousEpisodeEndText?.length || 0
-    // Convert nullable fields to undefined for type compatibility
-    const processedBoundaries = result.boundaries.map((boundary) => ({
-      ...boundary,
+    // Convert nullable fields to undefined for type compatibility and ensure required fields are preserved
+    const processedBoundaries: Array<{
+      startPosition: number
+      endPosition: number
+      episodeNumber: number
+      title?: string
+      summary?: string
+      confidence: number
+      reasoning: string
+      characterList: string[]
+      sceneList: string[]
+      dialogueList: string[]
+      highlightList: string[]
+      situationList: string[]
+    }> = boundariesArr.map((boundary) => ({
+      startPosition: boundary.startPosition,
+      endPosition: boundary.endPosition,
+      episodeNumber: boundary.episodeNumber,
       title: boundary.title ?? undefined,
       summary: boundary.summary ?? undefined,
+      confidence: boundary.confidence,
+      reasoning: boundary.reasoning,
+      characterList: boundary.characterList || [],
+      sceneList: boundary.sceneList || [],
+      dialogueList: boundary.dialogueList || [],
+      highlightList: boundary.highlightList || [],
+      situationList: boundary.situationList || [],
     }))
 
     const boundaries = convertPositionsToBoundaries(
@@ -328,9 +369,13 @@ function convertPositionsToBoundaries(
     episodeNumber: number
     title?: string
     summary?: string
-    estimatedPages: number
     confidence: number
     reasoning: string
+    characterList: string[]
+    sceneList: string[]
+    dialogueList: string[]
+    highlightList: string[]
+    situationList: string[]
   }>,
   chunks: Array<{
     chunkIndex: number
@@ -404,8 +449,13 @@ function convertPositionsToBoundaries(
       episodeNumber: boundary.episodeNumber,
       title: boundary.title,
       summary: boundary.summary,
-      estimatedPages: boundary.estimatedPages,
       confidence: boundary.confidence,
+      reasoning: boundary.reasoning,
+      characterList: boundary.characterList,
+      sceneList: boundary.sceneList,
+      dialogueList: boundary.dialogueList,
+      highlightList: boundary.highlightList,
+      situationList: boundary.situationList,
     }
   })
 }

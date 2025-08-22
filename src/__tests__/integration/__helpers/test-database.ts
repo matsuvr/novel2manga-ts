@@ -346,7 +346,6 @@ export class TestDataFactory {
       startCharIndex: overrides.startCharIndex ?? 0,
       endChunk: overrides.endChunk ?? 1,
       endCharIndex: overrides.endCharIndex ?? 100,
-      estimatedPages: overrides.estimatedPages ?? 5,
       confidence: overrides.confidence ?? 0.9,
       // createdAt はDBデフォルト
     }
@@ -362,7 +361,6 @@ export class TestDataFactory {
       'startCharIndex',
       'endChunk',
       'endCharIndex',
-      'estimatedPages',
       'confidence',
       'createdAt',
     ])

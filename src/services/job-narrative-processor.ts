@@ -256,7 +256,6 @@ export class JobNarrativeProcessor {
         startCharIndex: boundary.startCharIndex,
         endChunk: boundary.endChunk,
         endCharIndex: boundary.endCharIndex,
-        estimatedPages: boundary.estimatedPages,
         confidence: boundary.confidence,
       })
     }
@@ -275,7 +274,6 @@ export class JobNarrativeProcessor {
       startCharIndex: number
       endChunk: number
       endCharIndex: number
-      estimatedPages: number
       confidence: number
       title?: string | null
       summary?: string | null
@@ -298,7 +296,6 @@ export class JobNarrativeProcessor {
           summary: ep.summary || undefined,
           startCharIndex: ep.startCharIndex,
           endCharIndex: ep.endCharIndex,
-          estimatedPages: ep.estimatedPages,
         })),
       ],
       lastEpisodeEndPosition: lastEpisode
