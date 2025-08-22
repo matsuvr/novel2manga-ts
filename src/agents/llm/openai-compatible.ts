@@ -345,7 +345,7 @@ export function enforceJsonSchemaConstraintsForStructuredOutputs(schema: unknown
 // zod-to-json-schema は { $ref: "#/$defs/Name", $defs: { Name: {type: 'object', ...} } } のような
 // ルート$ref構造を生成することがある。Groq Structured Outputsは「ルートはobject型」を要求するため、
 // ルート参照を実体へ差し替える。
-export function flattenRootObjectSchema(schema: unknown, _expectedName?: string): unknown {
+export function flattenRootObjectSchema(schema: unknown): unknown {
   if (!schema || typeof schema !== 'object') return schema
   const s = schema as Record<string, unknown>
   const ref = typeof s.$ref === 'string' ? (s.$ref as string) : null

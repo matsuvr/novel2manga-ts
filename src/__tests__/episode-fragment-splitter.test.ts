@@ -78,7 +78,7 @@ describe('episode-fragment-splitter', () => {
         const trimmed = fragmentText.trim()
         if (trimmed.length > 0) {
           const lastChar = trimmed[trimmed.length - 1]
-          expect(['。', '！', '？', trimmed[trimmed.length - 1]]).toContain(lastChar)
+          expect(['。', '！', '？']).toContain(lastChar)
         }
       })
     })
