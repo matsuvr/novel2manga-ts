@@ -74,3 +74,49 @@ export async function recordStorageFile(
     })
     .onConflictDoNothing()
 }
+
+/**
+ * Synchronous version of recordStorageFile for use in better-sqlite3 transactions
+ */
+export function recordStorageFileSync(
+  params: RecordStorageFileParams,
+  tx: DrizzleTransaction,
+): void {
+  // For SQLite transactions, we need the novelId upfront since we can't do async operations
+  if (!params.novelId && params.jobId) {
+    // Try to get novelId from the transaction context
+    const rows = tx
+      .select({ novelId: jobs.novelId })
+      .from(jobs)
+      .where(eq(jobs.id, params.jobId))
+      .limit(1)
+      .all()
+    const novelId = rows[0]?.novelId
+    if (novelId) {
+      params = { ...params, novelId }
+    }
+  }
+
+  if (!params.novelId) {
+    // novelId は NOT NULL のため、確定できない場合は追跡スキップ（呼び出し元で後続ミスを避ける）
+    return
+  }
+
+  const id = randomUUID()
+  const now = new Date().toISOString()
+
+  tx.insert(storageFiles)
+    .values({
+      id,
+      novelId: params.novelId,
+      jobId: params.jobId || null, // Convert undefined to null for database
+      filePath: params.filePath,
+      fileCategory: params.fileCategory,
+      fileType: params.fileType,
+      mimeType: params.mimeType,
+      fileSize: params.fileSize,
+      createdAt: now,
+    })
+    .onConflictDoNothing()
+    .run()
+}
