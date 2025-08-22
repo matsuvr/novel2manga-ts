@@ -1,3 +1,4 @@
+import { executeStorageWithTracking } from '@/services/application/transaction-manager'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
 
 export interface ChunkStoragePort {
@@ -21,6 +22,11 @@ export interface LayoutStoragePort {
   // Incremental progress checkpoint for atomic resumes
   putEpisodeLayoutProgress(jobId: string, episodeNumber: number, json: string): Promise<string>
   getEpisodeLayoutProgress(jobId: string, episodeNumber: number): Promise<string | null>
+}
+
+export interface EpisodeTextStoragePort {
+  putEpisodeText(jobId: string, episodeNumber: number, text: string): Promise<string>
+  getEpisodeText(jobId: string, episodeNumber: number): Promise<string | null>
 }
 
 export interface RenderStoragePort {
@@ -49,6 +55,7 @@ export interface OutputStoragePort {
     meta?: Record<string, string | number>,
   ): Promise<string>
   getExport(path: string): Promise<{ text: string } | null>
+  deleteExport(path: string): Promise<void>
 }
 
 export interface StoragePorts {
@@ -56,6 +63,7 @@ export interface StoragePorts {
   chunk: ChunkStoragePort
   analysis: AnalysisStoragePort
   layout: LayoutStoragePort
+  episodeText: EpisodeTextStoragePort
   render: RenderStoragePort
   output: OutputStoragePort
 }
@@ -73,7 +81,21 @@ export function getStoragePorts(): StoragePorts {
       async putNovelText(novelId, json) {
         const storage = await StorageFactory.getNovelStorage()
         const key = `${novelId}.json`
-        await storage.put(key, json)
+
+        await executeStorageWithTracking({
+          storage,
+          key,
+          value: json,
+          tracking: {
+            filePath: key,
+            fileCategory: 'original',
+            fileType: 'json',
+            novelId,
+            jobId: undefined,
+            mimeType: 'application/json; charset=utf-8',
+          },
+        })
+
         return key
       },
     },
@@ -88,7 +110,21 @@ export function getStoragePorts(): StoragePorts {
       async putChunk(jobId, index, content) {
         const storage = await StorageFactory.getChunkStorage()
         const key = StorageKeys.chunk(jobId, index)
-        await storage.put(key, content)
+
+        await executeStorageWithTracking({
+          storage,
+          key,
+          value: content,
+          tracking: {
+            filePath: key,
+            fileCategory: 'chunk',
+            fileType: 'txt',
+            novelId: undefined,
+            jobId,
+            mimeType: 'text/plain; charset=utf-8',
+          },
+        })
+
         return key
       },
     },
@@ -103,7 +139,21 @@ export function getStoragePorts(): StoragePorts {
       async putAnalysis(jobId, index, json) {
         const storage = await StorageFactory.getAnalysisStorage()
         const key = StorageKeys.chunkAnalysis(jobId, index)
-        await storage.put(key, json)
+
+        await executeStorageWithTracking({
+          storage,
+          key,
+          value: json,
+          tracking: {
+            filePath: key,
+            fileCategory: 'analysis',
+            fileType: 'json',
+            novelId: undefined,
+            jobId,
+            mimeType: 'application/json; charset=utf-8',
+          },
+        })
+
         return key
       },
     },
@@ -111,7 +161,21 @@ export function getStoragePorts(): StoragePorts {
       async putEpisodeLayout(jobId, episodeNumber, yaml) {
         const storage = await StorageFactory.getLayoutStorage()
         const key = StorageKeys.episodeLayout(jobId, episodeNumber)
-        await storage.put(key, yaml)
+
+        await executeStorageWithTracking({
+          storage,
+          key,
+          value: yaml,
+          tracking: {
+            filePath: key,
+            fileCategory: 'layout',
+            fileType: 'yaml',
+            novelId: undefined,
+            jobId,
+            mimeType: 'text/yaml; charset=utf-8',
+          },
+        })
+
         return key
       },
       async getEpisodeLayout(jobId, episodeNumber) {
@@ -130,7 +194,21 @@ export function getStoragePorts(): StoragePorts {
           typeof keyFn === 'function'
             ? keyFn(jobId, episodeNumber)
             : `${jobId}/episode_${episodeNumber}.progress.json`
-        await storage.put(key, json)
+
+        await executeStorageWithTracking({
+          storage,
+          key,
+          value: json,
+          tracking: {
+            filePath: key,
+            fileCategory: 'metadata',
+            fileType: 'json',
+            novelId: undefined,
+            jobId,
+            mimeType: 'application/json; charset=utf-8',
+          },
+        })
+
         return key
       },
       async getEpisodeLayoutProgress(jobId, episodeNumber) {
@@ -146,30 +224,106 @@ export function getStoragePorts(): StoragePorts {
         return obj?.text ?? null
       },
     },
+    episodeText: {
+      async putEpisodeText(jobId, episodeNumber, text) {
+        const storage = await StorageFactory.getAnalysisStorage()
+        // Some tests mock StorageKeys partially. Fallback to string template if function missing.
+        const keyFn = (StorageKeys as unknown as Record<string, unknown>).episodeText as
+          | undefined
+          | ((jobId: string, ep: number) => string)
+        const key =
+          typeof keyFn === 'function'
+            ? keyFn(jobId, episodeNumber)
+            : `${jobId}/episode_${episodeNumber}.txt`
+
+        await executeStorageWithTracking({
+          storage,
+          key,
+          value: text,
+          metadata: {
+            contentType: 'text/plain; charset=utf-8',
+            jobId,
+            episode: String(episodeNumber),
+          },
+          tracking: {
+            filePath: key,
+            fileCategory: 'episode',
+            fileType: 'txt',
+            novelId: undefined,
+            jobId,
+            mimeType: 'text/plain; charset=utf-8',
+          },
+        })
+
+        return key
+      },
+      async getEpisodeText(jobId, episodeNumber) {
+        const storage = await StorageFactory.getAnalysisStorage()
+        const keyFn = (StorageKeys as unknown as Record<string, unknown>).episodeText as
+          | undefined
+          | ((jobId: string, ep: number) => string)
+        const key =
+          typeof keyFn === 'function'
+            ? keyFn(jobId, episodeNumber)
+            : `${jobId}/episode_${episodeNumber}.txt`
+        const obj = await storage.get(key)
+        return obj?.text ?? null
+      },
+    },
     render: {
       async putPageRender(jobId, episodeNumber, pageNumber, data, meta) {
         const storage = await StorageFactory.getRenderStorage()
         const key = StorageKeys.pageRender(jobId, episodeNumber, pageNumber)
-        await storage.put(key, data, {
-          contentType: 'image/png',
-          jobId,
-          episodeNumber: String(episodeNumber),
-          pageNumber: String(pageNumber),
-          ...(meta ?? {}),
+
+        await executeStorageWithTracking({
+          storage,
+          key,
+          value: data,
+          metadata: {
+            contentType: 'image/png',
+            jobId,
+            episodeNumber: String(episodeNumber),
+            pageNumber: String(pageNumber),
+            ...(meta ?? {}),
+          },
+          tracking: {
+            filePath: key,
+            fileCategory: 'render',
+            fileType: 'png',
+            novelId: undefined,
+            jobId,
+            mimeType: 'image/png',
+          },
         })
+
         return key
       },
       async putPageThumbnail(jobId, episodeNumber, pageNumber, data, meta) {
         const storage = await StorageFactory.getRenderStorage()
         const key = StorageKeys.pageThumbnail(jobId, episodeNumber, pageNumber)
-        await storage.put(key, data, {
-          contentType: 'image/jpeg',
-          jobId,
-          episodeNumber: String(episodeNumber),
-          pageNumber: String(pageNumber),
-          type: 'thumbnail',
-          ...(meta ?? {}),
+
+        await executeStorageWithTracking({
+          storage,
+          key,
+          value: data,
+          metadata: {
+            contentType: 'image/jpeg',
+            jobId,
+            episodeNumber: String(episodeNumber),
+            pageNumber: String(pageNumber),
+            type: 'thumbnail',
+            ...(meta ?? {}),
+          },
+          tracking: {
+            filePath: key,
+            fileCategory: 'render',
+            fileType: 'jpg',
+            novelId: undefined,
+            jobId,
+            mimeType: 'image/jpeg',
+          },
         })
+
         return key
       },
       async getPageRender(jobId, episodeNumber, pageNumber) {
@@ -183,18 +337,37 @@ export function getStoragePorts(): StoragePorts {
       async putExport(jobId, kind, data, meta) {
         const storage = await StorageFactory.getOutputStorage()
         const key = StorageKeys.exportOutput(jobId, kind === 'pdf' ? 'pdf' : 'zip')
-        await storage.put(key, data, {
-          contentType: kind === 'pdf' ? 'application/pdf' : 'application/zip',
-          jobId,
-          type: kind === 'pdf' ? 'pdf_export' : 'zip_export',
-          ...(meta ?? {}),
+
+        await executeStorageWithTracking({
+          storage,
+          key,
+          value: data,
+          metadata: {
+            contentType: kind === 'pdf' ? 'application/pdf' : 'application/zip',
+            jobId,
+            type: kind === 'pdf' ? 'pdf_export' : 'zip_export',
+            ...(meta ?? {}),
+          },
+          tracking: {
+            filePath: key,
+            fileCategory: 'output',
+            fileType: kind === 'pdf' ? 'pdf' : 'zip',
+            novelId: undefined,
+            jobId,
+            mimeType: kind === 'pdf' ? 'application/pdf' : 'application/zip',
+          },
         })
+
         return key
       },
       async getExport(path) {
         const storage = await StorageFactory.getOutputStorage()
         const obj = await storage.get(path)
         return obj ? { text: obj.text } : null
+      },
+      async deleteExport(path) {
+        const storage = await StorageFactory.getOutputStorage()
+        await storage.delete(path)
       },
     },
   }

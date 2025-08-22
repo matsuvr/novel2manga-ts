@@ -31,7 +31,7 @@ export default async function EpisodePreviewPage({ params }: { params: Promise<P
   // ページ番号を推定（レイアウトの最大ページ）
   const layoutStorage = await StorageFactory.getLayoutStorage()
   const yamlText = await layoutStorage.get(StorageKeys.episodeLayout(jobId, epNum))
-  // データがなければ推定ページ数で 1..estimatedPages を使う
+  // Get page numbers from layout data
   let pageNumbers: number[] = []
   try {
     if (yamlText?.text) {
@@ -43,12 +43,18 @@ export default async function EpisodePreviewPage({ params }: { params: Promise<P
         pageNumbers = parsed.pages.map((p) => p.page_number).sort((a, b) => a - b)
       }
     }
-  } catch (_e) {
-    // YAML parse failure can be ignored; fallback to estimated page numbers
+  } catch (e) {
+    console.error('Failed to parse layout YAML for episode', {
+      jobId,
+      episodeNumber: epNum,
+      error: e instanceof Error ? e.message : String(e),
+    })
+    // YAML parse failure - layout data is required
   }
   if (pageNumbers.length === 0) {
-    const total = Math.max(1, target.estimatedPages || 1)
-    pageNumbers = Array.from({ length: total }, (_, i) => i + 1)
+    throw new Error(
+      `Layout data not found for episode ${episodeNumber}. Layout generation must be completed first.`,
+    )
   }
 
   const renderStorage = await StorageFactory.getRenderStorage()

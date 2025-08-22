@@ -77,7 +77,6 @@ vi.mock('@/utils/storage', () => ({
           startCharIndex: boundary.startCharIndex,
           endChunk: boundary.endChunk,
           endCharIndex: boundary.endCharIndex,
-          estimatedPages: boundary.estimatedPages,
           confidence: boundary.confidence,
         })
       }

@@ -1,12 +1,5 @@
 #!/bin/sh
 
-# Run full checks before pushing
-
-echo "Running typecheck..."
-npm run -s typecheck || exit 1
-
-echo "Running Biome check..."
-npm run -s check:ci || exit 1
-
-echo "Running tests..."
-npm test || exit 1
+# Run the same checks as local manual runs
+echo "Running unified verify:prepush (typecheck, lint:check, test, test:integration)"
+npm run -s verify:prepush || exit 1

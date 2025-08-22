@@ -390,7 +390,6 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
         startCharIndex: 0,
         endChunk: 1,
         endCharIndex: 0,
-        estimatedPages: 1,
         confidence: 0.5,
         createdAt: new Date().toISOString(),
       }
@@ -407,7 +406,6 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
         startCharIndex: fullEpisode.startCharIndex,
         endChunk: fullEpisode.endChunk,
         endCharIndex: fullEpisode.endCharIndex,
-        estimatedPages: fullEpisode.estimatedPages,
         confidence: fullEpisode.confidence as number,
       })
       return
@@ -424,7 +422,6 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       typeof e.startCharIndex === 'number' &&
       typeof e.endChunk === 'number' &&
       typeof e.endCharIndex === 'number' &&
-      typeof e.estimatedPages === 'number' &&
       typeof e.confidence === 'number'
     ) {
       const id = makeEpisodeId(e.jobId, e.episodeNumber)
@@ -439,7 +436,6 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
         startCharIndex: e.startCharIndex,
         endChunk: e.endChunk,
         endCharIndex: e.endCharIndex,
-        estimatedPages: e.estimatedPages,
         confidence: e.confidence,
       })
       return
@@ -468,7 +464,6 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
         startCharIndex: episode.startCharIndex,
         endChunk: episode.endChunk,
         endCharIndex: episode.endCharIndex,
-        estimatedPages: episode.estimatedPages,
         confidence: episode.confidence,
       }))
 
@@ -483,7 +478,6 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
             startCharIndex: sql`excluded.start_char_index`,
             endChunk: sql`excluded.end_chunk`,
             endCharIndex: sql`excluded.end_char_index`,
-            estimatedPages: sql`excluded.estimated_pages`,
             confidence: sql`excluded.confidence`,
           },
         })
@@ -509,6 +503,14 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       .from(episodes)
       .where(eq(episodes.jobId, jobId))
       .orderBy(asc(episodes.episodeNumber))
+  }
+
+  async updateEpisodeTextPath(jobId: string, episodeNumber: number, path: string): Promise<void> {
+    // Update episodes.episode_text_path for the given jobId and episodeNumber
+    await this.db
+      .update(episodes)
+      .set({ episodeTextPath: path })
+      .where(and(eq(episodes.jobId, jobId), eq(episodes.episodeNumber, episodeNumber)))
   }
 
   async createOutput(output: Omit<NewOutput, 'id' | 'createdAt'>): Promise<string> {

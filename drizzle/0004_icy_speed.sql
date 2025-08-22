@@ -1,0 +1,1 @@
+ALTER TABLE `episodes` DROP COLUMN `estimated_pages`;
