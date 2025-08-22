@@ -271,7 +271,7 @@ export async function analyzeNarrativeArc(
       systemPrompt: cfg.systemPrompt,
       userPrompt: userPrompt,
       schema: responseSchema,
-      schemaName: 'NarrativeArcAnalysis',
+      schemaName: 'EpisodeBoundaries',
     })
 
     if (!result) {

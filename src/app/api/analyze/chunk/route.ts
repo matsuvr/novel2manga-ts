@@ -12,46 +12,43 @@ const analyzeChunkRequestSchema = z.object({
   chunkIndex: z.number(),
 })
 
-// 6要素の出力スキーマ: summary, characters, scenes, dialogues, highlights, situations
+// 簡素化された出力スキーマ
 const textAnalysisOutputSchema = z.object({
-  summary: z.string().describe('このチャンクの内容要約（100-200文字）'),
   characters: z.array(
     z.object({
-      name: z.string().nullable(),
-      description: z.string().nullable(),
+      name: z.string(),
+      description: z.string(),
       firstAppearance: z.number(),
     }),
   ),
   scenes: z.array(
     z.object({
-      location: z.string().nullable(),
-      time: z.string().nullable().optional(),
-      description: z.string().nullable(),
+      location: z.string(),
+      description: z.string(),
       startIndex: z.number(),
       endIndex: z.number(),
     }),
   ),
   dialogues: z.array(
     z.object({
-      speaker: z.string().nullable(),
-      text: z.string().nullable(),
-      emotion: z.string().nullable().optional(),
+      speakerId: z.string(),
+      text: z.string(),
+      emotion: z.string(),
       index: z.number(),
     }),
   ),
   highlights: z.array(
     z.object({
       type: z.enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence']),
-      description: z.string().nullable(),
-      importance: z.number().min(1).max(10).describe('重要度を1-10に変更'),
+      description: z.string(),
+      importance: z.number().min(1).max(10),
       startIndex: z.number(),
       endIndex: z.number(),
-      text: z.string().nullable().optional().describe('該当部分のテキスト抜粋'),
     }),
   ),
   situations: z.array(
     z.object({
-      description: z.string().nullable(),
+      description: z.string(),
       index: z.number(),
     }),
   ),
