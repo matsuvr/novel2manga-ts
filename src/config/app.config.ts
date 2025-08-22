@@ -1,26 +1,28 @@
 export const appConfig = {
   // チャンク分割設定
   chunking: {
-    defaultChunkSize: 5000, // デフォルトチャンクサイズ（文字数）
-    defaultOverlapSize: 500, // デフォルトオーバーラップサイズ（文字数）
-    maxChunkSize: 10000, // 最大チャンクサイズ
-    minChunkSize: 100, // 最小チャンクサイズ
+    defaultChunkSize: 3000, // デフォルトチャンクサイズ（文字数）- 削減
+    defaultOverlapSize: 300, // デフォルトオーバーラップサイズ（文字数）- 削減
+    maxChunkSize: 6000, // 最大チャンクサイズ - 削減
+    minChunkSize: 1, // 最小チャンクサイズ
     maxOverlapRatio: 0.5, // チャンクサイズに対する最大オーバーラップ比率
+
+    // スクリプト変換用のエピソードフラグメント分割設定
+    scriptConversion: {
+      fragmentSize: 2000, // エピソードフラグメントサイズ（文字数）
+      overlapSize: 200, // フラグメント間オーバーラップサイズ（文字数）
+      maxFragmentSize: 4000, // 最大フラグメントサイズ
+      minFragmentSize: 500, // 最小フラグメントサイズ
+    },
   },
 
   // LLM設定（モデル・パラメータは llm.config.ts に集約。ここではプロンプトのみ保持）
   llm: {
     // テキスト分析用設定（プロンプトのみ）
     textAnalysis: {
-      systemPrompt: `あなたは小説テキストを分析し、マンガ制作に必要な5要素（登場人物、シーン、対話、ハイライト、状況）を抽出する専門家です。
+      systemPrompt: `小説テキストからマンガ制作に必要な要素を抽出してください。
 
-必ず次の要件どおりに「有効なJSONのみ」を出力してください。説明文やマークダウン、コードフェンス、前後のテキストは一切出力してはいけません。
-要件:
-- 出力はオブジェクトで、キーは characters, scenes, dialogues, highlights, situations の5つのみ。
-- 各キーの値は必ず配列（要素が無ければ空配列[]）。
-- 文字列はすべてダブルクオート。
-- 数値フィールドは数値で出力。
-- スキーマ:
+出力は必ず以下のJSON形式のみ:
 {
   "characters": [{"name": "名前", "description": "説明", "firstAppearance": 0}],
   "scenes": [{"location": "場所", "time": "時間", "description": "説明", "startIndex": 0, "endIndex": 0}],
@@ -28,74 +30,48 @@ export const appConfig = {
   "highlights": [{"type": "climax|turning_point|emotional_peak|action_sequence", "description": "説明", "importance": 1, "startIndex": 0, "endIndex": 0}],
   "situations": [{"description": "状況説明", "index": 0}]
 }
-`,
-      userPromptTemplate: `チャンク番号: {{chunkIndex}}
 
-分析の助けになるように前後のチャンクを付加しますが、分析の対象にするのは分析対象チャンクだけであることに注意してください。
+説明文は一切出力禁止。JSONのみ出力。`,
+      userPromptTemplate: `チャンク{{chunkIndex}}:
 
-【前のチャンク】
-{{previousChunkText}}
+前: {{previousChunkText}}
+対象: {{chunkText}}
+次: {{nextChunkText}}
 
-【分析対象チャンク】
-{{chunkText}}
-
-【次のチャンク】
-{{nextChunkText}}
-
-重要: 上記テキストのみを根拠に、要求スキーマに完全準拠したJSONだけを出力してください。キー欠落は禁止。該当が無い配列は空配列[]で出力。余計な文章は一切出力しないこと。`,
+上記テキストから要素を抽出し、JSONのみ出力。`,
     },
 
     // 物語弧分析用設定（プロンプトのみ）
     narrativeArcAnalysis: {
-      systemPrompt: `あなたは物語の構造を分析し、マンガ1話分のエピソードの境界を特定する専門家です。
-      マンガにしてページ数20～50ページほどの分量になるようなエピソードの境界を特定してください。
+      systemPrompt: `物語をマンガエピソードに分割してください。
 
-入力された物語のセグメントを分析し、以下の点を考慮してエピソードの境界を決定してください：
-1. 場面の転換（時間・場所の変化）
-2. 視点の変化
-3. 話題や展開の大きな変化
-4. 緊張の高まりと解決
-5. キャラクターの心理状態の変化
-
-必ず以下のJSON構造に厳密に従って出力してください。説明文やコードフェンスは出力禁止です：
+出力形式:
 {
   "boundaries": [
     {
-      "startPosition": エピソード開始位置（文字数）,
-      "endPosition": エピソード終了位置（文字数）,
+      "startPosition": 開始位置,
+      "endPosition": 終了位置,
       "episodeNumber": エピソード番号,
-      "title": "エピソードタイトル",
-      "summary": "エピソード概要",
-      "confidence": 境界の信頼度(0.0-1.0),
-      "reasoning": "境界設定の理由",
-      "characterList": [入力されたキャラクター名のリストをまとめたもの],
-      "sceneList": [入力されたシーンのリストをまとめたもの],
-      "dialogueList": [入力されたセリフのリストをまとめたもの],
-      "highlightList": [入力したハイライトのリストをまとめたもの],
-      "situationList": [入力した状況のリストをまとめたもの]
+      "title": "タイトル",
+      "summary": "概要",
+      "confidence": 信頼度(0.0-1.0),
+      "reasoning": "理由",
+      "characterList": ["キャラクター名"],
+      "sceneList": ["シーン"],
+      "dialogueList": ["セリフ"],
+      "highlightList": ["ハイライト"],
+      "situationList": ["状況"]
     }
   ]
-}`,
-      userPromptTemplate: `【分析対象】
-テキスト全体の文字数: {{totalChars}}文字
+}
 
-【登場人物】
-{{characterList}}
+JSONのみ出力。`,
+      userPromptTemplate: `文字数: {{totalChars}}
+登場人物: {{characterList}}
+ハイライト: {{highlightsInfo}}
+テキスト: {{fullText}}
 
-【全体要約】
-{{overallSummary}}
-
-【重要なハイライト】
-{{highlightsInfo}}
-
-【キャラクターの行動・発言】
-{{characterActions}}
-
-【分析テキスト】
-{{fullText}}
-
-上記のテキストを分析し、漫画のエピソードとして適切な境界を見つけてください。
-各エピソードは物語的に意味のある単位で、読者が満足できる区切りになるようにしてください。`,
+エピソード境界を特定し、JSONのみ出力。`,
     },
     scriptConversion: {
       systemPrompt: `以下の情報を基に、セリフ+ナレーション+心の声のセリフと、場面情報を表すト書きとして、台本形式のJSONにしてください。会話は全て漏らさず出力してください。
@@ -154,6 +130,65 @@ export const appConfig = {
       - 状況: {{situationList}}
 
       `,
+
+      // エピソードフラグメント単位でのスクリプト変換用プロンプト
+      fragmentConversion: {
+        systemPrompt: `エピソードテキストの一部から台本形式のJSONを作成してください。このテキストは大きなエピソードの一部（フラグメント）です。
+
+出力するJSONの構造:
+{
+  "scenes": [
+    {
+      "id": "fragment_scene_1",
+      "setting": "場所と時間（例：教室、午後）",
+      "description": "シーンの説明",
+      "script": [
+        {
+          "index": 1,
+          "type": "narration",
+          "text": "ナレーション内容"
+        },
+        {
+          "index": 2,
+          "type": "dialogue",
+          "speaker": "キャラクター名",
+          "text": "セリフ内容"
+        },
+        {
+          "index": 3,
+          "type": "thought",
+          "speaker": "キャラクター名",
+          "text": "心の声"
+        },
+        {
+          "index": 4,
+          "type": "stage",
+          "text": "ト書き・動作説明"
+        }
+      ]
+    }
+  ]
+}
+
+注意事項：
+- このフラグメントは完全ではない可能性があります
+- 前後の文脈を考慮して、自然に繋がるようにしてください
+- 文の途中で切れている場合は、適切に補完してください
+- scene idには "fragment_scene_" プレフィックスを付けてください`,
+
+        userPromptTemplate: `前のフラグメント内容（文脈参考用）:
+{{previousFragment}}
+
+現在のフラグメント内容:
+{{fragmentText}}
+
+次のフラグメント内容（文脈参考用）:
+{{nextFragment}}
+
+フラグメント番号: {{fragmentIndex}} / {{totalFragments}}
+
+上記のフラグメントから台本形式のJSONを作成してください。`,
+      },
     },
     pageBreakEstimation: {
       systemPrompt: `以下はマンガにするための脚本です。重要度や見所が強いシーンは1ページ1コマ、見所になるシーンは1ページ2～3コマ、状況説明が主となるシーンは1ページ4～6コマにして分割します。
@@ -318,13 +353,13 @@ IMPORTANT: Return exactly one JSON object starting with { "pages": and ending wi
   // 処理設定
   processing: {
     // 並列処理数
-    maxConcurrentChunks: 5, // 同時処理可能なチャンク数
-    maxConcurrentJobs: 3, // 同時処理可能なジョブ数
+    maxConcurrentChunks: 3, // 同時処理可能なチャンク数 - 削減
+    maxConcurrentJobs: 2, // 同時処理可能なジョブ数 - 削減
 
     // バッチ処理設定
     batchSize: {
-      chunks: 10, // チャンク処理のバッチサイズ
-      analysis: 5, // 分析処理のバッチサイズ
+      chunks: 6, // チャンク処理のバッチサイズ - 削減
+      analysis: 3, // 分析処理のバッチサイズ - 削減
     },
 
     // リトライ設定
@@ -345,11 +380,11 @@ IMPORTANT: Return exactly one JSON object starting with { "pages": and ending wi
 
     // エピソード処理設定
     episode: {
-      targetCharsPerEpisode: 8000, // エピソードあたりの目標文字数
-      minCharsPerEpisode: 6000, // 最小文字数
-      maxCharsPerEpisode: 12000, // 最大文字数
+      targetCharsPerEpisode: 8000, // エピソードあたりの目標文字数 - 削減
+      minCharsPerEpisode: 1, // 最小文字数 - 削減
+      maxCharsPerEpisode: 12000, // 最大文字数 - 削減
       // ナラティブアーク分析用チャンク数設定
-      maxChunksPerEpisode: 20, // エピソードあたりの最大チャンク数
+      maxChunksPerEpisode: 15, // エピソードあたりの最大チャンク数 - 削減
     },
   },
 
