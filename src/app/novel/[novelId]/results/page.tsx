@@ -42,7 +42,7 @@ export default async function NovelResultsPage({ params }: { params: Promise<Par
           <li key={e.id} className="apple-card p-4">
             <div className="font-semibold">Episode {e.episodeNumber}</div>
             <div className="text-sm text-gray-600">{e.title}</div>
-            <div className="text-sm text-gray-600 mt-1">📄 {e.estimatedPages} ページ</div>
+            <div className="text-sm text-gray-600 mt-1">📄 レイアウト生成済み</div>
             <div className="mt-2 flex gap-2">
               <a
                 href={`/novel/${novelId}/results/${latest.id}/episode/${e.episodeNumber}`}

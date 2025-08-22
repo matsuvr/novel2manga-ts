@@ -301,7 +301,6 @@ vi.mock('@/repositories/episode-repository', () => ({
         endChunk: 0,
         startCharIndex: 0,
         endCharIndex: 100,
-        estimatedPages: 4,
         confidence: 0.9,
         createdAt: new Date().toISOString(),
       },

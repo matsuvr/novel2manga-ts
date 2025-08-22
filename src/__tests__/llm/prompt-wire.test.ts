@@ -43,9 +43,6 @@ describe('LLM prompt wiring (temporary)', () => {
     const cfg = getNarrativeAnalysisConfig()
     const prompt = cfg.userPromptTemplate
       .replace('{{totalChars}}', '12000')
-      .replace('{{targetPages}}', '24')
-      .replace('{{minPages}}', '15')
-      .replace('{{maxPages}}', '30')
       .replace('{{characterList}}', '- 太郎\n- 花子')
       .replace('{{overallSummary}}', '全体の要約テキスト')
       .replace('{{highlightsInfo}}', '- クライマックス')
@@ -69,10 +66,13 @@ describe('LLM prompt wiring (temporary)', () => {
 
   it('scriptConversion prompt/systemPrompt が展開され、エージェントが実行できる', async () => {
     const cfg = getScriptConversionConfig()
-    const prompt = (cfg.userPromptTemplate || 'Episode text: {{episodeText}}').replace(
-      '{{episodeText}}',
-      '太郎は走った。花子は笑った。',
-    )
+    const prompt = (cfg.userPromptTemplate || 'Episode text: {{episodeText}}')
+      .replace('{{episodeText}}', '太郎は走った。花子は笑った。')
+      .replace('{{characterList}}', '太郎（主人公）、花子（ヒロイン）')
+      .replace('{{sceneList}}', '公園、学校')
+      .replace('{{dialogueList}}', '「行くぞ！」「待って！」')
+      .replace('{{highlightList}}', 'クライマックス')
+      .replace('{{situationList}}', '雨の中を走る')
 
     assertNoPlaceholders(prompt)
     assertNoPlaceholders(cfg.systemPrompt)
@@ -98,10 +98,7 @@ describe('LLM prompt wiring (temporary)', () => {
         { index: 2, type: 'dialogue', speaker: '花子', text: '待って！' },
       ],
     })
-    const prompt = (cfg.userPromptTemplate || '')
-      .replace('{{scriptJson}}', scriptJson)
-      .replace('{{targetPages}}', '4')
-      .replace('{{avgLinesPerPage}}', '8')
+    const prompt = (cfg.userPromptTemplate || '').replace('{{scriptJson}}', scriptJson)
 
     assertNoPlaceholders(prompt)
     assertNoPlaceholders(cfg.systemPrompt)

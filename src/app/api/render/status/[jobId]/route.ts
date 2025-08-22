@@ -10,7 +10,7 @@ import {
   createSuccessResponse,
   ValidationError,
 } from '@/utils/api-error'
-import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { getLayoutStorage, StorageFactory, StorageKeys } from '@/utils/storage'
 import { validateJobId } from '@/utils/validators'
 
 export async function GET(
@@ -88,8 +88,39 @@ export async function GET(
         }>,
       }
 
-      // エピソードから実際のページ数を取得、なければ設定値をフォールバックとして使用
-      const totalPages = episode.estimatedPages || appConfig.processing.episode.maxPagesPerEpisode
+      // Get actual pages from layout data
+      const storage = await getLayoutStorage()
+      const layoutKey = StorageKeys.episodeLayout(params.jobId, episode.episodeNumber)
+
+      let totalPages: number
+      try {
+        const layoutData = await storage.get(layoutKey)
+        if (!layoutData) {
+          throw new ApiError(
+            `Layout data not found for episode ${episode.episodeNumber}`,
+            404,
+            'NOT_FOUND',
+          )
+        }
+        const layout = JSON.parse(layoutData.text)
+        if (!layout.pages || !Array.isArray(layout.pages)) {
+          throw new ApiError(
+            `Invalid layout data for episode ${episode.episodeNumber}`,
+            500,
+            'INVALID_STATE',
+          )
+        }
+        totalPages = layout.pages.length
+      } catch (error) {
+        if (error instanceof ApiError) {
+          throw error
+        }
+        throw new ApiError(
+          `Failed to load layout for episode ${episode.episodeNumber}: ${error instanceof Error ? error.message : String(error)}`,
+          500,
+          'STORAGE_ERROR',
+        )
+      }
 
       for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
         // ページ番号でフィルタリング

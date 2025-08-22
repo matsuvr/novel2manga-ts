@@ -194,9 +194,7 @@ pages:
         currentStep: 'render',
         renderCompleted: false,
       }),
-      getEpisodesByJobId: vi
-        .fn()
-        .mockResolvedValue([{ episodeNumber: 1, title: 'Episode 1', estimatedPages: 3 }]),
+      getEpisodesByJobId: vi.fn().mockResolvedValue([{ episodeNumber: 1, title: 'Episode 1' }]),
       getJobWithProgress: vi.fn().mockResolvedValue({
         id: testJobId,
         novelId: testNovelId,
@@ -213,7 +211,6 @@ pages:
               title: 'Episode 1',
               startChunk: 0,
               endChunk: 2,
-              estimatedPages: 3,
             },
           ],
         },

@@ -106,16 +106,27 @@ export class OutputService {
     }
 
     const outputId = `out_${randomUUID()}`
-    await this.outputRepo.create({
-      id: outputId,
-      novelId: job.novelId,
-      jobId,
-      outputType: format === 'pdf' ? 'pdf' : 'images_zip',
-      outputPath: exportFilePath,
-      fileSize,
-      pageCount,
-      metadataPath: null,
-    })
+    try {
+      await this.outputRepo.create({
+        id: outputId,
+        novelId: job.novelId,
+        jobId,
+        outputType: format === 'pdf' ? 'pdf' : 'images_zip',
+        outputPath: exportFilePath,
+        fileSize,
+        pageCount,
+        metadataPath: null,
+      })
+    } catch (e) {
+      // DB 失敗時はストレージへ保存済みの成果物を削除して整合性維持
+      try {
+        const ports = getStoragePorts()
+        await ports.output.deleteExport(exportFilePath)
+      } catch {
+        // 削除失敗は握りつぶして元のDBエラーを返す
+      }
+      throw e
+    }
 
     return { outputId, exportFilePath, fileSize, pageCount }
   }

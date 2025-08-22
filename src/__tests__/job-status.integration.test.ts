@@ -165,7 +165,6 @@ describe('JobProgressService Integration Tests', () => {
           summary: null,
           startChunk: 0,
           endChunk: 4,
-          estimatedPages: 30,
           startCharIndex: 0,
           endCharIndex: 1000,
           confidence: 0.9,
@@ -180,7 +179,6 @@ describe('JobProgressService Integration Tests', () => {
           summary: null,
           startChunk: 5,
           endChunk: 9,
-          estimatedPages: 40,
           startCharIndex: 1001,
           endCharIndex: 2000,
           confidence: 0.85,
@@ -269,18 +267,17 @@ describe('JobProgressService Integration Tests', () => {
 
       const perEpisodePages = result!.progress!.perEpisodePages!
 
-      // Episode 1: total=30, planned=25, rendered=0 (validation may be present with defaults)
+      // Episode 1: actualPages=25, rendered=0 (validation may be present with defaults)
       expect(perEpisodePages[1]).toMatchObject({
-        planned: 25,
+        actualPages: 25,
         rendered: 0,
-        total: 30,
+        validation: expect.any(Object),
       })
 
-      // Episode 2: total=40, planned=35, rendered=3 + validation present
+      // Episode 2: actualPages=35, rendered=3 + validation present
       expect(perEpisodePages[2]).toMatchObject({
-        planned: 35,
+        actualPages: 35,
         rendered: 3,
-        total: 40,
         validation: {
           normalizedPages: [2, 5, 7],
           pagesWithIssueCounts: { 2: 3, 5: 1, 7: 2 },
@@ -317,7 +314,6 @@ describe('JobProgressService Integration Tests', () => {
           summary: null,
           startChunk: 0,
           endChunk: 4,
-          estimatedPages: 20,
           startCharIndex: 0,
           endCharIndex: 1000,
           confidence: 0.9,
@@ -342,11 +338,11 @@ describe('JobProgressService Integration Tests', () => {
 
       const perEpisodePages = result!.progress!.perEpisodePages!
 
-      // Should have planned=0 due to parsing error, but still include the episode
+      // Should have actualPages=0 due to parsing error, but still include the episode
       expect(perEpisodePages[1]).toMatchObject({
-        planned: 0, // Falls back to 0 when JSON parsing fails
+        actualPages: 0, // Falls back to 0 when JSON parsing fails
         rendered: 0,
-        total: 20,
+        validation: expect.any(Object),
       })
     })
 

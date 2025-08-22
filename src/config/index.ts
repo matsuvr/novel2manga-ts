@@ -219,7 +219,7 @@ export function getEpisodeConfig() {
     targetCharsPerEpisode: config.processing.episode.targetCharsPerEpisode,
     minCharsPerEpisode: config.processing.episode.minCharsPerEpisode,
     maxCharsPerEpisode: config.processing.episode.maxCharsPerEpisode,
-    charsPerPage: config.processing.episode.charsPerPage,
+    maxChunksPerEpisode: config.processing.episode.maxChunksPerEpisode,
   }
 }
 

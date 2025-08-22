@@ -1,0 +1,1 @@
+ALTER TABLE `episodes` ADD `episode_text_path` text;
