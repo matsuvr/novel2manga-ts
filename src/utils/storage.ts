@@ -32,14 +32,17 @@ const getStorageBase = () => {
   return path.join(process.cwd(), '.local-storage')
 }
 
-const LOCAL_STORAGE_BASE = getStorageBase()
+// 注意: テスト実行時に VITEST/NODE_ENV が設定されるタイミング差で
+// モジュールロード時に固定化するとベースディレクトリがズレる可能性がある。
+// そのため固定値を使わず、必要時に getStorageBase() を評価する。
+// （下位の resolveStorage 内で使用）
+// const LOCAL_STORAGE_BASE = getStorageBase()
 
-// ディレクトリ作成ヘルパー（成功したパスをキャッシュして不要なIOを削減）
-const createdDirs = new Set<string>()
+// ディレクトリ作成ヘルパー
+// 注意: 並列テストでディレクトリが削除される可能性があるため、
+// キャッシュによるスキップは危険（ENOENT を誘発）となる。毎回 mkdir -p で冪等に作成する。
 async function ensureDir(dirPath: string): Promise<void> {
-  if (createdDirs.has(dirPath)) return
   await fs.mkdir(dirPath, { recursive: true })
-  createdDirs.add(dirPath)
 }
 
 // ========================================
@@ -61,12 +64,13 @@ export class LocalFileStorage implements Storage {
     const filePath = path.join(this.baseDir, key)
     const dir = path.dirname(filePath)
 
-    // ディレクトリ作成を並行化
+    // ベースディレクトリと対象ディレクトリを作成（冪等・並行安全）
+    await ensureDir(this.baseDir)
     await ensureDir(dir)
 
     if (this.isBinaryData(value)) {
       // バイナリデータの場合：直接ファイルに保存
-      await fs.writeFile(filePath, value as Buffer)
+      await fs.writeFile(filePath, value as unknown as Uint8Array)
 
       // メタデータは別ファイルに保存（必要な場合のみ）
       if (metadata && Object.keys(metadata).length > 0) {
@@ -473,8 +477,9 @@ async function resolveStorage(
   // 明示ローカル指定 or 開発/テストはローカル
   if (isDevelopment() || process.env.STORAGE_MODE === 'local') {
     // eslint-disable-next-line no-console
-    console.log(`[storage] Using LocalFileStorage (dev/local): ${LOCAL_STORAGE_BASE}/${localDir}`)
-    return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, localDir))
+    const base = getStorageBase()
+    console.log(`[storage] Using LocalFileStorage (dev/local): ${base}/${localDir}`)
+    return new LocalFileStorage(path.join(base, localDir))
   }
 
   // 本番: Cloudflare R2 バインディングがある場合のみR2、なければ明示エラー
@@ -811,6 +816,42 @@ export async function auditStorageKeys(options: {
             issue: 'invalid-format',
             detail: 'regex-mismatch',
           })
+        }
+        for (const seg of FORBIDDEN_SEGMENTS) {
+          if (key.includes(seg)) {
+            issues.push({ key, issue: 'forbidden-segment', detail: seg })
+          }
+        }
+        if (seen.has(key)) {
+          issues.push({ key, issue: 'duplicate' })
+        } else {
+          seen.add(key)
+        }
+      }
+    }),
+  )
+
+  return { scanned, issues }
+}
+
+// 直指定版: Factory を経由せず、与えられた Storage インスタンス配列を監査
+export async function auditStorageKeysOnStorages(
+  storages: Storage[],
+  options?: { prefix?: string; abortSignal?: AbortSignal },
+): Promise<{ scanned: number; issues: StorageKeyIssue[] }> {
+  const issues: StorageKeyIssue[] = []
+  const seen = new Set<string>()
+  let scanned = 0
+
+  await Promise.all(
+    storages.map(async (storage) => {
+      if (!storage.list) return
+      const keys = await storage.list(options?.prefix)
+      for (const key of keys) {
+        if (options?.abortSignal?.aborted) return
+        scanned++
+        if (!KEY_REGEX.test(key)) {
+          issues.push({ key, issue: 'invalid-format', detail: 'regex-mismatch' })
         }
         for (const seg of FORBIDDEN_SEGMENTS) {
           if (key.includes(seg)) {
