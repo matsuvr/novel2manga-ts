@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AnalyzePipeline } from '@/services/application/analyze-pipeline'
 import { StorageFactory } from '@/utils/storage'
-import { setupUnifiedTestEnvironment } from './__helpers/unified-test-setup'
 import { cleanJobStorage, cleanNovelStorage } from './__helpers/test-storage-clean'
+import { setupUnifiedTestEnvironment } from './__helpers/unified-test-setup'
 
 // Mock the narrative arc analyzer to prevent LLM calls in tests
 vi.mock('@/agents/narrative-arc-analyzer', () => ({
