@@ -2,6 +2,11 @@ import { getDatabase } from '@/db'
 import type { Storage } from '@/utils/storage'
 import { type RecordStorageFileParams, recordStorageFile } from './storage-tracker'
 
+// Drizzle transaction type
+type DrizzleTransaction = Parameters<
+  Parameters<ReturnType<typeof getDatabase>['transaction']>[0]
+>[0]
+
 interface StorageOperation {
   storage: Storage
   key: string
@@ -15,7 +20,7 @@ interface StorageDeleteOperation {
 }
 
 interface DatabaseOperation {
-  execute: () => Promise<void>
+  execute: (tx?: DrizzleTransaction) => Promise<void>
   rollback?: () => Promise<void>
 }
 
@@ -65,8 +70,13 @@ export class TransactionManager {
 
   /**
    * データベース操作を追加
+   * @param execute - 実行する操作（Drizzleトランザクションオブジェクトを受け取るoptional parameter）
+   * @param rollback - ロールバック処理（オプション）
    */
-  addDatabaseOperation(execute: () => Promise<void>, rollback?: () => Promise<void>): void {
+  addDatabaseOperation(
+    execute: (tx?: DrizzleTransaction) => Promise<void>,
+    rollback?: () => Promise<void>,
+  ): void {
     if (this.executed) {
       throw new Error('Cannot add operations after execution started')
     }
@@ -116,27 +126,20 @@ export class TransactionManager {
         const db = getDatabase()
         drizzleDb = db
 
-        // SQLiteトランザクション開始
-        db.$client.exec('BEGIN IMMEDIATE')
-
-        try {
+        // Drizzleトランザクション開始
+        await db.transaction(async (tx) => {
           for (const dbOp of this.dbOps) {
-            await dbOp.execute()
+            // DB操作に取引オブジェクトを渡す（後方互換性のためoptional）
+            await dbOp.execute(tx)
           }
 
           // Phase 3: ストレージ追跡（DB操作と同一トランザクション内）
           for (const trackingOp of this.trackingOps) {
-            await recordStorageFile(trackingOp.params)
+            await recordStorageFile(trackingOp.params, tx)
           }
+        })
 
-          // トランザクション確定
-          db.$client.exec('COMMIT')
-          this.committed = true
-        } catch (error) {
-          // DB操作またはストレージ追跡失敗時はロールバック
-          db.$client.exec('ROLLBACK')
-          throw error
-        }
+        this.committed = true
       } else {
         // DB操作がない場合でも追跡は実行
         for (const trackingOp of this.trackingOps) {
@@ -171,7 +174,7 @@ export class TransactionManager {
   private async performRollback(
     completedStorageOps: { storage: Storage; key: string }[],
     completedDeleteOps: { storage: Storage; key: string }[],
-    drizzleDb?: ReturnType<typeof getDatabase>,
+    _drizzleDb?: ReturnType<typeof getDatabase>,
   ): Promise<void> {
     const rollbackErrors: Error[] = []
 
@@ -186,14 +189,8 @@ export class TransactionManager {
       }
     }
 
-    // データベースロールバック（まだコミットされていない場合）
-    if (drizzleDb && !this.committed) {
-      try {
-        drizzleDb.$client.exec('ROLLBACK')
-      } catch (error) {
-        rollbackErrors.push(new Error(`Failed to rollback database transaction: ${error}`))
-      }
-    }
+    // データベースロールバック（Drizzleトランザクションは自動ロールバックされるため不要）
+    // Drizzleトランザクション内で例外が発生した場合、自動的にロールバックされる
 
     // カスタムロールバック処理
     for (const dbOp of this.dbOps) {
@@ -256,7 +253,7 @@ export async function executeStorageDbTransaction<T>(options: {
 
   tx.addStorageWrite(options.storage, options.key, options.value, options.metadata)
 
-  tx.addDatabaseOperation(async () => {
+  tx.addDatabaseOperation(async (_tx) => {
     dbResult = await options.dbOperation()
   }, options.dbRollback)
 
@@ -314,7 +311,9 @@ export async function executeStorageWithDbOperation(options: {
   tx.addStorageWrite(options.storage, options.key, options.value, options.metadata)
 
   if (options.dbOperation) {
-    tx.addDatabaseOperation(options.dbOperation, options.dbRollback)
+    tx.addDatabaseOperation(async (_tx) => {
+      await options.dbOperation?.()
+    }, options.dbRollback)
   }
 
   if (options.tracking) {

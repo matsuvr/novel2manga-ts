@@ -56,7 +56,7 @@ export class LocalFileStorage implements Storage {
     return `${key}.meta.json`
   }
 
-  private isBinaryData(value: string | Buffer): boolean {
+  private isBinaryData(value: string | Buffer): value is Buffer {
     return Buffer.isBuffer(value)
   }
 
@@ -69,7 +69,9 @@ export class LocalFileStorage implements Storage {
     await ensureDir(dir)
 
     if (this.isBinaryData(value)) {
-      // バイナリデータの場合：直接ファイルに保存
+      // バイナリデータの場合：BufferをUint8Arrayとしてキャストして保存
+      // Node の Buffer は Uint8Array のサブクラス。fs.writeFile は ArrayBufferView を受け取るため
+      // ランタイム無変換で安全に受け渡せるように型を Uint8Array へアサートする。
       await fs.writeFile(filePath, value as unknown as Uint8Array)
 
       // メタデータは別ファイルに保存（必要な場合のみ）

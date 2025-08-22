@@ -81,7 +81,7 @@ async function gatherChunkInputs(params: {
 
   // 設定からチャンク数上限を取得
   const episodeConfig = getEpisodeConfig()
-  const maxChunksPerEpisode = episodeConfig.maxChunksPerEpisode
+  const maxChunksPerEpisode = episodeConfig?.maxChunksPerEpisode ?? 20
 
   while (totalChars < targetChars && chunks.length < maxChunksPerEpisode) {
     const chunkInput = await loadChunkInput(jobId, currentChunkIndex, storages)
@@ -114,9 +114,9 @@ export async function prepareNarrativeAnalysisInput(
   const {
     jobId,
     startChunkIndex,
-    targetChars = episodeConfig.targetCharsPerEpisode,
-    minChars = episodeConfig.minCharsPerEpisode,
-    maxChars = episodeConfig.maxCharsPerEpisode,
+    targetChars = episodeConfig?.targetCharsPerEpisode ?? 1000,
+    minChars = episodeConfig?.minCharsPerEpisode ?? 500,
+    maxChars = episodeConfig?.maxCharsPerEpisode ?? 2000,
   } = options
 
   // 動的にストレージAPIを取得（テストの部分モック互換）

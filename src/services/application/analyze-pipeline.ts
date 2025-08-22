@@ -13,6 +13,18 @@ import { EpisodeRepository } from '@/repositories/episode-repository'
 import { getDatabaseService } from '@/services/db-factory'
 import type { EpisodeBoundary } from '@/types/episode'
 import type { AnalyzeResponse } from '@/types/job'
+
+// Type guard for database service with updateEpisodeTextPath method
+function hasUpdateEpisodeTextPath(service: unknown): service is {
+  updateEpisodeTextPath: (jobId: string, episodeNumber: number, path: string) => Promise<void>
+} & Record<string, unknown> {
+  return (
+    typeof service === 'object' &&
+    service !== null &&
+    'updateEpisodeTextPath' in service &&
+    typeof (service as Record<string, unknown>).updateEpisodeTextPath === 'function'
+  )
+}
 import type { PageBreakPlan } from '@/types/script'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { saveEpisodeBoundaries } from '@/utils/storage'
@@ -93,31 +105,30 @@ export class AnalyzePipeline {
     const title = options.title || 'Novel'
 
     // まず小説を DB に保存してから job を作成する（FOREIGN KEY制約のため）
-    // ストレージとDB操作を統合トランザクションで実行
+    // 小説メタデータの先行保存（job の外部キー制約のため）
     try {
-      const { executeStorageWithDbOperation } = await import(
-        '@/services/application/transaction-manager'
-      )
+      // DBに小説メタデータ（タイトル等）を書き込む/存在保証する
+      await novelRepo.ensure(novelId, {
+        title: title || `Novel ${novelId.slice(0, 8)}`,
+        author: 'Unknown',
+        originalTextPath: `${novelId}.json`,
+        textLength: novelText.length,
+        language: 'ja',
+        metadataPath: null,
+      })
+
+      // ストレージに小説テキストを保存
       const novelStorage = await (await import('@/utils/storage')).StorageFactory.getNovelStorage()
       const key = `${novelId}.json`
       const novelData = JSON.stringify({ text: novelText, title: title || '' })
 
-      await executeStorageWithDbOperation({
+      const { executeStorageWithTracking } = await import(
+        '@/services/application/transaction-manager'
+      )
+      await executeStorageWithTracking({
         storage: novelStorage,
         key,
         value: novelData,
-        dbOperation: async () => {
-          // DBに小説メタデータ（タイトル等）を書き込む/存在保証する
-          // job の外部キー制約のために先に作成/確保しておく
-          await novelRepo.ensure(novelId, {
-            title: title || `Novel ${novelId.slice(0, 8)}`,
-            author: 'Unknown',
-            originalTextPath: `${novelId}.json`,
-            textLength: novelText.length,
-            language: 'ja',
-            metadataPath: null,
-          })
-        },
         tracking: {
           filePath: key,
           fileCategory: 'original',
@@ -595,24 +606,38 @@ export class AnalyzePipeline {
             episodePreview: `${episodeText.substring(0, 100)}...`,
           })
 
-          // Persist episode text to storage and record path in DB
+          // Persist episode text to storage using specialized port and update database atomically
           const episodeTextKey = await this.ports.episodeText.putEpisodeText(jobId, ep, episodeText)
+
+          // Use TransactionManager for atomic database update with storage tracking
           try {
-            // Update episodes table with episodeTextPath if supported
+            const { executeStorageWithTracking } = await import(
+              '@/services/application/transaction-manager'
+            )
+
+            // Since episode text is already saved, we use tracking-only operation for consistency
+            await executeStorageWithTracking({
+              storage: await (await import('@/utils/storage')).StorageFactory.getAnalysisStorage(),
+              key: episodeTextKey,
+              value: episodeText,
+              metadata: {
+                contentType: 'text/plain; charset=utf-8',
+                jobId,
+                episode: String(ep),
+              },
+              tracking: {
+                filePath: episodeTextKey,
+                fileCategory: 'episode',
+                fileType: 'txt',
+                jobId,
+                mimeType: 'text/plain; charset=utf-8',
+              },
+            })
+
+            // Update database with episode text path
             const dbService = getDatabaseService()
-            if (
-              typeof (dbService as unknown as Record<string, unknown>).updateEpisodeTextPath ===
-              'function'
-            ) {
-              await (
-                dbService as unknown as {
-                  updateEpisodeTextPath: (
-                    jobId: string,
-                    episodeNumber: number,
-                    path: string,
-                  ) => Promise<void>
-                }
-              ).updateEpisodeTextPath(jobId, ep, episodeTextKey)
+            if (hasUpdateEpisodeTextPath(dbService)) {
+              await dbService.updateEpisodeTextPath(jobId, ep, episodeTextKey)
             }
           } catch (e) {
             logger.warn('Failed to update episodeTextPath in DB; continuing', {

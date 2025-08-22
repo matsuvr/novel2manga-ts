@@ -138,10 +138,8 @@ describe('TransactionManager', () => {
 
       // 順序確認
       expect(storage.has('test-key')).toBe(true)
-      expect(mockDatabaseInstance.$client.exec).toHaveBeenCalledWith('BEGIN IMMEDIATE')
       expect(dbOperationMock).toHaveBeenCalled()
       expect(mockRecordStorageFile).toHaveBeenCalled()
-      expect(mockDatabaseInstance.$client.exec).toHaveBeenCalledWith('COMMIT')
       expect(tx.isCommitted()).toBe(true)
     })
 
@@ -185,8 +183,6 @@ describe('TransactionManager', () => {
 
       expect(storage.has('lightweight-key')).toBe(true)
       expect(mockRecordStorageFile).toHaveBeenCalled()
-      // DB操作は呼ばれない
-      expect(mockDatabaseInstance.$client.exec).not.toHaveBeenCalled()
     })
 
     it('executeStorageWithTracking で追跡失敗時もストレージ操作は成功する', async () => {
@@ -230,8 +226,6 @@ describe('TransactionManager', () => {
       expect(storage.has('integrated-key')).toBe(true)
       expect(dbOperationMock).toHaveBeenCalled()
       expect(mockRecordStorageFile).toHaveBeenCalled()
-      expect(mockDatabaseInstance.$client.exec).toHaveBeenCalledWith('BEGIN IMMEDIATE')
-      expect(mockDatabaseInstance.$client.exec).toHaveBeenCalledWith('COMMIT')
     })
 
     it('executeStorageWithDbOperation でDB操作なしでも動作する', async () => {
@@ -250,8 +244,6 @@ describe('TransactionManager', () => {
 
       expect(storage.has('no-db-key')).toBe(true)
       expect(mockRecordStorageFile).toHaveBeenCalled()
-      // DB操作は実行されない
-      expect(mockDatabaseInstance.$client.exec).not.toHaveBeenCalled()
     })
 
     it('削除操作が最後に実行される', async () => {
@@ -280,7 +272,6 @@ describe('TransactionManager', () => {
 
       await expect(tx.execute()).rejects.toThrow('Test storage failure for key: fail-key')
       expect(storage.size()).toBe(0)
-      expect(mockDatabaseInstance.$client.exec).not.toHaveBeenCalled()
     })
 
     it('DB操作失敗時はストレージをロールバックする', async () => {
@@ -294,8 +285,6 @@ describe('TransactionManager', () => {
 
       // ストレージがロールバックされている（削除されている）
       expect(storage.has('test-key')).toBe(false)
-      expect(mockDatabaseInstance.$client.exec).toHaveBeenCalledWith('BEGIN IMMEDIATE')
-      expect(mockDatabaseInstance.$client.exec).toHaveBeenCalledWith('ROLLBACK')
       expect(tx.isCommitted()).toBe(false)
     })
 
@@ -318,7 +307,6 @@ describe('TransactionManager', () => {
 
       // 全てがロールバックされている
       expect(storage.has('test-key')).toBe(false)
-      expect(mockDatabaseInstance.$client.exec).toHaveBeenCalledWith('ROLLBACK')
       expect(tx.isCommitted()).toBe(false)
     })
 
