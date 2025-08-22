@@ -32,14 +32,17 @@ const getStorageBase = () => {
   return path.join(process.cwd(), '.local-storage')
 }
 
-const LOCAL_STORAGE_BASE = getStorageBase()
+// 注意: テスト実行時に VITEST/NODE_ENV が設定されるタイミング差で
+// モジュールロード時に固定化するとベースディレクトリがズレる可能性がある。
+// そのため固定値を使わず、必要時に getStorageBase() を評価する。
+// （下位の resolveStorage 内で使用）
+// const LOCAL_STORAGE_BASE = getStorageBase()
 
-// ディレクトリ作成ヘルパー（成功したパスをキャッシュして不要なIOを削減）
-const createdDirs = new Set<string>()
+// ディレクトリ作成ヘルパー
+// 注意: 並列テストでディレクトリが削除される可能性があるため、
+// キャッシュによるスキップは危険（ENOENT を誘発）となる。毎回 mkdir -p で冪等に作成する。
 async function ensureDir(dirPath: string): Promise<void> {
-  if (createdDirs.has(dirPath)) return
   await fs.mkdir(dirPath, { recursive: true })
-  createdDirs.add(dirPath)
 }
 
 // ========================================
@@ -53,7 +56,7 @@ export class LocalFileStorage implements Storage {
     return `${key}.meta.json`
   }
 
-  private isBinaryData(value: string | Buffer): boolean {
+  private isBinaryData(value: string | Buffer): value is Buffer {
     return Buffer.isBuffer(value)
   }
 
@@ -61,12 +64,15 @@ export class LocalFileStorage implements Storage {
     const filePath = path.join(this.baseDir, key)
     const dir = path.dirname(filePath)
 
-    // ディレクトリ作成を並行化
+    // ベースディレクトリと対象ディレクトリを作成（冪等・並行安全）
+    await ensureDir(this.baseDir)
     await ensureDir(dir)
 
     if (this.isBinaryData(value)) {
-      // バイナリデータの場合：直接ファイルに保存
-      await fs.writeFile(filePath, value as Buffer)
+      // バイナリデータの場合：BufferをUint8Arrayとしてキャストして保存
+      // Node の Buffer は Uint8Array のサブクラス。fs.writeFile は ArrayBufferView を受け取るため
+      // ランタイム無変換で安全に受け渡せるように型を Uint8Array へアサートする。
+      await fs.writeFile(filePath, value as unknown as Uint8Array)
 
       // メタデータは別ファイルに保存（必要な場合のみ）
       if (metadata && Object.keys(metadata).length > 0) {
@@ -375,6 +381,24 @@ export class R2Storage implements Storage {
         customMetadata: metadata,
       })
     })
+
+    // 強整合性: 書き込み直後に可視性を確認（R2の最終的整合性影響を緩和）
+    // head/get が成功するまで短いバックオフで再試行
+    const maxChecks = 5
+    for (let i = 0; i < maxChecks; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      const ok = await this.retryableOperation(async () => {
+        const h = await this.bucket.head(key)
+        return !!h
+      })
+      if (ok) break
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((r) => setTimeout(r, 50 * (i + 1)))
+      if (i === maxChecks - 1) {
+        // 最終試行で可視にならなければエラーにする（呼び出し側でリカバリ）
+        throw new Error(`R2Storage.put visibility check failed for key: ${key}`)
+      }
+    }
   }
 
   async get(key: string): Promise<{ text: string; metadata?: Record<string, string> } | null> {
@@ -455,8 +479,9 @@ async function resolveStorage(
   // 明示ローカル指定 or 開発/テストはローカル
   if (isDevelopment() || process.env.STORAGE_MODE === 'local') {
     // eslint-disable-next-line no-console
-    console.log(`[storage] Using LocalFileStorage (dev/local): ${LOCAL_STORAGE_BASE}/${localDir}`)
-    return new LocalFileStorage(path.join(LOCAL_STORAGE_BASE, localDir))
+    const base = getStorageBase()
+    console.log(`[storage] Using LocalFileStorage (dev/local): ${base}/${localDir}`)
+    return new LocalFileStorage(path.join(base, localDir))
   }
 
   // 本番: Cloudflare R2 バインディングがある場合のみR2、なければ明示エラー
@@ -609,6 +634,10 @@ export const StorageKeys = {
     validateId(jobId, 'jobId')
     return `${jobId}/episode_${episodeNumber}.progress.json`
   },
+  episodeText: (jobId: string, episodeNumber: number) => {
+    validateId(jobId, 'jobId')
+    return `${jobId}/episode_${episodeNumber}.txt`
+  },
   pageRender: (jobId: string, episodeNumber: number, pageNumber: number) => {
     validateId(jobId, 'jobId')
     return `${jobId}/episode_${episodeNumber}/page_${pageNumber}.png`
@@ -641,11 +670,11 @@ export async function saveEpisodeBoundaries(
     startCharIndex: number
     endChunk: number
     endCharIndex: number
-    estimatedPages: number
     confidence: number
   }>,
 ): Promise<void> {
-  // ファイルシステムに保存
+  // 強整合性を保証したストレージ+DB操作
+  const { executeStorageDbTransaction } = await import('@/services/application/transaction-manager')
   const storage = await getAnalysisStorage()
   const key = StorageKeys.narrativeAnalysis(jobId)
   const data = {
@@ -655,38 +684,50 @@ export async function saveEpisodeBoundaries(
       totalEpisodes: episodes.length,
     },
   }
-  await storage.put(key, JSON.stringify(data, null, 2))
 
-  // データベースに保存
-  const { EpisodeWriteService } = await import('@/services/application/episode-write')
-  const { JobProgressService } = await import('@/services/application/job-progress')
-  const jobService = new JobProgressService()
-  const episodeService = new EpisodeWriteService()
+  await executeStorageDbTransaction({
+    storage,
+    key,
+    value: JSON.stringify(data, null, 2),
+    dbOperation: async () => {
+      const { EpisodeWriteService } = await import('@/services/application/episode-write')
+      const { JobProgressService } = await import('@/services/application/job-progress')
+      const jobService = new JobProgressService()
+      const episodeService = new EpisodeWriteService()
 
-  // jobからnovelIdを取得
-  const job = await jobService.getJobWithProgress(jobId)
-  if (!job) {
-    throw new Error(`Job not found: ${jobId}`)
-  }
+      const job = await jobService.getJobWithProgress(jobId)
+      if (!job) {
+        throw new Error(`Job not found: ${jobId}`)
+      }
 
-  // エピソードをデータベースに保存
-  const episodesForDb = episodes.map((episode) => ({
-    novelId: job.novelId,
-    jobId,
-    episodeNumber: episode.episodeNumber,
-    title: episode.title,
-    summary: episode.summary,
-    startChunk: episode.startChunk,
-    startCharIndex: episode.startCharIndex,
-    endChunk: episode.endChunk,
-    endCharIndex: episode.endCharIndex,
-    estimatedPages: episode.estimatedPages,
-    confidence: episode.confidence,
-  }))
+      const episodesForDb = episodes.map((episode) => ({
+        novelId: job.novelId,
+        jobId,
+        episodeNumber: episode.episodeNumber,
+        title: episode.title,
+        summary: episode.summary,
+        startChunk: episode.startChunk,
+        startCharIndex: episode.startCharIndex,
+        endChunk: episode.endChunk,
+        endCharIndex: episode.endCharIndex,
+        confidence: episode.confidence,
+      }))
 
-  await episodeService.bulkUpsert(episodesForDb)
+      await episodeService.bulkUpsert(episodesForDb)
+    },
+    tracking: {
+      filePath: key,
+      fileCategory: 'analysis',
+      fileType: 'json',
+      novelId: undefined,
+      jobId,
+      mimeType: 'application/json; charset=utf-8',
+    },
+  })
 
-  console.log(`Saved ${episodes.length} episodes to both database and file system`)
+  console.log(
+    `Saved ${episodes.length} episodes to both database and file system with strong consistency`,
+  )
 }
 
 // チャンク分析取得関数
@@ -777,6 +818,42 @@ export async function auditStorageKeys(options: {
             issue: 'invalid-format',
             detail: 'regex-mismatch',
           })
+        }
+        for (const seg of FORBIDDEN_SEGMENTS) {
+          if (key.includes(seg)) {
+            issues.push({ key, issue: 'forbidden-segment', detail: seg })
+          }
+        }
+        if (seen.has(key)) {
+          issues.push({ key, issue: 'duplicate' })
+        } else {
+          seen.add(key)
+        }
+      }
+    }),
+  )
+
+  return { scanned, issues }
+}
+
+// 直指定版: Factory を経由せず、与えられた Storage インスタンス配列を監査
+export async function auditStorageKeysOnStorages(
+  storages: Storage[],
+  options?: { prefix?: string; abortSignal?: AbortSignal },
+): Promise<{ scanned: number; issues: StorageKeyIssue[] }> {
+  const issues: StorageKeyIssue[] = []
+  const seen = new Set<string>()
+  let scanned = 0
+
+  await Promise.all(
+    storages.map(async (storage) => {
+      if (!storage.list) return
+      const keys = await storage.list(options?.prefix)
+      for (const key of keys) {
+        if (options?.abortSignal?.aborted) return
+        scanned++
+        if (!KEY_REGEX.test(key)) {
+          issues.push({ key, issue: 'invalid-format', detail: 'regex-mismatch' })
         }
         for (const seg of FORBIDDEN_SEGMENTS) {
           if (key.includes(seg)) {

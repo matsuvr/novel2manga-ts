@@ -33,6 +33,14 @@
 - [ ] Vertical Dialogue Rendering: update README with feature flag/env placeholders (no secrets)
 - [ ] Vertical Dialogue Rendering: cache tuning and concurrency guard if needed
 
+## New (2025-08-21): Episode Text Persistence
+
+- [x] Add StorageKeys.episodeText and storage port episodeText (analysis bucket)
+- [x] Persist episode text after extraction in AnalyzePipeline
+- [x] Add episodes.episode_text_path column and DatabaseService.updateEpisodeTextPath
+- [ ] Generate and apply Drizzle migration for episode_text_path
+- [ ] Add unit tests covering DB path update and retrieval API
+
 ## New (2025-08-16): Panel Count + Template Snap
 
 - [x] Loader: Read `public/docs/panel_layout_sample/<count>/*.json` and build `LayoutTemplate` candidates

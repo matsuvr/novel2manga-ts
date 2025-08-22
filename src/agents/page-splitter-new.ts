@@ -68,7 +68,6 @@ export class PageSplitAgentNew {
       episodeNumber: episodeData.episodeNumber,
       episodeTitle: episodeData.episodeTitle,
       episodeSummary: episodeData.episodeSummary,
-      estimatedPages: episodeData.estimatedPages,
       narrativeFlow: narrativeAnalysis,
       chunkSummaries: episodeData.chunks.map((chunk, i) => {
         const analysis = chunk.analysis as unknown as ChunkAnalysisResult

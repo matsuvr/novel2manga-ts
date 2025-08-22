@@ -247,7 +247,7 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
             >
               <div className="font-semibold">Episode {episode.episodeNumber}</div>
               <div className="text-sm text-gray-600">{episode.title}</div>
-              <div className="text-sm text-gray-600 mt-1">📄 {episode.estimatedPages} ページ</div>
+              <div className="text-sm text-gray-600 mt-1">📄 レイアウト生成済み</div>
               <div className="mt-2 flex gap-2">
                 <button
                   type="button"
@@ -309,7 +309,7 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
             </div>
             <div>
               <p className="text-gray-500">推定ページ数</p>
-              <p className="font-medium">{selectedEpisode.estimatedPages} ページ</p>
+              <p className="font-medium">レイアウト生成済み</p>
             </div>
             <div>
               <p className="text-gray-500">信頼度</p>

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import JSZip from 'jszip'
 import PDFDocument from 'pdfkit'
 import type { Episode, NewOutput } from '@/db'
+import { getLogger } from '@/infrastructure/logging/logger'
 import { getStoragePorts } from '@/infrastructure/storage/ports'
 import { adaptAll } from '@/repositories/adapters'
 import { EpisodeRepository } from '@/repositories/episode-repository'
@@ -44,8 +45,17 @@ export class OutputService {
     try {
       const buf = Buffer.from(obj.text, 'base64')
       if (buf.length > 0) return buf
-    } catch (_e) {
-      // ignore base64 decoding failure; fall back to utf-8 buffer below
+    } catch (error) {
+      const logger = getLogger().withContext({
+        service: 'OutputService',
+        operation: 'getExportContent',
+        path,
+      })
+      logger.warn('Base64 decoding failed, falling back to UTF-8', {
+        path,
+        textLength: obj.text.length,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
     return Buffer.from(obj.text)
   }
@@ -106,16 +116,42 @@ export class OutputService {
     }
 
     const outputId = `out_${randomUUID()}`
-    await this.outputRepo.create({
-      id: outputId,
-      novelId: job.novelId,
-      jobId,
-      outputType: format === 'pdf' ? 'pdf' : 'images_zip',
-      outputPath: exportFilePath,
-      fileSize,
-      pageCount,
-      metadataPath: null,
-    })
+    try {
+      await this.outputRepo.create({
+        id: outputId,
+        novelId: job.novelId,
+        jobId,
+        outputType: format === 'pdf' ? 'pdf' : 'images_zip',
+        outputPath: exportFilePath,
+        fileSize,
+        pageCount,
+        metadataPath: null,
+      })
+    } catch (e) {
+      // TODO: Refactor to use TransactionManager for atomic storage+DB operations
+      // This would require changing exportToPDF/exportToZIP to return buffers instead of saving directly
+      // Current manual rollback provides partial consistency but isn't fully atomic
+
+      // DB 失敗時はストレージへ保存済みの成果物を削除して整合性維持
+      try {
+        const ports = getStoragePorts()
+        await ports.output.deleteExport(exportFilePath)
+      } catch (deleteError) {
+        const logger = getLogger().withContext({
+          service: 'OutputService',
+          operation: 'export-cleanup',
+          jobId,
+          exportFilePath,
+        })
+        logger.warn('Failed to delete export file during cleanup', {
+          jobId,
+          exportFilePath,
+          deleteError: deleteError instanceof Error ? deleteError.message : String(deleteError),
+          originalError: e instanceof Error ? e.message : String(e),
+        })
+      }
+      throw e
+    }
 
     return { outputId, exportFilePath, fileSize, pageCount }
   }
@@ -208,8 +244,18 @@ export class OutputService {
               totalPages++
             }
           }
-        } catch {
-          // 読み取り不能な場合はスキップ（画像は出力可能な範囲で続行）
+        } catch (error) {
+          const logger = getLogger().withContext({
+            service: 'OutputService',
+            operation: 'exportToZIP',
+            jobId,
+            episodeNumber: episode.episodeNumber,
+          })
+          logger.warn('Failed to parse layout YAML, skipping episode pages', {
+            jobId,
+            episodeNumber: episode.episodeNumber,
+            error: error instanceof Error ? error.message : String(error),
+          })
         }
       }
     }

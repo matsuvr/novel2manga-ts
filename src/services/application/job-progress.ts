@@ -78,11 +78,14 @@ export class JobProgressService {
             stack: error instanceof Error ? error.stack : undefined,
           })
         })
-        .catch(() => {
+        .catch((loggerError) => {
           // Fallback to console if logger fails
           console.error('Failed to parse layout progress JSON', {
             json: layoutProgressJson,
             error: error instanceof Error ? error.message : String(error),
+          })
+          console.warn('Logger import failed:', {
+            loggerError: loggerError instanceof Error ? loggerError.message : String(loggerError),
           })
         })
       return 0
@@ -140,16 +143,14 @@ export class JobProgressService {
         // Process episodes in parallel for better performance
         const perEpisodePagesPromises = episodes.map(async (episode) => {
           const episodeNumber = episode.episodeNumber
-          const total = episode.estimatedPages || 0
-
-          // Get planned pages from layout progress
+          // Get actual pages from layout progress
           const layoutProgress = await this.safeOperation(
             () => layout.getEpisodeLayoutProgress(id, episodeNumber),
             'getEpisodeLayoutProgress',
             { jobId: id, episodeNumber },
           )
 
-          const planned = layoutProgress ? this.parseLayoutProgress(layoutProgress) : 0
+          const actualPages = layoutProgress ? this.parseLayoutProgress(layoutProgress) : 0
           const validation = layoutProgress
             ? this.parseLayoutValidation(layoutProgress)
             : { normalizedPages: [], pagesWithIssueCounts: {}, issuesCount: 0 }
@@ -166,9 +167,8 @@ export class JobProgressService {
           return [
             episodeNumber,
             {
-              planned,
+              actualPages,
               rendered,
-              total,
               validation,
             },
           ] as const
@@ -179,9 +179,8 @@ export class JobProgressService {
         const perEpisodePages: Record<
           number,
           {
-            planned: number
+            actualPages: number
             rendered: number
-            total?: number
             validation: {
               normalizedPages: number[]
               pagesWithIssueCounts: Record<number, number>

@@ -32,7 +32,13 @@ describe('/api/job/[id]', () => {
   let testJobId: string
   let testNovelId: string
   let testDir: string
-  let mockDbService: any
+  let mockDbService: {
+    createNovel: ReturnType<typeof vi.fn>
+    createJob: ReturnType<typeof vi.fn>
+    createChunk: ReturnType<typeof vi.fn>
+    getNovel: ReturnType<typeof vi.fn>
+    getJob: ReturnType<typeof vi.fn>
+  }
 
   beforeEach(async () => {
     vi.clearAllMocks()
@@ -70,8 +76,11 @@ describe('/api/job/[id]', () => {
     // テストディレクトリのクリーンアップ
     try {
       await fs.rm(testDir, { recursive: true, force: true })
-    } catch (_error) {
-      // エラーは無視
+    } catch (error) {
+      console.warn('Failed to clean up test directory:', {
+        testDir,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   })
 

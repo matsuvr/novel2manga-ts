@@ -400,3 +400,9 @@ console.log(result.metadata?.provider)
 4. **厳密な型安全性**: ゼロany、JSON-schema検証
 
 統合テストも完全に対応し、既存のコードベースとの互換性を保ちながら、段階的な移行が可能です。
+
+## 追加: エピソード本文の永続化（2025-08-21）
+
+- エピソード抽出後、本文テキストをストレージに保存（`analysis` ストレージ、キー: `StorageKeys.episodeText(jobId, episodeNumber)`）。
+- DB `episodes` テーブルに `episode_text_path` 列を追加し、保存したキーを格納。
+- これにより、後続処理（スクリプト変換・ページ割り振り）や再処理時の再抽出を避け、トレーサビリティが向上。
