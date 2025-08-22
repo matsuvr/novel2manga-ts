@@ -74,8 +74,8 @@ vi.mock('@/utils/storage', () => ({
     getOutputStorage: () => testStorageFactory.getOutputStorage(),
   },
   StorageKeys: {
-    chunk: (jobId: string, index: number) => `${jobId}/chunks/${index}.txt`,
-    chunkAnalysis: (jobId: string, index: number) => `${jobId}/analysis/chunk-${index}.json`,
+    chunk: (jobId: string, index: number) => `${jobId}/chunk_${index}.txt`,
+    chunkAnalysis: (jobId: string, index: number) => `${jobId}/chunk_${index}.json`,
     episodeLayout: (jobId: string, episodeNumber: number) =>
       `${jobId}/episode_${episodeNumber}.yaml`,
   },
@@ -236,98 +236,12 @@ describe('Service Integration Tests', () => {
       getDatabase: vi.fn(() => testDb.db),
     }))
 
-    // episode-utilsのモック
-    vi.doMock('@/utils/episode-utils', async (importOriginal) => {
-      const actual = (await importOriginal()) as any
-      return {
-        ...actual,
-        prepareNarrativeAnalysisInput: vi.fn().mockImplementation(async (options: any) => {
-          // Ensure we never return null to avoid "Failed to prepare narrative analysis input" error
-          const result = {
-            jobId: options?.jobId || 'test-job-fallback', // Use the actual jobId passed to the function
-            chunks: [
-              {
-                chunkIndex: 0,
-                text: 'テストチャンクデータ1',
-                analysis: {
-                  characters: [],
-                  scenes: [],
-                  dialogues: [],
-                  highlights: [],
-                  situations: [],
-                },
-              },
-              {
-                chunkIndex: 1,
-                text: 'テストチャンクデータ2',
-                analysis: {
-                  characters: [],
-                  scenes: [],
-                  dialogues: [],
-                  highlights: [],
-                  situations: [],
-                },
-              },
-            ],
-            targetCharsPerEpisode: 1000,
-            minCharsPerEpisode: 500,
-            maxCharsPerEpisode: 2000,
-            startingEpisodeNumber: 1,
-            isMiddleOfNovel: false,
-            previousEpisodeEndText: undefined,
-          }
-          return result
-        }),
-      }
-    })
+    // Remove redundant prepareNarrativeAnalysisInput mock - let it use actual storage
 
     // エージェントモックのセットアップ
     setupAgentMocks()
 
-    // episode-utilsのモックを再設定（setupAgentMocksの後で確実に適用）
-    vi.doMock('@/utils/episode-utils', async (importOriginal) => {
-      const actual = (await importOriginal()) as any
-      return {
-        ...actual,
-        prepareNarrativeAnalysisInput: vi.fn().mockImplementation(async (options: any) => {
-          // Ensure we never return null to avoid "Failed to prepare narrative analysis input" error
-          const result = {
-            jobId: options?.jobId || 'test-job-fallback', // Use the actual jobId passed to the function
-            chunks: [
-              {
-                chunkIndex: 0,
-                text: 'テストチャンクデータ1',
-                analysis: {
-                  characters: [],
-                  scenes: [],
-                  dialogues: [],
-                  highlights: [],
-                  situations: [],
-                },
-              },
-              {
-                chunkIndex: 1,
-                text: 'テストチャンクデータ2',
-                analysis: {
-                  characters: [],
-                  scenes: [],
-                  dialogues: [],
-                  highlights: [],
-                  situations: [],
-                },
-              },
-            ],
-            targetCharsPerEpisode: 1000,
-            minCharsPerEpisode: 500,
-            maxCharsPerEpisode: 2000,
-            startingEpisodeNumber: 1,
-            isMiddleOfNovel: false,
-            previousEpisodeEndText: undefined,
-          }
-          return result
-        }),
-      }
-    })
+    // Remove duplicate prepareNarrativeAnalysisInput mock - storage consistency is handled above
 
     // setupAgentMocks内の '@/config' モックでは scriptConversion 設定が未定義のため、上書きする
     vi.doMock('@/config', () => ({
@@ -428,7 +342,7 @@ describe('Service Integration Tests', () => {
 
       // 検証: ストレージにチャンクが保存されている
       const chunkStorage = await testStorageFactory.getChunkStorage()
-      expect(chunkStorage.has(`${result.jobId}/chunks/0.txt`)).toBe(true)
+      expect(chunkStorage.has(`${result.jobId}/chunk_0.txt`)).toBe(true)
 
       // 検証: 分析結果 (isDemoモードではスキップされるため、チェックしない)
       // const analysisStorage = await testStorageFactory.getAnalysisStorage();
@@ -466,8 +380,7 @@ describe('Service Integration Tests', () => {
 
   describe('Database and Storage Integration', () => {
     it('データベースとストレージ間のデータ一貫性を保つ', async () => {
-      // このテストはprepareNarrativeAnalysisInputに依存しない範囲で
-      // データベースとストレージの一貫性をテストします
+      // 完全なパイプライン実行でデータベースとストレージの一貫性をテストします
 
       // 準備: 小説データの作成
       const novel = await dataFactory.createNovel({
@@ -478,34 +391,42 @@ describe('Service Integration Tests', () => {
       const novelText = 'データ一貫性テスト用のテキストです。'.repeat(350) // 6300文字確保
       await storageDataFactory.seedNovelText(novel.id, novelText)
 
-      // AnalyzePipelineの初期化部分のみテストし、
-      // prepareNarrativeAnalysisInputでエラーが出ることを許容
+      // AnalyzePipelineの完全実行
       const pipeline = new AnalyzePipeline()
+      const result = await pipeline.runWithText(novel.id, novelText, {
+        title: novel.title,
+        isDemo: true,
+      })
 
-      try {
-        // この呼び出しは prepareNarrativeAnalysisInput でエラーになることを期待
-        await pipeline.runWithText(novel.id, novelText, {
-          title: novel.title,
-          isDemo: true,
-        })
+      // 基本的なパイプライン実行結果の確認
+      expect(result.response?.success).toBe(true)
+      expect(result.jobId).toBeDefined()
+      expect(result.chunkCount).toBeGreaterThan(0)
 
-        // ここに到達したら期待に反する
-        expect(true).toBe(false)
-      } catch (error: any) {
-        // エラーが "Failed to prepare narrative analysis input" であることを確認
-        expect(error.message).toBe('Failed to prepare narrative analysis input')
+      // データベース一貫性の検証
+      const job = await testDb.service.getJob(result.jobId)
+      expect(job).toBeDefined()
+      expect(job?.status).toBe('completed')
+      expect(job?.novelId).toBe(novel.id)
 
-        // データ一貫性テスト：基本的なデータベース確認のみ実行
-        // データベースに小説データが存在することを確認
-        const dbNovel = await testDb.service.getNovel(novel.id)
-        expect(dbNovel).toBeDefined()
-        expect(dbNovel?.id).toBe(novel.id)
-        expect(dbNovel?.title).toBe('Consistency Test Novel')
+      // データベースに小説データが存在することを確認
+      const dbNovel = await testDb.service.getNovel(novel.id)
+      expect(dbNovel).toBeDefined()
+      expect(dbNovel?.id).toBe(novel.id)
+      expect(dbNovel?.title).toBe('Consistency Test Novel')
 
-        console.log(
-          '✅ データ一貫性テスト: prepareNarrativeAnalysisInputエラー時でも基本データは保持されている',
-        )
-      }
+      // チャンクがデータベースとストレージの両方に存在することを確認
+      const chunks = await testDb.service.getChunksByJobId(result.jobId)
+      expect(chunks.length).toBe(result.chunkCount)
+      expect(chunks[0].contentPath).toBeDefined()
+
+      // ストレージにチャンクが保存されていることを確認
+      const chunkStorage = await testStorageFactory.getChunkStorage()
+      expect(chunkStorage.has(`${result.jobId}/chunk_0.txt`)).toBe(true)
+
+      console.log(
+        '✅ データ一貫性テスト: 完全なパイプライン実行でデータベースとストレージの一貫性が保たれている',
+      )
     })
 
     it('トランザクション境界でのロールバック処理', async () => {

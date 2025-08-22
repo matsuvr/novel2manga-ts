@@ -73,7 +73,12 @@ describe('Storage', () => {
         expect(result?.metadata).not.toHaveProperty('createdAt')
       } finally {
         // テスト後のクリーンアップ
-        await fs.rm(baseDir, { recursive: true, force: true }).catch(() => {})
+        await fs.rm(baseDir, { recursive: true, force: true }).catch((error) => {
+          console.warn('Failed to clean up test directory:', {
+            baseDir,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        })
       }
     })
   })

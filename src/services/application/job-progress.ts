@@ -78,11 +78,14 @@ export class JobProgressService {
             stack: error instanceof Error ? error.stack : undefined,
           })
         })
-        .catch(() => {
+        .catch((loggerError) => {
           // Fallback to console if logger fails
           console.error('Failed to parse layout progress JSON', {
             json: layoutProgressJson,
             error: error instanceof Error ? error.message : String(error),
+          })
+          console.warn('Logger import failed:', {
+            loggerError: loggerError instanceof Error ? loggerError.message : String(loggerError),
           })
         })
       return 0

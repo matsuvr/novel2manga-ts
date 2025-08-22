@@ -104,7 +104,8 @@ export function buildLayoutFromPageBreaks(
     const panels: Panel[] = p.panels.map((pp, idx) => {
       // 新しい形式からcontentとdialogueを直接取得
       let content = pp.content || ''
-      const dialogues: Dialogue[] = (pp.dialogue || []).map((d) => ({
+      const dialogueArr = Array.isArray(pp.dialogue) ? pp.dialogue : []
+      const dialogues: Dialogue[] = dialogueArr.map((d) => ({
         speaker: d.speaker,
         text: d.lines,
       }))

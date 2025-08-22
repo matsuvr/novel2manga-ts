@@ -3,6 +3,11 @@ import { eq } from 'drizzle-orm'
 import { getDatabase } from '@/db'
 import { jobs, storageFiles } from '@/db/schema'
 
+// Drizzle transaction type for internal use
+type DrizzleTransaction = Parameters<
+  Parameters<ReturnType<typeof getDatabase>['transaction']>[0]
+>[0]
+
 type FileCategory =
   | 'original'
   | 'chunk'
@@ -28,9 +33,13 @@ export interface RecordStorageFileParams {
  * storage_files テーブルへ追跡レコードを作成（idempotent）。
  * - jobId が与えられた場合は DB から novelId を逆引き
  * - file_path にユニーク制約があるため onConflictDoNothing で冪等に登録
+ * - tx パラメータが提供された場合はそのトランザクション内で実行
  */
-export async function recordStorageFile(params: RecordStorageFileParams): Promise<void> {
-  const db = getDatabase()
+export async function recordStorageFile(
+  params: RecordStorageFileParams,
+  tx?: DrizzleTransaction,
+): Promise<void> {
+  const db = tx || getDatabase()
 
   let novelId = params.novelId
   if (!novelId && params.jobId) {
