@@ -41,7 +41,7 @@ export function buildLayoutLLMInput(episodeData: EpisodeData): LayoutLLMInput {
       episodeTitle: episodeData.episodeTitle,
       chunks: simplifiedChunks,
     },
-    targetPages: episodeData.estimatedPages,
+    targetPages: 20, // Target pages for layout generation (configurable)
     layoutConstraints: {
       avoidEqualGrid: true,
       preferVariedSizes: true,

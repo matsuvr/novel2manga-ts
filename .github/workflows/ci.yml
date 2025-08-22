@@ -29,6 +29,7 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
+          check-latest: true
 
       - name: Clean npm cache and dependencies
         run: |
@@ -37,7 +38,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm install
+          npm install --no-audit --no-fund
           # Rollup optional dependencies workaround for CI
           npm rebuild || true
 
@@ -52,6 +53,8 @@ jobs:
           npx tsc --version
           echo "Node.js version: $(node --version)"
           echo "npm version: $(npm --version)"
+          echo "Vite version: $(npx vite --version || echo 'vite missing')"
+          echo "Vitest version: $(npx vitest --version || echo 'vitest missing')"
 
       - name: Type Check
         run: npx tsc --noEmit
@@ -62,8 +65,17 @@ jobs:
       - name: Unit Tests
         run: |
           set -e
+          mkdir -p test-results
           npm run test:unit -- --run --reporter=junit --outputFile=test-results/junit-unit.xml || TEST_FAILED=$?
           echo "Unit test exit code: ${TEST_FAILED:-0}"
+          exit ${TEST_FAILED:-0}
+
+      - name: Integration Tests
+        run: |
+          set -e
+          mkdir -p test-results
+          npm run test:integration -- --run --reporter=junit --outputFile=test-results/junit-integration.xml || TEST_FAILED=$?
+          echo "Integration test exit code: ${TEST_FAILED:-0}"
           exit ${TEST_FAILED:-0}
 
       # Removed legacy full-flow test step; integration tests run via npm run test:integration

@@ -37,7 +37,6 @@ export interface EpisodeData {
   startCharIndex: number
   endChunk: number
   endCharIndex: number
-  estimatedPages: number
   chunks: ChunkData[] // このエピソードに含まれるチャンクとその解析結果
 }
 

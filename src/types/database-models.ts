@@ -146,7 +146,6 @@ export const EpisodeSchema = z.object({
   startCharIndex: z.number(),
   endChunk: z.number(),
   endCharIndex: z.number(),
-  estimatedPages: z.number(),
   confidence: z.number(),
   createdAt: z.date(),
 })

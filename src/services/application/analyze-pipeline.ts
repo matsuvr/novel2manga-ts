@@ -13,6 +13,19 @@ import { EpisodeRepository } from '@/repositories/episode-repository'
 import { getDatabaseService } from '@/services/db-factory'
 import type { EpisodeBoundary } from '@/types/episode'
 import type { AnalyzeResponse } from '@/types/job'
+
+// Type guard for database service with updateEpisodeTextPath method
+function hasUpdateEpisodeTextPath(service: unknown): service is {
+  updateEpisodeTextPath: (jobId: string, episodeNumber: number, path: string) => Promise<void>
+} & Record<string, unknown> {
+  return (
+    typeof service === 'object' &&
+    service !== null &&
+    'updateEpisodeTextPath' in service &&
+    typeof (service as Record<string, unknown>).updateEpisodeTextPath === 'function'
+  )
+}
+
 import type { PageBreakPlan } from '@/types/script'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { saveEpisodeBoundaries } from '@/utils/storage'
@@ -93,15 +106,9 @@ export class AnalyzePipeline {
     const title = options.title || 'Novel'
 
     // まず小説を DB に保存してから job を作成する（FOREIGN KEY制約のため）
+    // 小説メタデータの先行保存（job の外部キー制約のため）
     try {
-      // ここで「ストレージ（ファイル）に小説本文を JSON として書き込む」
-      //   - key: novelId.json 等（実際のパスはポート実装依存）
-      await this.ports.novel.putNovelText(
-        novelId,
-        JSON.stringify({ text: novelText, title: title || '' }),
-      )
-      // ここで「DBに小説メタデータ（タイトル等）を書き込む/存在保証する」
-      //   - job の外部キー制約のために先に作成/確保しておく
+      // DBに小説メタデータ（タイトル等）を書き込む/存在保証する
       await novelRepo.ensure(novelId, {
         title: title || `Novel ${novelId.slice(0, 8)}`,
         author: 'Unknown',
@@ -109,6 +116,28 @@ export class AnalyzePipeline {
         textLength: novelText.length,
         language: 'ja',
         metadataPath: null,
+      })
+
+      // ストレージに小説テキストを保存
+      const novelStorage = await (await import('@/utils/storage')).StorageFactory.getNovelStorage()
+      const key = `${novelId}.json`
+      const novelData = JSON.stringify({ text: novelText, title: title || '' })
+
+      const { executeStorageWithTracking } = await import(
+        '@/services/application/transaction-manager'
+      )
+      await executeStorageWithTracking({
+        storage: novelStorage,
+        key,
+        value: novelData,
+        tracking: {
+          filePath: key,
+          fileCategory: 'original',
+          fileType: 'json',
+          novelId,
+          jobId: undefined,
+          mimeType: 'application/json; charset=utf-8',
+        },
       })
     } catch (e) {
       // ストレージ/DB への保存失敗は致命的エラーとして扱う（jobが作成できないため）
@@ -150,18 +179,16 @@ export class AnalyzePipeline {
     // ここで「DBのジョブ進捗を更新（split ステップの総数設定）」
     await jobRepo.updateStep(jobId, 'split', 0, chunks.length)
 
-    // Persist chunks to storage and collect DB rows
+    // Persist chunks to storage and DB immediately for強整合性
     let currentPosition = 0
-    const rows: Array<Parameters<typeof chunkRepo.create>[0]> = []
-    const FLUSH_BATCH_SIZE = 100
     for (let i = 0; i < chunks.length; i++) {
       const content = chunks[i]
       // ここで「ストレージ（ファイル）にチャンク本文を書き込む」
       const key = await this.ports.chunk.putChunk(jobId, i, content)
       const startPos = currentPosition
       const endPos = currentPosition + content.length
-      // ここで「DBにチャンクメタデータを保存するための行データを準備（まだ未書き込み）」
-      rows.push({
+      // ここで「DBにチャンクメタデータを即時挿入（書き込み）」
+      await chunkRepo.create({
         novelId,
         jobId,
         chunkIndex: i,
@@ -171,14 +198,6 @@ export class AnalyzePipeline {
         wordCount: content.length,
       })
       currentPosition = endPos
-      if (rows.length >= FLUSH_BATCH_SIZE) {
-        // ここで「DBにチャンクメタデータをバッチ挿入（書き込み）」
-        await chunkRepo.createBatch(rows.splice(0, rows.length))
-      }
-    }
-    // 残りをフラッシュ
-    if (rows.length > 0) {
-      await chunkRepo.createBatch(rows.splice(0, rows.length))
     }
 
     // ここで「DBのジョブ進捗を更新（split ステップの進行度更新）」
@@ -588,17 +607,80 @@ export class AnalyzePipeline {
             episodePreview: `${episodeText.substring(0, 100)}...`,
           })
 
+          // エピソード本文の保存をストレージ+DB一体のトランザクションで実行（強整合性）
+          {
+            const storageModule = await import('@/utils/storage')
+            const storage = await storageModule.StorageFactory.getAnalysisStorage()
+            const key =
+              typeof (storageModule.StorageKeys as unknown as Record<string, unknown>)
+                .episodeText === 'function'
+                ? (
+                    storageModule.StorageKeys as unknown as {
+                      episodeText: (jobId: string, ep: number) => string
+                    }
+                  ).episodeText(jobId, ep)
+                : `${jobId}/episode_${ep}.txt`
+
+            const { executeStorageWithDbOperation } = await import(
+              '@/services/application/transaction-manager'
+            )
+
+            await executeStorageWithDbOperation({
+              storage,
+              key,
+              value: episodeText,
+              metadata: {
+                contentType: 'text/plain; charset=utf-8',
+                jobId,
+                episode: String(ep),
+              },
+              dbOperation: async () => {
+                const dbService = getDatabaseService()
+                if (hasUpdateEpisodeTextPath(dbService)) {
+                  await dbService.updateEpisodeTextPath(jobId, ep, key)
+                }
+              },
+              tracking: {
+                filePath: key,
+                fileCategory: 'episode',
+                fileType: 'txt',
+                novelId: undefined,
+                jobId,
+                mimeType: 'text/plain; charset=utf-8',
+              },
+            })
+
+            logger.info('Episode text saved atomically with DB path update', {
+              jobId,
+              episodeNumber: ep,
+              episodeTextKey: key,
+            })
+          }
+
+          // Extract structured data from narrative arc analysis for the current episode
+          const currentEpisodeBoundary = boundaries.find((b) => b.episodeNumber === ep)
+
           // Convert episode text to script
           // ここで「LLM を呼び出してエピソード本文を台本スクリプト形式に変換」
-          const script = await convertEpisodeTextToScript(episodeText, {
-            jobId,
-            episodeNumber: ep,
-          })
+          const script = await convertEpisodeTextToScript(
+            {
+              episodeText,
+              // Use structured data from narrative arc analysis results
+              characterList: currentEpisodeBoundary?.characterList?.join('、') || undefined,
+              sceneList: currentEpisodeBoundary?.sceneList?.join('、') || undefined,
+              dialogueList: currentEpisodeBoundary?.dialogueList?.join('、') || undefined,
+              highlightList: currentEpisodeBoundary?.highlightList?.join('、') || undefined,
+              situationList: currentEpisodeBoundary?.situationList?.join('、') || undefined,
+            },
+            {
+              jobId,
+              episodeNumber: ep,
+            },
+          )
 
-          // Estimate page breaks
+          // Estimate page breaks using advanced LLM without mechanical page count logic
           // ここで「LLM（またはエージェント）を呼び出してページ割り（コマ割り）を推定」
           const pageBreakPlan = await estimatePageBreaks(script, {
-            avgLinesPerPage: 20, // TODO: calculate from episode.estimatedPages
             jobId,
             episodeNumber: ep,
           })

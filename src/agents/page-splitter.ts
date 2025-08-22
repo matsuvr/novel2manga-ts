@@ -65,7 +65,6 @@ export class PageSplitAgent {
       episodeNumber: episodeData.episodeNumber,
       episodeTitle: episodeData.episodeTitle,
       episodeSummary: episodeData.episodeSummary,
-      estimatedPages: episodeData.estimatedPages,
       narrativeFlow: narrativeAnalysis,
       chunkSummaries: episodeData.chunks.map((chunk, i) => {
         // Cast to the correct ChunkAnalysisResult type

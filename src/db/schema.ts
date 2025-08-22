@@ -167,8 +167,8 @@ export const episodes = sqliteTable(
     startCharIndex: integer('start_char_index').notNull(),
     endChunk: integer('end_chunk').notNull(),
     endCharIndex: integer('end_char_index').notNull(),
-    estimatedPages: integer('estimated_pages').notNull(),
     confidence: real('confidence').notNull(),
+    episodeTextPath: text('episode_text_path'),
     createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({

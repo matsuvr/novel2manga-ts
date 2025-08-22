@@ -145,10 +145,10 @@ async function resolveEpisodeData(
         startCharIndex: 0,
         endChunk: 0,
         endCharIndex: 0,
-        estimatedPages: 1,
         confidence: 0.9,
         createdAt: new Date().toISOString(),
-      }
+        episodeTextPath: null,
+      } as Episode
     } else {
       logger.error('Episode not found')
       throw new Error('Episode not found')
@@ -371,12 +371,12 @@ async function generateEpisodeLayoutInternal(
         startCharIndex: 0,
         endChunk: 0,
         endCharIndex: 0,
-        estimatedPages: 1,
         confidence: 0.9,
         createdAt: new Date().toISOString(),
-      }
+        episodeTextPath: null,
+      } as Episode
       const db = getDatabaseService()
-      await db.createEpisode({ jobId, episodeNumber, title: fallbackEpisode.title })
+      await db.createEpisode({ jobId, episodeNumber, title: fallbackEpisode.title ?? undefined })
     } catch {
       // noop
     }
@@ -403,7 +403,6 @@ async function generateEpisodeLayoutInternal(
     startCharIndex: episode.startCharIndex,
     endChunk: episode.endChunk,
     endCharIndex: episode.endCharIndex,
-    estimatedPages: episode.estimatedPages,
     chunks: chunkDataArray,
   }
 
@@ -429,10 +428,22 @@ async function generateEpisodeLayoutInternal(
     }
 
     const { convertEpisodeTextToScript } = await import('@/agents/script/script-converter')
-    const script = await convertEpisodeTextToScript(episodeText, {
-      jobId,
-      episodeNumber: episode.episodeNumber,
-    })
+    const script = await convertEpisodeTextToScript(
+      {
+        episodeText,
+        // TODO: Extract structured data for enhanced script conversion
+        characterList: undefined,
+        sceneList: undefined,
+        dialogueList: undefined,
+        highlightList: undefined,
+        situationList: undefined,
+      },
+      {
+        jobId,
+        episodeNumber: episode.episodeNumber,
+        isDemo,
+      },
+    )
 
     // Progress validation: Script conversion must produce results
     const allScriptLines =
@@ -446,14 +457,10 @@ async function generateEpisodeLayoutInternal(
     }
 
     const { estimatePageBreaks } = await import('@/agents/script/page-break-estimator')
-    const avgLines = Math.max(
-      4,
-      Math.floor(allScriptLines.length / 4), // デフォルトの平均行数を想定
-    )
     const pageBreaks = await estimatePageBreaks(script, {
-      avgLinesPerPage: avgLines,
       jobId,
       episodeNumber: episode.episodeNumber,
+      isDemo,
     })
 
     // Progress validation: Page breaks must be estimated

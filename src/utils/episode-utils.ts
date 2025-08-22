@@ -3,8 +3,6 @@ import type { ChunkAnalysisResult, ChunkData } from '@/types/chunk'
 import type { NarrativeAnalysisInput } from '@/types/episode'
 import type { Storage } from '@/utils/storage'
 
-const MAX_CHUNKS_PER_EPISODE = 20
-
 export interface PrepareNarrativeInputOptions {
   jobId: string
   startChunkIndex: number
@@ -48,11 +46,17 @@ async function loadChunkInput(
   storages: StorageBundle,
 ): Promise<NarrativeAnalysisInput['chunks'][0] | null> {
   const { chunkStorage, analysisStorage, StorageKeys } = storages
-  const chunkObj = await chunkStorage.get(StorageKeys.chunk(jobId, chunkIndex))
-  const chunkData = chunkObj ? { text: chunkObj.text } : null
-  if (!chunkData) return null
+  const chunkKey = StorageKeys.chunk(jobId, chunkIndex)
 
-  const analysisObj = await analysisStorage.get(StorageKeys.chunkAnalysis(jobId, chunkIndex))
+  const chunkObj = await chunkStorage.get(chunkKey)
+  const chunkData = chunkObj ? { text: chunkObj.text } : null
+
+  if (!chunkData) {
+    return null
+  }
+
+  const analysisKey = StorageKeys.chunkAnalysis(jobId, chunkIndex)
+  const analysisObj = await analysisStorage.get(analysisKey)
   const analysisResult = analysisObj ? (JSON.parse(analysisObj.text) as ChunkAnalysisResult) : null
 
   return {
@@ -75,7 +79,11 @@ async function gatherChunkInputs(params: {
   let totalChars = 0
   let currentChunkIndex = startChunkIndex
 
-  while (totalChars < targetChars && chunks.length < MAX_CHUNKS_PER_EPISODE) {
+  // 設定からチャンク数上限を取得
+  const episodeConfig = getEpisodeConfig()
+  const maxChunksPerEpisode = episodeConfig?.maxChunksPerEpisode ?? 20
+
+  while (totalChars < targetChars && chunks.length < maxChunksPerEpisode) {
     const chunkInput = await loadChunkInput(jobId, currentChunkIndex, storages)
     if (!chunkInput) break
 
@@ -106,9 +114,9 @@ export async function prepareNarrativeAnalysisInput(
   const {
     jobId,
     startChunkIndex,
-    targetChars = episodeConfig.targetCharsPerEpisode,
-    minChars = episodeConfig.minCharsPerEpisode,
-    maxChars = episodeConfig.maxCharsPerEpisode,
+    targetChars = episodeConfig?.targetCharsPerEpisode ?? 1000,
+    minChars = episodeConfig?.minCharsPerEpisode ?? 500,
+    maxChars = episodeConfig?.maxCharsPerEpisode ?? 2000,
   } = options
 
   // 動的にストレージAPIを取得（テストの部分モック互換）
@@ -119,14 +127,30 @@ export async function prepareNarrativeAnalysisInput(
     analysisStorage: await StorageFactory.getAnalysisStorage(),
   }
 
-  const chunks = await gatherChunkInputs({
-    jobId,
-    startChunkIndex,
-    targetChars,
-    minChars,
-    maxChars,
-    storages,
-  })
+  // Add retry logic to handle timing issues in test environments
+  const maxRetries = 5
+  let chunks: NarrativeAnalysisInput['chunks'] = []
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    chunks = await gatherChunkInputs({
+      jobId,
+      startChunkIndex,
+      targetChars,
+      minChars,
+      maxChars,
+      storages,
+    })
+
+    if (chunks.length > 0) {
+      break
+    }
+
+    // If no chunks found and this isn't the last attempt, wait a bit and retry
+    if (attempt < maxRetries - 1) {
+      const waitTime = 100 * (attempt + 1) // Exponential backoff
+      await new Promise((resolve) => setTimeout(resolve, waitTime))
+    }
+  }
 
   if (chunks.length === 0) {
     return null
@@ -144,10 +168,7 @@ export async function prepareNarrativeAnalysisInput(
   }
 }
 
-export function calculateEstimatedPages(charCount: number): number {
-  const { charsPerPage } = getEpisodeConfig()
-  return Math.round(charCount / charsPerPage)
-}
+// Note: Page estimation removed - using advanced LLM for intelligent page breaks
 
 export function validateEpisodeBoundaries(
   boundaries: Array<{

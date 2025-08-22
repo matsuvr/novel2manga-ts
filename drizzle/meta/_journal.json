@@ -22,6 +22,20 @@
       "when": 1755273700852,
       "tag": "0002_serious_paper_doll",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1755761201800,
+      "tag": "0003_mute_gauntlet",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1755781829349,
+      "tag": "0004_icy_speed",
+      "breakpoints": true
     }
   ]
 }
