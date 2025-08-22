@@ -1,2 +1,25 @@
 # Exclude Biome config to avoid conflicts with Biome's own formatter
 biome.json
+
+# Generated runtime/test artifacts — exclude from formatting
+.test-storage/
+.local-storage/
+
+# Build and reports
+.next/
+dist/
+coverage/
+playwright-report/
+test-results/
+
+# Logs and temp
+logs/
+*.log
+/tmp_test/
+
+# Misc cache/output
+vitest_out.txt
+
+# Database binaries
+/database/*.db
+/database/*.sqlite
