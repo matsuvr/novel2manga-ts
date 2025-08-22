@@ -15,7 +15,6 @@ describe('buildLayoutLLMInput', () => {
       startCharIndex: 0,
       endChunk: 1,
       endCharIndex: 100,
-      estimatedPages: 3,
       chunks: [
         {
           chunkIndex: 0,
@@ -54,7 +53,7 @@ describe('buildLayoutLLMInput', () => {
 
     const input = buildLayoutLLMInput(episode)
     expect(input.episodeData.episodeNumber).toBe(1)
-    expect(input.targetPages).toBe(3)
+    expect(input.targetPages).toBe(20)
     expect(input.layoutConstraints.avoidEqualGrid).toBe(true)
     expect(input.episodeData.chunks.length).toBe(2)
     expect(input.episodeData.chunks[0].hasHighlight).toBe(true)

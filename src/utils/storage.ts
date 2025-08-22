@@ -375,6 +375,24 @@ export class R2Storage implements Storage {
         customMetadata: metadata,
       })
     })
+
+    // 強整合性: 書き込み直後に可視性を確認（R2の最終的整合性影響を緩和）
+    // head/get が成功するまで短いバックオフで再試行
+    const maxChecks = 5
+    for (let i = 0; i < maxChecks; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      const ok = await this.retryableOperation(async () => {
+        const h = await this.bucket.head(key)
+        return !!h
+      })
+      if (ok) break
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((r) => setTimeout(r, 50 * (i + 1)))
+      if (i === maxChecks - 1) {
+        // 最終試行で可視にならなければエラーにする（呼び出し側でリカバリ）
+        throw new Error(`R2Storage.put visibility check failed for key: ${key}`)
+      }
+    }
   }
 
   async get(key: string): Promise<{ text: string; metadata?: Record<string, string> } | null> {
@@ -609,6 +627,10 @@ export const StorageKeys = {
     validateId(jobId, 'jobId')
     return `${jobId}/episode_${episodeNumber}.progress.json`
   },
+  episodeText: (jobId: string, episodeNumber: number) => {
+    validateId(jobId, 'jobId')
+    return `${jobId}/episode_${episodeNumber}.txt`
+  },
   pageRender: (jobId: string, episodeNumber: number, pageNumber: number) => {
     validateId(jobId, 'jobId')
     return `${jobId}/episode_${episodeNumber}/page_${pageNumber}.png`
@@ -641,11 +663,11 @@ export async function saveEpisodeBoundaries(
     startCharIndex: number
     endChunk: number
     endCharIndex: number
-    estimatedPages: number
     confidence: number
   }>,
 ): Promise<void> {
-  // ファイルシステムに保存
+  // 強整合性を保証したストレージ+DB操作
+  const { executeStorageDbTransaction } = await import('@/services/application/transaction-manager')
   const storage = await getAnalysisStorage()
   const key = StorageKeys.narrativeAnalysis(jobId)
   const data = {
@@ -655,38 +677,50 @@ export async function saveEpisodeBoundaries(
       totalEpisodes: episodes.length,
     },
   }
-  await storage.put(key, JSON.stringify(data, null, 2))
 
-  // データベースに保存
-  const { EpisodeWriteService } = await import('@/services/application/episode-write')
-  const { JobProgressService } = await import('@/services/application/job-progress')
-  const jobService = new JobProgressService()
-  const episodeService = new EpisodeWriteService()
+  await executeStorageDbTransaction({
+    storage,
+    key,
+    value: JSON.stringify(data, null, 2),
+    dbOperation: async () => {
+      const { EpisodeWriteService } = await import('@/services/application/episode-write')
+      const { JobProgressService } = await import('@/services/application/job-progress')
+      const jobService = new JobProgressService()
+      const episodeService = new EpisodeWriteService()
 
-  // jobからnovelIdを取得
-  const job = await jobService.getJobWithProgress(jobId)
-  if (!job) {
-    throw new Error(`Job not found: ${jobId}`)
-  }
+      const job = await jobService.getJobWithProgress(jobId)
+      if (!job) {
+        throw new Error(`Job not found: ${jobId}`)
+      }
 
-  // エピソードをデータベースに保存
-  const episodesForDb = episodes.map((episode) => ({
-    novelId: job.novelId,
-    jobId,
-    episodeNumber: episode.episodeNumber,
-    title: episode.title,
-    summary: episode.summary,
-    startChunk: episode.startChunk,
-    startCharIndex: episode.startCharIndex,
-    endChunk: episode.endChunk,
-    endCharIndex: episode.endCharIndex,
-    estimatedPages: episode.estimatedPages,
-    confidence: episode.confidence,
-  }))
+      const episodesForDb = episodes.map((episode) => ({
+        novelId: job.novelId,
+        jobId,
+        episodeNumber: episode.episodeNumber,
+        title: episode.title,
+        summary: episode.summary,
+        startChunk: episode.startChunk,
+        startCharIndex: episode.startCharIndex,
+        endChunk: episode.endChunk,
+        endCharIndex: episode.endCharIndex,
+        confidence: episode.confidence,
+      }))
 
-  await episodeService.bulkUpsert(episodesForDb)
+      await episodeService.bulkUpsert(episodesForDb)
+    },
+    tracking: {
+      filePath: key,
+      fileCategory: 'analysis',
+      fileType: 'json',
+      novelId: undefined,
+      jobId,
+      mimeType: 'application/json; charset=utf-8',
+    },
+  })
 
-  console.log(`Saved ${episodes.length} episodes to both database and file system`)
+  console.log(
+    `Saved ${episodes.length} episodes to both database and file system with strong consistency`,
+  )
 }
 
 // チャンク分析取得関数

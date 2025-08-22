@@ -5,7 +5,7 @@ import { type PageBreakPlan, PageBreakSchema, type Script } from '@/types/script
 
 export async function estimatePageBreaks(
   script: Script,
-  opts: { avgLinesPerPage: number; jobId?: string; episodeNumber?: number },
+  _opts: { jobId?: string; episodeNumber?: number },
 ): Promise<PageBreakPlan> {
   const generator = getLlmStructuredGenerator()
   // Read prompts directly from app config to avoid test mocks on '@/config'
@@ -15,9 +15,10 @@ export async function estimatePageBreaks(
     systemPrompt: pb.systemPrompt,
     userPromptTemplate: pb.userPromptTemplate,
   }
-  const prompt = (cfg.userPromptTemplate || '')
-    .replace('{{avgLinesPerPage}}', String(opts.avgLinesPerPage))
-    .replace('{{scriptJson}}', JSON.stringify(script, null, 2))
+  const prompt = (cfg.userPromptTemplate || '').replace(
+    '{{scriptJson}}',
+    JSON.stringify(script, null, 2),
+  )
   const result = await generator.generateObjectWithFallback({
     name: 'page-break-estimation',
     systemPrompt: cfg.systemPrompt,

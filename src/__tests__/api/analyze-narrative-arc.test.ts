@@ -14,7 +14,6 @@ vi.mock('@/agents/narrative-arc-analyzer', () => ({
       startCharIndex: 0,
       endChunk: 1,
       endCharIndex: 500,
-      estimatedPages: 5,
       confidence: 0.85,
     },
     {
@@ -25,7 +24,6 @@ vi.mock('@/agents/narrative-arc-analyzer', () => ({
       startCharIndex: 500,
       endChunk: 2,
       endCharIndex: 1000,
-      estimatedPages: 6,
       confidence: 0.9,
     },
   ]),

@@ -183,8 +183,8 @@ describe('/api/export', () => {
         renderCompleted: true,
       }),
       getEpisodesByJobId: vi.fn().mockResolvedValue([
-        { episodeNumber: 1, title: 'Episode 1', estimatedPages: 3 },
-        { episodeNumber: 2, title: 'Episode 2', estimatedPages: 4 },
+        { episodeNumber: 1, title: 'Episode 1' },
+        { episodeNumber: 2, title: 'Episode 2' },
       ]),
       createOutput: vi.fn().mockResolvedValue('output-id'),
     }

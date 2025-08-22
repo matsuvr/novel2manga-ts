@@ -47,9 +47,14 @@ export interface EpisodeBoundary {
   startCharIndex: number
   endChunk: number
   endCharIndex: number
-  estimatedPages: number
   confidence: number
+  reasoning?: string
   plotPoints?: string[]
   emotionalArc?: string
   cliffhanger?: boolean
+  characterList?: string[]
+  sceneList?: string[]
+  dialogueList?: string[]
+  highlightList?: string[]
+  situationList?: string[]
 }

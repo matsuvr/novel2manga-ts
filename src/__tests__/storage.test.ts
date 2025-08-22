@@ -7,6 +7,11 @@ import { clearStorageCache, LocalFileStorage, StorageFactory, StorageKeys } from
 // モック設定
 vi.mock('@/config', () => ({
   isDevelopment: vi.fn(),
+  getDatabaseConfig: vi.fn(() => ({
+    sqlite: {
+      path: ':memory:',
+    },
+  })),
 }))
 
 const mockIsDevelopment = vi.mocked(isDevelopment)

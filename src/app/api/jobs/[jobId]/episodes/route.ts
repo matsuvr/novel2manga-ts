@@ -51,7 +51,6 @@ export async function GET(
             summary: 'Demo episode for testing',
             startChunk: 0,
             endChunk: 0,
-            estimatedPages: 1,
             confidence: 0.9,
           },
         ],
@@ -82,7 +81,6 @@ export async function GET(
         summary: ep.summary,
         startChunk: ep.startChunk,
         endChunk: ep.endChunk,
-        estimatedPages: ep.estimatedPages,
         confidence: ep.confidence,
       })),
     })
@@ -115,7 +113,6 @@ export async function POST(
             summary: 'Demo episode for testing',
             startChunk: 0,
             endChunk: 0,
-            estimatedPages: 1,
             confidence: 0.9,
           },
         ],
@@ -156,7 +153,6 @@ export async function POST(
           summary: ep.summary,
           startChunk: ep.startChunk,
           endChunk: ep.endChunk,
-          estimatedPages: ep.estimatedPages,
           confidence: ep.confidence,
         })),
       })
@@ -189,7 +185,6 @@ export async function POST(
           summary: ep.summary,
           startChunk: ep.startChunk,
           endChunk: ep.endChunk,
-          estimatedPages: ep.estimatedPages,
           confidence: ep.confidence,
         })),
       })

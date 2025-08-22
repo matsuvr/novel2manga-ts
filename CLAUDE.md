@@ -38,9 +38,9 @@ If any item cannot be satisfied, stop and resolve it first. Do not proceed with 
 ```
 
 - あなたはgh, jqのコマンドが利用可能です
-- grepではなく、git-grepを使って、関数の名称や関数全体を取得すると作業が楽になります
+- grepではなく、git grepを使って、関数の名称や関数全体を取得すると作業が楽になります
 - gpt-5, gpt-5-mini, gpt-5-nano は8月5日にリリースされたモデルです。指定間違いではありません。この3つについては、レビューで指摘しないでください。勝手に変更するのも禁止です
-- serenaのreplaceは問題を起こすことが多いので、使わないでください
+- Don't use serena's replace
 
 PR checklist (copy into your PR and tick all):
 
