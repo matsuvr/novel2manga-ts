@@ -441,6 +441,7 @@ async function generateEpisodeLayoutInternal(
       {
         jobId,
         episodeNumber: episode.episodeNumber,
+        isDemo,
       },
     )
 
@@ -459,6 +460,7 @@ async function generateEpisodeLayoutInternal(
     const pageBreaks = await estimatePageBreaks(script, {
       jobId,
       episodeNumber: episode.episodeNumber,
+      isDemo,
     })
 
     // Progress validation: Page breaks must be estimated
