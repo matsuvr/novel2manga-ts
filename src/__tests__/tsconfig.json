@@ -3,11 +3,11 @@
   "compilerOptions": {
     "noEmit": true,
     "baseUrl": "../../",
+    "moduleResolution": "node",
     "paths": {
       "@/*": ["src/*"]
-    },
-    "types": ["vitest/globals", "@testing-library/jest-dom", "node"]
+    }
   },
   "exclude": [],
-  "include": ["./**/*.ts", "./**/*.tsx", "./types/**/*.d.ts"]
+  "include": ["./**/*.ts", "./**/*.tsx", "./types/**/*.d.ts", "../../src/types/**/*.d.ts"]
 }
