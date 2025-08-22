@@ -282,7 +282,8 @@ export async function analyzeNarrativeArc(
     }
 
     console.log('LLM analysis successful')
-    // Defensive guard: some tests may stub generator and omit boundaries
+
+    // Defensive parsing: handle cases where LLM response may have malformed or missing boundaries
     type RawBoundary = {
       startPosition: number
       endPosition: number

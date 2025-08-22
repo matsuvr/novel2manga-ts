@@ -5,6 +5,35 @@ import { vi } from 'vitest'
 import type { Database } from '@/types/database'
 import type { Storage } from '@/types/storage'
 
+// Test-specific types to replace `any`
+interface MockJob {
+  id: string
+  status?: string
+  novelId?: string
+  currentStep?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+interface MockEpisode {
+  id: string
+  jobId: string
+  episodeNumber: number
+  title?: string
+  content?: string
+}
+
+interface MockNovel {
+  id: string
+  title?: string
+  content?: string
+  createdAt?: string
+}
+
+interface MockClient {
+  exec: ReturnType<typeof vi.fn>
+}
+
 // インメモリストレージの実装
 export class UnifiedMemoryStorage implements Storage {
   private storage: Map<string, { text: string; metadata?: Record<string, string> }> = new Map()
@@ -111,11 +140,11 @@ export class UnifiedStorageFactory {
 
 // モックDB実装
 export class MockDatabase implements Partial<Database> {
-  private jobs: Map<string, any> = new Map()
-  private episodes: Map<string, any[]> = new Map()
-  private novels: Map<string, any> = new Map()
+  private jobs: Map<string, MockJob> = new Map()
+  private episodes: Map<string, MockEpisode[]> = new Map()
+  private novels: Map<string, MockNovel> = new Map()
   private transactionActive = false
-  public $client: { exec: any }
+  public $client: MockClient
 
   constructor() {
     this.$client = {
@@ -140,20 +169,37 @@ export class MockDatabase implements Partial<Database> {
     }
   }
 
-  async ensureNovel(id: string, data?: any): Promise<void> {
-    this.novels.set(id, data || { id })
+  // Drizzleトランザクションメソッドを追加
+  async transaction<T>(fn: (tx: MockDatabase) => Promise<T>): Promise<T> {
+    if (this.transactionActive) {
+      throw new Error('SqliteError: cannot start a transaction within a transaction')
+    }
+
+    this.transactionActive = true
+    try {
+      const result = await fn(this)
+      this.transactionActive = false
+      return result
+    } catch (error) {
+      this.transactionActive = false
+      throw error
+    }
+  }
+
+  async ensureNovel(id: string, data?: Partial<MockNovel>): Promise<void> {
+    this.novels.set(id, { id, ...data })
   }
 
   async updateJobStatus(jobId: string, status: string): Promise<void> {
-    const job = this.jobs.get(jobId) || {}
+    const job = this.jobs.get(jobId) || { id: jobId }
     this.jobs.set(jobId, { ...job, status })
   }
 
-  async getJob(jobId: string): Promise<any> {
+  async getJob(jobId: string): Promise<MockJob | null> {
     return this.jobs.get(jobId) || null
   }
 
-  async getEpisodesByJobId(jobId: string): Promise<any[]> {
+  async getEpisodesByJobId(jobId: string): Promise<MockEpisode[]> {
     return this.episodes.get(jobId) || []
   }
 
@@ -179,7 +225,7 @@ export function setupUnifiedTestEnvironment() {
 
   // すべてのモックを一箇所でセットアップ
   vi.mock('@/config', async (importOriginal) => {
-    const actual = (await importOriginal()) as any
+    const actual = (await importOriginal()) as Record<string, unknown>
     return {
       ...actual,
       isDevelopment: () => true,
@@ -188,7 +234,7 @@ export function setupUnifiedTestEnvironment() {
   })
 
   vi.mock('@/utils/storage', async (importOriginal) => {
-    const actual = (await importOriginal()) as any
+    const actual = (await importOriginal()) as Record<string, unknown>
     const testFactory = UnifiedStorageFactory.getInstance()
     return {
       ...actual,
