@@ -61,18 +61,18 @@ describe('enforceJsonSchemaConstraintsForStructuredOutputs', () => {
     expect(out.properties.importance.anyOf[0].minimum).toBeUndefined()
     expect(out.properties.importance.anyOf[0].maximum).toBeUndefined()
   })
-})
 
-it('strips numeric constraints on plain number properties (not only union)', () => {
-  const schema = {
-    type: 'object',
-    properties: {
-      confidence: { type: 'number', minimum: 0, maximum: 1 },
-    },
-    required: ['confidence'],
-    additionalProperties: false,
-  }
-  const out = stripUnsupportedKeywordsForGroqSO(schema) as any
-  expect(out.properties.confidence.minimum).toBeUndefined()
-  expect(out.properties.confidence.maximum).toBeUndefined()
+  it('strips numeric constraints on plain number properties (not only union)', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        confidence: { type: 'number', minimum: 0, maximum: 1 },
+      },
+      required: ['confidence'],
+      additionalProperties: false,
+    }
+    const out = stripUnsupportedKeywordsForGroqSO(schema) as any
+    expect(out.properties.confidence.minimum).toBeUndefined()
+    expect(out.properties.confidence.maximum).toBeUndefined()
+  })
 })

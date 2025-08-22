@@ -210,8 +210,8 @@ export class OpenAICompatibleClient implements LlmClient {
         json_schema: {
           name: schemaName,
           schema: jsonSchema,
-          strict: true,
         },
+        strict: true,
       }
     } else {
       // その他のプロバイダー: 基本的なJSON形式を指定
@@ -523,7 +523,11 @@ function summarizeSchema(schema: unknown): Record<string, unknown> {
     if (obj.items) walk(obj.items, depth + 1)
     for (const key of ['anyOf', 'oneOf', 'allOf']) {
       const arr = obj[key] as unknown[] | undefined
-      if (Array.isArray(arr)) arr.forEach((n) => walk(n, depth + 1))
+      if (Array.isArray(arr)) {
+        arr.forEach((n) => {
+          walk(n, depth + 1)
+        })
+      }
     }
     if (obj.$defs && typeof obj.$defs === 'object') {
       for (const k of Object.keys(obj.$defs as Record<string, unknown>)) {

@@ -4,7 +4,7 @@ export const appConfig = {
     defaultChunkSize: 3000, // デフォルトチャンクサイズ（文字数）- 削減
     defaultOverlapSize: 300, // デフォルトオーバーラップサイズ（文字数）- 削減
     maxChunkSize: 6000, // 最大チャンクサイズ - 削減
-    minChunkSize: 1, // 最小チャンクサイズ
+    minChunkSize: 100, // 最小チャンクサイズ - 意味のある最小サイズに修正
     maxOverlapRatio: 0.5, // チャンクサイズに対する最大オーバーラップ比率
 
     // スクリプト変換用のエピソードフラグメント分割設定
@@ -13,6 +13,9 @@ export const appConfig = {
       overlapSize: 200, // フラグメント間オーバーラップサイズ（文字数）
       maxFragmentSize: 4000, // 最大フラグメントサイズ
       minFragmentSize: 500, // 最小フラグメントサイズ
+      minSceneLength: 200, // 最小シーン長（文字数）- シーン統合判定用
+      contextSize: 200, // フラグメント間コンテキストサイズ（文字数）
+      fragmentConversionThreshold: 4000, // フラグメント変換を使用する閾値（文字数）
     },
   },
 
