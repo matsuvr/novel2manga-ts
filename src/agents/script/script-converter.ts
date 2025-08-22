@@ -12,12 +12,35 @@ export interface ScriptConversionInput {
   situationList?: string
 }
 
+export interface ScriptConversionOptions {
+  jobId?: string
+  episodeNumber?: number
+  isDemo?: boolean
+  useFragmentConversion?: boolean
+  fragmentSize?: number
+  overlapSize?: number
+  maxConcurrentFragments?: number
+}
+
 export async function convertEpisodeTextToScript(
   input: ScriptConversionInput,
-  options?: { jobId?: string; episodeNumber?: number; isDemo?: boolean },
+  options?: ScriptConversionOptions,
 ): Promise<Script> {
   if (!input.episodeText || input.episodeText.trim() === '') {
     throw new Error('Episode text is required and cannot be empty')
+  }
+
+  // フラグメント変換を使用する場合
+  if (options?.useFragmentConversion && input.episodeText.length > 4000) {
+    const { convertEpisodeTextToScriptWithFragments } = await import('./fragment-script-converter')
+    return convertEpisodeTextToScriptWithFragments(input, {
+      jobId: options.jobId,
+      episodeNumber: options.episodeNumber,
+      isDemo: options.isDemo,
+      fragmentSize: options.fragmentSize,
+      overlapSize: options.overlapSize,
+      maxConcurrentFragments: options.maxConcurrentFragments,
+    })
   }
 
   // Demo mode: return fixed script structure for testing

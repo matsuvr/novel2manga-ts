@@ -442,6 +442,8 @@ async function generateEpisodeLayoutInternal(
         jobId,
         episodeNumber: episode.episodeNumber,
         isDemo,
+        // フラグメント変換を有効化（出力トークン数削減のため）
+        useFragmentConversion: true,
       },
     )
 

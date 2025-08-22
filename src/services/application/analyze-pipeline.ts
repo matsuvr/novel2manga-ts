@@ -206,81 +206,51 @@ export class AnalyzePipeline {
     await jobRepo.markStepCompleted(jobId, 'split')
 
     // Analysis schema
-    const nonEmptyObject = <T extends z.ZodRawShape>(schema: z.ZodObject<T>) =>
-      schema.refine((obj) => Object.keys(obj).length > 0, {
-        message: 'Empty object is not allowed',
-      })
-
     const textAnalysisOutputSchema = z
       .object({
         characters: z.array(
-          nonEmptyObject(
-            z
-              .object({
-                name: z.string().nullable().optional(),
-                description: z.string().nullable().optional(),
-                firstAppearance: z.number().nullable().optional(),
-              })
-              .strip(),
-          ),
+          z.object({
+            name: z.string(),
+            description: z.string(),
+            firstAppearance: z.number(),
+          }),
         ),
         scenes: z.array(
-          nonEmptyObject(
-            z
-              .object({
-                location: z.string().nullable().optional(),
-                time: z.string().nullable().optional(),
-                description: z.string().nullable().optional(),
-                startIndex: z.number().nullable().optional(),
-                endIndex: z.number().nullable().optional(),
-              })
-              .strip(),
-          ),
+          z.object({
+            location: z.string(),
+            description: z.string(),
+            startIndex: z.number(),
+            endIndex: z.number(),
+          }),
         ),
         dialogues: z.array(
-          nonEmptyObject(
-            z
-              .object({
-                speakerId: z.string().nullable().optional(),
-                text: z.string().nullable().optional(),
-                emotion: z.string().nullable().optional(),
-                index: z.number().nullable().optional(),
-              })
-              .strip(),
-          ),
+          z.object({
+            speakerId: z.string(),
+            text: z.string(),
+            emotion: z.string(),
+            index: z.number(),
+          }),
         ),
         highlights: z.array(
-          nonEmptyObject(
-            z
-              .object({
-                type: z
-                  .enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence'])
-                  .nullable()
-                  .optional(),
-                description: z.string().nullable().optional(),
-                importance: z.number().min(1).max(10).nullable().optional(),
-                startIndex: z.number().nullable().optional(),
-                endIndex: z.number().nullable().optional(),
-                text: z.string().nullable().optional(),
-              })
-              .strip(),
-          ),
+          z.object({
+            type: z.enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence']),
+            description: z.string(),
+            importance: z.number().min(1).max(10),
+            startIndex: z.number(),
+            endIndex: z.number(),
+          }),
         ),
         situations: z.array(
-          nonEmptyObject(
-            z
-              .object({
-                description: z.string().nullable().optional(),
-                index: z.number().nullable().optional(),
-              })
-              .strip(),
-          ),
+          z.object({
+            description: z.string(),
+            index: z.number(),
+          }),
         ),
       })
       .strip()
 
     // Analyze chunks with limited concurrency
-    const DEFAULT_MAX_CONCURRENT = 5
+    const DEFAULT_MAX_CONCURRENT = 3
     const maxConcurrent = Math.max(1, Math.min(DEFAULT_MAX_CONCURRENT, chunks.length))
     const runOne = async (i: number) => {
       // ここで「DBのジョブ進捗を更新（analyze_chunk_i ステップ）」
@@ -383,7 +353,20 @@ export class AnalyzePipeline {
     try {
       // ここで「LLM を呼び出して物語構造（ナラティブアーク）を分析し、エピソード境界を推定」
       //   - input（集約済みテキスト等）を LLM に渡す
+      logger.info('Starting narrative arc analysis', { jobId })
       boundaries = (await analyzeNarrativeArc(input, chunkRepository)) ?? []
+      logger.info('Narrative arc analysis completed', {
+        jobId,
+        boundariesFound: boundaries.length,
+        boundaries: boundaries.map((b) => ({
+          episodeNumber: b.episodeNumber,
+          title: b.title,
+          startChunk: b.startChunk,
+          startCharIndex: b.startCharIndex,
+          endChunk: b.endChunk,
+          endCharIndex: b.endCharIndex,
+        })),
+      })
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       logger.error('Narrative arc analysis failed', {
@@ -421,26 +404,129 @@ export class AnalyzePipeline {
       throw error
     }
     if (Array.isArray(boundaries) && boundaries.length > 0) {
+      logger.info('Episode boundaries detected, starting episode processing', {
+        jobId,
+        boundariesCount: boundaries.length,
+        episodeNumbers: boundaries.map((b) => b.episodeNumber),
+      })
+
       // ここで「検出したエピソード境界をストレージ/DBへ保存（ユーティリティで一括）」（書き込み）
-      await saveEpisodeBoundaries(jobId, boundaries)
+      try {
+        await saveEpisodeBoundaries(jobId, boundaries)
+        logger.info('Episode boundaries saved successfully', { jobId })
+      } catch (saveError) {
+        const errorMessage = saveError instanceof Error ? saveError.message : String(saveError)
+        logger.error('Failed to save episode boundaries - critical error', {
+          jobId,
+          error: errorMessage,
+          stack: saveError instanceof Error ? saveError.stack : undefined,
+          boundariesCount: boundaries.length,
+          boundaries: boundaries.map((b) => ({ episodeNumber: b.episodeNumber, title: b.title })),
+        })
+
+        // コンソールにも構造化ログを出力
+        console.error(
+          JSON.stringify({
+            ts: new Date().toISOString(),
+            level: 'error',
+            service: 'analyze-pipeline',
+            operation: 'save-episode-boundaries',
+            msg: 'Failed to save episode boundaries - critical for story processing',
+            jobId,
+            error: errorMessage,
+            stack: saveError instanceof Error ? saveError.stack?.slice(0, 1000) : undefined,
+          }),
+        )
+
+        // エピソード境界の保存は物語処理に必須のため、失敗時は処理停止
+        try {
+          await jobRepo.updateStatus(
+            jobId,
+            'failed',
+            `Failed to save episode boundaries: ${errorMessage}`,
+          )
+        } catch (statusError) {
+          logger.error('Failed to update job status after boundary save failure', {
+            jobId,
+            originalError: errorMessage,
+            statusError: statusError instanceof Error ? statusError.message : String(statusError),
+          })
+        }
+
+        throw new Error(
+          `Failed to save episode boundaries: ${errorMessage}. Story processing cannot continue without proper episode boundaries.`,
+        )
+      }
+
       // ここで「DBのジョブ進捗を完了（episode ステップ完了）」
-      await jobRepo.markStepCompleted(jobId, 'episode')
+      try {
+        await jobRepo.markStepCompleted(jobId, 'episode')
+        logger.info('Episode step marked as completed', { jobId })
+      } catch (markError) {
+        const errorMessage = markError instanceof Error ? markError.message : String(markError)
+        logger.error('Failed to mark episode step as completed - critical for progress tracking', {
+          jobId,
+          error: errorMessage,
+          stack: markError instanceof Error ? markError.stack : undefined,
+        })
+
+        // 進捗管理は物語処理の追跡に必須
+        throw new Error(
+          `Failed to mark episode step as completed: ${errorMessage}. Progress tracking is essential for story processing continuity.`,
+        )
+      }
+
       // ここで「DBのジョブ進捗を更新（layout ステップの総数設定）」
-      await jobRepo.updateStep(jobId, 'layout', chunks.length, chunks.length)
+      try {
+        await jobRepo.updateStep(jobId, 'layout', chunks.length, chunks.length)
+        logger.info('Layout step initialized', { jobId })
+      } catch (updateError) {
+        const errorMessage =
+          updateError instanceof Error ? updateError.message : String(updateError)
+        logger.error('Failed to initialize layout step - critical for progress tracking', {
+          jobId,
+          error: errorMessage,
+          stack: updateError instanceof Error ? updateError.stack : undefined,
+        })
+
+        // レイアウトステップの初期化も必須
+        throw new Error(
+          `Failed to initialize layout step: ${errorMessage}. Layout processing setup is essential for story visualization.`,
+        )
+      }
 
       // Generate page breaks for each episode
       const episodeNumbers = boundaries.map((b) => b.episodeNumber).sort((a, b) => a - b)
+      logger.info('Starting episode processing loop', {
+        jobId,
+        episodeNumbers,
+        totalEpisodes: episodeNumbers.length,
+      })
       let totalPages = 0
 
       for (const ep of episodeNumbers) {
+        logger.info('Processing episode', { jobId, episodeNumber: ep })
         try {
           // Get episode text for script conversion
           // ここで「DBからエピソード情報を読み込む」
+          logger.info('Fetching episodes from database', { jobId })
           const episodes = await episodeRepo.getByJobId(jobId)
+          logger.info('Episodes fetched from database', {
+            jobId,
+            foundEpisodes: episodes.length,
+            episodeNumbers: episodes.map((e) => e.episodeNumber),
+          })
+
           const episode = episodes.find((e) => e.episodeNumber === ep)
           if (!episode) {
+            logger.error('Episode not found in database', {
+              jobId,
+              searchingFor: ep,
+              availableEpisodes: episodes.map((e) => e.episodeNumber),
+            })
             throw new Error(`Episode ${ep} not found`)
           }
+          logger.info('Episode found, starting processing', { jobId, episodeNumber: ep })
 
           // Get episode text from chunks
           // ここで「DBからチャンクメタデータ一覧を読み込む」
@@ -675,6 +761,8 @@ export class AnalyzePipeline {
             {
               jobId,
               episodeNumber: ep,
+              // フラグメント変換を有効化（出力トークン数削減のため）
+              useFragmentConversion: true,
             },
           )
 
@@ -702,20 +790,59 @@ export class AnalyzePipeline {
         } catch (pageBreakError) {
           const errorMessage =
             pageBreakError instanceof Error ? pageBreakError.message : String(pageBreakError)
-          logger.error('Page break estimation failed', {
-            jobId,
-            episodeNumber: ep,
-            error: errorMessage,
-          })
 
-          // ジョブステータスを失敗に更新
-          // ここで「DBのジョブステータスを failed に更新（書き込み）」
-          await jobRepo.updateStatus(
-            jobId,
-            'failed',
-            `Episode ${ep} page break estimation failed: ${errorMessage}`,
+          // 詳細なエラーログを出力
+          logger.error(
+            'Episode processing failed - stopping entire job to maintain story integrity',
+            {
+              jobId,
+              episodeNumber: ep,
+              error: errorMessage,
+              stack: pageBreakError instanceof Error ? pageBreakError.stack : undefined,
+              episodeNumbers,
+              totalEpisodes: episodeNumbers.length,
+              context: 'Script conversion or page break estimation failure',
+            },
           )
-          throw pageBreakError
+
+          // コンソールにも構造化ログを出力（デバッグ用）
+          console.error(
+            JSON.stringify({
+              ts: new Date().toISOString(),
+              level: 'error',
+              service: 'analyze-pipeline',
+              operation: 'episode-processing',
+              msg: 'Episode processing failed - story integrity requires complete processing',
+              jobId,
+              episodeNumber: ep,
+              error: errorMessage,
+              stack:
+                pageBreakError instanceof Error ? pageBreakError.stack?.slice(0, 1000) : undefined,
+            }),
+          )
+
+          // ジョブステータスを失敗に更新（詳細なエラーメッセージ付き）
+          try {
+            await jobRepo.updateStatus(
+              jobId,
+              'failed',
+              `Episode ${ep} processing failed: ${errorMessage}. Story integrity requires all episodes to be processed successfully.`,
+            )
+          } catch (statusUpdateError) {
+            logger.error('Failed to update job status after episode processing failure', {
+              jobId,
+              originalError: errorMessage,
+              statusUpdateError:
+                statusUpdateError instanceof Error
+                  ? statusUpdateError.message
+                  : String(statusUpdateError),
+            })
+          }
+
+          // 物語の一貫性を保つため、エラー発生時は処理を停止
+          throw new Error(
+            `Episode ${ep} processing failed: ${errorMessage}. Cannot skip episodes as it would break story integrity.`,
+          )
         }
       }
 
@@ -793,6 +920,12 @@ export class AnalyzePipeline {
       await jobRepo.updateStep(jobId, 'complete')
       await jobRepo.updateStatus(jobId, 'completed')
     } else {
+      logger.warn('No episode boundaries detected, but proceeding with basic completion', {
+        jobId,
+        boundariesLength: boundaries?.length || 0,
+        boundariesType: typeof boundaries,
+      })
+
       // エピソードが検出されなかった場合もジョブを完了させる
       // ここで「DBのジョブ進捗を完了（episode ステップ完了）」
       await jobRepo.markStepCompleted(jobId, 'episode')
@@ -807,6 +940,7 @@ export class AnalyzePipeline {
       // ここで「DBのジョブ進捗（complete ステップ）とステータスを完了（書き込み）」
       await jobRepo.updateStep(jobId, 'complete')
       await jobRepo.updateStatus(jobId, 'completed')
+      logger.info('Job completed without episodes', { jobId })
       return { jobId, chunkCount: chunks.length, response }
     }
 
