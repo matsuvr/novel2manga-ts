@@ -607,33 +607,54 @@ export class AnalyzePipeline {
             episodePreview: `${episodeText.substring(0, 100)}...`,
           })
 
-          // Persist episode text to storage using specialized port
-          const episodeTextKey = await this.ports.episodeText.putEpisodeText(jobId, ep, episodeText)
+          // エピソード本文の保存をストレージ+DB一体のトランザクションで実行（強整合性）
+          {
+            const storageModule = await import('@/utils/storage')
+            const storage = await storageModule.StorageFactory.getAnalysisStorage()
+            const key =
+              typeof (storageModule.StorageKeys as unknown as Record<string, unknown>)
+                .episodeText === 'function'
+                ? (
+                    storageModule.StorageKeys as unknown as {
+                      episodeText: (jobId: string, ep: number) => string
+                    }
+                  ).episodeText(jobId, ep)
+                : `${jobId}/episode_${ep}.txt`
 
-          // Update database with episode text path (separate operation for better-sqlite3 compatibility)
-          try {
-            const dbService = getDatabaseService()
-            if (hasUpdateEpisodeTextPath(dbService)) {
-              await dbService.updateEpisodeTextPath(jobId, ep, episodeTextKey)
-              logger.info('Successfully updated episode text path in database', {
+            const { executeStorageWithDbOperation } = await import(
+              '@/services/application/transaction-manager'
+            )
+
+            await executeStorageWithDbOperation({
+              storage,
+              key,
+              value: episodeText,
+              metadata: {
+                contentType: 'text/plain; charset=utf-8',
                 jobId,
-                episodeNumber: ep,
-                episodeTextKey,
-              })
-            }
-          } catch (e) {
-            // Log detailed error information for debugging
-            logger.error('Failed to update episodeTextPath in DB after successful storage write', {
+                episode: String(ep),
+              },
+              dbOperation: async () => {
+                const dbService = getDatabaseService()
+                if (hasUpdateEpisodeTextPath(dbService)) {
+                  await dbService.updateEpisodeTextPath(jobId, ep, key)
+                }
+              },
+              tracking: {
+                filePath: key,
+                fileCategory: 'episode',
+                fileType: 'txt',
+                novelId: undefined,
+                jobId,
+                mimeType: 'text/plain; charset=utf-8',
+              },
+            })
+
+            logger.info('Episode text saved atomically with DB path update', {
               jobId,
               episodeNumber: ep,
-              episodeTextKey,
-              error: e instanceof Error ? e.message : String(e),
-              stack: e instanceof Error ? e.stack : undefined,
+              episodeTextKey: key,
             })
-            // Re-throw to maintain error visibility - this is a critical failure
-            throw new Error(
-              `Failed to update episode text path in database: ${e instanceof Error ? e.message : String(e)}`,
-            )
           }
 
           // Extract structured data from narrative arc analysis for the current episode
