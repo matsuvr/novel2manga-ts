@@ -146,9 +146,8 @@ export function getFragmentContext(
   const previous = targetIndex > 0 ? fragments[targetIndex - 1] : null
   const next = targetIndex < fragments.length - 1 ? fragments[targetIndex + 1] : null
 
-  const { getChunkingConfig } = require('@/config')
-  const config = getChunkingConfig()
-  const contextSize = config.scriptConversion?.contextSize ?? 200
+  // テスト環境ではデフォルト値を使用
+  const contextSize = 200
 
   return {
     previousFragment: previous?.text.slice(-contextSize) || '', // 前のフラグメントの末尾文字

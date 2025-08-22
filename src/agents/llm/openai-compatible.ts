@@ -193,7 +193,7 @@ export class OpenAICompatibleClient implements LlmClient {
 
       // ルートが$ref/definitionsベースになるzod-to-json-schemaの出力を、
       // Groq要件(ルートtypeがobject)に合わせて実体へフラット化
-      const flattened = flattenRootObjectSchema(baseJsonSchema, schemaName)
+      const flattened = flattenRootObjectSchema(baseJsonSchema)
 
       // Groq Structured Outputs 制約に合わせてJSON Schemaを厳密化
       let jsonSchema = enforceJsonSchemaConstraintsForStructuredOutputs(flattened)
