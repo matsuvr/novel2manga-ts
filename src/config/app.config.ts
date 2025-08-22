@@ -1,5 +1,7 @@
+// AnalyzePipeline などアプリケーション全体が参照する中心的な設定オブジェクト
+// 各セクションはパイプラインのステップと対応し、app.config.ts から読み込まれる
 export const appConfig = {
-  // チャンク分割設定
+  // チャンク分割設定（AnalyzePipeline.runWithText で使用）
   chunking: {
     defaultChunkSize: 5000, // デフォルトチャンクサイズ（文字数）
     defaultOverlapSize: 500, // デフォルトオーバーラップサイズ（文字数）
@@ -8,9 +10,9 @@ export const appConfig = {
     maxOverlapRatio: 0.5, // チャンクサイズに対する最大オーバーラップ比率
   },
 
-  // LLM設定（モデル・パラメータは llm.config.ts に集約。ここではプロンプトのみ保持）
+  // LLM設定（AnalyzePipeline の分析ステップで参照。モデル選択は llm.config.ts に委譲）
   llm: {
-    // テキスト分析用設定（プロンプトのみ）
+    // テキスト分析用設定（AnalyzePipeline のチャンク分析で使用）
     textAnalysis: {
       systemPrompt: `あなたは小説テキストを分析し、マンガ制作に必要な5要素（登場人物、シーン、対話、ハイライト、状況）を抽出する専門家です。
 
@@ -45,7 +47,7 @@ export const appConfig = {
 重要: 上記テキストのみを根拠に、要求スキーマに完全準拠したJSONだけを出力してください。キー欠落は禁止。該当が無い配列は空配列[]で出力。余計な文章は一切出力しないこと。`,
     },
 
-    // 物語弧分析用設定（プロンプトのみ）
+    // 物語弧分析用設定（AnalyzePipeline から呼ばれる analyzeNarrativeArc で使用）
     narrativeArcAnalysis: {
       systemPrompt: `あなたは物語の構造を分析し、エピソードの境界を特定する専門家です。
 
@@ -97,7 +99,7 @@ export const appConfig = {
 各エピソードは物語的に意味のある単位で、読者が満足できる区切りになるようにしてください。`,
     },
 
-    // レイアウト生成用設定（プロンプトのみ）
+    // レイアウト生成用設定（将来的な layoutGeneration ステップ用）
     //     layoutGeneration: {
     //       systemPrompt: `あなたはマンガのページごとの「コマ数」だけを決定する専門家です。
 
@@ -196,6 +198,7 @@ export const appConfig = {
 
     // 注意：個別のチャンク番号や分析の痕跡を残さず、一つの連続した物語として扱ってください。`,
     //     },
+    // 台本化（scriptConversion）設定（convertEpisodeTextToScript で使用）
     scriptConversion: {
       systemPrompt:
         '以下の情報を基に、セリフ＋ナレーション＋心の声のセリフと、場面情報を表すト書きとして、台本形式にしてください。会話は全て漏らさず出力してください。',
@@ -203,6 +206,7 @@ export const appConfig = {
 
       {{episodeText}}`,
     },
+    // ページ切れ目推定設定（estimatePageBreaks で使用）
     pageBreakEstimation: {
       systemPrompt: `以下はマンガにするための脚本です。重要度や見所が強いシーンは1ページ1コマ、見所になるシーンは1ページ2～3コマ、状況説明が主となるシーンは1ページ4～6コマにして分割します。
 

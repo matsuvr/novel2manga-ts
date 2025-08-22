@@ -3,6 +3,8 @@ import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
 // import { generateEpisodeLayout } from '@/services/application/layout-generation' // DEPRECATED: replaced by pageBreakEstimation
 import { estimatePageBreaks } from '@/agents/script/page-break-estimator'
 import { convertEpisodeTextToScript } from '@/agents/script/script-converter'
+// app.config.ts を通じて提供される各種設定（チャンク分割・LLMプロンプト）
+// AnalyzePipeline はここから値を読み取り、処理フローを進める
 import { getChunkingConfig, getTextAnalysisConfig } from '@/config'
 import type { Chunk } from '@/db/schema'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
@@ -135,6 +137,7 @@ export class AnalyzePipeline {
     // Rationale: sentence-based splitting caused instability across languages and inconsistent
     // segment sizes; sliding window chunking yields predictable boundaries and better LLM context
     // continuity, especially for Japanese text without clear punctuation.
+    // app.config.ts の `chunking` セクションから分割パラメータを取得
     const chunkCfg = getChunkingConfig()
     // ここで「小説本文を固定長で分割（メモリ内処理。I/Oなし）」
     const chunks = splitTextIntoSlidingChunks(
@@ -267,6 +270,7 @@ export class AnalyzePipeline {
       // ここで「DBのジョブ進捗を更新（analyze_chunk_i ステップ）」
       await jobRepo.updateStep(jobId, `analyze_chunk_${i}`, i, chunks.length)
       const chunkText = chunks[i]
+      // app.config.ts の `llm.textAnalysis` からプロンプト設定を取得
       const config = getTextAnalysisConfig()
       if (!config?.userPromptTemplate) {
         throw new Error('Text analysis config is invalid: userPromptTemplate is missing')
