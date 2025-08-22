@@ -184,8 +184,8 @@ export class JobNarrativeProcessor {
           `Narrative arc analysis for chunks ${startIndex}-${endIndex}`,
         )
 
-        // エピソード境界を現在のバッチに適用
-        const newEpisodes = this.convertBoundariesToEpisodes(analysisResult, jobId)
+        // エピソード境界を現在のバッチに適用（FKのため novelId を正しく付与）
+        const newEpisodes = this.convertBoundariesToEpisodes(analysisResult, jobId, job.novelId)
 
         // 進捗を更新
         progress = this.updateProgress(progress, newEpisodes, endIndex)
@@ -202,8 +202,10 @@ export class JobNarrativeProcessor {
         }
       }
 
-      // 処理完了
-      await this.jobService.updateStatus(jobId, 'completed')
+      // エピソード分析完了 - ステップをマークして終了（フロー制御はanalyze-pipelineが担当）
+      this.logger.info('Episode analysis completed', { jobId })
+      await this.jobService.markStepCompleted(jobId, 'episode')
+
       return progress
     } catch (error) {
       // エラー時の処理
@@ -240,6 +242,7 @@ export class JobNarrativeProcessor {
   private convertBoundariesToEpisodes(
     boundaries: EpisodeBoundary[],
     jobId: string,
+    novelId: string,
   ): Array<Omit<NewEpisode, 'id' | 'createdAt'>> {
     const episodes: Array<Omit<NewEpisode, 'id' | 'createdAt'>> = []
 
@@ -247,7 +250,7 @@ export class JobNarrativeProcessor {
       const boundary = boundaries[i]
 
       episodes.push({
-        novelId: jobId,
+        novelId,
         jobId,
         episodeNumber: boundary.episodeNumber,
         title: boundary.title || null,
