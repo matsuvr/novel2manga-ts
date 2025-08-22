@@ -3,14 +3,52 @@
  * ストレージとデータベース操作の強整合性を検証
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  executeStorageDbTransaction,
-  executeStorageWithDbOperation,
-  executeStorageWithTracking,
-  TransactionManager,
-} from '@/services/application/transaction-manager'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Storage } from '@/utils/storage'
+import { setupUnifiedTestEnvironment, MockDatabase } from '../__helpers/unified-test-setup'
+
+// グローバルモックインスタンス
+let mockDatabaseInstance: MockDatabase
+let mockRecordStorageFile: any
+
+// モックは後でセットアップ
+
+// 統合テスト環境セットアップ
+let testCleanup: () => void
+let TransactionManager: any
+let executeStorageDbTransaction: any
+let executeStorageWithDbOperation: any
+let executeStorageWithTracking: any
+
+beforeEach(async () => {
+  const { cleanup, mockDb } = setupUnifiedTestEnvironment()
+  testCleanup = cleanup
+  mockDatabaseInstance = mockDb
+
+  // Get the mocked recordStorageFile function from the unified setup
+  const storageTrackerModule = await import('@/services/application/storage-tracker')
+  mockRecordStorageFile = storageTrackerModule.recordStorageFile as any
+
+  // Clear vi module cache to force re-import
+  vi.resetModules()
+
+  // モック適用後にTransactionManagerをインポート
+  const transactionManagerModule = await import('@/services/application/transaction-manager')
+  TransactionManager = transactionManagerModule.TransactionManager
+  executeStorageDbTransaction = transactionManagerModule.executeStorageDbTransaction
+  executeStorageWithDbOperation = transactionManagerModule.executeStorageWithDbOperation
+  executeStorageWithTracking = transactionManagerModule.executeStorageWithTracking
+
+  // モックをリセット
+  if (mockRecordStorageFile && mockRecordStorageFile.mockClear) {
+    mockRecordStorageFile.mockClear()
+    mockRecordStorageFile.mockResolvedValue(undefined)
+  }
+})
+
+afterEach(() => {
+  testCleanup()
+})
 
 // テストヘルパー: インメモリストレージ
 class TestStorage implements Storage {
@@ -73,39 +111,13 @@ class TestStorage implements Storage {
   }
 }
 
-// データベースモック
-vi.mock('@/db', () => ({
-  getDatabase: vi.fn(() => ({
-    $client: {
-      exec: vi.fn(),
-    },
-  })),
-}))
-
-// ストレージ追跡モック
-vi.mock('@/services/application/storage-tracker', () => ({
-  recordStorageFile: vi.fn(),
-}))
+// モックは統合環境でセットアップ済み
 
 describe('TransactionManager', () => {
   let storage: TestStorage
-  let dbMock: { exec: any }
-  let recordStorageFileMock: any
 
   beforeEach(async () => {
     storage = new TestStorage()
-
-    const { getDatabase } = await import('@/db')
-    dbMock = {
-      exec: vi.fn(),
-    }
-    vi.mocked(getDatabase).mockReturnValue({
-      $client: dbMock,
-    } as any)
-
-    const { recordStorageFile } = await import('@/services/application/storage-tracker')
-    recordStorageFileMock = vi.mocked(recordStorageFile)
-    recordStorageFileMock.mockClear()
   })
 
   describe('正常ケース', () => {
@@ -126,10 +138,10 @@ describe('TransactionManager', () => {
 
       // 順序確認
       expect(storage.has('test-key')).toBe(true)
-      expect(dbMock.exec).toHaveBeenCalledWith('BEGIN IMMEDIATE')
+      expect(mockDatabaseInstance.$client.exec).toHaveBeenCalledWith('BEGIN IMMEDIATE')
       expect(dbOperationMock).toHaveBeenCalled()
-      expect(recordStorageFileMock).toHaveBeenCalled()
-      expect(dbMock.exec).toHaveBeenCalledWith('COMMIT')
+      expect(mockRecordStorageFile).toHaveBeenCalled()
+      expect(mockDatabaseInstance.$client.exec).toHaveBeenCalledWith('COMMIT')
       expect(tx.isCommitted()).toBe(true)
     })
 
@@ -154,7 +166,7 @@ describe('TransactionManager', () => {
       expect(result).toBe(dbResult)
       expect(storage.has('test-key-2')).toBe(true)
       expect(dbOperationMock).toHaveBeenCalled()
-      expect(recordStorageFileMock).toHaveBeenCalled()
+      expect(mockRecordStorageFile).toHaveBeenCalled()
     })
 
     it('executeStorageWithTracking 軽量版が正常に動作する', async () => {
@@ -172,13 +184,13 @@ describe('TransactionManager', () => {
       })
 
       expect(storage.has('lightweight-key')).toBe(true)
-      expect(recordStorageFileMock).toHaveBeenCalled()
+      expect(mockRecordStorageFile).toHaveBeenCalled()
       // DB操作は呼ばれない
-      expect(dbMock.exec).not.toHaveBeenCalled()
+      expect(mockDatabaseInstance.$client.exec).not.toHaveBeenCalled()
     })
 
     it('executeStorageWithTracking で追跡失敗時もストレージ操作は成功する', async () => {
-      recordStorageFileMock.mockRejectedValueOnce(new Error('Tracking failed'))
+      mockRecordStorageFile.mockRejectedValueOnce(new Error('Tracking failed'))
 
       await executeStorageWithTracking({
         storage,
@@ -195,7 +207,7 @@ describe('TransactionManager', () => {
       // ストレージ操作は成功
       expect(storage.has('tracking-fail-key')).toBe(true)
       // 追跡は試行されるが失敗
-      expect(recordStorageFileMock).toHaveBeenCalled()
+      expect(mockRecordStorageFile).toHaveBeenCalled()
     })
 
     it('executeStorageWithDbOperation でストレージ+DB操作+追跡が統合実行される', async () => {
@@ -217,9 +229,9 @@ describe('TransactionManager', () => {
 
       expect(storage.has('integrated-key')).toBe(true)
       expect(dbOperationMock).toHaveBeenCalled()
-      expect(recordStorageFileMock).toHaveBeenCalled()
-      expect(dbMock.exec).toHaveBeenCalledWith('BEGIN IMMEDIATE')
-      expect(dbMock.exec).toHaveBeenCalledWith('COMMIT')
+      expect(mockRecordStorageFile).toHaveBeenCalled()
+      expect(mockDatabaseInstance.$client.exec).toHaveBeenCalledWith('BEGIN IMMEDIATE')
+      expect(mockDatabaseInstance.$client.exec).toHaveBeenCalledWith('COMMIT')
     })
 
     it('executeStorageWithDbOperation でDB操作なしでも動作する', async () => {
@@ -237,9 +249,9 @@ describe('TransactionManager', () => {
       })
 
       expect(storage.has('no-db-key')).toBe(true)
-      expect(recordStorageFileMock).toHaveBeenCalled()
+      expect(mockRecordStorageFile).toHaveBeenCalled()
       // DB操作は実行されない
-      expect(dbMock.exec).not.toHaveBeenCalled()
+      expect(mockDatabaseInstance.$client.exec).not.toHaveBeenCalled()
     })
 
     it('削除操作が最後に実行される', async () => {
@@ -268,7 +280,7 @@ describe('TransactionManager', () => {
 
       await expect(tx.execute()).rejects.toThrow('Test storage failure for key: fail-key')
       expect(storage.size()).toBe(0)
-      expect(dbMock.exec).not.toHaveBeenCalled()
+      expect(mockDatabaseInstance.$client.exec).not.toHaveBeenCalled()
     })
 
     it('DB操作失敗時はストレージをロールバックする', async () => {
@@ -282,14 +294,14 @@ describe('TransactionManager', () => {
 
       // ストレージがロールバックされている（削除されている）
       expect(storage.has('test-key')).toBe(false)
-      expect(dbMock.exec).toHaveBeenCalledWith('BEGIN IMMEDIATE')
-      expect(dbMock.exec).toHaveBeenCalledWith('ROLLBACK')
+      expect(mockDatabaseInstance.$client.exec).toHaveBeenCalledWith('BEGIN IMMEDIATE')
+      expect(mockDatabaseInstance.$client.exec).toHaveBeenCalledWith('ROLLBACK')
       expect(tx.isCommitted()).toBe(false)
     })
 
     it('追跡失敗時はトランザクション全体をロールバックする', async () => {
       const tx = new TransactionManager()
-      recordStorageFileMock.mockRejectedValueOnce(new Error('Tracking failed'))
+      mockRecordStorageFile.mockRejectedValueOnce(new Error('Tracking failed'))
 
       tx.addStorageWrite(storage, 'test-key', 'test-value')
       tx.addDatabaseOperation(async () => {
@@ -306,7 +318,7 @@ describe('TransactionManager', () => {
 
       // 全てがロールバックされている
       expect(storage.has('test-key')).toBe(false)
-      expect(dbMock.exec).toHaveBeenCalledWith('ROLLBACK')
+      expect(mockDatabaseInstance.$client.exec).toHaveBeenCalledWith('ROLLBACK')
       expect(tx.isCommitted()).toBe(false)
     })
 
