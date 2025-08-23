@@ -287,6 +287,21 @@ export class MangaPageRenderer {
     let processedDialogues = 0
 
     // Count total dialogues for progress tracking
+    // Helper: timeout wrapper to avoid silent hangs on external API/canvas
+    const withTimeout = async <T>(p: Promise<T>, ms: number, label: string): Promise<T> => {
+      let timer: NodeJS.Timeout | null = null
+      try {
+        return await Promise.race<Promise<T>>([
+          p,
+          new Promise<T>((_, reject) => {
+            timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+          }) as Promise<T>,
+        ])
+      } finally {
+        if (timer) clearTimeout(timer)
+      }
+    }
+
     for (const panel of page.panels) {
       totalDialogues += (panel.dialogues || []).length
     }
@@ -328,14 +343,18 @@ export class MangaPageRenderer {
             })
 
             const apiStartTime = Date.now()
-            const { meta, pngBuffer } = await renderVerticalText({
-              text: d.text,
-              fontSize: feature.defaults.fontSize,
-              lineHeight: feature.defaults.lineHeight,
-              letterSpacing: feature.defaults.letterSpacing,
-              padding: feature.defaults.padding,
-              maxCharsPerLine: feature.defaults.maxCharsPerLine,
-            })
+            const { meta, pngBuffer } = await withTimeout(
+              renderVerticalText({
+                text: d.text,
+                fontSize: feature.defaults.fontSize,
+                lineHeight: feature.defaults.lineHeight,
+                letterSpacing: feature.defaults.letterSpacing,
+                padding: feature.defaults.padding,
+                maxCharsPerLine: feature.defaults.maxCharsPerLine,
+              }),
+              20000,
+              'Vertical text API call',
+            )
             const apiDuration = Date.now() - apiStartTime
 
             logger.debug('Vertical text API call completed', {
@@ -349,7 +368,11 @@ export class MangaPageRenderer {
 
             // node-canvas Image 作成
             if (typeof CanvasRenderer.createImageFromBuffer === 'function') {
-              const created = CanvasRenderer.createImageFromBuffer(pngBuffer)
+              const created = await withTimeout(
+                Promise.resolve(CanvasRenderer.createImageFromBuffer(pngBuffer)),
+                5000,
+                'Canvas image creation',
+              )
               imageObj = created.image
               w = Math.max(1, created.width || meta.width)
               h = Math.max(1, created.height || meta.height)

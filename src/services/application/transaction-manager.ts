@@ -273,6 +273,10 @@ export class TransactionManager {
 /**
  * 便利関数: 単一ストレージ書き込み + DB操作 + 追跡の統合実行
  */
+// Note: For DB operations that return void, we still consider success
+// when the operation executed and the transaction committed. We track
+// execution via a boolean flag instead of relying on the return value.
+
 export async function executeStorageDbTransaction<T>(options: {
   storage: Storage
   key: string
@@ -284,11 +288,13 @@ export async function executeStorageDbTransaction<T>(options: {
 }): Promise<T> {
   const tx = new TransactionManager()
   let dbResult: T | undefined
+  let dbOpExecuted = false
 
   tx.addStorageWrite(options.storage, options.key, options.value, options.metadata)
 
   tx.addDatabaseOperation(async (_tx) => {
     dbResult = await options.dbOperation()
+    dbOpExecuted = true
   }, options.dbRollback)
 
   if (options.tracking) {
@@ -297,11 +303,13 @@ export async function executeStorageDbTransaction<T>(options: {
 
   await tx.execute()
 
-  if (dbResult === undefined) {
-    throw new Error('Database operation did not complete successfully')
+  // If the DB operation wasn't executed at all, that's an error.
+  if (!dbOpExecuted) {
+    throw new Error('Database operation was not executed')
   }
 
-  return dbResult
+  // For void-returning operations, returning undefined is expected and OK.
+  return dbResult as T
 }
 
 /**

@@ -167,6 +167,29 @@ describe('TransactionManager', () => {
       expect(mockRecordStorageFile).toHaveBeenCalled()
     })
 
+    it('executeStorageDbTransaction が void 戻り値でも成功する', async () => {
+      const dbOperationMock = vi.fn().mockResolvedValue(undefined)
+
+      await expect(
+        executeStorageDbTransaction({
+          storage,
+          key: 'void-key',
+          value: 'void-value',
+          dbOperation: dbOperationMock,
+          tracking: {
+            filePath: 'void-key',
+            fileCategory: 'analysis',
+            fileType: 'json',
+            jobId: 'void-job',
+          },
+        }),
+      ).resolves.toBeUndefined()
+
+      expect(storage.has('void-key')).toBe(true)
+      expect(dbOperationMock).toHaveBeenCalled()
+      expect(mockRecordStorageFile).toHaveBeenCalled()
+    })
+
     it('executeStorageWithTracking 軽量版が正常に動作する', async () => {
       await executeStorageWithTracking({
         storage,

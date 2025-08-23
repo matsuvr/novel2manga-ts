@@ -223,29 +223,38 @@ export class AnalyzePipeline {
             endIndex: z.number(),
           }),
         ),
-        dialogues: z.array(
-          z.object({
-            speakerId: z.string(),
-            text: z.string(),
-            emotion: z.string(),
-            index: z.number(),
-          }),
-        ),
-        highlights: z.array(
-          z.object({
-            type: z.enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence']),
-            description: z.string(),
-            importance: z.number().min(1).max(10),
-            startIndex: z.number(),
-            endIndex: z.number(),
-          }),
-        ),
-        situations: z.array(
-          z.object({
-            description: z.string(),
-            index: z.number(),
-          }),
-        ),
+        dialogues: z
+          .array(
+            z.object({
+              speakerId: z.string(),
+              text: z.string(),
+              emotion: z.string(),
+              index: z.number(),
+            }),
+          )
+          .optional()
+          .default([]),
+        highlights: z
+          .array(
+            z.object({
+              type: z.enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence']),
+              description: z.string(),
+              importance: z.number().min(1).max(10),
+              startIndex: z.number(),
+              endIndex: z.number(),
+            }),
+          )
+          .optional()
+          .default([]),
+        situations: z
+          .array(
+            z.object({
+              description: z.string(),
+              index: z.number(),
+            }),
+          )
+          .optional()
+          .default([]),
       })
       .strip()
 
@@ -585,63 +594,65 @@ export class AnalyzePipeline {
             })
           }
 
+          // Resolve chunk storage once per episode for efficiency
+          const storageModule = await import('@/utils/storage')
+          const chunkStorage = await storageModule.StorageFactory.getChunkStorage()
+
           for (const chunkMeta of chunksMetadata) {
             const chunk = chunkMeta as Chunk
+            const inRange = chunk.chunkIndex >= adjStartChunk && chunk.chunkIndex <= adjEndChunk
+
             logger.info('Processing chunk metadata', {
               jobId,
               episodeNumber: ep,
               chunkIndex: chunk.chunkIndex,
               episodeStartChunk: adjStartChunk,
               episodeEndChunk: adjEndChunk,
-              isInRange: chunk.chunkIndex >= adjStartChunk && chunk.chunkIndex <= adjEndChunk,
+              isInRange: inRange,
             })
 
-            if (chunk.chunkIndex >= adjStartChunk && chunk.chunkIndex <= adjEndChunk) {
-              // Get actual chunk text from storage
-              // ここで「ストレージ（ファイル）から対象チャンク本文を読み込む」
-              const chunkContent = await this.ports.chunk.getChunk(jobId, chunk.chunkIndex)
-              if (!chunkContent?.text) {
-                throw new Error(
-                  `Chunk content not found for job ${jobId}, chunk ${chunk.chunkIndex}`,
-                )
-              }
+            if (!inRange) continue
 
-              const startIndexRaw = chunk.chunkIndex === adjStartChunk ? episode.startCharIndex : 0
-              const startIndex = Math.max(
-                0,
-                Math.min(
-                  chunkContent.text.length,
-                  typeof startIndexRaw === 'number' ? startIndexRaw : 0,
-                ),
+            // Read chunk text using recorded contentPath to avoid any key-generation drift
+            const obj = await chunkStorage.get(chunk.contentPath)
+            const text = obj?.text ?? ''
+            if (!text) {
+              throw new Error(
+                `Chunk content not found or empty for job ${jobId}, chunk ${chunk.chunkIndex}, path ${chunk.contentPath}`,
               )
-              // endIndex は endChunk のときに未定義の場合があるため安全側で補正し、文字数範囲にクランプ
-              const endIndexRaw =
-                chunk.chunkIndex === adjEndChunk
-                  ? typeof episode.endCharIndex === 'number'
-                    ? episode.endCharIndex
-                    : chunkContent.text.length
-                  : chunkContent.text.length
-              const endIndex = Math.max(0, Math.min(chunkContent.text.length, endIndexRaw))
-
-              // guard: ensure non-negative length
-              const safeStart = Math.min(startIndex, endIndex)
-              const safeEnd = Math.max(endIndex, startIndex)
-
-              const extractedText = chunkContent.text.substring(safeStart, safeEnd)
-              episodeText += extractedText
-              processedChunks++
-
-              logger.info('Extracted text from chunk', {
-                jobId,
-                episodeNumber: ep,
-                chunkIndex: chunk.chunkIndex,
-                chunkTextLength: chunkContent.text.length,
-                extractedLength: extractedText.length,
-                startIndex: safeStart,
-                endIndex: safeEnd,
-                extractedPreview: `${extractedText.substring(0, 50)}...`,
-              })
             }
+
+            const startIndexRaw = chunk.chunkIndex === adjStartChunk ? episode.startCharIndex : 0
+            const startIndex = Math.max(
+              0,
+              Math.min(text.length, typeof startIndexRaw === 'number' ? startIndexRaw : 0),
+            )
+
+            const endIndexRaw =
+              chunk.chunkIndex === adjEndChunk
+                ? typeof episode.endCharIndex === 'number'
+                  ? episode.endCharIndex
+                  : text.length
+                : text.length
+            const endIndex = Math.max(0, Math.min(text.length, endIndexRaw))
+
+            const safeStart = Math.min(startIndex, endIndex)
+            const safeEnd = Math.max(endIndex, startIndex)
+            const extractedText = text.substring(safeStart, safeEnd)
+
+            episodeText += extractedText
+            processedChunks++
+
+            logger.info('Extracted text from chunk', {
+              jobId,
+              episodeNumber: ep,
+              chunkIndex: chunk.chunkIndex,
+              chunkTextLength: text.length,
+              extractedLength: extractedText.length,
+              startIndex: safeStart,
+              endIndex: safeEnd,
+              extractedPreview: `${extractedText.substring(0, 50)}...`,
+            })
           }
 
           logger.info('Episode text extraction completed', {

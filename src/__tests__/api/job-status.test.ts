@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GET } from '@/app/api/jobs/[jobId]/status/route'
+import { JobProgressService } from '@/services/application/job-progress'
 import { DatabaseService } from '@/services/database'
 import { __resetDatabaseServiceForTest } from '@/services/db-factory'
 
@@ -17,8 +18,21 @@ vi.mock('@/services/database', () => ({
   })),
 }))
 
+vi.mock('@/services/application/job-progress', () => ({
+  JobProgressService: vi.fn().mockImplementation(() => ({
+    getJobWithProgress: vi.fn(),
+  })),
+}))
+
+vi.mock('@/repositories', () => ({
+  getChunkRepository: vi.fn().mockReturnValue({
+    getByJobId: vi.fn().mockResolvedValue([]),
+  }),
+}))
+
 describe('/api/jobs/[jobId]/status', () => {
   let mockDbService: any
+  let mockJobProgressService: any
 
   beforeEach(() => {
     __resetDatabaseServiceForTest()
@@ -30,7 +44,12 @@ describe('/api/jobs/[jobId]/status', () => {
       getNovel: vi.fn().mockResolvedValue(null),
     }
 
+    mockJobProgressService = {
+      getJobWithProgress: vi.fn(),
+    }
+
     vi.mocked(DatabaseService).mockReturnValue(mockDbService)
+    vi.mocked(JobProgressService).mockReturnValue(mockJobProgressService)
   })
 
   afterEach(() => {
@@ -41,7 +60,7 @@ describe('/api/jobs/[jobId]/status', () => {
     const jobId = 'job-ok'
     const request = new NextRequest(`http://localhost:3000/api/jobs/${jobId}/status`)
 
-    mockDbService.getJobWithProgress.mockResolvedValue({
+    mockJobProgressService.getJobWithProgress.mockResolvedValue({
       id: jobId,
       novelId: 'novel-1',
       status: 'processing',
@@ -105,7 +124,7 @@ describe('/api/jobs/[jobId]/status', () => {
     const jobId = 'job-db-error'
     const request = new NextRequest(`http://localhost:3000/api/jobs/${jobId}/status`)
 
-    mockDbService.getJobWithProgress.mockRejectedValue(new Error('DB connection failed'))
+    mockJobProgressService.getJobWithProgress.mockRejectedValue(new Error('DB connection failed'))
 
     const res = await GET(request, { params: { jobId } })
     const data = await res.json()

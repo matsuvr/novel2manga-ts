@@ -279,36 +279,77 @@ ${layoutData.panels
         const layout = parseMangaLayoutFromYaml(yamlContent)
 
         // Render the page using the existing renderer
-        const imageBlob = await renderer.renderToImage(layout, page.pageNumber, 'png')
-        const base64Image = await blobToBase64(imageBlob)
+        // Guard against potential silent hang in renderer
+        logger.debug('Rendering page to image blob (start)', { pageNumber: page.pageNumber })
+        const imageBlob = await Promise.race([
+          renderer.renderToImage(layout, page.pageNumber, 'png'),
+          new Promise<Blob>((_, reject) =>
+            setTimeout(
+              () => reject(new Error('Renderer.renderToImage timeout after 30000ms')),
+              30000,
+            ),
+          ),
+        ])
+        logger.debug('Rendering page to image blob (done)', {
+          pageNumber: page.pageNumber,
+          sizeHint: imageBlob.size,
+        })
+
+        // Convert to base64 (with timeout to avoid silent hang)
+        logger.debug('Converting image blob to base64 (start)', { pageNumber: page.pageNumber })
+        const base64Image = await Promise.race([
+          blobToBase64(imageBlob),
+          new Promise<string>((_, reject) =>
+            setTimeout(() => reject(new Error('blobToBase64 timeout after 15000ms')), 15000),
+          ),
+        ])
+        logger.debug('Converting image blob to base64 (done)', {
+          pageNumber: page.pageNumber,
+          length: base64Image.length,
+        })
 
         // Generate thumbnail
         const imageBlobForThumbnail = new Blob([Buffer.from(base64Image, 'base64')], {
           type: 'image/png',
         })
-        const thumbnailBlob = await ThumbnailGenerator.generateThumbnail(imageBlobForThumbnail, {
-          width: 200,
-          height: 280,
-          quality: 0.8,
-        })
+        logger.debug('Generating thumbnail (start)', { pageNumber: page.pageNumber })
+        const thumbnailBlob = await Promise.race([
+          ThumbnailGenerator.generateThumbnail(imageBlobForThumbnail, {
+            width: 200,
+            height: 280,
+            quality: 0.8,
+          }),
+          new Promise<Blob>((_, reject) =>
+            setTimeout(
+              () => reject(new Error('Thumbnail generation timeout after 10000ms')),
+              10000,
+            ),
+          ),
+        ])
+        logger.debug('Generating thumbnail (done)', { pageNumber: page.pageNumber })
         const thumbnailBase64 = await blobToBase64(thumbnailBlob)
 
         // Store the rendered images
+        logger.debug('Storing rendered image (start)', { pageNumber: page.pageNumber })
         const renderKey = await ports.render.putPageRender(
           jobId,
           episodeNumber,
           page.pageNumber,
           Buffer.from(base64Image, 'base64'),
         )
+        logger.debug('Storing rendered image (done)', { pageNumber: page.pageNumber, renderKey })
 
+        logger.debug('Storing thumbnail (start)', { pageNumber: page.pageNumber })
         const thumbnailKey = await ports.render.putPageThumbnail(
           jobId,
           episodeNumber,
           page.pageNumber,
           Buffer.from(thumbnailBase64, 'base64'),
         )
+        logger.debug('Storing thumbnail (done)', { pageNumber: page.pageNumber, thumbnailKey })
 
         // Update render status in database
+        logger.debug('Updating render status in DB (start)', { pageNumber: page.pageNumber })
         const db = getDatabaseService()
         await db.updateRenderStatus(jobId, episodeNumber, page.pageNumber, {
           isRendered: true,
@@ -318,6 +359,7 @@ ${layoutData.panels
           height: appConfig.rendering.defaultPageSize.height,
           fileSize: Buffer.from(base64Image, 'base64').length,
         })
+        logger.debug('Updating render status in DB (done)', { pageNumber: page.pageNumber })
 
         renderedCount++
         results.push({

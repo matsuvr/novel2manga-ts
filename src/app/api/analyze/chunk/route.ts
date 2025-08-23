@@ -29,29 +29,38 @@ const textAnalysisOutputSchema = z.object({
       endIndex: z.number(),
     }),
   ),
-  dialogues: z.array(
-    z.object({
-      speakerId: z.string(),
-      text: z.string(),
-      emotion: z.string(),
-      index: z.number(),
-    }),
-  ),
-  highlights: z.array(
-    z.object({
-      type: z.enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence']),
-      description: z.string(),
-      importance: z.number().min(1).max(10),
-      startIndex: z.number(),
-      endIndex: z.number(),
-    }),
-  ),
-  situations: z.array(
-    z.object({
-      description: z.string(),
-      index: z.number(),
-    }),
-  ),
+  dialogues: z
+    .array(
+      z.object({
+        speakerId: z.string(),
+        text: z.string(),
+        emotion: z.string(),
+        index: z.number(),
+      }),
+    )
+    .optional()
+    .default([]),
+  highlights: z
+    .array(
+      z.object({
+        type: z.enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence']),
+        description: z.string(),
+        importance: z.number().min(1).max(10),
+        startIndex: z.number(),
+        endIndex: z.number(),
+      }),
+    )
+    .optional()
+    .default([]),
+  situations: z
+    .array(
+      z.object({
+        description: z.string(),
+        index: z.number(),
+      }),
+    )
+    .optional()
+    .default([]),
 })
 
 export async function POST(request: NextRequest) {

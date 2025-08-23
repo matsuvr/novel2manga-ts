@@ -182,30 +182,95 @@ async function convertSingleFragment(
     .replace('{{fragmentIndex}}', (fragment.index + 1).toString())
     .replace('{{totalFragments}}', allFragments.length.toString())
 
-  try {
-    const result = await generator.generateObjectWithFallback({
-      name: 'fragment-script-conversion',
-      systemPrompt: fragmentConfig.systemPrompt,
-      userPrompt: prompt,
-      schema: FragmentScriptSchema,
-      schemaName: 'FragmentScript',
-    })
+  const logger = getLogger().withContext({ service: 'fragment-script-converter' })
 
-    // 結果の検証
-    if (!result || !result.scenes) {
-      throw new Error(`Invalid fragment script result for fragment ${fragment.index}`)
+  const isMaxTokensError = (msg: string) =>
+    msg.includes('max completion tokens reached') || msg.includes('json_validate_failed')
+
+  const hasLoopPattern = (text: string): boolean => {
+    const normalized = text.replace(/\s+/g, ' ').trim()
+    if (normalized.length < 200) return false
+    // 1) 同一行/文の過剰反復
+    const lines = text
+      .split(/\n|。/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    const freq = new Map<string, number>()
+    for (const line of lines) {
+      const key = line.slice(0, 40) // 冒頭40文字で近似比較
+      freq.set(key, (freq.get(key) || 0) + 1)
     }
+    if (Array.from(freq.values()).some((n) => n >= 5)) return true
 
-    return result as FragmentScript
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    const logger = getLogger().withContext({ service: 'fragment-script-converter' })
-    logger.error('Fragment script conversion failed', {
-      fragmentIndex: fragment.index,
-      error: errorMessage,
-    })
-    throw error
+    // 2) 固定長チャンクの繰り返し（50〜120文字）
+    const winSizes = [50, 80, 120]
+    for (const size of winSizes) {
+      const counts = new Map<string, number>()
+      for (let i = 0; i + size <= normalized.length; i += size) {
+        const seg = normalized.slice(i, i + size)
+        counts.set(seg, (counts.get(seg) || 0) + 1)
+      }
+      if (Array.from(counts.values()).some((n) => n >= 3)) return true
+    }
+    return false
   }
+
+  const maxAttempts = 3
+  let lastErr: unknown
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const result = await generator.generateObjectWithFallback({
+        name: 'fragment-script-conversion',
+        systemPrompt: fragmentConfig.systemPrompt,
+        userPrompt: prompt,
+        schema: FragmentScriptSchema,
+        schemaName: 'FragmentScript',
+      })
+
+      if (!result || !result.scenes) {
+        throw new Error(`Invalid fragment script result for fragment ${fragment.index}`)
+      }
+
+      // ループ出力の簡易検出（出力に異常反復がある場合はリトライ）
+      const combinedText = result.scenes
+        .flatMap((s) => s.script?.map((e) => e.text || '') || [])
+        .join('\n')
+      if (hasLoopPattern(combinedText)) {
+        if (attempt < maxAttempts) {
+          logger.warn('Loop-like output detected, retrying fragment conversion', {
+            fragmentIndex: fragment.index,
+            attempt,
+            maxAttempts,
+          })
+          continue
+        }
+        throw new Error('Loop output detected in fragment conversion')
+      }
+
+      return result as FragmentScript
+    } catch (error) {
+      lastErr = error
+      const message = error instanceof Error ? error.message : String(error)
+      const retryable = isMaxTokensError(message) || /Loop output detected/i.test(message)
+      if (!retryable || attempt === maxAttempts) {
+        logger.error('Fragment script conversion failed', {
+          fragmentIndex: fragment.index,
+          error: message,
+        })
+        throw error
+      }
+      logger.warn('Retrying fragment conversion due to transient LLM failure', {
+        fragmentIndex: fragment.index,
+        attempt,
+        maxAttempts,
+        reason: message,
+      })
+      // Backoff
+      await new Promise((r) => setTimeout(r, 500 * attempt))
+    }
+  }
+
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr))
 }
 
 /**

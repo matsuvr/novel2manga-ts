@@ -141,6 +141,11 @@ export interface ChunkDbPort {
       wordCount?: number | null
     }>,
   ): Promise<void>
+  /**
+   * Retrieve chunks metadata by jobId. Returns implementation-defined row shape.
+   * Consumers should treat the result as read-only metadata objects.
+   */
+  getChunksByJobId(jobId: string): Promise<unknown[]>
 }
 
 // === Type Guards ===

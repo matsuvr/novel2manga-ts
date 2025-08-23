@@ -96,6 +96,7 @@ export function adaptChunkPort(db: DatabaseService): ChunkDbPort {
     entity: 'chunk',
     mode: 'rw',
     createChunk: (payload) => db.createChunk(payload),
+    getChunksByJobId: (jobId) => db.getChunksByJobId(jobId),
     createChunksBatch: async (payloads) => {
       // Fallback: sequential inserts (DatabaseService implements batch natively; tests may mock)
       for (const item of payloads) {

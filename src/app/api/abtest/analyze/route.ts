@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { CompatAgent } from '@/agent/compat'
+import { analyzeChunkWithFallback } from '@/agents/chunk-analyzer'
 import { getTextAnalysisConfig } from '@/config'
 
 const zBody = z.object({
@@ -24,47 +24,44 @@ const textAnalysisOutputSchema = z.object({
       endIndex: z.number(),
     }),
   ),
-  dialogues: z.array(
-    z.object({
-      speakerId: z.string(),
-      text: z.string(),
-      emotion: z.string(),
-      index: z.number(),
-    }),
-  ),
-  highlights: z.array(
-    z.object({
-      type: z.enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence']),
-      description: z.string(),
-      importance: z.number().min(1).max(10),
-      startIndex: z.number(),
-      endIndex: z.number(),
-    }),
-  ),
-  situations: z.array(
-    z.object({
-      description: z.string(),
-      index: z.number(),
-    }),
-  ),
+  dialogues: z
+    .array(
+      z.object({
+        speakerId: z.string(),
+        text: z.string(),
+        emotion: z.string(),
+        index: z.number(),
+      }),
+    )
+    .optional()
+    .default([]),
+  highlights: z
+    .array(
+      z.object({
+        type: z.enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence']),
+        description: z.string(),
+        importance: z.number().min(1).max(10),
+        startIndex: z.number(),
+        endIndex: z.number(),
+      }),
+    )
+    .optional()
+    .default([]),
+  situations: z
+    .array(
+      z.object({
+        description: z.string(),
+        index: z.number(),
+      }),
+    )
+    .optional()
+    .default([]),
 })
 
 async function runWithModel(modelId: string, prompt: string) {
-  const config = getTextAnalysisConfig()
-  const agent = new CompatAgent({
-    name: `abtest-${modelId}`,
-    instructions: config.systemPrompt,
-    provider: 'groq',
-    model: modelId,
-    maxTokens: 8192,
-  })
-
   try {
-    const result = await agent.generateObject<z.infer<typeof textAnalysisOutputSchema>>({
-      userPrompt: prompt,
-      schema: textAnalysisOutputSchema,
-      schemaName: 'TextAnalysisOutput',
-      options: { maxRetries: 2 },
+    const { result } = await analyzeChunkWithFallback(prompt, textAnalysisOutputSchema, {
+      maxRetries: 2,
     })
     return { ok: true as const, model: modelId, object: result }
   } catch (error) {
