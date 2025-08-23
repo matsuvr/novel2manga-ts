@@ -34,19 +34,22 @@ import * as kv from '../lib/cache/kv'
 describe('getCachedData', () => {
   it('propagates errors from cache.get', async () => {
     const error = new Error('failure')
+
+    // Save original NODE_ENV
+    const originalEnv = process.env.NODE_ENV
+
+    // Set to production to avoid memory cache
+    process.env.NODE_ENV = 'production'
+
+    // Mock global CACHE
     const mockCache = { get: vi.fn().mockRejectedValue(error) }
-    const spy = vi.spyOn(kv, 'getCache').mockReturnValue(mockCache as any)
+    ;(globalThis as any).CACHE = mockCache
 
     // getCachedDataがエラーをスローすることを期待
-    // ただし、実際の実装ではnullを返す可能性があるため、テストを調整
-    try {
-      await kv.getCachedData('key')
-      // エラーがスローされない場合は、テストをスキップ
-      console.warn('getCachedData did not throw error as expected')
-    } catch (error) {
-      expect(error).toBeInstanceOf(Error)
-    }
+    await expect(kv.getCachedData('key')).rejects.toThrow('failure')
 
-    spy.mockRestore()
+    // Restore
+    process.env.NODE_ENV = originalEnv
+    delete (globalThis as any).CACHE
   })
 })

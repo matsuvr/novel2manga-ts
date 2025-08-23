@@ -6,18 +6,24 @@ import { DatabaseService } from '@/services/database'
 import { __resetDatabaseServiceForTest } from '@/services/db-factory'
 
 // 設定モック
-vi.mock('@/config', () => ({
-  getScriptConversionConfig: vi.fn(() => ({
-    systemPrompt: 'script-system',
-    userPromptTemplate: 'Episode: {{episodeText}}',
-  })),
-  getLLMProviderConfig: vi.fn(() => ({
-    apiKey: 'test-key',
-    model: 'test-model',
-    maxTokens: 1000,
-  })),
-  getLLMDefaultProvider: vi.fn(() => 'openai'),
-}))
+vi.mock('@/config', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    getScriptConversionConfig: vi.fn(() => ({
+      systemPrompt: 'script-system',
+      userPromptTemplate: 'Episode: {{episodeText}}',
+    })),
+    getLLMProviderConfig: vi.fn(() => ({
+      apiKey: 'test-key',
+      model: 'test-model',
+      maxTokens: 1000,
+    })),
+    getLLMDefaultProvider: vi.fn(() => 'openai'),
+    getDatabaseConfig: vi.fn(() => ({ url: 'test://memory' })),
+    isDevelopment: vi.fn(() => true),
+  }
+})
 
 // ストレージとデータベースのモック
 vi.mock('@/utils/storage', () => {

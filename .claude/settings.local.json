@@ -92,8 +92,11 @@
       "Bash(dir:*)",
       "Bash(npm rebuild:*)",
       "WebFetch(domain:console.groq.com)",
-      "Bash(sqlite3:*)"
-    ]
+      "Bash(sqlite3:*)",
+      "Bash(npm run:*)",
+      "Bash(git grep:*)"
+    ],
+    "additionalDirectories": ["G:\\G\\TsProjects"]
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": ["cloudflare", "serena", "deepwiki"],
