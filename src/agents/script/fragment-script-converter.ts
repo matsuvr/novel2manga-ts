@@ -272,8 +272,8 @@ async function convertSingleFragment(
         maxAttempts,
         reason: message,
       })
-      // Backoff
-      await new Promise((r) => setTimeout(r, 500 * attempt))
+      // Exponential backoff
+      await new Promise((r) => setTimeout(r, 500 * 2 ** (attempt - 1)))
     }
   }
 
