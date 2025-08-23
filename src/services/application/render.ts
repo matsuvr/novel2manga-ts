@@ -281,15 +281,11 @@ ${layoutData.panels
         // Render the page using the existing renderer
         // Guard against potential silent hang in renderer
         logger.debug('Rendering page to image blob (start)', { pageNumber: page.pageNumber })
-        const imageBlob = await Promise.race([
+        const imageBlob = await withTimeout(
           renderer.renderToImage(layout, page.pageNumber, 'png'),
-          new Promise<Blob>((_, reject) =>
-            setTimeout(
-              () => reject(new Error('Renderer.renderToImage timeout after 30000ms')),
-              30000,
-            ),
-          ),
-        ])
+          30000,
+          'Renderer.renderToImage timeout after 30000ms'
+        )
         logger.debug('Rendering page to image blob (done)', {
           pageNumber: page.pageNumber,
           sizeHint: imageBlob.size,
