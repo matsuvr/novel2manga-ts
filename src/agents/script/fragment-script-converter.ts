@@ -187,9 +187,16 @@ async function convertSingleFragment(
   const isMaxTokensError = (msg: string) =>
     msg.includes('max completion tokens reached') || msg.includes('json_validate_failed')
 
+  // Magic numbers for loop pattern detection
+  const LOOP_PATTERN_MIN_LENGTH = 200
+  const LOOP_PATTERN_LINE_PREFIX_LENGTH = 40
+  const LOOP_PATTERN_LINE_REPEAT_THRESHOLD = 5
+  const LOOP_PATTERN_CHUNK_SIZES = [50, 80, 120]
+  const LOOP_PATTERN_CHUNK_REPEAT_THRESHOLD = 3
+
   const hasLoopPattern = (text: string): boolean => {
     const normalized = text.replace(/\s+/g, ' ').trim()
-    if (normalized.length < 200) return false
+    if (normalized.length < LOOP_PATTERN_MIN_LENGTH) return false
     // 1) 同一行/文の過剰反復
     const lines = text
       .split(/\n|。/)
