@@ -55,6 +55,7 @@ export default function HomeClient() {
   const [novelText, setNovelText] = useState('')
   const [jobId, setJobId] = useState<string | null>(null)
   const [novelIdState, setNovelIdState] = useState<string | null>(null)
+  const [resumeNovelId, setResumeNovelId] = useState<string>('')
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -89,6 +90,12 @@ export default function HomeClient() {
       }
       const novelId = uploadData.uuid
       if (!novelId) throw new Error('novelId を取得できませんでした')
+
+      // Validate novelId format (UUID v4)
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(novelId)) {
+        throw new Error('サーバーから無効なnovelId形式を受信しました')
+      }
+
       setNovelIdState(novelId)
 
       // アップロード完了後すぐに進捗表示に移行
@@ -167,9 +174,62 @@ export default function HomeClient() {
     setViewMode('input')
     setNovelText('')
     setJobId(null)
+    setNovelIdState(null)
+    setResumeNovelId('')
     setEpisodes([])
     setError(null)
     setIsProcessing(false)
+  }
+  const handleResume = async (resumeNovelId: string) => {
+    // Validate novelId format before sending to server
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(resumeNovelId)
+    ) {
+      setError('無効なnovelId形式です。有効なUUIDを入力してください。')
+      return
+    }
+
+    setIsProcessing(true)
+    setError(null)
+    setViewMode('progress')
+
+    try {
+      const resumeResponse = await fetch('/api/resume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ novelId: resumeNovelId }),
+      })
+
+      if (!resumeResponse.ok) {
+        const errorData = (await resumeResponse.json().catch(() => ({}))) as {
+          error?: string
+        }
+        throw new Error(errorData.error || '再開の開始に失敗しました')
+      }
+
+      const resumeData = (await resumeResponse.json().catch(() => ({}))) as {
+        jobId?: string
+        novelId?: string
+        status?: string
+        message?: string
+      }
+
+      const jobId = resumeData.jobId
+      if (!jobId) throw new Error('jobId を取得できませんでした')
+
+      setJobId(jobId)
+      setNovelIdState(resumeData.novelId || resumeNovelId)
+
+      // 既に完了している場合は直接結果ページへ
+      if (resumeData.status === 'completed') {
+        await handleProcessComplete()
+      }
+    } catch (err) {
+      console.error('Resume error:', err)
+      setError(err instanceof Error ? err.message : '再開中にエラーが発生しました')
+      setViewMode('input')
+      setIsProcessing(false)
+    }
   }
 
   const [pendingRedirect, setPendingRedirect] = useState<string | null>(null)
@@ -222,8 +282,41 @@ export default function HomeClient() {
         )}
 
         {viewMode === 'input' && (
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-6xl mx-auto space-y-6">
+            {/* 再開機能 */}
+            <div className="bg-white rounded-3xl shadow-lg border border-gray-100/50 p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <span className="text-2xl mr-2">🔄</span>
+                処理の再開
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                以前に処理を開始したnovelIdを入力して、処理を再開できます
+              </p>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  placeholder="novelId (UUID形式)"
+                  value={resumeNovelId}
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  onChange={(e) => setResumeNovelId(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => resumeNovelId && handleResume(resumeNovelId)}
+                  disabled={!resumeNovelId.trim() || isProcessing}
+                  className="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-medium shadow-sm shadow-green-500/20 transition hover:shadow-md hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  再開
+                </button>
+              </div>
+            </div>
+
+            {/* 新規処理 */}
             <div className="bg-white rounded-3xl shadow-2xl border border-gray-100/50 p-6 min-h-[600px] transition-all duration-500 ease-out hover:shadow-3xl hover:-translate-y-1">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <span className="text-2xl mr-2">📝</span>
+                新規変換
+              </h3>
               <TextInputArea
                 value={novelText}
                 onChange={setNovelText}

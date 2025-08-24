@@ -677,6 +677,14 @@ export async function saveEpisodeBoundaries(
   const { executeStorageDbTransaction } = await import('@/services/application/transaction-manager')
   const storage = await getAnalysisStorage()
   const key = StorageKeys.narrativeAnalysis(jobId)
+
+  // Get job info for novelId before the transaction
+  const { JobProgressService } = await import('@/services/application/job-progress')
+  const jobService = new JobProgressService()
+  const job = await jobService.getJobWithProgress(jobId)
+  if (!job) {
+    throw new Error(`Job not found: ${jobId}`)
+  }
   const data = {
     episodes,
     metadata: {
@@ -691,14 +699,7 @@ export async function saveEpisodeBoundaries(
     value: JSON.stringify(data, null, 2),
     dbOperation: async () => {
       const { EpisodeWriteService } = await import('@/services/application/episode-write')
-      const { JobProgressService } = await import('@/services/application/job-progress')
-      const jobService = new JobProgressService()
       const episodeService = new EpisodeWriteService()
-
-      const job = await jobService.getJobWithProgress(jobId)
-      if (!job) {
-        throw new Error(`Job not found: ${jobId}`)
-      }
 
       const episodesForDb = episodes.map((episode) => ({
         novelId: job.novelId,
@@ -719,7 +720,7 @@ export async function saveEpisodeBoundaries(
       filePath: key,
       fileCategory: 'analysis',
       fileType: 'json',
-      novelId: undefined,
+      novelId: job.novelId,
       jobId,
       mimeType: 'application/json; charset=utf-8',
     },
