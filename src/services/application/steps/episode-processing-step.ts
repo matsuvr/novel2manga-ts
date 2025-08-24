@@ -5,23 +5,12 @@ import { adaptAll } from '@/repositories/adapters'
 import { getDatabaseService } from '@/services/db-factory'
 import type { EpisodeBoundary } from '@/types/episode'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
+import { hasUpdateEpisodeTextPath } from '@/utils/type-guards'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface EpisodeTextResult {
   episodeText: string
   extractionMethod: 'chunk-based' | 'narrative-analysis-direct'
-}
-
-// Type guard for database service with updateEpisodeTextPath method
-function hasUpdateEpisodeTextPath(service: unknown): service is {
-  updateEpisodeTextPath: (jobId: string, episodeNumber: number, path: string) => Promise<void>
-} & Record<string, unknown> {
-  return (
-    typeof service === 'object' &&
-    service !== null &&
-    'updateEpisodeTextPath' in service &&
-    typeof (service as Record<string, unknown>).updateEpisodeTextPath === 'function'
-  )
 }
 
 /**

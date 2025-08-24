@@ -55,3 +55,43 @@ export function validateMangaLayout(
   })
   return { valid: false, errors }
 }
+
+/**
+ * Generic type guard for checking if an object has specific methods
+ * Useful for database services, APIs, etc.
+ */
+export function hasMethod<T extends string>(
+  obj: unknown,
+  methodName: T,
+): obj is Record<T, (...args: unknown[]) => unknown> {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    methodName in obj &&
+    typeof (obj as Record<string, unknown>)[methodName] === 'function'
+  )
+}
+
+/**
+ * Type guard for checking if an object has multiple methods
+ */
+export function hasMethods<T extends readonly string[]>(
+  obj: unknown,
+  methodNames: T,
+): obj is Record<T[number], (...args: unknown[]) => unknown> {
+  if (typeof obj !== 'object' || obj === null) return false
+
+  const record = obj as Record<string, unknown>
+  return methodNames.every(
+    (methodName) => methodName in record && typeof record[methodName] === 'function',
+  )
+}
+
+/**
+ * Type guard for database service with updateEpisodeTextPath method
+ */
+export function hasUpdateEpisodeTextPath(service: unknown): service is {
+  updateEpisodeTextPath: (jobId: string, episodeNumber: number, path: string) => Promise<void>
+} & Record<string, unknown> {
+  return hasMethod(service, 'updateEpisodeTextPath')
+}

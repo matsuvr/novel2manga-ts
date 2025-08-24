@@ -24,18 +24,6 @@ export class TransactionService {
   }
 
   /**
-   * Execute asynchronous operation within a synchronous transaction
-   * Use this when you need async operations but want transaction safety
-   *
-   * WARNING: This converts async operations to sync, which may have limitations
-   */
-  executeAsyncInSync<T>(_operation: AsyncTransactionOperation<T>): T {
-    throw new Error(
-      'Async operations in sync transactions are not supported with better-sqlite3. Use executeSync with sync operations instead.',
-    )
-  }
-
-  /**
    * Execute operation with explicit transaction boundaries
    * This method respects the UnitOfWork pattern
    */

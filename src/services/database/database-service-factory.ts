@@ -84,8 +84,13 @@ let globalFactory: DatabaseServiceFactory | null = null
 
 /**
  * Initialize the global database service factory
+ * If a factory already exists, it will be cleaned up first
  */
 export function initializeDatabaseServiceFactory(db: Database): void {
+  // Clean up existing factory if it exists
+  if (globalFactory) {
+    cleanup()
+  }
   globalFactory = new DatabaseServiceFactory(db)
 }
 
@@ -99,6 +104,28 @@ export function getDatabaseServiceFactory(): DatabaseServiceFactory {
     )
   }
   return globalFactory
+}
+
+/**
+ * Clean up the global database service factory
+ * Should be called when the application is shutting down
+ */
+export function cleanup(): void {
+  if (globalFactory) {
+    // Close the database connection if it has a close method
+    const db = globalFactory.getRawDatabase()
+    if (db && typeof (db as unknown as { close?: () => void }).close === 'function') {
+      ;(db as unknown as { close: () => void }).close()
+    }
+    globalFactory = null
+  }
+}
+
+/**
+ * Check if the factory is initialized
+ */
+export function isFactoryInitialized(): boolean {
+  return globalFactory !== null
 }
 
 /**

@@ -139,7 +139,9 @@ describe('episode text persistence', () => {
 
     // Test prepareNarrativeAnalysisInput - it should handle missing chunks gracefully
     vi.clearAllMocks() // Clear the mock to test the real function
-    const episodeUtilsModule = (await vi.importActual('@/utils/episode-utils')) as any
+    const episodeUtilsModule = (await vi.importActual(
+      '@/utils/episode-utils',
+    )) as typeof import('@/utils/episode-utils')
     const { prepareNarrativeAnalysisInput } = episodeUtilsModule
 
     const input = await prepareNarrativeAnalysisInput({

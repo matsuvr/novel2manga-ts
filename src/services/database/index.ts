@@ -28,6 +28,8 @@ export {
   DatabaseServiceFactory,
   initializeDatabaseServiceFactory,
   getDatabaseServiceFactory,
+  cleanup,
+  isFactoryInitialized,
   db,
 } from './database-service-factory'
 

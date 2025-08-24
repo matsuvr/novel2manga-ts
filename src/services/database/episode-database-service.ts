@@ -49,12 +49,13 @@ export class EpisodeDatabaseService extends BaseDatabaseService {
 
       // Update job total episodes count
       const jobId = episodeList[0].jobId
+      type CountResult = { count: number }
       const total = tx
-        .select({ count: sql`count(*)` })
+        .select({ count: sql<number>`count(*)`.mapWith(Number) })
         .from(episodes)
         .where(eq(episodes.jobId, jobId))
-        .all()
-      const totalEpisodes = Number((total as unknown as { count: number }[])[0]?.count ?? 0)
+        .all() as CountResult[]
+      const totalEpisodes = total[0]?.count ?? 0
 
       tx.update(jobs)
         .set({ totalEpisodes, updatedAt: new Date().toISOString() })
