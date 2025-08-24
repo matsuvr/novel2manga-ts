@@ -4,9 +4,25 @@ import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { getDatabaseConfig } from '@/config'
+// Import will be added when migration is complete to avoid circular dependency
 import * as schema from './schema'
+import { cleanup } from '@/services/database/database-service-factory'
 
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null
+
+// Setup cleanup handlers for graceful shutdown
+if (typeof process !== 'undefined') {
+  const handleShutdown = () => {
+    cleanup()
+    if (db) {
+      db = null
+    }
+  }
+
+  process.on('SIGINT', handleShutdown)
+  process.on('SIGTERM', handleShutdown)
+  process.on('exit', handleShutdown)
+}
 
 export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
   if (!db) {
@@ -22,6 +38,9 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
     try {
       const sqliteDb = new Database(dbPath)
       db = drizzle(sqliteDb, { schema })
+
+      // TODO: Initialize the new database service architecture when migration is complete
+      // initializeDatabaseServiceFactory(db)
     } catch (error) {
       // 特定: ネイティブモジュール ABI 不一致 (ERR_DLOPEN_FAILED) などのロード失敗を捕捉
       const msg = error instanceof Error ? error.message : String(error)

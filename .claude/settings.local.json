@@ -92,7 +92,8 @@
       "Bash(dir:*)",
       "Bash(npm rebuild:*)",
       "WebFetch(domain:console.groq.com)",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Bash(git grep:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
