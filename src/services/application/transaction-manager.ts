@@ -156,21 +156,13 @@ export class TransactionManager {
           }
         } else {
           // Drizzle標準のトランザクションAPI
-          await db.transaction((tx) => {
-            let errorInAsync: unknown | null = null
-            ;(async () => {
-              try {
-                for (const dbOp of this.dbOps) {
-                  await dbOp.execute(tx as unknown as DrizzleTransaction)
-                }
-                for (const trackingOp of this.trackingOps) {
-                  await recordStorageFile(trackingOp.params, tx as unknown as DrizzleTransaction)
-                }
-              } catch (err) {
-                errorInAsync = err
-              }
-            })()
-            if (errorInAsync) throw errorInAsync
+          await db.transaction(async (tx) => {
+            for (const dbOp of this.dbOps) {
+              await dbOp.execute(tx as unknown as DrizzleTransaction)
+            }
+            for (const trackingOp of this.trackingOps) {
+              await recordStorageFile(trackingOp.params, tx as unknown as DrizzleTransaction)
+            }
           })
           this.committed = true
         }
@@ -284,11 +276,13 @@ export async function executeStorageDbTransaction<T>(options: {
 }): Promise<T> {
   const tx = new TransactionManager()
   let dbResult: T | undefined
+  let dbOperationExecuted = false
 
   tx.addStorageWrite(options.storage, options.key, options.value, options.metadata)
 
   tx.addDatabaseOperation(async (_tx) => {
     dbResult = await options.dbOperation()
+    dbOperationExecuted = true
   }, options.dbRollback)
 
   if (options.tracking) {
@@ -297,11 +291,13 @@ export async function executeStorageDbTransaction<T>(options: {
 
   await tx.execute()
 
-  if (dbResult === undefined) {
-    throw new Error('Database operation did not complete successfully')
+  // Check if the database operation was executed (not just if result has a value)
+  // This handles void operations correctly
+  if (!dbOperationExecuted) {
+    throw new Error('Database operation did not execute successfully')
   }
 
-  return dbResult
+  return dbResult as T
 }
 
 /**

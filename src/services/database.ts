@@ -25,7 +25,19 @@ import { getLogger } from '@/infrastructure/logging/logger'
 import type { TransactionPort, UnitOfWorkPort } from '@/repositories/ports'
 import type { JobProgress, JobStatus, JobStep } from '@/types/job'
 import { makeEpisodeId } from '@/utils/ids'
+// Temporarily remove circular import - will be addressed in complete migration
 
+/**
+ * Legacy DatabaseService - gradually being replaced by domain-specific services
+ *
+ * @deprecated This class will be phased out in favor of domain-specific services.
+ * New code should use the services from '@/services/database' instead.
+ *
+ * Migration guide:
+ * - Episode operations: Use db.episodes() from '@/services/database'
+ * - Job operations: Use db.jobs() from '@/services/database'
+ * - Transaction operations: Use db.transactions() from '@/services/database'
+ */
 export class DatabaseService implements TransactionPort, UnitOfWorkPort {
   private db = getDatabase()
 
@@ -449,6 +461,10 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
     await this.db.delete(jobs).where(eq(jobs.id, id))
   }
 
+  /**
+   * @deprecated Use db.episodes().createEpisodes() from '@/services/database' instead
+   * Fixed to use synchronous transactions for better-sqlite3 compatibility
+   */
   async createEpisodes(episodeList: Array<Omit<NewEpisode, 'id' | 'createdAt'>>): Promise<void> {
     if (episodeList.length === 0) return
 
@@ -488,8 +504,9 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
         .select({ count: sql`count(*)` })
         .from(episodes)
         .where(eq(episodes.jobId, jobId))
-        .get()
-      const totalEpisodes = Number(total?.count ?? 0)
+        .all()
+      const totalEpisodes = Number((total as unknown as { count: number }[])[0]?.count ?? 0)
+
       tx.update(jobs)
         .set({ totalEpisodes, updatedAt: new Date().toISOString() })
         .where(eq(jobs.id, jobId))
@@ -497,8 +514,11 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
     })
   }
 
+  /**
+   * @deprecated Use db.episodes().getEpisodesByJobId() from '@/services/database' instead
+   */
   async getEpisodesByJobId(jobId: string): Promise<Episode[]> {
-    return await this.db
+    return this.db
       .select()
       .from(episodes)
       .where(eq(episodes.jobId, jobId))
