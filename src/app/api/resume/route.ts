@@ -11,12 +11,12 @@ const resumeRequestSchema = z.object({
 })
 
 export async function POST(request: NextRequest) {
-  try {
-    const _logger = getLogger().withContext({
-      route: 'api/resume',
-      method: 'POST',
-    })
+  const _logger = getLogger().withContext({
+    route: 'api/resume',
+    method: 'POST',
+  })
 
+  try {
     let rawBody: unknown
     try {
       rawBody = await request.json()
@@ -42,22 +42,13 @@ export async function POST(request: NextRequest) {
 
     return ApiResponder.success({
       success: result.success,
-      id: result.jobId,
       jobId: result.jobId,
       novelId: result.novelId,
       message: result.message,
       status: result.status,
       resumePoint: result.resumePoint,
-      data: {
-        jobId: result.jobId,
-        resumePoint: result.resumePoint,
-      },
     })
   } catch (error) {
-    const _logger = getLogger().withContext({
-      route: 'api/resume',
-      method: 'POST',
-    })
     _logger.error('Resume request failed', {
       error: extractErrorMessage(error),
     })
