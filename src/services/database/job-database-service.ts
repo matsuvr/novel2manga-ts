@@ -81,7 +81,7 @@ export class JobDatabaseService extends BaseDatabaseService {
       .select({ count: sql<number>`count(*)` })
       .from(chunks)
       .where(eq(chunks.jobId, id))
-      .all() as CountQueryResult[]
+      .all()
 
     const episodesData = this.db
       .select({
@@ -94,7 +94,7 @@ export class JobDatabaseService extends BaseDatabaseService {
       .orderBy(episodes.episodeNumber)
       .all()
 
-    const totalChunks = chunksCount[0]?.count ?? 0
+    const totalChunks = (chunksCount[0] as CountQueryResult | undefined)?.count ?? 0
 
     const progress: JobProgress = {
       currentStep: job.currentStep,
