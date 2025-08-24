@@ -6,8 +6,23 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { getDatabaseConfig } from '@/config'
 // Import will be added when migration is complete to avoid circular dependency
 import * as schema from './schema'
+import { cleanup } from '@/services/database/database-service-factory'
 
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null
+
+// Setup cleanup handlers for graceful shutdown
+if (typeof process !== 'undefined') {
+  const handleShutdown = () => {
+    cleanup()
+    if (db) {
+      db = null
+    }
+  }
+
+  process.on('SIGINT', handleShutdown)
+  process.on('SIGTERM', handleShutdown)
+  process.on('exit', handleShutdown)
+}
 
 export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
   if (!db) {

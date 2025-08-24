@@ -14,6 +14,8 @@ export interface JobProgress {
   }>
 }
 
+type CountQueryResult = { count: number }
+
 export interface JobWithProgress {
   id: string
   novelId: string
@@ -76,10 +78,10 @@ export class JobDatabaseService extends BaseDatabaseService {
 
     // Get progress information
     const chunksCount = this.db
-      .select({ count: sql`count(*)` })
+      .select({ count: sql<number>`count(*)` })
       .from(chunks)
       .where(eq(chunks.jobId, id))
-      .all()
+      .all() as CountQueryResult[]
 
     const episodesData = this.db
       .select({
@@ -92,7 +94,7 @@ export class JobDatabaseService extends BaseDatabaseService {
       .orderBy(episodes.episodeNumber)
       .all()
 
-    const totalChunks = Number((chunksCount as unknown as { count: number }[])[0]?.count ?? 0)
+    const totalChunks = chunksCount[0]?.count ?? 0
 
     const progress: JobProgress = {
       currentStep: job.currentStep,

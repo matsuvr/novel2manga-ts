@@ -90,6 +90,12 @@ export default function HomeClient() {
       }
       const novelId = uploadData.uuid
       if (!novelId) throw new Error('novelId を取得できませんでした')
+
+      // Validate novelId format (UUID v4)
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(novelId)) {
+        throw new Error('サーバーから無効なnovelId形式を受信しました')
+      }
+
       setNovelIdState(novelId)
 
       // アップロード完了後すぐに進捗表示に移行
@@ -175,6 +181,14 @@ export default function HomeClient() {
     setIsProcessing(false)
   }
   const handleResume = async (resumeNovelId: string) => {
+    // Validate novelId format before sending to server
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(resumeNovelId)
+    ) {
+      setError('無効なnovelId形式です。有効なUUIDを入力してください。')
+      return
+    }
+
     setIsProcessing(true)
     setError(null)
     setViewMode('progress')

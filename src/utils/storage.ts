@@ -677,20 +677,20 @@ export async function saveEpisodeBoundaries(
   const { executeStorageDbTransaction } = await import('@/services/application/transaction-manager')
   const storage = await getAnalysisStorage()
   const key = StorageKeys.narrativeAnalysis(jobId)
+
+  // Get job info for novelId before the transaction
+  const { JobProgressService } = await import('@/services/application/job-progress')
+  const jobService = new JobProgressService()
+  const job = await jobService.getJobWithProgress(jobId)
+  if (!job) {
+    throw new Error(`Job not found: ${jobId}`)
+  }
   const data = {
     episodes,
     metadata: {
       createdAt: new Date().toISOString(),
       totalEpisodes: episodes.length,
     },
-  }
-
-  // Get job info first for both db operation and tracking
-  const { JobProgressService } = await import('@/services/application/job-progress')
-  const jobService = new JobProgressService()
-  const job = await jobService.getJobWithProgress(jobId)
-  if (!job) {
-    throw new Error(`Job not found: ${jobId}`)
   }
 
   await executeStorageDbTransaction({
