@@ -23,6 +23,14 @@ vi.mock('@/config/app.config', () => ({
         overlapSize: 200,
         maxFragmentSize: 4000,
         minFragmentSize: 500,
+        minSceneLength: 200,
+        loopPatternDetection: {
+          minLength: 200,
+          linePrefixLength: 40,
+          lineRepeatThreshold: 5,
+          chunkSizes: [50, 80, 120],
+          chunkRepeatThreshold: 3,
+        },
       },
     },
     llm: {

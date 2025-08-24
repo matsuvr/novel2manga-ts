@@ -146,7 +146,7 @@ export async function convertEpisodeTextToScriptWithFragments(
   await Promise.all(workers)
 
   // フラグメントスクリプトを統合して最終スクリプトを生成
-  const finalScript = mergeFragmentScripts(fragmentScripts, options.episodeNumber)
+  const finalScript = await mergeFragmentScripts(fragmentScripts, options.episodeNumber)
 
   logger.info('Fragment-based script conversion completed', {
     totalScenes: finalScript.scenes.length,
@@ -183,16 +183,20 @@ async function convertSingleFragment(
     .replace('{{totalFragments}}', allFragments.length.toString())
 
   const logger = getLogger().withContext({ service: 'fragment-script-converter' })
+  const config = await getAppConfigWithOverrides()
 
   const isMaxTokensError = (msg: string) =>
     msg.includes('max completion tokens reached') || msg.includes('json_validate_failed')
 
-  // Magic numbers for loop pattern detection
-  const LOOP_PATTERN_MIN_LENGTH = 200
-  const LOOP_PATTERN_LINE_PREFIX_LENGTH = 40
-  const LOOP_PATTERN_LINE_REPEAT_THRESHOLD = 5
-  const LOOP_PATTERN_CHUNK_SIZES = [50, 80, 120]
-  const LOOP_PATTERN_CHUNK_REPEAT_THRESHOLD = 3
+  // Loop pattern detection settings from config
+  const LOOP_PATTERN_MIN_LENGTH = config.chunking.scriptConversion.loopPatternDetection.minLength
+  const _LOOP_PATTERN_LINE_PREFIX_LENGTH =
+    config.chunking.scriptConversion.loopPatternDetection.linePrefixLength
+  const _LOOP_PATTERN_LINE_REPEAT_THRESHOLD =
+    config.chunking.scriptConversion.loopPatternDetection.lineRepeatThreshold
+  const _LOOP_PATTERN_CHUNK_SIZES = config.chunking.scriptConversion.loopPatternDetection.chunkSizes
+  const _LOOP_PATTERN_CHUNK_REPEAT_THRESHOLD =
+    config.chunking.scriptConversion.loopPatternDetection.chunkRepeatThreshold
 
   const hasLoopPattern = (text: string): boolean => {
     const normalized = text.replace(/\s+/g, ' ').trim()
@@ -283,7 +287,10 @@ async function convertSingleFragment(
 /**
  * フラグメントスクリプトを統合して最終スクリプトを生成
  */
-function mergeFragmentScripts(fragmentScripts: FragmentScript[], episodeNumber?: number): Script {
+async function mergeFragmentScripts(
+  fragmentScripts: FragmentScript[],
+  episodeNumber?: number,
+): Promise<Script> {
   const logger = getLogger().withContext({ service: 'fragment-script-merger' })
 
   const allScenes: Scene[] = []
@@ -312,7 +319,7 @@ function mergeFragmentScripts(fragmentScripts: FragmentScript[], episodeNumber?:
   }
 
   // 隣接するシーンで同じ設定の場合は統合
-  const mergedScenes = mergeAdjacentSimilarScenes(allScenes)
+  const mergedScenes = await mergeAdjacentSimilarScenes(allScenes)
 
   return {
     title: `Episode ${episodeNumber || 1}`,
@@ -323,7 +330,7 @@ function mergeFragmentScripts(fragmentScripts: FragmentScript[], episodeNumber?:
 /**
  * 隣接する類似シーンを統合
  */
-function mergeAdjacentSimilarScenes(scenes: Scene[]): Scene[] {
+async function mergeAdjacentSimilarScenes(scenes: Scene[]): Promise<Scene[]> {
   if (scenes.length <= 1) return scenes
 
   const merged: Scene[] = []
@@ -333,7 +340,10 @@ function mergeAdjacentSimilarScenes(scenes: Scene[]): Scene[] {
     const nextScene = scenes[i]
 
     // 設定が同じ場合は統合
-    if (currentScene.setting === nextScene.setting && shouldMergeScenes(currentScene, nextScene)) {
+    if (
+      currentScene.setting === nextScene.setting &&
+      (await shouldMergeScenes(currentScene, nextScene))
+    ) {
       // スクリプト要素を結合
       currentScene.script = [...(currentScene.script || []), ...(nextScene.script || [])]
 
@@ -356,7 +366,7 @@ function mergeAdjacentSimilarScenes(scenes: Scene[]): Scene[] {
 /**
  * 2つのシーンを統合すべきかどうかを判定
  */
-function shouldMergeScenes(scene1: Scene, scene2: Scene): boolean {
+async function shouldMergeScenes(scene1: Scene, scene2: Scene): Promise<boolean> {
   // 同じ設定で、どちらかが非常に短い場合は統合
   const scene1Length = (scene1.script || []).reduce(
     (sum: number, item: { text: string }) => sum + item.text.length,
@@ -367,8 +377,9 @@ function shouldMergeScenes(scene1: Scene, scene2: Scene): boolean {
     0,
   )
 
-  // テスト環境ではデフォルト値を使用
-  const minSceneLength = 200
+  // 設定から最小シーン長を取得
+  const config = await getAppConfigWithOverrides()
+  const minSceneLength = config.chunking.scriptConversion.minSceneLength
 
   return scene1Length < minSceneLength || scene2Length < minSceneLength
 }

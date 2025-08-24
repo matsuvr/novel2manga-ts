@@ -329,10 +329,13 @@ export async function executeStorageWithTracking(options: {
   if (options.tracking) {
     try {
       await recordStorageFile(options.tracking)
-    } catch (_error) {
+    } catch (error) {
       // 追跡失敗はログに記録するが、メイン処理は失敗させない
-      // console.warn を使わずにエラーを完全に無視する（テスト環境では出力が邪魔になる）
-      // 本来であればここで適切なロガーを使うべき
+      const { getLogger } = await import('@/infrastructure/logging/logger')
+      getLogger().warn('Storage tracking failed but operation will continue', {
+        error: error instanceof Error ? error.message : String(error),
+        tracking: options.tracking,
+      })
     }
   }
 }

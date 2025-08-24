@@ -35,6 +35,27 @@ export interface BatchRenderResult {
   duration: number
 }
 
+// Utility function for timeout handling
+const withTimeout = async <T>(
+  promise: Promise<T>,
+  ms: number,
+  errorMessage: string,
+): Promise<T> => {
+  let timer: NodeJS.Timeout | null = null
+  try {
+    return await Promise.race<Promise<T>>([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(errorMessage)), ms)
+      }),
+    ])
+  } finally {
+    if (timer) {
+      clearTimeout(timer)
+    }
+  }
+}
+
 export async function renderBatchFromYaml(
   jobId: string,
   episodeNumber: number,
@@ -284,7 +305,7 @@ ${layoutData.panels
         const imageBlob = await withTimeout(
           renderer.renderToImage(layout, page.pageNumber, 'png'),
           30000,
-          'Renderer.renderToImage timeout after 30000ms'
+          'Renderer.renderToImage timeout after 30000ms',
         )
         logger.debug('Rendering page to image blob (done)', {
           pageNumber: page.pageNumber,

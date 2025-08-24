@@ -119,7 +119,9 @@ describe('episode text persistence', () => {
 
     // For demo mode, we can't guarantee chunk storage works exactly the same
     // so we'll just verify the basic flow worked
-    console.log(`Demo run completed with jobId: ${jobId}, chunkCount: ${chunkCount}`)
+    // Additional verification: check if the pipeline completed successfully
+    expect(jobId).toMatch(/^[a-f0-9\-]+$/i) // Valid UUID format
+    expect(chunkCount).toBeGreaterThanOrEqual(1) // At least one chunk should be created
 
     // 後始末
     await cleanJobStorage(jobId)

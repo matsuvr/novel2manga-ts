@@ -16,6 +16,15 @@ export const appConfig = {
       minSceneLength: 200, // 最小シーン長（文字数）- シーン統合判定用
       contextSize: 200, // フラグメント間コンテキストサイズ（文字数）
       fragmentConversionThreshold: 4000, // フラグメント変換を使用する閾値（文字数）
+
+      // ループパターン検出設定
+      loopPatternDetection: {
+        minLength: 200, // ループパターン検出の最小テキスト長
+        linePrefixLength: 40, // 行プレフィックスの比較長
+        lineRepeatThreshold: 5, // 行の繰り返し閾値
+        chunkSizes: [50, 80, 120], // チェック対象のチャンクサイズ
+        chunkRepeatThreshold: 3, // チャンクの繰り返し閾値
+      },
     },
   },
 

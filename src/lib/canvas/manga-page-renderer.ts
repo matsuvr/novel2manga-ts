@@ -110,28 +110,11 @@ export class MangaPageRenderer {
     chunks: ChunkAnalysisResult[],
     pageIndex: number,
   ): Promise<Panel[]> {
-    // --- DEBUG LOG ---
-    console.log(
-      `[MangaPageRenderer] Creating panels for page ${pageIndex}. Received ${chunks.length} chunks.`,
-    )
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i]
-      console.log(
-        `Chunk ${i}:`,
-        JSON.stringify(
-          {
-            chunkIndex: chunk.chunkIndex,
-            dialoguesCount: (chunk.dialogues || []).length,
-            situationsCount: (chunk.situations || []).length,
-            highlightsCount: (chunk.highlights || []).length,
-            scenesCount: (chunk.scenes || []).length,
-          },
-          null,
-          2,
-        ),
-      )
-    }
-    // --- END DEBUG LOG ---
+    const logger = getLogger().withContext({ component: 'MangaPageRenderer' })
+    logger.info('Creating panels for page', {
+      pageIndex,
+      chunksCount: chunks.length,
+    })
 
     // パネルレイアウトを計算
     const panelLayouts = this.layoutEngine.calculatePanelLayout(chunks)
