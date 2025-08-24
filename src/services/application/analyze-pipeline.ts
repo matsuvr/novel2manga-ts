@@ -1,36 +1,23 @@
-import { z } from 'zod'
-import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
-// import { generateEpisodeLayout } from '@/services/application/layout-generation' // DEPRECATED: replaced by pageBreakEstimation
-import { estimatePageBreaks } from '@/agents/script/page-break-estimator'
-import { convertEpisodeTextToScript } from '@/agents/script/script-converter'
-import { getChunkingConfig, getTextAnalysisConfig } from '@/config'
-import type { Chunk } from '@/db/schema'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
-import { getChunkRepository, getJobRepository, getNovelRepository } from '@/repositories'
-import { adaptAll } from '@/repositories/adapters'
-import { EpisodeRepository } from '@/repositories/episode-repository'
-import { getDatabaseService } from '@/services/db-factory'
+import { getJobRepository, getNovelRepository } from '@/repositories'
 import type { EpisodeBoundary } from '@/types/episode'
-import type { AnalyzeResponse } from '@/types/job'
 
-// Type guard for database service with updateEpisodeTextPath method
-function hasUpdateEpisodeTextPath(service: unknown): service is {
-  updateEpisodeTextPath: (jobId: string, episodeNumber: number, path: string) => Promise<void>
-} & Record<string, unknown> {
-  return (
-    typeof service === 'object' &&
-    service !== null &&
-    'updateEpisodeTextPath' in service &&
-    typeof (service as Record<string, unknown>).updateEpisodeTextPath === 'function'
-  )
-}
-
-import type { PageBreakPlan } from '@/types/script'
-import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
-import { saveEpisodeBoundaries } from '@/utils/storage'
-import { splitTextIntoSlidingChunks } from '@/utils/text-splitter'
-import { generateUUID } from '@/utils/uuid'
+// Import pipeline steps
+import {
+  NovelManagementStep,
+  JobManagementStep,
+  TextChunkingStep,
+  TextAnalysisStep,
+  NarrativeAnalysisStep,
+  EpisodeProcessingStep,
+  ScriptConversionStep,
+  PageBreakStep,
+  RenderingStep,
+  CompletionStep,
+  BasePipelineStep,
+  type StepContext,
+} from './steps'
 
 export interface AnalyzeOptions {
   isDemo?: boolean
@@ -53,7 +40,7 @@ export interface AnalyzeOptions {
  * テスト: src/__tests__/integration/service-integration.test.ts など多数
  *
  * Note: Orchestrator (scenario.ts) とは異なる責務を持つ
- * - AnalyzePipeline: ビジネスロジックの実装
+ * - AnalyzePipeline: ビジネスロジックの順序を定義。実際のロジックは個別のステップクラスに実装されている
  * - Orchestrator: APIチェーンの実行エンジン（開発・デモ用）
  *
  * 重要: このファイルでは「どこで何を I/O するか／LLM を呼ぶか」を日本語コメントで明示しています。
@@ -62,815 +49,201 @@ export interface AnalyzeOptions {
  * - 「LLM へプロンプトを渡す（呼び出す）」
  * を見つけやすくするため、各該当箇所の直前にコメントを追加しています。
  */
-export class AnalyzePipeline {
+export class AnalyzePipeline extends BasePipelineStep {
+  readonly stepName = 'analyze-pipeline'
+
+  private readonly novelStep = new NovelManagementStep()
+  private readonly jobStep = new JobManagementStep()
+  private readonly chunkingStep = new TextChunkingStep()
+  private readonly analysisStep = new TextAnalysisStep()
+  private readonly narrativeStep = new NarrativeAnalysisStep()
+  private readonly episodeStep = new EpisodeProcessingStep()
+  private readonly scriptStep = new ScriptConversionStep()
+  private readonly pageBreakStep = new PageBreakStep()
+  private readonly renderingStep = new RenderingStep()
+  private readonly completionStep = new CompletionStep()
+
   constructor(
     private readonly ports: StoragePorts = getStoragePorts(),
     // keep optional logger for future detailed tracing without lint noise
     _logger: LoggerPort = getLogger().withContext({
       service: 'analyze-pipeline',
     }),
-  ) {}
+  ) {
+    super()
+  }
 
   async runWithNovelId(novelId: string, options: AnalyzeOptions = {}) {
-    // DB 上の小説存在確認（旧テスト互換: エラーメッセージに「データベース」文言を含める）
-    // ここで「DBから小説メタデータを読み込む」
-    const novelRepo = getNovelRepository()
-    const dbNovel = await novelRepo.get(novelId)
-    if (!dbNovel) {
+    const logger = getLogger().withContext({ service: 'analyze-pipeline' })
+
+    const result = await this.novelStep.runWithNovelId(novelId, {
+      logger,
+      ports: this.ports,
+    })
+
+    if (!result.success) {
       const { ApiError } = await import('@/utils/api-error')
-      throw new ApiError('小説ID がデータベースに見つかりません', 404, 'NOT_FOUND')
+      throw new ApiError(result.error, 404, 'NOT_FOUND')
     }
 
-    // ストレージからテキスト取得（旧テスト互換: 「のテキストがストレージに見つかりません」）
-    // ここで「ストレージ（ファイル）から小説本文を読み込む」
-    const novel = await this.ports.novel.getNovelText(novelId)
-    if (!novel?.text) {
-      const { ApiError } = await import('@/utils/api-error')
-      throw new ApiError('小説のテキストがストレージに見つかりません', 404, 'NOT_FOUND')
-    }
-    return this.runWithText(novelId, novel.text, options)
+    return this.runWithText(novelId, result.data.text, {
+      ...options,
+      title: result.data.title || options.title,
+    })
   }
 
   async runWithText(novelId: string, novelText: string, options: AnalyzeOptions = {}) {
     const logger = getLogger().withContext({ service: 'analyze-pipeline' })
     logger.info('AnalyzePipeline.runWithText: start', { novelId, textLength: novelText.length })
-    const jobRepo = getJobRepository()
-    const chunkRepo = getChunkRepository()
-    const novelRepo = getNovelRepository()
-    const db = getDatabaseService()
-    const { episode: episodePort } = adaptAll(db)
-    const episodeRepo = new EpisodeRepository(episodePort)
 
-    // 既存の jobId が指定されていればそれを使用。なければ新規発行
-    const jobId = options.existingJobId ?? generateUUID()
     const title = options.title || 'Novel'
 
-    // まず小説を DB に保存してから job を作成する（FOREIGN KEY制約のため）
-    // 小説メタデータの先行保存（job の外部キー制約のため）
-    try {
-      // DBに小説メタデータ（タイトル等）を書き込む/存在保証する
-      await novelRepo.ensure(novelId, {
-        title: title || `Novel ${novelId.slice(0, 8)}`,
-        author: 'Unknown',
-        originalTextPath: `${novelId}.json`,
-        textLength: novelText.length,
-        language: 'ja',
-        metadataPath: null,
-      })
-
-      // ストレージに小説テキストを保存
-      const novelStorage = await (await import('@/utils/storage')).StorageFactory.getNovelStorage()
-      const key = `${novelId}.json`
-      const novelData = JSON.stringify({ text: novelText, title: title || '' })
-
-      const { executeStorageWithTracking } = await import(
-        '@/services/application/transaction-manager'
-      )
-      await executeStorageWithTracking({
-        storage: novelStorage,
-        key,
-        value: novelData,
-        tracking: {
-          filePath: key,
-          fileCategory: 'original',
-          fileType: 'json',
-          novelId,
-          jobId: undefined,
-          mimeType: 'application/json; charset=utf-8',
-        },
-      })
-    } catch (e) {
-      // ストレージ/DB への保存失敗は致命的エラーとして扱う（jobが作成できないため）
-      const message = e instanceof Error ? e.message : String(e)
-      getLogger().error('Failed to persist novel text or ensure novel before job creation', {
-        error: message,
-        novelId,
-      })
-      throw new Error(`Failed to create novel before job: ${message}`)
+    const context: StepContext = {
+      jobId: '', // Will be set after job initialization
+      novelId,
+      logger,
+      ports: this.ports,
     }
 
-    // 既にジョブが作成済みの場合は新規作成をスキップ
-    if (!options.existingJobId) {
-      // ここで「DBにジョブレコードを作成（書き込み）」
-      //   - novelId を外部キーに持つ
-      await jobRepo.create({
-        id: jobId,
-        novelId,
-        title: `Analysis Job for ${title}`,
-      })
-    }
-
-    // 機械的な固定長チャンク分割（オーバーラップ付き）
-    // Rationale: sentence-based splitting caused instability across languages and inconsistent
-    // segment sizes; sliding window chunking yields predictable boundaries and better LLM context
-    // continuity, especially for Japanese text without clear punctuation.
-    const chunkCfg = getChunkingConfig()
-    // ここで「小説本文を固定長で分割（メモリ内処理。I/Oなし）」
-    const chunks = splitTextIntoSlidingChunks(
+    // Ensure novel persistence before job creation
+    const novelPersistResult = await this.novelStep.ensureNovelPersistence(
+      novelId,
       novelText,
-      chunkCfg.defaultChunkSize,
-      chunkCfg.defaultOverlapSize,
-      {
-        minChunkSize: chunkCfg.minChunkSize,
-        maxChunkSize: chunkCfg.maxChunkSize,
-        maxOverlapRatio: chunkCfg.maxOverlapRatio,
-      },
+      title,
+      { logger },
     )
-    // ここで「DBのジョブ進捗を更新（split ステップの総数設定）」
-    await jobRepo.updateStep(jobId, 'split', 0, chunks.length)
-
-    // Persist chunks to storage and DB immediately for強整合性
-    let currentPosition = 0
-    for (let i = 0; i < chunks.length; i++) {
-      const content = chunks[i]
-      // ここで「ストレージ（ファイル）にチャンク本文を書き込む」
-      const key = await this.ports.chunk.putChunk(jobId, i, content)
-      const startPos = currentPosition
-      const endPos = currentPosition + content.length
-      // ここで「DBにチャンクメタデータを即時挿入（書き込み）」
-      await chunkRepo.create({
-        novelId,
-        jobId,
-        chunkIndex: i,
-        contentPath: key,
-        startPosition: startPos,
-        endPosition: endPos,
-        wordCount: content.length,
-      })
-      currentPosition = endPos
+    if (!novelPersistResult.success) {
+      throw new Error(novelPersistResult.error)
     }
 
-    // ここで「DBのジョブ進捗を更新（split ステップの進行度更新）」
-    await jobRepo.updateStep(jobId, 'split', 0, chunks.length)
-    // ここで「DBのジョブ進捗を完了（split ステップ完了）」
-    await jobRepo.markStepCompleted(jobId, 'split')
-
-    // Analysis schema
-    const textAnalysisOutputSchema = z
-      .object({
-        characters: z.array(
-          z.object({
-            name: z.string(),
-            description: z.string(),
-            firstAppearance: z.number(),
-          }),
-        ),
-        scenes: z.array(
-          z.object({
-            location: z.string(),
-            description: z.string(),
-            startIndex: z.number(),
-            endIndex: z.number(),
-          }),
-        ),
-        dialogues: z.array(
-          z.object({
-            speakerId: z.string(),
-            text: z.string(),
-            emotion: z.string(),
-            index: z.number(),
-          }),
-        ),
-        highlights: z.array(
-          z.object({
-            type: z.enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence']),
-            description: z.string(),
-            importance: z.number().min(1).max(10),
-            startIndex: z.number(),
-            endIndex: z.number(),
-          }),
-        ),
-        situations: z.array(
-          z.object({
-            description: z.string(),
-            index: z.number(),
-          }),
-        ),
-      })
-      .strip()
-
-    // Analyze chunks with limited concurrency
-    const maxConcurrent = Math.max(1, Math.min(3, chunks.length))
-    const runOne = async (i: number) => {
-      // ここで「DBのジョブ進捗を更新（analyze_chunk_i ステップ）」
-      await jobRepo.updateStep(jobId, `analyze_chunk_${i}`, i, chunks.length)
-      const chunkText = chunks[i]
-      const config = getTextAnalysisConfig()
-      if (!config?.userPromptTemplate) {
-        throw new Error('Text analysis config is invalid: userPromptTemplate is missing')
-      }
-      const prevText = i > 0 ? chunks[i - 1] : ''
-      const nextText = i + 1 < chunks.length ? chunks[i + 1] : ''
-      // ここで「LLM に渡すユーザープロンプトを生成」
-      const prompt = config.userPromptTemplate
-        .replace('{{chunkIndex}}', i.toString())
-        .replace('{{chunkText}}', chunkText)
-        .replace('{{previousChunkText}}', prevText)
-        .replace('{{nextChunkText}}', nextText)
-
-      let result: z.infer<typeof textAnalysisOutputSchema>
-      try {
-        const { analyzeChunkWithFallback } = await import('@/agents/chunk-analyzer')
-        const analysis = await analyzeChunkWithFallback(prompt, textAnalysisOutputSchema, {
-          maxRetries: 0,
-          jobId,
-          chunkIndex: i,
-        })
-        result = analysis.result
-      } catch (firstError) {
-        logger.warn('Chunk analysis failed, retrying', {
-          jobId,
-          chunkIndex: i,
-          error: firstError instanceof Error ? firstError.message : String(firstError),
-        })
-        await jobRepo.updateStep(jobId, `analyze_chunk_${i}_retry`, i, chunks.length)
-
-        try {
-          const { analyzeChunkWithFallback } = await import('@/agents/chunk-analyzer')
-          const analysis = await analyzeChunkWithFallback(prompt, textAnalysisOutputSchema, {
-            maxRetries: 0,
-            jobId,
-            chunkIndex: i,
-          })
-          result = analysis.result
-        } catch (retryError) {
-          const errorMessage = retryError instanceof Error ? retryError.message : String(retryError)
-          logger.error('Chunk analysis failed after retry', {
-            jobId,
-            chunkIndex: i,
-            firstError: firstError instanceof Error ? firstError.message : String(firstError),
-            retryError: errorMessage,
-          })
-          await jobRepo.updateStatus(jobId, 'failed', `Chunk ${i} analysis failed: ${errorMessage}`)
-          throw retryError
-        }
-      }
-      if (!result) {
-        const errorMessage = `Failed to generate analysis result for chunk ${i}`
-        logger.error(errorMessage, { jobId, chunkIndex: i })
-        await jobRepo.updateStatus(jobId, 'failed', errorMessage)
-        throw new Error(errorMessage)
-      }
-
-      const analysisData = {
-        chunkIndex: i,
-        jobId,
-        analysis: result,
-        analyzedAt: new Date().toISOString(),
-      }
-      await this.ports.analysis.putAnalysis(jobId, i, JSON.stringify(analysisData, null, 2))
-      await jobRepo.updateStep(jobId, `analyze_chunk_${i}_done`, i + 1, chunks.length)
-      return true as const
+    // Initialize or resume job
+    const jobInitResult = await this.jobStep.initializeJob(
+      novelId,
+      { title, existingJobId: options.existingJobId },
+      { logger },
+    )
+    if (!jobInitResult.success) {
+      throw new Error(jobInitResult.error)
     }
-    // Use a queue to avoid race conditions with shared nextIndex
-    const chunkIndices = Array.from({ length: chunks.length }, (_, i) => i)
-    const worker = async () => {
-      while (true) {
-        const i = chunkIndices.shift()
-        if (i === undefined) break
-        await runOne(i)
-      }
+
+    const { jobId, existingJob } = jobInitResult.data
+    context.jobId = jobId
+
+    // Process text chunks
+    const chunkingResult = await this.chunkingStep.processTextChunks(
+      novelText,
+      existingJob || null,
+      context,
+    )
+    if (!chunkingResult.success) {
+      throw new Error(chunkingResult.error)
     }
-    await Promise.all(Array.from({ length: maxConcurrent }, () => worker()))
 
-    // ここで「DBのジョブ進捗を完了（analyze ステップ完了）」
-    await jobRepo.markStepCompleted(jobId, 'analyze')
+    const { chunks, totalChunks } = chunkingResult.data
 
-    // Episode boundaries
-    // ここで「エピソード分析の入力を準備（必要なストレージ/DBから読み出して集約する処理）」
-    const input = await prepareNarrativeAnalysisInput({
-      jobId,
-      startChunkIndex: 0,
-    })
-    if (!input) throw new Error('Failed to prepare narrative analysis input')
-
-    const chunkRepository = new (
-      await import('@/infrastructure/storage/chunk-repository')
-    ).StorageChunkRepository()
-
-    let boundaries: EpisodeBoundary[]
-    try {
-      // ここで「LLM を呼び出して物語構造（ナラティブアーク）を分析し、エピソード境界を推定」
-      //   - input（集約済みテキスト等）を LLM に渡す
-      logger.info('Starting narrative arc analysis', { jobId })
-      boundaries = (await analyzeNarrativeArc(input, chunkRepository)) ?? []
-      logger.info('Narrative arc analysis completed', {
-        jobId,
-        boundariesFound: boundaries.length,
-        boundaries: boundaries.map((b) => ({
-          episodeNumber: b.episodeNumber,
-          title: b.title,
-          startChunk: b.startChunk,
-          startCharIndex: b.startCharIndex,
-          endChunk: b.endChunk,
-          endCharIndex: b.endCharIndex,
-        })),
-      })
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      logger.error('Narrative arc analysis failed', {
-        jobId,
-        error: errorMessage,
-        stack: error instanceof Error ? error.stack : undefined,
-      })
-
-      // コンソールにも構造化ログを出力
-      console.error(
-        JSON.stringify({
-          ts: new Date().toISOString(),
-          level: 'error',
-          service: 'analyze-pipeline',
-          operation: 'narrative-arc-analysis',
-          msg: 'Narrative arc analysis failed',
-          jobId,
-          error: errorMessage,
-          stack: error instanceof Error ? error.stack?.slice(0, 500) : undefined,
-        }),
-      )
-
-      // ジョブステータスを失敗に更新
-      try {
-        // ここで「DBのジョブステータスを failed に更新（書き込み）」
-        await jobRepo.updateStatus(jobId, 'failed', errorMessage)
-      } catch (statusError) {
-        logger.error('Failed to update job status after narrative analysis failure', {
-          jobId,
-          originalError: errorMessage,
-          statusError: statusError instanceof Error ? statusError.message : String(statusError),
-        })
-      }
-
-      throw error
+    // Update job progress for chunking
+    if (!existingJob?.splitCompleted) {
+      await this.updateJobStep(jobId, 'split', { logger }, 0, totalChunks)
+      await this.markStepCompleted(jobId, 'split', { logger })
     }
-    if (Array.isArray(boundaries) && boundaries.length > 0) {
+
+    // Text analysis step
+    const analysisResult = await this.analysisStep.analyzeChunks(
+      chunks,
+      existingJob || null,
+      context,
+    )
+    if (!analysisResult.success) {
+      await this.updateJobStatus(jobId, 'failed', { logger }, analysisResult.error)
+      throw new Error(analysisResult.error)
+    }
+
+    // Mark analysis step as completed if not already done
+    if (!existingJob?.analyzeCompleted) {
+      await this.markStepCompleted(jobId, 'analyze', { logger })
+    }
+
+    // Narrative analysis step
+    const narrativeResult = await this.narrativeStep.analyzeNarrativeArc(context)
+    if (!narrativeResult.success) {
+      await this.updateJobStatus(jobId, 'failed', { logger }, narrativeResult.error)
+      throw new Error(narrativeResult.error)
+    }
+
+    const { boundaries, hasBoundaries } = narrativeResult.data
+
+    // Episode processing - only if boundaries were detected
+    if (hasBoundaries) {
       logger.info('Episode boundaries detected, starting episode processing', {
         jobId,
         boundariesCount: boundaries.length,
         episodeNumbers: boundaries.map((b) => b.episodeNumber),
       })
 
-      // ここで「検出したエピソード境界をストレージ/DBへ保存（ユーティリティで一括）」（書き込み）
-      try {
-        await saveEpisodeBoundaries(jobId, boundaries)
-        logger.info('Episode boundaries saved successfully', { jobId })
-      } catch (saveError) {
-        const errorMessage = saveError instanceof Error ? saveError.message : String(saveError)
-        logger.error('Failed to save episode boundaries - critical error', {
-          jobId,
-          error: errorMessage,
-          stack: saveError instanceof Error ? saveError.stack : undefined,
-          boundariesCount: boundaries.length,
-          boundaries: boundaries.map((b) => ({ episodeNumber: b.episodeNumber, title: b.title })),
-        })
+      // Mark episode step as completed
+      await this.markStepCompleted(jobId, 'episode', { logger })
 
-        // コンソールにも構造化ログを出力
-        console.error(
-          JSON.stringify({
-            ts: new Date().toISOString(),
-            level: 'error',
-            service: 'analyze-pipeline',
-            operation: 'save-episode-boundaries',
-            msg: 'Failed to save episode boundaries - critical for story processing',
-            jobId,
-            error: errorMessage,
-            stack: saveError instanceof Error ? saveError.stack?.slice(0, 1000) : undefined,
-          }),
-        )
+      // Initialize layout step
+      await this.updateJobStep(jobId, 'layout', { logger }, totalChunks, totalChunks)
 
-        // エピソード境界の保存は物語処理に必須のため、失敗時は処理停止
-        try {
-          await jobRepo.updateStatus(
-            jobId,
-            'failed',
-            `Failed to save episode boundaries: ${errorMessage}`,
-          )
-        } catch (statusError) {
-          logger.error('Failed to update job status after boundary save failure', {
-            jobId,
-            originalError: errorMessage,
-            statusError: statusError instanceof Error ? statusError.message : String(statusError),
-          })
-        }
-
-        throw new Error(
-          `Failed to save episode boundaries: ${errorMessage}. Story processing cannot continue without proper episode boundaries.`,
-        )
-      }
-
-      // ここで「DBのジョブ進捗を完了（episode ステップ完了）」
-      try {
-        await jobRepo.markStepCompleted(jobId, 'episode')
-        logger.info('Episode step marked as completed', { jobId })
-      } catch (markError) {
-        const errorMessage = markError instanceof Error ? markError.message : String(markError)
-        logger.error('Failed to mark episode step as completed - critical for progress tracking', {
-          jobId,
-          error: errorMessage,
-          stack: markError instanceof Error ? markError.stack : undefined,
-        })
-
-        // 進捗管理は物語処理の追跡に必須
-        throw new Error(
-          `Failed to mark episode step as completed: ${errorMessage}. Progress tracking is essential for story processing continuity.`,
-        )
-      }
-
-      // ここで「DBのジョブ進捗を更新（layout ステップの総数設定）」
-      try {
-        await jobRepo.updateStep(jobId, 'layout', chunks.length, chunks.length)
-        logger.info('Layout step initialized', { jobId })
-      } catch (updateError) {
-        const errorMessage =
-          updateError instanceof Error ? updateError.message : String(updateError)
-        logger.error('Failed to initialize layout step - critical for progress tracking', {
-          jobId,
-          error: errorMessage,
-          stack: updateError instanceof Error ? updateError.stack : undefined,
-        })
-
-        // レイアウトステップの初期化も必須
-        throw new Error(
-          `Failed to initialize layout step: ${errorMessage}. Layout processing setup is essential for story visualization.`,
-        )
-      }
-
-      // Generate page breaks for each episode
+      // Process each episode
       const episodeNumbers = boundaries.map((b) => b.episodeNumber).sort((a, b) => a - b)
       logger.info('Starting episode processing loop', {
         jobId,
         episodeNumbers,
         totalEpisodes: episodeNumbers.length,
       })
+
       let totalPages = 0
 
-      for (const ep of episodeNumbers) {
-        logger.info('Processing episode', { jobId, episodeNumber: ep })
+      for (const episodeNumber of episodeNumbers) {
+        logger.info('Processing episode', { jobId, episodeNumber })
         try {
-          // Get episode text for script conversion
-          // ここで「DBからエピソード情報を読み込む」
-          logger.info('Fetching episodes from database', { jobId })
-          const episodes = await episodeRepo.getByJobId(jobId)
-          logger.info('Episodes fetched from database', {
-            jobId,
-            foundEpisodes: episodes.length,
-            episodeNumbers: episodes.map((e) => e.episodeNumber),
-          })
+          await this.processEpisode(episodeNumber, boundaries, context)
 
-          const episode = episodes.find((e) => e.episodeNumber === ep)
-          if (!episode) {
-            logger.error('Episode not found in database', {
-              jobId,
-              searchingFor: ep,
-              availableEpisodes: episodes.map((e) => e.episodeNumber),
-            })
-            throw new Error(`Episode ${ep} not found`)
+          // Get total pages from this episode's page break plan
+          const pageBreakPlanText = await this.ports.layout.getEpisodeLayout(jobId, episodeNumber)
+          if (pageBreakPlanText) {
+            const pageBreakPlan = JSON.parse(pageBreakPlanText)
+            totalPages += pageBreakPlan.pages.length
           }
-          logger.info('Episode found, starting processing', { jobId, episodeNumber: ep })
-
-          // Get episode text from chunks
-          // ここで「DBからチャンクメタデータ一覧を読み込む」
-          const chunkRepo = getChunkRepository()
-          const chunksMetadata = await chunkRepo.getByJobId(jobId)
-
-          // Validate episode boundaries
-          if (
-            episode.startChunk < 0 ||
-            episode.endChunk < 0 ||
-            episode.startChunk > episode.endChunk
-          ) {
-            const errorMessage = `Invalid episode boundaries for episode ${ep}: startChunk=${episode.startChunk}, endChunk=${episode.endChunk}`
-            logger.error('Invalid episode boundaries detected', {
-              jobId,
-              episodeNumber: ep,
-              startChunk: episode.startChunk,
-              endChunk: episode.endChunk,
-              startCharIndex: episode.startCharIndex,
-              endCharIndex: episode.endCharIndex,
-            })
-            throw new Error(errorMessage)
-          }
-
-          logger.info('Starting episode text extraction', {
-            jobId,
-            episodeNumber: ep,
-            totalChunksInJob: chunksMetadata.length,
-            episodeStartChunk: episode.startChunk,
-            episodeEndChunk: episode.endChunk,
-            episodeStartChar: episode.startCharIndex,
-            episodeEndChar: episode.endCharIndex,
-          })
-
-          let episodeText = ''
-          let processedChunks = 0
-
-          // Clamp episode boundaries to available chunk indices
-          const availableIndices = chunksMetadata
-            .map((c) => (c as Chunk).chunkIndex)
-            .sort((a, b) => a - b)
-          const minIdx = availableIndices.length > 0 ? availableIndices[0] : 0
-          const maxIdx =
-            availableIndices.length > 0 ? availableIndices[availableIndices.length - 1] : 0
-          const adjStartChunk = Math.max(minIdx, Math.min(maxIdx, episode.startChunk))
-          const adjEndChunk = Math.max(adjStartChunk, Math.min(maxIdx, episode.endChunk))
-
-          if (adjStartChunk !== episode.startChunk || adjEndChunk !== episode.endChunk) {
-            logger.warn('Adjusted episode chunk boundaries to available range', {
-              jobId,
-              episodeNumber: ep,
-              originalStartChunk: episode.startChunk,
-              originalEndChunk: episode.endChunk,
-              adjustedStartChunk: adjStartChunk,
-              adjustedEndChunk: adjEndChunk,
-              availableIndices,
-            })
-          }
-
-          for (const chunkMeta of chunksMetadata) {
-            const chunk = chunkMeta as Chunk
-            logger.info('Processing chunk metadata', {
-              jobId,
-              episodeNumber: ep,
-              chunkIndex: chunk.chunkIndex,
-              episodeStartChunk: adjStartChunk,
-              episodeEndChunk: adjEndChunk,
-              isInRange: chunk.chunkIndex >= adjStartChunk && chunk.chunkIndex <= adjEndChunk,
-            })
-
-            if (chunk.chunkIndex >= adjStartChunk && chunk.chunkIndex <= adjEndChunk) {
-              // Get actual chunk text from storage
-              // ここで「ストレージ（ファイル）から対象チャンク本文を読み込む」
-              const chunkContent = await this.ports.chunk.getChunk(jobId, chunk.chunkIndex)
-              if (!chunkContent?.text) {
-                throw new Error(
-                  `Chunk content not found for job ${jobId}, chunk ${chunk.chunkIndex}`,
-                )
-              }
-
-              const startIndexRaw = chunk.chunkIndex === adjStartChunk ? episode.startCharIndex : 0
-              const startIndex = Math.max(
-                0,
-                Math.min(
-                  chunkContent.text.length,
-                  typeof startIndexRaw === 'number' ? startIndexRaw : 0,
-                ),
-              )
-              // endIndex は endChunk のときに未定義の場合があるため安全側で補正し、文字数範囲にクランプ
-              const endIndexRaw =
-                chunk.chunkIndex === adjEndChunk
-                  ? typeof episode.endCharIndex === 'number'
-                    ? episode.endCharIndex
-                    : chunkContent.text.length
-                  : chunkContent.text.length
-              const endIndex = Math.max(0, Math.min(chunkContent.text.length, endIndexRaw))
-
-              // guard: ensure non-negative length
-              const safeStart = Math.min(startIndex, endIndex)
-              const safeEnd = Math.max(endIndex, startIndex)
-
-              const extractedText = chunkContent.text.substring(safeStart, safeEnd)
-              episodeText += extractedText
-              processedChunks++
-
-              logger.info('Extracted text from chunk', {
-                jobId,
-                episodeNumber: ep,
-                chunkIndex: chunk.chunkIndex,
-                chunkTextLength: chunkContent.text.length,
-                extractedLength: extractedText.length,
-                startIndex: safeStart,
-                endIndex: safeEnd,
-                extractedPreview: `${extractedText.substring(0, 50)}...`,
-              })
-            }
-          }
-
-          logger.info('Episode text extraction completed', {
-            jobId,
-            episodeNumber: ep,
-            processedChunks,
-            totalEpisodeTextLength: episodeText.length,
-          })
-
-          // Validate episode text before script conversion
-          if (!episodeText || episodeText.trim().length === 0) {
-            const errorMessage = `Episode text is empty for episode ${ep}. Expected content from narrative arc analysis but got: "${episodeText}" (startChunk=${episode.startChunk}, endChunk=${episode.endChunk}, startCharIndex=${episode.startCharIndex}, endCharIndex=${episode.endCharIndex})`
-            logger.error('Empty episode text detected', {
-              jobId,
-              episodeNumber: ep,
-              episodeTextLength: episodeText.length,
-              episodeStartChunk: episode.startChunk,
-              episodeEndChunk: episode.endChunk,
-              episodeStartChar: episode.startCharIndex,
-              episodeEndChar: episode.endCharIndex,
-              chunksFound: chunksMetadata.length,
-              processedChunks,
-              allChunkIndices: chunksMetadata.map((c) => (c as Chunk).chunkIndex),
-              adjustedStartChunk: adjStartChunk,
-              adjustedEndChunk: adjEndChunk,
-            })
-            throw new Error(errorMessage)
-          }
-
-          if (processedChunks === 0) {
-            const errorMessage = `No chunks were processed for episode ${ep}. This indicates episode boundaries don't match available chunks.`
-            logger.error('No chunks processed for episode', {
-              jobId,
-              episodeNumber: ep,
-              episodeStartChunk: episode.startChunk,
-              episodeEndChunk: episode.endChunk,
-              availableChunkIndices: chunksMetadata.map((c) => (c as Chunk).chunkIndex),
-            })
-            throw new Error(errorMessage)
-          }
-
-          logger.info('Episode text extracted successfully', {
-            jobId,
-            episodeNumber: ep,
-            episodeTextLength: episodeText.length,
-            episodeStartChunk: episode.startChunk,
-            episodeEndChunk: episode.endChunk,
-            episodePreview: `${episodeText.substring(0, 100)}...`,
-          })
-
-          // エピソード本文の保存をストレージ+DB一体のトランザクションで実行（強整合性）
-          {
-            const storageModule = await import('@/utils/storage')
-            const storage = await storageModule.StorageFactory.getAnalysisStorage()
-            const key =
-              typeof (storageModule.StorageKeys as unknown as Record<string, unknown>)
-                .episodeText === 'function'
-                ? (
-                    storageModule.StorageKeys as unknown as {
-                      episodeText: (jobId: string, ep: number) => string
-                    }
-                  ).episodeText(jobId, ep)
-                : `${jobId}/episode_${ep}.txt`
-
-            const { executeStorageWithDbOperation } = await import(
-              '@/services/application/transaction-manager'
-            )
-
-            await executeStorageWithDbOperation({
-              storage,
-              key,
-              value: episodeText,
-              metadata: {
-                contentType: 'text/plain; charset=utf-8',
-                jobId,
-                episode: String(ep),
-              },
-              dbOperation: async () => {
-                const dbService = getDatabaseService()
-                if (hasUpdateEpisodeTextPath(dbService)) {
-                  await dbService.updateEpisodeTextPath(jobId, ep, key)
-                }
-              },
-              tracking: {
-                filePath: key,
-                fileCategory: 'episode',
-                fileType: 'txt',
-                novelId: undefined,
-                jobId,
-                mimeType: 'text/plain; charset=utf-8',
-              },
-            })
-
-            logger.info('Episode text saved atomically with DB path update', {
-              jobId,
-              episodeNumber: ep,
-              episodeTextKey: key,
-            })
-          }
-
-          // Extract structured data from narrative arc analysis for the current episode
-          const currentEpisodeBoundary = boundaries.find((b) => b.episodeNumber === ep)
-
-          // Convert episode text to script
-          // ここで「LLM を呼び出してエピソード本文を台本スクリプト形式に変換」
-          const script = await convertEpisodeTextToScript(
-            {
-              episodeText,
-              // Use structured data from narrative arc analysis results
-              characterList: currentEpisodeBoundary?.characterList?.join('、') || undefined,
-              sceneList: currentEpisodeBoundary?.sceneList?.join('、') || undefined,
-              dialogueList: currentEpisodeBoundary?.dialogueList?.join('、') || undefined,
-              highlightList: currentEpisodeBoundary?.highlightList?.join('、') || undefined,
-              situationList: currentEpisodeBoundary?.situationList?.join('、') || undefined,
-            },
-            {
-              jobId,
-              episodeNumber: ep,
-              // フラグメント変換を有効化（出力トークン数削減のため）
-              useFragmentConversion: true,
-            },
-          )
-
-          // Estimate page breaks using advanced LLM without mechanical page count logic
-          // ここで「LLM（またはエージェント）を呼び出してページ割り（コマ割り）を推定」
-          const pageBreakPlan = await estimatePageBreaks(script, {
-            jobId,
-            episodeNumber: ep,
-          })
-
-          // Store page break plan
-          const ports = getStoragePorts()
-          // ここで「ストレージ（ファイル）にページ割り計画を JSON として書き込む」
-          await ports.layout.putEpisodeLayout(jobId, ep, JSON.stringify(pageBreakPlan, null, 2))
-
-          // Count total pages for this episode
-          totalPages += pageBreakPlan.pages.length
-
-          logger.info('Page break estimation completed', {
-            jobId,
-            episodeNumber: ep,
-            pagesInEpisode: pageBreakPlan.pages.length,
-            runningTotal: totalPages,
-          })
-        } catch (pageBreakError) {
+        } catch (episodeError) {
           const errorMessage =
-            pageBreakError instanceof Error ? pageBreakError.message : String(pageBreakError)
-
-          // 詳細なエラーログを出力
+            episodeError instanceof Error ? episodeError.message : String(episodeError)
           logger.error(
             'Episode processing failed - stopping entire job to maintain story integrity',
             {
               jobId,
-              episodeNumber: ep,
+              episodeNumber,
               error: errorMessage,
-              stack: pageBreakError instanceof Error ? pageBreakError.stack : undefined,
+              stack: episodeError instanceof Error ? episodeError.stack : undefined,
               episodeNumbers,
               totalEpisodes: episodeNumbers.length,
-              context: 'Script conversion or page break estimation failure',
+              context: 'Episode processing failure',
             },
           )
 
-          // コンソールにも構造化ログを出力（デバッグ用）
-          console.error(
-            JSON.stringify({
-              ts: new Date().toISOString(),
-              level: 'error',
-              service: 'analyze-pipeline',
-              operation: 'episode-processing',
-              msg: 'Episode processing failed - story integrity requires complete processing',
-              jobId,
-              episodeNumber: ep,
-              error: errorMessage,
-              stack:
-                pageBreakError instanceof Error ? pageBreakError.stack?.slice(0, 1000) : undefined,
-            }),
+          await this.updateJobStatus(
+            jobId,
+            'failed',
+            { logger },
+            `Episode ${episodeNumber} processing failed: ${errorMessage}. Story integrity requires all episodes to be processed successfully.`,
           )
 
-          // ジョブステータスを失敗に更新（詳細なエラーメッセージ付き）
-          try {
-            await jobRepo.updateStatus(
-              jobId,
-              'failed',
-              `Episode ${ep} processing failed: ${errorMessage}. Story integrity requires all episodes to be processed successfully.`,
-            )
-          } catch (statusUpdateError) {
-            logger.error('Failed to update job status after episode processing failure', {
-              jobId,
-              originalError: errorMessage,
-              statusUpdateError:
-                statusUpdateError instanceof Error
-                  ? statusUpdateError.message
-                  : String(statusUpdateError),
-            })
-          }
-
-          // 物語の一貫性を保つため、エラー発生時は処理を停止
           throw new Error(
-            `Episode ${ep} processing failed: ${errorMessage}. Cannot skip episodes as it would break story integrity.`,
+            `Episode ${episodeNumber} processing failed: ${errorMessage}. Cannot skip episodes as it would break story integrity.`,
           )
         }
       }
 
-      // Update totalPages based on pageBreakEstimation results
-      // ここで「DBに総ページ数を保存（書き込み）」
-      // Type guard for updateJobTotalPages (backward compatibility)
-      const hasUpdateJobTotalPages = (
-        repo: unknown,
-      ): repo is { updateJobTotalPages: (id: string, pages: number) => Promise<void> } => {
-        return (
-          typeof repo === 'object' &&
-          repo !== null &&
-          'updateJobTotalPages' in repo &&
-          typeof (repo as { updateJobTotalPages: unknown }).updateJobTotalPages === 'function'
-        )
-      }
+      // Update total pages
+      await this.updateJobTotalPages(jobId, totalPages, { logger })
 
-      if (hasUpdateJobTotalPages(jobRepo)) {
-        await jobRepo.updateJobTotalPages(jobId, totalPages)
-      } else {
-        logger.warn('JobRepository missing updateJobTotalPages; skipping totalPages persist', {
-          jobId,
-          totalPages,
-        })
-      }
-      // ここで「DBのジョブ進捗を完了（layout ステップ完了）」
-      await jobRepo.markStepCompleted(jobId, 'layout')
-      // ここで「DBのジョブ進捗を更新（render ステップの総数＝総ページ数）」
-      await jobRepo.updateStep(jobId, 'render', 0, totalPages)
+      // Mark layout step as completed
+      await this.markStepCompleted(jobId, 'layout', { logger })
+
+      // Initialize render step
+      await this.updateJobStep(jobId, 'render', { logger }, 0, totalPages)
 
       logger.info('Page break estimation completed for all episodes', {
         jobId,
@@ -878,83 +251,212 @@ export class AnalyzePipeline {
         episodeCount: episodeNumbers.length,
       })
 
-      // デモやテスト環境では重いレンダリングをスキップ
-      const shouldRender = !options.isDemo && process.env.NODE_ENV !== 'test'
-      if (shouldRender) {
-        try {
-          // Render pages for each episode
-          const ports = getStoragePorts()
-          for (const ep of episodeNumbers) {
-            // ここで「ストレージ（ファイル）からページ割り計画 JSON を読み込む」
-            const pageBreakPlanText = await ports.layout.getEpisodeLayout(jobId, ep)
-            if (pageBreakPlanText) {
-              const pageBreakPlan: PageBreakPlan = JSON.parse(pageBreakPlanText)
-              const { renderFromPageBreakPlan } = await import('@/services/application/render')
-              // ここで「レンダリングサービスを呼び出す（画像等を生成しストレージへ書き出す）」
-              await renderFromPageBreakPlan(jobId, ep, pageBreakPlan, ports, {
-                skipExisting: false,
-                concurrency: 3,
-              })
-            }
-          }
-          logger.info('PageBreakPlan rendering completed for all episodes', { jobId })
-        } catch (renderError) {
-          const errorMessage =
-            renderError instanceof Error ? renderError.message : String(renderError)
-          logger.error('PageBreakPlan rendering failed', {
-            jobId,
-            error: errorMessage,
-          })
+      // Rendering step
+      const renderingResult = await this.renderingStep.renderEpisodes(
+        episodeNumbers,
+        { isDemo: options.isDemo },
+        context,
+      )
+      if (!renderingResult.success) {
+        logger.error('Rendering failed', { jobId, error: renderingResult.error })
+        // Don't fail the job for rendering errors in demo mode
+        if (!options.isDemo) {
+          throw new Error(renderingResult.error)
         }
-      } else {
-        getLogger().warn('Skipping render in demo/test environment', {
-          jobId,
-          totalPages,
-          error: 'Demo/test environment',
-        })
       }
 
-      // すべてのエピソードの処理完了後、ステップ/ステータスを確定
-      // ここで「DBのジョブ進捗（complete ステップ）とステータスを完了（書き込み）」
-      await jobRepo.updateStep(jobId, 'complete')
-      await jobRepo.updateStatus(jobId, 'completed')
+      // Mark render step as completed
+      await this.markStepCompleted(jobId, 'render', { logger })
+
+      // Complete the job
+      await this.updateJobStep(jobId, 'complete', { logger })
+      await this.updateJobStatus(jobId, 'completed', { logger })
+
+      // Generate completion response
+      const completionResult = await this.completionStep.completeJob(totalChunks, true, context)
+      if (!completionResult.success) {
+        throw new Error(completionResult.error)
+      }
+
+      logger.info('AnalyzePipeline.runWithText: completed', { jobId, chunkCount: totalChunks })
+      return { jobId, chunkCount: totalChunks, response: completionResult.data.response }
     } else {
+      // No episode boundaries detected
       logger.warn('No episode boundaries detected, but proceeding with basic completion', {
         jobId,
         boundariesLength: boundaries?.length || 0,
         boundariesType: typeof boundaries,
       })
 
-      // エピソードが検出されなかった場合もジョブを完了させる
-      // ここで「DBのジョブ進捗を完了（episode ステップ完了）」
-      await jobRepo.markStepCompleted(jobId, 'episode')
-      const response: AnalyzeResponse = {
-        success: true,
-        id: jobId,
-        message: `テキストを${chunks.length}個のチャンクに分割し、分析を完了しました（エピソードは検出されませんでした）`,
-        data: { jobId, chunkCount: chunks.length },
-        metadata: { timestamp: new Date().toISOString() },
+      // Mark episode step as completed
+      await this.markStepCompleted(jobId, 'episode', { logger })
+
+      // Complete remaining steps
+      await this.markStepCompleted(jobId, 'render', { logger })
+      await this.updateJobStep(jobId, 'complete', { logger })
+      await this.updateJobStatus(jobId, 'completed', { logger })
+
+      // Generate completion response
+      const completionResult = await this.completionStep.completeJob(totalChunks, false, context)
+      if (!completionResult.success) {
+        throw new Error(completionResult.error)
       }
-      // 完了ステップへ遷移（UIの完了判定を確実にする）
-      // ここで「DBのジョブ進捗（complete ステップ）とステータスを完了（書き込み）」
-      await jobRepo.updateStep(jobId, 'complete')
-      await jobRepo.updateStatus(jobId, 'completed')
+
       logger.info('Job completed without episodes', { jobId })
-      return { jobId, chunkCount: chunks.length, response }
+      return { jobId, chunkCount: totalChunks, response: completionResult.data.response }
+    }
+  }
+
+  private async processEpisode(
+    episodeNumber: number,
+    boundaries: EpisodeBoundary[],
+    context: StepContext,
+  ): Promise<void> {
+    const { logger } = context
+
+    // Extract episode text
+    const episodeResult = await this.episodeStep.extractEpisodeText(
+      episodeNumber,
+      boundaries,
+      context,
+    )
+    if (!episodeResult.success) {
+      throw new Error(episodeResult.error)
     }
 
-    const response: AnalyzeResponse = {
-      success: true,
-      id: jobId,
-      message: `テキストを${chunks.length}個のチャンクに分割し、分析を完了しました`,
-      data: { jobId, chunkCount: chunks.length },
-      metadata: { timestamp: new Date().toISOString() },
+    const { episodeText, extractionMethod } = episodeResult.data
+    logger.info('Episode text extracted successfully', {
+      jobId: context.jobId,
+      episodeNumber,
+      episodeTextLength: episodeText.length,
+      extractionMethod,
+    })
+
+    // Convert to script
+    const scriptResult = await this.scriptStep.convertToScript(
+      episodeText,
+      episodeNumber,
+      boundaries,
+      context,
+    )
+    if (!scriptResult.success) {
+      throw new Error(scriptResult.error)
     }
-    // 完了ステップへ遷移（UIの完了判定を確実にする）
-    // ここで「DBのジョブ進捗（complete ステップ）とステータスを完了（書き込み）」
-    await jobRepo.updateStep(jobId, 'complete')
-    await jobRepo.updateStatus(jobId, 'completed')
-    logger.info('AnalyzePipeline.runWithText: completed', { jobId, chunkCount: chunks.length })
-    return { jobId, chunkCount: chunks.length, response }
+
+    const { script } = scriptResult.data
+
+    // Generate page breaks
+    const pageBreakResult = await this.pageBreakStep.estimatePageBreaks(
+      script,
+      episodeNumber,
+      context,
+    )
+    if (!pageBreakResult.success) {
+      throw new Error(pageBreakResult.error)
+    }
+
+    logger.info('Episode processing completed', {
+      jobId: context.jobId,
+      episodeNumber,
+      totalPages: pageBreakResult.data.totalPages,
+    })
+  }
+
+  async resumeJob(jobId: string): Promise<{ resumePoint: string }> {
+    const logger = getLogger().withContext({ service: 'analyze-pipeline' })
+    logger.info('AnalyzePipeline.resumeJob: start', { jobId })
+
+    const jobRepo = getJobRepository()
+    const novelRepo = getNovelRepository()
+
+    // ジョブの現在の状態を取得
+    const job = await jobRepo.getJob(jobId)
+    if (!job) {
+      throw new Error(`Job not found: ${jobId}`)
+    }
+
+    // 小説データを取得
+    const novel = await novelRepo.get(job.novelId)
+    if (!novel) {
+      throw new Error(`Novel not found: ${job.novelId}`)
+    }
+
+    logger.info('Resume job state', {
+      jobId,
+      novelId: job.novelId,
+      status: job.status,
+      currentStep: job.currentStep,
+      splitCompleted: job.splitCompleted,
+      analyzeCompleted: job.analyzeCompleted,
+      episodeCompleted: job.episodeCompleted,
+      layoutCompleted: job.layoutCompleted,
+      renderCompleted: job.renderCompleted,
+    })
+
+    // 既に完了している場合
+    if (job.status === 'completed' && job.renderCompleted) {
+      logger.info('Job already completed, nothing to resume', { jobId })
+      return { resumePoint: 'completed' }
+    }
+
+    // 小説テキストを取得（ストレージから読み込み）
+    let novelText: string
+    try {
+      const novelStorage = await (await import('@/utils/storage')).StorageFactory.getNovelStorage()
+      const key = `${job.novelId}.json`
+      const novelData = await novelStorage.get(key)
+      if (!novelData || !novelData.text) {
+        throw new Error(`Novel text not found in storage: ${key}`)
+      }
+      novelText = typeof novelData.text === 'string' ? novelData.text : String(novelData.text)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      logger.error('Failed to load novel text from storage', {
+        jobId,
+        novelId: job.novelId,
+        error: message,
+      })
+      throw new Error(`Failed to load novel text: ${message}`)
+    }
+
+    // 処理を再開
+    // まず、何のステップから再開すべきかを判定
+    let resumePoint: string
+
+    if (!job.splitCompleted) {
+      resumePoint = 'split'
+      logger.info('Resuming from split step', { jobId })
+    } else if (!job.analyzeCompleted) {
+      resumePoint = 'analyze'
+      logger.info('Resuming from analyze step', { jobId })
+    } else if (!job.episodeCompleted) {
+      resumePoint = 'episode'
+      logger.info('Resuming from episode step', { jobId })
+    } else if (!job.layoutCompleted) {
+      resumePoint = 'layout'
+      logger.info('Resuming from layout step', { jobId })
+    } else if (!job.renderCompleted) {
+      resumePoint = 'render'
+      logger.info('Resuming from render step', { jobId })
+    } else {
+      resumePoint = 'completed'
+      logger.info('All steps completed, marking as completed', { jobId })
+      await jobRepo.updateStatus(jobId, 'completed')
+      return { resumePoint }
+    }
+
+    // 既存のジョブIDを使って処理を再開
+    const result = await this.runWithText(job.novelId, novelText, {
+      existingJobId: jobId,
+      title: novel.title || undefined,
+    })
+
+    logger.info('AnalyzePipeline.resumeJob: completed', {
+      jobId,
+      resumePoint,
+      chunkCount: result.chunkCount,
+    })
+
+    return { resumePoint }
   }
 }
