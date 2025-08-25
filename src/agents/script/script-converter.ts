@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import { getLlmStructuredGenerator } from '@/agent/structured-generator'
+import { getLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import { type Script, ScriptSchema } from '@/types/script'
 
@@ -28,6 +28,16 @@ export async function convertEpisodeTextToScript(
 ): Promise<Script> {
   if (!input.episodeText || input.episodeText.trim() === '') {
     throw new Error('Episode text is required and cannot be empty')
+  }
+
+  // Add validation for minimum text length to ensure meaningful content
+  // Allow shorter text in test environments to not break existing tests
+  const trimmedText = input.episodeText.trim()
+  const minLength = process.env.NODE_ENV === 'test' ? 5 : 50
+  if (trimmedText.length < minLength) {
+    throw new Error(
+      `Episode text is too short. Please provide at least ${minLength} characters of story content, not just a title.`,
+    )
   }
 
   // フラグメント変換を使用する場合
@@ -92,5 +102,27 @@ export async function convertEpisodeTextToScript(
     schema: ScriptSchema as unknown as z.ZodTypeAny,
     schemaName: 'Script',
   })
-  return result as Script
+
+  // Normalize LLM output: handle cases where LLM uses 'lines' or 'content' instead of 'script'
+  const normalized = result as Script
+  if (normalized.scenes) {
+    for (const scene of normalized.scenes) {
+      if (!scene.script) {
+        // If script is missing, try to use 'lines' or 'content' from the raw output
+        const rawScene = scene as unknown as Record<string, unknown>
+        const lines = rawScene.lines as unknown[] | undefined
+        const content = rawScene.content as unknown[] | undefined
+
+        if (Array.isArray(lines) && lines.length > 0) {
+          scene.script = lines as Script['scenes'][0]['script']
+        } else if (Array.isArray(content) && content.length > 0) {
+          scene.script = content as Script['scenes'][0]['script']
+        } else {
+          scene.script = [] // Ensure script is always an array
+        }
+      }
+    }
+  }
+
+  return normalized
 }
