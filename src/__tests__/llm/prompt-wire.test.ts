@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CompatAgent } from '@/agent/compat'
+import { CompatAgent } from '@/agents/compat'
 import {
   getNarrativeAnalysisConfig,
   getPageBreakEstimationConfig,

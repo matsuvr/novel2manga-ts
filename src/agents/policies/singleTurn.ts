@@ -1,6 +1,6 @@
+import { AgentError, AgentErrorType } from '@/agents/errors'
 import type { LlmClient, LlmMessage, LlmTool } from '@/llm/client'
 import type { AgentInput, AgentOptions, AgentPolicy, AgentResult, ToolRegistry } from '../types'
-import { AgentError } from '../types'
 
 /**
  * シングルターンポリシー
@@ -79,10 +79,10 @@ export class SingleTurnPolicy implements AgentPolicy {
       return result
     } catch (error) {
       throw new AgentError(
+        AgentErrorType.API_ERROR,
         `Single turn execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'EXECUTION_ERROR',
-        0,
-        error instanceof Error ? error : undefined,
+        'unknown',
+        error,
       )
     }
   }

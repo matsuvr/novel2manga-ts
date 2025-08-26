@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { CompatAgentOptions } from '@/agent/compat'
-import { CompatAgent, createCompatAgent } from '@/agent/compat'
+import type { CompatAgentOptions } from '@/agents/compat'
+import { CompatAgent, createCompatAgent } from '@/agents/compat'
 
 describe('CompatAgent', () => {
   let agent: CompatAgent

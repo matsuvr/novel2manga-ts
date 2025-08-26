@@ -76,6 +76,9 @@ export const JobSchema = z.object({
   processedEpisodes: z.number(),
   totalPages: z.number(),
   renderedPages: z.number(),
+  // 実行中の位置（UX向上用）
+  processingEpisode: z.number().optional(),
+  processingPage: z.number().optional(),
 
   // エラー管理
   lastError: z.string().optional(),

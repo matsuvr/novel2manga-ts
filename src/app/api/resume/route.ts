@@ -1,10 +1,9 @@
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
-
-import { JobResumeService } from '@/services/application/job-resume-service'
-import { ApiResponder } from '@/utils/api-responder'
 import { getLogger } from '@/infrastructure/logging/logger'
+import { JobResumeService } from '@/services/application/job-resume-service'
 import { extractErrorMessage } from '@/utils/api-error'
+import { ApiResponder } from '@/utils/api-responder'
 
 const resumeRequestSchema = z.object({
   novelId: z.string().uuid(),

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { AgentCore, createAgentCore, createAgentCoreWithConfig } from '@/agent/core'
-import { mockTools, SimpleToolRegistry } from '@/agent/tools'
-import type { AgentInput } from '@/agent/types'
+import { AgentCore, createAgentCore, createAgentCoreWithConfig } from '@/agents/core'
+import { mockTools, SimpleToolRegistry } from '@/agents/tools'
+import type { AgentInput } from '@/agents/types'
 import { createFakeLlmClient, FakeLlmClient } from '@/llm/fake'
 
 describe('AgentCore', () => {

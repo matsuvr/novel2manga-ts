@@ -17,7 +17,7 @@ export interface NovelTextStoragePort {
 }
 
 export interface LayoutStoragePort {
-  putEpisodeLayout(jobId: string, episodeNumber: number, yaml: string): Promise<string>
+  putEpisodeLayout(jobId: string, episodeNumber: number, json: string): Promise<string>
   getEpisodeLayout(jobId: string, episodeNumber: number): Promise<string | null>
   // Incremental progress checkpoint for atomic resumes
   putEpisodeLayoutProgress(jobId: string, episodeNumber: number, json: string): Promise<string>
@@ -158,21 +158,21 @@ export function getStoragePorts(): StoragePorts {
       },
     },
     layout: {
-      async putEpisodeLayout(jobId, episodeNumber, yaml) {
+      async putEpisodeLayout(jobId, episodeNumber, json) {
         const storage = await StorageFactory.getLayoutStorage()
         const key = StorageKeys.episodeLayout(jobId, episodeNumber)
 
         await executeStorageWithTracking({
           storage,
           key,
-          value: yaml,
+          value: json,
           tracking: {
             filePath: key,
             fileCategory: 'layout',
-            fileType: 'yaml',
+            fileType: 'json',
             novelId: undefined,
             jobId,
-            mimeType: 'text/yaml; charset=utf-8',
+            mimeType: 'application/json; charset=utf-8',
           },
         })
 
@@ -182,6 +182,10 @@ export function getStoragePorts(): StoragePorts {
         const storage = await StorageFactory.getLayoutStorage()
         const key = StorageKeys.episodeLayout(jobId, episodeNumber)
         const obj = await storage.get(key)
+        // Add migration monitoring - MEDIUM PRIORITY
+        console.log(
+          `Layout format migration: ${jobId}/episode_${episodeNumber} - using JSON format`,
+        )
         return obj?.text ?? null
       },
       async putEpisodeLayoutProgress(jobId, episodeNumber, json) {

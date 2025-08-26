@@ -1,7 +1,7 @@
 import type { Chunk } from '@/db/schema'
 import { getChunkRepository } from '@/repositories'
-import { EpisodeRepository } from '@/repositories/episode-repository'
 import { adaptAll } from '@/repositories/adapters'
+import { EpisodeRepository } from '@/repositories/episode-repository'
 import { getDatabaseService } from '@/services/db-factory'
 import type { EpisodeBoundary } from '@/types/episode'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'

@@ -28,7 +28,7 @@
 | 統合分析             | `StorageKeys.integratedAnalysis(jobId)`        | `{jobId}/integrated.json`         |
 | 物語構造(エピソード) | `StorageKeys.narrativeAnalysis(jobId)`         | `{jobId}/narrative.json`          |
 | エピソード本文       | `StorageKeys.episodeText(jobId, ep)`           | `{jobId}/episode_{ep}.txt`        |
-| エピソードレイアウト | `StorageKeys.episodeLayout(jobId, ep)`         | `{jobId}/episode_1.yaml`          |
+| エピソードレイアウト | `StorageKeys.episodeLayout(jobId, ep)`         | `{jobId}/episode_1.json`          |
 | **エピソード進捗**   | `StorageKeys.episodeLayoutProgress(jobId, ep)` | `{jobId}/episode_1.progress.json` |
 | ページ画像           | `StorageKeys.pageRender(jobId, ep, page)`      | `{jobId}/episode_1/page_1.png`    |
 
@@ -144,7 +144,7 @@ private async safeOperation<T>(
 
 8. (LEGACY) **chunks.content_path** → `chunks/{job_id}/chunk_{index}.txt` → 現行キーはベースディレクトリ付与後 `{job_id}/chunk_{index}.txt`
 9. (LEGACY) **chunk_analysis_status.analysis_path** → `analysis/{job_id}/chunk_{index}.json` → 現行 `{job_id}/chunk_{index}.json`
-10. (LEGACY) **layout_status.layout_path** → `novels/{novel_id}/jobs/{job_id}/episodes/episode_{number}/layout.yaml` → 現行 `{job_id}/episode_{number}/layout.yaml`
+10. (LEGACY) **layout_status.layout_path** → `novels/{novel_id}/jobs/{job_id}/episodes/episode_{number}/layout.yaml` → 現行は JSON 固定 `{job_id}/episode_{number}.json`
 11. (LEGACY) **render_status.image_path** → `novels/{novel_id}/jobs/{job_id}/renders/episode_{episode}/page_{page:03d}.png` → 現行 `{job_id}/episode_{episode}/page_{page:03d}.png`
 12. (LEGACY) **outputs.output_path** → `novels/{novel_id}/jobs/{job_id}/outputs/manga.{format}` → 現行 `{job_id}/output.{format}`
 

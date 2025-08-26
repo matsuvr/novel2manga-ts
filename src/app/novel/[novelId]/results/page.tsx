@@ -31,7 +31,7 @@ export default async function NovelResultsPage({ params }: { params: Promise<Par
       <div className="apple-card p-4 flex items-center justify-between">
         <div>
           <div className="font-semibold">エクスポート</div>
-          <div className="text-sm text-gray-600">全エピソードのYAMLとPNGをZIPでダウンロード</div>
+          <div className="text-sm text-gray-600">全エピソードのJSONとPNGをZIPでダウンロード</div>
         </div>
         <a className="btn-secondary" href={`/api/export/zip/${latest.id}`}>
           画像ZIPをダウンロード
