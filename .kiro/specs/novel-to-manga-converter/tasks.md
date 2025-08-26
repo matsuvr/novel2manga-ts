@@ -130,3 +130,4 @@
 - [x] Bubble style decision uses only text punctuation, not `emotion`
 - [x] Update unit tests to remove normalization expectations
 - [x] Update design.md to document free-text policy and style heuristics
+- Refactor: Consolidated `src/agent` into `src/agents`; updated imports project-wide; unified error handling to `src/agents/errors.ts`. Unit tests pass.

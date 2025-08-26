@@ -1,3 +1,4 @@
+import { AgentError, AgentErrorType } from '@/agents/errors'
 import type { LlmClient, LlmMessage, LlmTool } from '@/llm/client'
 import type {
   AgentInput,
@@ -8,7 +9,6 @@ import type {
   ToolRegistry,
   ToolResult,
 } from '../types'
-import { AgentError, AgentTimeoutError } from '../types'
 
 /**
  * ReActポリシー
@@ -138,21 +138,17 @@ export class ReActPolicy implements AgentPolicy {
           break
         }
       } catch (error) {
-        throw new AgentError(
-          `ReAct step ${stepIndex} failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          'EXECUTION_ERROR',
-          stepIndex,
-          error instanceof Error ? error : undefined,
-        )
+        const message = `ReAct step ${stepIndex} failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        throw new AgentError(AgentErrorType.API_ERROR, message, 'unknown', error)
       }
     }
 
     // 最大ステップ数に達した場合
     if (trace.length >= maxSteps) {
-      throw new AgentTimeoutError(
+      throw new AgentError(
+        AgentErrorType.TIMEOUT_ERROR,
         `ReAct execution reached maximum steps (${maxSteps})`,
-        maxSteps,
-        trace.length,
+        'unknown',
       )
     }
 

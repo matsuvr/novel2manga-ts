@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import ProcessingProgress from '@/components/ProcessingProgress'
 import ResultsDisplay from '@/components/ResultsDisplay'
 import TextInputArea from '@/components/TextInputArea'
@@ -136,39 +136,38 @@ export default function HomeClient() {
     }
   }
 
-  const handleProcessComplete = async () => {
+  const handleProcessComplete = useCallback(async () => {
     if (!jobId) return
 
+    // まず確実に遷移を試み、データ取得は結果ページ側のサーバーコンポーネントに任せる
+    if (novelIdState && jobId) {
+      const url = `/novel/${encodeURIComponent(novelIdState)}/results/${encodeURIComponent(jobId)}`
+      setPendingRedirect(url)
+      setViewMode('redirecting')
+      try {
+        router.push(url)
+      } catch {
+        // noop: ユーザが手動クリックできるUIを表示
+      } finally {
+        setIsProcessing(false)
+      }
+      return
+    }
+
+    // フォールバック: novelId がない場合のみ、従来の結果表示に切替
     try {
       const response = await fetch(`/api/jobs/${jobId}/episodes`)
       if (!response.ok) throw new Error('Failed to fetch episodes')
-
-      const data = (await response.json().catch(() => ({}))) as {
-        episodes?: Episode[]
-      }
+      const data = (await response.json().catch(() => ({}))) as { episodes?: Episode[] }
       setEpisodes(data.episodes || [])
-      // 永続URLへ遷移（小説IDとジョブIDが利用可能な場合）。
-      // ただしブラウザのポップアップ/ナビブロック対策で、遷移待ちビューを出す。
-      if (novelIdState && jobId) {
-        const url = `/novel/${encodeURIComponent(novelIdState)}/results/${encodeURIComponent(jobId)}`
-        setPendingRedirect(url)
-        setViewMode('redirecting')
-        // 自動遷移を試みる
-        try {
-          router.push(url)
-        } catch {
-          // noop: ユーザが手動クリックできるUIを表示
-        }
-      } else {
-        setViewMode('results')
-      }
-      setIsProcessing(false)
+      setViewMode('results')
     } catch (err) {
       console.error('Error fetching results:', err)
       setError('結果の取得に失敗しました')
+    } finally {
       setIsProcessing(false)
     }
-  }
+  }, [jobId, novelIdState, router])
 
   const handleReset = () => {
     setViewMode('input')
@@ -233,6 +232,43 @@ export default function HomeClient() {
   }
 
   const [pendingRedirect, setPendingRedirect] = useState<string | null>(null)
+
+  // 冗長監視: 完了を取りこぼさないため、軽量ポーリングで状態を監視し、完了時に確実に遷移
+  // ProcessingProgress 側でも onComplete を呼ぶが、UI側の状態遷移競合を避けるため二重でも問題なし
+  // （router.push は同一URLへの重複呼び出しを無視する）
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    if (!jobId) return
+    let aborted = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const poll = async () => {
+      if (aborted) return
+      try {
+        const res = await fetch(`/api/jobs/${jobId}/status`, { cache: 'no-store' })
+        if (!res.ok) throw new Error(`status ${res.status}`)
+        const data = (await res.json().catch(() => ({}))) as {
+          job?: { status?: string; renderCompleted?: boolean }
+        }
+        const completed =
+          data?.job?.renderCompleted === true ||
+          data?.job?.status === 'completed' ||
+          data?.job?.status === 'complete'
+        if (completed) {
+          await handleProcessComplete()
+          return
+        }
+      } catch {
+        // noop
+      }
+      timer = setTimeout(poll, 2500)
+    }
+    timer = setTimeout(poll, 1200)
+    return () => {
+      aborted = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [jobId, handleProcessComplete])
 
   return (
     <div

@@ -1,6 +1,6 @@
-import { AnalyzePipeline } from '@/services/application/analyze-pipeline'
-import { getJobRepository, getNovelRepository } from '@/repositories'
 import { getLogger } from '@/infrastructure/logging/logger'
+import { getJobRepository, getNovelRepository } from '@/repositories'
+import { AnalyzePipeline } from '@/services/application/analyze-pipeline'
 import { extractErrorMessage } from '@/utils/api-error'
 
 export interface ResumeResult {

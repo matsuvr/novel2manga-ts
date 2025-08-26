@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-// Cerebras-compatible schema: avoid z.preprocess() which creates complex $defs references
+// Groq Structured Output compatible schema: simplified to avoid problematic $refs
 export const ScriptLineSchema = z.object({
   index: z.number().int().nonnegative().optional(), // LLM output may not include index
   type: z.enum(['dialogue', 'thought', 'narration', 'stage']).or(
@@ -16,6 +16,7 @@ export const ScriptLineSchema = z.object({
   text: z.string().default(''),
 })
 
+// Simplified schema for Groq Structured Output - use only 'script' array to avoid deep $refs
 export const ScriptSchema = z.object({
   title: z.string().optional(),
   scenes: z.array(
@@ -23,9 +24,15 @@ export const ScriptSchema = z.object({
       id: z.string().optional(), // LLM output includes string scene IDs like "scene1"
       setting: z.string().optional(),
       description: z.string().optional(),
-      script: z.array(ScriptLineSchema).optional(),
-      lines: z.array(ScriptLineSchema).optional(), // 互換性のため両方サポート
-      content: z.array(ScriptLineSchema).optional(), // LLM output uses 'content' instead of 'script'/'lines'
+      script: z.array(
+        z.object({
+          index: z.number().int().nonnegative().optional(),
+          type: z.enum(['dialogue', 'thought', 'narration', 'stage']),
+          speaker: z.string().optional(),
+          character: z.string().optional(),
+          text: z.string(),
+        }),
+      ),
     }),
   ),
 })
@@ -45,7 +52,7 @@ export const PageBreakSchema = z.object({
           dialogue: z.array(
             z.object({
               speaker: z.string(),
-              lines: z.string(),
+              text: z.string(),
             }),
           ),
         }),

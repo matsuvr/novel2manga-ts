@@ -15,23 +15,21 @@
 
 // Core services
 export { BaseDatabaseService } from './base-database-service'
-export { TransactionService } from './transaction-service'
-export type { SyncTransactionOperation, AsyncTransactionOperation } from './transaction-service'
-
-// Domain-specific services
-export { EpisodeDatabaseService } from './episode-database-service'
-export { JobDatabaseService } from './job-database-service'
-export type { JobProgress, JobWithProgress } from './job-database-service'
-
 // Factory and convenience exports
 export {
-  DatabaseServiceFactory,
-  initializeDatabaseServiceFactory,
-  getDatabaseServiceFactory,
   cleanup,
-  isFactoryInitialized,
+  DatabaseServiceFactory,
   db,
+  getDatabaseServiceFactory,
+  initializeDatabaseServiceFactory,
+  isFactoryInitialized,
 } from './database-service-factory'
+// Domain-specific services
+export { EpisodeDatabaseService } from './episode-database-service'
+export type { JobProgress, JobWithProgress } from './job-database-service'
+export { JobDatabaseService } from './job-database-service'
+export type { AsyncTransactionOperation, SyncTransactionOperation } from './transaction-service'
+export { TransactionService } from './transaction-service'
 
 /**
  * Migration guide:

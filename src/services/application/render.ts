@@ -6,6 +6,7 @@ import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
 import { getDatabaseService } from '@/services/db-factory'
 import type { PageBreakPlan } from '@/types/script'
+import { normalizeAndValidateLayout } from '@/utils/layout-normalizer'
 import { parseMangaLayoutFromYaml } from '@/utils/layout-parser'
 
 export interface BatchOptions {
@@ -47,8 +48,13 @@ export async function renderBatchFromYaml(
   const startTime = Date.now()
   const dbService = getDatabaseService()
 
-  // parse & validate layout (supports canonical and bbox formats)
-  const mangaLayout = parseMangaLayoutFromYaml(layoutYaml)
+  // parse layout (supports canonical and bbox formats)
+  const parsedLayout = parseMangaLayoutFromYaml(layoutYaml)
+  // normalize and auto-fix overlaps/gaps using embedded references
+  const { layout: mangaLayout, pageIssues } = normalizeAndValidateLayout(parsedLayout)
+  if (Object.values(pageIssues).some((issues) => issues.length > 0)) {
+    logger.warn('Layout issues detected and normalized', { pageIssues })
+  }
   const allPages = mangaLayout.pages.map((p) => p.page_number)
   const targetPages = pages && pages.length > 0 ? pages : allPages
   const validPages = targetPages.filter((p) => allPages.includes(p))
@@ -256,7 +262,7 @@ export async function renderFromPageBreakPlan(
               id: panel.panelIndex,
               bbox: layoutPanel.bbox,
               content: panel.content,
-              dialogue: panel.dialogue.map((d) => `${d.speaker}: ${d.lines}`).join('\n'),
+              dialogue: panel.dialogue.map((d) => `${d.speaker}: ${d.text}`).join('\n'),
             }
           }),
         }
@@ -275,8 +281,15 @@ ${layoutData.panels
   )
   .join('\n')}`
 
-        // Parse YAML content to MangaLayout
-        const layout = parseMangaLayoutFromYaml(yamlContent)
+        // Parse YAML content to MangaLayout and normalize to avoid overlaps
+        const parsed = parseMangaLayoutFromYaml(yamlContent)
+        const { layout, pageIssues } = normalizeAndValidateLayout(parsed)
+        if (Object.values(pageIssues).some((issues) => issues.length > 0)) {
+          logger.warn('Normalized layout for page due to issues', {
+            pageNumber: page.pageNumber,
+            pageIssues,
+          })
+        }
 
         // Render the page using the existing renderer
         const imageBlob = await renderer.renderToImage(layout, page.pageNumber, 'png')

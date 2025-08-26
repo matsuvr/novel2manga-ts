@@ -17,6 +17,7 @@ export const DialogueSchema = z.object({
   speaker: z.string(),
   text: z.string(),
   emotion: EmotionSchema.optional(),
+  type: z.enum(['speech', 'thought', 'narration']).optional(),
 })
 
 export const PanelSchema = z.object({

@@ -41,6 +41,8 @@ interface JobData {
     totalEpisodes?: number
     renderedPages?: number
     totalPages?: number
+    processingEpisode?: number
+    processingPage?: number
     progress?: {
       perEpisodePages?: Record<
         string,
@@ -272,7 +274,15 @@ function ProcessingProgress({
       })
 
       if (jobDataString === lastJobData) {
-        return null // データに変化がない場合は更新しない
+        // データに変化がなくても、完了または失敗していれば停止指示を返す
+        const totalPages = Number(data.job.totalPages || 0)
+        const renderedPages = Number(data.job.renderedPages || 0)
+        const fallbackCompleted =
+          data.job.status === 'completed' && totalPages > 0 && renderedPages >= totalPages
+        const statusCompleted = data.job.status === 'completed' || data.job.status === 'complete'
+        const uiCompleted =
+          data.job.renderCompleted === true || fallbackCompleted || statusCompleted
+        return uiCompleted || data.job.status === 'failed' ? 'stop' : null
       }
 
       setLastJobData(jobDataString)
@@ -318,13 +328,17 @@ function ProcessingProgress({
         let currentIndex = -1
         let completedCount = 0
 
-        // 完了条件はレンダリング完了のみ
-        // 念押しフォールバック: job.statusがcompleted かつ renderedPages>=totalPages>0 でも完了扱い
+        // 完了条件
+        // 1) レンダリング完了フラグ
+        // 2) 念押しフォールバック: job.status が completed かつ renderedPages>=totalPages>0
+        // 3) バックエンドが completed を明示した場合（DB集計が未反映でもUIは完了として扱う）
         const totalPages = Number(data.job.totalPages || 0)
         const renderedPages = Number(data.job.renderedPages || 0)
         const fallbackCompleted =
           data.job.status === 'completed' && totalPages > 0 && renderedPages >= totalPages
-        const uiCompleted = data.job.renderCompleted === true || fallbackCompleted
+        const statusCompleted = data.job.status === 'completed' || data.job.status === 'complete'
+        const uiCompleted =
+          data.job.renderCompleted === true || fallbackCompleted || statusCompleted
 
         if (uiCompleted) {
           updatedSteps.forEach((step) => {
@@ -517,9 +531,14 @@ function ProcessingProgress({
           hints.layout = `現在: エピソード ${processedEp + 1} / ${totalEp || '?'} をレイアウト中`
         }
         if ((stepId === 'render' || stepId.startsWith('render_')) && !data.job.renderCompleted) {
-          const done = (data.job.renderedPages ?? 0) + 1
           const total = data.job.totalPages || 0
-          hints.render = `現在: ページ ${Math.min(done, total || done)} / ${total || '?'} をレンダリング中`
+          const inFlightPage = data.job.processingPage
+          const doneBase = data.job.renderedPages ?? 0
+          const done = Math.min(
+            total || doneBase + 1,
+            typeof inFlightPage === 'number' && inFlightPage > 0 ? inFlightPage : doneBase + 1,
+          )
+          hints.render = `現在: ページ ${done} / ${total || '?'} をレンダリング中`
         }
         setRuntimeHints(hints)
 
@@ -530,7 +549,11 @@ function ProcessingProgress({
         return updatedSteps
       })
 
-      return data.job.renderCompleted === true || data.job.status === 'failed' ? 'stop' : 'continue'
+      // 完了または失敗でポーリング停止
+      const statusCompleted = data.job.status === 'completed' || data.job.status === 'complete'
+      return data.job.renderCompleted === true || statusCompleted || data.job.status === 'failed'
+        ? 'stop'
+        : 'continue'
     },
     [
       lastJobData,
@@ -588,8 +611,17 @@ function ProcessingProgress({
         if (result === 'stop') {
           addLog('info', 'ポーリングを停止しました')
           try {
-            if (data.job.renderCompleted === true) {
+            const statusCompleted =
+              data.job.status === 'completed' || data.job.status === 'complete'
+            if (data.job.renderCompleted === true || statusCompleted) {
               addLog('info', '処理が完了しました。上部のエクスポートからダウンロードできます。')
+              // 念のためここでも onComplete を呼ぶ（UI側の遷移を確実に発火）
+              if (onComplete) onComplete()
+            } else if (data.job.status === 'failed') {
+              const errorStep = data.job.lastErrorStep || data.job.currentStep || '不明'
+              const errorMessage = data.job.lastError || 'エラーの詳細が不明です'
+              addLog('error', `処理が失敗しました - ${errorStep}: ${errorMessage}`)
+              addLog('info', 'エラーが解決しない場合は、新しいファイルで再度お試しください。')
             }
           } catch (e) {
             console.error('post-complete message handling failed', e)
@@ -634,7 +666,7 @@ function ProcessingProgress({
       if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current)
       if (pollAbortRef.current) pollAbortRef.current.abort()
     }
-  }, [jobId, addLog, updateStepsFromJobData])
+  }, [jobId, addLog, updateStepsFromJobData, onComplete])
 
   // jobIdが未確定でも進捗カードを表示（初期段階からUX向上）
   useEffect(() => {
@@ -684,8 +716,39 @@ function ProcessingProgress({
       })
   }, [perEpisodePages, currentLayoutEpisode])
 
+  // Check if any step has error status to show error banner
+  const hasFailedStep = steps.some((step) => step.status === 'error')
+  const failedStep = steps.find((step) => step.status === 'error')
+
   return (
     <div className="space-y-6">
+      {hasFailedStep && failedStep && (
+        <div className="apple-card p-4 bg-red-50 border-red-200 border-2">
+          <div className="flex items-start space-x-3">
+            <div className="flex-shrink-0 mt-0.5">
+              <svg className="w-5 h-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h4 className="text-lg font-semibold text-red-800 mb-1">処理が失敗しました</h4>
+              <p className="text-red-700 text-sm mb-2">{failedStep.name}でエラーが発生しました。</p>
+              {failedStep.error && (
+                <div className="bg-red-100 border border-red-300 rounded p-3 text-sm text-red-800">
+                  <strong>エラー詳細:</strong> {failedStep.error}
+                </div>
+              )}
+              <p className="text-red-600 text-xs mt-2">
+                問題が解決しない場合は、新しいファイルで再度お試しください。
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="apple-card p-6">
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">

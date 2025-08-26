@@ -277,6 +277,21 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
     await this.db.update(jobs).set(updateData).where(eq(jobs.id, id))
   }
 
+  /** 現在処理中のエピソード/ページを更新（任意） */
+  async updateProcessingPosition(
+    jobId: string,
+    params: { episode?: number | null; page?: number | null },
+  ): Promise<void> {
+    const upd: Partial<
+      Job & { processingEpisode?: number | null; processingPage?: number | null }
+    > = {
+      updatedAt: new Date().toISOString(),
+    }
+    if (params.episode !== undefined) upd.processingEpisode = params.episode ?? null
+    if (params.page !== undefined) upd.processingPage = params.page ?? null
+    await this.db.update(jobs).set(upd).where(eq(jobs.id, jobId))
+  }
+
   async updateJobError(
     id: string,
     error: string,
@@ -753,6 +768,15 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
         })
       }
     }
+
+    // 進行位置の更新（ページ単位）
+    try {
+      await this.updateProcessingPosition(jobId, { episode: episodeNumber, page: pageNumber })
+    } catch (e) {
+      logger.warn('updateRenderStatus: failed to update processing position', {
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
   }
 
   // 補助: renderCompleted=false かつ totalPages>0 の候補ジョブを取得（簡易版: 全件からフィルタ）
@@ -831,6 +855,20 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       .set({ totalPages: sum, updatedAt: new Date().toISOString() })
       .where(eq(jobs.id, jobId))
     return sum
+  }
+
+  // layout_statusのisGeneratedエピソード数からprocessedEpisodesを再集計
+  async recomputeJobProcessedEpisodes(jobId: string): Promise<number> {
+    const rows = (await this.db
+      .select({ generated: layoutStatus.isGenerated })
+      .from(layoutStatus)
+      .where(eq(layoutStatus.jobId, jobId))) as Array<{ generated: 0 | 1 | null }>
+    const count = rows.reduce((acc, r) => acc + (r.generated ? 1 : 0), 0)
+    await this.db
+      .update(jobs)
+      .set({ processedEpisodes: count, updatedAt: new Date().toISOString() })
+      .where(eq(jobs.id, jobId))
+    return count
   }
 
   async getJobsByNovelId(novelId: string): Promise<Job[]> {

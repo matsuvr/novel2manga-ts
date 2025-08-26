@@ -4,9 +4,9 @@ import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { getDatabaseConfig } from '@/config'
+import { cleanup } from '@/services/database/database-service-factory'
 // Import will be added when migration is complete to avoid circular dependency
 import * as schema from './schema'
-import { cleanup } from '@/services/database/database-service-factory'
 
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null
 

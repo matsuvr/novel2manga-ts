@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { getLlmStructuredGenerator } from '@/agent/structured-generator'
+import { getLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getChunkBundleAnalysisConfig } from '@/config'
 import type { ChunkAnalysisResult } from '@/types/chunk'
 

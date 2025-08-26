@@ -193,12 +193,12 @@ export class FakeLlmClient implements LlmClient {
                 {
                   panelIndex: 1,
                   content: 'テストパネル1',
-                  dialogue: [{ speaker: 'テストキャラ', lines: 'テストセリフ1' }],
+                  dialogue: [{ speaker: 'テストキャラ', text: 'テストセリフ1' }],
                 },
                 {
                   panelIndex: 2,
                   content: 'テストパネル2',
-                  dialogue: [{ speaker: 'テストキャラ', lines: 'テストセリフ2' }],
+                  dialogue: [{ speaker: 'テストキャラ', text: 'テストセリフ2' }],
                 },
               ],
             },

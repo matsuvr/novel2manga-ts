@@ -1,6 +1,6 @@
 import type { z } from 'zod'
-import { CompatAgent } from '@/agent/compat'
-import { getLlmStructuredGenerator } from '@/agent/structured-generator'
+import { CompatAgent } from '@/agents/compat'
+import { getLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getLLMDefaultProvider, getTextAnalysisConfig } from '@/config'
 import { getLogger } from '@/infrastructure/logging/logger'
 

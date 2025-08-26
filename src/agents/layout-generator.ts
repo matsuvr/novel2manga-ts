@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { getLlmStructuredGenerator } from '@/agent/structured-generator'
+import { getLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getLayoutGenerationConfig } from '@/config'
 import { Page } from '@/domain/models/page'
 import type { PageBatchPlan } from '@/types/page-splitting'
