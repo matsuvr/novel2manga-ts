@@ -3,6 +3,7 @@ import { appConfig } from '@/config/app.config'
 import { adaptAll } from '@/repositories/adapters'
 import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
+import type { Episode } from '@/db/schema'
 import { getDatabaseService } from '@/services/db-factory'
 import {
   ApiError,
@@ -54,14 +55,43 @@ export async function GET(
     }
 
     // エピソード一覧を取得
-    const episodes = await episodeRepo.getByJobId(params.jobId)
+    let episodes = await episodeRepo.getByJobId(params.jobId)
+    // Fallback: derive episodes from layout storage (JSON files) when DB has none
     if (episodes.length === 0) {
-      return createSuccessResponse({
-        jobId: params.jobId,
-        status: 'no_episodes',
-        renderStatus: [],
-        message: 'No episodes found for this job',
-      })
+      try {
+        const storage = await StorageFactory.getLayoutStorage()
+        const keys = (await storage.list?.(params.jobId)) || []
+        const epNums = Array.from(
+          new Set(
+            keys
+              .map((k) => {
+                const m = k.match(/episode_(\d+)\.json$/)
+                return m ? Number(m[1]) : undefined
+              })
+              .filter((n): n is number => typeof n === 'number' && Number.isFinite(n)),
+          ),
+        ).sort((a, b) => a - b)
+        episodes = epNums.map(
+          (n) =>
+            ({
+              id: `${params.jobId}-${n}`,
+              novelId: 'unknown',
+              jobId: params.jobId,
+              episodeNumber: n,
+              title: `エピソード${n}`,
+              summary: null,
+              startChunk: 0,
+              startCharIndex: 0,
+              endChunk: 0,
+              endCharIndex: 0,
+              confidence: 1,
+              episodeTextPath: null,
+              createdAt: new Date().toISOString(),
+            }) satisfies Episode,
+        )
+      } catch {
+        // keep empty
+      }
     }
 
     // 指定されたエピソードのレンダリング状態を確認

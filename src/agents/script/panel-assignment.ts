@@ -42,19 +42,29 @@ export async function assignPanels(
 
     return result as PanelAssignmentPlan
   } catch (error) {
-    // テスト環境でのフォールバック処理
+    // フォールバック処理（最小限・堅牢）: pageBreaks の形式が不完全でも落ちないようにする
     console.warn('Panel assignment failed, using fallback:', error)
 
-    // 基本的なフォールバック構造を生成
     const fallbackAssignment: PanelAssignmentPlan = {
-      pages: pageBreaks.pages.map((page, _pageIndex) => ({
-        pageNumber: page.pageNumber,
-        panelCount: page.panelCount,
-        panels: page.panels.map((_panel, panelIndex) => ({
-          id: panelIndex + 1,
-          lines: [1], // デフォルトで最初の行を使用
-        })),
-      })),
+      pages: (Array.isArray(pageBreaks?.pages) ? pageBreaks.pages : []).map((page) => {
+        const panelCount = Math.max(
+          1,
+          Number.isFinite(Number(page.panelCount))
+            ? Number(page.panelCount)
+            : Array.isArray((page as unknown as { panels?: unknown[] }).panels)
+              ? (page as unknown as { panels?: unknown[] }).panels?.length || 1
+              : 1,
+        )
+        return {
+          pageNumber: Number.isFinite(Number(page.pageNumber)) ? Number(page.pageNumber) : 1,
+          panelCount,
+          // 行の割当は空で返す。後段の PageBreakStep 側で未割当行を自動配分する
+          panels: Array.from({ length: panelCount }, (_, i) => ({
+            id: i + 1,
+            lines: [] as number[],
+          })),
+        }
+      }),
     }
 
     console.log('Fallback assignment generated:', JSON.stringify(fallbackAssignment, null, 2))

@@ -33,7 +33,7 @@ export class PageBreakStep implements PipelineStep {
 
       // Estimate page breaks using advanced LLM without mechanical page count logic
       // ここで「LLM（またはエージェント）を呼び出してページ割り（コマ割り）を推定」
-      const pageBreakPlan = await estimatePageBreaks(
+      let pageBreakPlan = await estimatePageBreaks(
         script as Parameters<typeof estimatePageBreaks>[0],
         {
           jobId,
@@ -43,6 +43,14 @@ export class PageBreakStep implements PipelineStep {
 
       if (!pageBreakPlan) {
         throw new Error('Page break estimation failed: pageBreakPlan is undefined')
+      }
+
+      // Enforce panel count upper bound (1..6) per template availability
+      pageBreakPlan = {
+        pages: pageBreakPlan.pages.map((p) => ({
+          ...p,
+          panelCount: Math.max(1, Math.min(6, p.panelCount || 1)),
+        })),
       }
 
       // ===== Enforce full coverage: assign every script line to panels =====
@@ -173,9 +181,28 @@ export class PageBreakStep implements PipelineStep {
         episodeTitle: undefined,
       })
 
-      // Store final layout instead of raw page break plan
+      // Store final layout JSON (per-episode) and also save full pages snapshot for bundling
       const ports = getStoragePorts()
-      await ports.layout.putEpisodeLayout(jobId, episodeNumber, JSON.stringify(layout, null, 2))
+      const layoutJson = JSON.stringify(layout, null, 2)
+      await ports.layout.putEpisodeLayout(jobId, episodeNumber, layoutJson)
+
+      // Additionally store a job-scoped full pages plan to support bundling step
+      try {
+        const { StorageFactory } = await import('@/utils/storage')
+        const storage = await StorageFactory.getLayoutStorage()
+        const { JsonStorageKeys } = await import('@/utils/storage')
+        await storage.put(JsonStorageKeys.fullPages(jobId), layoutJson, {
+          contentType: 'application/json; charset=utf-8',
+          jobId,
+          episode: String(episodeNumber),
+        })
+      } catch (e) {
+        logger.warn('Failed to store full pages snapshot (continuing)', {
+          jobId,
+          episodeNumber,
+          error: e instanceof Error ? e.message : String(e),
+        })
+      }
 
       // Count total pages for this episode
       const totalPages = layout.pages.length
