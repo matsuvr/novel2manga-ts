@@ -124,9 +124,16 @@ export class PageBreakStep implements PipelineStep {
         indexedAll.push({ idx })
       }
       const allIdxSet = new Set(indexedAll.map((x) => x.idx))
-      const assignedIdxSet = new Set(
-        assignment.pages.flatMap((p) => p.panels.flatMap((pp) => pp.lines)),
-      )
+      // Optimize nested flatMap by using a single loop
+      const assignedLines: number[] = []
+      for (const page of assignment.pages) {
+        for (const panel of page.panels) {
+          if (Array.isArray(panel.lines)) {
+            assignedLines.push(...panel.lines)
+          }
+        }
+      }
+      const assignedIdxSet = new Set(assignedLines)
       let unassigned: number[] = Array.from(allIdxSet).filter((i) => !assignedIdxSet.has(i))
 
       // 2.5) 空パネルをまず未割当行で埋める（少なくとも1行は必ず割当）

@@ -182,6 +182,10 @@ export function getStoragePorts(): StoragePorts {
         const storage = await StorageFactory.getLayoutStorage()
         const key = StorageKeys.episodeLayout(jobId, episodeNumber)
         const obj = await storage.get(key)
+        // Add migration monitoring - MEDIUM PRIORITY
+        console.log(
+          `Layout format migration: ${jobId}/episode_${episodeNumber} - using JSON format`,
+        )
         return obj?.text ?? null
       },
       async putEpisodeLayoutProgress(jobId, episodeNumber, json) {

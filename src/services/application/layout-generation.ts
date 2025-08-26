@@ -306,25 +306,7 @@ async function _restoreLayoutProgress(
     }
   }
 
-  if (!progressRaw && pagesCanonical.length === 0) {
-    const yamlExisting = await ports.layout.getEpisodeLayout(jobId, episodeNumber)
-    if (yamlExisting) {
-      try {
-        const { parseMangaLayoutFromYaml } = await import('@/utils/layout-parser')
-        const parsed = parseMangaLayoutFromYaml(yamlExisting)
-        const epPages = Array.isArray(parsed.pages) ? parsed.pages : []
-        pagesCanonical = epPages.map((p) => ({
-          page_number: p.page_number,
-          panels: p.panels,
-        }))
-        lastPlannedPage = pagesCanonical[pagesCanonical.length - 1]?.page_number ?? 0
-      } catch (e) {
-        logger.warn('Failed to parse existing YAML; starting fresh', {
-          error: (e as Error).message,
-        })
-      }
-    }
-  }
+  // YAMLは廃止: 進捗・レイアウトの復元はJSONのprogressファイルのみを参照する
 
   return { pagesCanonical, lastPlannedPage }
 }

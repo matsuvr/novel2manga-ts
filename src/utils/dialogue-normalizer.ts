@@ -63,8 +63,25 @@ export function normalizeDialogues(dialogues: unknown[]): Dialogue[] {
       }
     }
 
-    // その他の場合は空のDialogueオブジェクトを返す
-    console.warn(`[DialogueNormalizer] Unexpected dialogue format at index ${index}:`, dialogue)
+    // その他の場合は空のDialogueオブジェクトを返す（詳細を付与して警告）
+    let details = ''
+    if (typeof dialogue === 'object' && dialogue !== null) {
+      const obj = dialogue as UnknownDialogue
+      const missingSpeaker = !('speaker' in obj) || typeof obj.speaker !== 'string'
+      const missingText = !('text' in obj) || typeof obj.text !== 'string'
+      const missingLines = !('lines' in obj) || typeof obj.lines !== 'string'
+      const parts = [] as string[]
+      if (missingSpeaker) parts.push('speaker')
+      if (missingText) parts.push('text')
+      if (missingLines) parts.push('lines')
+      details = parts.length > 0 ? `[object] missing or invalid: ${parts.join(', ')}` : '[object]'
+    } else {
+      details = `[type: ${typeof dialogue}]`
+    }
+    console.warn(
+      `[DialogueNormalizer] Unexpected dialogue format at index ${index}: ${details}`,
+      dialogue,
+    )
     return {
       speaker: 'ナレーション',
       text: String(dialogue || ''),

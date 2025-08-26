@@ -257,7 +257,6 @@ export async function renderFromPageBreakPlan(
         // Create layout data by combining panel layout with page content
         const layoutData = {
           page_number: page.pageNumber,
-          panels_count: page.panelCount,
           panels: page.panels.map((panel, index) => {
             const layoutPanel = panelLayout.panels[index]
             const [x, y, width, height] = layoutPanel.bbox
@@ -267,7 +266,10 @@ export async function renderFromPageBreakPlan(
               size: { width, height },
               content: panel.content,
               dialogues: panel.dialogue.map((d) => ({
-                text: d.text,
+                text:
+                  (d as { text?: string; lines?: string }).text ??
+                  (d as { lines?: string }).lines ??
+                  '',
                 speaker: d.speaker,
                 type: 'speech' as const,
               })),
@@ -281,7 +283,7 @@ export async function renderFromPageBreakPlan(
           created_at: new Date().toISOString(),
           episodeNumber: episodeNumber,
           pages: [layoutData],
-        }
+        } as Parameters<typeof normalizeAndValidateLayout>[0]
         const { layout, pageIssues } = normalizeAndValidateLayout(parsed)
         if (Object.values(pageIssues).some((issues) => issues.length > 0)) {
           logger.warn('Normalized layout for page due to issues', {

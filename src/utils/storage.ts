@@ -404,7 +404,9 @@ export class R2Storage implements Storage {
   async get(key: string): Promise<{ text: string; metadata?: Record<string, string> } | null> {
     return await this.retryableOperation(async () => {
       const object = await this.bucket.get(key)
-      if (!object) return null
+      if (!object) {
+        return null
+      }
 
       const text = await object.text()
       return {
