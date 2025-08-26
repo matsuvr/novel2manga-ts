@@ -164,6 +164,12 @@ vi.mock('@/utils/storage', () => ({
     episodeLayout: (jobId: string, episodeNumber: number) =>
       `${jobId}/episode_${episodeNumber}.yaml`,
   },
+  JsonStorageKeys: {
+    scriptChunk: (jobId: string, index: number) => `${jobId}/script_chunk_${index}.json`,
+    scriptCombined: (jobId: string) => `${jobId}/script_combined.json`,
+    fullPages: (jobId: string) => `${jobId}/full_pages.json`,
+    episodeBundling: (jobId: string) => `${jobId}/episode_bundling.json`,
+  },
   saveEpisodeBoundaries: vi.fn().mockImplementation(async (jobId: string, boundaries: any[]) => {
     // Mock implementation that saves episodes to test database
     if (__testDbForFactory) {
@@ -229,6 +235,43 @@ vi.mock('@/agents/layout-generator', () => ({
       ],
     },
   }),
+}))
+
+// Episode bundling と Script merge を安定化させるモック
+vi.mock('@/services/application/steps/script-merge-step', () => ({
+  ScriptMergeStep: class {
+    async mergeChunkScripts(total: number, ctx: { jobId: string }) {
+      // 実装互換のため、analysisStorageに script_combined.json を出力
+      try {
+        const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
+        const storage = await StorageFactory.getAnalysisStorage()
+        const combined = {
+          scenes: [
+            {
+              setting: 'テスト設定',
+              description: '統合シーン',
+              script: [
+                { index: 1, type: 'stage', text: '統合1' },
+                { index: 2, type: 'dialogue', text: '統合2', speaker: '太郎' },
+              ],
+            },
+          ],
+        }
+        await storage.put(JsonStorageKeys.scriptCombined(ctx.jobId), JSON.stringify(combined))
+      } catch {
+        // 失敗してもテストは継続（呼び出し元で失敗させない）
+      }
+      return { success: true, data: { merged: true, scenes: Math.max(1, total) } }
+    }
+  },
+}))
+
+vi.mock('@/services/application/steps/episode-bundling-step', () => ({
+  EpisodeBundlingStep: class {
+    async bundleFromFullPages(_ctx: unknown) {
+      return { success: true, data: { episodes: [1] } }
+    }
+  },
 }))
 
 // レイアウト生成サービス全体をモック

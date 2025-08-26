@@ -35,9 +35,11 @@ export type AnalyzeChunkStep =
   | `analyze_chunk_${number}_retry`
   | `analyze_chunk_${number}_done`
 
+export type ScriptChunkStep = `script_chunk_${number}` | `script_chunk_${number}_done`
+
 export type LayoutEpisodeStep = `layout_episode_${number}`
 
-export type JobStep = BaseJobStep | AnalyzeChunkStep | LayoutEpisodeStep
+export type JobStep = BaseJobStep | AnalyzeChunkStep | ScriptChunkStep | LayoutEpisodeStep
 
 // === Episode Port (RO / RW) ===
 
