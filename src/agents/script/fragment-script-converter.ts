@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { getLlmStructuredGenerator } from '@/agent/structured-generator'
+import { getLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import type { Script } from '@/types/script'

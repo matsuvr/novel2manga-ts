@@ -24,7 +24,8 @@ describe('Storage', () => {
       expect(StorageKeys.chunkAnalysis('job-1', 0)).toBe('job-1/chunk_0.json')
       expect(StorageKeys.integratedAnalysis('job-1')).toBe('job-1/integrated.json')
       expect(StorageKeys.narrativeAnalysis('job-1')).toBe('job-1/narrative.json')
-      expect(StorageKeys.episodeLayout('job-1', 1)).toBe('job-1/episode_1.yaml')
+      // レイアウトはJSONに統一
+      expect(StorageKeys.episodeLayout('job-1', 1)).toBe('job-1/episode_1.json')
       expect(StorageKeys.pageRender('job-1', 1, 1)).toBe('job-1/episode_1/page_1.png')
     })
   })
@@ -83,8 +84,8 @@ describe('Storage', () => {
     })
   })
 
-  describe('YAML layout saving', () => {
-    it('saves .yaml as plain text and reads back unchanged', async () => {
+  describe('Layout saving as plain text', () => {
+    it('saves layout text and reads back unchanged (stored as .json)', async () => {
       const jobId = 'testjob123'
       const episode = 1
       const yamlText = [
@@ -106,8 +107,8 @@ describe('Storage', () => {
       const loaded = await layoutPorts.getEpisodeLayout(jobId, episode)
       expect(loaded).toBe(yamlText)
 
-      // キーの形式も確認
-      expect(key).toBe('testjob123/episode_1.yaml')
+      // キーの形式も確認（JSONファイルとして保存）
+      expect(key).toBe('testjob123/episode_1.json')
     })
   })
 })

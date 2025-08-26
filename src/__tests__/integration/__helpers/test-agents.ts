@@ -4,10 +4,10 @@
  */
 
 import { vi } from 'vitest'
-import { AgentCore, AgentCoreFactory } from '@/agent/core'
-import { ReActPolicy } from '@/agent/policies/react'
-import { SingleTurnPolicy } from '@/agent/policies/singleTurn'
-import { SimpleToolRegistry } from '@/agent/tools'
+import { AgentCore, AgentCoreFactory } from '@/agents/core'
+import { ReActPolicy } from '@/agents/policies/react'
+import { SingleTurnPolicy } from '@/agents/policies/singleTurn'
+import { SimpleToolRegistry } from '@/agents/tools'
 import { FakeLlmClient } from '@/llm/fake'
 
 /**
@@ -179,18 +179,18 @@ export function createMockLayoutGenerator(): AgentCore {
                 {
                   panelIndex: 1,
                   content: 'テスト内容1',
-                  dialogue: [{ speaker: 'キャラクター1', lines: 'こんにちは' }],
+                  dialogue: [{ speaker: 'キャラクター1', text: 'こんにちは' }],
                 },
                 {
                   panelIndex: 2,
                   content: 'テスト内容2',
-                  dialogue: [{ speaker: 'キャラクター2', lines: 'こんにちは' }],
+                  dialogue: [{ speaker: 'キャラクター2', text: 'こんにちは' }],
                 },
                 { panelIndex: 3, content: 'テスト内容3', dialogue: [] },
                 {
                   panelIndex: 4,
                   content: 'テスト内容4',
-                  dialogue: [{ speaker: 'ナレーション', lines: '場面が変わる' }],
+                  dialogue: [{ speaker: 'ナレーション', text: '場面が変わる' }],
                 },
               ],
             },
@@ -202,14 +202,14 @@ export function createMockLayoutGenerator(): AgentCore {
                 {
                   panelIndex: 2,
                   content: 'テスト内容6',
-                  dialogue: [{ speaker: 'キャラクター1', lines: 'さようなら' }],
+                  dialogue: [{ speaker: 'キャラクター1', text: 'さようなら' }],
                 },
                 { panelIndex: 3, content: 'テスト内容7', dialogue: [] },
                 { panelIndex: 4, content: 'テスト内容8', dialogue: [] },
                 {
                   panelIndex: 5,
                   content: 'テスト内容9',
-                  dialogue: [{ speaker: 'キャラクター2', lines: 'また明日' }],
+                  dialogue: [{ speaker: 'キャラクター2', text: 'また明日' }],
                 },
                 { panelIndex: 6, content: 'テスト内容10', dialogue: [] },
               ],
@@ -240,7 +240,7 @@ export function setupAgentMocks() {
   }))
 
   // 新しいエージェントコアのモック
-  vi.mock('@/agent/core', () => ({
+  vi.mock('@/agents/core', () => ({
     AgentCore: vi.fn().mockImplementation(() => ({
       run: vi.fn().mockResolvedValue({
         messages: [
@@ -270,7 +270,7 @@ export function setupAgentMocks() {
   }))
 
   // 後方互換性のためのCompatAgentモック
-  vi.mock('@/agent/compat', () => ({
+  vi.mock('@/agents/compat', () => ({
     CompatAgent: vi.fn().mockImplementation(() => ({
       generateObject: vi.fn().mockResolvedValue(TEST_CHUNK_ANALYSIS),
       generate: vi.fn().mockResolvedValue('test response'),
@@ -529,12 +529,11 @@ export function setupAgentMocks() {
   vi.mock('@/utils/uuid', () => {
     let counter = 0
     return {
-      // 契約テスト期待: /^test-uuid-\\d+$/ にマッチ（先頭に1つのバックスラッシュ、続く 'd' の繰り返し）
-      // 並行時の一意性は 'd' の長さで担保
+      // 契約テスト期待: valid storage key format (no backslashes)
+      // 並行時の一意性は counter で担保
       generateUUID: vi.fn(() => {
         counter += 1
-        const length = 12 + (counter % 50)
-        return `test-uuid-\\${'d'.repeat(length)}`
+        return `test-uuid-${counter.toString().padStart(13, 'd')}`
       }),
     }
   })

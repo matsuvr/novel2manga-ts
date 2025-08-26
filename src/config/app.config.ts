@@ -1,9 +1,9 @@
 export const appConfig = {
   // チャンク分割設定
   chunking: {
-    defaultChunkSize: 3000, // デフォルトチャンクサイズ（文字数）- 削減
-    defaultOverlapSize: 300, // デフォルトオーバーラップサイズ（文字数）- 削減
-    maxChunkSize: 6000, // 最大チャンクサイズ - 削減
+    defaultChunkSize: 5000, // デフォルトチャンクサイズ（文字数）
+    defaultOverlapSize: 300, // デフォルトオーバーラップサイズ（文字数）
+    maxChunkSize: 10000, // 最大チャンクサイズ
     minChunkSize: 100, // 最小チャンクサイズ - 意味のある最小サイズに修正
     maxOverlapRatio: 0.5, // チャンクサイズに対する最大オーバーラップ比率
 
@@ -22,26 +22,36 @@ export const appConfig = {
   // LLM設定（モデル・パラメータは llm.config.ts に集約。ここではプロンプトのみ保持）
   llm: {
     // テキスト分析用設定（プロンプトのみ）
+    // NOTE: 以下のsystemPrompt/userPromptTemplateは、チャンク分析のJSON出力仕様を満たすように調整してください。
+    // - コメント: ここに「抽出フィールド（characters/scenes/dialogues/highlights/situations）と任意のpacing」を明記
+    // - JSONのみ出力、説明禁止、日本語で統一、未知フィールド禁止などの制約を記述
     textAnalysis: {
-      systemPrompt: `小説テキストからマンガ制作に必要な要素を抽出してください。
+      systemPrompt: `これは長文のテキスト一部分です。このテキストからマンガ制作に必要な以下の要素を抽出してください。
 
 出力は必ず以下のJSON形式のみ:
 {
   "characters": [{"name": "名前", "description": "説明", "firstAppearance": 0}],
-  "scenes": [{"location": "場所", "time": "時間", "description": "説明", "startIndex": 0, "endIndex": 0}],
+  "scenes": [{"location": "場所", "time": "時間または「不明」またはnull", "description": "説明", "startIndex": 0, "endIndex": 0}],
   "dialogues": [{"speakerId": "話者ID", "text": "セリフ", "emotion": "感情", "index": 0}],
   "highlights": [{"type": "climax|turning_point|emotional_peak|action_sequence", "description": "説明", "importance": 1, "startIndex": 0, "endIndex": 0}],
-  "situations": [{"description": "状況説明", "index": 0}]
+  "situations": [{"description": "状況説明", "index": 0}],
+  "pacing": "マンガとしてのペース"（pacingフィールドは任意）
 }
 
-説明文は一切出力禁止。JSONのみ出力。`,
+注意事項:
+- 時間や場所が不明確な場合は、timeフィールドにnullを設定するか「不明」と記載してください
+- 必ずsituationsフィールドも含めてください
+- 説明文は一切出力禁止。JSONのみ出力。
+- 未知のプロパティ禁止
+- すべて日本語で出力。日本語以外の文章が入力されていた場合は、現代日本語口語訳で出力
+- 未知フィールドは禁止`,
       userPromptTemplate: `チャンク{{chunkIndex}}:
 
 前: {{previousChunkText}}
 対象: {{chunkText}}
 次: {{nextChunkText}}
 
-上記テキストから要素を抽出し、JSONのみ出力。`,
+上記テキストから要素を抽出し、JSONのみ出力。前と次のチャンクは、あくまでも話を把握するために利用し、分析対象は対象のチャンクのみとすること`,
     },
 
     // 物語弧分析用設定（プロンプトのみ）
@@ -65,7 +75,8 @@ export const appConfig = {
       "highlightList": ["ハイライト"],
       "situationList": ["状況"]
     }
-  ]
+  ],
+  "overallAnalysis": "全体分析の概要"
 }
 
 JSONのみ出力。`,
@@ -76,51 +87,50 @@ JSONのみ出力。`,
 
 エピソード境界を特定し、JSONのみ出力。`,
     },
+    // NOTE: チャンク台本化用。入力は「チャンク全文」。
+    // - コメント: ここに「全セリフ漏れなく・長文は30字程度で分割・現代日本語口語・単一のJSONオブジェクト」を明記
+    // - {{analysisHints}}プレースホルダを使用する場合はテンプレ内に追加
     scriptConversion: {
-      systemPrompt: `以下の情報を基に、セリフ+ナレーション+心の声のセリフと、場面情報を表すト書きとして、台本形式のJSONにしてください。会話は全て漏らさず出力してください。もし、言語が現代日本語でなかった場合は、現代日本語口語訳で出力してください。
+      systemPrompt: `以下の情報を基に、セリフ+ナレーション+心の声のセリフと、場面情報を表すト書きとして、台本形式のJSONにしてください。会話は全て漏らさず出力してください。また、セリフが長い場合は、30文字程度の長さで分割した状態で台本にしてください。もし、言語が現代日本語でなかった場合は、現代日本語口語訳で出力してください。要約禁止。物語の情景をできるだけ忠実に台本形式で再現してください。
 
-        出力するJSONの構造:
-        {
-          "title": "エピソードタイトル（任意）",
-          "scenes": [
-            {
-              "id": "scene1",
-              "setting": "場所と時間（例：教室、午後）",
-              "description": "シーンの説明",
-              "script": [
-                {
-                  "index": 1,
-                  "type": "narration",
-                  "text": "ナレーション内容"
-                },
-                {
-                  "index": 2,
-                  "type": "dialogue",
-                  "speaker": "キャラクター名",
-                  "text": "セリフ内容"
-                },
-                {
-                  "index": 3,
-                  "type": "thought",
-                  "speaker": "キャラクター名",
-                  "text": "心の声"
-                },
-                {
-                  "index": 4,
-                  "type": "stage",
-                  "text": "ト書き・動作説明"
-                }
-              ]
-            }
-          ]
-        }
+CRITICAL: 必ず単一のJSONオブジェクトを返してください。配列ではありません。
 
-        type の値：
-        - "dialogue": キャラクターのセリフ
-        - "thought": キャラクターの心の声・内心
-        - "narration": ナレーション・地の文
-        - "stage": ト書き・動作や状況の説明
-        `,
+正しい出力例:
+{
+  "title": "病室での会話",
+  "scenes": [
+    {
+      "id": "1",
+      "setting": "病室、午後",
+      "description": "ジョンジーとスーの会話",
+      "script": [
+        {"index": 1, "type": "narration", "text": "スーが部屋に入る"},
+        {"index": 2, "type": "dialogue", "speaker": "ジョンジー", "text": "最後の一枚が散るとき、わたしも一緒に行くのよ"},
+        {"index": 3, "type": "dialogue", "speaker": "スー", "text": "そんな馬鹿な話は聞いたことがないわ"}
+      ]
+    },
+    {
+      "id": "2", 
+      "setting": "同じ病室、少し後",
+      "description": "続く会話",
+      "script": [
+        {"index": 1, "type": "dialogue", "speaker": "スー", "text": "あなたは元気になるのよ"},
+        {"index": 2, "type": "stage", "text": "スーがジョンジーの手を握る"}
+      ]
+    }
+  ]
+}
+
+絶対に避けるべき間違った形式:
+❌ 配列形式: [{"title": "...", "scenes": [...]}, {"title": "...", "scenes": [...]}]
+❌ 破綻した構造: {"scenes": [{"id": "1", ...}, "id", ":", "2", "setting", ":", "..."]}
+
+重要な指示:
+- 必ず単一のオブジェクト { } を返してください。配列 [ ] は絶対禁止です。
+- 複数シーンは scenes 配列内に複数のオブジェクトとして配置
+- 必ずscript配列に台本要素を含めてください（空配列は禁止）
+- オブジェクトのプロパティを文字列として分離しないでください
+- JSONのみ出力、説明文禁止`,
       userPromptTemplate: `Episode text:
 
       {{episodeText}}
@@ -136,14 +146,14 @@ JSONのみ出力。`,
 
       // エピソードフラグメント単位でのスクリプト変換用プロンプト
       fragmentConversion: {
-        systemPrompt: `以下の情報を基に、セリフ+ナレーション+心の声のセリフと、場面情報を表すト書きとして、台本形式のJSONにしてください。会話は全て漏らさず出力してください。もし、言語が現代日本語でなかった場合は、現代日本語口語訳で出力してください。
+        systemPrompt: `以下の情報を基に、セリフ+ナレーション+心の声のセリフと、場面情報を表すト書きとして、台本形式のJSONにしてください。会話は全て漏らさず出力してください。また、セリフが長い場合は、30文字程度の長さで分割した状態で台本にしてください。もし、言語が現代日本語でなかった場合は、現代日本語口語訳で出力してください。
 このテキストは大きなエピソードの一部（フラグメント）です。
 
 出力するJSONの構造:
 {
   "scenes": [
     {
-      "id": "fragment_scene_1",
+      "id": 1,
       "setting": "場所と時間（例：教室、午後）",
       "description": "シーンの説明",
       "script": [
@@ -178,7 +188,8 @@ JSONのみ出力。`,
 - このフラグメントは完全ではない可能性があります
 - 前後の文脈を考慮して、自然に繋がるようにしてください
 - 文の途中で切れている場合は、適切に補完してください
-- scene idには "fragment_scene_" プレフィックスを付けてください`,
+- scene idは整数で出力してください
+- script配列は必ず内容を含めてください（空配列は禁止）`,
 
         userPromptTemplate: `前のフラグメント内容（文脈参考用）:
 {{previousFragment}}
@@ -194,8 +205,10 @@ JSONのみ出力。`,
 上記のフラグメントから台本形式のJSONを作成してください。`,
       },
     },
+    // NOTE: コマ・ページ分割用。
+    // - コメント: ここに「1ページのコマ数は1..6のみ・スプラッシュ/見開き不可・JSONのみ」を明記
     pageBreakEstimation: {
-      systemPrompt: `以下はマンガにするための脚本です。重要度や見所が強いシーンは1ページ1コマ、見所になるシーンは1ページ2～3コマ、状況説明が主となるシーンは1ページ4～6コマにして分割します。
+      systemPrompt: `以下はマンガにするための脚本です。重要度や見所が強いシーンは1ページ1コマ、見所になるシーンは1ページ2～3コマ、状況説明が主となるシーンは1ページ4～6コマにして分割します。要約・省略は禁止であり、台本にある全要素を必ず全て盛り込んでください。全て日本語で書いてください。1つのコマに入るセリフの数は0～2個です。情景だけでセリフがないコマもありえます。1ページのコマ数は1～6、スプラッシュ、見開きは無しです。出力はJSONのみです。JSONの外側に説明は不要です。
 
 CRITICAL: You must return a single JSON object with a "pages" property containing an array of pages. Do NOT return an array of objects. The response must start with { and end with }, not [ and ].
 
@@ -214,7 +227,7 @@ Output format: {"pages": [...]}, not [{"pages": [...]}]. JSONのみ。`,
           "panelIndex": 1,
           "content": "Panel 1 の内容",
           "dialogue": [
-            { "speaker": "話者1", "lines": "発言1" }
+            { "speaker": "話者1", "text": "発言1" }
           ]
         }
       ]
@@ -227,14 +240,14 @@ Output format: {"pages": [...]}, not [{"pages": [...]}]. JSONのみ。`,
           "panelIndex": 1,
           "content": "Panel 2 内容",
           "dialogue": [
-            { "speaker": "話者 2", "lines": "セリフ 2" }
+            { "speaker": "話者 2", "text": "セリフ 2" }
           ]
         },
         {
           "panelIndex": 2,
           "content": "Panel 3 内容",
           "dialogue": [
-            { "speaker": "話者 3", "lines": "セリフ 3" }
+            { "speaker": "話者 3", "text": "セリフ 3" }
           ]
         }
       ]
@@ -242,9 +255,21 @@ Output format: {"pages": [...]}, not [{"pages": [...]}]. JSONのみ。`,
   ]
 }
 
+CRITICAL: dialogue配列内の各要素は、必ず{"speaker": "話者名", "text": "セリフ内容"}の形式のオブジェクトでなければなりません。文字列単体ではいけません。
+
 IMPORTANT: Return exactly one JSON object starting with { "pages": and ending with }. Do NOT wrap it in an array.
 
       `,
+    },
+    // NOTE: 連載マンガのエピソード束ね判定用（新規）。
+    // - コメント: ここに「20–50ページに収まるよう切れ目候補を返す・JSON {breakAfterPageIndices[], rationale[]}のみ」を明記
+    // - 入力には totalPages と pagesSummary（各ページの要約/強度/speech数等）を与える
+    episodeBundling: {
+      systemPrompt: `与えられたJSONは、ページ毎にどんな風にコマを割り、どんなセリフを入れるかを指定している設計書です。長編であるため、全体の一部分である可能性があります。pageIndexを参考にしてください。このJSONを読み、連載マンガのエピソードとして適切なところで分割をしてください。1エピソードは20～50ページ程度です。1エピソードにはかなら山場を入れ、かつ、引きをつけるところで分割してください。エピソード毎に、{["episodeNumber": 1, "title": "エピソード1のタイトル", "summary": "エピソード1の要約", "startPageIndex": 1, "endPageIndex": 5]}の形式でJSONを出力してください。`, // ここにエピソード束ねの方針・制約（20–50p、物語的切れ目、JSONのみ）を記述
+      userPromptTemplate: `分割対象となるJSONは以下です。
+      {{pageBreakEstimatJson}}
+      
+      トータルページ数、各ページの要素、強度、セリフ数は、与えられたJSONをよく確認してください`,
     },
   },
 

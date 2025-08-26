@@ -94,7 +94,7 @@ interface Tool {
 ### 基本的な使用
 
 ```typescript
-import { AgentCoreFactory } from '@/agent/core'
+import { AgentCoreFactory } from '@/agents/core'
 import { createLlmClientFromConfig } from '@/llm'
 
 const llmClient = createLlmClientFromConfig()
@@ -108,9 +108,9 @@ const result = await agent.run({
 ### ツール付きの使用
 
 ```typescript
-import { AgentCoreFactory } from '@/agent/core'
-import { ReActPolicy } from '@/agent/policies/react'
-import { ToolFactory } from '@/agent/tools'
+import { AgentCoreFactory } from '@/agents/core'
+import { ReActPolicy } from '@/agents/policies/react'
+import { ToolFactory } from '@/agents/tools'
 
 const agent = AgentCoreFactory.create({
   llmClient: createLlmClientFromConfig(),
@@ -198,6 +198,13 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
 
 - プライマリLLMが失敗した場合、自動的に代替プロバイダーを試行
 - 設定可能なフォールバックチェーン
+
+## エピソード束ね指針（20～50ページは目安）
+
+- 束ねステップは「1エピソードあたり20～50ページ」を“目安”として利用する。
+- 厳密なバリデーションは行わず、範囲外でも処理は継続する。
+- LLM提案が空 or 指針に沿う分割が得られない場合は、全ページを1エピソードとして扱うフォールバックを適用する。
+- ログには警告を記録するが、エラーとしては扱わない（処理は継続）。
 - エラー追跡とメトリクス
 
 ### ストリーミング
@@ -224,7 +231,7 @@ const agent = new BaseAgent({ provider: 'openai' })
 const result = await agent.generateObject(schema, prompt)
 
 // 新しい方法
-import { AgentCoreFactory } from '@/agent/core'
+import { AgentCoreFactory } from '@/agents/core'
 import { createLlmClientFromConfig } from '@/llm'
 
 const agent = AgentCoreFactory.create({
@@ -406,3 +413,4 @@ console.log(result.metadata?.provider)
 - エピソード抽出後、本文テキストをストレージに保存（`analysis` ストレージ、キー: `StorageKeys.episodeText(jobId, episodeNumber)`）。
 - DB `episodes` テーブルに `episode_text_path` 列を追加し、保存したキーを格納。
 - これにより、後続処理（スクリプト変換・ページ割り振り）や再処理時の再抽出を避け、トレーサビリティが向上。
+  Note: The agent implementation previously under `src/agent` has been consolidated into `src/agents`. All imports should target `@/agents/*`. Error handling is unified via `src/agents/errors.ts`.

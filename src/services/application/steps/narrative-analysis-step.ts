@@ -1,6 +1,6 @@
 import { analyzeNarrativeArc } from '@/agents/narrative-arc-analyzer'
 import { StorageChunkRepository } from '@/infrastructure/storage/chunk-repository'
-import { getJobRepository } from '@/repositories'
+import { getChunkRepository, getJobRepository } from '@/repositories'
 import type { EpisodeBoundary } from '@/types/episode'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import { saveEpisodeBoundaries } from '@/utils/storage'
@@ -26,35 +26,70 @@ export class NarrativeAnalysisStep implements PipelineStep {
     const { jobId, logger } = context
 
     try {
-      // ここで「エピソード分析の入力を準備（必要なストレージ/DBから読み出して集約する処理）」
-      const input = await prepareNarrativeAnalysisInput({
-        jobId,
-        startChunkIndex: 0,
-      })
-      if (!input) {
-        return { success: false, error: 'Failed to prepare narrative analysis input' }
-      }
+      // すべてのチャンクを走査して境界を順次推定（単発ではなく全体をカバー）
+      const chunkRepo = getChunkRepository()
+      const chunkMetas = await chunkRepo.getByJobId(jobId)
+      const totalChunks = chunkMetas.length
+      const boundariesAll: EpisodeBoundary[] = []
+      let boundaries: EpisodeBoundary[] = []
 
       const chunkRepository = new StorageChunkRepository()
-      let boundaries: EpisodeBoundary[]
 
       try {
-        // ここで「LLM を呼び出して物語構造（ナラティブアーク）を分析し、エピソード境界を推定」
-        //   - input（集約済みテキスト等）を LLM に渡す
-        logger.info('Starting narrative arc analysis', { jobId })
-        boundaries = (await analyzeNarrativeArc(input, chunkRepository)) ?? []
-        logger.info('Narrative arc analysis completed', {
+        logger.info('Starting narrative arc analysis (multi-pass)', { jobId, totalChunks })
+
+        let startIndex = 0
+        let nextEpisodeNumberOffset = 0
+
+        // 安全ブレーク: 最大ループ回数（全チャンク+5）
+        const maxPasses = Math.max(1, totalChunks) + 5
+        let pass = 0
+
+        while (startIndex < totalChunks && pass < maxPasses) {
+          pass++
+          // 入力準備（このパスの開始チャンクから目標文字数まで）
+          const input = await prepareNarrativeAnalysisInput({
+            jobId,
+            startChunkIndex: startIndex,
+          })
+          if (!input || !input.chunks || input.chunks.length === 0) {
+            logger.warn('No narrative input produced for pass', { jobId, startIndex, pass })
+            break
+          }
+
+          // 連番が重複しないように episodeNumber の開始番号をオフセット
+          const startingEpisodeNumber = nextEpisodeNumberOffset + 1
+
+          const batchBoundaries =
+            (await analyzeNarrativeArc({ ...input, startingEpisodeNumber }, chunkRepository)) ?? []
+
+          // 追加
+          boundariesAll.push(...batchBoundaries)
+
+          // 次のパスの開始位置を進める
+          // 通常はこのパスで扱ったチャンク数分だけ進める（重複を避けるため +1 で前進）
+          startIndex += input.chunks.length
+          // エピソード番号オフセットを更新
+          if (batchBoundaries.length > 0) {
+            nextEpisodeNumberOffset =
+              startingEpisodeNumber - 1 + Math.max(...batchBoundaries.map((b) => b.episodeNumber))
+          }
+
+          logger.info('Narrative arc pass completed', {
+            jobId,
+            pass,
+            startIndex,
+            batchBoundaries: batchBoundaries.length,
+            totalAccumulated: boundariesAll.length,
+          })
+        }
+
+        logger.info('Narrative arc analysis completed (multi-pass)', {
           jobId,
-          boundariesFound: boundaries.length,
-          boundaries: boundaries.map((b) => ({
-            episodeNumber: b.episodeNumber,
-            title: b.title,
-            startChunk: b.startChunk,
-            startCharIndex: b.startCharIndex,
-            endChunk: b.endChunk,
-            endCharIndex: b.endCharIndex,
-          })),
+          boundariesFound: boundariesAll.length,
         })
+
+        boundaries = boundariesAll
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
         logger.error('Narrative arc analysis failed', {

@@ -41,6 +41,21 @@ pages:
         content: 'サンプル2'
 `
   const base64Png = Buffer.from('dummy').toString('base64')
+  const layoutJson = JSON.stringify({
+    title: 'テストマンガ',
+    created_at: '2024-01-01T00:00:00.000Z',
+    episodeNumber: 1,
+    pages: [
+      {
+        page_number: 1,
+        panels: [{ id: 1, position: { x: 0.1, y: 0.1 }, size: { width: 0.8, height: 0.4 } }],
+      },
+      {
+        page_number: 2,
+        panels: [{ id: 1, position: { x: 0.1, y: 0.55 }, size: { width: 0.8, height: 0.4 } }],
+      },
+    ],
+  })
   return {
     StorageFactory: {
       getDatabase: vi.fn(),
@@ -49,7 +64,7 @@ pages:
         put: vi.fn(),
       }),
       getLayoutStorage: vi.fn().mockResolvedValue({
-        get: vi.fn().mockImplementation(async (_key: string) => ({ text: validYaml })),
+        get: vi.fn().mockImplementation(async (_key: string) => ({ text: layoutJson })),
         put: vi.fn(),
       }),
       getOutputStorage: vi.fn().mockResolvedValue({
@@ -58,7 +73,7 @@ pages:
       }),
     },
     StorageKeys: {
-      episodeLayout: vi.fn((jobId: string, episode: number) => `${jobId}/episode_${episode}.yaml`),
+      episodeLayout: vi.fn((jobId: string, episode: number) => `${jobId}/episode_${episode}.json`),
       pageRender: vi.fn(
         (jobId: string, episode: number, page: number) =>
           `${jobId}/renders/episode_${episode}/page_${page}.png`,

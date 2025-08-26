@@ -6,7 +6,9 @@ import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
 import { getDatabaseService } from '@/services/db-factory'
 import type { PageBreakPlan } from '@/types/script'
-import { parseMangaLayoutFromYaml } from '@/utils/layout-parser'
+import { normalizeAndValidateLayout } from '@/utils/layout-normalizer'
+import yaml from 'js-yaml'
+// YAML依存を排除: 直接JSONのMangaLayoutを構築して使用する
 
 export interface BatchOptions {
   concurrency?: number
@@ -35,10 +37,11 @@ export interface BatchRenderResult {
   duration: number
 }
 
-export async function renderBatchFromYaml(
+// 互換APIは維持せず、JSONレイアウト経路のみ使用します。
+export async function renderBatchFromJson(
   jobId: string,
   episodeNumber: number,
-  layoutYaml: string,
+  mangaLayoutJson: unknown,
   pages?: number[],
   options: BatchOptions = {},
   ports: StoragePorts = getStoragePorts(),
@@ -47,8 +50,13 @@ export async function renderBatchFromYaml(
   const startTime = Date.now()
   const dbService = getDatabaseService()
 
-  // parse & validate layout (supports canonical and bbox formats)
-  const mangaLayout = parseMangaLayoutFromYaml(layoutYaml)
+  // layoutはJSONとして渡される前提
+  const parsedLayout = mangaLayoutJson as Parameters<typeof normalizeAndValidateLayout>[0]
+  // normalize and auto-fix overlaps/gaps using embedded references
+  const { layout: mangaLayout, pageIssues } = normalizeAndValidateLayout(parsedLayout)
+  if (Object.values(pageIssues).some((issues) => issues.length > 0)) {
+    logger.warn('Layout issues detected and normalized', { pageIssues })
+  }
   const allPages = mangaLayout.pages.map((p) => p.page_number)
   const targetPages = pages && pages.length > 0 ? pages : allPages
   const validPages = targetPages.filter((p) => allPages.includes(p))
@@ -249,34 +257,40 @@ export async function renderFromPageBreakPlan(
         // Create layout data by combining panel layout with page content
         const layoutData = {
           page_number: page.pageNumber,
-          panels_count: page.panelCount,
           panels: page.panels.map((panel, index) => {
             const layoutPanel = panelLayout.panels[index]
+            const [x, y, width, height] = layoutPanel.bbox
             return {
               id: panel.panelIndex,
-              bbox: layoutPanel.bbox,
+              position: { x, y },
+              size: { width, height },
               content: panel.content,
-              dialogue: panel.dialogue.map((d) => `${d.speaker}: ${d.lines}`).join('\n'),
+              dialogues: panel.dialogue.map((d) => ({
+                text:
+                  (d as { text?: string; lines?: string }).text ??
+                  (d as { lines?: string }).lines ??
+                  '',
+                speaker: d.speaker,
+                type: 'speech' as const,
+              })),
             }
           }),
         }
 
-        // Convert layout data to YAML format for compatibility with existing renderer
-        const yamlContent = `page_${page.pageNumber}:
-  panels_count: ${layoutData.panels_count}
-  panels:
-${layoutData.panels
-  .map(
-    (panel) =>
-      `    - id: ${panel.id}
-      bbox: [${panel.bbox.join(', ')}]
-      content: "${panel.content.replace(/"/g, '\\"')}"
-      dialogue: "${panel.dialogue.replace(/"/g, '\\"')}"`,
-  )
-  .join('\n')}`
-
-        // Parse YAML content to MangaLayout
-        const layout = parseMangaLayoutFromYaml(yamlContent)
+        // 直接MangaLayout JSONを構築
+        const parsed = {
+          title: `Episode ${episodeNumber}`,
+          created_at: new Date().toISOString(),
+          episodeNumber: episodeNumber,
+          pages: [layoutData],
+        } as Parameters<typeof normalizeAndValidateLayout>[0]
+        const { layout, pageIssues } = normalizeAndValidateLayout(parsed)
+        if (Object.values(pageIssues).some((issues) => issues.length > 0)) {
+          logger.warn('Normalized layout for page due to issues', {
+            pageNumber: page.pageNumber,
+            pageIssues,
+          })
+        }
 
         // Render the page using the existing renderer
         const imageBlob = await renderer.renderToImage(layout, page.pageNumber, 'png')
@@ -372,4 +386,30 @@ ${layoutData.panels
     results,
     duration,
   }
+}
+
+// Backward-compatible wrapper: accept YAML or JSON text, parse safely, then delegate to JSON renderer
+export async function renderBatchFromYaml(
+  jobId: string,
+  episodeNumber: number,
+  layoutYaml: string,
+  pages?: number[],
+  options: BatchOptions = {},
+  ports: StoragePorts = getStoragePorts(),
+  logger: LoggerPort = getLogger().withContext({ jobId, episodeNumber, service: 'render' }),
+): Promise<BatchRenderResult> {
+  let parsed: unknown
+  // Try YAML first; if it fails, try JSON.parse for historical JSON storage
+  try {
+    parsed = yaml.load(layoutYaml) as unknown
+  } catch {
+    try {
+      parsed = JSON.parse(layoutYaml) as unknown
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      logger.error('Failed to parse layout text as YAML/JSON', { error: msg })
+      throw new Error(`Invalid layout text: ${msg}`)
+    }
+  }
+  return renderBatchFromJson(jobId, episodeNumber, parsed, pages, options, ports, logger)
 }

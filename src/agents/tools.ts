@@ -1,6 +1,6 @@
 import { z } from 'zod'
+import { AgentError, AgentErrorType } from '@/agents/errors'
 import type { Tool, ToolRegistry } from './types'
-import { ToolError } from './types'
 
 /**
  * シンプルなツールレジストリの実装
@@ -49,22 +49,20 @@ export class SimpleToolRegistry implements ToolRegistry {
   ): Promise<unknown> {
     const tool = this.get(toolName)
     if (!tool) {
-      throw new ToolError(
+      throw new AgentError(
+        AgentErrorType.API_ERROR,
         `Tool '${toolName}' not found`,
-        toolName,
         'unknown',
-        undefined,
         new Error(`Tool '${toolName}' is not registered`),
       )
     }
 
     // バリデーション
     if (!this.validate(toolName, args)) {
-      throw new ToolError(
+      throw new AgentError(
+        AgentErrorType.SCHEMA_VALIDATION_ERROR,
         `Invalid arguments for tool '${toolName}'`,
-        toolName,
         'unknown',
-        undefined,
         new Error(`Arguments do not match schema for tool '${toolName}'`),
       )
     }
@@ -72,12 +70,11 @@ export class SimpleToolRegistry implements ToolRegistry {
     try {
       return await tool.handle(args, context)
     } catch (error) {
-      throw new ToolError(
+      throw new AgentError(
+        AgentErrorType.API_ERROR,
         `Tool '${toolName}' execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        toolName,
         'unknown',
-        undefined,
-        error instanceof Error ? error : undefined,
+        error,
       )
     }
   }

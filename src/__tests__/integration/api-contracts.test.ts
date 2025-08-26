@@ -243,7 +243,7 @@ describe('API Contract Tests', () => {
         expect(data.error).toBeDefined()
       } else {
         expect(data.success).toBe(true)
-        expect(data.jobId).toMatch(/^test-uuid-\\d+$/)
+        expect(data.jobId).toMatch(/^test-uuid-[d\d]+$/)
         expect(data.chunkCount).toBeGreaterThan(0)
         expect(data.message).toContain('分析を完了しました')
       }
