@@ -3,6 +3,60 @@ import { getLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import { type Script, ScriptSchema } from '@/types/script'
 
+// ===== Helper types and functions (extracted for readability/testability) =====
+type SceneLine = Script['scenes'][0]['script'][number]
+type SceneShape = {
+  id?: string
+  setting?: string
+  description?: string
+  script: SceneLine[]
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null
+}
+
+function normalizeLineType(v: unknown): SceneLine['type'] {
+  const t = String(v || '').toLowerCase()
+  return t === 'dialogue' || t === 'thought' || t === 'narration' || t === 'stage'
+    ? (t as SceneLine['type'])
+    : 'stage'
+}
+
+export function coerceScriptLines(lines: unknown[]): SceneLine[] {
+  const out: SceneLine[] = []
+  for (const item of lines) {
+    if (isRecord(item)) {
+      const text = typeof item.text === 'string' ? item.text : String(item.text ?? '')
+      out.push({
+        index: typeof item.index === 'number' ? item.index : undefined,
+        type: normalizeLineType(item.type),
+        speaker: typeof item.speaker === 'string' ? item.speaker : undefined,
+        character: typeof item.character === 'string' ? item.character : undefined,
+        text,
+      })
+    } else if (typeof item === 'string') {
+      out.push({ type: 'narration', text: item })
+    }
+  }
+  return out
+}
+
+export function isSceneObject(v: unknown): v is SceneShape {
+  if (!isRecord(v)) return false
+  const scriptVal = (v as Record<string, unknown>).script
+  if (!Array.isArray(scriptVal)) return false
+  // Accept if every entry has at least a stringifiable text
+  return scriptVal.every((line) => {
+    if (isRecord(line))
+      return (
+        typeof (line as { text?: unknown }).text === 'string' ||
+        typeof (line as { text?: unknown }).text === 'number'
+      )
+    return typeof line === 'string'
+  })
+}
+
 export interface ScriptConversionInput {
   episodeText: string
   characterList?: string
@@ -60,54 +114,7 @@ function repairCorruptedScriptJson(result: unknown, options?: ScriptConversionOp
   )
 
   try {
-    // Type helpers
-    const isRecord = (v: unknown): v is Record<string, unknown> =>
-      typeof v === 'object' && v !== null
-
-    type SceneLine = Script['scenes'][0]['script'][number]
-    type SceneShape = {
-      id?: string
-      setting?: string
-      description?: string
-      script: SceneLine[]
-    }
-
-    const normalizeLineType = (v: unknown): SceneLine['type'] => {
-      const t = String(v || '').toLowerCase()
-      return t === 'dialogue' || t === 'thought' || t === 'narration' || t === 'stage'
-        ? (t as SceneLine['type'])
-        : 'stage'
-    }
-
-    const coerceScriptLines = (lines: unknown[]): SceneLine[] => {
-      const out: SceneLine[] = []
-      for (const item of lines) {
-        if (isRecord(item)) {
-          const text = typeof item.text === 'string' ? item.text : String(item.text ?? '')
-          out.push({
-            index: typeof item.index === 'number' ? item.index : undefined,
-            type: normalizeLineType(item.type),
-            speaker: typeof item.speaker === 'string' ? item.speaker : undefined,
-            character: typeof item.character === 'string' ? item.character : undefined,
-            text,
-          })
-        } else if (typeof item === 'string') {
-          out.push({ type: 'narration', text: item })
-        }
-      }
-      return out
-    }
-
-    const isSceneObject = (v: unknown): v is SceneShape => {
-      if (!isRecord(v)) return false
-      const scriptVal = (v as Record<string, unknown>).script
-      if (!Array.isArray(scriptVal)) return false
-      // Accept if every entry has at least a stringifiable text
-      return scriptVal.every((line) => {
-        if (isRecord(line)) return typeof line.text === 'string' || typeof line.text === 'number'
-        return typeof line === 'string'
-      })
-    }
+    // Type helpers moved to top-level for testability
 
     const repairedScenes: Array<{
       id?: string

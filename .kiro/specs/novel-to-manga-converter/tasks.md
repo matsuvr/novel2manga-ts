@@ -41,6 +41,12 @@
 - [ ] Generate and apply Drizzle migration for episode_text_path
 - [ ] Add unit tests covering DB path update and retrieval API
 
+## New (2025-08-26): Episode Bundling Policy Update
+
+- [x] Treat 20–50 pages as advisory, not a hard validation.
+- [x] Implement fallback: when proposals are empty or total pages < 20, bundle all pages into a single episode and log a warning.
+- [x] Add unit test ensuring fallback behavior for <20 pages.
+
 ## New (2025-08-16): Panel Count + Template Snap
 
 - [x] Loader: Read `public/docs/panel_layout_sample/<count>/*.json` and build `LayoutTemplate` candidates

@@ -117,6 +117,26 @@ export function buildLayoutFromAssignment(
         content = settingOrDesc && settingOrDesc.trim().length > 0 ? settingOrDesc : '…'
       }
 
+      // 重要度スコアリング（type重み付け強化）
+      const speechCount = dialogues.filter(
+        (d) => (d as { type?: 'speech' | 'thought' | 'narration' }).type === 'speech',
+      ).length
+      const thoughtCount = dialogues.filter(
+        (d) => (d as { type?: 'speech' | 'thought' | 'narration' }).type === 'thought',
+      ).length
+      const narrationCount = dialogues.filter(
+        (d) => (d as { type?: 'speech' | 'thought' | 'narration' }).type === 'narration',
+      ).length
+      const stageCount = stageLines.length
+      const contentBoost = content.length >= 50 ? 1 : 0
+      const rawImportance =
+        3 +
+        2 * (speechCount + thoughtCount) +
+        Math.min(2, narrationCount) +
+        Math.min(2, stageCount) +
+        contentBoost
+      const importance = Math.min(10, Math.max(3, rawImportance))
+
       const shape = template.panels[idx % template.panels.length]
       return {
         id: nextId++,
@@ -125,10 +145,7 @@ export function buildLayoutFromAssignment(
         content,
         dialogues,
         sourceChunkIndex: 0,
-        importance: Math.min(
-          10,
-          Math.max(3, dialogues.length >= 2 ? 7 : stageLines.length >= 1 ? 6 : 5),
-        ),
+        importance,
       }
     })
 
@@ -157,7 +174,8 @@ export function buildLayoutFromPageBreaks(
       const dialogueArr = Array.isArray(pp.dialogue) ? pp.dialogue : []
       const dialogues: Dialogue[] = dialogueArr.map((d) => ({
         speaker: d.speaker,
-        text: d.text,
+        text:
+          (d as { text?: string; lines?: string }).text ?? (d as { lines?: string }).lines ?? '',
       }))
 
       // 空コマ禁止: content が空の場合でも、dialogue を content にコピーしない
@@ -175,7 +193,19 @@ export function buildLayoutFromPageBreaks(
         sourceChunkIndex: 0,
         importance: Math.min(
           10,
-          Math.max(3, dialogues.length >= 2 ? 7 : content.length >= 50 ? 6 : 5),
+          Math.max(
+            3,
+            // セリフ/心の声を高く評価、次点で長い状況説明
+            dialogues.filter(
+              (d) =>
+                (d as { type?: 'speech' | 'thought' | 'narration' }).type === 'speech' ||
+                (d as { type?: 'speech' | 'thought' | 'narration' }).type === 'thought',
+            ).length >= 2
+              ? 7
+              : content.length >= 50
+                ? 6
+                : 5,
+          ),
         ),
       }
     })
