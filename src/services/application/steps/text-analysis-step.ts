@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import type { Job } from '@/db/schema'
 import { getTextAnalysisConfig } from '@/config'
+import type { Job } from '@/db/schema'
 import { getJobRepository } from '@/repositories'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
@@ -26,6 +26,7 @@ export class TextAnalysisStep implements PipelineStep {
       scenes: z.array(
         z.object({
           location: z.string(),
+          time: z.string().nullable().optional(),
           description: z.string(),
           startIndex: z.number(),
           endIndex: z.number(),

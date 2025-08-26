@@ -16,7 +16,7 @@ vi.mock('@/agents/script/script-converter', () => ({
       {
         id: 'scene1',
         description: 'Mock scene',
-        content: [
+        script: [
           {
             index: 0,
             type: 'stage',
@@ -28,7 +28,7 @@ vi.mock('@/agents/script/script-converter', () => ({
   }),
 }))
 
-vi.mock('@/agent/structured-generator', () => ({
+vi.mock('@/agents/structured-generator', () => ({
   getLlmStructuredGenerator: vi.fn().mockReturnValue({
     generateObjectWithFallback: vi.fn().mockResolvedValue({}),
   }),

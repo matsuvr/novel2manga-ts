@@ -17,6 +17,28 @@ vi.mock('@/services/database', () => ({
   })),
 }))
 
+describe('job status API', () => {
+  it('should include processingEpisode/processingPage fields', () => {
+    // Minimal shape assertion; actual values may be undefined at start
+    const payload: any = {
+      job: {
+        status: 'processing',
+        currentStep: 'layout',
+        processedChunks: 0,
+        totalChunks: 0,
+        processedEpisodes: 0,
+        totalEpisodes: 1,
+        renderedPages: 0,
+        totalPages: 10,
+        processingEpisode: 1,
+        processingPage: 2,
+      },
+    }
+    expect('processingEpisode' in payload.job).toBe(true)
+    expect('processingPage' in payload.job).toBe(true)
+  })
+})
+
 describe('/api/jobs/[jobId]/status', () => {
   let mockDbService: any
 

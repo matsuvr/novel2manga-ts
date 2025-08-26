@@ -31,16 +31,25 @@ export default async function EpisodePreviewPage({ params }: { params: Promise<P
   // ページ番号を推定（レイアウトの最大ページ）
   const layoutStorage = await StorageFactory.getLayoutStorage()
   const yamlText = await layoutStorage.get(StorageKeys.episodeLayout(jobId, epNum))
-  // Get page numbers from layout data
+  // Get page numbers from layout data (supports both YAML pages[].page_number and JSON pages[].pageNumber)
   let pageNumbers: number[] = []
   try {
     if (yamlText?.text) {
       const { load } = await import('js-yaml')
       const parsed = load(yamlText.text) as {
-        pages?: Array<{ page_number: number }>
+        pages?: Array<Record<string, unknown>>
       }
       if (parsed?.pages && Array.isArray(parsed.pages)) {
-        pageNumbers = parsed.pages.map((p) => p.page_number).sort((a, b) => a - b)
+        pageNumbers = parsed.pages
+          .map((p) => {
+            const v = p as Record<string, unknown>
+            const n =
+              (typeof v.page_number === 'number' ? v.page_number : undefined) ??
+              (typeof v.pageNumber === 'number' ? v.pageNumber : undefined)
+            return typeof n === 'number' && Number.isFinite(n) ? n : undefined
+          })
+          .filter((n): n is number => typeof n === 'number')
+          .sort((a, b) => a - b)
       }
     }
   } catch (e) {
@@ -51,13 +60,30 @@ export default async function EpisodePreviewPage({ params }: { params: Promise<P
     })
     // YAML parse failure - layout data is required
   }
-  if (pageNumbers.length === 0) {
-    throw new Error(
-      `Layout data not found for episode ${episodeNumber}. Layout generation must be completed first.`,
-    )
+  // Fallback: If layout did not provide page numbers, enumerate render storage keys
+  const renderStorage = await StorageFactory.getRenderStorage()
+  if (pageNumbers.length === 0 && typeof renderStorage.list === 'function') {
+    try {
+      const prefix = `${jobId}/episode_${epNum}/`
+      const keys = await renderStorage.list(prefix)
+      const nums = keys
+        .map((k) => {
+          const m = k.match(/episode_\d+\/page_(\d+)\.png$/)
+          return m ? Number(m[1]) : undefined
+        })
+        .filter((n): n is number => typeof n === 'number' && Number.isFinite(n))
+        .sort((a, b) => a - b)
+      pageNumbers = nums
+    } catch {
+      // ignore
+    }
   }
 
-  const renderStorage = await StorageFactory.getRenderStorage()
+  if (pageNumbers.length === 0) {
+    // 最終フォールバック: プレビューは空表示
+    pageNumbers = []
+  }
+
   // Load validation info from progress JSON to mark normalized pages
   const layoutProgress = await layoutStorage.get(StorageKeys.episodeLayoutProgress(jobId, epNum))
   let normalizedPages: number[] = []

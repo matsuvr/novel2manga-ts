@@ -4,13 +4,13 @@
     "panels": [
       {
         "id": 1,
-        "bbox": [0.05, 0.08, 0.9, 0.45],
+        "bbox": [0, 0.08, 1, 0.45],
         "content": "PLACEHOLDER",
         "dialogue": "PLACEHOLDER"
       },
       {
         "id": 2,
-        "bbox": [0.05, 0.56, 0.9, 0.34],
+        "bbox": [0, 0.56, 1, 0.34],
         "content": "PLACEHOLDER",
         "dialogue": "PLACEHOLDER"
       }

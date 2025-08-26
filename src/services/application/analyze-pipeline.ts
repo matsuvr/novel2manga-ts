@@ -5,18 +5,18 @@ import type { EpisodeBoundary } from '@/types/episode'
 
 // Import pipeline steps
 import {
-  NovelManagementStep,
-  JobManagementStep,
-  TextChunkingStep,
-  TextAnalysisStep,
-  NarrativeAnalysisStep,
+  BasePipelineStep,
+  CompletionStep,
   EpisodeProcessingStep,
-  ScriptConversionStep,
+  JobManagementStep,
+  NarrativeAnalysisStep,
+  NovelManagementStep,
   PageBreakStep,
   RenderingStep,
-  CompletionStep,
-  BasePipelineStep,
+  ScriptConversionStep,
   type StepContext,
+  TextAnalysisStep,
+  TextChunkingStep,
 } from './steps'
 
 export interface AnalyzeOptions {
@@ -205,7 +205,15 @@ export class AnalyzePipeline extends BasePipelineStep {
           const pageBreakPlanText = await this.ports.layout.getEpisodeLayout(jobId, episodeNumber)
           if (pageBreakPlanText) {
             const pageBreakPlan = JSON.parse(pageBreakPlanText)
-            totalPages += pageBreakPlan.pages.length
+            if (pageBreakPlan?.pages && Array.isArray(pageBreakPlan.pages)) {
+              totalPages += pageBreakPlan.pages.length
+            } else {
+              logger.warn('Invalid page break plan structure', {
+                jobId,
+                episodeNumber,
+                pageBreakPlan,
+              })
+            }
           }
         } catch (episodeError) {
           const errorMessage =
@@ -281,28 +289,109 @@ export class AnalyzePipeline extends BasePipelineStep {
       logger.info('AnalyzePipeline.runWithText: completed', { jobId, chunkCount: totalChunks })
       return { jobId, chunkCount: totalChunks, response: completionResult.data.response }
     } else {
-      // No episode boundaries detected
-      logger.warn('No episode boundaries detected, but proceeding with basic completion', {
+      // No episode boundaries detected → Fallback: treat full text as a single episode
+      logger.warn('No episode boundaries detected, falling back to single-episode processing', {
         jobId,
-        boundariesLength: boundaries?.length || 0,
-        boundariesType: typeof boundaries,
+        totalChunks,
       })
 
-      // Mark episode step as completed
+      // Episode step
       await this.markStepCompleted(jobId, 'episode', { logger })
 
-      // Complete remaining steps
+      // Persist a synthetic single-episode boundary for export/UI compatibility
+      try {
+        const lastChunkIndex = Math.max(0, totalChunks - 1)
+        let lastChunkLen = 0
+        if (totalChunks > 0) {
+          const lastChunkObj = await this.ports.chunk.getChunk(jobId, lastChunkIndex)
+          lastChunkLen = typeof lastChunkObj?.text === 'string' ? lastChunkObj.text.length : 0
+        } else {
+          lastChunkLen = novelText.length
+        }
+        const { saveEpisodeBoundaries } = await import('@/utils/storage')
+        await saveEpisodeBoundaries(jobId, [
+          {
+            episodeNumber: 1,
+            title: options.title || 'Episode 1',
+            summary: undefined as unknown as string | undefined,
+            startChunk: 0,
+            startCharIndex: 0,
+            endChunk: lastChunkIndex,
+            endCharIndex: lastChunkLen,
+            confidence: 1,
+          },
+        ])
+      } catch (persistError) {
+        logger.warn('Failed to persist synthetic episode boundary (fallback continues)', {
+          jobId,
+          error: persistError instanceof Error ? persistError.message : String(persistError),
+        })
+      }
+
+      // Initialize layout step for fallback
+      await this.updateJobStep(jobId, 'layout', { logger }, totalChunks, totalChunks)
+
+      const episodeNumber = 1
+
+      // Convert full novel text to script directly (bypass DB episode boundaries)
+      const scriptResult = await this.scriptStep.convertToScript(
+        novelText,
+        episodeNumber,
+        [],
+        context,
+      )
+      if (!scriptResult.success) {
+        await this.updateJobStatus(jobId, 'failed', { logger }, scriptResult.error)
+        throw new Error(scriptResult.error)
+      }
+      const { script } = scriptResult.data
+
+      // Page breaks and layout storage
+      const pageBreakResult = await this.pageBreakStep.estimatePageBreaks(
+        script,
+        episodeNumber,
+        context,
+      )
+      if (!pageBreakResult.success) {
+        await this.updateJobStatus(jobId, 'failed', { logger }, pageBreakResult.error)
+        throw new Error(pageBreakResult.error)
+      }
+
+      if (!pageBreakResult.data) {
+        const errorMessage = 'Page break result data is undefined'
+        await this.updateJobStatus(jobId, 'failed', { logger }, errorMessage)
+        throw new Error(errorMessage)
+      }
+
+      const totalPages = pageBreakResult.data.totalPages
+      await this.updateJobTotalPages(jobId, totalPages, { logger })
+      await this.markStepCompleted(jobId, 'layout', { logger })
+
+      // Render
+      await this.updateJobStep(jobId, 'render', { logger }, 0, totalPages)
+      const renderingResult = await this.renderingStep.renderEpisodes(
+        [episodeNumber],
+        { isDemo: options.isDemo },
+        context,
+      )
+      if (!renderingResult.success) {
+        logger.error('Rendering failed (fallback)', { jobId, error: renderingResult.error })
+        if (!options.isDemo) {
+          throw new Error(renderingResult.error)
+        }
+      }
       await this.markStepCompleted(jobId, 'render', { logger })
+
+      // Complete
       await this.updateJobStep(jobId, 'complete', { logger })
       await this.updateJobStatus(jobId, 'completed', { logger })
 
-      // Generate completion response
-      const completionResult = await this.completionStep.completeJob(totalChunks, false, context)
+      const completionResult = await this.completionStep.completeJob(totalChunks, true, context)
       if (!completionResult.success) {
         throw new Error(completionResult.error)
       }
 
-      logger.info('Job completed without episodes', { jobId })
+      logger.info('Job completed via single-episode fallback', { jobId, episodeNumber, totalPages })
       return { jobId, chunkCount: totalChunks, response: completionResult.data.response }
     }
   }
@@ -355,6 +444,10 @@ export class AnalyzePipeline extends BasePipelineStep {
       throw new Error(pageBreakResult.error)
     }
 
+    if (!pageBreakResult.data) {
+      throw new Error('Page break result data is undefined')
+    }
+
     logger.info('Episode processing completed', {
       jobId: context.jobId,
       episodeNumber,
@@ -393,10 +486,34 @@ export class AnalyzePipeline extends BasePipelineStep {
       renderCompleted: job.renderCompleted,
     })
 
-    // 既に完了している場合
-    if (job.status === 'completed' && job.renderCompleted) {
+    // 実際の完了状態を確認 - status が completed でも、すべてのステップが完了していない場合は再開可能
+    const isActuallyCompleted =
+      job.splitCompleted &&
+      job.analyzeCompleted &&
+      job.episodeCompleted &&
+      job.layoutCompleted &&
+      job.renderCompleted
+
+    if (job.status === 'completed' && isActuallyCompleted) {
       logger.info('Job already completed, nothing to resume', { jobId })
       return { resumePoint: 'completed' }
+    }
+
+    // status が completed だが実際には完了していない場合、statusを processing に戻す
+    if (job.status === 'completed' && !isActuallyCompleted) {
+      logger.warn('Job marked as completed but steps incomplete, resetting status to processing', {
+        jobId,
+        splitCompleted: job.splitCompleted,
+        analyzeCompleted: job.analyzeCompleted,
+        episodeCompleted: job.episodeCompleted,
+        layoutCompleted: job.layoutCompleted,
+        renderCompleted: job.renderCompleted,
+      })
+      await jobRepo.updateStatus(
+        jobId,
+        'processing',
+        'Status reset - incomplete steps detected during resume',
+      )
     }
 
     // 小説テキストを取得（ストレージから読み込み）

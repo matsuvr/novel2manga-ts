@@ -125,6 +125,8 @@ export async function GET(
         totalEpisodes: job.totalEpisodes ?? 0,
         renderedPages: job.renderedPages ?? 0,
         totalPages: job.totalPages ?? 0,
+        processingEpisode: job.processingEpisode ?? undefined,
+        processingPage: job.processingPage ?? undefined,
         lastError: job.lastError,
         lastErrorStep: job.lastErrorStep,
         progress: job.progress,

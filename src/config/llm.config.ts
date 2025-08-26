@@ -54,8 +54,8 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
   groq: {
     apiKey: process.env.GROQ_API_KEY,
     model: 'openai/gpt-oss-120b',
-    // プロンプト簡素化により削減
-    maxTokens: 60000,
+    // Script conversion token limit reduced to prevent generation failure
+    maxTokens: 16000,
     timeout: 30_000,
   },
   openrouter: {
@@ -150,7 +150,7 @@ export type ModelLimits = {
 export function getModelLimits(provider: string, model: string): ModelLimits {
   // 既定値（環境で上書き可）
   const _defaultSoftCap = toNum(process.env.GROQ_SOFT_CAP) ?? 60000
-  const defaultMin = toNum(process.env.GROQ_MIN_COMPLETION) ?? 1024
+  const defaultMin = toNum(process.env.GROQ_MIN_COMPLETION) ?? 512
 
   if (provider === 'groq') {
     // GPT-OSS 120B は理論上 65535

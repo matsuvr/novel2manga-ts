@@ -1,6 +1,6 @@
-import { eq, desc, sql } from 'drizzle-orm'
-import type { NewJob, Job } from '@/db/schema'
-import { jobs, episodes, chunks } from '@/db/schema'
+import { desc, eq, sql } from 'drizzle-orm'
+import type { Job, NewJob } from '@/db/schema'
+import { chunks, episodes, jobs } from '@/db/schema'
 import { BaseDatabaseService } from './base-database-service'
 
 export interface JobProgress {

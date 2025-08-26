@@ -1,4 +1,3 @@
-import yaml from 'js-yaml'
 import type { Episode } from '@/db'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
@@ -357,7 +356,9 @@ async function generateEpisodeLayoutInternal(
     logger,
   )
   // テスト環境では、episodeが存在しない場合に最低限のダミーを生成して先へ進める
-  if (!episode && process.env.NODE_ENV === 'test') {
+  const _envNode = (globalThis as unknown as { process?: { env?: Record<string, string> } })
+    ?.process?.env?.NODE_ENV
+  if (!episode && _envNode === 'test') {
     try {
       const jobRow = await jobRepo.getJobWithProgress(jobId)
       const fallbackEpisode = {
@@ -448,8 +449,7 @@ async function generateEpisodeLayoutInternal(
     )
 
     // Progress validation: Script conversion must produce results
-    const allScriptLines =
-      script?.scenes?.flatMap((scene) => scene.script || scene.lines || scene.content || []) || []
+    const allScriptLines = script?.scenes?.flatMap((scene) => scene.script || []) || []
     if (allScriptLines.length === 0) {
       logger.error('Script conversion failed to produce valid script', {
         episodeNumber,
@@ -499,7 +499,6 @@ async function generateEpisodeLayoutInternal(
 
     const { normalizeAndValidateLayout } = await import('@/utils/layout-normalizer')
     const normalized = normalizeAndValidateLayout(layoutBuilt, {
-      allowFallback: false,
       bypassValidation: true,
     })
 
@@ -521,18 +520,13 @@ async function generateEpisodeLayoutInternal(
       })
     }
 
-    // 保存（bbox形式）- with atomic error handling
+    // 保存（JSON形式に統一）- with atomic error handling
     try {
-      const { toBBoxLayout } = await import('@/utils/layout-parser')
-      const yamlContent = yaml.dump(toBBoxLayout(normalized.layout), {
-        indent: 2,
-        lineWidth: -1,
-        noRefs: true,
-      })
+      const jsonContent = JSON.stringify(normalized.layout)
 
       // Atomic write operations - must both succeed or both fail
       await Promise.all([
-        ports.layout.putEpisodeLayout(jobId, episodeNumber, yamlContent),
+        ports.layout.putEpisodeLayout(jobId, episodeNumber, jsonContent),
         ports.layout.putEpisodeLayoutProgress(
           jobId,
           episodeNumber,
@@ -550,7 +544,7 @@ async function generateEpisodeLayoutInternal(
         error: (storageError as Error).message,
         stack: (storageError as Error).stack,
       })
-      throw new Error(`Storage operation failed: ${(storageError as Error).message}`)
+      throw new Error('Storage operation failed')
     }
 
     // ステータス更新
@@ -576,6 +570,9 @@ async function generateEpisodeLayoutInternal(
           layoutPath: StorageKeys.episodeLayout(jobId, episodeNumber),
         })
         await db.recomputeJobTotalPages(jobId)
+        await db.recomputeJobProcessedEpisodes(jobId)
+        // 現在処理中のエピソードを記録（ページは未確定のためnull）
+        await db.updateProcessingPosition(jobId, { episode: episodeNumber, page: null })
       } catch (dbError) {
         logger.error('Failed to persist layout totals to database', {
           error: (dbError as Error).message,

@@ -24,6 +24,37 @@ function toPanelLayout(raw: RawJson): PanelLayout {
   return { panels_count: page.panels_count, panels: page.panels }
 }
 
+// --- Validation helpers to ensure templates don't overlap/out-of-bounds ---
+const EPS = 1e-3
+function rectsOverlap(a: [number, number, number, number], b: [number, number, number, number]) {
+  const [ax, ay, aw, ah] = a
+  const [bx, by, bw, bh] = b
+  const ax2 = ax + aw
+  const ay2 = ay + ah
+  const bx2 = bx + bw
+  const by2 = by + bh
+  const overlapX = Math.min(ax2, bx2) - Math.max(ax, bx)
+  const overlapY = Math.min(ay2, by2) - Math.max(ay, by)
+  return overlapX > EPS && overlapY > EPS
+}
+
+function isValidPanelLayout(layout: PanelLayout): boolean {
+  // bounds and positive size
+  for (const p of layout.panels) {
+    const [x, y, w, h] = p.bbox
+    if (!(w > EPS && h > EPS)) return false
+    if (x < -EPS || y < -EPS) return false
+    if (x + w > 1 + EPS || y + h > 1 + EPS) return false
+  }
+  // pairwise intersection check (N is small)
+  for (let i = 0; i < layout.panels.length; i++) {
+    for (let j = i + 1; j < layout.panels.length; j++) {
+      if (rectsOverlap(layout.panels[i].bbox, layout.panels[j].bbox)) return false
+    }
+  }
+  return true
+}
+
 // 1 panel
 import p1_1 from '../../public/docs/panel_layout_sample/1/1panel_sample.json'
 
@@ -49,8 +80,6 @@ import p4_6 from '../../public/docs/panel_layout_sample/4/4panels_sample6.json'
 import p4_7 from '../../public/docs/panel_layout_sample/4/4panels_sample7.json'
 import p4_8 from '../../public/docs/panel_layout_sample/4/4panels_sample8.json'
 import p4_9 from '../../public/docs/panel_layout_sample/4/4panels_sample9.json'
-import p4_10 from '../../public/docs/panel_layout_sample/4/4panels_sample10.json'
-import p4_11 from '../../public/docs/panel_layout_sample/4/4panels_sample11.json'
 
 // 5 panels
 import p5_1 from '../../public/docs/panel_layout_sample/5/5panels_sample1.json'
@@ -84,8 +113,6 @@ const layoutsByCount: Record<number, PanelLayout[]> = {
     toPanelLayout(p4_7 as unknown as RawJson),
     toPanelLayout(p4_8 as unknown as RawJson),
     toPanelLayout(p4_9 as unknown as RawJson),
-    toPanelLayout(p4_10 as unknown as RawJson),
-    toPanelLayout(p4_11 as unknown as RawJson),
   ],
   5: [
     toPanelLayout(p5_1 as unknown as RawJson),
@@ -105,6 +132,14 @@ export function getRandomPanelLayout(panelCount: number): PanelLayout {
   if (list.length === 0) {
     throw new Error(`No panel layout samples found for ${panelCount} panels`)
   }
-  const idx = Math.floor(Math.random() * list.length)
-  return list[idx]
+  const valid = list.filter(isValidPanelLayout)
+  if (valid.length === 0) {
+    // すべて不正なら、最初の一つを返す（上位で正規化フォールバックがかかる）
+    // eslint-disable-next-line no-console
+    console.warn('[panel-layout-samples] All templates invalid for count', panelCount)
+    const idx = Math.floor(Math.random() * list.length)
+    return list[idx]
+  }
+  const idx = Math.floor(Math.random() * valid.length)
+  return valid[idx]
 }
