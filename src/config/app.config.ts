@@ -1,9 +1,9 @@
 export const appConfig = {
   // チャンク分割設定
   chunking: {
-    defaultChunkSize: 5000, // デフォルトチャンクサイズ（文字数）- 削減
-    defaultOverlapSize: 300, // デフォルトオーバーラップサイズ（文字数）- 削減
-    maxChunkSize: 10000, // 最大チャンクサイズ - 削減
+    defaultChunkSize: 5000, // デフォルトチャンクサイズ（文字数）
+    defaultOverlapSize: 300, // デフォルトオーバーラップサイズ（文字数）
+    maxChunkSize: 10000, // 最大チャンクサイズ
     minChunkSize: 100, // 最小チャンクサイズ - 意味のある最小サイズに修正
     maxOverlapRatio: 0.5, // チャンクサイズに対する最大オーバーラップ比率
 
@@ -22,8 +22,11 @@ export const appConfig = {
   // LLM設定（モデル・パラメータは llm.config.ts に集約。ここではプロンプトのみ保持）
   llm: {
     // テキスト分析用設定（プロンプトのみ）
+    // NOTE: 以下のsystemPrompt/userPromptTemplateは、チャンク分析のJSON出力仕様を満たすように調整してください。
+    // - コメント: ここに「抽出フィールド（characters/scenes/dialogues/highlights/situations）と任意のpacing」を明記
+    // - JSONのみ出力、説明禁止、日本語で統一、未知フィールド禁止などの制約を記述
     textAnalysis: {
-      systemPrompt: `小説テキストからマンガ制作に必要な要素を抽出してください。
+      systemPrompt: `これは長文のテキスト一部分です。このテキストからマンガ制作に必要な以下の要素を抽出してください。
 
 出力は必ず以下のJSON形式のみ:
 {
@@ -31,7 +34,8 @@ export const appConfig = {
   "scenes": [{"location": "場所", "time": "時間または「不明」またはnull", "description": "説明", "startIndex": 0, "endIndex": 0}],
   "dialogues": [{"speakerId": "話者ID", "text": "セリフ", "emotion": "感情", "index": 0}],
   "highlights": [{"type": "climax|turning_point|emotional_peak|action_sequence", "description": "説明", "importance": 1, "startIndex": 0, "endIndex": 0}],
-  "situations": [{"description": "状況説明", "index": 0}]
+  "situations": [{"description": "状況説明", "index": 0}],
+  "pacing": "マンガとしてのペース"（pacingフィールドは任意）
 }
 
 注意事項:
@@ -39,7 +43,8 @@ export const appConfig = {
 - 必ずsituationsフィールドも含めてください
 - 説明文は一切出力禁止。JSONのみ出力。
 - 未知のプロパティ禁止
-- すべて日本語で出力。日本語以外の文章が入力されていた場合は、現代日本語口語訳で出力`,
+- すべて日本語で出力。日本語以外の文章が入力されていた場合は、現代日本語口語訳で出力
+- 未知フィールドは禁止`,
       userPromptTemplate: `チャンク{{chunkIndex}}:
 
 前: {{previousChunkText}}
@@ -82,6 +87,9 @@ JSONのみ出力。`,
 
 エピソード境界を特定し、JSONのみ出力。`,
     },
+    // NOTE: チャンク台本化用。入力は「チャンク全文」。
+    // - コメント: ここに「全セリフ漏れなく・長文は30字程度で分割・現代日本語口語・単一のJSONオブジェクト」を明記
+    // - {{analysisHints}}プレースホルダを使用する場合はテンプレ内に追加
     scriptConversion: {
       systemPrompt: `以下の情報を基に、セリフ+ナレーション+心の声のセリフと、場面情報を表すト書きとして、台本形式のJSONにしてください。会話は全て漏らさず出力してください。また、セリフが長い場合は、30文字程度の長さで分割した状態で台本にしてください。もし、言語が現代日本語でなかった場合は、現代日本語口語訳で出力してください。要約禁止。物語の情景をできるだけ忠実に台本形式で再現してください。
 
@@ -197,8 +205,10 @@ CRITICAL: 必ず単一のJSONオブジェクトを返してください。配列
 上記のフラグメントから台本形式のJSONを作成してください。`,
       },
     },
+    // NOTE: コマ・ページ分割用。
+    // - コメント: ここに「1ページのコマ数は1..6のみ・スプラッシュ/見開き不可・JSONのみ」を明記
     pageBreakEstimation: {
-      systemPrompt: `以下はマンガにするための脚本です。重要度や見所が強いシーンは1ページ1コマ、見所になるシーンは1ページ2～3コマ、状況説明が主となるシーンは1ページ4～6コマにして分割します。要約・省略は禁止であり、台本にある全要素を必ず全て盛り込んでください。全て日本語で書いてください。1つのコマに入るセリフの数は0～2個です。情景だけでセリフがないコマもありえます。
+      systemPrompt: `以下はマンガにするための脚本です。重要度や見所が強いシーンは1ページ1コマ、見所になるシーンは1ページ2～3コマ、状況説明が主となるシーンは1ページ4～6コマにして分割します。要約・省略は禁止であり、台本にある全要素を必ず全て盛り込んでください。全て日本語で書いてください。1つのコマに入るセリフの数は0～2個です。情景だけでセリフがないコマもありえます。1ページのコマ数は1～6、スプラッシュ、見開きは無しです。出力はJSONのみです。JSONの外側に説明は不要です。
 
 CRITICAL: You must return a single JSON object with a "pages" property containing an array of pages. Do NOT return an array of objects. The response must start with { and end with }, not [ and ].
 
@@ -250,6 +260,16 @@ CRITICAL: dialogue配列内の各要素は、必ず{"speaker": "話者名", "tex
 IMPORTANT: Return exactly one JSON object starting with { "pages": and ending with }. Do NOT wrap it in an array.
 
       `,
+    },
+    // NOTE: 連載マンガのエピソード束ね判定用（新規）。
+    // - コメント: ここに「20–50ページに収まるよう切れ目候補を返す・JSON {breakAfterPageIndices[], rationale[]}のみ」を明記
+    // - 入力には totalPages と pagesSummary（各ページの要約/強度/speech数等）を与える
+    episodeBundling: {
+      systemPrompt: `与えられたJSONは、ページ毎にどんな風にコマを割り、どんなセリフを入れるかを指定している設計書です。長編であるため、全体の一部分である可能性があります。pageIndexを参考にしてください。このJSONを読み、連載マンガのエピソードとして適切なところで分割をしてください。1エピソードは20～50ページ程度です。1エピソードにはかなら山場を入れ、かつ、引きをつけるところで分割してください。エピソード毎に、{["episodeNumber": 1, "title": "エピソード1のタイトル", "summary": "エピソード1の要約", "startPageIndex": 1, "endPageIndex": 5]}の形式でJSONを出力してください。`, // ここにエピソード束ねの方針・制約（20–50p、物語的切れ目、JSONのみ）を記述
+      userPromptTemplate: `分割対象となるJSONは以下です。
+      {{pageBreakEstimatJson}}
+      
+      トータルページ数、各ページの要素、強度、セリフ数は、与えられたJSONをよく確認してください`,
     },
   },
 

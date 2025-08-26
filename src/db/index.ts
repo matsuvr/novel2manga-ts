@@ -41,6 +41,72 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
 
       // TODO: Initialize the new database service architecture when migration is complete
       // initializeDatabaseServiceFactory(db)
+
+      // In dev/test, run migrations only when it's safe to do so.
+      if (
+        process.env.NODE_ENV === 'development' ||
+        process.env.NODE_ENV === 'test' ||
+        process.env.VITEST
+      ) {
+        // Detect if the DB already has application tables but lacks drizzle's meta table.
+        // In that case, running migrations may fail with "table already exists"; skip with a clear warning.
+        const hasDrizzleMeta = (() => {
+          const row = sqliteDb
+            .prepare(
+              "SELECT name FROM sqlite_master WHERE type='table' AND name='__drizzle_migrations'",
+            )
+            .get() as unknown
+          const name = (row as null | Record<string, unknown>)?.name
+          return typeof name === 'string'
+        })()
+
+        const hasUserTables = (() => {
+          const rows = sqliteDb
+            .prepare(
+              "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+            )
+            .all() as unknown
+          const list = Array.isArray(rows) ? rows : []
+          return list.length > 0
+        })()
+
+        if (!hasDrizzleMeta && hasUserTables) {
+          // DBは既にアプリのテーブルを持つが、マイグレーション管理テーブルが無い状態。
+          // この場合は自動migrateをスキップし、明確なメッセージを出す。
+          console.warn(
+            '[Database:migrate] 既存テーブルを検出しましたが __drizzle_migrations が存在しません。マイグレーションをスキップします。',
+            {
+              dbPath,
+              action:
+                '開発用途: そのまま継続可能です。厳密整合が必要な場合はDBを初期化するか、手動でメタを整合させてください。',
+              options: [
+                '安全: database/novel2manga.db を一旦削除して起動時にクリーン作成（データ消去に注意）',
+                '上級: drizzle/meta/_journal.json の内容に合わせて __drizzle_migrations を手動作成・同期',
+              ],
+            },
+          )
+        } else {
+          try {
+            migrate(db, { migrationsFolder: path.join(process.cwd(), 'drizzle') })
+          } catch (migrateError) {
+            // フォールバック禁止方針: マイグレーション失敗は重大事として明示し、起動を停止する
+            const message =
+              migrateError instanceof Error ? migrateError.message : String(migrateError)
+            console.error(
+              '[Database:migrate] マイグレーションに失敗しました。アプリ起動を停止します。',
+              {
+                message,
+                guidance: [
+                  '1) 開発用途: database/novel2manga.db を削除して再作成 (データ消去に注意)',
+                  '2) 既存DB維持: drizzle/meta/_journal.json と __drizzle_migrations の整合を取り、重複カラム/テーブルを手動修正',
+                  '3) 競合例: 既に存在するカラムに対する ALTER TABLE 追加 (drizzle/000x_*.sql) など',
+                ],
+              },
+            )
+            throw migrateError
+          }
+        }
+      }
     } catch (error) {
       // 特定: ネイティブモジュール ABI 不一致 (ERR_DLOPEN_FAILED) などのロード失敗を捕捉
       const msg = error instanceof Error ? error.message : String(error)
@@ -65,19 +131,7 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
       }
       throw error
     }
-
-    // Run migrations automatically in development/test environments
-    if (
-      process.env.NODE_ENV === 'development' ||
-      process.env.NODE_ENV === 'test' ||
-      process.env.VITEST
-    ) {
-      try {
-        migrate(db, { migrationsFolder: path.join(process.cwd(), 'drizzle') })
-      } catch (error) {
-        console.warn('Migration failed, continuing without migrations:', error)
-      }
-    }
+    // Migrations are handled above inside the initialization try-block with safety checks.
   }
 
   if (!db) {

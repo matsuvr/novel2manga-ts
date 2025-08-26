@@ -26,39 +26,36 @@ export default async function EpisodePreviewPage({ params }: { params: Promise<P
 
   const episodes = await episodeRepo.getByJobId(jobId)
   const target = episodes.find((e) => e.episodeNumber === epNum)
-  if (!target) return notFound()
+  if (!target) {
+    // Fallback: layout 存在で許可
+    const layoutStorage = await StorageFactory.getLayoutStorage()
+    const exists = await layoutStorage.exists(StorageKeys.episodeLayout(jobId, epNum))
+    if (!exists) return notFound()
+  }
 
   // ページ番号を推定（レイアウトの最大ページ）
   const layoutStorage = await StorageFactory.getLayoutStorage()
-  const yamlText = await layoutStorage.get(StorageKeys.episodeLayout(jobId, epNum))
-  // Get page numbers from layout data (supports both YAML pages[].page_number and JSON pages[].pageNumber)
+  const layoutText = await layoutStorage.get(StorageKeys.episodeLayout(jobId, epNum))
+  // Get page numbers from layout data (JSONのみ)
   let pageNumbers: number[] = []
   try {
-    if (yamlText?.text) {
-      const { load } = await import('js-yaml')
-      const parsed = load(yamlText.text) as {
-        pages?: Array<Record<string, unknown>>
+    if (layoutText?.text) {
+      const parsed = JSON.parse(layoutText.text) as {
+        pages?: Array<{ page_number?: number; pageNumber?: number }>
       }
       if (parsed?.pages && Array.isArray(parsed.pages)) {
         pageNumbers = parsed.pages
-          .map((p) => {
-            const v = p as Record<string, unknown>
-            const n =
-              (typeof v.page_number === 'number' ? v.page_number : undefined) ??
-              (typeof v.pageNumber === 'number' ? v.pageNumber : undefined)
-            return typeof n === 'number' && Number.isFinite(n) ? n : undefined
-          })
-          .filter((n): n is number => typeof n === 'number')
+          .map((p) => (typeof p.page_number === 'number' ? p.page_number : p.pageNumber))
+          .filter((n): n is number => typeof n === 'number' && Number.isFinite(n))
           .sort((a, b) => a - b)
       }
     }
   } catch (e) {
-    console.error('Failed to parse layout YAML for episode', {
+    console.error('Failed to parse layout JSON for episode', {
       jobId,
       episodeNumber: epNum,
       error: e instanceof Error ? e.message : String(e),
     })
-    // YAML parse failure - layout data is required
   }
   // Fallback: If layout did not provide page numbers, enumerate render storage keys
   const renderStorage = await StorageFactory.getRenderStorage()

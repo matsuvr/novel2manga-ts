@@ -17,7 +17,7 @@ type FileCategory =
   | 'render'
   | 'output'
   | 'metadata'
-type FileType = 'txt' | 'json' | 'yaml' | 'png' | 'jpg' | 'pdf' | 'zip'
+type FileType = 'txt' | 'json' | 'png' | 'jpg' | 'pdf' | 'zip'
 
 export interface RecordStorageFileParams {
   filePath: string

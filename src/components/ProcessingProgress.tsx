@@ -602,6 +602,12 @@ function ProcessingProgress({
           signal: controller.signal,
         })
         if (!response.ok) {
+          // 404 NOT_FOUND の場合はジョブが存在しないため、ポーリングを停止
+          if (response.status === 404) {
+            addLog('error', 'ジョブが見つかりません。ポーリングを停止します。')
+            addLog('info', '新しいファイルをアップロードしてジョブを作成してください。')
+            return // ポーリング停止
+          }
           throw new Error(`API呼び出しに失敗: ${response.status} ${response.statusText}`)
         }
         const data: JobData = await response.json()
