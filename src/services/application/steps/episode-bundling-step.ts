@@ -115,7 +115,7 @@ export class EpisodeBundlingStep implements PipelineStep {
         }
       }
 
-      // 制約適用: 20–50ページに収まるように分割・結合
+      // 目安適用: 20–50ページに収まるように分割・結合（厳密なバリデーションはしない）
       const MIN = 20
       const MAX = 50
       const ranges: Array<{ start: number; end: number }> = []
@@ -140,7 +140,14 @@ export class EpisodeBundlingStep implements PipelineStep {
         }
       }
       if (ranges.length === 0) {
-        throw new Error('Failed to determine episode ranges within 20–50 pages')
+        // ガイドラインに沿った範囲が検出できなかった場合でも弾かない。
+        // 全ページを1エピソードとして扱うフォールバックを適用し、警告のみを記録する。
+        logger.warn('No episode ranges proposed; falling back to single-episode bundle', {
+          jobId,
+          totalPages,
+          guideline: '20-50 pages (advisory)',
+        })
+        ranges.push({ start: 1, end: totalPages })
       }
 
       // Persist bundling JSON for resume/debug

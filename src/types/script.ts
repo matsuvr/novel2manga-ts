@@ -52,7 +52,9 @@ export const PageBreakSchema = z.object({
           dialogue: z.array(
             z.object({
               speaker: z.string(),
-              text: z.string(),
+              text: z.string().optional(),
+              // Deprecated: 'lines' for backward compatibility (will be removed later)
+              lines: z.string().optional(),
             }),
           ),
         }),

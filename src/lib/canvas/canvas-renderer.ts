@@ -246,20 +246,32 @@ export class CanvasRenderer {
             this.ctx.fill()
             this.ctx.stroke()
           } else if (shapeType === 'thought') {
-            // 簡易雲形: 小円弧を連結して輪郭を作る
-            const r = 10
+            // 雲形（連続パス）: 楕円周囲に沿ってふくらみを連続的に描画
             const bumps = 8
+            const r = Math.max(6, Math.min(bubbleW, bubbleH) * 0.08)
             const cx = bx + bubbleW / 2
             const cy = by + bubbleH / 2
             const rx = bubbleW / 2
             const ry = bubbleH / 2
+
             this.ctx.beginPath()
-            for (let k = 0; k < bumps; k++) {
+            // 開始点
+            let anglePrev = 0
+            let pxPrev = cx + Math.cos(anglePrev) * rx
+            let pyPrev = cy + Math.sin(anglePrev) * ry
+            this.ctx.moveTo(pxPrev, pyPrev)
+            for (let k = 1; k <= bumps; k++) {
               const angle = (k / bumps) * Math.PI * 2
               const px = cx + Math.cos(angle) * rx
               const py = cy + Math.sin(angle) * ry
-              this.ctx.moveTo(px + r, py)
-              this.ctx.arc(px, py, r, 0, Math.PI * 2)
+              // 制御点: 前後点の外側へオフセットした位置
+              const midAngle = (anglePrev + angle) / 2
+              const cx1 = cx + Math.cos(midAngle) * (rx + r)
+              const cy1 = cy + Math.sin(midAngle) * (ry + r)
+              this.ctx.quadraticCurveTo(cx1, cy1, px, py)
+              anglePrev = angle
+              pxPrev = px
+              pyPrev = py
             }
             this.ctx.closePath()
             this.ctx.fill()
