@@ -404,7 +404,9 @@ export class R2Storage implements Storage {
   async get(key: string): Promise<{ text: string; metadata?: Record<string, string> } | null> {
     return await this.retryableOperation(async () => {
       const object = await this.bucket.get(key)
-      if (!object) return null
+      if (!object) {
+        return null
+      }
 
       const text = await object.text()
       return {
@@ -628,7 +630,7 @@ export const StorageKeys = {
   },
   episodeLayout: (jobId: string, episodeNumber: number) => {
     validateId(jobId, 'jobId')
-    return `${jobId}/episode_${episodeNumber}.yaml`
+    return `${jobId}/episode_${episodeNumber}.json`
   },
   episodeLayoutProgress: (jobId: string, episodeNumber: number) => {
     validateId(jobId, 'jobId')
@@ -656,6 +658,26 @@ export const StorageKeys = {
   renderStatus: (jobId: string, episodeNumber: number, pageNumber: number) => {
     validateId(jobId, 'jobId')
     return `${jobId}/episode_${episodeNumber}/page_${pageNumber}.json`
+  },
+} as const
+
+// Additional JSON-first keys for new pipeline artifacts
+export const JsonStorageKeys = {
+  scriptChunk: (jobId: string, index: number) => {
+    validateId(jobId, 'jobId')
+    return `${jobId}/script_chunk_${index}.json`
+  },
+  scriptCombined: (jobId: string) => {
+    validateId(jobId, 'jobId')
+    return `${jobId}/script_combined.json`
+  },
+  fullPages: (jobId: string) => {
+    validateId(jobId, 'jobId')
+    return `${jobId}/full_pages.json`
+  },
+  episodeBundling: (jobId: string) => {
+    validateId(jobId, 'jobId')
+    return `${jobId}/episode_bundling.json`
   },
 } as const
 

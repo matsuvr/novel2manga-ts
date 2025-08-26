@@ -416,27 +416,28 @@ export function stripUnsupportedKeywordsForGroqSO(schema: unknown): unknown {
   return walk(schema)
 }
 
-// 入力長に基づき、安全なmax_tokensを推定
+// 設定値を尊重し、必要最小限の安全制限のみ適用
 function decideSafeMaxTokens(
   provider: OpenAICompatibleClient['provider'],
   model: string,
   configured: number,
-  messages: ChatMessage[],
+  _messages: ChatMessage[],
 ): number {
-  const totalChars = messages.reduce((acc, m) => acc + (m.content?.length ?? 0), 0)
-  const estInputTokens = Math.ceil(totalChars / 3.8)
-
   const limits = getModelLimits(provider, model)
-  // 設定値・理論値・ソフト上限から決定
+
+  // 設定値が硬い上限を超えていない限り、設定値を使用
+  // CONFIG CENTRALIZATION に従い、設定値を勝手に上書きしない
   const cap = Math.min(configured, limits.hardCap)
-  // 期待出力: 入力トークンに対してGroqは余裕を見て1.1倍、その他は0.9倍
-  const desired = Math.max(
-    limits.minCompletion,
-    Math.floor(estInputTokens * (provider === 'groq' ? 1.1 : 0.9)),
-  )
-  let safe = Math.min(cap, limits.softCapDefault, desired)
-  if (safe < limits.minCompletion) safe = Math.min(limits.minCompletion, cap)
-  return safe
+
+  // 最低限の完了トークン数は確保するが、設定値が明示されている場合は優先
+  if (cap < limits.minCompletion) {
+    console.warn(
+      `[${provider}] Configured maxTokens (${configured}) is below minimum completion tokens (${limits.minCompletion}). Using minimum.`,
+    )
+    return Math.min(limits.minCompletion, limits.hardCap)
+  }
+
+  return cap
 }
 
 function buildRedactedTrace(

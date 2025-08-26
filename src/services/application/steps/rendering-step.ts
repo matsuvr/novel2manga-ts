@@ -56,16 +56,56 @@ export class RenderingStep implements PipelineStep {
         // Render pages for each episode
         const ports = getStoragePorts()
         for (const ep of episodeNumbers) {
-          // ここで「ストレージ（ファイル）からページ割り計画 JSON を読み込む」
-          const pageBreakPlanText = await ports.layout.getEpisodeLayout(jobId, ep)
-          if (pageBreakPlanText) {
-            const pageBreakPlan: PageBreakPlan = JSON.parse(pageBreakPlanText)
-            const { renderFromPageBreakPlan } = await import('@/services/application/render')
-            // ここで「レンダリングサービスを呼び出す（画像等を生成しストレージへ書き出す）」
-            await renderFromPageBreakPlan(jobId, ep, pageBreakPlan, ports, {
-              skipExisting: false,
-              concurrency: 3,
-            })
+          // ここで「ストレージ（ファイル）からページ割り計画/YAMLレイアウトを読み込む」
+          const layoutText = await ports.layout.getEpisodeLayout(jobId, ep)
+          if (layoutText) {
+            const parsed = JSON.parse(layoutText)
+            const isMangaLayout =
+              Array.isArray(parsed?.pages) && parsed.pages[0]?.panels?.[0]?.position
+            if (isMangaLayout) {
+              const { normalizeAndValidateLayout } = await import('@/utils/layout-normalizer')
+              const normalized = normalizeAndValidateLayout(parsed)
+
+              const { MangaPageRenderer } = await import('@/lib/canvas/manga-page-renderer')
+              const { appConfig } = await import('@/config/app.config')
+              const renderer = await MangaPageRenderer.create({
+                pageWidth: appConfig.rendering.defaultPageSize.width,
+                pageHeight: appConfig.rendering.defaultPageSize.height,
+                margin: 20,
+                panelSpacing: 10,
+                defaultFont: 'sans-serif',
+                fontSize: 14,
+              })
+              try {
+                for (const p of normalized.layout.pages) {
+                  const imageBlob = await renderer.renderToImage(
+                    normalized.layout,
+                    p.page_number,
+                    'png',
+                  )
+                  const imageBuffer = Buffer.from(await imageBlob.arrayBuffer())
+                  await ports.render.putPageRender(jobId, ep, p.page_number, imageBuffer)
+                  const { ThumbnailGenerator } = await import('@/lib/canvas/thumbnail-generator')
+                  const thumbBlob = await ThumbnailGenerator.generateThumbnail(imageBlob, {
+                    width: 200,
+                    height: 280,
+                    quality: 0.8,
+                    format: 'jpeg',
+                  })
+                  const thumbnailBuffer = Buffer.from(await thumbBlob.arrayBuffer())
+                  await ports.render.putPageThumbnail(jobId, ep, p.page_number, thumbnailBuffer)
+                }
+              } finally {
+                renderer.cleanup()
+              }
+            } else {
+              const pageBreakPlan: PageBreakPlan = parsed
+              const { renderFromPageBreakPlan } = await import('@/services/application/render')
+              await renderFromPageBreakPlan(jobId, ep, pageBreakPlan, ports, {
+                skipExisting: false,
+                concurrency: 3,
+              })
+            }
           }
         }
         logger.info('PageBreakPlan rendering completed for all episodes', { jobId })

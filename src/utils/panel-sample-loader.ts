@@ -1,5 +1,5 @@
 import type { LayoutTemplate } from '@/types/panel-layout'
-import { referencePages } from '@/utils/reference-layouts'
+import { getRandomPanelLayout } from '@/data/panel-layout-samples'
 
 // Cloudflare Workers-compatible embedded samples (no fs at runtime)
 
@@ -22,15 +22,46 @@ function templateFromPanels(
   }
 }
 
+// bbox形式からposition/size形式に変換
+function bboxToPositionSize(bbox: [number, number, number, number]): {
+  position: { x: number; y: number }
+  size: { width: number; height: number }
+} {
+  const [x, y, w, h] = bbox
+  return {
+    position: { x, y },
+    size: { width: w, height: h },
+  }
+}
+
 function buildEmbeddedSamples(): Map<number, LayoutTemplate[]> {
   const map = new Map<number, LayoutTemplate[]>()
-  // From referencePages (embedded patterns by count)
-  for (const ref of referencePages) {
-    const count = ref.panels.length
-    const arr = map.get(count) || []
-    arr.push(templateFromPanels(`ref-${count}`, ref.panels))
-    map.set(count, arr)
+
+  // From panel-layout-samples (public/docs/panel_layout_sample/*.json)
+  try {
+    for (let count = 1; count <= 6; count++) {
+      const templates: LayoutTemplate[] = []
+
+      // 各パネル数に対して複数のサンプルを試行
+      for (let attempt = 0; attempt < 10; attempt++) {
+        try {
+          const layout = getRandomPanelLayout(count)
+          const panels = layout.panels.map((p) => bboxToPositionSize(p.bbox))
+          templates.push(templateFromPanels(`sample-${count}-${attempt}`, panels))
+        } catch {
+          // 特定のサンプルが見つからない場合は次の試行へ
+          break
+        }
+      }
+
+      if (templates.length > 0) {
+        map.set(count, templates)
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to load panel layout samples:', e)
   }
+
   // Deduplicate by geometry signature
   // Iterate via entries array to avoid requiring downlevelIteration/ES2015 target
   for (const [k, arr] of Array.from(map.entries())) {

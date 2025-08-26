@@ -182,43 +182,118 @@ export class CanvasRenderer {
 
     // パネル内の対話を吹き出しとして描画（縦書き画像が提供されている場合は画像を使用）
     if (panel.dialogues && panel.dialogues.length > 0) {
-      let bubbleY = y + height * 0.2 // 吹き出しの開始Y位置（やや上）
-      const maxAreaWidth = width * 0.45
-      const maxAreaHeightTotal = height * 0.7
-      const perBubbleMaxHeight = Math.max(60, maxAreaHeightTotal / panel.dialogues.length)
-      for (let i = 0; i < panel.dialogues.length; i++) {
-        const dialogue = panel.dialogues[i]
-        const key = `${panel.id}:${i}`
-        const asset = this.dialogueAssets?.[key]
-        if (!asset) {
-          throw new Error(`Vertical dialogue asset missing for ${key}`)
+      // クリッピング: 吹き出しをパネル枠の内側に限定
+      this.ctx.save()
+      this.ctx.beginPath()
+      this.ctx.rect(x, y, width, height)
+      this.ctx.clip()
+      try {
+        let bubbleY = y + height * 0.2 // 吹き出しの開始Y位置（やや上）
+        const maxAreaWidth = width * 0.45
+        const maxAreaHeightTotal = height * 0.7
+        const perBubbleMaxHeight = Math.max(60, maxAreaHeightTotal / panel.dialogues.length)
+
+        for (let i = 0; i < panel.dialogues.length; i++) {
+          const dialogue = panel.dialogues[i]
+          const key = `${panel.id}:${i}`
+          const asset = this.dialogueAssets?.[key]
+          if (!asset) {
+            throw new Error(`Vertical dialogue asset missing for ${key}`)
+          }
+          // ベースのスケール
+          let scale = Math.min(maxAreaWidth / asset.width, perBubbleMaxHeight / asset.height, 1)
+          let drawW = asset.width * scale
+          let drawH = asset.height * scale
+          const padding = 10
+          let bubbleW = drawW + padding * 2
+          let bubbleH = drawH + padding * 2
+
+          // パネル下端に収まるよう自動縮小
+          const availableVertical = y + height - bubbleY
+          const maxThisBubbleHeight = Math.max(
+            30,
+            Math.min(perBubbleMaxHeight, availableVertical - 2),
+          )
+          if (bubbleH > maxThisBubbleHeight) {
+            const shrink = (maxThisBubbleHeight - padding * 2) / Math.max(1, drawH)
+            scale = Math.min(scale, shrink)
+            drawW = asset.width * scale
+            drawH = asset.height * scale
+            bubbleW = drawW + padding * 2
+            bubbleH = drawH + padding * 2
+          }
+
+          // これでもはみ出す場合は描画を中止
+          if (bubbleH <= 0 || bubbleY + bubbleH > y + height) {
+            break
+          }
+
+          const bx = x + width - bubbleW - width * 0.05 // 右寄せ
+          const by = bubbleY
+
+          // 吹き出し背景
+          this.ctx.save()
+          this.ctx.strokeStyle = '#000000'
+          this.ctx.fillStyle = '#ffffff'
+          this.ctx.lineWidth = dialogue.emotion === 'shout' ? 3 : 2
+          // 形状切替: speech=角丸、thought=雲状、narration=長方形
+          const shapeType = (dialogue as { type?: 'speech' | 'thought' | 'narration' }).type
+          if (shapeType === 'narration') {
+            // 長方形（角丸なし）
+            this.ctx.beginPath()
+            this.ctx.rect(bx, by, bubbleW, bubbleH)
+            this.ctx.closePath()
+            this.ctx.fill()
+            this.ctx.stroke()
+          } else if (shapeType === 'thought') {
+            // 雲形（連続パス）: 楕円周囲に沿ってふくらみを連続的に描画
+            const bumps = 8
+            const r = Math.max(6, Math.min(bubbleW, bubbleH) * 0.08)
+            const cx = bx + bubbleW / 2
+            const cy = by + bubbleH / 2
+            const rx = bubbleW / 2
+            const ry = bubbleH / 2
+
+            this.ctx.beginPath()
+            // 開始点
+            let anglePrev = 0
+            let pxPrev = cx + Math.cos(anglePrev) * rx
+            let pyPrev = cy + Math.sin(anglePrev) * ry
+            this.ctx.moveTo(pxPrev, pyPrev)
+            for (let k = 1; k <= bumps; k++) {
+              const angle = (k / bumps) * Math.PI * 2
+              const px = cx + Math.cos(angle) * rx
+              const py = cy + Math.sin(angle) * ry
+              // 制御点: 前後点の外側へオフセットした位置
+              const midAngle = (anglePrev + angle) / 2
+              const cx1 = cx + Math.cos(midAngle) * (rx + r)
+              const cy1 = cy + Math.sin(midAngle) * (ry + r)
+              this.ctx.quadraticCurveTo(cx1, cy1, px, py)
+              anglePrev = angle
+              pxPrev = px
+              pyPrev = py
+            }
+            this.ctx.closePath()
+            this.ctx.fill()
+            this.ctx.stroke()
+          } else {
+            // speech または未指定は角丸矩形
+            this.drawRoundedRect(bx, by, bubbleW, bubbleH, 8)
+          }
+          this.ctx.restore()
+
+          // 画像貼り付け（中央揃え）
+          const imgX = bx + (bubbleW - drawW) / 2
+          const imgY = by + (bubbleH - drawH) / 2
+          // node-canvas: ctx.drawImage(Image, dx, dy, dWidth, dHeight)
+          // browser: HTMLImageElement でも同じ
+          this.ctx.drawImage(asset.image as unknown as CanvasImageSource, imgX, imgY, drawW, drawH)
+
+          bubbleY += bubbleH + 10 // 次の吹き出し位置
         }
-        // scale to fit
-        const scale = Math.min(maxAreaWidth / asset.width, perBubbleMaxHeight / asset.height, 1)
-        const drawW = asset.width * scale
-        const drawH = asset.height * scale
-        const padding = 10
-        const bubbleW = drawW + padding * 2
-        const bubbleH = drawH + padding * 2
-        const bx = x + width - bubbleW - width * 0.05 // 右寄せ
-        const by = bubbleY
-
-        // 吹き出し背景
-        this.ctx.save()
-        this.ctx.strokeStyle = '#000000'
-        this.ctx.fillStyle = '#ffffff'
-        this.ctx.lineWidth = dialogue.emotion === 'shout' ? 3 : 2
-        this.drawRoundedRect(bx, by, bubbleW, bubbleH, 8)
+      } finally {
+        // クリッピング解除
         this.ctx.restore()
-
-        // 画像貼り付け（中央揃え）
-        const imgX = bx + (bubbleW - drawW) / 2
-        const imgY = by + (bubbleH - drawH) / 2
-        // node-canvas: ctx.drawImage(Image, dx, dy, dWidth, dHeight)
-        // browser: HTMLImageElement でも同じ
-        this.ctx.drawImage(asset.image as unknown as CanvasImageSource, imgX, imgY, drawW, drawH)
-
-        bubbleY += bubbleH + 10 // 次の吹き出し位置
       }
     }
   }

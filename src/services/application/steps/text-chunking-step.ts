@@ -1,5 +1,5 @@
-import type { Chunk, Job } from '@/db/schema'
 import { getChunkingConfig } from '@/config'
+import type { Chunk, Job } from '@/db/schema'
 import { getChunkRepository } from '@/repositories'
 import { splitTextIntoSlidingChunks } from '@/utils/text-splitter'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CompatAgent } from '@/agent/compat'
+import { CompatAgent } from '@/agents/compat'
 import { getLLMDefaultProvider, getNarrativeAnalysisConfig } from '@/config'
 import type { ChunkAnalysisResult } from '@/types/chunk'
 import type { PageBatchPlan } from '@/types/page-splitting'
@@ -42,7 +42,7 @@ export class PageSplitAgent {
         narrative.systemPrompt +
         '\nYou are now a manga pagination planner that outputs compact 3-page batches based on narrative arc analysis.',
       provider,
-      maxTokens: Math.min(2048, narrative.maxTokens || 2048),
+      // maxTokens removed - use llm.config.ts value
     })
   }
 

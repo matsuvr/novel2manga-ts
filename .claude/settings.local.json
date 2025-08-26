@@ -93,7 +93,12 @@
       "Bash(npm rebuild:*)",
       "WebFetch(domain:console.groq.com)",
       "Bash(sqlite3:*)",
-      "Bash(git grep:*)"
+      "Bash(git grep:*)",
+      "Bash(cp:*)",
+      "Bash(mkdir:*)",
+      "Bash(rg:*)",
+      "Bash(npx @biomejs/biome lint .)",
+      "Bash(true)"
     ]
   },
   "enableAllProjectMcpServers": true,

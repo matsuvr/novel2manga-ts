@@ -9,7 +9,7 @@ import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
 import { OutputRepository } from '@/repositories/output-repository'
 import { getDatabaseService } from '@/services/db-factory'
-import { parseMangaLayoutFromYaml } from '@/utils/layout-parser'
+// YAML依存を撤廃。レイアウトはJSONとして扱う
 // StorageKeys は内部で直接使用しない
 
 export class OutputService {
@@ -84,7 +84,45 @@ export class OutputService {
     const job = await jobRepo.getJob(jobId)
     if (!job) throw new Error('指定されたジョブが見つかりません')
 
-    const allEpisodes = await episodeRepo.getByJobId(jobId)
+    let allEpisodes = await episodeRepo.getByJobId(jobId)
+    if (allEpisodes.length === 0) {
+      // Fallback: derive episode list from layout storage (JSON files)
+      try {
+        const _layoutStorage = await this.ports.layout
+        const storage = await (await import('@/utils/storage')).StorageFactory.getLayoutStorage()
+        const keys = (await storage.list?.(jobId)) || []
+        const epNums = Array.from(
+          new Set(
+            keys
+              .map((k) => {
+                const m = k.match(/episode_(\d+)\.json$/)
+                return m ? Number(m[1]) : undefined
+              })
+              .filter((n): n is number => typeof n === 'number' && Number.isFinite(n)),
+          ),
+        ).sort((a, b) => a - b)
+        allEpisodes = epNums.map(
+          (n) =>
+            ({
+              id: `${jobId}-${n}`,
+              novelId: job.novelId,
+              jobId,
+              episodeNumber: n,
+              title: `エピソード${n}`,
+              summary: null,
+              startChunk: 0,
+              startCharIndex: 0,
+              endChunk: 0,
+              endCharIndex: 0,
+              confidence: 1,
+              episodeTextPath: null,
+              createdAt: new Date().toISOString(),
+            }) satisfies Episode,
+        )
+      } catch {
+        // ignore
+      }
+    }
     let targetEpisodes = allEpisodes
     if (episodeNumbers && episodeNumbers.length > 0) {
       targetEpisodes = allEpisodes.filter((e) => episodeNumbers.includes(e.episodeNumber))
@@ -173,7 +211,9 @@ export class OutputService {
     for (const episode of episodes.sort((a, b) => a.episodeNumber - b.episodeNumber)) {
       const layoutDataText = await this.ports.layout.getEpisodeLayout(jobId, episode.episodeNumber)
       if (!layoutDataText) continue
-      const mangaLayout = parseMangaLayoutFromYaml(layoutDataText)
+      const mangaLayout = JSON.parse(layoutDataText) as {
+        pages?: Array<{ page_number: number }>
+      }
       if (mangaLayout.pages) {
         for (const page of mangaLayout.pages.sort((a, b) => a.page_number - b.page_number)) {
           const base64Image = await this.ports.render.getPageRender(
@@ -227,9 +267,11 @@ export class OutputService {
 
       const layoutText = await this.ports.layout.getEpisodeLayout(jobId, episode.episodeNumber)
       if (layoutText) {
-        episodeFolder.file('layout.yaml', layoutText)
+        episodeFolder.file('layout.json', layoutText)
         try {
-          const mangaLayout = parseMangaLayoutFromYaml(layoutText)
+          const mangaLayout = JSON.parse(layoutText) as {
+            pages?: Array<{ page_number: number }>
+          }
           if (mangaLayout.pages) {
             for (const page of mangaLayout.pages.sort((a, b) => a.page_number - b.page_number)) {
               const base64Image = await this.ports.render.getPageRender(
@@ -251,7 +293,7 @@ export class OutputService {
             jobId,
             episodeNumber: episode.episodeNumber,
           })
-          logger.warn('Failed to parse layout YAML, skipping episode pages', {
+          logger.warn('Failed to parse layout JSON, skipping episode pages', {
             jobId,
             episodeNumber: episode.episodeNumber,
             error: error instanceof Error ? error.message : String(error),
