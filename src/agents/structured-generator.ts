@@ -1,6 +1,7 @@
 import type { z } from 'zod'
-import { createClientForProvider, selectProviderOrder } from '../agents/llm/router'
-import type { LlmClient, LlmProvider } from '../agents/llm/types'
+import { createClientForProvider, selectProviderOrder } from '@/agents/llm/router'
+import type { LlmClient, LlmProvider } from '@/agents/llm/types'
+import { normalizeLLMResponse } from '@/utils/dialogue-normalizer'
 import { getLLMProviderConfig } from '../config/llm.config'
 
 export interface GenerateArgs<T> {
@@ -66,15 +67,41 @@ export class DefaultLlmStructuredGenerator {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        return await client.generateStructured<T>({
+        const result = await client.generateStructured<T>({
           systemPrompt,
           userPrompt,
           spec: { schema, schemaName },
           options: { maxTokens },
         })
+
+        // dialogue形式正規化処理を適用（該当する場合のみ）
+        const normalizedResult = this.normalizeResultIfNeeded(result)
+        return normalizedResult
       } catch (error) {
         lastError = error
         const errorMessage = error instanceof Error ? error.message : String(error)
+
+        // dialogue関連のスキーマエラーの場合、詳細ログを出力
+        if (
+          errorMessage.includes('schema validation failed') &&
+          errorMessage.includes('dialogue')
+        ) {
+          console.error(
+            JSON.stringify({
+              ts: new Date().toISOString(),
+              level: 'error',
+              msg: 'Dialogue schema validation failed - LLM returned invalid dialogue format',
+              service: 'llm-structured-generator',
+              name,
+              provider: prov,
+              attempt,
+              error: errorMessage,
+              rawResponseSample: errorMessage.includes('Raw:')
+                ? errorMessage.split('Raw:')[1]?.slice(0, 500)
+                : 'No raw response available',
+            }),
+          )
+        }
 
         // JSON生成関連のエラーのみリトライ対象とする
         const isRetryableJsonError = this.isRetryableJsonError(errorMessage)
@@ -111,6 +138,36 @@ export class DefaultLlmStructuredGenerator {
 
   private createClient(provider: LlmProvider): LlmClient {
     return createClientForProvider(provider)
+  }
+
+  /**
+   * LLM応答にdialogue配列が含まれている場合、正規化処理を適用
+   */
+  private normalizeResultIfNeeded<T>(result: T): T {
+    // 結果がオブジェクトで、pages配列を含む場合（レイアウト生成の場合）
+    if (
+      typeof result === 'object' &&
+      result !== null &&
+      'pages' in result &&
+      Array.isArray((result as { pages?: unknown[] }).pages)
+    ) {
+      try {
+        return normalizeLLMResponse(result as Record<string, unknown>) as T
+      } catch (error) {
+        console.warn(
+          JSON.stringify({
+            ts: new Date().toISOString(),
+            level: 'warn',
+            msg: 'Failed to normalize dialogue format, using original result',
+            service: 'llm-structured-generator',
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        )
+        return result
+      }
+    }
+
+    return result
   }
 
   private isPostResponseError(message: string): boolean {

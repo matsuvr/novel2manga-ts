@@ -24,6 +24,7 @@ const textAnalysisOutputSchema = z.object({
   scenes: z.array(
     z.object({
       location: z.string(),
+      time: z.string().nullable().optional(),
       description: z.string(),
       startIndex: z.number(),
       endIndex: z.number(),

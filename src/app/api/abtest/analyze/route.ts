@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { CompatAgent } from '@/agent/compat'
-import { getTextAnalysisConfig } from '@/config'
+import { CompatAgent } from '@/agents/compat'
+import { getLLMDefaultProvider, getTextAnalysisConfig } from '@/config'
 
 const zBody = z.object({
   text: z.string().min(1),
@@ -19,6 +19,7 @@ const textAnalysisOutputSchema = z.object({
   scenes: z.array(
     z.object({
       location: z.string(),
+      time: z.string().nullable().optional(),
       description: z.string(),
       startIndex: z.number(),
       endIndex: z.number(),
@@ -51,12 +52,13 @@ const textAnalysisOutputSchema = z.object({
 
 async function runWithModel(modelId: string, prompt: string) {
   const config = getTextAnalysisConfig()
+  const provider = getLLMDefaultProvider()
   const agent = new CompatAgent({
     name: `abtest-${modelId}`,
     instructions: config.systemPrompt,
-    provider: 'groq',
+    provider,
     model: modelId,
-    maxTokens: 8192,
+    // Use llm.config.ts provider and let CompatAgent handle maxTokens
   })
 
   try {

@@ -4,7 +4,7 @@
     "panels": [
       {
         "id": 1,
-        "bbox": [0.05, 0.08, 0.9, 0.9],
+        "bbox": [0, 0.08, 1, 0.9],
         "content": "PLACEHOLDER",
         "dialogue": "PLACEHOLDER"
       }

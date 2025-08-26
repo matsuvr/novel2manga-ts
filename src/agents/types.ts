@@ -74,57 +74,7 @@ export interface AgentResult {
 }
 
 // エージェントエラー
-export class AgentError extends Error {
-  constructor(
-    message: string,
-    public readonly code: string,
-    public readonly stepIndex?: number,
-    public readonly cause?: Error,
-  ) {
-    super(message)
-    this.name = 'AgentError'
-  }
-}
-
-// ツールエラー
-export class ToolError extends AgentError {
-  constructor(
-    message: string,
-    public readonly toolName: string,
-    public readonly toolCallId: string,
-    stepIndex?: number,
-    cause?: Error,
-  ) {
-    super(message, 'TOOL_ERROR', stepIndex, cause)
-    this.name = 'ToolError'
-  }
-}
-
-// ポリシーエラー
-export class PolicyError extends AgentError {
-  constructor(
-    message: string,
-    public readonly policy: string,
-    stepIndex?: number,
-    cause?: Error,
-  ) {
-    super(message, 'POLICY_ERROR', stepIndex, cause)
-    this.name = 'PolicyError'
-  }
-}
-
-// タイムアウトエラー
-export class AgentTimeoutError extends AgentError {
-  constructor(
-    message: string,
-    public readonly maxSteps: number,
-    public readonly actualSteps: number,
-    cause?: Error,
-  ) {
-    super(message, 'TIMEOUT', actualSteps, cause)
-    this.name = 'AgentTimeoutError'
-  }
-}
+// エラー関連は src/agents/errors.ts に統一
 
 // ツール定義
 export interface Tool {

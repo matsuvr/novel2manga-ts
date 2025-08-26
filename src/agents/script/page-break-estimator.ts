@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import { getLlmStructuredGenerator } from '@/agent/structured-generator'
+import { getLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import { type PageBreakPlan, PageBreakSchema, type Script } from '@/types/script'
 
@@ -21,7 +21,7 @@ export async function estimatePageBreaks(
               dialogue: [
                 {
                   speaker: '太郎',
-                  lines: 'やってみよう！',
+                  text: 'やってみよう！',
                 },
               ],
             },
@@ -31,7 +31,7 @@ export async function estimatePageBreaks(
               dialogue: [
                 {
                   speaker: '太郎',
-                  lines: script.scenes?.[0]?.script?.[1]?.text || '太郎のセリフ',
+                  text: script.scenes?.[0]?.script?.[1]?.text || '太郎のセリフ',
                 },
               ],
             },

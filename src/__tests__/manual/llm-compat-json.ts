@@ -45,7 +45,7 @@ function loadDotEnv() {
 loadDotEnv()
 
 // アプリのモジュール（相対パスで直接参照）
-import { CompatAgent } from '@/agent/compat'
+import { CompatAgent } from '@/agents/compat'
 import { appConfig } from '@/config/app.config'
 import { getLLMProviderConfig, type LLMProvider } from '@/config/llm.config'
 

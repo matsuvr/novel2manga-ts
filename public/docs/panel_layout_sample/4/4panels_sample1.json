@@ -4,25 +4,25 @@
     "panels": [
       {
         "id": 1,
-        "bbox": [0.05, 0.05, 0.9, 0.2],
+        "bbox": [0, 0.05, 1, 0.2],
         "content": "PLACEHOLDER",
         "dialogue": "PLACEHOLDER"
       },
       {
         "id": 2,
-        "bbox": [0.05, 0.27, 0.9, 0.08],
+        "bbox": [0, 0.27, 1, 0.08],
         "content": "PLACEHOLDER",
         "dialogue": "PLACEHOLDER"
       },
       {
         "id": 3,
-        "bbox": [0.05, 0.37, 0.9, 0.12],
+        "bbox": [0, 0.37, 1, 0.12],
         "content": "PLACEHOLDER",
         "dialogue": "PLACEHOLDER"
       },
       {
         "id": 4,
-        "bbox": [0.05, 0.51, 0.9, 0.38],
+        "bbox": [0, 0.51, 1, 0.38],
         "content": "PLACEHOLDER",
         "dialogue": "PLACEHOLDER"
       }

@@ -56,6 +56,10 @@ export const jobs = sqliteTable(
     totalPages: integer('total_pages').default(0),
     renderedPages: integer('rendered_pages').default(0),
 
+    // 実行中の位置（UX向上用の現在位置）
+    processingEpisode: integer('processing_episode'),
+    processingPage: integer('processing_page'),
+
     // エラー管理
     lastError: text('last_error'),
     lastErrorStep: text('last_error_step'),

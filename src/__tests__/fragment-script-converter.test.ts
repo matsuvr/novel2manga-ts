@@ -3,7 +3,7 @@ import { convertEpisodeTextToScriptWithFragments } from '@/agents/script/fragmen
 
 // LLM generator のモック
 const mockGenerateObjectWithFallback = vi.fn()
-vi.mock('@/agent/structured-generator', () => ({
+vi.mock('@/agents/structured-generator', () => ({
   getLlmStructuredGenerator: () => ({
     generateObjectWithFallback: mockGenerateObjectWithFallback,
   }),
