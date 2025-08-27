@@ -28,8 +28,6 @@ export async function POST(request: NextRequest) {
     const { text } = (body || {}) as { text: unknown }
 
     // デバッグ用：文字化け調査（最小限）
-    console.log('[DEBUG] Received text:', text)
-
     if (typeof text !== 'string' || text.length === 0) {
       return ApiResponder.validation('テキストが必要です')
     }
