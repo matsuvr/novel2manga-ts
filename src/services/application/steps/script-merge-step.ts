@@ -43,7 +43,9 @@ export class ScriptMergeStep implements PipelineStep {
           chunkIndex: i,
           textLength,
           hasJapanese,
-          textPreview: obj.text.substring(0, 200).replace(/\n/g, '\\n'),
+          textPreview: obj.text
+            .substring(0, ScriptMergeStep.TEXT_PREVIEW_LENGTH)
+            .replace(/\n/g, '\\n'),
         })
 
         let scriptObj: { scenes?: typeof allScenes }
@@ -55,7 +57,7 @@ export class ScriptMergeStep implements PipelineStep {
             jobId,
             chunkIndex: i,
             parseError: parseMsg,
-            textPreview: obj.text.substring(0, 500),
+            textPreview: obj.text.substring(0, ScriptMergeStep.ERROR_TEXT_PREVIEW_LENGTH),
           })
           throw new Error(`Failed to parse script chunk ${i}: ${parseMsg}`)
         }
