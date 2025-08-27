@@ -55,7 +55,7 @@ export class ScriptMergeStep implements PipelineStep {
             jobId,
             chunkIndex: i,
             parseError: parseMsg,
-            textPreview: obj.text.substring(0, 500),
+            textPreview: obj.text.substring(0, ScriptMergeStep.ERROR_TEXT_PREVIEW_LENGTH),
           })
           throw new Error(`Failed to parse script chunk ${i}: ${parseMsg}`)
         }
