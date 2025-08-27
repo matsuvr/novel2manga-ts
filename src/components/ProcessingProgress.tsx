@@ -1,6 +1,7 @@
 'use client'
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { z } from 'zod'
 
 interface ProcessStep {
   id: string
@@ -227,49 +228,22 @@ function ProcessingProgress({
     return Math.max(0, Math.min(1, w))
   }, [currentEpisodeProgressWeight])
 
-  // Type guard for episode page data to ensure type safety
-  const isValidEpisodePageData = useCallback(
-    (
-      data: unknown,
-    ): data is {
-      planned: number
-      rendered: number
-      total?: number
-      validation?: {
-        normalizedPages: number[]
-        pagesWithIssueCounts: Record<number, number> | Record<string, number>
-        issuesCount: number
-      }
-    } => {
-      if (typeof data !== 'object' || data === null) return false
-
-      // 型ガード: 必要なプロパティが存在するかチェック
-      const hasRequiredProperties =
-        'planned' in data &&
-        'rendered' in data &&
-        typeof data.planned === 'number' &&
-        typeof data.rendered === 'number'
-
-      if (!hasRequiredProperties) return false
-
-      // total プロパティの型チェック
-      const hasValidTotal =
-        !('total' in data) || data.total === undefined || typeof data.total === 'number'
-      if (!hasValidTotal) return false
-
-      // validation プロパティの型チェック
-      if ('validation' in data && data.validation !== undefined) {
-        if (typeof data.validation !== 'object' || data.validation === null) return false
-        if (
-          !('normalizedPages' in data.validation) ||
-          !Array.isArray(data.validation.normalizedPages)
-        ) {
-          return false
-        }
-      }
-
-      return true
-    },
+  // Zod による perEpisodePages の要素検証（型安全・簡潔）
+  const EpisodePageDataSchema = useMemo(
+    () =>
+      z.object({
+        planned: z.number(),
+        rendered: z.number(),
+        total: z.number().optional(),
+        validation: z
+          .object({
+            normalizedPages: z.array(z.number()),
+            // 数値キーはJSONでは文字列化されるため、record<number>相当も受け入れる
+            pagesWithIssueCounts: z.record(z.number()).optional(),
+            issuesCount: z.number().optional(),
+          })
+          .optional(),
+      }),
     [],
   )
 
@@ -372,13 +346,21 @@ function ProcessingProgress({
         > = {}
         for (const [k, v] of Object.entries(data.job.progress.perEpisodePages)) {
           const episodeNumber = Number(k)
-          if (!Number.isNaN(episodeNumber) && isValidEpisodePageData(v)) {
-            normalized[episodeNumber] = {
-              planned: v.planned,
-              rendered: v.rendered,
-              total: v.total,
-              validation: v.validation,
-            }
+          if (Number.isNaN(episodeNumber)) continue
+          const parsed = EpisodePageDataSchema.safeParse(v)
+          if (!parsed.success) continue
+          const val = parsed.data
+          normalized[episodeNumber] = {
+            planned: val.planned,
+            rendered: val.rendered,
+            total: val.total,
+            validation: val.validation
+              ? {
+                  normalizedPages: val.validation.normalizedPages,
+                  pagesWithIssueCounts: val.validation.pagesWithIssueCounts || {},
+                  issuesCount: val.validation.issuesCount ?? 0,
+                }
+              : undefined,
           }
         }
         setPerEpisodePages(normalized)
@@ -629,8 +611,8 @@ function ProcessingProgress({
       onComplete,
       describeStep,
       isDemoMode,
-      isValidEpisodePageData,
       inProgressWeight,
+      EpisodePageDataSchema.safeParse,
     ],
   )
 
