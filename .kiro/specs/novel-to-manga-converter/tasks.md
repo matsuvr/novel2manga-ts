@@ -137,3 +137,20 @@
 - [x] Update unit tests to remove normalization expectations
 - [x] Update design.md to document free-text policy and style heuristics
 - Refactor: Consolidated `src/agent` into `src/agents`; updated imports project-wide; unified error handling to `src/agents/errors.ts`. Unit tests pass.
+
+## New (2025-08-27): Error Handling Architecture Improvements
+
+- [x] Extract shared error patterns into centralized constants (`src/errors/error-patterns.ts`)
+  - [x] Define connectivity, JSON/schema, retryable JSON, and HTTP error patterns
+  - [x] Remove duplication between `isPostResponseError` and `isRetryableJsonError` methods
+  - [x] Add comprehensive documentation for each error pattern category
+- [x] Enhance `normalizePageBreakResult` function with detailed JSDoc documentation
+  - [x] Document all supported LLM response formats (standard, array, nested, mixed, unknown)
+  - [x] Explain page numbering normalization and fallback behavior
+  - [x] Add usage examples and case-by-case explanations
+- [x] Review and document storage audit performance optimizations
+  - [x] Parallel storage key fetching using `Promise.all()`
+  - [x] Single-pass validation combining duplicate detection and format checking
+  - [x] Abort signal support for long-running operations
+- [x] Update design.md with new error handling architecture documentation
+- [x] Update tasks.md to reflect completed error handling improvements
