@@ -23,27 +23,47 @@ function isPageContainerObject(obj: unknown): obj is { pages: unknown[] } {
   )
 }
 
-// 結果を正規化する関数
+/**
+ * Normalizes LLM response to ensure consistent PageBreakPlan structure.
+ *
+ * The LLM can return page break data in various formats depending on the provider
+ * and prompt interpretation. This function handles all known response patterns
+ * and converts them to the standard PageBreakPlan format.
+ *
+ * @param result - Raw LLM response that may be in various formats
+ * @returns Normalized PageBreakPlan with proper structure
+ *
+ * @example
+ * // Handles already correct format: { pages: [...] }
+ * // Handles simple array: [{ pageNumber: 1, ... }, { pageNumber: 2, ... }]
+ * // Handles nested format: [{ pages: [...] }, { pages: [...] }]
+ * // Handles mixed/malformed arrays with filtering
+ * // Returns empty plan for unrecognized formats
+ */
 function normalizePageBreakResult(result: unknown): PageBreakPlan {
-  // 既に正しい形式の場合
+  // Case 1: Already in correct PageBreakPlan format { pages: [...] }
   if (typeof result === 'object' && result !== null && 'pages' in result) {
     return result as PageBreakPlan
   }
 
-  // 配列の場合
+  // Case 2: Array responses - handle multiple sub-patterns
   if (Array.isArray(result)) {
-    // Case 1: Simple array of pages
+    // Case 2a: Simple array of page objects [{ pageNumber: 1, ... }, ...]
+    // This occurs when LLM returns pages directly as an array
     if (result.length > 0 && isPageObject(result[0])) {
       return { pages: result as PageBreakPlan['pages'] }
     }
 
-    // Case 2: Array of objects containing pages (e.g., [{"pages": [...]}])
+    // Case 2b: Array of container objects [{ pages: [...] }, { pages: [...] }]
+    // This occurs when LLM wraps pages in multiple container objects
+    // We need to flatten and renumber to maintain sequential page numbering
     if (result.length > 0 && isPageContainerObject(result[0])) {
-      // Concatenate all pages from all objects in the array (flatMap)
+      // Extract and concatenate all pages from all container objects
       const allPages: PageBreakPlan['pages'] = (result as unknown[]).flatMap((item) =>
         isPageContainerObject(item) ? item.pages.filter(isPageObject) : [],
       )
-      // Re-number pages sequentially (immutable update)
+      // Renumber pages sequentially starting from 1 (immutable update)
+      // This ensures consistent page numbering even if source had gaps or duplicates
       const renumbered: PageBreakPlan['pages'] = allPages.map((page, idx) => ({
         ...page,
         pageNumber: idx + 1,
@@ -51,11 +71,13 @@ function normalizePageBreakResult(result: unknown): PageBreakPlan {
       return { pages: renumbered }
     }
 
-    // Case 3: Fallback - treat as pages array
+    // Case 2c: Mixed/malformed array - filter valid page objects only
+    // This occurs when LLM returns an array with mixed valid/invalid objects
     return { pages: result.filter(isPageObject) }
   }
 
-  // その他の場合は空のページ配列を返す
+  // Case 3: Unrecognized format - return empty plan to prevent crashes
+  // This provides graceful degradation for unexpected LLM response formats
   return { pages: [] }
 }
 
