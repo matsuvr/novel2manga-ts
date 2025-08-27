@@ -74,6 +74,7 @@ vi.mock('@/repositories/factory', () => {
         __testDbForFactory!.service.markJobStepCompleted(id, step),
       updateStatus: (id: string, status: any) =>
         __testDbForFactory!.service.updateJobStatus(id, status),
+      getJob: (id: string) => __testDbForFactory!.service.getJob(id),
       getJobWithProgress: (id: string) => __testDbForFactory!.service.getJobWithProgress(id),
     }),
     getNovelRepository: () => ({
