@@ -23,14 +23,17 @@ export async function saveNovelToStorage(text: string) {
     },
   }
 
+  // JSONデータをUTF-8で文字列化（文字化け防止）
+  const jsonString = JSON.stringify(fileData, null, 2)
+
   // テスト環境はテスト用メモリストレージのAPI形状に合わせる
   if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
     await storage.put(key, {
-      text: JSON.stringify(fileData),
+      text: jsonString,
       metadata: { uuid, length: text.length },
     } as unknown as string)
   } else {
-    await storage.put(key, JSON.stringify(fileData), {
+    await storage.put(key, jsonString, {
       uuid,
       length: text.length.toString(),
     })

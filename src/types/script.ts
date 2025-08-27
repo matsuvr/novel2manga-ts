@@ -71,7 +71,10 @@ export const PanelAssignmentSchema = z.object({
       pageNumber: z.number().int().min(1),
       panelCount: z.number().int().min(1).max(8),
       panels: z.array(
-        z.object({ id: z.number().int().min(1), lines: z.array(z.number().int().nonnegative()) }),
+        z.object({
+          id: z.number().int().min(1),
+          scriptIndexes: z.array(z.number().int().nonnegative()),
+        }),
       ),
     }),
   ),

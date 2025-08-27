@@ -128,8 +128,8 @@ export class PageBreakStep implements PipelineStep {
       const assignedLines: number[] = []
       for (const page of assignment.pages) {
         for (const panel of page.panels) {
-          if (Array.isArray(panel.lines)) {
-            assignedLines.push(...panel.lines)
+          if (Array.isArray(panel.scriptIndexes)) {
+            assignedLines.push(...panel.scriptIndexes)
           }
         }
       }
@@ -140,10 +140,10 @@ export class PageBreakStep implements PipelineStep {
       if (unassigned.length > 0) {
         for (const page of assignment.pages) {
           for (const panel of page.panels) {
-            if (!panel.lines || panel.lines.length === 0) {
+            if (!panel.scriptIndexes || panel.scriptIndexes.length === 0) {
               const take = unassigned.shift()
               if (typeof take === 'number') {
-                panel.lines = [take]
+                panel.scriptIndexes = [take]
               }
               if (unassigned.length === 0) break
             }
@@ -152,7 +152,9 @@ export class PageBreakStep implements PipelineStep {
         }
         // 再計算: まだ未割当が残っていれば後続の追加ページで吸収
         if (unassigned.length > 0) {
-          const used = new Set(assignment.pages.flatMap((p) => p.panels.flatMap((pp) => pp.lines)))
+          const used = new Set(
+            assignment.pages.flatMap((p) => p.panels.flatMap((pp) => pp.scriptIndexes)),
+          )
           unassigned = Array.from(allIdxSet).filter((i) => !used.has(i))
         }
       }
@@ -176,7 +178,7 @@ export class PageBreakStep implements PipelineStep {
           assignment.pages.push({
             pageNumber: pageNo,
             panelCount: chunk.length,
-            panels: chunk.map((lineIdx, i) => ({ id: i + 1, lines: [lineIdx] })),
+            panels: chunk.map((lineIdx, i) => ({ id: i + 1, scriptIndexes: [lineIdx] })),
           })
         }
       }

@@ -10,15 +10,25 @@ import { saveNovelToStorage } from './storage/route'
 
 export async function POST(request: NextRequest) {
   try {
-    // JSON パース失敗時は 400 を返す
+    // Windows環境での文字化け対策：生のバイトデータを直接処理
     let body: unknown
     try {
-      body = await request.json()
-    } catch {
+      // 生のバイトデータを取得してUTF-8でデコード（request.json()を呼ばない）
+      const buffer = await request.arrayBuffer()
+      const rawText = new TextDecoder('utf-8').decode(buffer)
+      body = JSON.parse(rawText)
+    } catch (error) {
+      console.log(
+        '[DEBUG] JSON parse error:',
+        error instanceof Error ? error.message : String(error),
+      )
       return ApiResponder.validation('無効なJSONが送信されました')
     }
 
     const { text } = (body || {}) as { text: unknown }
+
+    // デバッグ用：文字化け調査（最小限）
+    console.log('[DEBUG] Received text:', text)
 
     if (typeof text !== 'string' || text.length === 0) {
       return ApiResponder.validation('テキストが必要です')
