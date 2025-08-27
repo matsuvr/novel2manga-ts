@@ -129,6 +129,9 @@ const INITIAL_STEPS: ProcessStep[] = [
   },
 ]
 
+// ステップ1つあたりの全体進捗割合を定数化
+const STEP_PERCENT = 100 / (INITIAL_STEPS.length || 1)
+
 // ヘルパー関数: レンダリング進捗の計算
 function calculateRenderProgress(job: Record<string, unknown>): number {
   const totalPages = job.totalPages
@@ -151,7 +154,7 @@ function calculateRenderProgress(job: Record<string, unknown>): number {
 
 // ヘルパー関数: 全体進捗の計算
 function calculateOverallProgress(job: Record<string, unknown>, completedCount: number): number {
-  const baseProgress = Math.round((completedCount / INITIAL_STEPS.length) * 100)
+  const baseProgress = Math.round(completedCount * STEP_PERCENT)
 
   // レンダリング段階では、実際のページ進捗を全体進捗に反映
   const currentStep = job.currentStep
@@ -163,7 +166,7 @@ function calculateOverallProgress(job: Record<string, unknown>, completedCount: 
     const renderedPages = job.renderedPages
 
     if (typeof totalPages === 'number' && typeof renderedPages === 'number' && totalPages > 0) {
-      const renderProgress = (renderedPages / totalPages) * (100 / INITIAL_STEPS.length)
+      const renderProgress = (renderedPages / totalPages) * STEP_PERCENT
       return Math.round(baseProgress + renderProgress)
     }
   }
@@ -638,7 +641,7 @@ function ProcessingProgress({
     setSteps((prev) =>
       prev.map((step, index) => (index === 0 ? { ...step, status: 'completed' as const } : step)),
     )
-    setOverallProgress(Math.round((1 / INITIAL_STEPS.length) * 100))
+    setOverallProgress(Math.round(STEP_PERCENT))
     addLog('info', `処理を開始しました。Job ID: ${jobId}`)
 
     // Visibility: pause when hidden
@@ -747,9 +750,21 @@ function ProcessingProgress({
       updated[0].status = 'processing'
       return updated
     })
-    setOverallProgress(Math.round((0 / INITIAL_STEPS.length) * 100))
+    setOverallProgress(0)
     addLog('info', '準備中: アップロードを開始しています')
   }, [jobId, addLog])
+
+  // perEpisodePages に依存する合計ページ数・描画済みページ数をメモ化
+  const { totalPagesByEpisodes, renderedPagesByEpisodes } = useMemo(() => {
+    const values = Object.values(perEpisodePages)
+    if (values.length === 0) return { totalPagesByEpisodes: 0, renderedPagesByEpisodes: 0 }
+    const total = values.reduce(
+      (sum, ep) => sum + (typeof ep.total === 'number' ? ep.total : ep.planned),
+      0,
+    )
+    const rendered = values.reduce((sum, ep) => sum + ep.rendered, 0)
+    return { totalPagesByEpisodes: total, renderedPagesByEpisodes: rendered }
+  }, [perEpisodePages])
 
   // Memoize heavy computation for episode progress cards
   const episodeProgressCards = useMemo(() => {
@@ -944,28 +959,15 @@ function ProcessingProgress({
                           <span>レンダリング詳細:</span>
                           <span>
                             {(() => {
-                              // より正確なページ数計算
-                              const totalPages = perEpisodePages
-                                ? Object.values(perEpisodePages).reduce(
-                                    (sum, ep) => sum + (ep.total || ep.planned),
-                                    0,
-                                  )
-                                : 0
-                              const renderedPages = perEpisodePages
-                                ? Object.values(perEpisodePages).reduce(
-                                    (sum, ep) => sum + ep.rendered,
-                                    0,
-                                  )
-                                : 0
-
+                              const totalPages = totalPagesByEpisodes
+                              const renderedPages = renderedPagesByEpisodes
                               if (totalPages > 0) {
                                 const progressPercent = Math.round(
                                   (renderedPages / totalPages) * 100,
                                 )
                                 return `${renderedPages} / ${totalPages} ページ完了 (${progressPercent}%)`
-                              } else {
-                                return `${renderedPages} ページ完了`
                               }
+                              return `${renderedPages} ページ完了`
                             })()}
                           </span>
                         </div>
