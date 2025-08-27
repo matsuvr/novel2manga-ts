@@ -466,10 +466,17 @@ function ProcessingProgress({
             data.job.currentStep?.startsWith('render_')
           ) {
             updatedSteps[5].status = 'processing'
+            // レンダリング進捗の詳細計算
             if (data.job.totalPages && data.job.renderedPages !== undefined) {
-              updatedSteps[5].progress = Math.round(
-                (data.job.renderedPages / data.job.totalPages) * 100,
-              )
+              const baseProgress = Math.round((data.job.renderedPages / data.job.totalPages) * 100)
+              // 現在処理中のページがある場合は部分的な進捗を追加
+              const processingPage = data.job.processingPage
+              if (typeof processingPage === 'number' && processingPage > 0) {
+                const pageProgress = Math.min(90, baseProgress + 10) // 最大90%まで
+                updatedSteps[5].progress = pageProgress
+              } else {
+                updatedSteps[5].progress = baseProgress
+              }
             }
             currentIndex = 5
           }
@@ -538,13 +545,35 @@ function ProcessingProgress({
             total || doneBase + 1,
             typeof inFlightPage === 'number' && inFlightPage > 0 ? inFlightPage : doneBase + 1,
           )
-          hints.render = `現在: ページ ${done} / ${total || '?'} をレンダリング中`
+          // より詳細なレンダリング進捗表示
+          if (total > 0) {
+            const progressPercent = Math.round((done / total) * 100)
+            hints.render = `現在: ページ ${done} / ${total} をレンダリング中 (${progressPercent}%)`
+          } else {
+            hints.render = `現在: ページ ${done} をレンダリング中`
+          }
         }
         setRuntimeHints(hints)
 
         // 現在のインデックスと進捗を設定
         setCurrentStepIndex(currentIndex)
-        setOverallProgress(Math.round((completedCount / INITIAL_STEPS.length) * 100))
+
+        // 全体進捗の計算を改善（レンダリング段階では実際のページ進捗を反映）
+        let overallProgressPercent = Math.round((completedCount / INITIAL_STEPS.length) * 100)
+
+        // レンダリング段階では、実際のページ進捗を全体進捗に反映
+        if (data.job.currentStep === 'render' || data.job.currentStep?.startsWith('render_')) {
+          const totalPages = data.job.totalPages || 0
+          const renderedPages = data.job.renderedPages || 0
+          if (totalPages > 0) {
+            // レンダリング段階の進捗を全体進捗に反映
+            const renderProgress = (renderedPages / totalPages) * (100 / INITIAL_STEPS.length)
+            const baseProgress = (completedCount / INITIAL_STEPS.length) * 100
+            overallProgressPercent = Math.round(baseProgress + renderProgress)
+          }
+        }
+
+        setOverallProgress(overallProgressPercent)
 
         return updatedSteps
       })
@@ -872,6 +901,50 @@ function ProcessingProgress({
                         style={{ width: `${step.progress}%` }}
                       />
                     </div>
+                    {/* レンダリング段階では詳細なページ情報を表示 */}
+                    {step.id === 'render' && jobId && (
+                      <div className="mt-2 text-xs text-gray-600">
+                        <div className="flex items-center justify-between">
+                          <span>レンダリング詳細:</span>
+                          <span>
+                            {(() => {
+                              // より正確なページ数計算
+                              const totalPages = perEpisodePages
+                                ? Object.values(perEpisodePages).reduce(
+                                    (sum, ep) => sum + (ep.total || ep.planned),
+                                    0,
+                                  )
+                                : 0
+                              const renderedPages = perEpisodePages
+                                ? Object.values(perEpisodePages).reduce(
+                                    (sum, ep) => sum + ep.rendered,
+                                    0,
+                                  )
+                                : 0
+
+                              if (totalPages > 0) {
+                                const progressPercent = Math.round(
+                                  (renderedPages / totalPages) * 100,
+                                )
+                                return `${renderedPages} / ${totalPages} ページ完了 (${progressPercent}%)`
+                              } else {
+                                return `${renderedPages} ページ完了`
+                              }
+                            })()}
+                          </span>
+                        </div>
+                        {/* エピソード別の詳細進捗 */}
+                        {Object.keys(perEpisodePages).length > 0 && (
+                          <div className="mt-1 text-xs text-gray-500">
+                            {Object.entries(perEpisodePages).map(([ep, data]) => (
+                              <span key={ep} className="mr-2">
+                                EP{ep}: {data.rendered}/{data.total || data.planned}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
