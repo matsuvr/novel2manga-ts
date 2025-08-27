@@ -36,9 +36,9 @@ USER appuser
 # ポート3000を公開
 EXPOSE 3000
 
-# ヘルスチェックを追加
+# ヘルスチェックを追加（Node.js-based for better security)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/api/health || exit 1
+    CMD node -e "require('http').get('http://localhost:3000/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
 
 # アプリケーションを起動
 CMD ["npm", "start"]
