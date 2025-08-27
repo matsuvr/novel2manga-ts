@@ -68,9 +68,32 @@ export async function estimatePageBreaks(
 
   // Handle case where LLM returns an array instead of object
   let pageBreakPlan = result as PageBreakPlan
+
   if (Array.isArray(result)) {
-    // If LLM returned an array, assume it's the pages array and wrap it in an object
-    pageBreakPlan = { pages: result as PageBreakPlan['pages'] }
+    // Case 1: Simple array of pages
+    if (result.length > 0 && result[0].pageNumber !== undefined) {
+      pageBreakPlan = { pages: result as PageBreakPlan['pages'] }
+    }
+    // Case 2: Array of objects containing pages (e.g., [{"pages": [...]}])
+    else if (result.length > 0 && result[0].pages && Array.isArray(result[0].pages)) {
+      // Concatenate all pages from all objects in the array
+      const allPages: PageBreakPlan['pages'] = []
+      for (const item of result) {
+        if (item.pages && Array.isArray(item.pages)) {
+          allPages.push(...item.pages)
+        }
+      }
+      // Re-number pages sequentially
+      let pageNumber = 1
+      for (const page of allPages) {
+        page.pageNumber = pageNumber++
+      }
+      pageBreakPlan = { pages: allPages }
+    }
+    // Case 3: Fallback - treat as pages array
+    else {
+      pageBreakPlan = { pages: result as PageBreakPlan['pages'] }
+    }
   }
 
   return pageBreakPlan

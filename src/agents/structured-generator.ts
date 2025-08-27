@@ -172,7 +172,6 @@ export class DefaultLlmStructuredGenerator {
 
   private isPostResponseError(message: string): boolean {
     const postMarkers = [
-      'schema validation failed',
       'does not contain a valid JSON',
       'Unexpected end of JSON input',
       'Failed to parse JSON response',
@@ -189,6 +188,10 @@ export class DefaultLlmStructuredGenerator {
     ]
     const hasMarker = postMarkers.some((m) => message.includes(m))
     const hasConnectivity = connectivity.some((m) => message.includes(m))
+
+    // schema validation failed はリトライ対象なので、post-responseエラーとして扱わない
+    if (message.includes('schema validation failed')) return false
+
     if (hasMarker) return true
     if (/HTTP\s+4\d{2}/.test(message)) return true
     if (hasConnectivity) return false
@@ -203,6 +206,9 @@ export class DefaultLlmStructuredGenerator {
       'JSON parse failed',
       'Unexpected end of JSON input',
       'does not contain a valid JSON',
+      'schema validation failed',
+      'Expected object, received array',
+      'invalid_type',
     ]
     return retryableErrors.some((error) => message.includes(error))
   }

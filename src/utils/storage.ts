@@ -866,32 +866,41 @@ export async function auditStorageKeysOnStorages(
 ): Promise<{ scanned: number; issues: StorageKeyIssue[] }> {
   const issues: StorageKeyIssue[] = []
   const seen = new Set<string>()
-  let scanned = 0
 
-  await Promise.all(
+  const results = await Promise.all(
     storages.map(async (storage) => {
-      if (!storage.list) return
+      if (!storage.list) return { scanned: 0, storageIssues: [] }
       const keys = await storage.list(options?.prefix)
+      const storageIssues: StorageKeyIssue[] = []
+      let scanned = 0
+
       for (const key of keys) {
-        if (options?.abortSignal?.aborted) return
+        if (options?.abortSignal?.aborted) return { scanned, storageIssues }
         scanned++
         if (!KEY_REGEX.test(key)) {
-          issues.push({ key, issue: 'invalid-format', detail: 'regex-mismatch' })
+          storageIssues.push({ key, issue: 'invalid-format', detail: 'regex-mismatch' })
         }
         for (const seg of FORBIDDEN_SEGMENTS) {
           if (key.includes(seg)) {
-            issues.push({ key, issue: 'forbidden-segment', detail: seg })
+            storageIssues.push({ key, issue: 'forbidden-segment', detail: seg })
           }
         }
         if (seen.has(key)) {
-          issues.push({ key, issue: 'duplicate' })
+          storageIssues.push({ key, issue: 'duplicate' })
         } else {
           seen.add(key)
         }
       }
+      return { scanned, storageIssues }
     }),
   )
 
-  return { scanned, issues }
+  // Aggregate results
+  const totalScanned = results.reduce((sum, result) => sum + result.scanned, 0)
+  for (const result of results) {
+    issues.push(...result.storageIssues)
+  }
+
+  return { scanned: totalScanned, issues }
 }
 // NOTE: 動的追加は廃止。auditKeys は StorageFactory 定義に含めた。
