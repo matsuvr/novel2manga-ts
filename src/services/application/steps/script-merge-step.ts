@@ -8,6 +8,9 @@ export interface ScriptMergeResult {
 export class ScriptMergeStep implements PipelineStep {
   readonly stepName = 'script-merge'
 
+  static readonly TEXT_PREVIEW_LENGTH = 100
+  static readonly ERROR_TEXT_PREVIEW_LENGTH = 200
+
   async mergeChunkScripts(
     totalChunks: number,
     context: StepContext,
