@@ -82,13 +82,14 @@ export class LocalFileStorage implements Storage {
           createdAt: new Date().toISOString(),
           isBinary: true,
         }
-        await fs.writeFile(metadataPath, JSON.stringify(metadataContent), 'utf-8')
+        await fs.writeFile(metadataPath, JSON.stringify(metadataContent), { encoding: 'utf8' })
       }
     } else {
-      // テキストデータの場合：拡張子に関わらずプレーンテキストとして保存
-      // 付随するメタデータは sidecar の .meta.json に保存（バイナリ/テキスト問わず統一）
-      const text = value.toString()
-      await fs.writeFile(filePath, text, 'utf-8')
+      // テキストデータの場合：明示的にBufferに変換してからUTF-8で保存
+      // Windows環境での文字化け問題を回避するため、Bufferを経由
+      const textContent = typeof value === 'string' ? value : (value as Buffer).toString('utf8')
+      const buffer = Buffer.from(textContent, 'utf8')
+      await fs.writeFile(filePath, buffer)
 
       const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
       const metadataContent = {
@@ -96,7 +97,7 @@ export class LocalFileStorage implements Storage {
         createdAt: new Date().toISOString(),
         isBinary: false,
       }
-      await fs.writeFile(metadataPath, JSON.stringify(metadataContent), 'utf-8')
+      await fs.writeFile(metadataPath, JSON.stringify(metadataContent), { encoding: 'utf8' })
     }
   }
 
