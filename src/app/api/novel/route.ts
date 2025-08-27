@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
       const rawText = new TextDecoder('utf-8').decode(buffer)
       body = JSON.parse(rawText)
     } catch (error) {
-      console.log(
+      console.error(
         '[DEBUG] JSON parse error:',
         error instanceof Error ? error.message : String(error),
       )
