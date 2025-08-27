@@ -272,9 +272,15 @@ IMPORTANT: Return exactly one JSON object starting with { "pages": and ending wi
       トータルページ数、各ページの要素、強度、セリフ数は、与えられたJSONをよく確認してください`,
     },
   },
-  // src/config/app.config.ts に追加
+  // Panel assignment configuration - prompts externalized per CLAUDE.md CONFIG CENTRALIZATION rule
   panelAssignment: {
-    systemPrompt: `あなたはマンガのコマ割り専門家です。与えられた脚本とページ分割データを基に、各ページのコマに適切なスクリプト行を割り当ててください。
+    get systemPrompt() {
+      try {
+        const { panelAssignmentPrompts } = require('./prompts')
+        return panelAssignmentPrompts.systemPrompt
+      } catch (_error) {
+        // Fallback for test environment or when prompts can't be loaded
+        return `あなたはマンガのコマ割り専門家です。与えられた脚本とページ分割データを基に、各ページのコマに適切なスクリプト行を割り当ててください。
 
 【重要】巨大なナレーションが含まれる場合の処理:
 - 長すぎるナレーション（100文字以上）は自動的に分割
@@ -299,9 +305,16 @@ IMPORTANT: Return exactly one JSON object starting with { "pages": and ending wi
 注意事項:
 - 各ページのpanelCountとpanels配列の長さが一致させる
 - scriptIndexes配列には、スクリプトの実際の行インデックスを入れる
-- 空のpanelsは禁止`,
-
-    userPromptTemplate: `【タスク】以下のデータを基に、各ページのコマにスクリプト行を割り当ててください。
+- 空のpanelsは禁止`
+      }
+    },
+    get userPromptTemplate() {
+      try {
+        const { panelAssignmentPrompts } = require('./prompts')
+        return panelAssignmentPrompts.userPromptTemplate
+      } catch (_error) {
+        // Fallback for test environment or when prompts can't be loaded
+        return `【タスク】以下のデータを基に、各ページのコマにスクリプト行を割り当ててください。
 
 【入力データ1: 脚本JSON】
 {{scriptJson}}
@@ -316,37 +329,13 @@ IMPORTANT: Return exactly one JSON object starting with { "pages": and ending wi
 4. ページ数はpageBreaksJsonのpages配列の長さに合わせる（通常10ページ以上）
 5. 巨大ナレーションは必ず分割: 100文字以上のナレーションは複数のpanelsに分散
 
-【具体例】
-scriptJsonに以下のデータがある場合:
-{
-  "scenes": [{
-    "script": [
-      {"index": 1, "text": "こんにちは"},
-      {"index": 2, "text": "今日は良い天気ですね"},
-      {"index": 3, "text": "そうですね"}
-    ]
-  }]
-}
-
-正しい出力例:
-{
-  "pages": [
-    {
-      "pageNumber": 1,
-      "panelCount": 2,
-      "panels": [
-        {"id": 1, "scriptIndexes": [1]},
-        {"id": 2, "scriptIndexes": [2, 3]}
-      ]
-    }
-  ]
-}
-
 【制約】
 - 1ページのコマ数は1-6個まで
 - スプラッシュ/見開きは使用しない
 - 各ページのpanelCountとpanels配列の長さを必ず一致させる
-- 空のscriptIndexes配列は禁止（最低1つのindexを入れる）`,
+- 空のscriptIndexes配列は禁止（最低1つのindexを入れる）`
+      }
+    },
   },
 
   // ストレージ設定

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { getLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getChunkBundleAnalysisConfig } from '@/config'
+import { getLogger } from '@/infrastructure/logging/logger'
 import type { ChunkAnalysisResult } from '@/types/chunk'
 
 // LLM structured generator (with LLM-only fallback)
@@ -68,10 +69,15 @@ interface ChunkWithAnalysis {
 export async function analyzeChunkBundle(
   chunksWithAnalyses: ChunkWithAnalysis[],
 ): Promise<BundleAnalysisResult> {
-  console.log(
-    '[analyzeChunkBundle] Starting bundle analysis with chunks:',
-    chunksWithAnalyses.length,
-  )
+  const logger = getLogger().withContext({
+    agent: 'chunk-bundle-analyzer',
+    operation: 'analyzeChunkBundle',
+  })
+
+  logger.info('Starting bundle analysis', {
+    chunkCount: chunksWithAnalyses.length,
+    totalTextLength: chunksWithAnalyses.reduce((s, c) => s + c.text.length, 0),
+  })
 
   try {
     // LLMモック: 解析をスキップして定型の集約を返す
@@ -214,7 +220,10 @@ export async function analyzeChunkBundle(
       .replace('{{situationList}}', situationList || 'なし')
 
     try {
-      console.log('Sending to LLM for bundle analysis...')
+      logger.info('Sending request to LLM for bundle analysis', {
+        userPromptLength: userPrompt.length,
+        chunkCount: chunksWithAnalyses.length,
+      })
 
       const cfg = getChunkBundleAnalysisConfig()
       const result = await generator.generateObjectWithFallback({
@@ -225,19 +234,29 @@ export async function analyzeChunkBundle(
         schemaName: 'BundleAnalysis',
       })
 
-      console.log('Bundle analysis successful')
-      console.log('Summary length:', result.summary.length)
-      console.log('Characters found:', result.mainCharacters.length)
-      console.log('Highlights found:', result.highlights.length)
-      console.log('Key dialogues found:', result.keyDialogues.length)
+      logger.info('Bundle analysis completed successfully', {
+        summaryLength: result.summary.length,
+        charactersFound: result.mainCharacters.length,
+        highlightsFound: result.highlights.length,
+        keyDialoguesFound: result.keyDialogues.length,
+      })
 
       return result
     } catch (error) {
-      console.error('[analyzeChunkBundle] Bundle analysis LLM error:', error)
+      logger.error('Bundle analysis LLM request failed', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        operation: 'llm_request',
+      })
       throw error
     }
   } catch (error) {
-    console.error('[analyzeChunkBundle] Fatal error in bundle analysis:', error)
+    logger.error('Fatal error in bundle analysis', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      chunkCount: chunksWithAnalyses.length,
+      operation: 'bundle_analysis',
+    })
     throw error
   }
 }

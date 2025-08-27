@@ -19,7 +19,8 @@ export function getChunkAnalyzerAgent(): CompatAgent {
       maxTokens: config.maxTokens,
     })
 
-    console.log(`[chunkAnalyzerAgent] Using provider: ${provider}`)
+    const logger = getLogger().withContext({ agent: 'chunk-analyzer' })
+    logger.info('Chunk analyzer agent initialized', { provider, maxTokens: config.maxTokens })
   }
 
   return agentInstance

@@ -6,9 +6,12 @@ import { NovelRepository } from '@/repositories/novel-repository'
 import { getDatabaseService } from '@/services/db-factory'
 import { ValidationError } from '@/utils/api-error'
 import { ApiResponder } from '@/utils/api-responder'
+import { getLogger } from '@/infrastructure/logging/logger'
 import { saveNovelToStorage } from './storage/route'
 
 export async function POST(request: NextRequest) {
+  const logger = getLogger().withContext({ api: 'novel/POST' })
+
   try {
     // Windows環境での文字化け対策：生のバイトデータを直接処理
     let body: unknown
@@ -18,17 +21,20 @@ export async function POST(request: NextRequest) {
       const rawText = new TextDecoder('utf-8').decode(buffer)
       body = JSON.parse(rawText)
     } catch (error) {
-      console.log(
-        '[DEBUG] JSON parse error:',
-        error instanceof Error ? error.message : String(error),
-      )
+      logger.error('JSON parse error during novel upload', {
+        error: error instanceof Error ? error.message : String(error),
+        operation: 'json_parse',
+      })
       return ApiResponder.validation('無効なJSONが送信されました')
     }
 
     const { text } = (body || {}) as { text: unknown }
 
     // デバッグ用：文字化け調査（最小限）
-    console.log('[DEBUG] Received text:', text)
+    logger.debug('Received text for novel processing', {
+      textLength: typeof text === 'string' ? text.length : 'invalid',
+      textType: typeof text,
+    })
 
     if (typeof text !== 'string' || text.length === 0) {
       return ApiResponder.validation('テキストが必要です')
@@ -52,9 +58,17 @@ export async function POST(request: NextRequest) {
         metadataPath: null,
       })
 
-      console.log(`✓ 小説をDBに保存: ${data.uuid}`)
+      logger.info('Novel successfully saved to database', {
+        novelId: data.uuid,
+        operation: 'db_save',
+      })
     } catch (dbError) {
-      console.error('DB保存エラー:', dbError)
+      logger.error('Database save failed for novel', {
+        novelId: data.uuid,
+        error: dbError instanceof Error ? dbError.message : String(dbError),
+        stack: dbError instanceof Error ? dbError.stack : undefined,
+        operation: 'db_save',
+      })
       // DBエラーがあってもストレージには保存されているので、処理は続行
     }
 
