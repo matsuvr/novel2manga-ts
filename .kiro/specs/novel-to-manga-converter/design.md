@@ -414,3 +414,58 @@ console.log(result.metadata?.provider)
 - DB `episodes` テーブルに `episode_text_path` 列を追加し、保存したキーを格納。
 - これにより、後続処理（スクリプト変換・ページ割り振り）や再処理時の再抽出を避け、トレーサビリティが向上。
   Note: The agent implementation previously under `src/agent` has been consolidated into `src/agents`. All imports should target `@/agents/*`. Error handling is unified via `src/agents/errors.ts`.
+
+## エラーハンドリングアーキテクチャ（2025-08-27 更新）
+
+### 統一エラーパターン管理
+
+LLM構造化ジェネレーターにおけるエラー処理は、共通のエラーパターン定義により一元化されています：
+
+#### エラーパターン分類
+
+- **接続エラーパターン** (`CONNECTIVITY_ERROR_PATTERNS`): ネットワーク/接続問題を示すエラー
+  - プロバイダーフォールバックの対象（pre-response エラー）
+  - 例: `ECONNRESET`, `ENOTFOUND`, `ETIMEDOUT`, `fetch failed`, `network error`, `TLS`
+
+- **JSON/スキーマエラーパターン** (`JSON_SCHEMA_ERROR_PATTERNS`): LLM応答後に発生するエラー
+  - プロバイダーフォールバックの対象外（post-response エラー）
+  - 例: `json_validate_failed`, `Failed to generate JSON`, `schema validation failed`, `invalid_type`
+
+- **リトライ可能JSON エラーパターン** (`RETRYABLE_JSON_ERROR_PATTERNS`): 同一プロバイダー内でリトライ可能なエラー
+  - 一時的なJSON生成の問題に対してリトライロジックを適用
+  - JSON/スキーマエラーのサブセット
+
+- **HTTP エラーパターン** (`HTTP_ERROR_PATTERNS`): ステータスコードベースの分類
+  - `CLIENT_ERROR` (4xx): クライアント/プロンプト問題、フォールバック対象外
+  - `SERVER_ERROR` (5xx): サーバー問題、フォールバック対象
+
+#### 実装場所
+
+- **定義**: `src/errors/error-patterns.ts` - 全エラーパターンの一元管理
+- **利用**: `src/agents/structured-generator.ts` - エラー判定ロジックで使用
+
+#### 利点
+
+1. **重複排除**: 複数の関数間でエラーパターンを共有
+2. **保守性**: パターン変更時の単一変更点
+3. **一貫性**: エラー分類ロジックの統一
+4. **可読性**: 各パターンの用途と例を明確に文書化
+
+### ページブレーク正規化の堅牢化
+
+`normalizePageBreakResult` 関数は、LLMの多様な応答形式に対応する包括的な正規化処理を提供：
+
+#### 対応する応答形式
+
+1. **標準形式**: `{ pages: [...] }` - そのまま返却
+2. **単純配列**: `[{ pageNumber: 1, ... }, ...]` - pagesプロパティでラップ
+3. **入れ子形式**: `[{ pages: [...] }, { pages: [...] }]` - フラット化してページ番号を再採番
+4. **混合形式**: 有効なページオブジェクトのみをフィルタリング
+5. **不明形式**: 空のページ配列を返してクラッシュを防止
+
+#### 品質保証
+
+- 型ガード関数による安全な型チェック
+- イミュータブルな更新パターン
+- シーケンシャルなページ番号の保証
+- 包括的なJSDoc文書化
