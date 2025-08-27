@@ -1,9 +1,9 @@
 import type { NextRequest } from 'next/server'
 import { appConfig } from '@/config/app.config'
+import type { Episode } from '@/db/schema'
 import { adaptAll } from '@/repositories/adapters'
 import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
-import type { Episode } from '@/db/schema'
 import { getDatabaseService } from '@/services/db-factory'
 import {
   ApiError,

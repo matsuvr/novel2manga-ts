@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test'
 import fs from 'node:fs/promises'
+import { expect, test } from '@playwright/test'
 import { getBaseURL } from '../utils/getBaseURL'
 
 test.describe('E2E: analyze → chunk-scripts → merge → page-break → bundle (JSON) → status', () => {

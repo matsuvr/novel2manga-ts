@@ -1,7 +1,7 @@
 import { estimatePageBreaks } from '@/agents/script/page-break-estimator'
 import { assignPanels, buildLayoutFromAssignment } from '@/agents/script/panel-assignment'
 import { getStoragePorts } from '@/infrastructure/storage/ports'
-import type { PageBreakPlan, Script, PanelAssignmentPlan } from '@/types/script'
+import type { PageBreakPlan, PanelAssignmentPlan, Script } from '@/types/script'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface PageBreakResult {
