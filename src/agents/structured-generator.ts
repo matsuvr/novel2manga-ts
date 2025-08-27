@@ -171,30 +171,37 @@ export class DefaultLlmStructuredGenerator {
   }
 
   private isPostResponseError(message: string): boolean {
-    const postMarkers = [
-      'does not contain a valid JSON',
-      'Unexpected end of JSON input',
-      'Failed to parse JSON response',
-      'empty or non-text response',
-    ]
+    // 接続系のみ provider 切替対象（post-response ではない）
     const connectivity = [
       'ECONNRESET',
       'ENOTFOUND',
       'ETIMEDOUT',
       'fetch failed',
       'network error',
-      'HTTP 5',
       'TLS',
     ]
-    const hasMarker = postMarkers.some((m) => message.includes(m))
-    const hasConnectivity = connectivity.some((m) => message.includes(m))
+    if (connectivity.some((m) => message.includes(m))) return false
+    if (/HTTP\s+5\d{2}/.test(message)) return false
 
-    // schema validation failed はリトライ対象なので、post-responseエラーとして扱わない
-    if (message.includes('schema validation failed')) return false
+    // JSON/スキーマ関連は「応答後エラー」= provider 切替しない
+    const jsonOrSchemaErrors = [
+      'json_validate_failed',
+      'Failed to generate JSON',
+      'JSON parse failed',
+      'Unexpected end of JSON input',
+      'does not contain a valid JSON',
+      'schema validation failed',
+      'Failed to parse JSON response',
+      'empty or non-text response',
+      'Expected object, received array',
+      'invalid_type',
+    ]
+    if (jsonOrSchemaErrors.some((m) => message.includes(m))) return true
 
-    if (hasMarker) return true
+    // 4xx はプロンプト/利用側の問題として post-response
     if (/HTTP\s+4\d{2}/.test(message)) return true
-    if (hasConnectivity) return false
+
+    // 既定は post-response（切替しない）
     return true
   }
 

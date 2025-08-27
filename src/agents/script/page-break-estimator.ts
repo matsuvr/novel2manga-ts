@@ -43,12 +43,12 @@ function normalizePageBreakResult(result: unknown): PageBreakPlan {
       const allPages: PageBreakPlan['pages'] = (result as unknown[]).flatMap((item) =>
         isPageContainerObject(item) ? item.pages.filter(isPageObject) : [],
       )
-      // Re-number pages sequentially
-      let pageNumber = 1
-      for (const page of allPages) {
-        page.pageNumber = pageNumber++
-      }
-      return { pages: allPages }
+      // Re-number pages sequentially (immutable update)
+      const renumbered: PageBreakPlan['pages'] = allPages.map((page, idx) => ({
+        ...page,
+        pageNumber: idx + 1,
+      }))
+      return { pages: renumbered }
     }
 
     // Case 3: Fallback - treat as pages array
