@@ -3,6 +3,12 @@ import { createClientForProvider, selectProviderOrder } from '@/agents/llm/route
 import type { LlmClient, LlmProvider } from '@/agents/llm/types'
 import { normalizeLLMResponse } from '@/utils/dialogue-normalizer'
 import { getLLMProviderConfig } from '../config/llm.config'
+import {
+  CONNECTIVITY_ERROR_PATTERNS,
+  JSON_SCHEMA_ERROR_PATTERNS,
+  RETRYABLE_JSON_ERROR_PATTERNS,
+  HTTP_ERROR_PATTERNS,
+} from '@/errors/error-patterns'
 
 export interface GenerateArgs<T> {
   name?: string
@@ -171,40 +177,23 @@ export class DefaultLlmStructuredGenerator {
   }
 
   private isPostResponseError(message: string): boolean {
-    const postMarkers = [
-      'schema validation failed',
-      'does not contain a valid JSON',
-      'Unexpected end of JSON input',
-      'Failed to parse JSON response',
-      'empty or non-text response',
-    ]
-    const connectivity = [
-      'ECONNRESET',
-      'ENOTFOUND',
-      'ETIMEDOUT',
-      'fetch failed',
-      'network error',
-      'HTTP 5',
-      'TLS',
-    ]
-    const hasMarker = postMarkers.some((m) => message.includes(m))
-    const hasConnectivity = connectivity.some((m) => message.includes(m))
-    if (hasMarker) return true
-    if (/HTTP\s+4\d{2}/.test(message)) return true
-    if (hasConnectivity) return false
+    // 接続系のみ provider 切替対象（post-response ではない）
+    if (CONNECTIVITY_ERROR_PATTERNS.some((pattern) => message.includes(pattern))) return false
+    if (HTTP_ERROR_PATTERNS.SERVER_ERROR.test(message)) return false
+
+    // JSON/スキーマ関連は「応答後エラー」= provider 切替しない
+    if (JSON_SCHEMA_ERROR_PATTERNS.some((pattern) => message.includes(pattern))) return true
+
+    // 4xx はプロンプト/利用側の問題として post-response
+    if (HTTP_ERROR_PATTERNS.CLIENT_ERROR.test(message)) return true
+
+    // 既定は post-response（切替しない）
     return true
   }
 
   private isRetryableJsonError(message: string): boolean {
     // Groqの特定のJSONエラーをリトライ対象とする
-    const retryableErrors = [
-      'json_validate_failed',
-      'Failed to generate JSON',
-      'JSON parse failed',
-      'Unexpected end of JSON input',
-      'does not contain a valid JSON',
-    ]
-    return retryableErrors.some((error) => message.includes(error))
+    return RETRYABLE_JSON_ERROR_PATTERNS.some((pattern) => message.includes(pattern))
   }
 }
 

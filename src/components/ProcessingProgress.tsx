@@ -1,6 +1,7 @@
 'use client'
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { z } from 'zod'
 
 interface ProcessStep {
   id: string
@@ -129,6 +130,51 @@ const INITIAL_STEPS: ProcessStep[] = [
   },
 ]
 
+// ステップ1つあたりの全体進捗割合を定数化
+const STEP_PERCENT = 100 / (INITIAL_STEPS.length || 1)
+
+// ヘルパー関数: レンダリング進捗の計算
+function calculateRenderProgress(job: Record<string, unknown>): number {
+  const totalPages = job.totalPages
+  const renderedPages = job.renderedPages
+
+  if (typeof totalPages !== 'number' || typeof renderedPages !== 'number') {
+    return 0
+  }
+
+  const baseProgress = Math.round((renderedPages / totalPages) * 100)
+  const processingPage = job.processingPage
+
+  // 現在処理中のページがある場合は部分的な進捗を追加
+  if (typeof processingPage === 'number' && processingPage > 0) {
+    return Math.min(90, baseProgress + 10) // 最大90%まで
+  }
+
+  return baseProgress
+}
+
+// ヘルパー関数: 全体進捗の計算
+function calculateOverallProgress(job: Record<string, unknown>, completedCount: number): number {
+  const baseProgress = Math.round(completedCount * STEP_PERCENT)
+
+  // レンダリング段階では、実際のページ進捗を全体進捗に反映
+  const currentStep = job.currentStep
+  if (
+    typeof currentStep === 'string' &&
+    (currentStep === 'render' || currentStep.startsWith('render_'))
+  ) {
+    const totalPages = job.totalPages
+    const renderedPages = job.renderedPages
+
+    if (typeof totalPages === 'number' && typeof renderedPages === 'number' && totalPages > 0) {
+      const renderProgress = (renderedPages / totalPages) * STEP_PERCENT
+      return Math.round(baseProgress + renderProgress)
+    }
+  }
+
+  return baseProgress
+}
+
 function ProcessingProgress({
   jobId,
   onComplete,
@@ -182,32 +228,22 @@ function ProcessingProgress({
     return Math.max(0, Math.min(1, w))
   }, [currentEpisodeProgressWeight])
 
-  // Type guard for episode page data to ensure type safety
-  const isValidEpisodePageData = useCallback(
-    (
-      data: unknown,
-    ): data is {
-      planned: number
-      rendered: number
-      total?: number
-      validation?: {
-        normalizedPages: number[]
-        pagesWithIssueCounts: Record<number, number> | Record<string, number>
-        issuesCount: number
-      }
-    } => {
-      if (typeof data !== 'object' || data === null) return false
-      const obj = data as Record<string, unknown>
-      return (
-        typeof obj.planned === 'number' &&
-        typeof obj.rendered === 'number' &&
-        (obj.total === undefined || typeof obj.total === 'number') &&
-        (obj.validation === undefined ||
-          (typeof obj.validation === 'object' &&
-            obj.validation !== null &&
-            Array.isArray((obj.validation as Record<string, unknown>).normalizedPages)))
-      )
-    },
+  // Zod による perEpisodePages の要素検証（型安全・簡潔）
+  const EpisodePageDataSchema = useMemo(
+    () =>
+      z.object({
+        planned: z.number(),
+        rendered: z.number(),
+        total: z.number().optional(),
+        validation: z
+          .object({
+            normalizedPages: z.array(z.number()),
+            // 数値キーはJSONでは文字列化されるため、record<number>相当も受け入れる
+            pagesWithIssueCounts: z.record(z.number()).optional(),
+            issuesCount: z.number().optional(),
+          })
+          .optional(),
+      }),
     [],
   )
 
@@ -310,13 +346,21 @@ function ProcessingProgress({
         > = {}
         for (const [k, v] of Object.entries(data.job.progress.perEpisodePages)) {
           const episodeNumber = Number(k)
-          if (!Number.isNaN(episodeNumber) && isValidEpisodePageData(v)) {
-            normalized[episodeNumber] = {
-              planned: v.planned,
-              rendered: v.rendered,
-              total: v.total,
-              validation: v.validation,
-            }
+          if (Number.isNaN(episodeNumber)) continue
+          const parsed = EpisodePageDataSchema.safeParse(v)
+          if (!parsed.success) continue
+          const val = parsed.data
+          normalized[episodeNumber] = {
+            planned: val.planned,
+            rendered: val.rendered,
+            total: val.total,
+            validation: val.validation
+              ? {
+                  normalizedPages: val.validation.normalizedPages,
+                  pagesWithIssueCounts: val.validation.pagesWithIssueCounts || {},
+                  issuesCount: val.validation.issuesCount ?? 0,
+                }
+              : undefined,
           }
         }
         setPerEpisodePages(normalized)
@@ -466,11 +510,8 @@ function ProcessingProgress({
             data.job.currentStep?.startsWith('render_')
           ) {
             updatedSteps[5].status = 'processing'
-            if (data.job.totalPages && data.job.renderedPages !== undefined) {
-              updatedSteps[5].progress = Math.round(
-                (data.job.renderedPages / data.job.totalPages) * 100,
-              )
-            }
+            // レンダリング進捗の計算
+            updatedSteps[5].progress = calculateRenderProgress(data.job)
             currentIndex = 5
           }
         }
@@ -538,13 +579,22 @@ function ProcessingProgress({
             total || doneBase + 1,
             typeof inFlightPage === 'number' && inFlightPage > 0 ? inFlightPage : doneBase + 1,
           )
-          hints.render = `現在: ページ ${done} / ${total || '?'} をレンダリング中`
+          // より詳細なレンダリング進捗表示
+          if (total > 0) {
+            const progressPercent = Math.round((done / total) * 100)
+            hints.render = `現在: ページ ${done} / ${total} をレンダリング中 (${progressPercent}%)`
+          } else {
+            hints.render = `現在: ページ ${done} をレンダリング中`
+          }
         }
         setRuntimeHints(hints)
 
         // 現在のインデックスと進捗を設定
         setCurrentStepIndex(currentIndex)
-        setOverallProgress(Math.round((completedCount / INITIAL_STEPS.length) * 100))
+
+        // 全体進捗の計算
+        const overallProgressPercent = calculateOverallProgress(data.job, completedCount)
+        setOverallProgress(overallProgressPercent)
 
         return updatedSteps
       })
@@ -561,8 +611,8 @@ function ProcessingProgress({
       onComplete,
       describeStep,
       isDemoMode,
-      isValidEpisodePageData,
       inProgressWeight,
+      EpisodePageDataSchema.safeParse,
     ],
   )
 
@@ -573,7 +623,7 @@ function ProcessingProgress({
     setSteps((prev) =>
       prev.map((step, index) => (index === 0 ? { ...step, status: 'completed' as const } : step)),
     )
-    setOverallProgress(Math.round((1 / INITIAL_STEPS.length) * 100))
+    setOverallProgress(Math.round(STEP_PERCENT))
     addLog('info', `処理を開始しました。Job ID: ${jobId}`)
 
     // Visibility: pause when hidden
@@ -648,7 +698,7 @@ function ProcessingProgress({
         if (document.hidden) next = POLLING_INTERVAL_MS * 2
         scheduleNext(next)
       } catch (error) {
-        if ((error as Error)?.name === 'AbortError') {
+        if (error instanceof Error && error.name === 'AbortError') {
           return
         }
         if (isMountedRef.current) {
@@ -682,9 +732,21 @@ function ProcessingProgress({
       updated[0].status = 'processing'
       return updated
     })
-    setOverallProgress(Math.round((0 / INITIAL_STEPS.length) * 100))
+    setOverallProgress(0)
     addLog('info', '準備中: アップロードを開始しています')
   }, [jobId, addLog])
+
+  // perEpisodePages に依存する合計ページ数・描画済みページ数をメモ化
+  const { totalPagesByEpisodes, renderedPagesByEpisodes } = useMemo(() => {
+    const values = Object.values(perEpisodePages)
+    if (values.length === 0) return { totalPagesByEpisodes: 0, renderedPagesByEpisodes: 0 }
+    const total = values.reduce(
+      (sum, ep) => sum + (typeof ep.total === 'number' ? ep.total : ep.planned),
+      0,
+    )
+    const rendered = values.reduce((sum, ep) => sum + ep.rendered, 0)
+    return { totalPagesByEpisodes: total, renderedPagesByEpisodes: rendered }
+  }, [perEpisodePages])
 
   // Memoize heavy computation for episode progress cards
   const episodeProgressCards = useMemo(() => {
@@ -872,6 +934,37 @@ function ProcessingProgress({
                         style={{ width: `${step.progress}%` }}
                       />
                     </div>
+                    {/* レンダリング段階では詳細なページ情報を表示 */}
+                    {step.id === 'render' && jobId && (
+                      <div className="mt-2 text-xs text-gray-600">
+                        <div className="flex items-center justify-between">
+                          <span>レンダリング詳細:</span>
+                          <span>
+                            {(() => {
+                              const totalPages = totalPagesByEpisodes
+                              const renderedPages = renderedPagesByEpisodes
+                              if (totalPages > 0) {
+                                const progressPercent = Math.round(
+                                  (renderedPages / totalPages) * 100,
+                                )
+                                return `${renderedPages} / ${totalPages} ページ完了 (${progressPercent}%)`
+                              }
+                              return `${renderedPages} ページ完了`
+                            })()}
+                          </span>
+                        </div>
+                        {/* エピソード別の詳細進捗 */}
+                        {Object.keys(perEpisodePages).length > 0 && (
+                          <div className="mt-1 text-xs text-gray-500">
+                            {Object.entries(perEpisodePages).map(([ep, data]) => (
+                              <span key={ep} className="mr-2">
+                                EP{ep}: {data.rendered}/{data.total || data.planned}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 

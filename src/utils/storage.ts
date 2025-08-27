@@ -821,42 +821,43 @@ export async function auditStorageKeys(options: {
     'getOutputStorage',
   ]
 
-  const issues: StorageKeyIssue[] = []
-  const seen = new Set<string>()
-  let scanned = 0
-  // 並列で各ストレージをスキャン
-  await Promise.all(
+  // 1) まず全ストレージのキー一覧を収集（並列）
+  const keyLists = await Promise.all(
     target.map(async (name) => {
       const getter = (StorageFactory as Record<string, unknown>)[name]
-      if (typeof getter !== 'function') return
+      if (typeof getter !== 'function') return [] as string[]
       const storage = (await (getter as () => Promise<Storage>)()) as Storage
-      if (!storage.list) return
+      if (!storage.list) return [] as string[]
       const keys = await storage.list(options.prefix)
-      for (const key of keys) {
-        if (options.abortSignal?.aborted) return
-        scanned++
-        if (!KEY_REGEX.test(key)) {
-          issues.push({
-            key,
-            issue: 'invalid-format',
-            detail: 'regex-mismatch',
-          })
-        }
-        for (const seg of FORBIDDEN_SEGMENTS) {
-          if (key.includes(seg)) {
-            issues.push({ key, issue: 'forbidden-segment', detail: seg })
-          }
-        }
-        if (seen.has(key)) {
-          issues.push({ key, issue: 'duplicate' })
-        } else {
-          seen.add(key)
-        }
-      }
+      return keys
     }),
   )
 
-  return { scanned, issues }
+  const issues: StorageKeyIssue[] = []
+  const seen = new Set<string>()
+  const totalScanned = keyLists.reduce((sum, keys) => sum + keys.length, 0)
+
+  // 2) 単一パスで検証と重複チェックを実行（競合回避）
+  outer: for (const keys of keyLists) {
+    for (const key of keys) {
+      if (options.abortSignal?.aborted) break outer
+      if (!KEY_REGEX.test(key)) {
+        issues.push({ key, issue: 'invalid-format', detail: 'regex-mismatch' })
+      }
+      for (const seg of FORBIDDEN_SEGMENTS) {
+        if (key.includes(seg)) {
+          issues.push({ key, issue: 'forbidden-segment', detail: seg })
+        }
+      }
+      if (seen.has(key)) {
+        issues.push({ key, issue: 'duplicate' })
+      } else {
+        seen.add(key)
+      }
+    }
+  }
+
+  return { scanned: totalScanned, issues }
 }
 
 // 直指定版: Factory を経由せず、与えられた Storage インスタンス配列を監査
@@ -864,34 +865,39 @@ export async function auditStorageKeysOnStorages(
   storages: Storage[],
   options?: { prefix?: string; abortSignal?: AbortSignal },
 ): Promise<{ scanned: number; issues: StorageKeyIssue[] }> {
-  const issues: StorageKeyIssue[] = []
-  const seen = new Set<string>()
-  let scanned = 0
-
-  await Promise.all(
+  // 1) 各ストレージのキー一覧を収集（並列）
+  const keyLists = await Promise.all(
     storages.map(async (storage) => {
-      if (!storage.list) return
+      if (!storage.list) return [] as string[]
       const keys = await storage.list(options?.prefix)
-      for (const key of keys) {
-        if (options?.abortSignal?.aborted) return
-        scanned++
-        if (!KEY_REGEX.test(key)) {
-          issues.push({ key, issue: 'invalid-format', detail: 'regex-mismatch' })
-        }
-        for (const seg of FORBIDDEN_SEGMENTS) {
-          if (key.includes(seg)) {
-            issues.push({ key, issue: 'forbidden-segment', detail: seg })
-          }
-        }
-        if (seen.has(key)) {
-          issues.push({ key, issue: 'duplicate' })
-        } else {
-          seen.add(key)
-        }
-      }
+      return keys
     }),
   )
 
-  return { scanned, issues }
+  const issues: StorageKeyIssue[] = []
+  const seen = new Set<string>()
+  const totalScanned = keyLists.reduce((sum, keys) => sum + keys.length, 0)
+
+  // 2) 単一パスで検証・重複チェック
+  outer: for (const keys of keyLists) {
+    for (const key of keys) {
+      if (options?.abortSignal?.aborted) break outer
+      if (!KEY_REGEX.test(key)) {
+        issues.push({ key, issue: 'invalid-format', detail: 'regex-mismatch' })
+      }
+      for (const seg of FORBIDDEN_SEGMENTS) {
+        if (key.includes(seg)) {
+          issues.push({ key, issue: 'forbidden-segment', detail: seg })
+        }
+      }
+      if (seen.has(key)) {
+        issues.push({ key, issue: 'duplicate' })
+      } else {
+        seen.add(key)
+      }
+    }
+  }
+
+  return { scanned: totalScanned, issues }
 }
 // NOTE: 動的追加は廃止。auditKeys は StorageFactory 定義に含めた。
