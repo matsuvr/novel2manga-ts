@@ -129,6 +129,48 @@ const INITIAL_STEPS: ProcessStep[] = [
   },
 ]
 
+// ヘルパー関数: レンダリング進捗の計算
+function calculateRenderProgress(job: Record<string, unknown>): number {
+  const totalPages = job.totalPages
+  const renderedPages = job.renderedPages
+
+  if (typeof totalPages !== 'number' || typeof renderedPages !== 'number') {
+    return 0
+  }
+
+  const baseProgress = Math.round((renderedPages / totalPages) * 100)
+  const processingPage = job.processingPage
+
+  // 現在処理中のページがある場合は部分的な進捗を追加
+  if (typeof processingPage === 'number' && processingPage > 0) {
+    return Math.min(90, baseProgress + 10) // 最大90%まで
+  }
+
+  return baseProgress
+}
+
+// ヘルパー関数: 全体進捗の計算
+function calculateOverallProgress(job: Record<string, unknown>, completedCount: number): number {
+  const baseProgress = Math.round((completedCount / INITIAL_STEPS.length) * 100)
+
+  // レンダリング段階では、実際のページ進捗を全体進捗に反映
+  const currentStep = job.currentStep
+  if (
+    typeof currentStep === 'string' &&
+    (currentStep === 'render' || currentStep.startsWith('render_'))
+  ) {
+    const totalPages = job.totalPages
+    const renderedPages = job.renderedPages
+
+    if (typeof totalPages === 'number' && typeof renderedPages === 'number' && totalPages > 0) {
+      const renderProgress = (renderedPages / totalPages) * (100 / INITIAL_STEPS.length)
+      return Math.round(baseProgress + renderProgress)
+    }
+  }
+
+  return baseProgress
+}
+
 function ProcessingProgress({
   jobId,
   onComplete,
@@ -197,16 +239,33 @@ function ProcessingProgress({
       }
     } => {
       if (typeof data !== 'object' || data === null) return false
-      const obj = data as Record<string, unknown>
-      return (
-        typeof obj.planned === 'number' &&
-        typeof obj.rendered === 'number' &&
-        (obj.total === undefined || typeof obj.total === 'number') &&
-        (obj.validation === undefined ||
-          (typeof obj.validation === 'object' &&
-            obj.validation !== null &&
-            Array.isArray((obj.validation as Record<string, unknown>).normalizedPages)))
-      )
+
+      // 型ガード: 必要なプロパティが存在するかチェック
+      const hasRequiredProperties =
+        'planned' in data &&
+        'rendered' in data &&
+        typeof data.planned === 'number' &&
+        typeof data.rendered === 'number'
+
+      if (!hasRequiredProperties) return false
+
+      // total プロパティの型チェック
+      const hasValidTotal =
+        !('total' in data) || data.total === undefined || typeof data.total === 'number'
+      if (!hasValidTotal) return false
+
+      // validation プロパティの型チェック
+      if ('validation' in data && data.validation !== undefined) {
+        if (typeof data.validation !== 'object' || data.validation === null) return false
+        if (
+          !('normalizedPages' in data.validation) ||
+          !Array.isArray(data.validation.normalizedPages)
+        ) {
+          return false
+        }
+      }
+
+      return true
     },
     [],
   )
@@ -466,18 +525,8 @@ function ProcessingProgress({
             data.job.currentStep?.startsWith('render_')
           ) {
             updatedSteps[5].status = 'processing'
-            // レンダリング進捗の詳細計算
-            if (data.job.totalPages && data.job.renderedPages !== undefined) {
-              const baseProgress = Math.round((data.job.renderedPages / data.job.totalPages) * 100)
-              // 現在処理中のページがある場合は部分的な進捗を追加
-              const processingPage = data.job.processingPage
-              if (typeof processingPage === 'number' && processingPage > 0) {
-                const pageProgress = Math.min(90, baseProgress + 10) // 最大90%まで
-                updatedSteps[5].progress = pageProgress
-              } else {
-                updatedSteps[5].progress = baseProgress
-              }
-            }
+            // レンダリング進捗の計算
+            updatedSteps[5].progress = calculateRenderProgress(data.job)
             currentIndex = 5
           }
         }
@@ -558,21 +607,8 @@ function ProcessingProgress({
         // 現在のインデックスと進捗を設定
         setCurrentStepIndex(currentIndex)
 
-        // 全体進捗の計算を改善（レンダリング段階では実際のページ進捗を反映）
-        let overallProgressPercent = Math.round((completedCount / INITIAL_STEPS.length) * 100)
-
-        // レンダリング段階では、実際のページ進捗を全体進捗に反映
-        if (data.job.currentStep === 'render' || data.job.currentStep?.startsWith('render_')) {
-          const totalPages = data.job.totalPages || 0
-          const renderedPages = data.job.renderedPages || 0
-          if (totalPages > 0) {
-            // レンダリング段階の進捗を全体進捗に反映
-            const renderProgress = (renderedPages / totalPages) * (100 / INITIAL_STEPS.length)
-            const baseProgress = (completedCount / INITIAL_STEPS.length) * 100
-            overallProgressPercent = Math.round(baseProgress + renderProgress)
-          }
-        }
-
+        // 全体進捗の計算
+        const overallProgressPercent = calculateOverallProgress(data.job, completedCount)
         setOverallProgress(overallProgressPercent)
 
         return updatedSteps
@@ -677,7 +713,7 @@ function ProcessingProgress({
         if (document.hidden) next = POLLING_INTERVAL_MS * 2
         scheduleNext(next)
       } catch (error) {
-        if ((error as Error)?.name === 'AbortError') {
+        if (error instanceof Error && error.name === 'AbortError') {
           return
         }
         if (isMountedRef.current) {
