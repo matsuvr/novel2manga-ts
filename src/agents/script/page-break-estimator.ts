@@ -3,6 +3,84 @@ import { getLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import { type PageBreakPlan, PageBreakSchema, type Script } from '@/types/script'
 
+// 型ガード関数: ページオブジェクトかどうかを判定
+function isPageObject(obj: unknown): obj is PageBreakPlan['pages'][0] {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    'pageNumber' in obj &&
+    typeof (obj as Record<string, unknown>).pageNumber === 'number'
+  )
+}
+
+// 型ガード関数: ページ配列を含むオブジェクトかどうかを判定
+function isPageContainerObject(obj: unknown): obj is { pages: unknown[] } {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    'pages' in obj &&
+    Array.isArray((obj as Record<string, unknown>).pages)
+  )
+}
+
+/**
+ * Normalizes LLM response to ensure consistent PageBreakPlan structure.
+ *
+ * The LLM can return page break data in various formats depending on the provider
+ * and prompt interpretation. This function handles all known response patterns
+ * and converts them to the standard PageBreakPlan format.
+ *
+ * @param result - Raw LLM response that may be in various formats
+ * @returns Normalized PageBreakPlan with proper structure
+ *
+ * @example
+ * // Handles already correct format: { pages: [...] }
+ * // Handles simple array: [{ pageNumber: 1, ... }, { pageNumber: 2, ... }]
+ * // Handles nested format: [{ pages: [...] }, { pages: [...] }]
+ * // Handles mixed/malformed arrays with filtering
+ * // Returns empty plan for unrecognized formats
+ */
+function normalizePageBreakResult(result: unknown): PageBreakPlan {
+  // Case 1: Already in correct PageBreakPlan format { pages: [...] }
+  if (typeof result === 'object' && result !== null && 'pages' in result) {
+    return result as PageBreakPlan
+  }
+
+  // Case 2: Array responses - handle multiple sub-patterns
+  if (Array.isArray(result)) {
+    // Case 2a: Simple array of page objects [{ pageNumber: 1, ... }, ...]
+    // This occurs when LLM returns pages directly as an array
+    if (result.length > 0 && isPageObject(result[0])) {
+      return { pages: result as PageBreakPlan['pages'] }
+    }
+
+    // Case 2b: Array of container objects [{ pages: [...] }, { pages: [...] }]
+    // This occurs when LLM wraps pages in multiple container objects
+    // We need to flatten and renumber to maintain sequential page numbering
+    if (result.length > 0 && isPageContainerObject(result[0])) {
+      // Extract and concatenate all pages from all container objects
+      const allPages: PageBreakPlan['pages'] = (result as unknown[]).flatMap((item) =>
+        isPageContainerObject(item) ? item.pages.filter(isPageObject) : [],
+      )
+      // Renumber pages sequentially starting from 1 (immutable update)
+      // This ensures consistent page numbering even if source had gaps or duplicates
+      const renumbered: PageBreakPlan['pages'] = allPages.map((page, idx) => ({
+        ...page,
+        pageNumber: idx + 1,
+      }))
+      return { pages: renumbered }
+    }
+
+    // Case 2c: Mixed/malformed array - filter valid page objects only
+    // This occurs when LLM returns an array with mixed valid/invalid objects
+    return { pages: result.filter(isPageObject) }
+  }
+
+  // Case 3: Unrecognized format - return empty plan to prevent crashes
+  // This provides graceful degradation for unexpected LLM response formats
+  return { pages: [] }
+}
+
 export async function estimatePageBreaks(
   script: Script,
   opts: { jobId?: string; episodeNumber?: number; isDemo?: boolean },
@@ -67,11 +145,5 @@ export async function estimatePageBreaks(
   })
 
   // Handle case where LLM returns an array instead of object
-  let pageBreakPlan = result as PageBreakPlan
-  if (Array.isArray(result)) {
-    // If LLM returned an array, assume it's the pages array and wrap it in an object
-    pageBreakPlan = { pages: result as PageBreakPlan['pages'] }
-  }
-
-  return pageBreakPlan
+  return normalizePageBreakResult(result)
 }
