@@ -39,13 +39,10 @@ function normalizePageBreakResult(result: unknown): PageBreakPlan {
 
     // Case 2: Array of objects containing pages (e.g., [{"pages": [...]}])
     if (result.length > 0 && isPageContainerObject(result[0])) {
-      // Concatenate all pages from all objects in the array
-      const allPages: PageBreakPlan['pages'] = []
-      for (const item of result) {
-        if (isPageContainerObject(item)) {
-          allPages.push(...item.pages.filter(isPageObject))
-        }
-      }
+      // Concatenate all pages from all objects in the array (flatMap)
+      const allPages: PageBreakPlan['pages'] = (result as unknown[]).flatMap((item) =>
+        isPageContainerObject(item) ? item.pages.filter(isPageObject) : [],
+      )
       // Re-number pages sequentially
       let pageNumber = 1
       for (const page of allPages) {
