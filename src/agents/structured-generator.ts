@@ -3,6 +3,12 @@ import { createClientForProvider, selectProviderOrder } from '@/agents/llm/route
 import type { LlmClient, LlmProvider } from '@/agents/llm/types'
 import { normalizeLLMResponse } from '@/utils/dialogue-normalizer'
 import { getLLMProviderConfig } from '../config/llm.config'
+import {
+  CONNECTIVITY_ERROR_PATTERNS,
+  JSON_SCHEMA_ERROR_PATTERNS,
+  RETRYABLE_JSON_ERROR_PATTERNS,
+  HTTP_ERROR_PATTERNS,
+} from '@/errors/error-patterns'
 
 export interface GenerateArgs<T> {
   name?: string
@@ -172,34 +178,14 @@ export class DefaultLlmStructuredGenerator {
 
   private isPostResponseError(message: string): boolean {
     // 接続系のみ provider 切替対象（post-response ではない）
-    const connectivity = [
-      'ECONNRESET',
-      'ENOTFOUND',
-      'ETIMEDOUT',
-      'fetch failed',
-      'network error',
-      'TLS',
-    ]
-    if (connectivity.some((m) => message.includes(m))) return false
-    if (/HTTP\s+5\d{2}/.test(message)) return false
+    if (CONNECTIVITY_ERROR_PATTERNS.some((pattern) => message.includes(pattern))) return false
+    if (HTTP_ERROR_PATTERNS.SERVER_ERROR.test(message)) return false
 
     // JSON/スキーマ関連は「応答後エラー」= provider 切替しない
-    const jsonOrSchemaErrors = [
-      'json_validate_failed',
-      'Failed to generate JSON',
-      'JSON parse failed',
-      'Unexpected end of JSON input',
-      'does not contain a valid JSON',
-      'schema validation failed',
-      'Failed to parse JSON response',
-      'empty or non-text response',
-      'Expected object, received array',
-      'invalid_type',
-    ]
-    if (jsonOrSchemaErrors.some((m) => message.includes(m))) return true
+    if (JSON_SCHEMA_ERROR_PATTERNS.some((pattern) => message.includes(pattern))) return true
 
     // 4xx はプロンプト/利用側の問題として post-response
-    if (/HTTP\s+4\d{2}/.test(message)) return true
+    if (HTTP_ERROR_PATTERNS.CLIENT_ERROR.test(message)) return true
 
     // 既定は post-response（切替しない）
     return true
@@ -207,17 +193,7 @@ export class DefaultLlmStructuredGenerator {
 
   private isRetryableJsonError(message: string): boolean {
     // Groqの特定のJSONエラーをリトライ対象とする
-    const retryableErrors = [
-      'json_validate_failed',
-      'Failed to generate JSON',
-      'JSON parse failed',
-      'Unexpected end of JSON input',
-      'does not contain a valid JSON',
-      'schema validation failed',
-      'Expected object, received array',
-      'invalid_type',
-    ]
-    return retryableErrors.some((error) => message.includes(error))
+    return RETRYABLE_JSON_ERROR_PATTERNS.some((pattern) => message.includes(pattern))
   }
 }
 
