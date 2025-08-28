@@ -91,7 +91,7 @@ JSONのみ出力。`,
     // - コメント: ここに「全セリフ漏れなく・長文は30字程度で分割・現代日本語口語・単一のJSONオブジェクト」を明記
     // - {{analysisHints}}プレースホルダを使用する場合はテンプレ内に追加
     scriptConversion: {
-      systemPrompt: `以下の情報を基に、セリフ+ナレーション+心の声のセリフと、場面情報を表すト書きとして、台本形式のJSONにしてください。会話は全て漏らさず出力してください。また、セリフが長い場合は、30文字程度の長さで分割した状態で台本にしてください。もし、言語が現代日本語でなかった場合は、現代日本語口語訳で出力してください。要約禁止。物語の情景をできるだけ忠実に台本形式で再現してください。
+      systemPrompt: `以下の情報を基に、セリフ+ナレーション+心の声のセリフと、場面情報を表すト書きとして、台本形式のJSONにしてください。会話は全て漏らさず出力してください。また、セリフが長い場合は、30文字程度の長さで分割した状態で台本にしてください。もし、言語が現代日本語でなかった場合は、現代日本語口語訳で出力してください。要約禁止。物語の情景をできるだけ忠実に台本形式で再現してください。必ず物語を細かく分割し、長大なナレーションを避けてください。ナレーションは1つは80文字以下になるように分割してください。
 
 CRITICAL: 必ず単一のJSONオブジェクトを返してください。配列ではありません。
 
@@ -270,6 +270,71 @@ IMPORTANT: Return exactly one JSON object starting with { "pages": and ending wi
       {{pageBreakEstimatJson}}
       
       トータルページ数、各ページの要素、強度、セリフ数は、与えられたJSONをよく確認してください`,
+    },
+  },
+  // Panel assignment configuration - prompts externalized per CLAUDE.md CONFIG CENTRALIZATION rule
+  panelAssignment: {
+    get systemPrompt() {
+      try {
+        const { panelAssignmentPrompts } = require('./prompts')
+        return panelAssignmentPrompts.systemPrompt
+      } catch (_error) {
+        // Fallback for test environment or when prompts can't be loaded
+        return `あなたはマンガのコマ割り専門家です。与えられた脚本とページ分割データを基に、各ページのコマに適切なスクリプト行を割り当ててください。
+
+【重要】巨大なナレーションが含まれる場合の処理:
+- 長すぎるナレーション（100文字以上）は自動的に分割
+- 各パネルには最大3-4行のナレーションまで
+- 1つのパネルに収まらないテキストは自動的に分割してください。
+
+出力は必ず以下のJSON形式のみ:
+{
+  "pages": [
+    {
+      "pageNumber": 1,
+      "panelCount": 3,
+      "panels": [
+        { "id": 1, "scriptIndexes": [1, 2] },
+        { "id": 2, "scriptIndexes": [3] },
+        { "id": 3, "scriptIndexes": [4, 5, 6] }
+      ]
+    }
+  ]
+}
+
+注意事項:
+- 各ページのpanelCountとpanels配列の長さが一致させる
+- scriptIndexes配列には、スクリプトの実際の行インデックスを入れる
+- 空のpanelsは禁止`
+      }
+    },
+    get userPromptTemplate() {
+      try {
+        const { panelAssignmentPrompts } = require('./prompts')
+        return panelAssignmentPrompts.userPromptTemplate
+      } catch (_error) {
+        // Fallback for test environment or when prompts can't be loaded
+        return `【タスク】以下のデータを基に、各ページのコマにスクリプト行を割り当ててください。
+
+【入力データ1: 脚本JSON】
+{{scriptJson}}
+
+【入力データ2: ページ分割データ】
+{{pageBreaksJson}}
+
+【重要指示】
+1. scriptJsonの各scene.script配列のindexフィールドを参照
+2. 各ページのpanels[].scriptIndexes配列には、対応するscriptのindex番号を入れる
+3. 例: scriptのindex: 1, 2, 3がある場合、scriptIndexes: [1, 2] や scriptIndexes: [3] のように対応付ける
+4. ページ数はpageBreaksJsonのpages配列の長さに合わせる（通常10ページ以上）
+5. 巨大ナレーションは必ず分割: 100文字以上のナレーションは複数のpanelsに分散
+
+【制約】
+- 1ページのコマ数は1-6個まで
+- スプラッシュ/見開きは使用しない
+- 各ページのpanelCountとpanels配列の長さを必ず一致させる
+- 空のscriptIndexes配列は禁止（最低1つのindexを入れる）`
+      }
     },
   },
 

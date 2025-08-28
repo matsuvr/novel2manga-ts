@@ -1,5 +1,5 @@
-import type { LayoutTemplate } from '@/types/panel-layout'
 import { getRandomPanelLayout } from '@/data/panel-layout-samples'
+import type { LayoutTemplate } from '@/types/panel-layout'
 
 // Cloudflare Workers-compatible embedded samples (no fs at runtime)
 

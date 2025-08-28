@@ -1,9 +1,8 @@
-import { describe, it, expect } from 'vitest'
-import type { PageBreakPlan } from '@/types/script'
-
+import { describe, expect, it } from 'vitest'
 // Since normalizePageBreakResult is not exported, we need to access it through the module
 // that uses it. We'll import estimatePageBreaks and test the normalization via demo mode
 import { estimatePageBreaks } from '@/agents/script/page-break-estimator'
+import type { PageBreakPlan } from '@/types/script'
 
 describe('Page Break Result Normalization', () => {
   const demoScript = {

@@ -14,8 +14,8 @@ vi.mock('@/agents/structured-generator', () => ({
           pageNumber: 1,
           panelCount: 2,
           panels: [
-            { id: 1, lines: [1, 2] },
-            { id: 2, lines: [3, 4] },
+            { id: 1, scriptIndexes: [1, 2] },
+            { id: 2, scriptIndexes: [3, 4] },
           ],
         },
       ],
@@ -464,9 +464,9 @@ describe('Service Integration Tests', () => {
             pageNumber: 1,
             panelCount: 3,
             panels: [
-              { id: 1, lines: [1] },
-              { id: 2, lines: [2] },
-              { id: 3, lines: [3] },
+              { id: 1, scriptIndexes: [1] },
+              { id: 2, scriptIndexes: [2] },
+              { id: 3, scriptIndexes: [3] },
             ],
           },
         ],
