@@ -1,6 +1,6 @@
+import { convertEpisodeTextToScript } from '@/agents/script/script-converter'
 import { getJobRepository } from '@/repositories'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
-import { convertEpisodeTextToScript } from '@/agents/script/script-converter'
 
 export interface ChunkScriptResult {
   completed: boolean

@@ -1,3 +1,4 @@
+import yaml from 'js-yaml'
 import { appConfig } from '@/config/app.config'
 import { getRandomPanelLayout } from '@/data/panel-layout-samples'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
@@ -7,7 +8,6 @@ import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
 import { getDatabaseService } from '@/services/db-factory'
 import type { PageBreakPlan } from '@/types/script'
 import { normalizeAndValidateLayout } from '@/utils/layout-normalizer'
-import yaml from 'js-yaml'
 // YAML依存を排除: 直接JSONのMangaLayoutを構築して使用する
 
 export interface BatchOptions {

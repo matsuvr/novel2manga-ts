@@ -49,8 +49,8 @@ export class ScriptConversionStep implements PipelineStep {
         {
           jobId,
           episodeNumber,
-          // フラグメント変換を有効化（出力トークン数削減のため）
-          useFragmentConversion: true,
+          // フラグメント変換を無効化（処理経路の透明化のため）
+          useFragmentConversion: false,
         },
       )
 
