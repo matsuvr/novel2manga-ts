@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // LLM 構造化ジェネレーターをモック（エピソード候補を返さないケース）
 vi.mock('@/agents/structured-generator', () => ({

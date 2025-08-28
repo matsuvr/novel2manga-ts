@@ -61,7 +61,7 @@ export async function assignPanels(
           // 行の割当は空で返す。後段の PageBreakStep 側で未割当行を自動配分する
           panels: Array.from({ length: panelCount }, (_, i) => ({
             id: i + 1,
-            lines: [] as number[],
+            scriptIndexes: [] as number[],
           })),
         }
       }),
@@ -82,7 +82,7 @@ export function buildLayoutFromAssignment(
     let nextId = 1
     const panels: Panel[] = p.panels.map((pp, idx) => {
       const allScriptLines = script.scenes?.flatMap((scene) => scene.script || []) || []
-      const lines: ScriptLine[] = pp.lines
+      const lines: ScriptLine[] = pp.scriptIndexes
         .map((i) => allScriptLines.find((s) => s.index === i))
         .filter((v): v is ScriptLine => !!v)
 
