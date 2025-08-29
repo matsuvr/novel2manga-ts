@@ -17,8 +17,6 @@ export { EpisodeProcessingStep } from './episode-processing-step'
 // Step-specific result types
 export type { JobInitResult, JobManagementOptions } from './job-management-step'
 export { JobManagementStep } from './job-management-step'
-export type { NarrativeAnalysisResult } from './narrative-analysis-step'
-export { NarrativeAnalysisStep } from './narrative-analysis-step'
 export { NovelManagementStep } from './novel-management-step'
 export type { PageBreakResult } from './page-break-step'
 export { PageBreakStep } from './page-break-step'

@@ -9,7 +9,7 @@ import { OpenAICompatibleClient } from './openai-compatible'
 import type { LlmClient, LlmProvider, OpenAICompatibleConfig } from './types'
 
 export type ProviderConfig =
-  | ({ provider: 'openai' | 'groq' | 'openrouter' | 'gemini' } & Omit<
+  | ({ provider: 'openai' | 'groq' | 'grok' | 'openrouter' | 'gemini' } & Omit<
       OpenAICompatibleConfig,
       'provider'
     >)
@@ -20,6 +20,7 @@ export function createLlmClient(cfg: ProviderConfig): LlmClient {
   switch (cfg.provider) {
     case 'openai':
     case 'groq':
+    case 'grok':
     case 'openrouter':
     case 'gemini':
       return new OpenAICompatibleClient({ ...cfg, provider: cfg.provider })
@@ -65,10 +66,11 @@ export function createClientForProvider(provider: LlmProvider): LlmClient {
     apiKey: cfg.apiKey,
     model: cfg.model,
     baseUrl: cfg.baseUrl ?? defaultBaseUrl(provider as Exclude<LlmProvider, 'cerebras' | 'fake'>),
-    useChatCompletions: true,
+    // OpenAI gpt-5 系は Responses API を推奨（chat/completions の max_tokens 非対応）
+    useChatCompletions: provider !== 'openai' ? true : !/^gpt-5/i.test(cfg.model || ''),
   }
   return createLlmClient({
-    provider: provider as 'openai' | 'groq' | 'openrouter' | 'gemini',
+    provider: provider as 'openai' | 'groq' | 'grok' | 'openrouter' | 'gemini',
     ...oc,
   })
 }
@@ -93,6 +95,8 @@ function defaultBaseUrl(provider: Exclude<LlmProvider, 'cerebras' | 'fake'>): st
   switch (provider) {
     case 'groq':
       return 'https://api.groq.com/openai/v1'
+    case 'grok':
+      return 'https://api.x.ai/v1'
     case 'openrouter':
       return 'https://openrouter.ai/api/v1'
     case 'gemini':

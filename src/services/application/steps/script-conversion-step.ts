@@ -1,9 +1,9 @@
-import { convertEpisodeTextToScript } from '@/agents/script/script-converter'
-import type { EpisodeBoundary } from '@/types/episode'
+import { convertChunkToMangaScript } from '@/agents/script/script-converter'
+import type { NewMangaScript } from '@/types/script'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface ScriptConversionResult {
-  script: unknown // The converted script object
+  script: NewMangaScript // The converted manga script object
 }
 
 /**
@@ -13,51 +13,51 @@ export class ScriptConversionStep implements PipelineStep {
   readonly stepName = 'script-conversion'
 
   /**
-   * Convert episode text to script format using LLM
+   * Convert chunk text to manga script format using LLM
    */
   async convertToScript(
-    episodeText: string,
-    episodeNumber: number,
-    boundaries: EpisodeBoundary[],
+    chunkText: string,
+    chunkIndex: number,
+    chunksNumber: number,
+    allChunks: string[],
     context: StepContext,
   ): Promise<StepExecutionResult<ScriptConversionResult>> {
     const { jobId, logger } = context
 
     try {
-      // Extract structured data from narrative arc analysis for the current episode
-      const currentEpisodeBoundary = boundaries.find((b) => b.episodeNumber === episodeNumber)
+      // Get previous and next chunks for context
+      const previousText = chunkIndex > 1 ? allChunks[chunkIndex - 2] : undefined
+      const nextChunk = chunkIndex < chunksNumber ? allChunks[chunkIndex] : undefined
 
-      logger.info('Starting script conversion', {
+      logger.info('Starting manga script conversion', {
         jobId,
-        episodeNumber,
-        episodeTextLength: episodeText.length,
-        hasStructuredData: !!currentEpisodeBoundary,
+        chunkIndex,
+        chunksNumber,
+        chunkTextLength: chunkText.length,
+        hasPrevious: !!previousText,
+        hasNext: !!nextChunk,
       })
 
-      // Convert episode text to script
-      // ここで「LLM を呼び出してエピソード本文を台本スクリプト形式に変換」
-      const script = await convertEpisodeTextToScript(
+      // Convert chunk text to manga script using new format
+      const script = await convertChunkToMangaScript(
         {
-          episodeText,
-          // Use structured data from narrative arc analysis results
-          characterList: currentEpisodeBoundary?.characterList?.join('、') || undefined,
-          sceneList: currentEpisodeBoundary?.sceneList?.join('、') || undefined,
-          dialogueList: currentEpisodeBoundary?.dialogueList?.join('、') || undefined,
-          highlightList: currentEpisodeBoundary?.highlightList?.join('、') || undefined,
-          situationList: currentEpisodeBoundary?.situationList?.join('、') || undefined,
+          chunkText,
+          chunkIndex,
+          chunksNumber,
+          previousText,
+          nextChunk,
         },
         {
           jobId,
-          episodeNumber,
-          // フラグメント変換を無効化（処理経路の透明化のため）
-          useFragmentConversion: false,
         },
       )
 
-      logger.info('Script conversion completed', {
+      logger.info('Manga script conversion completed', {
         jobId,
-        episodeNumber,
+        chunkIndex,
+        chunksNumber,
         scriptGenerated: !!script,
+        panelsCount: script?.panels?.length || 0,
       })
 
       return {
@@ -66,9 +66,10 @@ export class ScriptConversionStep implements PipelineStep {
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      logger.error('Script conversion failed', {
+      logger.error('Manga script conversion failed', {
         jobId,
-        episodeNumber,
+        chunkIndex,
+        chunksNumber,
         error: errorMessage,
         stack: error instanceof Error ? error.stack : undefined,
       })
