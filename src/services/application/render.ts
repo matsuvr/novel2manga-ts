@@ -265,7 +265,7 @@ export async function renderFromPageBreakPlan(
               position: { x, y },
               size: { width, height },
               content: panel.content,
-              dialogues: panel.dialogue.map((d) => ({
+              dialogues: (panel.dialogue || []).map((d) => ({
                 text:
                   (d as { text?: string; lines?: string }).text ??
                   (d as { lines?: string }).lines ??

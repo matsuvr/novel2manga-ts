@@ -103,6 +103,7 @@ export class AnalyzePipeline extends BasePipelineStep {
       novelId,
       logger,
       ports: this.ports,
+      isDemo: options.isDemo,
     }
 
     // Ensure novel persistence before job creation

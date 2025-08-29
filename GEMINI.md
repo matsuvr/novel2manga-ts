@@ -54,3 +54,7 @@ PR checklist (copy into your PR and tick all):
 - [ ] Updated: .kiro\specs\novel-to-manga-converter\tasks.md
 - [ ] Updated: src\db\schema.ts (+ migrations applied/generated as needed)
 - [ ] Updated: database\storage-structure.md
+
+```
+
+```

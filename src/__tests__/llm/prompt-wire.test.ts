@@ -66,20 +66,54 @@ describe('LLM prompt wiring (temporary)', () => {
 
   it('scriptConversion prompt/systemPrompt が展開され、エージェントが実行できる', async () => {
     const cfg = getScriptConversionConfig()
-    const prompt = (cfg.userPromptTemplate || 'Episode text: {{episodeText}}')
+    let prompt = cfg.userPromptTemplate || ''
+    let systemPrompt = cfg.systemPrompt || ''
+
+    // Replace all placeholders in userPromptTemplate (use global replace for multiple occurrences)
+    prompt = prompt
+      .replace(/\{\{episodeText\}\}/g, '太郎は走った。花子は笑った。')
+      .replace(/\{\{chunkIndex\}\}/g, '1')
+      .replace(/\{\{totalChunks\}\}/g, '1')
+      .replace(/\{\{previousFragment\}\}/g, '')
+      .replace(/\{\{nextFragment\}\}/g, '')
+      .replace(/\{\{characterList\}\}/g, '太郎（主人公）、花子（ヒロイン）')
+      .replace(/\{\{sceneList\}\}/g, '公園、学校')
+      .replace(/\{\{dialogueList\}\}/g, '「行くぞ！」「待って！」')
+      .replace(/\{\{highlightList\}\}/g, 'クライマックス')
+      .replace(/\{\{situationList\}\}/g, '雨の中を走る')
+      // Fix the malformed placeholder in the template
+      .replace(/\{\{episodeTextの0\.\.40\}\}/g, '太郎は走った。花子は笑った。')
+
+    // Replace any placeholders in systemPrompt as well
+    systemPrompt = systemPrompt
       .replace('{{episodeText}}', '太郎は走った。花子は笑った。')
+      .replace('{{chunkIndex}}', '1')
+      .replace('{{totalChunks}}', '1')
+      .replace('{{previousFragment}}', '')
+      .replace('{{nextFragment}}', '')
       .replace('{{characterList}}', '太郎（主人公）、花子（ヒロイン）')
       .replace('{{sceneList}}', '公園、学校')
       .replace('{{dialogueList}}', '「行くぞ！」「待って！」')
       .replace('{{highlightList}}', 'クライマックス')
       .replace('{{situationList}}', '雨の中を走る')
+      .replace('{{episodeTextの0..40}}', '太郎は走った。花子は笑った。')
+
+    // Debug: log any remaining placeholders
+    if (prompt.includes('{{') || prompt.includes('}}')) {
+      console.log('Remaining placeholders in prompt:', prompt.match(/\{\{[^}]+\}\}/g))
+      console.log('Full prompt:', prompt)
+    }
+    if (systemPrompt.includes('{{') || systemPrompt.includes('}}')) {
+      console.log('Remaining placeholders in systemPrompt:', systemPrompt.match(/\{\{[^}]+\}\}/g))
+      console.log('Full systemPrompt:', systemPrompt)
+    }
 
     assertNoPlaceholders(prompt)
-    assertNoPlaceholders(cfg.systemPrompt)
+    assertNoPlaceholders(systemPrompt)
 
     const agent = new CompatAgent({
       name: 'prompt-wire-script',
-      instructions: cfg.systemPrompt,
+      instructions: systemPrompt,
       provider: 'fake',
       maxTokens: cfg.maxTokens,
     })

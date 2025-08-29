@@ -139,6 +139,19 @@ export class EpisodeBundlingStep implements PipelineStep {
           a = b + 1
         }
       }
+      // 端数吸収: 最終エピソードがMIN未満なら直前に吸収（複数あれば末尾のみ吸収）
+      if (ranges.length >= 2) {
+        const last = ranges[ranges.length - 1]
+        const lastLen = last.end - last.start + 1
+        if (lastLen < MIN) {
+          ranges[ranges.length - 2].end = last.end
+          ranges.pop()
+          logger.info('Merged short tail episode into previous (post-bundle correction)', {
+            jobId,
+            mergedTo: ranges[ranges.length - 1],
+          })
+        }
+      }
       if (ranges.length === 0) {
         // ガイドラインに沿った範囲が検出できなかった場合でも弾かない。
         // 全ページを1エピソードとして扱うフォールバックを適用し、警告のみを記録する。

@@ -97,6 +97,43 @@ export class TextChunkingStep implements PipelineStep {
           chunkConfig: chunkCfg,
         })
 
+        // 端数吸収: 最終チャンクが閾値未満の場合は直前チャンクに連結
+        // - 閾値には chunkCfg.minChunkSize を利用
+        // - オーバーラップ分の重複を避けるため、前チャンクの開始位置を再計算し、原文から再スライスする
+        try {
+          const size = Math.max(
+            Math.max(1, chunkCfg.minChunkSize),
+            Math.min(chunkCfg.defaultChunkSize, chunkCfg.maxChunkSize),
+          )
+          const ov = Math.min(
+            Math.floor(size * (chunkCfg.maxOverlapRatio ?? 0.5)),
+            Math.max(0, chunkCfg.defaultOverlapSize),
+          )
+          const stride = Math.max(1, size - ov)
+
+          if (chunks.length >= 2) {
+            const last = chunks[chunks.length - 1]
+            if (last.length < chunkCfg.minChunkSize) {
+              const len = novelText.length
+              const lastStart = len - last.length
+              const prevStart = Math.max(0, lastStart - stride)
+              const merged = novelText.slice(prevStart, len)
+              chunks.splice(chunks.length - 2, 2, merged)
+              logger.info('Merged short tail chunk into previous (post-split correction)', {
+                jobId,
+                prevStart,
+                lastStart,
+                mergedLength: merged.length,
+              })
+            }
+          }
+        } catch (e) {
+          logger.warn('Tail-merge correction failed (continuing with original chunks)', {
+            jobId,
+            error: e instanceof Error ? e.message : String(e),
+          })
+        }
+
         // Persist chunks to storage and DB immediately for強整合性
         await this.persistChunks(chunks, { jobId, novelId, logger, ports })
       }

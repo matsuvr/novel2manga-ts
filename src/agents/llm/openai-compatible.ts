@@ -56,6 +56,7 @@ export class OpenAICompatibleClient implements LlmClient {
       : this.buildResponsesBody([system, user], options, spec.schema)
 
     const endpoint = this.useChatCompletions ? '/chat/completions' : '/responses'
+    const isVerbose = process.env.LOG_LLM_REQUESTS === '1' || process.env.NODE_ENV === 'development'
     console.log(`[${this.provider}] Making request to ${this.baseUrl}${endpoint}`)
     console.log(`[${this.provider}] Model: ${this.model}`)
 
@@ -64,7 +65,9 @@ export class OpenAICompatibleClient implements LlmClient {
       spec.schema &&
       spec.schemaName
     ) {
-      console.log(`[${this.provider}] Using Structured Output with schema: ${spec.schemaName}`)
+      if (isVerbose) {
+        console.log(`[${this.provider}] Using Structured Output with schema: ${spec.schemaName}`)
+      }
     } else {
       console.log(`[${this.provider}] Using basic JSON object response format`)
     }
@@ -98,15 +101,25 @@ export class OpenAICompatibleClient implements LlmClient {
     }
 
     const data: unknown = await res.json()
-    console.log(`[${this.provider}] Raw response data:`, JSON.stringify(data, null, 2))
+    // Avoid heavy JSON.stringify of entire response; log only meta in verbose mode
+    if (isVerbose) {
+      try {
+        const meta = summarizeResponseMeta(data)
+        console.log(`[${this.provider}] Raw response meta: ${meta}`)
+      } catch {
+        console.log(`[${this.provider}] Raw response received (meta unavailable)`)
+      }
+    }
 
     const content = extractTextFromResponse(data, this.useChatCompletions)
     if (!content) {
       throw new Error(`${this.provider}: empty or non-text response`)
     }
 
-    console.log(`[${this.provider}] Extracted content:`, content)
-    console.log(`[${this.provider}] Content length:`, content.length)
+    if (isVerbose) {
+      console.log(`[${this.provider}] Extracted content (preview):`, truncate(content, 800))
+      console.log(`[${this.provider}] Content length:`, content.length)
+    }
 
     const jsonText = extractFirstJsonChunk(content)
     console.log(`[${this.provider}] Extracted JSON text:`, truncate(jsonText, 200))
@@ -142,13 +155,22 @@ export class OpenAICompatibleClient implements LlmClient {
     const sanitizedJson = JSON.stringify(sanitized)
     if (originalJson !== sanitizedJson) {
       console.warn(
-        `[${this.provider}] Structured Output constraint violation detected. LLM produced invalid elements that were sanitized.`,
+        `[${this.provider}] Structured Output constraint violation detected. Sanitization applied.`,
       )
-      console.warn(
-        `[${this.provider}] Note: ${this.provider} uses best-effort structured output which may not guarantee 100% schema compliance.`,
-      )
-      console.log(`[${this.provider}] Original object:`, JSON.stringify(parsed, null, 2))
-      console.log(`[${this.provider}] Sanitized object:`, JSON.stringify(sanitized, null, 2))
+      if (isVerbose) {
+        try {
+          const origKeys = Array.isArray(parsed)
+            ? `array(len=${(parsed as unknown[]).length})`
+            : `keys=${Object.keys(parsed as Record<string, unknown>).length}`
+          const saniKeys = Array.isArray(sanitized)
+            ? `array(len=${(sanitized as unknown[]).length})`
+            : `keys=${Object.keys(sanitized as Record<string, unknown>).length}`
+          console.log(`[${this.provider}] Parsed object summary: ${origKeys}`)
+          console.log(`[${this.provider}] Sanitized object summary: ${saniKeys}`)
+        } catch {
+          // ignore preview failures
+        }
+      }
     } else {
       console.log(`[${this.provider}] Structured Output worked correctly - no sanitization needed`)
     }
@@ -159,10 +181,17 @@ export class OpenAICompatibleClient implements LlmClient {
       console.error(`[${this.provider}] Schema validation failed:`)
       console.error(`Schema name: ${schemaName}`)
       console.error(`Validation error: ${msg}`)
-      console.error(`Original parsed object keys:`, Object.keys(parsed || {}))
-      console.error(`Original parsed object:`, JSON.stringify(parsed, null, 2))
-      console.error(`Sanitized object keys:`, Object.keys(sanitized || {}))
-      console.error(`Sanitized object:`, JSON.stringify(sanitized, null, 2))
+      try {
+        console.error(`Original parsed object keys:`, Object.keys(parsed || {}))
+        console.error(`Sanitized object keys:`, Object.keys(sanitized || {}))
+        if (isVerbose) {
+          // In verbose mode, still avoid full dumps; provide small previews
+          console.error(`[${this.provider}] Parsed preview:`, safeObjectPreview(parsed))
+          console.error(`[${this.provider}] Sanitized preview:`, safeObjectPreview(sanitized))
+        }
+      } catch {
+        // ignore preview failures
+      }
       throw new Error(
         `${this.provider}: schema validation failed: ${msg}. Raw: ${truncate(jsonText, 400)}`,
       )
@@ -191,14 +220,17 @@ export class OpenAICompatibleClient implements LlmClient {
       const { zodToJsonSchema } = require('zod-to-json-schema')
       const baseJsonSchema = zodToJsonSchema(schema, { name: schemaName })
 
-      // ルートが$ref/definitionsベースになるzod-to-json-schemaの出力を、
-      // Groq要件(ルートtypeがobject)に合わせて実体へフラット化
-      const flattened = flattenRootObjectSchema(baseJsonSchema)
+      // ルートが$ref/definitionsベースになるzod-to-json-schemaの出力を実体化
+      let jsonSchema = flattenRootObjectSchema(baseJsonSchema)
 
-      // Groq Structured Outputs 制約に合わせてJSON Schemaを厳密化
-      let jsonSchema = enforceJsonSchemaConstraintsForStructuredOutputs(flattened)
+      // refs/$defs/anyOf/oneOf/allOf を可能な限り排除し、ネスト深度<=5を保証
+      jsonSchema = inlineAllRefsAndDropDefs(jsonSchema)
+      jsonSchema = dropUnionCombinators(jsonSchema)
 
-      // Groq互換: union( anyOf/type配列 )配下の数値制約( minimum/maximum 等 )で400になるケースを回避
+      // Structured Outputs向けに additionalProperties:false を再帰適用
+      jsonSchema = enforceJsonSchemaConstraintsForStructuredOutputs(jsonSchema)
+
+      // Groq互換: 数値制約のエッジを緩和
       if (this.provider === 'groq') {
         jsonSchema = stripUnsupportedKeywordsForGroqSO(jsonSchema)
       }
@@ -210,8 +242,9 @@ export class OpenAICompatibleClient implements LlmClient {
         json_schema: {
           name: schemaName,
           schema: jsonSchema,
+          // OpenAI/Groq互換: strict は json_schema 内に配置
+          strict: true,
         },
-        strict: true,
       }
     } else {
       // その他のプロバイダー: 基本的なJSON形式を指定
@@ -249,6 +282,46 @@ type ResponsesApiResponse = {
   output?: Array<{ content?: Array<{ text?: string }> }>
   output_text?: string
   choices?: Array<{ message?: { content?: string } }>
+}
+
+// Lightweight meta summarizer to avoid heavy JSON.stringify on large responses
+function summarizeResponseMeta(data: unknown): string {
+  if (!data || typeof data !== 'object') return typeof data
+  const d = data as Record<string, unknown>
+  const id = typeof d.id === 'string' ? d.id : undefined
+  const model = typeof d.model === 'string' ? d.model : undefined
+  const usage = d.usage as Record<string, unknown> | undefined
+  const totalTokens =
+    usage && typeof usage === 'object' && typeof usage.total_tokens === 'number'
+      ? (usage.total_tokens as number)
+      : undefined
+  let choicesLen: number | undefined
+  if (Array.isArray((d as ChatCompletionsResponse).choices)) {
+    choicesLen = ((d as ChatCompletionsResponse).choices as unknown[]).length
+  }
+  let outputLen: number | undefined
+  const r = d as ResponsesApiResponse
+  if (typeof r.output_text === 'string') outputLen = r.output_text.length
+  return [
+    id ? `id=${id}` : null,
+    model ? `model=${model}` : null,
+    choicesLen !== undefined ? `choices=${choicesLen}` : null,
+    totalTokens !== undefined ? `totalTokens=${totalTokens}` : null,
+    outputLen !== undefined ? `outputTextLen=${outputLen}` : null,
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
+// Produce a shallow preview string for objects without full serialization
+function safeObjectPreview(obj: unknown): string {
+  try {
+    if (!obj || typeof obj !== 'object') return String(obj)
+    const keys = Object.keys(obj as Record<string, unknown>)
+    return `{keys:${keys.length}, sampleKeys:${keys.slice(0, 10).join(',')}}`
+  } catch {
+    return '[unavailable]'
+  }
 }
 
 function extractTextFromResponse(data: unknown, useChat: boolean): string | null {
@@ -376,6 +449,88 @@ export function flattenRootObjectSchema(schema: unknown): unknown {
   return schema
 }
 
+// $ref をすべてインライン展開し、$defs を除去する
+export function inlineAllRefsAndDropDefs(schema: unknown): unknown {
+  if (!schema || typeof schema !== 'object') return schema
+  const root = schema as Record<string, unknown>
+  const getByPointer = (pointer: string): unknown => {
+    const path = pointer.replace(/^#\/?/, '').split('/')
+    let cur: unknown = root
+    for (const key of path) {
+      if (!cur || typeof cur !== 'object') return undefined
+      cur = (cur as Record<string, unknown>)[key]
+    }
+    return cur
+  }
+  const visited = new WeakSet<object>()
+  const walk = (node: unknown): unknown => {
+    if (!node || typeof node !== 'object') return node
+    if (visited.has(node as object)) return node
+    visited.add(node as object)
+    const obj = node as Record<string, unknown>
+    if (typeof obj.$ref === 'string') {
+      const target = getByPointer(obj.$ref as string)
+      if (target && typeof target === 'object') {
+        const cloned = JSON.parse(JSON.stringify(target))
+        return walk(cloned)
+      }
+    }
+    if (obj.properties && typeof obj.properties === 'object') {
+      const props = obj.properties as Record<string, unknown>
+      for (const k of Object.keys(props)) props[k] = walk(props[k])
+    }
+    if (obj.items) obj.items = walk(obj.items)
+    if (Array.isArray(obj.anyOf)) obj.anyOf = (obj.anyOf as unknown[]).map(walk)
+    if (Array.isArray(obj.oneOf)) obj.oneOf = (obj.oneOf as unknown[]).map(walk)
+    if (Array.isArray(obj.allOf)) obj.allOf = (obj.allOf as unknown[]).map(walk)
+    if (obj.$defs && typeof obj.$defs === 'object') {
+      const defs = obj.$defs as Record<string, unknown>
+      for (const k of Object.keys(defs)) defs[k] = walk(defs[k])
+    }
+    return obj
+  }
+  const inlined = walk(root)
+  if (inlined && typeof inlined === 'object' && '$defs' in inlined) {
+    delete (inlined as Record<string, unknown>).$defs
+  }
+  return inlined
+}
+
+// anyOf/oneOf/allOf を排除（先頭案に単純化）してスキーマ深さと複雑性を削減
+export function dropUnionCombinators(schema: unknown): unknown {
+  const visited = new WeakSet<object>()
+  const walk = (node: unknown): unknown => {
+    if (!node || typeof node !== 'object') return node
+    if (visited.has(node as object)) return node
+    visited.add(node as object)
+    const obj = node as Record<string, unknown>
+    const takeFirst = (arr: unknown[] | undefined) =>
+      Array.isArray(arr) && arr.length > 0 ? arr[0] : undefined
+    if (Array.isArray(obj.anyOf)) {
+      const first = takeFirst(obj.anyOf as unknown[])
+      return walk(first)
+    }
+    if (Array.isArray(obj.oneOf)) {
+      const first = takeFirst(obj.oneOf as unknown[])
+      return walk(first)
+    }
+    if (Array.isArray(obj.allOf)) {
+      const first = takeFirst(obj.allOf as unknown[])
+      return walk(first)
+    }
+    if (obj.properties && typeof obj.properties === 'object') {
+      const props = obj.properties as Record<string, unknown>
+      for (const k of Object.keys(props)) props[k] = walk(props[k])
+    }
+    if (obj.items) obj.items = walk(obj.items)
+    if (obj.$defs && typeof obj.$defs === 'object') {
+      const defs = obj.$defs as Record<string, unknown>
+      for (const k of Object.keys(defs)) defs[k] = walk(defs[k])
+    }
+    return obj
+  }
+  return walk(schema)
+}
 // Groq Structured Outputsでエラーとなりがちな数値制約を全面的に除去して互換性を高める
 export function stripUnsupportedKeywordsForGroqSO(schema: unknown): unknown {
   const visited = new WeakSet<object>()
@@ -385,6 +540,9 @@ export function stripUnsupportedKeywordsForGroqSO(schema: unknown): unknown {
     delete obj.exclusiveMinimum
     delete obj.exclusiveMaximum
     delete obj.multipleOf
+    // Arrays: Groq structured outputs rejects minItems/maxItems in response_format
+    delete (obj as Record<string, unknown>).minItems
+    delete (obj as Record<string, unknown>).maxItems
   }
   const walk = (node: unknown): unknown => {
     if (!node || typeof node !== 'object') return node

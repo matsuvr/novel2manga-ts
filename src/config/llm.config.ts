@@ -53,14 +53,14 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
   },
   groq: {
     apiKey: process.env.GROQ_API_KEY,
-    model: 'openai/gpt-oss-120b',
+    model: 'moonshotai/kimi-k2-instruct',
     // Script conversion token limit reduced to prevent generation failure
     maxTokens: 16000,
     timeout: 30_000,
   },
   openrouter: {
     apiKey: process.env.OPENROUTER_API_KEY,
-    model: 'mistralai/mistral-small-3.2-24b-instruct:free',
+    model: 'deepseek/deepseek-chat-v3.1:free',
     baseUrl: 'https://openrouter.ai/api/v1',
     maxTokens: 8192,
     timeout: 30_000,

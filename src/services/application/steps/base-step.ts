@@ -18,6 +18,7 @@ export interface StepContext {
   novelId: string
   logger: LoggerPort
   ports: StoragePorts
+  isDemo?: boolean
 }
 
 /**
