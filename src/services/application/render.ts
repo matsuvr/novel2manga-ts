@@ -6,7 +6,7 @@ import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/por
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
 import { getDatabaseService } from '@/services/db-factory'
-import type { PageBreakPlan } from '@/types/script'
+import type { PageBreakV2 } from '@/types/script'
 import { normalizeAndValidateLayout } from '@/utils/layout-normalizer'
 // YAML依存を排除: 直接JSONのMangaLayoutを構築して使用する
 
@@ -189,7 +189,7 @@ async function blobToBase64(blob: Blob): Promise<string> {
 export async function renderFromPageBreakPlan(
   jobId: string,
   episodeNumber: number,
-  pageBreakPlan: PageBreakPlan,
+  pageBreakPlan: PageBreakV2,
   ports: StoragePorts,
   options: BatchOptions = {},
 ): Promise<{
@@ -217,7 +217,7 @@ export async function renderFromPageBreakPlan(
   let failedCount = 0
 
   logger.info('Starting pageBreakPlan based rendering', {
-    totalPages: pageBreakPlan.pages.length,
+    totalPages: Math.max(...pageBreakPlan.panels.map((p) => p.pageNumber), 1),
   })
 
   // Initialize renderer with proper async initialization
@@ -231,7 +231,20 @@ export async function renderFromPageBreakPlan(
   })
 
   try {
-    for (const page of pageBreakPlan.pages) {
+    // PageBreakV2をページごとにグループ化
+    const pageMap = new Map<number, (typeof pageBreakPlan.panels)[0][]>()
+    for (const panel of pageBreakPlan.panels) {
+      if (!pageMap.has(panel.pageNumber)) {
+        pageMap.set(panel.pageNumber, [])
+      }
+      const panels = pageMap.get(panel.pageNumber)
+      if (panels) {
+        panels.push(panel)
+      }
+    }
+
+    for (const [pageNumber, panels] of Array.from(pageMap.entries())) {
+      const page = { pageNumber, panels, panelCount: panels.length }
       try {
         // Check if page already exists
         if (options.skipExisting) {
@@ -257,7 +270,7 @@ export async function renderFromPageBreakPlan(
         // Create layout data by combining panel layout with page content
         const layoutData = {
           page_number: page.pageNumber,
-          panels: page.panels.map((panel, index) => {
+          panels: page.panels.map((panel: PageBreakV2['panels'][0], index: number) => {
             const layoutPanel = panelLayout.panels[index]
             const [x, y, width, height] = layoutPanel.bbox
             return {
@@ -265,11 +278,8 @@ export async function renderFromPageBreakPlan(
               position: { x, y },
               size: { width, height },
               content: panel.content,
-              dialogues: (panel.dialogue || []).map((d) => ({
-                text:
-                  (d as { text?: string; lines?: string }).text ??
-                  (d as { lines?: string }).lines ??
-                  '',
+              dialogues: (panel.dialogue || []).map((d: { speaker: string; text: string }) => ({
+                text: d.text,
                 speaker: d.speaker,
                 type: 'speech' as const,
               })),
@@ -368,7 +378,7 @@ export async function renderFromPageBreakPlan(
   const duration = Date.now() - startTime
 
   logger.info('PageBreakPlan rendering completed', {
-    totalPages: pageBreakPlan.pages.length,
+    totalPages: Math.max(...pageBreakPlan.panels.map((p) => p.pageNumber), 1),
     renderedPages: renderedCount,
     skippedPages: skippedCount,
     failedPages: failedCount,
@@ -379,7 +389,7 @@ export async function renderFromPageBreakPlan(
     success: true,
     jobId,
     episodeNumber,
-    totalPages: pageBreakPlan.pages.length,
+    totalPages: Math.max(...pageBreakPlan.panels.map((p) => p.pageNumber), 1),
     renderedPages: renderedCount,
     skippedPages: skippedCount,
     failedPages: failedCount,

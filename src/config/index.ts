@@ -42,19 +42,6 @@ export function getLLMConfig() {
   return getAppConfig().llm
 }
 
-// 物語弧分析設定を取得
-export function getNarrativeAnalysisConfig() {
-  const prompts = getAppConfig().llm.narrativeArcAnalysis
-  const provider = getDefaultProvider()
-  const providerConfig = getProviderConfig(provider as LLMProvider)
-  return {
-    provider: provider,
-    maxTokens: providerConfig.maxTokens,
-    systemPrompt: prompts.systemPrompt,
-    userPromptTemplate: prompts.userPromptTemplate,
-  }
-}
-
 // テキスト分析設定を取得
 export function getTextAnalysisConfig() {
   const prompts = getAppConfig().llm.textAnalysis
@@ -87,7 +74,7 @@ export function getLayoutGenerationConfig() {
 
 // DEPRECATED: チャンクバンドル統合分析設定を取得
 // This function is deprecated and should not be used in the current flow
-// The correct flow is: textAnalysis → narrativeArcAnalysis → scriptConversion → pageBreakEstimation
+// The correct flow is: textAnalysis → scriptConversion → pageBreakEstimation
 export function getChunkBundleAnalysisConfig() {
   const prompts = getAppConfig().llm as unknown as Record<
     string,

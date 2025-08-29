@@ -426,13 +426,12 @@ async function generateEpisodeLayoutInternal(
         episodeNumber: episode.episodeNumber,
         isDemo,
         // フラグメント変換を無効化（処理経路の透明化のため）
-        useFragmentConversion: false,
       },
     )
 
     // Progress validation: Script conversion must produce results
-    const allScriptLines = script?.scenes?.flatMap((scene) => scene.script || []) || []
-    if (allScriptLines.length === 0) {
+    const allScriptPanels = Array.isArray(script?.panels) ? script.panels : []
+    if (allScriptPanels.length === 0) {
       logger.error('Script conversion failed to produce valid script', {
         episodeNumber,
         scriptStructure: script,
@@ -448,10 +447,10 @@ async function generateEpisodeLayoutInternal(
     })
 
     // Progress validation: Page breaks must be estimated
-    if (!pageBreaks?.pages || pageBreaks.pages.length === 0) {
+    if (!pageBreaks?.panels || pageBreaks.panels.length === 0) {
       logger.error('Page break estimation failed to produce valid page breaks', {
         episodeNumber,
-        scriptLength: allScriptLines.length,
+        scriptLength: allScriptPanels.length,
       })
       throw new Error('Page break estimation failed to produce valid page breaks')
     }
@@ -467,14 +466,14 @@ async function generateEpisodeLayoutInternal(
     logger.info('Layout generation completed successfully', {
       episodeNumber,
       generatedPages: layoutBuilt?.pages?.length || 0,
-      scriptLength: allScriptLines.length,
+      scriptLength: allScriptPanels.length,
     })
 
     // Basic validation: ensure layout was generated
     if (!layoutBuilt?.pages || layoutBuilt.pages.length === 0) {
       logger.error('Layout building failed to generate any pages', {
         episodeNumber,
-        scriptLength: allScriptLines.length,
+        scriptLength: allScriptPanels.length,
       })
       throw new Error('Layout building failed to generate any pages')
     }
