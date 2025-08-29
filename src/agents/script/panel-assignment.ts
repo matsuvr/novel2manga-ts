@@ -14,14 +14,17 @@ import { selectLayoutTemplateByCountRandom } from '@/utils/layout-templates'
 export async function assignPanels(
   script: Script,
   pageBreaks: PageBreakPlan,
-  _opts?: { jobId?: string; episodeNumber?: number },
+  _opts?: { jobId?: string; episodeNumber?: number; maxElementChars?: number },
 ): Promise<PanelAssignmentPlan> {
   try {
     const generator = getLlmStructuredGenerator()
     const cfg = getPanelAssignmentConfig()
-    const prompt = (cfg.userPromptTemplate || '')
+    let prompt = (cfg.userPromptTemplate || '')
       .replace('{{scriptJson}}', JSON.stringify(script, null, 2))
       .replace('{{pageBreaksJson}}', JSON.stringify(pageBreaks, null, 2))
+    if (_opts?.maxElementChars && Number.isFinite(_opts.maxElementChars)) {
+      prompt += `\n\nIMPORTANT CONSTRAINTS:\n- Keep per-panel content and any dialogue text length <= ${_opts.maxElementChars} characters.\n- Prefer assigning fewer script lines to a panel rather than exceeding the limit.`
+    }
     const result = await generator.generateObjectWithFallback({
       name: 'panel-assignment',
       systemPrompt: cfg.systemPrompt,
@@ -77,9 +80,11 @@ export function buildLayoutFromAssignment(
   assignment: PanelAssignmentPlan,
   episodeMeta: { title: string; episodeNumber: number; episodeTitle?: string },
 ): MangaLayout {
+  const recentContentGlobal = new Set<string>()
   const pages = assignment.pages.map((p) => {
     const template = selectLayoutTemplateByCountRandom(Math.max(1, p.panelCount))
     let nextId = 1
+    const usedContentInPage = new Set<string>()
     const panels: Panel[] = p.panels.map((pp, idx) => {
       const allScriptLines = script.scenes?.flatMap((scene) => scene.script || []) || []
       const lines: ScriptLine[] = pp.scriptIndexes
@@ -88,10 +93,22 @@ export function buildLayoutFromAssignment(
 
       const stageLines = lines.filter((l) => l.type === 'stage')
       const narrationLines = lines.filter((l) => l.type === 'narration')
-      const speeches = lines.filter((l) => l.type === 'dialogue' || l.type === 'thought')
+      let speeches = lines.filter((l) => l.type === 'dialogue' || l.type === 'thought')
+      // セリフ0〜2制約（登場順優先）
+      if (speeches.length > 2) {
+        speeches = speeches.slice(0, 2)
+      }
 
-      // content にはナレーションを含めない。舞台指示や状況（stage）のみを反映する
-      let content = stageLines.map((n) => n.text).join('\n')
+      // content（= thingsToBeDrawn）の決定: セリフ本文の重複を避け、絵として描くべき対象を短く表現
+      const parentScene = script.scenes?.find((scene) =>
+        scene.script?.some((s) => lines.some((l) => l.index === s.index)),
+      )
+      let content = decideThingsToBeDrawn({
+        stageLines,
+        narrationLines,
+        speeches,
+        parentScene,
+      })
       // dialogues にはセリフ・心の声・ナレーションを含める
       const speechDialogues: Dialogue[] = speeches.map((d) => ({
         speaker: d.speaker || '',
@@ -105,17 +122,27 @@ export function buildLayoutFromAssignment(
       }))
       const dialogues: Dialogue[] = [...speechDialogues, ...narrationDialogues]
 
-      // 空コマ禁止: content が空の場合でも、dialogue を content にコピーしない
-      // シーンの setting/description を優先して反映する
+      // 空コマ禁止: content が空の場合、セリフ本文はコピーせず、シーン情報 or 話者名で補完
       if (!content || content.trim().length === 0) {
-        const parentScene = script.scenes?.find((scene) =>
-          scene.script?.some((s) => lines.some((l) => l.index === s.index)),
-        )
         const settingOrDesc = [parentScene?.setting, parentScene?.description]
           .filter((v): v is string => !!v && v.trim().length > 0)
           .join(' / ')
-        content = settingOrDesc && settingOrDesc.trim().length > 0 ? settingOrDesc : '…'
+        content =
+          settingOrDesc && settingOrDesc.trim().length > 0
+            ? settingOrDesc
+            : deriveSpeakerFallback(speeches)
       }
+
+      // 同一ページや直近の重複 content を抑制（文/行の一部を代替として採用）
+      if (usedContentInPage.has(content) || recentContentGlobal.has(content)) {
+        const alt = pickAlternateSentence(
+          content,
+          (cand) => !usedContentInPage.has(cand) && !recentContentGlobal.has(cand),
+        )
+        content = alt && alt.trim().length > 0 ? alt : deriveSpeakerFallback(speeches)
+      }
+      usedContentInPage.add(content)
+      recentContentGlobal.add(content)
 
       // 重要度スコアリング（type重み付け強化）
       const speechCount = dialogues.filter(
@@ -161,27 +188,154 @@ export function buildLayoutFromAssignment(
   }
 }
 
+// ==== helpers for content (thingsToBeDrawn) generation ====
+function decideThingsToBeDrawn(args: {
+  stageLines: ScriptLine[]
+  narrationLines: ScriptLine[]
+  speeches: ScriptLine[]
+  parentScene?: { setting?: string; description?: string }
+}): string {
+  const { stageLines, narrationLines, speeches, parentScene } = args
+  const dialogueTexts = new Set(speeches.map((s) => (s.text || '').trim()))
+
+  // 1) Prefer stage (directions)
+  const stageText = normalizeShort(joinBestSentences(stageLines.map((l) => l.text || '')))
+  if (stageText && stageText.length > 0) return stageText
+
+  // 2) Fallback to narration if it doesn't duplicate dialogue text
+  const narr = narrationLines.map((l) => l.text || '')
+  const narrPick = pickSentenceAvoidingSet(narr, dialogueTexts)
+  if (narrPick) return narrPick
+
+  // 3) Scene meta
+  const meta = [parentScene?.setting, parentScene?.description]
+    .filter((v): v is string => !!v && v.trim().length > 0)
+    .join(' / ')
+  if (meta) return meta
+
+  // 4) Last resort: speaker fallback
+  return deriveSpeakerFallback(speeches)
+}
+
+function deriveSpeakerFallback(speeches: ScriptLine[]): string {
+  const names = Array.from(
+    new Set(speeches.map((s) => (s.speaker || '').trim()).filter((s): s is string => s.length > 0)),
+  )
+  if (names.length === 0) return '…'
+  if (names.length === 1) return `${names[0]}`
+  if (names.length === 2) return `${names[0]}と${names[1]}`
+  return `${names[0]}たち`
+}
+
+function normalizeShort(s: string, max = 80): string {
+  const t = (s || '').trim()
+  if (!t) return ''
+  return t.length > max ? t.slice(0, max) : t
+}
+
+function splitIntoSentences(text: string): string[] {
+  return text
+    .split(/\n|(?<=[。！？!?.])/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+}
+
+function joinBestSentences(lines: string[], max = 80): string {
+  const parts = lines.flatMap(splitIntoSentences)
+  const uniq: string[] = []
+  const seen = new Set<string>()
+  for (const p of parts) {
+    const t = p.trim()
+    if (!t || seen.has(t)) continue
+    seen.add(t)
+    uniq.push(t)
+    const joined = uniq.join(' / ')
+    if (joined.length >= 20) return joined.slice(0, max)
+  }
+  return uniq.join(' / ').slice(0, max)
+}
+
+function pickSentenceAvoidingSet(lines: string[], avoid: Set<string>, max = 80): string {
+  for (const line of lines) {
+    const parts = splitIntoSentences(line)
+    for (const part of parts) {
+      const t = part.trim()
+      if (t && !avoid.has(t)) return t.length > max ? t.slice(0, max) : t
+    }
+  }
+  return ''
+}
+
+function pickAlternateSentence(text: string, accept: (s: string) => boolean, max = 80): string {
+  const parts = splitIntoSentences(text)
+  for (const p of parts) {
+    const t = p.trim()
+    if (t && accept(t)) return t.length > max ? t.slice(0, max) : t
+  }
+  return ''
+}
+
 export function buildLayoutFromPageBreaks(
   pageBreaks: PageBreakPlan,
   episodeMeta: { title: string; episodeNumber: number; episodeTitle?: string },
 ): MangaLayout {
+  const recentContentGlobal = new Set<string>()
   const pages = pageBreaks.pages.map((p) => {
     const template = selectLayoutTemplateByCountRandom(Math.max(1, p.panelCount))
     let nextId = 1
+    const usedContentInPage = new Set<string>()
     const panels: Panel[] = p.panels.map((pp, idx) => {
       // 新しい形式からcontentとdialogueを直接取得
       let content = pp.content || ''
       const dialogueArr = Array.isArray(pp.dialogue) ? pp.dialogue : []
-      const dialogues: Dialogue[] = dialogueArr.map((d) => ({
+      let dialogues: Dialogue[] = dialogueArr.map((d) => ({
         speaker: d.speaker,
         text:
           (d as { text?: string; lines?: string }).text ?? (d as { lines?: string }).lines ?? '',
       }))
-
-      // 空コマ禁止: content が空の場合でも、dialogue を content にコピーしない
-      if (!content || content.trim().length === 0) {
-        content = '…'
+      // セリフ0〜2制約（配列長で抑制、詳しいtypeは既存型に委ねる）
+      if (dialogues.length > 2) {
+        dialogues = dialogues.slice(0, 2)
       }
+
+      // 空コマ禁止: content が空 or セリフ本文と同一の場合、話者名などで補完（thingsToBeDrawn の意味付け）
+      const dialogueTexts = new Set(dialogues.map((d) => (d.text || '').trim()))
+      if (!content || content.trim().length === 0 || dialogueTexts.has(content.trim())) {
+        const names = Array.from(
+          new Set(dialogues.map((d) => (d.speaker || '').trim()).filter((n) => n.length > 0)),
+        )
+        if (names.length === 0) {
+          content = '…'
+        } else if (names.length === 1) {
+          content = `${names[0]}`
+        } else if (names.length === 2) {
+          content = `${names[0]}と${names[1]}`
+        } else {
+          content = `${names[0]}たち`
+        }
+      }
+
+      // 重複 content 抑制（ページ内/全体）
+      if (usedContentInPage.has(content) || recentContentGlobal.has(content)) {
+        const altParts = content
+          .split(/\n|。|！|？|\.|!|\?/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0 && !usedContentInPage.has(s) && !recentContentGlobal.has(s))
+        const names = Array.from(
+          new Set(dialogues.map((d) => (d.speaker || '').trim()).filter((n) => n.length > 0)),
+        )
+        const speakerFallback =
+          names.length === 0
+            ? '…'
+            : names.length === 1
+              ? names[0]
+              : names.length === 2
+                ? `${names[0]}と${names[1]}`
+                : `${names[0]}たち`
+        content = altParts[0] || speakerFallback
+      }
+      usedContentInPage.add(content)
+      recentContentGlobal.add(content)
 
       const shape = template.panels[idx % template.panels.length]
       return {

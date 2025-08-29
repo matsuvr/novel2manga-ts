@@ -5,6 +5,9 @@
 
 import { vi } from 'vitest'
 
+// Import for mocking
+import { convertEpisodeTextToScript } from '@/agents/script/script-converter'
+
 // LLM structured generator モック - エラーの根本原因を解決
 vi.mock('@/agents/structured-generator', () => ({
   getLlmStructuredGenerator: vi.fn(() => ({
@@ -484,6 +487,22 @@ describe('Service Integration Tests', () => {
         ],
       }),
     }))
+
+    // Script converter も resetAllMocks の影響を受けるため、ここで毎回上書きする
+    vi.mocked(convertEpisodeTextToScript).mockResolvedValue({
+      title: 'Test Episode',
+      scenes: [
+        {
+          id: '1',
+          setting: 'テスト設定',
+          description: 'テスト説明',
+          script: [
+            { index: 1, type: 'stage', text: 'テスト舞台設定', speaker: null },
+            { index: 2, type: 'dialogue', text: 'テストセリフ', speaker: '太郎' },
+          ],
+        },
+      ],
+    })
 
     // PageBreakStep を steps バレル経由で上書き（AnalyzePipeline は './steps' から import）
     vi.doMock('@/services/application/steps', async () => {

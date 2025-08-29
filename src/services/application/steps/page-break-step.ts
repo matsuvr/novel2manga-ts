@@ -184,11 +184,42 @@ export class PageBreakStep implements PipelineStep {
       }
 
       // 4) 最終レイアウトを生成（台本の各行テキストをそのまま使用。要約/省略なし）
-      const layout = buildLayoutFromAssignment(structuredScript, assignment, {
+      let layout = buildLayoutFromAssignment(structuredScript, assignment, {
         title: `Episode ${episodeNumber}`,
         episodeNumber,
         episodeTitle: undefined,
       })
+
+      // 4.5) レイアウト検証: content や dialogues.text が閾値を超えた場合は一度だけ再割当を試みる
+      const MAX_ELEM = 100
+      if (hasLayoutElementExceeding(layout, MAX_ELEM)) {
+        logger.warn(
+          'Layout contains elements exceeding max length; retrying panel assignment once',
+          {
+            jobId,
+            episodeNumber,
+            maxChars: MAX_ELEM,
+          },
+        )
+        try {
+          assignment = await assignPanels(structuredScript, pageBreakPlan, {
+            jobId,
+            episodeNumber,
+            maxElementChars: MAX_ELEM,
+          })
+          layout = buildLayoutFromAssignment(structuredScript, assignment, {
+            title: `Episode ${episodeNumber}`,
+            episodeNumber,
+            episodeTitle: undefined,
+          })
+        } catch (e) {
+          logger.warn('Retry panel assignment failed; proceeding with original assignment', {
+            jobId,
+            episodeNumber,
+            error: e instanceof Error ? e.message : String(e),
+          })
+        }
+      }
 
       // Store final layout JSON (per-episode) and also save full pages snapshot for bundling
       const ports = getStoragePorts()
@@ -240,4 +271,28 @@ export class PageBreakStep implements PipelineStep {
       return { success: false, error: errorMessage }
     }
   }
+}
+
+function hasLayoutElementExceeding(
+  layout: {
+    pages: Array<{
+      panels: Array<{ content?: string; dialogues?: Array<{ text?: string }> }>
+    }>
+  },
+  maxChars: number,
+): boolean {
+  try {
+    for (const page of layout.pages || []) {
+      for (const panel of page.panels || []) {
+        if ((panel.content || '').length > maxChars) return true
+        const ds = Array.isArray(panel.dialogues) ? panel.dialogues : []
+        for (const d of ds) {
+          if ((d?.text || '').length > maxChars) return true
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return false
 }

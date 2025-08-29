@@ -7,6 +7,7 @@ import ProcessingProgress from '@/components/ProcessingProgress'
 import ResultsDisplay from '@/components/ResultsDisplay'
 import TextInputArea from '@/components/TextInputArea'
 import type { Episode } from '@/types/database-models'
+import { decideNextPollingAction, isJobStatus } from '@/utils/polling'
 
 type ViewMode = 'input' | 'processing' | 'progress' | 'results' | 'redirecting'
 
@@ -237,11 +238,12 @@ export default function HomeClient() {
   // ProcessingProgress 側でも onComplete を呼ぶが、UI側の状態遷移競合を避けるため二重でも問題なし
   // （router.push は同一URLへの重複呼び出しを無視する）
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => {
     if (!jobId) return
     let aborted = false
     let timer: ReturnType<typeof setTimeout> | null = null
+    // 失敗の連続観測カウンタ（このエフェクトのライフタイムに紐づく）
+    let consecutiveFailed = 0
     const poll = async () => {
       if (aborted) return
       try {
@@ -250,14 +252,26 @@ export default function HomeClient() {
         const data = (await res.json().catch(() => ({}))) as {
           job?: { status?: string; renderCompleted?: boolean }
         }
-        const completed =
-          data?.job?.renderCompleted === true ||
-          data?.job?.status === 'completed' ||
-          data?.job?.status === 'complete'
-        if (completed) {
+        const rawStatus = data?.job?.status
+        const status = isJobStatus(rawStatus) ? rawStatus : undefined
+        const action = decideNextPollingAction(
+          { status, renderCompleted: data?.job?.renderCompleted },
+          consecutiveFailed,
+        )
+        if (action === 'redirect') {
           await handleProcessComplete()
           return
         }
+        if (action === 'stop_failed') {
+          // ユーザーにも分かるようにエラーメッセージを提示し、ポーリング停止
+          setError(
+            '処理が失敗状態のままです。ログをご確認の上、内容を調整して再度お試しください。必要であれば再開機能をご利用ください。',
+          )
+          return
+        }
+        // ここまで来たら継続。failedでなければ連続カウントをリセット
+        if (data?.job?.status !== 'failed') consecutiveFailed = 0
+        else consecutiveFailed += 1
       } catch {
         // noop
       }

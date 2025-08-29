@@ -41,6 +41,7 @@ If any item cannot be satisfied, stop and resolve it first. Do not proceed with 
 - grepではなく、git grepを使って、関数の名称や関数全体を取得すると作業が楽になります
 - gpt-5, gpt-5-mini, gpt-5-nano は8月5日にリリースされたモデルです。指定間違いではありません。この3つについては、レビューで指摘しないでください。勝手に変更するのも禁止です
 - Don't use serena's replace
+- 本体の実装ではconsole.logではなくloggerクラスを使う。テストではconsole.logの利用はOK。
 
 PR checklist (copy into your PR and tick all):
 

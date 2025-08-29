@@ -1,12 +1,12 @@
 import type { NextRequest } from 'next/server'
 export const runtime = 'nodejs'
 
+import { getLogger } from '@/infrastructure/logging/logger'
 import { adaptAll } from '@/repositories/adapters'
 import { NovelRepository } from '@/repositories/novel-repository'
 import { getDatabaseService } from '@/services/db-factory'
 import { ValidationError } from '@/utils/api-error'
 import { ApiResponder } from '@/utils/api-responder'
-import { getLogger } from '@/infrastructure/logging/logger'
 import { saveNovelToStorage } from './storage/route'
 
 export async function POST(request: NextRequest) {

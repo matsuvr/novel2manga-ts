@@ -1,7 +1,13 @@
 import type { z } from 'zod'
 import { getLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getAppConfigWithOverrides } from '@/config/app.config'
-import { type PageBreakPlan, PageBreakSchema, type Script } from '@/types/script'
+import {
+  type PageBreakPlan,
+  type PageBreakV2,
+  PageBreakV2Schema,
+  type Script,
+} from '@/types/script'
+import { toLegacyPageBreak } from '@/utils/pagebreak-adapters'
 
 // 型ガード関数: ページオブジェクトかどうかを判定
 function isPageObject(obj: unknown): obj is PageBreakPlan['pages'][0] {
@@ -136,14 +142,16 @@ export async function estimatePageBreaks(
     '{{scriptJson}}',
     JSON.stringify(script, null, 2),
   )
-  const result = await generator.generateObjectWithFallback({
+  const result = await generator.generateObjectWithFallback<PageBreakV2>({
     name: 'page-break-estimation',
     systemPrompt: cfg.systemPrompt,
     userPrompt: prompt,
-    schema: PageBreakSchema as unknown as z.ZodTypeAny,
-    schemaName: 'PageBreakPlan',
+    schema: PageBreakV2Schema as unknown as z.ZodTypeAny,
+    schemaName: 'PageBreakV2',
   })
 
-  // Handle case where LLM returns an array instead of object
-  return normalizePageBreakResult(result)
+  // Convert shallow panels[] into legacy pages structure
+  const legacy = toLegacyPageBreak(result)
+  // Normalize to be safe with LLM quirks
+  return normalizePageBreakResult(legacy)
 }
