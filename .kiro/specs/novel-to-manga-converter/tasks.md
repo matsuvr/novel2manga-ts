@@ -154,3 +154,17 @@
   - [x] Abort signal support for long-running operations
 - [x] Update design.md with new error handling architecture documentation
 - [x] Update tasks.md to reflect completed error handling improvements
+
+## New (2025-08-28): Script Conversion Guardrails
+
+- [x] Chunk-script: 空scriptの早期失敗（保存せず即エラー）
+- [x] Script-merge: 0シーンの場合は結合保存せずエラー
+- [x] 観測性: `script_chunk_{i}.summary.json` を保存（scenes数・先頭行数・preview）
+- [x] Unit: 上記ガードの最小テストを追加
+- [ ] Integration: 実パイプラインで script*chunk*\* と combined の検証ログを追加
+
+## New (2025-08-28): Remainder Absorption
+
+- [x] Chunking: 末尾の短いチャンクを直前に連結（原文スライスで重複抑止）
+- [x] Bundling: 末尾エピソードが下限未満なら直前に吸収
+- [ ] Tests: 端数吸収のユニット/統合テストを追加

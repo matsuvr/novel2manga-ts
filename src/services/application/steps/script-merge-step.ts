@@ -28,6 +28,11 @@ export class ScriptMergeStep implements PipelineStep {
         script: Array<{ index?: number; type: string; speaker?: string; text: string }>
       }> = []
 
+      const LOW_COVERAGE_WARN = 0.8
+      const MIN_COVERAGE_FAIL = 0.6
+      const lowCoverageChunks: Array<{ index: number; ratio: number }> = []
+      const failCoverageChunks: Array<{ index: number; ratio: number }> = []
+
       for (let i = 0; i < totalChunks; i++) {
         const key = JsonStorageKeys.scriptChunk(jobId, i)
         logger.info('Processing script chunk', { jobId, chunkIndex: i, key })
@@ -51,9 +56,12 @@ export class ScriptMergeStep implements PipelineStep {
             .replace(/\n/g, '\\n'),
         })
 
-        let scriptObj: { scenes?: typeof allScenes }
+        let scriptObj: { scenes?: typeof allScenes; coverageStats?: { coverageRatio?: number } }
         try {
-          scriptObj = JSON.parse(obj.text) as { scenes?: typeof allScenes }
+          scriptObj = JSON.parse(obj.text) as {
+            scenes?: typeof allScenes
+            coverageStats?: { coverageRatio?: number }
+          }
         } catch (parseError) {
           const parseMsg = parseError instanceof Error ? parseError.message : String(parseError)
           logger.error('JSON parse failed for script chunk', {
@@ -63,6 +71,16 @@ export class ScriptMergeStep implements PipelineStep {
             textPreview: obj.text.substring(0, ScriptMergeStep.ERROR_TEXT_PREVIEW_LENGTH),
           })
           throw new Error(`Failed to parse script chunk ${i}: ${parseMsg}`)
+        }
+
+        // Coverage gate (warn/fail)
+        const ratio = Number(scriptObj.coverageStats?.coverageRatio ?? NaN)
+        if (Number.isFinite(ratio)) {
+          if (ratio < MIN_COVERAGE_FAIL) failCoverageChunks.push({ index: i, ratio })
+          else if (ratio < LOW_COVERAGE_WARN) lowCoverageChunks.push({ index: i, ratio })
+        } else {
+          // missing coverage info is treated as failure
+          failCoverageChunks.push({ index: i, ratio: 0 })
         }
 
         if (Array.isArray(scriptObj.scenes)) {
@@ -83,10 +101,65 @@ export class ScriptMergeStep implements PipelineStep {
         }
       }
 
+      // Fail fast if any chunk is below minimum acceptable coverage
+      if (failCoverageChunks.length > 0) {
+        const details = failCoverageChunks
+          .map((c) => `chunk=${c.index} ratio=${c.ratio.toFixed(3)}`)
+          .join(', ')
+
+        // SAFE preview (env-controlled) for troubleshooting
+        if (process.env.LOG_SAFE_PREVIEW === '1') {
+          try {
+            const { StorageFactory, StorageKeys } = await import('@/utils/storage')
+            const chunkStorage = await StorageFactory.getChunkStorage()
+            const previewItems: Array<{ chunkIndex: number; preview: string }> = []
+            for (const c of failCoverageChunks.slice(0, 3)) {
+              const key = StorageKeys.chunk(jobId, c.index)
+              const obj = await chunkStorage.get(key)
+              const raw = obj?.text ?? ''
+              const preview = (raw.slice(0, 200) || '').replace(/\n/g, '\\n')
+              previewItems.push({ chunkIndex: c.index, preview })
+            }
+            logger.error('Low coverage SAFE previews', { jobId, previews: previewItems })
+          } catch (e) {
+            logger.warn('Failed to produce SAFE preview for low coverage chunks', {
+              jobId,
+              error: e instanceof Error ? e.message : String(e),
+            })
+          }
+        }
+
+        logger.error('Script merge aborted due to low coverage in chunks', {
+          jobId,
+          minCoverage: MIN_COVERAGE_FAIL,
+          details,
+        })
+        throw new Error(
+          `Coverage too low in ${failCoverageChunks.length} chunk(s) (min=${MIN_COVERAGE_FAIL}). Details: ${details}`,
+        )
+      }
+
+      if (lowCoverageChunks.length > 0) {
+        logger.warn('Some chunks have low coverage (proceeding)', {
+          jobId,
+          warnThreshold: LOW_COVERAGE_WARN,
+          chunks: lowCoverageChunks.map((c) => ({ index: c.index, ratio: c.ratio })),
+        })
+      }
+
       logger.info('All chunks processed, reindexing lines', {
         jobId,
         totalScenes: allScenes.length,
       })
+
+      // 早期失敗: 0シーンなら結合結果を保存せずに明示エラー
+      if (allScenes.length === 0) {
+        logger.error('Script merge aborted: no scenes collected from any chunk', {
+          jobId,
+          totalChunks,
+        })
+        throw new Error('Script merge failed: collected 0 scenes from all chunks')
+      }
 
       // Reindex line indices across scenes
       let nextIndex = 1

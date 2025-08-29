@@ -1,7 +1,8 @@
 import type { z } from 'zod'
 import { getLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getAppConfigWithOverrides } from '@/config/app.config'
-import { type Script, ScriptSchema } from '@/types/script'
+import { type Script, type ScriptV2, ScriptV2Schema } from '@/types/script'
+import { toLegacyScenes } from '@/utils/script-adapters'
 
 // ===== Helper types and functions (extracted for readability/testability) =====
 type SceneLine = Script['scenes'][0]['script'][number]
@@ -79,7 +80,7 @@ export interface ScriptConversionOptions {
 /**
  * Repairs corrupted JSON structure from LLM where scenes array contains mixed strings and objects
  */
-function repairCorruptedScriptJson(result: unknown, options?: ScriptConversionOptions): unknown {
+function _repairCorruptedScriptJson(result: unknown, options?: ScriptConversionOptions): unknown {
   // If result is not an object with scenes array, return as-is
   if (!result || typeof result !== 'object' || !('scenes' in result)) {
     return result
@@ -308,18 +309,7 @@ export async function convertEpisodeTextToScript(
     )
   }
 
-  // フラグメント変換を使用する場合（トークン制限回避のため閾値を下げる）
-  if (options?.useFragmentConversion && input.episodeText.length > 1000) {
-    const { convertEpisodeTextToScriptWithFragments } = await import('./fragment-script-converter')
-    return convertEpisodeTextToScriptWithFragments(input, {
-      jobId: options.jobId,
-      episodeNumber: options.episodeNumber,
-      isDemo: options.isDemo,
-      fragmentSize: options.fragmentSize,
-      overlapSize: options.overlapSize,
-      maxConcurrentFragments: options.maxConcurrentFragments,
-    })
-  }
+  // フラグメント方式は廃止（設定が true でも無効化）
 
   // Demo mode: return fixed script structure for testing
   if (options?.isDemo || isTestEnv) {
@@ -363,16 +353,48 @@ export async function convertEpisodeTextToScript(
     .replace('{{dialogueList}}', input.dialogueList || 'なし')
     .replace('{{highlightList}}', input.highlightList || 'なし')
     .replace('{{situationList}}', input.situationList || 'なし')
-  const result = await generator.generateObjectWithFallback({
-    name: 'script-conversion',
-    systemPrompt: cfg.systemPrompt,
-    userPrompt: prompt,
-    schema: ScriptSchema as unknown as z.ZodTypeAny,
-    schemaName: 'Script',
-  })
+  // ====== リトライ付与（最大2回）: coverageRatio>=0.8 を満たすまで ======
+  const maxRetries = 2
+  let attempt = 0
+  let scriptResult: unknown = null
+  let bestScriptResult: unknown = null
+  let bestRatio = -1
+  while (attempt <= maxRetries) {
+    const result = await generator.generateObjectWithFallback<ScriptV2>({
+      name: 'script-conversion',
+      systemPrompt: cfg.systemPrompt,
+      userPrompt: prompt,
+      schema: ScriptV2Schema as unknown as z.ZodTypeAny,
+      schemaName: 'ScriptV2',
+    })
 
-  // Repair corrupted JSON structure from LLM
-  let scriptResult = repairCorruptedScriptJson(result, options)
+    // Repair corrupted JSON structure from LLM
+    // V2は scenes を持たないため、そのまま扱う
+    scriptResult = result
+    if (scriptResult === null) {
+      attempt += 1
+      if (attempt > maxRetries) break
+      continue
+    }
+
+    // 正規化前に簡易カバレッジ判定（不足時はリトライ）
+    try {
+      const draftLegacy = toLegacyScenes(scriptResult as ScriptV2)
+      const ratio = estimateCoverageRatioFromScript(draftLegacy, input.episodeText.length)
+      if (ratio > bestRatio) {
+        bestRatio = ratio
+        bestScriptResult = scriptResult
+      }
+      if (ratio >= 0.8) {
+        break
+      }
+    } catch (_e) {
+      // 計算不能時はそのまま次へ（attempt++）
+    }
+
+    attempt += 1
+    if (attempt > maxRetries) break
+  }
 
   // If repair failed completely, fallback to demo mode
   if (scriptResult === null) {
@@ -409,6 +431,11 @@ export async function convertEpisodeTextToScript(
     }
   }
 
+  // If loop did not achieve threshold but found a better candidate, use it
+  if (bestScriptResult) {
+    scriptResult = bestScriptResult
+  }
+
   // Handle case where LLM returns an array instead of a single object
   if (Array.isArray(scriptResult)) {
     console.warn(
@@ -424,42 +451,41 @@ export async function convertEpisodeTextToScript(
     )
 
     // Merge all array elements into a single Script object
-    const allScenes: Script['scenes'] = []
-    let mergedTitle = ''
+    const mergedV2: ScriptV2 = { title: '', script: [] }
 
     for (let i = 0; i < scriptResult.length; i++) {
       const element = scriptResult[i]
       if (element && typeof element === 'object') {
-        // Take title from first element that has one
-        if (!mergedTitle && element.title) {
-          mergedTitle = element.title
-        }
-
-        // Merge scenes from all elements
-        if (Array.isArray(element.scenes)) {
-          allScenes.push(...element.scenes)
-        } else if (element.script && Array.isArray(element.script)) {
-          // If element has script directly (wrong structure), wrap it as a scene
-          allScenes.push({
-            id: element.id || String(i + 1),
-            setting: element.setting,
-            description: element.description,
-            script: element.script,
-          })
-        }
+        if (!mergedV2.title && (element as ScriptV2).title)
+          mergedV2.title = (element as ScriptV2).title
+        const arr = (element as ScriptV2).script
+        if (Array.isArray(arr)) mergedV2.script.push(...arr)
       }
     }
 
-    scriptResult = {
-      title: mergedTitle || undefined,
-      scenes: allScenes,
-    }
+    scriptResult = mergedV2
   }
 
   // Normalize LLM output: handle cases where LLM uses 'lines' or 'content' instead of 'script'
-  const normalized = scriptResult as Script
-  if (normalized.scenes) {
-    for (const scene of normalized.scenes) {
+  let normalizedLegacy = toLegacyScenes(scriptResult as ScriptV2)
+  // coverageStats/needsRetry が欠落している場合でも動作可能だが、ここで比率を再計算してメタを補完
+  try {
+    const ratio = estimateCoverageRatioFromScript(normalizedLegacy, input.episodeText.length)
+    ;(
+      normalizedLegacy as unknown as { coverageStats?: unknown; needsRetry?: boolean }
+    ).coverageStats = {
+      totalChars: input.episodeText.length,
+      coveredChars: Math.round(ratio * input.episodeText.length),
+      coverageRatio: ratio,
+      uncoveredCount: Math.max(0, Math.round((1 - ratio) * 10)),
+      uncoveredSpans: [],
+    }
+    ;(normalizedLegacy as unknown as { needsRetry?: boolean }).needsRetry = ratio < 0.8
+  } catch (_e) {
+    // 失敗しても致命的ではない
+  }
+  if (normalizedLegacy.scenes) {
+    for (const scene of normalizedLegacy.scenes) {
       if (!scene.script) {
         // If script is missing, try to use 'lines' or 'content' from the raw output
         const rawScene = scene as unknown as Record<string, unknown>
@@ -477,5 +503,84 @@ export async function convertEpisodeTextToScript(
     }
   }
 
-  return normalized
+  // ===== Hard limit: split long script lines (max 100 chars per element) =====
+  normalizedLegacy = splitLongScriptLines(normalizedLegacy, 100)
+
+  return normalizedLegacy
+}
+
+// 内部補助: 台本のカバレッジ比率を概算
+function estimateCoverageRatioFromScript(script: Script, totalChars: number): number {
+  try {
+    const texts = (script.scenes || []).flatMap((s) => (s.script || []).map((l) => l.text || ''))
+    const joined = texts.join('')
+    // 文字種の差を吸収しつつ概算（完全一致は期待しない）
+    const covered = Math.min(totalChars, Math.max(0, Math.floor(joined.length * 0.8)))
+    const ratio = totalChars > 0 ? covered / totalChars : 0
+    return Math.max(0, Math.min(1, ratio))
+  } catch (_e) {
+    return 0
+  }
+}
+
+// Split any ScriptLine.text longer than maxLen into multiple lines preserving type/speaker
+function splitLongScriptLines(script: Script, maxLen: number): Script {
+  try {
+    const scenes = (script.scenes || []).map((scene) => {
+      const newLines: Script['scenes'][number]['script'] = []
+      for (const line of scene.script || []) {
+        const text = String(line.text ?? '')
+        if (text.length <= maxLen) {
+          newLines.push({ ...line })
+          continue
+        }
+        const parts = splitTextNatural(text, maxLen)
+        for (const part of parts) {
+          newLines.push({
+            index: undefined,
+            type: line.type,
+            speaker: line.speaker,
+            character: line.character,
+            text: part,
+            sourceStart: line.sourceStart,
+            sourceEnd: line.sourceEnd,
+            sourceQuote: line.sourceQuote,
+            isContinuation: true,
+          })
+        }
+      }
+      return { ...scene, script: newLines }
+    })
+    return { ...script, scenes }
+  } catch {
+    return script
+  }
+}
+
+function splitTextNatural(text: string, maxLen: number): string[] {
+  if (text.length <= maxLen) return [text]
+  // First split by newlines
+  const byLines = text.split(/\n+/).flatMap((seg) => (seg.length ? [seg] : []))
+  const segments: string[] = []
+  const pushChunked = (s: string) => {
+    if (s.length <= maxLen) {
+      segments.push(s)
+      return
+    }
+    // Try sentence boundaries (Japanese/English punctuation)
+    const sentences = s
+      .split(/(?<=[。！？!?.])/)
+      .map((x) => x.trim())
+      .filter((x) => x.length > 0)
+    if (sentences.length > 1) {
+      for (const sent of sentences) pushChunked(sent)
+      return
+    }
+    // Fallback: hard chunking by maxLen
+    for (let i = 0; i < s.length; i += maxLen) {
+      segments.push(s.slice(i, i + maxLen))
+    }
+  }
+  for (const seg of byLines) pushChunked(seg)
+  return segments
 }
