@@ -1,6 +1,6 @@
 // Centralized LLM configuration: providers, defaults, and per-use-case parameters
 
-export type LLMProvider = 'openai' | 'gemini' | 'groq' | 'openrouter' | 'cerebras' | 'fake'
+export type LLMProvider = 'openai' | 'gemini' | 'groq' | 'grok' | 'openrouter' | 'cerebras' | 'fake'
 
 export interface ProviderConfig {
   apiKey?: string
@@ -13,6 +13,34 @@ export interface ProviderConfig {
 }
 
 // Per-use-case parameters have been removed.
+
+// Use-case aware provider selection (centralized, configurable)
+export type LLMUseCase =
+  | 'scriptConversion'
+  | 'coverageJudge'
+  | 'textAnalysis'
+  | 'pageBreak'
+  | 'panelAssignment'
+
+// Mapping for use-case specific provider preferences.
+// NOTE: Do not hardcode in application code; change preferences here.
+const useCaseProviders: Partial<Record<LLMUseCase, LLMProvider>> = {
+  // 指示: スクリプト変換に高性能なLLMを使用
+  scriptConversion: 'openai',
+}
+
+export function getProviderForUseCase(useCase: LLMUseCase): LLMProvider {
+  // Optional environment override: LLM_PROVIDER_SCRIPTCONVERSION=openai 等
+  const envKey = `LLM_PROVIDER_${useCase.toUpperCase()}`
+  const envVal = process.env[envKey]
+  if (
+    envVal &&
+    ['openai', 'gemini', 'groq', 'grok', 'openrouter', 'cerebras', 'fake'].includes(envVal)
+  ) {
+    return envVal as LLMProvider
+  }
+  return useCaseProviders[useCase] ?? getDefaultProvider()
+}
 
 // Default provider (config-driven only; no environment variable overrides)
 export function getDefaultProvider(): LLMProvider {
@@ -42,21 +70,28 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
   gemini: {
     apiKey: process.env.GEMINI_API_KEY,
     model: 'gemini-2.5-flash-lite',
-    maxTokens: 4096,
+    maxTokens: 8192,
     timeout: 30_000,
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
-    model: 'gpt-5-nano', // gpt-5-nano は8月5日に登場したモデルです。モデル指定を間違えているわけではありません
+    model: 'gpt-5', // gpt-5-nano は8月5日に登場したモデルです。モデル指定を間違えているわけではありません
     maxTokens: 128000,
     timeout: 60_000,
   },
   groq: {
     apiKey: process.env.GROQ_API_KEY,
-    model: 'moonshotai/kimi-k2-instruct',
+    model: 'openai/gpt-oss-120b',
     // Script conversion token limit reduced to prevent generation failure
     maxTokens: 16000,
     timeout: 30_000,
+  },
+  grok: {
+    apiKey: process.env.XAI_API_KEY,
+    model: 'grok-4',
+    baseUrl: 'https://api.x.ai/v1',
+    maxTokens: 32768,
+    timeout: 60_000,
   },
   openrouter: {
     apiKey: process.env.OPENROUTER_API_KEY,
@@ -101,6 +136,8 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
         return process.env.OPENAI_API_KEY
       case 'groq':
         return process.env.GROQ_API_KEY
+      case 'grok':
+        return process.env.XAI_API_KEY
       case 'openrouter':
         return process.env.OPENROUTER_API_KEY
       case 'gemini':
@@ -121,6 +158,8 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
         return process.env.OPENAI_MODEL
       case 'groq':
         return process.env.GROQ_MODEL
+      case 'grok':
+        return process.env.GROK_MODEL
       case 'openrouter':
         return process.env.OPENROUTER_MODEL
       case 'gemini':
@@ -146,37 +185,14 @@ export type ModelLimits = {
   minCompletion: number
 }
 
-// 集中管理: モデルごとの出力上限や既定ソフト上限をここで定義
-export function getModelLimits(provider: string, model: string): ModelLimits {
-  // 既定値（環境で上書き可）
-  const _defaultSoftCap = toNum(process.env.GROQ_SOFT_CAP) ?? 60000
-  const defaultMin = toNum(process.env.GROQ_MIN_COMPLETION) ?? 512
+export function getModelLimits(provider: LLMProvider, _model: string): ModelLimits {
+  // Use the maxTokens from provider config as the limits
+  const config = providers[provider]
+  const maxTokens = config.maxTokens
 
-  if (provider === 'groq') {
-    // GPT-OSS 120B は理論上 65535
-    if (/gpt-oss-120b/i.test(model)) {
-      return {
-        hardCap: 65535,
-        softCapDefault: toNum(process.env.GROQ_SOFT_CAP) ?? 60000,
-        minCompletion: defaultMin,
-      }
-    }
-    // GPT-OSS 20B などその他Groqモデル
-    return {
-      hardCap: toNum(process.env.GROQ_MAX_TOKENS) ?? 8192,
-      softCapDefault: toNum(process.env.GROQ_SOFT_CAP) ?? 8192,
-      minCompletion: defaultMin,
-    }
-  }
   return {
-    hardCap: toNum(process.env.LLM_MAX_TOKENS) ?? Number.MAX_SAFE_INTEGER,
-    softCapDefault: toNum(process.env.LLM_SOFT_CAP) ?? 8192,
-    minCompletion: toNum(process.env.LLM_MIN_COMPLETION) ?? 512,
+    hardCap: maxTokens,
+    softCapDefault: maxTokens,
+    minCompletion: Math.min(96, maxTokens),
   }
-}
-
-function toNum(v: string | undefined): number | undefined {
-  if (!v) return undefined
-  const n = Number(v)
-  return Number.isFinite(n) && n > 0 ? n : undefined
 }

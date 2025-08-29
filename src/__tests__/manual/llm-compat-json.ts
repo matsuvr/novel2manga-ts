@@ -81,17 +81,6 @@ function getTextAnalysisConfig(): SimplePromptConfig {
     userPromptTemplate: prompts.userPromptTemplate,
   }
 }
-function getNarrativeAnalysisConfig(): SimplePromptConfig {
-  const prompts = appConfig.llm.narrativeArcAnalysis
-  const provider = resolveProvider()
-  const providerConfig = getLLMProviderConfig(provider)
-  return {
-    provider,
-    maxTokens: providerConfig.maxTokens,
-    systemPrompt: prompts.systemPrompt,
-    userPromptTemplate: prompts.userPromptTemplate,
-  }
-}
 function getScriptConversionConfig(): SimplePromptConfig {
   const prompts = (appConfig.llm as unknown as Record<string, any>).scriptConversion || {
     systemPrompt: '',
@@ -172,35 +161,6 @@ const TextAnalysisSchema = z
           index: z.number().optional(),
         }),
       )
-      .optional(),
-  })
-  .strict()
-  .or(z.record(z.any()))
-
-const NarrativeArcSchema = z
-  .object({
-    episodes: z
-      .array(
-        z.object({
-          id: z.string().optional(),
-          title: z.string().optional(),
-          summary: z.string().optional(),
-          startChunkIndex: z.number().optional(),
-          endChunkIndex: z.number().optional(),
-          keyEvents: z.array(z.string()).optional(),
-          characters: z.array(z.string()).optional(),
-          mood: z.string().optional(),
-          significance: z.string().optional(),
-          boundaryConfidence: z.string().optional(),
-        }),
-      )
-      .optional(),
-    overallArc: z
-      .object({
-        theme: z.string().optional(),
-        progression: z.string().optional(),
-        climaxLocation: z.string().optional(),
-      })
       .optional(),
   })
   .strict()
@@ -294,44 +254,6 @@ async function runTextAnalysis(): Promise<NamedResult> {
   }
 }
 
-async function runNarrativeArc(): Promise<NamedResult> {
-  const cfg = getNarrativeAnalysisConfig()
-  const prompt = cfg.userPromptTemplate
-    .replace('{{totalChars}}', '12000')
-    .replace('{{targetPages}}', '24')
-    .replace('{{minPages}}', '15')
-    .replace('{{maxPages}}', '30')
-    .replace('{{characterList}}', '- 太郎\n- 花子')
-    .replace('{{overallSummary}}', '少年は走り続け、やがて成長する。')
-    .replace('{{highlightsInfo}}', '- ラストで告白')
-    .replace('{{characterActions}}', '- 太郎は走る\n- 花子は笑う')
-    .replace('{{fullText}}', '長文テキスト...')
-
-  try {
-    const agent = new CompatAgent({
-      name: 'manual-narrative',
-      instructions: cfg.systemPrompt,
-      provider: cfg.provider,
-      maxTokens: cfg.maxTokens,
-    })
-    const obj = await agent.generateObject(NarrativeArcSchema, prompt)
-    return {
-      name: 'narrativeArc',
-      ok: true,
-      provider: cfg.provider,
-      preview: JSON.stringify(obj).slice(0, 200),
-      jsonOk: true,
-    }
-  } catch (e) {
-    return {
-      name: 'narrativeArc',
-      ok: false,
-      provider: cfg.provider,
-      error: (e as Error).message,
-    }
-  }
-}
-
 async function runScriptConversion(): Promise<NamedResult> {
   const cfg = getScriptConversionConfig()
   const prompt = (cfg.userPromptTemplate || 'Episode text: {{episodeText}}').replace(
@@ -411,7 +333,6 @@ async function main() {
 
   const results = [] as NamedResult[]
   results.push(await runTextAnalysis())
-  results.push(await runNarrativeArc())
   results.push(await runScriptConversion())
   results.push(await runPageBreakEstimation())
   console.log(JSON.stringify({ results }, null, 2))

@@ -4,13 +4,16 @@ import { getJobDetails } from '@/services/application/job-details'
 import { ValidationError } from '@/utils/api-error'
 import { ApiResponder } from '@/utils/api-responder'
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(
+  _request: NextRequest,
+  ctx: { params: { id: string } | Promise<{ id: string }> },
+) {
   try {
     const logger = getLogger().withContext({
       route: 'api/job/[id]',
       method: 'GET',
     })
-    const id = params.id
+    const { id } = await ctx.params
     if (!id) {
       throw new ValidationError('ジョブIDが指定されていません')
     }

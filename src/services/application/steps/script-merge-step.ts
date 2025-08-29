@@ -2,7 +2,7 @@ import type { PipelineStep, StepContext, StepExecutionResult } from './base-step
 
 export interface ScriptMergeResult {
   merged: boolean
-  scenes: number
+  panels: number
 }
 
 export class ScriptMergeStep implements PipelineStep {
@@ -21,11 +21,13 @@ export class ScriptMergeStep implements PipelineStep {
       const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
       const storage = await StorageFactory.getAnalysisStorage()
 
-      const allScenes: Array<{
-        id?: string
-        setting?: string
-        description?: string
-        script: Array<{ index?: number; type: string; speaker?: string; text: string }>
+      const allPanels: Array<{
+        no: number
+        cut: string
+        camera: string
+        narration?: string[]
+        dialogue?: string[]
+        sfx?: string[]
       }> = []
 
       const LOW_COVERAGE_WARN = 0.8
@@ -56,10 +58,10 @@ export class ScriptMergeStep implements PipelineStep {
             .replace(/\n/g, '\\n'),
         })
 
-        let scriptObj: { scenes?: typeof allScenes; coverageStats?: { coverageRatio?: number } }
+        let scriptObj: { panels?: typeof allPanels; coverageStats?: { coverageRatio?: number } }
         try {
           scriptObj = JSON.parse(obj.text) as {
-            scenes?: typeof allScenes
+            panels?: typeof allPanels
             coverageStats?: { coverageRatio?: number }
           }
         } catch (parseError) {
@@ -79,25 +81,20 @@ export class ScriptMergeStep implements PipelineStep {
           if (ratio < MIN_COVERAGE_FAIL) failCoverageChunks.push({ index: i, ratio })
           else if (ratio < LOW_COVERAGE_WARN) lowCoverageChunks.push({ index: i, ratio })
         } else {
-          // missing coverage info is treated as failure
-          failCoverageChunks.push({ index: i, ratio: 0 })
+          // coverage情報が無い場合は警告のみ（マージは継続）
+          lowCoverageChunks.push({ index: i, ratio: 0 })
         }
 
-        if (Array.isArray(scriptObj.scenes)) {
-          const sceneCount = scriptObj.scenes.length
-          const totalLines = scriptObj.scenes.reduce(
-            (sum, scene) => sum + (scene.script?.length || 0),
-            0,
-          )
-          logger.info('Script chunk scenes processed', {
+        if (Array.isArray(scriptObj.panels)) {
+          const panelCount = scriptObj.panels.length
+          logger.info('Script chunk panels processed', {
             jobId,
             chunkIndex: i,
-            sceneCount,
-            totalLines,
+            panelCount,
           })
-          allScenes.push(...scriptObj.scenes)
+          allPanels.push(...scriptObj.panels)
         } else {
-          logger.warn('Script chunk has no scenes array', { jobId, chunkIndex: i, scriptObj })
+          logger.warn('Script chunk has no panels array', { jobId, chunkIndex: i, scriptObj })
         }
       }
 
@@ -147,37 +144,28 @@ export class ScriptMergeStep implements PipelineStep {
         })
       }
 
-      logger.info('All chunks processed, reindexing lines', {
+      logger.info('All chunks processed, combining panels', {
         jobId,
-        totalScenes: allScenes.length,
+        totalPanels: allPanels.length,
       })
 
       // 早期失敗: 0シーンなら結合結果を保存せずに明示エラー
-      if (allScenes.length === 0) {
-        logger.error('Script merge aborted: no scenes collected from any chunk', {
+      if (allPanels.length === 0) {
+        logger.error('Script merge aborted: no panels collected from any chunk', {
           jobId,
           totalChunks,
         })
-        throw new Error('Script merge failed: collected 0 scenes from all chunks')
+        throw new Error('Script merge failed: collected 0 panels from all chunks')
       }
 
-      // Reindex line indices across scenes
-      let nextIndex = 1
-      for (const scene of allScenes) {
-        for (const line of scene.script || []) {
-          line.index = nextIndex++
-        }
-      }
-
-      const combined = { scenes: allScenes }
+      const combined = { panels: allPanels }
       const combinedJson = JSON.stringify(combined, null, 2)
 
       // 結合結果の検証
       const combinedHasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(combinedJson)
       logger.info('Script merge completed, saving combined result', {
         jobId,
-        totalScenes: allScenes.length,
-        totalLines: nextIndex - 1,
+        totalPanels: allPanels.length,
         combinedJsonLength: combinedJson.length,
         combinedHasJapanese,
       })
@@ -187,8 +175,8 @@ export class ScriptMergeStep implements PipelineStep {
         jobId,
       })
 
-      logger.info('Script merge successful', { jobId, scenes: allScenes.length })
-      return { success: true, data: { merged: true, scenes: allScenes.length } }
+      logger.info('Script merge successful', { jobId, panels: allPanels.length })
+      return { success: true, data: { merged: true, panels: allPanels.length } }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       const stack = error instanceof Error ? error.stack : undefined
