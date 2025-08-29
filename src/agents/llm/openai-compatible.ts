@@ -2,6 +2,7 @@ import type { z } from 'zod'
 import { getModelLimits } from '@/config/llm.config'
 import type { GenerateStructuredParams, LlmClient, OpenAICompatibleConfig } from './types'
 import { extractFirstJsonChunk, sanitizeLlmJsonResponse } from './utils'
+import { defaultBaseUrl } from './base-url'
 
 type ChatMessage = { role: 'system' | 'user'; content: string }
 
@@ -393,25 +394,7 @@ function extractTextFromResponse(data: unknown, useChat: boolean): string | null
   return typeof t === 'string' && t.trim().length > 0 ? t : null
 }
 
-function defaultBaseUrl(
-  provider: Extract<
-    import('./types').LlmProvider,
-    'openai' | 'groq' | 'grok' | 'openrouter' | 'gemini'
-  >,
-): string {
-  switch (provider) {
-    case 'groq':
-      return 'https://api.groq.com/openai/v1'
-    case 'grok':
-      return 'https://api.x.ai/v1'
-    case 'openrouter':
-      return 'https://openrouter.ai/api/v1'
-    case 'gemini':
-      return 'https://generativelanguage.googleapis.com/v1'
-    default:
-      return 'https://api.openai.com/v1'
-  }
-}
+// defaultBaseUrl は src/agents/llm/base-url.ts に集約
 
 async function safeReadText(res: Response): Promise<string> {
   try {
