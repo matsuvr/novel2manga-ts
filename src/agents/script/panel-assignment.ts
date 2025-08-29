@@ -9,6 +9,13 @@ export async function assignPanels(
 ): Promise<PanelAssignmentPlan> {
   // PageBreakV2からPanelAssignmentPlanに変換
   const pageMap = new Map<number, number[]>()
+  const totalScriptPanels = Array.isArray(_script?.panels) ? _script.panels.length : 0
+  const clampToScriptRange = (oneBasedIndex: number): number => {
+    if (totalScriptPanels <= 0) return Math.max(1, oneBasedIndex)
+    if (oneBasedIndex < 1) return 1
+    if (oneBasedIndex > totalScriptPanels) return totalScriptPanels
+    return oneBasedIndex
+  }
 
   for (const panel of pageBreaks.panels) {
     if (!pageMap.has(panel.pageNumber)) {
@@ -23,10 +30,14 @@ export async function assignPanels(
   const pages = Array.from(pageMap.entries()).map(([pageNumber, panelIndexes]) => ({
     pageNumber,
     panelCount: panelIndexes.length,
-    panels: panelIndexes.map((panelIndex) => ({
-      id: panelIndex,
-      scriptIndexes: [panelIndex - 1], // パネルインデックスをスクリプトインデックスとしてマッピング
-    })),
+    panels: panelIndexes.map((panelIndex) => {
+      const safeIndex = clampToScriptRange(panelIndex)
+      return {
+        id: panelIndex,
+        // 1-based のインデックスを維持。スクリプト範囲外はクランプして常に非空を保証
+        scriptIndexes: [safeIndex],
+      }
+    }),
   }))
 
   return { pages }

@@ -100,8 +100,7 @@
       "Bash(npx @biomejs/biome lint .)",
       "Bash(true)",
       "Bash(jq:*)"
-    ],
-    "additionalDirectories": ["G:\\g\\TsProjects"]
+    ]
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": ["cloudflare", "serena", "deepwiki"],
