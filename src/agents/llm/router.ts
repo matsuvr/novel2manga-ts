@@ -5,6 +5,7 @@ import {
 } from '../../config/llm.config'
 import { FakeLlmClient } from '../../llm/fake'
 import { CerebrasClient, type CerebrasClientConfig } from './cerebras'
+import { defaultBaseUrl } from './base-url'
 import { OpenAICompatibleClient } from './openai-compatible'
 import type { LlmClient, LlmProvider, OpenAICompatibleConfig } from './types'
 
@@ -91,17 +92,4 @@ function _requireConfigured<T>(value: T | undefined, label: string): T {
   return value
 }
 
-function defaultBaseUrl(provider: Exclude<LlmProvider, 'cerebras' | 'fake'>): string {
-  switch (provider) {
-    case 'groq':
-      return 'https://api.groq.com/openai/v1'
-    case 'grok':
-      return 'https://api.x.ai/v1'
-    case 'openrouter':
-      return 'https://openrouter.ai/api/v1'
-    case 'gemini':
-      return 'https://generativelanguage.googleapis.com/v1'
-    default:
-      return 'https://api.openai.com/v1'
-  }
-}
+// defaultBaseUrl は src/agents/llm/base-url.ts に集約

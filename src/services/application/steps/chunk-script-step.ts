@@ -110,20 +110,10 @@ export class ChunkScriptStep implements PipelineStep {
               const { getProviderForUseCase, getLLMProviderConfig } = await import(
                 '@/config/llm.config'
               )
+              const { resolveBaseUrl } = await import('@/agents/llm/base-url')
               const provider = getProviderForUseCase('scriptConversion')
               const provCfg = getLLMProviderConfig(provider)
-              const baseUrl =
-                provCfg.baseUrl && provCfg.baseUrl.trim().length > 0
-                  ? provCfg.baseUrl
-                  : provider === 'groq'
-                    ? 'https://api.groq.com/openai/v1'
-                    : provider === 'openrouter'
-                      ? 'https://openrouter.ai/api/v1'
-                      : provider === 'gemini'
-                        ? 'https://generativelanguage.googleapis.com/v1'
-                        : provider === 'openai'
-                          ? 'https://api.openai.com/v1'
-                          : 'unknown'
+              const baseUrl = resolveBaseUrl(provider, provCfg.baseUrl)
 
               const errorInfo = {
                 jobId,
