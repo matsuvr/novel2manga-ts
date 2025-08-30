@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { convertEpisodeTextToScript } from '@/agents/script/script-converter'
+import { convertChunkToMangaScript } from '@/agents/script/script-converter'
 import { ChunkScriptStep } from '@/services/application/steps/chunk-script-step'
 
 // Mock the script converter
 vi.mock('@/agents/script/script-converter', () => ({
-  convertEpisodeTextToScript: vi.fn(),
+  convertChunkToMangaScript: vi.fn(),
 }))
 
 // Mock the repositories
@@ -16,9 +16,8 @@ vi.mock('@/repositories', () => ({
 
 // Mock the storage utilities
 vi.mock('@/utils/storage', async (importOriginal) => {
-  const original = await importOriginal()
+  await importOriginal()
   return {
-    ...original,
     StorageFactory: {
       getAnalysisStorage: vi.fn(),
     },
@@ -37,10 +36,15 @@ describe('ChunkScriptStep - Analysis Integration', () => {
     get: ReturnType<typeof vi.fn>
     put: ReturnType<typeof vi.fn>
   }
-  let mockLogger: {
-    info: ReturnType<typeof vi.fn>
-    warn: ReturnType<typeof vi.fn>
-    error: ReturnType<typeof vi.fn>
+  let mockLogger: any
+  const mockPorts = {
+    novel: {} as any,
+    chunk: {} as any,
+    analysis: {} as any,
+    layout: {} as any,
+    episodeText: {} as any,
+    render: {} as any,
+    output: {} as any,
   }
 
   beforeEach(async () => {
@@ -57,26 +61,49 @@ describe('ChunkScriptStep - Analysis Integration', () => {
       info: vi.fn(),
       warn: vi.fn(),
       error: vi.fn(),
+      debug: vi.fn(),
+      withContext: vi.fn().mockReturnThis(),
     }
 
     // Setup storage mocks
     const storageModule = await import('@/utils/storage')
-    vi.mocked(storageModule.StorageFactory.getAnalysisStorage).mockResolvedValue(mockStorage)
+    vi.mocked(storageModule.StorageFactory.getAnalysisStorage).mockResolvedValue(mockStorage as any)
     vi.mocked(storageModule.JsonStorageKeys.scriptChunk).mockReturnValue(
       'job-1/script_chunk_0.json',
     )
     vi.mocked(storageModule.StorageKeys.chunkAnalysis).mockReturnValue('job-1/chunk_0.json')
 
     // Setup script converter mock
-    vi.mocked(convertEpisodeTextToScript).mockResolvedValue({
-      title: 'Test Episode',
-      scenes: [
+    vi.mocked(convertChunkToMangaScript).mockResolvedValue({
+      style_tone: 'テスト用トーン',
+      style_art: 'テスト用アート',
+      style_sfx: 'テスト用効果音',
+      characters: [
         {
-          id: '1',
-          setting: 'Test setting',
-          script: [{ type: 'narration', text: 'Test narration' }],
+          id: 'char_1',
+          name_ja: 'テストキャラ',
+          role: 'protagonist',
+          speech_style: 'カジュアル',
+          aliases: ['テスト'],
         },
       ],
+      locations: [
+        {
+          id: 'loc_1',
+          name_ja: 'テスト場所',
+          notes: 'テスト用場所',
+        },
+      ],
+      props: [],
+      panels: [
+        {
+          no: 1,
+          cut: 'テストシーン説明',
+          camera: 'medium',
+          dialogue: [],
+        },
+      ],
+      continuity_checks: [],
     })
   })
 
@@ -107,37 +134,43 @@ describe('ChunkScriptStep - Analysis Integration', () => {
     mockStorage.get.mockResolvedValue(mockAnalysisData)
 
     // Execute
-    const result = await chunkScriptStep.convertChunksToScripts(chunks, context)
+    const result = await chunkScriptStep.convertChunksToScripts(chunks, {
+      ...context,
+      novelId: 'n1',
+      ports: mockPorts as any,
+    })
 
     // Verify result
     expect(result.success).toBe(true)
-    expect(result.data?.completed).toBe(true)
-    expect(result.data?.chunkCount).toBe(1)
+    if (result.success) {
+      expect(result.data.completed).toBe(true)
+      expect(result.data.chunkCount).toBe(1)
+    }
 
     // Verify that analysis data was passed correctly
-    expect(convertEpisodeTextToScript).toHaveBeenCalledWith(
-      {
-        episodeText: 'Test chunk content with character dialogue.',
-        characterList: 'Alice: The protagonist, Bob: Supporting character',
-        sceneList: 'Park (12:00): Sunny day in the park',
-        dialogueList: 'Alice: "Hello Bob!"',
-        highlightList: 'emotion (importance: 9): Alice shows excitement',
-        situationList: 'Characters meet for the first time',
-      },
-      { jobId, episodeNumber: 1, useFragmentConversion: false },
+    expect(convertChunkToMangaScript).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chunkText: 'Test chunk content with character dialogue.',
+        chunkIndex: 1,
+        chunksNumber: 1,
+        charactersList: expect.any(String),
+        scenesList: expect.any(String),
+        dialoguesList: expect.any(String),
+        highlightLists: expect.any(String),
+        situations: expect.any(String),
+      }),
+      { jobId, isDemo: undefined },
     )
 
     // Verify logging
     expect(mockLogger.info).toHaveBeenCalledWith(
-      'Converting chunk to script with analysis data',
+      'Converting chunk to manga script',
       expect.objectContaining({
         jobId,
         chunkIndex: 0,
-        hasCharacters: true,
-        hasScenes: true,
-        hasDialogues: true,
-        hasHighlights: true,
-        hasSituations: true,
+        hasAnalysis: true,
+        totalChunks: 1,
+        textLength: expect.any(Number),
       }),
     )
   })
@@ -151,22 +184,28 @@ describe('ChunkScriptStep - Analysis Integration', () => {
     mockStorage.get.mockResolvedValue(null)
 
     // Execute
-    const result = await chunkScriptStep.convertChunksToScripts(chunks, context)
+    const result = await chunkScriptStep.convertChunksToScripts(chunks, {
+      ...context,
+      novelId: 'n1',
+      ports: mockPorts as any,
+    })
 
     // Verify result
     expect(result.success).toBe(true)
 
-    // Verify that convertEpisodeTextToScript was called with minimal data
-    expect(convertEpisodeTextToScript).toHaveBeenCalledWith(
-      {
-        episodeText: 'Test chunk without analysis.',
-      },
-      { jobId, episodeNumber: 1, useFragmentConversion: false },
+    // Verify that convertChunkToMangaScript was called with minimal data
+    expect(convertChunkToMangaScript).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chunkText: 'Test chunk without analysis.',
+        chunkIndex: 1,
+        chunksNumber: 1,
+      }),
+      { jobId, isDemo: undefined },
     )
 
-    // Verify warning was logged
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      'Analysis data not found for chunk, proceeding without it',
+    // Verify info was logged about no analysis data
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      'Analysis data not found for chunk',
       expect.objectContaining({
         jobId,
         chunkIndex: 0,
@@ -183,25 +222,32 @@ describe('ChunkScriptStep - Analysis Integration', () => {
     mockStorage.get.mockResolvedValue({ text: 'invalid json{' })
 
     // Execute
-    const result = await chunkScriptStep.convertChunksToScripts(chunks, context)
+    const result = await chunkScriptStep.convertChunksToScripts(chunks, {
+      ...context,
+      novelId: 'n1',
+      ports: mockPorts as any,
+    })
 
     // Verify result
     expect(result.success).toBe(true)
 
-    // Verify that convertEpisodeTextToScript was called with minimal data
-    expect(convertEpisodeTextToScript).toHaveBeenCalledWith(
-      {
-        episodeText: 'Test chunk with corrupted analysis.',
-      },
-      { jobId, episodeNumber: 1, useFragmentConversion: false },
+    // Verify that convertChunkToMangaScript was called with minimal data
+    expect(convertChunkToMangaScript).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chunkText: 'Test chunk with corrupted analysis.',
+        chunkIndex: 1,
+        chunksNumber: 1,
+      }),
+      { jobId, isDemo: undefined },
     )
 
     // Verify warning was logged
     expect(mockLogger.warn).toHaveBeenCalledWith(
-      'Failed to read or parse chunk analysis, proceeding without it',
+      'Failed to read chunk analysis',
       expect.objectContaining({
         jobId,
         chunkIndex: 0,
+        error: expect.any(String),
       }),
     )
   })

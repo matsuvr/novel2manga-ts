@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 // Since normalizePageBreakResult is not exported, we need to access it through the module
 // that uses it. We'll import estimatePageBreaks and test the normalization via demo mode
 import { estimatePageBreaks } from '@/agents/script/page-break-estimator'
-import type { PageBreakPlan } from '@/types/script'
+import type { PageBreakV2 } from '@/types/script'
 
 describe('Page Break Result Normalization', () => {
   const demoScript = {
@@ -18,24 +18,26 @@ describe('Page Break Result Normalization', () => {
   }
 
   describe('estimatePageBreaks in demo mode', () => {
-    it('returns consistent PageBreakPlan structure in demo mode', async () => {
+    it('returns consistent PageBreakV2 structure in demo mode', async () => {
       const result = await estimatePageBreaks(demoScript, { isDemo: true })
 
       expect(result).toMatchObject({
-        pages: expect.arrayContaining([
+        panels: expect.arrayContaining([
           expect.objectContaining({
             pageNumber: expect.any(Number),
-            panelCount: expect.any(Number),
-            panels: expect.any(Array),
+            panelIndex: expect.any(Number),
+            content: expect.any(String),
+            dialogue: expect.any(Array),
           }),
         ]),
       })
 
-      // Check that pages are properly numbered starting from 1
-      expect(result.pages).toHaveLength(1)
-      expect(result.pages[0].pageNumber).toBe(1)
-      expect(result.pages[0].panelCount).toBe(3)
-      expect(result.pages[0].panels).toHaveLength(3)
+      // Check that panels are properly structured
+      expect(result.panels).toHaveLength(3)
+      expect(result.panels[0].pageNumber).toBe(1)
+      expect(result.panels[0].panelIndex).toBe(1)
+      expect(result.panels[1].panelIndex).toBe(2)
+      expect(result.panels[2].panelIndex).toBe(3)
     })
 
     it('handles demo mode with minimal script structure', async () => {
@@ -43,111 +45,106 @@ describe('Page Break Result Normalization', () => {
       const result = await estimatePageBreaks(minimalScript, { isDemo: true })
 
       expect(result).toMatchObject({
-        pages: expect.arrayContaining([
+        panels: expect.arrayContaining([
           expect.objectContaining({
-            pageNumber: 1,
-            panelCount: 3,
-            panels: expect.any(Array),
+            pageNumber: expect.any(Number),
+            panelIndex: expect.any(Number),
+            content: expect.any(String),
           }),
         ]),
       })
+
+      // Should still have 3 demo panels
+      expect(result.panels).toHaveLength(3)
     })
   })
 
-  // Since we can't directly test the private normalizePageBreakResult function,
-  // we'll create integration tests that verify the expected behavior patterns
-  describe('PageBreakPlan structure validation', () => {
-    it('validates expected PageBreakPlan structure', () => {
-      const validPlan: PageBreakPlan = {
-        pages: [
+  // Test PageBreakV2 structure validation
+  describe('PageBreakV2 structure validation', () => {
+    it('validates expected PageBreakV2 structure', () => {
+      const validPlan: PageBreakV2 = {
+        panels: [
           {
             pageNumber: 1,
-            panelCount: 2,
-            panels: [
-              {
-                panelIndex: 1,
-                content: 'Panel 1 content',
-                dialogue: [{ speaker: 'Speaker', text: 'Hello' }],
-              },
-              {
-                panelIndex: 2,
-                content: 'Panel 2 content',
-                dialogue: [],
-              },
-            ],
+            panelIndex: 1,
+            content: 'Panel 1 content',
+            dialogue: [{ speaker: 'Speaker', text: 'Hello' }],
+          },
+          {
+            pageNumber: 1,
+            panelIndex: 2,
+            content: 'Panel 2 content',
+            dialogue: [],
           },
         ],
       }
 
-      expect(validPlan.pages).toHaveLength(1)
-      expect(validPlan.pages[0].pageNumber).toBe(1)
-      expect(validPlan.pages[0].panels).toHaveLength(2)
-      expect(validPlan.pages[0].panels[0].panelIndex).toBe(1)
-      expect(validPlan.pages[0].panels[1].panelIndex).toBe(2)
+      expect(validPlan.panels).toHaveLength(2)
+      expect(validPlan.panels[0].pageNumber).toBe(1)
+      expect(validPlan.panels[0].panelIndex).toBe(1)
+      expect(validPlan.panels[1].panelIndex).toBe(2)
     })
 
     it('validates page numbering consistency', () => {
-      const multiPagePlan: PageBreakPlan = {
-        pages: [
+      const multiPagePlan: PageBreakV2 = {
+        panels: [
           {
             pageNumber: 1,
-            panelCount: 1,
-            panels: [
-              {
-                panelIndex: 1,
-                content: 'Page 1 content',
-                dialogue: [],
-              },
-            ],
+            panelIndex: 1,
+            content: 'Page 1 content',
+            dialogue: [],
           },
           {
             pageNumber: 2,
-            panelCount: 1,
-            panels: [
-              {
-                panelIndex: 1,
-                content: 'Page 2 content',
-                dialogue: [],
-              },
-            ],
+            panelIndex: 1,
+            content: 'Page 2 content',
+            dialogue: [],
           },
         ],
       }
 
-      // Verify sequential page numbering
-      expect(multiPagePlan.pages[0].pageNumber).toBe(1)
-      expect(multiPagePlan.pages[1].pageNumber).toBe(2)
+      // Verify page numbering in panels
+      expect(multiPagePlan.panels[0].pageNumber).toBe(1)
+      expect(multiPagePlan.panels[1].pageNumber).toBe(2)
     })
 
-    it('handles empty pages gracefully', () => {
-      const emptyPlan: PageBreakPlan = { pages: [] }
-      expect(emptyPlan.pages).toHaveLength(0)
+    it('handles empty panels gracefully', () => {
+      const emptyPlan: PageBreakV2 = { panels: [] }
+      expect(emptyPlan.panels).toHaveLength(0)
     })
   })
 
   describe('Normalization behavior patterns', () => {
     it('should handle various input formats through the public API', async () => {
-      // Test with empty script to see how normalization handles edge cases
+      // Test with empty script to see how demo mode handles edge cases
       const emptyScript = { scenes: [] }
       const result = await estimatePageBreaks(emptyScript, { isDemo: true })
 
       // The demo mode should still provide a valid structure
       expect(result).toBeDefined()
-      expect(result.pages).toBeDefined()
-      expect(Array.isArray(result.pages)).toBe(true)
+      expect(result.panels).toBeDefined()
+      expect(Array.isArray(result.panels)).toBe(true)
     })
 
     it('maintains panel consistency', async () => {
       const result = await estimatePageBreaks(demoScript, { isDemo: true })
 
-      for (const page of result.pages) {
-        // Each page should have a consistent panel structure
-        expect(page.panelCount).toBe(page.panels.length)
+      // Panel indices should be sequential starting from 1 within each page
+      let currentPageNumber = 1
+      let expectedPanelIndex = 1
 
-        // Panel indices should be sequential starting from 1
-        for (let i = 0; i < page.panels.length; i++) {
-          expect(page.panels[i].panelIndex).toBe(i + 1)
+      for (const panel of result.panels) {
+        expect(panel.pageNumber).toBeGreaterThanOrEqual(1)
+        expect(panel.panelIndex).toBeGreaterThanOrEqual(1)
+
+        // If we moved to a new page, reset panel index
+        if (panel.pageNumber !== currentPageNumber) {
+          currentPageNumber = panel.pageNumber
+          expectedPanelIndex = 1
         }
+
+        expect(panel.panelIndex).toBe(expectedPanelIndex)
+        expectedPanelIndex++
       }
     })
   })

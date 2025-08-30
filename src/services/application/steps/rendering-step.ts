@@ -1,5 +1,5 @@
 import { getStoragePorts } from '@/infrastructure/storage/ports'
-import type { PageBreakPlan } from '@/types/script'
+import type { PageBreakV2 } from '@/types/script'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface RenderingOptions {
@@ -99,7 +99,7 @@ export class RenderingStep implements PipelineStep {
                 renderer.cleanup()
               }
             } else {
-              const pageBreakPlan: PageBreakPlan = parsed
+              const pageBreakPlan: PageBreakV2 = parsed
               const { renderFromPageBreakPlan } = await import('@/services/application/render')
               await renderFromPageBreakPlan(jobId, ep, pageBreakPlan, ports, {
                 skipExisting: false,

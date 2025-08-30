@@ -1,6 +1,6 @@
 import type { z } from 'zod'
 
-export type LlmProvider = 'openai' | 'groq' | 'openrouter' | 'cerebras' | 'gemini' | 'fake'
+export type LlmProvider = 'openai' | 'groq' | 'grok' | 'openrouter' | 'cerebras' | 'gemini' | 'fake'
 
 export interface StructuredOutputSpec<T> {
   schema: z.ZodType<T>
@@ -30,7 +30,7 @@ export interface OpenAICompatibleConfig {
   baseUrl?: string
   apiKey: string
   model: string
-  provider: Extract<LlmProvider, 'openai' | 'groq' | 'openrouter' | 'gemini'>
+  provider: Extract<LlmProvider, 'openai' | 'groq' | 'grok' | 'openrouter' | 'gemini'>
   useChatCompletions?: boolean
 }
 
