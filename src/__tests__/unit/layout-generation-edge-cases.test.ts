@@ -11,20 +11,35 @@ import { generateEpisodeLayout } from '@/services/application/layout-generation'
 // Mock LLM modules to avoid API key requirements
 vi.mock('@/agents/script/script-converter', () => ({
   convertEpisodeTextToScript: vi.fn().mockResolvedValue({
-    title: 'Test Script',
-    scenes: [
+    style_tone: 'テストトーン',
+    style_art: 'テストアート',
+    style_sfx: 'テスト効果音',
+    characters: [
       {
-        id: 'scene1',
-        description: 'Mock scene',
-        script: [
-          {
-            index: 0,
-            type: 'stage',
-            text: 'Mock script line for testing',
-          },
-        ],
+        id: 'char_1',
+        name_ja: 'テストキャラ',
+        role: 'protagonist',
+        speech_style: 'カジュアル',
+        aliases: ['テスト'],
       },
     ],
+    locations: [
+      {
+        id: 'loc_1',
+        name_ja: 'テスト場所',
+        notes: 'テスト用場所',
+      },
+    ],
+    props: [],
+    panels: [
+      {
+        no: 1,
+        cut: 'Mock script line for testing',
+        camera: 'medium',
+        dialogue: [],
+      },
+    ],
+    continuity_checks: [],
   }),
 }))
 
@@ -36,11 +51,12 @@ vi.mock('@/agents/structured-generator', () => ({
 
 vi.mock('@/agents/script/page-break-estimator', () => ({
   estimatePageBreaks: vi.fn().mockResolvedValue({
-    pages: [
+    panels: [
       {
         pageNumber: 1,
-        startIndex: 0,
-        endIndex: 0,
+        panelIndex: 1,
+        content: 'Mock panel content',
+        dialogue: [],
       },
     ],
   }),
@@ -100,8 +116,8 @@ vi.mock('@/agents/script/panel-assignment', () => ({
   buildLayoutFromPageBreaks: vi.fn().mockImplementation((pageBreaks, episodeMeta) => {
     if (
       mockPanelAssignmentBehavior === 'empty' ||
-      !pageBreaks?.pages ||
-      pageBreaks.pages.length === 0
+      !pageBreaks?.panels ||
+      pageBreaks.panels.length === 0
     ) {
       return {
         title: episodeMeta.title || 'Test Episode',
@@ -213,16 +229,12 @@ const mockLogger: LoggerPort = {
 // Mock storage ports with race condition simulation
 const createMockStoragePorts = (simulateFailures = false): StoragePorts => ({
   novel: {
-    getNovel: vi.fn().mockResolvedValue({ text: 'test novel content' }),
-    putNovel: vi.fn(),
-    deleteNovel: vi.fn(),
-    listNovels: vi.fn(),
+    getNovelText: vi.fn().mockResolvedValue({ text: 'test novel content' }),
+    putNovelText: vi.fn(),
   },
   chunk: {
     getChunk: vi.fn().mockResolvedValue({ text: 'test chunk content' }),
     putChunk: vi.fn(),
-    deleteChunk: vi.fn(),
-    listChunks: vi.fn(),
   },
   analysis: {
     getAnalysis: vi.fn().mockResolvedValue({
@@ -237,39 +249,36 @@ const createMockStoragePorts = (simulateFailures = false): StoragePorts => ({
       }),
     }),
     putAnalysis: vi.fn(),
-    deleteAnalysis: vi.fn(),
-    listAnalyses: vi.fn(),
   },
   layout: {
     getEpisodeLayout: vi.fn().mockResolvedValue(''),
-    putEpisodeLayout: vi.fn().mockImplementation(async (jobId, episodeNumber, content) => {
+    putEpisodeLayout: vi.fn().mockImplementation(async (_jobId, _episodeNumber, _content) => {
       if (simulateFailures) {
         throw new Error('Simulated storage failure')
       }
     }),
-    deleteEpisodeLayout: vi.fn(),
     getEpisodeLayoutProgress: vi.fn().mockResolvedValue(''),
     putEpisodeLayoutProgress: vi
       .fn()
-      .mockImplementation(async (keyOrJobId, episodeNumberOrContent, content) => {
+      .mockImplementation(async (_jobId, _episodeNumber, _content) => {
         if (simulateFailures) {
           throw new Error('Simulated progress storage failure')
         }
       }),
-    deleteEpisodeLayoutProgress: vi.fn(),
-    listLayouts: vi.fn(),
+  },
+  episodeText: {
+    putEpisodeText: vi.fn(),
+    getEpisodeText: vi.fn().mockResolvedValue(''),
   },
   render: {
-    getImage: vi.fn(),
-    putImage: vi.fn(),
-    deleteImage: vi.fn(),
-    listImages: vi.fn(),
+    putPageRender: vi.fn(),
+    putPageThumbnail: vi.fn(),
+    getPageRender: vi.fn(),
   },
   output: {
-    getOutput: vi.fn(),
-    putOutput: vi.fn(),
-    deleteOutput: vi.fn(),
-    listOutputs: vi.fn(),
+    putExport: vi.fn(),
+    getExport: vi.fn(),
+    deleteExport: vi.fn(),
   },
 })
 
@@ -327,7 +336,7 @@ function createMockPlanNextBatch() {
   let planCallCount = 0
   let allowProgress = false
 
-  const mockFn = vi.fn().mockImplementation(async (episodeData, options) => {
+  const impl = async (episodeData: any, options: any) => {
     planCallCount++
     // console.log(`[DEBUG] mockPlanNextBatch call ${planCallCount}, allowProgress: ${allowProgress}, startPage: ${options?.startPage}`)
 
@@ -380,20 +389,22 @@ function createMockPlanNextBatch() {
       mayAdjustPreviousPages: false,
       remainingPagesEstimate: 5, // Still have remaining pages
     }
-  })
-
-  // Expose control methods
-  mockFn.setAllowProgress = (value: boolean) => {
-    allowProgress = value
-  }
-  mockFn.resetCallCount = () => {
-    planCallCount = 0
   }
 
-  return mockFn
+  const fn: any = vi.fn((episodeData: any, options: any) => impl(episodeData, options))
+  fn.__controls = {
+    setAllowProgress: (value: boolean) => {
+      allowProgress = value
+    },
+    resetCallCount: () => {
+      planCallCount = 0
+    },
+  }
+
+  return fn
 }
 
-const mockPlanNextBatch = createMockPlanNextBatch()
+const mockPlanNextBatch: any = createMockPlanNextBatch()
 
 vi.mock('@/agents/page-splitter', () => ({
   PageSplitAgent: vi.fn().mockImplementation(() => ({
@@ -404,7 +415,7 @@ vi.mock('@/agents/page-splitter', () => ({
 // Mock layout generator
 let mockGenerateMangaLayoutForPlan = vi.fn().mockImplementation(async (episodeData, plan) => {
   // Return layouts based on the plan
-  const pages = plan.plannedPages.map((plannedPage) => ({
+  const pages = plan.plannedPages.map((plannedPage: any) => ({
     page_number: plannedPage.pageNumber,
     panels: Array.from({ length: 4 }, (_, i) => ({
       position: { x: (i % 2) * 0.5, y: Math.floor(i / 2) * 0.5 },
@@ -429,8 +440,8 @@ vi.mock('@/utils/layout-normalizer', () => ({
 describe('Layout Generation Edge Cases', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockPlanNextBatch.resetCallCount()
-    mockPlanNextBatch.setAllowProgress(false)
+    ;(mockPlanNextBatch as any).__controls.resetCallCount()
+    ;(mockPlanNextBatch as any).__controls.setAllowProgress(false)
     mockPanelAssignmentBehavior = 'success'
   })
 
@@ -524,7 +535,16 @@ describe('Layout Generation Edge Cases', () => {
     it('should validate script conversion produces valid results', async () => {
       // Mock script converter to return empty script
       const { convertEpisodeTextToScript } = await import('@/agents/script/script-converter')
-      vi.mocked(convertEpisodeTextToScript).mockResolvedValueOnce({ script: [] })
+      vi.mocked(convertEpisodeTextToScript).mockResolvedValueOnce({
+        style_tone: 'x',
+        style_art: 'y',
+        style_sfx: 'z',
+        characters: [],
+        locations: [],
+        props: [],
+        panels: [],
+        continuity_checks: [],
+      } as any)
 
       const mockPorts = createMockStoragePorts(false)
 

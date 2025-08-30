@@ -20,6 +20,12 @@ export class EpisodeBundlingStep implements PipelineStep {
       const layoutStorage = await StorageFactory.getLayoutStorage()
       const full = await layoutStorage.get(JsonStorageKeys.fullPages(jobId))
       if (!full) {
+        logger.error('Missing full_pages.json file - page-break step may have failed', {
+          jobId,
+          expectedPath: JsonStorageKeys.fullPages(jobId),
+          suggestion:
+            'Ensure PageBreakStep.estimatePageBreaks() completes successfully before episode bundling',
+        })
         throw new Error('full_pages.json not found; ensure page-break step saved it')
       }
       const fullLayout = JSON.parse(full.text) as {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CompatAgent } from '@/agents/compat'
 import {
-  getNarrativeAnalysisConfig,
   getPageBreakEstimationConfig,
   getScriptConversionConfig,
   getTextAnalysisConfig,
@@ -39,31 +38,6 @@ describe('LLM prompt wiring (temporary)', () => {
     expect(out.length).toBeGreaterThan(0)
   })
 
-  it('narrativeArcAnalysis prompt/systemPrompt が展開され、エージェントが実行できる', async () => {
-    const cfg = getNarrativeAnalysisConfig()
-    const prompt = cfg.userPromptTemplate
-      .replace('{{totalChars}}', '12000')
-      .replace('{{characterList}}', '- 太郎\n- 花子')
-      .replace('{{overallSummary}}', '全体の要約テキスト')
-      .replace('{{highlightsInfo}}', '- クライマックス')
-      .replace('{{characterActions}}', '- 太郎は走る')
-      .replace('{{fullText}}', '長文テキスト...')
-
-    assertNoPlaceholders(prompt)
-    assertNoPlaceholders(cfg.systemPrompt)
-
-    const agent = new CompatAgent({
-      name: 'prompt-wire-narrative',
-      instructions: cfg.systemPrompt,
-      provider: 'fake',
-      maxTokens: cfg.maxTokens,
-    })
-
-    const out = await agent.generateText(prompt)
-    expect(out).toBeTypeOf('string')
-    expect(out.length).toBeGreaterThan(0)
-  })
-
   it('scriptConversion prompt/systemPrompt が展開され、エージェントが実行できる', async () => {
     const cfg = getScriptConversionConfig()
     let prompt = cfg.userPromptTemplate || ''
@@ -71,32 +45,29 @@ describe('LLM prompt wiring (temporary)', () => {
 
     // Replace all placeholders in userPromptTemplate (use global replace for multiple occurrences)
     prompt = prompt
-      .replace(/\{\{episodeText\}\}/g, '太郎は走った。花子は笑った。')
+      .replace(/\{\{chunksNumber\}\}/g, '5')
       .replace(/\{\{chunkIndex\}\}/g, '1')
-      .replace(/\{\{totalChunks\}\}/g, '1')
-      .replace(/\{\{previousFragment\}\}/g, '')
-      .replace(/\{\{nextFragment\}\}/g, '')
-      .replace(/\{\{characterList\}\}/g, '太郎（主人公）、花子（ヒロイン）')
-      .replace(/\{\{sceneList\}\}/g, '公園、学校')
-      .replace(/\{\{dialogueList\}\}/g, '「行くぞ！」「待って！」')
-      .replace(/\{\{highlightList\}\}/g, 'クライマックス')
-      .replace(/\{\{situationList\}\}/g, '雨の中を走る')
-      // Fix the malformed placeholder in the template
-      .replace(/\{\{episodeTextの0\.\.40\}\}/g, '太郎は走った。花子は笑った。')
+      .replace(/\{\{previousText\}\}/g, '前のチャンクテキスト')
+      .replace(/\{\{chunkText\}\}/g, '太郎は走った。花子は笑った。')
+      .replace(/\{\{nextChunk\}\}/g, '次のチャンクテキスト')
+      .replace(/\{\{charactersList\}\}/g, '太郎（主人公）、花子（ヒロイン）')
+      .replace(/\{\{scenesList\}\}/g, '公園、学校')
+      .replace(/\{\{dialoguesList\}\}/g, '「行くぞ！」「待って！」')
+      .replace(/\{\{highlightLists\}\}/g, 'クライマックス')
+      .replace(/\{\{situations\}\}/g, '雨の中を走る')
 
     // Replace any placeholders in systemPrompt as well
     systemPrompt = systemPrompt
-      .replace('{{episodeText}}', '太郎は走った。花子は笑った。')
+      .replace('{{chunksNumber}}', '5')
       .replace('{{chunkIndex}}', '1')
-      .replace('{{totalChunks}}', '1')
-      .replace('{{previousFragment}}', '')
-      .replace('{{nextFragment}}', '')
-      .replace('{{characterList}}', '太郎（主人公）、花子（ヒロイン）')
-      .replace('{{sceneList}}', '公園、学校')
-      .replace('{{dialogueList}}', '「行くぞ！」「待って！」')
-      .replace('{{highlightList}}', 'クライマックス')
-      .replace('{{situationList}}', '雨の中を走る')
-      .replace('{{episodeTextの0..40}}', '太郎は走った。花子は笑った。')
+      .replace('{{previousText}}', '前のチャンクテキスト')
+      .replace('{{chunkText}}', '太郎は走った。花子は笑った。')
+      .replace('{{nextChunk}}', '次のチャンクテキスト')
+      .replace('{{charactersList}}', '太郎（主人公）、花子（ヒロイン）')
+      .replace('{{scenesList}}', '公園、学校')
+      .replace('{{dialoguesList}}', '「行くぞ！」「待って！」')
+      .replace('{{highlightLists}}', 'クライマックス')
+      .replace('{{situations}}', '雨の中を走る')
 
     // Debug: log any remaining placeholders
     if (prompt.includes('{{') || prompt.includes('}}')) {

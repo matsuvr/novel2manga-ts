@@ -1,5 +1,6 @@
-import { convertEpisodeTextToScript } from '@/agents/script/script-converter'
+import { convertChunkToMangaScript } from '@/agents/script/script-converter'
 import { getJobRepository } from '@/repositories'
+import type { NewMangaScript } from '@/types/script'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface ChunkScriptResult {
@@ -17,54 +18,31 @@ export class ChunkScriptStep implements PipelineStep {
     const { jobId, logger } = context
     const jobRepo = getJobRepository()
     try {
-      const { StorageFactory, JsonStorageKeys, StorageKeys } = await import('@/utils/storage')
+      const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
       const storage = await StorageFactory.getAnalysisStorage()
 
       const maxConcurrent = Math.max(1, Math.min(3, chunks.length))
       const indices = Array.from({ length: chunks.length }, (_, i) => i)
 
-      // Helper function to read and format analysis data
+      // Helper function to read and format analysis data for new prompt format
       const readChunkAnalysis = async (
         chunkIndex: number,
       ): Promise<{
-        characterList?: string
-        sceneList?: string
-        dialogueList?: string
-        highlightList?: string
-        situationList?: string
+        charactersList?: string
+        scenesList?: string
+        dialoguesList?: string
+        highlightLists?: string
+        situations?: string
       }> => {
-        // Type definitions for analysis data
-        interface AnalysisCharacter {
-          name: string
-          description?: string
-        }
-        interface AnalysisScene {
-          location: string
-          time?: string
-          description?: string
-        }
-        interface AnalysisDialogue {
-          speaker: string
-          text?: string
-          content?: string
-        }
-        interface AnalysisHighlight {
-          type: string
-          importance: number
-          description: string
-        }
-        interface AnalysisSituation {
-          description: string
-        }
         try {
+          const { StorageKeys } = await import('@/utils/storage')
           const analysisKey = StorageKeys.chunkAnalysis(jobId, chunkIndex)
           const analysisData = await storage.get(analysisKey)
 
           if (!analysisData) {
-            logger.warn('Analysis data not found for chunk, proceeding without it', {
+            logger.info('Analysis data not found for chunk', {
               jobId,
               chunkIndex,
-              analysisKey,
             })
             return {}
           }
@@ -72,66 +50,15 @@ export class ChunkScriptStep implements PipelineStep {
           const parsed = JSON.parse(analysisData.text)
           const analysis = parsed.analysis || {}
 
-          // Format analysis data for LLM consumption
-          const formatCharacters = (chars: unknown[]) =>
-            Array.isArray(chars) && chars.length > 0
-              ? chars
-                  .map((c) => {
-                    const char = c as AnalysisCharacter
-                    return `${char.name}: ${char.description || 'character'}`
-                  })
-                  .join(', ')
-              : undefined
-
-          const formatScenes = (scenes: unknown[]) =>
-            Array.isArray(scenes) && scenes.length > 0
-              ? scenes
-                  .map((s) => {
-                    const scene = s as AnalysisScene
-                    return `${scene.location}${scene.time ? ` (${scene.time})` : ''}: ${scene.description || ''}`
-                  })
-                  .join('; ')
-              : undefined
-
-          const formatDialogues = (dialogues: unknown[]) =>
-            Array.isArray(dialogues) && dialogues.length > 0
-              ? dialogues
-                  .map((d) => {
-                    const dialogue = d as AnalysisDialogue
-                    return `${dialogue.speaker}: "${dialogue.text || dialogue.content}"`
-                  })
-                  .join('; ')
-              : undefined
-
-          const formatHighlights = (highlights: unknown[]) =>
-            Array.isArray(highlights) && highlights.length > 0
-              ? highlights
-                  .map((h) => {
-                    const highlight = h as AnalysisHighlight
-                    return `${highlight.type} (importance: ${highlight.importance}): ${highlight.description}`
-                  })
-                  .join('; ')
-              : undefined
-
-          const formatSituations = (situations: unknown[]) =>
-            Array.isArray(situations) && situations.length > 0
-              ? situations
-                  .map((s) => {
-                    const situation = s as AnalysisSituation
-                    return `${situation.description}`
-                  })
-                  .join('; ')
-              : undefined
-
           return {
-            characterList: formatCharacters(analysis.characters),
-            sceneList: formatScenes(analysis.scenes),
-            dialogueList: formatDialogues(analysis.dialogues),
-            highlightList: formatHighlights(analysis.highlights),
-            situationList: formatSituations(analysis.situations),
+            charactersList: analysis.characters ? JSON.stringify(analysis.characters, null, 2) : '',
+            scenesList: analysis.scenes ? JSON.stringify(analysis.scenes, null, 2) : '',
+            dialoguesList: analysis.dialogues ? JSON.stringify(analysis.dialogues, null, 2) : '',
+            highlightLists: analysis.highlights ? JSON.stringify(analysis.highlights, null, 2) : '',
+            situations: analysis.situations ? JSON.stringify(analysis.situations, null, 2) : '',
           }
         } catch (error) {
-          logger.warn('Failed to read or parse chunk analysis, proceeding without it', {
+          logger.warn('Failed to read chunk analysis', {
             jobId,
             chunkIndex,
             error: error instanceof Error ? error.message : String(error),
@@ -147,27 +74,80 @@ export class ChunkScriptStep implements PipelineStep {
           await jobRepo.updateStep(jobId, `script_chunk_${i}`, i, chunks.length)
           const text = chunks[i]
 
+          // Get previous and next chunks for context
+          const previousText = i > 0 ? chunks[i - 1] : undefined
+          const nextChunk = i < chunks.length - 1 ? chunks[i + 1] : undefined
+
           // Read analysis data for this chunk
           const analysisData = await readChunkAnalysis(i)
 
-          logger.info('Converting chunk to script with analysis data', {
+          logger.info('Converting chunk to manga script', {
             jobId,
             chunkIndex: i,
             textLength: text.length,
-            hasCharacters: !!analysisData.characterList,
-            hasScenes: !!analysisData.sceneList,
-            hasDialogues: !!analysisData.dialogueList,
-            hasHighlights: !!analysisData.highlightList,
-            hasSituations: !!analysisData.situationList,
+            totalChunks: chunks.length,
+            hasPrevious: !!previousText,
+            hasNext: !!nextChunk,
+            hasAnalysis: Object.values(analysisData).some((v) => v !== ''),
           })
 
-          const script = await convertEpisodeTextToScript(
-            {
-              episodeText: text,
-              ...analysisData,
-            },
-            { jobId, episodeNumber: i + 1, useFragmentConversion: false, isDemo: context.isDemo },
-          )
+          let script: NewMangaScript
+          try {
+            script = await convertChunkToMangaScript(
+              {
+                chunkText: text,
+                chunkIndex: i + 1,
+                chunksNumber: chunks.length,
+                previousText,
+                nextChunk,
+                ...analysisData,
+              },
+              { jobId, isDemo: context.isDemo },
+            )
+          } catch (e) {
+            // 生成失敗の診断を analysis に保存
+            try {
+              const { getProviderForUseCase, getLLMProviderConfig } = await import(
+                '@/config/llm.config'
+              )
+              const { resolveBaseUrl } = await import('@/agents/llm/base-url')
+              const provider = getProviderForUseCase('scriptConversion')
+              const provCfg = getLLMProviderConfig(provider)
+              const baseUrl = resolveBaseUrl(provider, provCfg.baseUrl)
+
+              const errorInfo = {
+                jobId,
+                chunkIndex: i,
+                timestamp: new Date().toISOString(),
+                provider,
+                model: provCfg.model,
+                baseUrl,
+                error: {
+                  message: e instanceof Error ? e.message : String(e),
+                },
+                promptMeta: {
+                  chunkTextPreview: text.substring(0, 120),
+                  hasPrevious: !!previousText,
+                  hasNext: !!nextChunk,
+                  hasAnalysis: Object.values(analysisData).some((v) => v !== ''),
+                },
+              } as const
+
+              await storage.put(
+                `${jobId}/script_chunk_${i}.error.json`,
+                JSON.stringify(errorInfo, null, 2),
+                { contentType: 'application/json; charset=utf-8', jobId, chunk: String(i) },
+              )
+            } catch (persistError) {
+              logger.warn('Failed to store script_chunk error diagnostic', {
+                jobId,
+                chunkIndex: i,
+                error: persistError instanceof Error ? persistError.message : String(persistError),
+              })
+            }
+            // エラーを再送出してパイプラインを停止
+            throw e
+          }
 
           // 早期失敗: script自体がnull/undefinedの場合
           if (!script) {
@@ -177,66 +157,98 @@ export class ChunkScriptStep implements PipelineStep {
             throw new Error(msg)
           }
 
-          // 重複リトライの解消: 以降の追加LLM呼び出しは行わず、script-converter 内のリトライ結果に委ねる
-          const scriptWithMeta = script as unknown as {
-            needsRetry?: boolean
-            coverageStats?: { coverageRatio?: number }
-          }
-          if (
-            scriptWithMeta.needsRetry &&
-            scriptWithMeta.coverageStats?.coverageRatio !== undefined
-          ) {
-            logger.warn(
-              'Script conversion reports low coverage; skipping duplicate retries (handled upstream)',
-              {
-                jobId,
-                chunkIndex: i,
-                coverage: scriptWithMeta.coverageStats.coverageRatio,
-                threshold: 0.8,
-              },
-            )
-          }
-
-          if (scriptWithMeta.coverageStats?.coverageRatio !== undefined) {
-            logger.info('Script coverage ratio', {
-              jobId,
-              chunkIndex: i,
-              coverage: scriptWithMeta.coverageStats.coverageRatio,
-            })
-          }
-
-          // 早期失敗: 空scriptは保存せずに即時エラー
-          const scenesLen = Array.isArray((script as { scenes?: unknown[] }).scenes)
-            ? ((script as { scenes?: unknown[] }).scenes as unknown[]).length
-            : 0
-          if (scenesLen <= 0) {
+          // Validate new manga script format（panels必須）
+          if (!script.panels || script.panels.length === 0) {
             const preview = text.substring(0, 120).replace(/\n/g, '\\n')
-            const msg = `ChunkScriptStep: empty script returned for chunk index=${i}. Aborting. textPreview=${preview}`
+            const msg = `ChunkScriptStep: empty manga script returned for chunk index=${i}. Aborting. textPreview=${preview}`
             logger.error(msg, { jobId, chunkIndex: i, script })
             throw new Error(msg)
           }
 
-          // 観測性: 非空の場合のみサマリを書き出す（軽量）
+          // LLM coverage judge: 原文と台本を突き合わせて coverageStats を付与（失敗時は1回だけ自動リトライ）
+          const runJudgeOnce = async () => {
+            const { getLlmStructuredGenerator } = await import('@/agents/structured-generator')
+            const gen = getLlmStructuredGenerator()
+            const { CoverageAssessmentSchema } = await import('@/types/script')
+            const rawText = text
+            const scriptJson = JSON.stringify(script)
+            return gen.generateObjectWithFallback<{
+              coverageRatio: number
+              missingPoints: string[]
+              overSummarized: boolean
+              notes?: string
+            }>({
+              name: 'coverage-judge',
+              systemPrompt:
+                (await import('@/config/app.config')).appConfig?.llm?.coverageJudge?.systemPrompt ??
+                'Coverage judge',
+              userPrompt:
+                (
+                  await import('@/config/app.config')
+                ).appConfig?.llm?.coverageJudge?.userPromptTemplate
+                  ?.replace('{{rawText}}', rawText)
+                  ?.replace('{{scriptJson}}', scriptJson) ?? '',
+              schema: CoverageAssessmentSchema as unknown as import('zod').ZodTypeAny,
+              schemaName: 'CoverageAssessment',
+            })
+          }
+          try {
+            let result = await runJudgeOnce()
+            if (!result || typeof result.coverageRatio !== 'number') {
+              logger.warn('Coverage judge returned invalid result, retrying once', {
+                jobId,
+                chunkIndex: i,
+              })
+              result = await runJudgeOnce()
+            }
+            if (result && typeof result === 'object' && typeof result.coverageRatio === 'number') {
+              ;(
+                script as {
+                  coverageStats?: {
+                    coverageRatio: number
+                    missingPoints: string[]
+                    overSummarized: boolean
+                  }
+                }
+              ).coverageStats = {
+                coverageRatio: Math.max(0, Math.min(1, result.coverageRatio)),
+                missingPoints: Array.isArray(result.missingPoints)
+                  ? result.missingPoints.slice(0, 10)
+                  : [],
+                overSummarized: !!result.overSummarized,
+              }
+            }
+          } catch (e) {
+            logger.warn('Coverage judge failed (continuing without coverageStats)', {
+              jobId,
+              chunkIndex: i,
+              error: e instanceof Error ? e.message : String(e),
+            })
+          }
+
+          logger.info('Manga script generated successfully', {
+            jobId,
+            chunkIndex: i,
+            panelsCount: script.panels.length,
+            charactersCount: script.characters.length,
+            locationsCount: script.locations.length,
+          })
+
+          // Store summary of manga script
           try {
             const summary = {
               jobId,
               chunkIndex: i,
-              scenes: scenesLen,
-              firstSceneLines:
-                scenesLen > 0
-                  ? (
-                      ((script as unknown as { scenes: Array<{ script?: unknown[] }> }).scenes[0]
-                        ?.script || []) as unknown[]
-                    ).length
-                  : 0,
-              textPreview: text.substring(0, 80),
-              analysisUsed: {
-                hasCharacters: !!analysisData.characterList,
-                hasScenes: !!analysisData.sceneList,
-                hasDialogues: !!analysisData.dialogueList,
-                hasHighlights: !!analysisData.highlightList,
-                hasSituations: !!analysisData.situationList,
+              panels: script.panels.length,
+              charactersCount: script.characters.length,
+              locationsCount: script.locations.length,
+              propsCount: script.props.length,
+              style: {
+                tone: script.style_tone,
+                art: script.style_art,
+                sfx: script.style_sfx,
               },
+              textPreview: text.substring(0, 80),
               createdAt: new Date().toISOString(),
             }
             await storage.put(

@@ -98,7 +98,8 @@
       "Bash(mkdir:*)",
       "Bash(rg:*)",
       "Bash(npx @biomejs/biome lint .)",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(jq:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
