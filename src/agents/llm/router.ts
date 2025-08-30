@@ -5,7 +5,8 @@ import {
 } from '../../config/llm.config'
 import { FakeLlmClient } from '../../llm/fake'
 import { CerebrasClient, type CerebrasClientConfig } from './cerebras'
-import { defaultBaseUrl } from './base-url'
+import { VertexAIClient, type VertexAIConfig } from './vertexai'
+import { defaultBaseUrl, type OpenAICompatProvider } from './base-url'
 import { OpenAICompatibleClient } from './openai-compatible'
 import type { LlmClient, LlmProvider, OpenAICompatibleConfig } from './types'
 
@@ -15,6 +16,7 @@ export type ProviderConfig =
       'provider'
     >)
   | ({ provider: 'cerebras' } & CerebrasClientConfig)
+  | ({ provider: 'vertexai' } & VertexAIConfig)
   | { provider: 'fake' }
 
 export function createLlmClient(cfg: ProviderConfig): LlmClient {
@@ -27,6 +29,8 @@ export function createLlmClient(cfg: ProviderConfig): LlmClient {
       return new OpenAICompatibleClient({ ...cfg, provider: cfg.provider })
     case 'cerebras':
       return new CerebrasClient(cfg)
+    case 'vertexai':
+      return new VertexAIClient(cfg)
     case 'fake':
       return new FakeLlmClient()
     default:
@@ -63,15 +67,30 @@ export function createClientForProvider(provider: LlmProvider): LlmClient {
     }
     return createLlmClient({ provider: 'cerebras', ...c })
   }
+  if (provider === 'vertexai') {
+    const vertexConfig = cfg.vertexai
+    if (!vertexConfig) {
+      throw new Error(`Missing Vertex AI configuration for provider: ${provider}`)
+    }
+    const c: VertexAIConfig = {
+      model: cfg.model,
+      project: vertexConfig.project,
+      location: vertexConfig.location,
+      serviceAccountPath: vertexConfig.serviceAccountPath,
+    }
+    return createLlmClient({ provider: 'vertexai', ...c })
+  }
+
+  // OpenAI-compatible providers only
   const oc: Omit<OpenAICompatibleConfig, 'provider'> = {
     apiKey: cfg.apiKey,
     model: cfg.model,
-    baseUrl: cfg.baseUrl ?? defaultBaseUrl(provider as Exclude<LlmProvider, 'cerebras' | 'fake'>),
+    baseUrl: cfg.baseUrl ?? defaultBaseUrl(provider as OpenAICompatProvider),
     // OpenAI gpt-5 系は Responses API を推奨（chat/completions の max_tokens 非対応）
     useChatCompletions: provider !== 'openai' ? true : !/^gpt-5/i.test(cfg.model || ''),
   }
   return createLlmClient({
-    provider: provider as 'openai' | 'groq' | 'grok' | 'openrouter' | 'gemini',
+    provider: provider as OpenAICompatProvider,
     ...oc,
   })
 }

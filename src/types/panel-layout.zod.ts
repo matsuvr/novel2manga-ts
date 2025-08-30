@@ -26,6 +26,7 @@ export const PanelSchema = z.object({
   size: SizeSchema,
   content: z.string(),
   dialogues: z.array(DialogueSchema).optional(),
+  sfx: z.array(z.string()).optional(), // Sound effects (SFX) support
   sourceChunkIndex: z.number().optional(),
   importance: z.number().min(1).max(10).optional(),
 })

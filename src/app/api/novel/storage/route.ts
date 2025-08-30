@@ -7,6 +7,7 @@ import {
 } from '@/utils/api-error'
 import { StorageFactory } from '@/utils/storage'
 import { generateUUID } from '@/utils/uuid'
+import { getLogger } from '@/infrastructure/logging/logger'
 
 export async function saveNovelToStorage(text: string) {
   const uuid = generateUUID()
@@ -49,7 +50,9 @@ export async function saveNovelToStorage(text: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('[novel-storage] Starting storage operation')
+    getLogger()
+      .withContext({ route: 'api/novel/storage', method: 'POST' })
+      .info('[novel-storage] Starting storage operation')
     const startTime = Date.now()
 
     const { text } = (await request.json()) as { text?: unknown }
@@ -63,14 +66,20 @@ export async function POST(request: NextRequest) {
     const result = await saveNovelToStorage(text)
 
     const duration = Date.now() - startTime
-    console.log(`[novel-storage] Storage completed in ${duration}ms`)
+    getLogger()
+      .withContext({ route: 'api/novel/storage', method: 'POST' })
+      .info('[novel-storage] Storage completed', { durationMs: duration })
 
     return createSuccessResponse({
       message: '小説が正常にアップロードされました',
       ...result,
     })
   } catch (error) {
-    console.error('ファイル保存エラー:', error)
+    getLogger()
+      .withContext({ route: 'api/novel/storage', method: 'POST' })
+      .error('ファイル保存エラー', {
+        error: error instanceof Error ? error.message : String(error),
+      })
     return createErrorResponse(error, 'ファイルの保存中にエラーが発生しました')
   }
 }
@@ -105,7 +114,11 @@ export async function GET(request: NextRequest) {
       metadata: fileData.metadata || result.metadata,
     })
   } catch (error) {
-    console.error('ファイル取得エラー:', error)
+    getLogger()
+      .withContext({ route: 'api/novel/storage', method: 'GET' })
+      .error('ファイル取得エラー', {
+        error: error instanceof Error ? error.message : String(error),
+      })
     return createErrorResponse(error, 'ファイルの取得中にエラーが発生しました')
   }
 }

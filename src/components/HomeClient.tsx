@@ -140,7 +140,29 @@ export default function HomeClient() {
   const handleProcessComplete = useCallback(async () => {
     if (!jobId) return
 
-    // まず確実に遷移を試み、データ取得は結果ページ側のサーバーコンポーネントに任せる
+    // リダイレクト条件を成功時に限定: 直前にサーバ状態を確認
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/status`, { cache: 'no-store' })
+      if (!res.ok) throw new Error(`status ${res.status}`)
+      const data = (await res.json().catch(() => ({}))) as {
+        job?: { status?: string; renderCompleted?: boolean }
+      }
+      const status = data?.job?.status
+      const isCompleted = status === 'completed' || status === 'complete'
+      if (!isCompleted) {
+        // 成功状態でなければリダイレクトしない
+        setError('処理が完了していないため、結果ページへは移動しません。')
+        setIsProcessing(false)
+        return
+      }
+    } catch {
+      // 取得に失敗した場合もリダイレクトしない
+      setError('現在のジョブ状態を確認できませんでした。')
+      setIsProcessing(false)
+      return
+    }
+
+    // 成功時のみ遷移を実行し、データ取得は結果ページ側のサーバーコンポーネントに任せる
     if (novelIdState && jobId) {
       const url = `/novel/${encodeURIComponent(novelIdState)}/results/${encodeURIComponent(jobId)}`
       setPendingRedirect(url)

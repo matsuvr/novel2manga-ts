@@ -601,9 +601,8 @@ function ProcessingProgress({
 
       // 完了または失敗でポーリング停止
       const statusCompleted = data.job.status === 'completed' || data.job.status === 'complete'
-      return data.job.renderCompleted === true || statusCompleted || data.job.status === 'failed'
-        ? 'stop'
-        : 'continue'
+      // Stop polling when job is definitively completed or failed.
+      return statusCompleted || data.job.status === 'failed' ? 'stop' : 'continue'
     },
     [
       lastJobData,

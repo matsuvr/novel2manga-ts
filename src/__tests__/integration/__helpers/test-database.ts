@@ -207,6 +207,21 @@ export async function createTestDatabase(): Promise<TestDatabase> {
         })
         .where(eq(schema.jobs.id, id))
     },
+    async createEpisodes(
+      episodeList: Array<Omit<schema.NewEpisode, 'id' | 'createdAt'>>,
+    ): Promise<void> {
+      if (episodeList.length === 0) return
+
+      for (const episode of episodeList) {
+        const id = crypto.randomUUID()
+        await db.insert(schema.episodes).values({ id, ...episode })
+      }
+    },
+    async recomputeJobProcessedEpisodes(jobId: string): Promise<number> {
+      // Simple implementation that counts episodes for the job
+      const rows = await db.select().from(schema.episodes).where(eq(schema.episodes.jobId, jobId))
+      return rows.length
+    },
   } as unknown as DatabaseService
 
   return {

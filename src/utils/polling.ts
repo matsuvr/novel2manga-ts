@@ -29,7 +29,7 @@ export function decideNextPollingAction(
   consecutiveFailed: number,
   failedThreshold = 3,
 ): PollingNextAction {
-  if (job.renderCompleted === true) return 'redirect'
+  // Redirect only when the job is fully completed according to server-side status
   if (job.status === 'completed' || job.status === 'complete') return 'redirect'
 
   if (job.status === 'failed') {

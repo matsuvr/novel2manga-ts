@@ -58,8 +58,8 @@ function buildEmbeddedSamples(): Map<number, LayoutTemplate[]> {
         map.set(count, templates)
       }
     }
-  } catch (e) {
-    console.warn('Failed to load panel layout samples:', e)
+  } catch {
+    // サンプル不足時は黙ってスキップ（埋め込みデータのない構成）
   }
 
   // Deduplicate by geometry signature

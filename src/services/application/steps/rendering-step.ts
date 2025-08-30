@@ -28,20 +28,21 @@ export class RenderingStep implements PipelineStep {
     const { jobId, logger } = context
 
     try {
-      // デモやテスト環境では重いレンダリングをスキップ
-      const shouldRender = !options.isDemo && process.env.NODE_ENV !== 'test'
+      // デモモードでは重いレンダリングをスキップ
+      const shouldRender = !options.isDemo
+      const _isLightweightMode = process.env.NODE_ENV === 'test'
 
       if (!shouldRender) {
-        logger.warn('Skipping render in demo/test environment', {
+        logger.warn('Skipping render in demo mode', {
           jobId,
           episodeCount: episodeNumbers.length,
-          reason: 'Demo/test environment',
+          reason: 'Demo mode',
         })
         return {
           success: true,
           data: {
             rendered: false,
-            skippedReason: 'Demo/test environment',
+            skippedReason: 'Demo mode',
           },
         }
       }
