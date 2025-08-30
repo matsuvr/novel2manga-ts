@@ -1,6 +1,14 @@
 // Centralized LLM configuration: providers, defaults, and per-use-case parameters
 
-export type LLMProvider = 'openai' | 'gemini' | 'groq' | 'grok' | 'openrouter' | 'cerebras' | 'fake'
+export type LLMProvider =
+  | 'openai'
+  | 'gemini'
+  | 'groq'
+  | 'grok'
+  | 'openrouter'
+  | 'cerebras'
+  | 'vertexai'
+  | 'fake'
 
 export interface ProviderConfig {
   apiKey?: string
@@ -10,6 +18,12 @@ export interface ProviderConfig {
   baseUrl?: string
   // OpenRouter specific: prefer Cerebras backend when available for the model
   preferCerebras?: boolean
+  // Vertex AI specific configuration
+  vertexai?: {
+    project: string
+    location: string
+    serviceAccountPath?: string
+  }
 }
 
 // Per-use-case parameters have been removed.
@@ -21,12 +35,16 @@ export type LLMUseCase =
   | 'textAnalysis'
   | 'pageBreak'
   | 'panelAssignment'
+  | 'episodeBreak'
 
 // Mapping for use-case specific provider preferences.
 // NOTE: Do not hardcode in application code; change preferences here.
 const useCaseProviders: Partial<Record<LLMUseCase, LLMProvider>> = {
   // 指示: スクリプト変換に高性能なLLMを使用
-  scriptConversion: 'openai',
+  scriptConversion: 'vertexai',
+  // エピソード切れ目検出もVertex AI（Gemini）を使用
+  episodeBreak: 'vertexai',
+  // その他はデフォルト（groq）を使用
 }
 
 export function getProviderForUseCase(useCase: LLMUseCase): LLMProvider {
@@ -35,7 +53,9 @@ export function getProviderForUseCase(useCase: LLMUseCase): LLMProvider {
   const envVal = process.env[envKey]
   if (
     envVal &&
-    ['openai', 'gemini', 'groq', 'grok', 'openrouter', 'cerebras', 'fake'].includes(envVal)
+    ['openai', 'gemini', 'groq', 'grok', 'openrouter', 'cerebras', 'vertexai', 'fake'].includes(
+      envVal,
+    )
   ) {
     return envVal as LLMProvider
   }
@@ -60,6 +80,17 @@ export function getFallbackChain(): LLMProvider[] {
 
 // Central provider definitions (single source of truth for models/params)
 export const providers: Record<LLMProvider, ProviderConfig> = {
+  vertexai: {
+    model: 'gemini-2.5-pro',
+    maxTokens: 32768,
+    timeout: 60_000,
+    vertexai: {
+      project: process.env.VERTEX_AI_PROJECT || 'manganamemaker',
+      location: process.env.VERTEX_AI_LOCATION || 'us-central1',
+      serviceAccountPath:
+        process.env.GOOGLE_APPLICATION_CREDENTIALS || 'manganamemaker-e402457d75fd.json',
+    },
+  },
   cerebras: {
     apiKey: process.env.CEREBRAS_API_KEY,
     // Structured outputs対応が安定している公開モデルに合わせる（ドキュメント例に準拠）
@@ -69,8 +100,8 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY,
-    model: 'gemini-2.5-flash-lite',
-    maxTokens: 8192,
+    model: 'gemini-2.5-flash',
+    maxTokens: 16000,
     timeout: 30_000,
   },
   openai: {
@@ -142,6 +173,9 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
         return process.env.OPENROUTER_API_KEY
       case 'gemini':
         return process.env.GEMINI_API_KEY
+      case 'vertexai':
+        // Vertex AI uses service account authentication, not API keys
+        return 'vertex-ai-auth'
       case 'fake':
         return 'fake-key'
       default:
@@ -164,6 +198,8 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
         return process.env.OPENROUTER_MODEL
       case 'gemini':
         return process.env.GEMINI_MODEL
+      case 'vertexai':
+        return process.env.VERTEX_AI_MODEL
       default:
         return undefined
     }

@@ -83,17 +83,19 @@ export async function POST(request: NextRequest) {
       201,
     )
   } catch (error) {
-    console.error('小説アップロードAPIエラー:', {
-      error:
-        error instanceof Error
-          ? {
-              message: error.message,
-              stack: error.stack,
-              name: error.name,
-            }
-          : error,
-      timestamp: new Date().toISOString(),
-    })
+    getLogger()
+      .withContext({ api: 'novel/POST' })
+      .error('小説アップロードAPIエラー', {
+        error:
+          error instanceof Error
+            ? {
+                message: error.message,
+                stack: error.stack,
+                name: error.name,
+              }
+            : error,
+        timestamp: new Date().toISOString(),
+      })
 
     return ApiResponder.error(
       error instanceof Error ? new ValidationError(error.message) : error,

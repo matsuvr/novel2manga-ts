@@ -1,7 +1,7 @@
 export const appConfig = {
   // チャンク分割設定
   chunking: {
-    defaultChunkSize: 2000, // デフォルトチャンクサイズ（文字数）
+    defaultChunkSize: 3000, // デフォルトチャンクサイズ（文字数）
     defaultOverlapSize: 200, // デフォルトオーバーラップサイズ（文字数）
     maxChunkSize: 4000, // 最大チャンクサイズ
     minChunkSize: 100, // 最小チャンクサイズ - 意味のある最小サイズに修正
@@ -18,6 +18,22 @@ export const appConfig = {
       contextSize: 0,
       fragmentConversionThreshold: 0,
     },
+  },
+
+  // Script segmentation configuration (for long scripts)
+  scriptSegmentation: {
+    // Maximum panels per segment for episode break estimation (2 episodes worth)
+    maxPanelsPerSegment: 400,
+    // Number of panels to overlap between segments for episode boundary context
+    contextOverlapPanels: 50,
+    // Minimum panels required to trigger segmentation (400+ panels)
+    minPanelsForSegmentation: 400,
+    // Enable segmentation by default for production
+    enableSegmentation: true,
+    // Log segmentation details for debugging
+    enableDetailedLogging: true,
+    // Minimum trailing segment size to avoid merging with previous (80% of maxPanelsPerSegment)
+    minTrailingSegmentSize: 320,
   },
 
   // LLM設定（モデル・パラメータは llm.config.ts に集約。ここではプロンプトのみ保持）
@@ -88,6 +104,13 @@ export const appConfig = {
   * ナレーション：\`ナレーション：「…」\`
   * カット指示：\`[カット] …\`（**一言で絵が決まる**表現）
   * SFX：\`〈SFX：…〉\` を行頭記載。
+  * 重要度：importance：1から6の整数で各パネルの重要度を設定。基準：
+    - 1: 日常的な動作、移動、背景説明。確率：5％
+    - 2: 軽い会話、状況説明。確率：30％
+    - 3: 感情の変化、重要な会話の一部。確率：40％
+    - 4: クライマックス直前、重要な決断：確率：10％
+    - 5: 物語の転換点、重要な発見。確率：10％
+    - 6: 最重要シーン、決定的な瞬間、物語のクライマックス。確率：5％
 * 禁止事項
 
   * 原作の時代・地名・関係性の改変／ネタバレ改竄。
@@ -138,7 +161,8 @@ export const appConfig = {
       "camera": "WS/俯瞰・曇天・濡れた石畳",
       "narration": ["ワシントン・スクエア西の小地区は、道が入り組み…芸術家たちが集った。"],
       "dialogue": ["キャラ名: セリフ内容"],
-      "sfx": ["ざあ…（遠景の雨/風、必要時）"]
+      "sfx": ["ざあ…（遠景の雨/風、必要時）"],
+      "importance": 1
     }
   ],
   "continuity_checks": [
@@ -188,58 +212,6 @@ JSONのみ出力。説明文禁止。`,
 
 {{situations}}`,
     },
-    // NOTE: コマ・ページ分割用（V2: 浅いスキーマ panels[]）。
-    pageBreakEstimation: {
-      systemPrompt: `以下はマンガにするための脚本（Script）です。台本（全行）を1〜6コマ/ページの範囲で、必要なページ数に分割してください。省略・圧縮・創作は禁止。全行を漏れなくページ/コマへ割当可能な設計を出力すること。全て日本語。出力はJSONのみ。
-
-必須ルール（厳守）:
-- ルートは単一のオブジェクト: {"panels": [...]}。配列や多重入れ子は禁止。
-- 各要素は { pageNumber, panelIndex, content, dialogue? }。
-  - pageNumber: 1から始まる連番。必ず1..K（欠番なし）。
-  - panelIndex: ページ内の連番（1..そのページの枚数）。
-  - content: thingsToBeDrawn（絵として描くべき対象の短い説明: 20〜80文字推奨）。セリフ本文の繰り返しは禁止。見つからない場合は、そのコマの登場人物名（speaker名の列挙）を入れる。
-  - dialogue: 0〜2要素の配列。各要素は { speaker: string, text: string }。セリフがあるなら speaker と text は両方必須。
-    ※Script JSONの dialogue 配列は "話者: セリフテキスト" 形式の文字列です。この文字列を分解し、コロンの前を speaker、後を text として設定してください。
-- 1ページのコマ数は1〜6。見所/強調は1〜2コマ、会話主体は2〜4コマ、状況説明は4〜6コマを目安に構成。
-- 全行網羅: Script内の全ての行（scenes[*].script[*]）が、どこかのパネルに割当可能になるようページ数とコマ数を決めること（実際の割当は別工程）。
-- 過密禁止: 1パネルに過剰な量を詰め込まない（長文のcontentは禁止・対話は最大2件）。
-- 1ページ化禁止: ページ数算定の目安を守り、必要なページ数を出力する。
-
-ページ数の目安（ガイドライン）:
-- Scriptの行数（L）をScript JSONから数え、1ページあたり6行程度を上限目標とし、必要ページ数K≈ceil(L/6)以上を目指す（内容の強弱に応じて±1〜2ページの調整は可）。
-- 各ページのpanelIndexは1から始め、1ページ内のpanelIndexが飛ばないよう採番。
-
-JSONスキーマ（PageBreakV2）: { "panels": [ { "pageNumber": number, "panelIndex": number, "content": string, "dialogue"?: [{"speaker": string, "text": string}] } ] }`,
-      userPromptTemplate: `脚本JSON（Script。全行を含む）:
-{{scriptJson}}
-
-指示の繰り返し（重要）:
-- Script内の全行が後段で割り当て可能になるよう、十分なページ数とコマ数を設計すること。
-- ページ数は1ページで収めず、行数に応じてK≈ceil(L/6)以上を目指す。
-- 各パネルのcontentは「thingsToBeDrawn」= 絵として描くべき対象の短い説明（20〜80文字程度）。セリフ本文の繰り返しは禁止。適切な対象が見当たらない場合は、そのコマの登場人物名（speaker名の列挙）を入れる（例: 太郎と花子）。
-- ルートは {"panels": [...]} のみ。未知プロパティや説明文は出力しない。
-
-出力JSONの例（参考）:
-{
-  "panels": [
-    { "pageNumber": 1, "panelIndex": 1, "content": "情景の導入", "dialogue": [] },
-    { "pageNumber": 1, "panelIndex": 2, "content": "医者の診断", "dialogue": [{"speaker": "医者", "text": "助かる見込みは十に一つですな"}] },
-    { "pageNumber": 1, "panelIndex": 3, "content": "医者が体温計を振り下げる", "dialogue": [{"speaker": "医者", "text": "その見込みはあの子が『生きたい』と思うかどうかにかかっている"}] }
-  ]
-}
-
-CRITICAL: dialogue要素は必ず {"speaker": string, "text": string}。セリフがあるなら speaker と text は両方必須。ルートはオブジェクト、配列やpagesキーは使わない。`,
-    },
-    // NOTE: 連載マンガのエピソード束ね判定用（新規）。
-    // - コメント: ここに「20–50ページに収まるよう切れ目候補を返す・JSON {breakAfterPageIndices[], rationale[]}のみ」を明記
-    // - 入力には totalPages と pagesSummary（各ページの要約/強度/speech数等）を与える
-    episodeBundling: {
-      systemPrompt: `与えられたJSONは、ページ毎にどんな風にコマを割り、どんなセリフを入れるかを指定している設計書です。長編であるため、全体の一部分である可能性があります。pageIndexを参考にしてください。このJSONを読み、連載マンガのエピソードとして適切なところで分割をしてください。1エピソードは20～50ページ程度です。1エピソードにはかなら山場を入れ、かつ、引きをつけるところで分割してください。エピソード毎に、{["episodeNumber": 1, "title": "エピソード1のタイトル", "summary": "エピソード1の要約", "startPageIndex": 1, "endPageIndex": 5]}の形式でJSONを出力してください。`, // ここにエピソード束ねの方針・制約（20–50p、物語的切れ目、JSONのみ）を記述
-      userPromptTemplate: `分割対象となるJSONは以下です。
-      {{pageBreakEstimatJson}}
-      
-      トータルページ数、各ページの要素、強度、セリフ数は、与えられたJSONをよく確認してください`,
-    },
 
     // カバレッジ判定用プロンプト（インライン化）
     coverageJudge: {
@@ -268,87 +240,64 @@ CRITICAL: dialogue要素は必ず {"speaker": string, "text": string}。セリ�
 
 上記スキーマのJSONのみを返すこと。`,
     },
-  },
-  // Panel assignment configuration - prompts now inlined per CLAUDE.md CONFIG CENTRALIZATION rule
-  panelAssignment: {
-    systemPrompt: `あなたはマンガのコマ割り専門家です。与えられた脚本とページ分割データを基に、各ページのコマに適切なスクリプト行を割り当ててください。
 
-【重要】巨大なナレーションが含まれる場合の処理:
-- 長すぎるナレーション（100文字以上）は自動的に分割
-- 各パネルには最大3-4行のナレーションまで
-- 1つのパネルに収まらないテキストは自動的に分割してください。
+    // Episode break estimation configuration
+    episodeBreakEstimation: {
+      systemPrompt: `あなたはマンガのエピソード構成専門家です。与えられた統合スクリプトから、マンガとしての自然なエピソードの切れ目を検出してください。
 
-【厳格な割当制約（コマ品質）】
-- 1コマあたりの「セリフ（dialogue/thought）」は最大2つまで。3つ以上は前から2つに制限
-- セリフが0件のコマは、必ず有意味なト書き（stage優先。無ければnarration）に対応するscriptIndexesを割り当てる
-- 同一ページ内で同一のstage/narrationテキストが重複しないよう、近い行の代替候補を選ぶ（同一文の繰り返しを避ける）
+【エピソード切れ目の基準】
+- 場面転換（時間、場所、状況の大きな変化）
+- ストーリー展開の区切り（導入→展開→山場→結末）
+- キャラクター視点の切り替え
+- テーマや雰囲気の変化
+- 自然な読み切り感のある区切り
 
-出力は必ず以下のJSON形式のみ:
+【制約】
+- 最小エピソード長: 10パネル以上
+- 最大エピソード長: 50パネル以下
+- パネル番号（no）を基準にstart/endを決定
+- エピソード番号は1から始まる連番
+- 全パネルが必ずいずれかのエピソードに含まれること（漏れ禁止）
+
+出力は以下のJSON形式のみ:
 {
-  "pages": [
+  "episodes": [
     {
-      "pageNumber": 1,
-      "panelCount": 3,
-      "panels": [
-        { "id": 1, "scriptIndexes": [1, 2] },
-        { "id": 2, "scriptIndexes": [3] },
-        { "id": 3, "scriptIndexes": [4, 5, 6] }
-      ]
+      "episodeNumber": 1,
+      "title": "プロローグ",
+      "startPanelIndex": 1,
+      "endPanelIndex": 15,
+      "description": "物語の導入部分"
+    },
+    {
+      "episodeNumber": 2,
+      "title": "出会い",
+      "startPanelIndex": 16,
+      "endPanelIndex": 35,
+      "description": "主人公と重要キャラクターの出会い"
     }
   ]
 }
 
 注意事項:
-- 各ページのpanelCountとpanels配列の長さが一致させる
-- scriptIndexes配列には、スクリプトの実際の行インデックスを入れる
-- 空のpanelsは禁止
-- 返答は厳密に上記JSONの構造のみ（追加の説明文や別フォーマット禁止）`,
-    userPromptTemplate: `【タスク】以下のデータを基に、各ページのコマにスクリプト行を割り当ててください。
-
-【入力データ1: 脚本JSON】
+- title、descriptionは必須（空文字禁止）
+- startPanelIndex ≤ endPanelIndex
+- エピソード間に隙間や重複なし
+- 追加の説明文は出力禁止`,
+      userPromptTemplate: `【統合スクリプト】
 {{scriptJson}}
 
-【入力データ2: ページ分割データ】
-{{pageBreaksJson}}
+【指示】
+上記の統合スクリプトのpanels配列を分析し、自然なエピソード切れ目を検出してください。各パネルのno（パネル番号）を基準に、startPanelIndexとendPanelIndexを決定してください。
 
-【重要指示】
-1. scriptJsonの各scene.script配列のindexフィールドを参照
-2. 各ページのpanels[].scriptIndexes配列には、対応するscriptのindex番号を入れる
-3. 例: scriptのindex: 1, 2, 3がある場合、scriptIndexes: [1, 2] や scriptIndexes: [3] のように対応付ける
-4. ページ数はpageBreaksJsonのpages配列の長さに合わせる（通常10ページ以上）
-5. 巨大ナレーションは必ず分割: 100文字以上のナレーションは複数のpanelsに分散
+【分析観点】
+1. パネル内容（cut）の変化
+2. 場所や時間設定の転換
+3. キャラクター構成の変化
+4. ストーリーの流れとテンション
 
-【具体例】
-scriptJsonに以下のデータがある場合:
-{
-  "scenes": [{
-    "script": [
-      {"index": 1, "text": "こんにちは"},
-      {"index": 2, "text": "今日は良い天気ですね"},
-      {"index": 3, "text": "そうですね"}
-    ]
-  }]
-}
-
-正しい出力例:
-{
-  "pages": [
-    {
-      "pageNumber": 1,
-      "panelCount": 2,
-      "panels": [
-        {"id": 1, "scriptIndexes": [1]},
-        {"id": 2, "scriptIndexes": [2, 3]}
-      ]
-    }
-  ]
-}
-
-【制約】
-- 1ページのコマ数は1-6個まで
-- スプラッシュ/見開きは使用しない
-- 各ページのpanelCountとpanels配列の長さを必ず一致させる
-- 空のscriptIndexes配列は禁止（最低1つのindexを入れる）`,
+適切なエピソード分割を行い、上記JSON形式で出力してください。`,
+    },
   },
 
   // ストレージ設定
