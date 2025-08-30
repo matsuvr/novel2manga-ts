@@ -51,12 +51,25 @@ export class VertexAIClient implements LlmClient {
 
     try {
       // Construct the full prompt using provided system and user prompts
-      const fullPrompt = [systemPrompt?.trim(), userPrompt.trim()].filter(Boolean).join('\n\n')
+      // Construct contents as an array of message objects with roles
+      const contents = []
+      if (systemPrompt && typeof systemPrompt === 'string' && systemPrompt.trim()) {
+        contents.push({
+          role: 'system',
+          parts: [systemPrompt.trim()],
+        })
+      }
+      if (userPrompt && typeof userPrompt === 'string' && userPrompt.trim()) {
+        contents.push({
+          role: 'user',
+          parts: [userPrompt.trim()],
+        })
+      }
 
       // Generate content using Vertex AI
       const response = await this.client.models.generateContent({
         model: this.model,
-        contents: fullPrompt,
+        contents,
         config: {
           maxOutputTokens: options.maxTokens,
           temperature: 0.1,
