@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { AsyncLocalStorage } from 'node:async_hooks'
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
@@ -11,28 +12,45 @@ export interface LoggerPort {
   withContext(ctx: Record<string, unknown>): LoggerPort
 }
 
+type LogContext = {
+  muteConsole?: boolean
+} & Record<string, unknown>
+
+// リクエスト毎のロギングコンテキスト
+const logContextStorage = new AsyncLocalStorage<LogContext>()
+
+export function runWithLogContext<T>(ctx: LogContext, fn: () => T): T {
+  return logContextStorage.run(ctx, fn)
+}
+
+export function getLogContext(): LogContext | undefined {
+  return logContextStorage.getStore()
+}
+
 class ConsoleLogger implements LoggerPort {
   constructor(private readonly base: Record<string, unknown> = {}) {}
 
   private fmt(level: LogLevel, msg: string, meta?: Record<string, unknown>) {
     const payload = { ts: new Date().toISOString(), level, msg, ...this.base, ...(meta || {}) }
     const line = JSON.stringify(payload)
+    const ctx = getLogContext()
+    const mute = ctx?.muteConsole === true
     switch (level) {
       case 'debug':
         // eslint-disable-next-line no-console
-        console.debug(line)
+        if (!mute) console.debug(line)
         break
       case 'info':
         // eslint-disable-next-line no-console
-        console.info(line)
+        if (!mute) console.info(line)
         break
       case 'warn':
         // eslint-disable-next-line no-console
-        console.warn(line)
+        if (!mute) console.warn(line)
         break
       case 'error':
         // eslint-disable-next-line no-console
-        console.error(line)
+        if (!mute) console.error(line)
         break
     }
   }

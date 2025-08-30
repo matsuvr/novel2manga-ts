@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import { isDevelopment } from '@/config'
+import { getLogger } from '@/infrastructure/logging/logger'
 
 // Cloudflare Workers のグローバルバインディング型は型定義ファイルに集約されています
 
@@ -192,8 +193,10 @@ export class LocalFileStorage implements Storage {
       await fs.unlink(metadataPath)
     } catch (error) {
       // メタデータファイルがなくてもエラーにしない
-      // eslint-disable-next-line no-console
-      console.debug('Failed to delete metadata file:', error)
+      const logger = getLogger().withContext({ service: 'LocalFileStorage', method: 'delete' })
+      logger.debug('Failed to delete metadata file', {
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 
@@ -481,9 +484,10 @@ async function resolveStorage(
 ): Promise<Storage> {
   // 明示ローカル指定 or 開発/テストはローカル
   if (isDevelopment() || process.env.STORAGE_MODE === 'local') {
-    // eslint-disable-next-line no-console
     const base = getStorageBase()
-    console.log(`[storage] Using LocalFileStorage (dev/local): ${base}/${localDir}`)
+    getLogger()
+      .withContext({ service: 'StorageFactory', method: 'resolveStorage' })
+      .info('[storage] Using LocalFileStorage (dev/local)', { base, localDir })
     return new LocalFileStorage(path.join(base, localDir))
   }
 
@@ -491,8 +495,9 @@ async function resolveStorage(
   const candidate = (globalThis as Record<string, unknown>)[binding]
   const bucket = isR2Bucket(candidate) ? candidate : undefined
   if (bucket) {
-    // eslint-disable-next-line no-console
-    console.log(`[storage] Using R2Storage binding: ${binding}`)
+    getLogger()
+      .withContext({ service: 'StorageFactory', method: 'resolveStorage' })
+      .info('[storage] Using R2Storage binding', { binding })
     return new R2Storage(bucket)
   }
 
@@ -676,10 +681,7 @@ export const JsonStorageKeys = {
     validateId(jobId, 'jobId')
     return `${jobId}/full_pages.json`
   },
-  episodeBundling: (jobId: string) => {
-    validateId(jobId, 'jobId')
-    return `${jobId}/episode_bundling.json`
-  },
+  // episodeBundling removed - replaced with episode break estimation
 } as const
 
 // エピソード境界保存関数
@@ -749,9 +751,11 @@ export async function saveEpisodeBoundaries(
     },
   })
 
-  console.log(
-    `Saved ${episodes.length} episodes to both database and file system with strong consistency`,
-  )
+  getLogger()
+    .withContext({ service: 'StorageFactory', method: 'saveEpisodeBoundaries', jobId })
+    .info('Saved episodes to database and file system with strong consistency', {
+      savedEpisodes: episodes.length,
+    })
 }
 
 // チャンク分析取得関数

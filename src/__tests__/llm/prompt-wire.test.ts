@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CompatAgent } from '@/agents/compat'
-import {
-  getPageBreakEstimationConfig,
-  getScriptConversionConfig,
-  getTextAnalysisConfig,
-} from '@/config'
+import { getScriptConversionConfig, getTextAnalysisConfig } from '@/config'
 
 function assertNoPlaceholders(str: string) {
   expect(str).toBeTypeOf('string')
@@ -94,29 +90,5 @@ describe('LLM prompt wiring (temporary)', () => {
     expect(out.length).toBeGreaterThan(0)
   })
 
-  it('pageBreakEstimation prompt/systemPrompt が展開され、エージェントが実行できる', async () => {
-    const cfg = getPageBreakEstimationConfig()
-    const scriptJson = JSON.stringify({
-      script: [
-        { index: 0, type: 'dialogue', speaker: '太郎', text: '行くぞ！' },
-        { index: 1, type: 'narration', text: '雨が強くなる。' },
-        { index: 2, type: 'dialogue', speaker: '花子', text: '待って！' },
-      ],
-    })
-    const prompt = (cfg.userPromptTemplate || '').replace('{{scriptJson}}', scriptJson)
-
-    assertNoPlaceholders(prompt)
-    assertNoPlaceholders(cfg.systemPrompt)
-
-    const agent = new CompatAgent({
-      name: 'prompt-wire-pagebreak',
-      instructions: cfg.systemPrompt,
-      provider: 'fake',
-      maxTokens: cfg.maxTokens,
-    })
-
-    const out = await agent.generateText(prompt)
-    expect(out).toBeTypeOf('string')
-    expect(out.length).toBeGreaterThan(0)
-  })
+  // pageBreakEstimation test removed - replaced with importance-based calculation
 })

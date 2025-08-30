@@ -3,6 +3,11 @@ import type { PipelineStep, StepContext, StepExecutionResult } from './base-step
 export interface ScriptMergeResult {
   merged: boolean
   panels: number
+  coverageWarnings?: Array<{
+    chunkIndex: number
+    coverageRatio: number
+    message: string
+  }>
 }
 
 export class ScriptMergeStep implements PipelineStep {
@@ -98,7 +103,14 @@ export class ScriptMergeStep implements PipelineStep {
         }
       }
 
-      // Fail fast if any chunk is below minimum acceptable coverage
+      // Collect coverage warnings (including chunks below minimum acceptable coverage)
+      const allLowCoverageChunks = [...failCoverageChunks, ...lowCoverageChunks]
+      const coverageWarnings = allLowCoverageChunks.map((c) => ({
+        chunkIndex: c.index,
+        coverageRatio: c.ratio,
+        message: `チャンク${c.index}のカバレッジが低くなっています (${(c.ratio * 100).toFixed(1)}%)`,
+      }))
+
       if (failCoverageChunks.length > 0) {
         const details = failCoverageChunks
           .map((c) => `chunk=${c.index} ratio=${c.ratio.toFixed(3)}`)
@@ -126,14 +138,12 @@ export class ScriptMergeStep implements PipelineStep {
           }
         }
 
-        logger.error('Script merge aborted due to low coverage in chunks', {
+        logger.warn('Script merge proceeding despite very low coverage in some chunks', {
           jobId,
           minCoverage: MIN_COVERAGE_FAIL,
           details,
+          note: 'Content may be missing from final output',
         })
-        throw new Error(
-          `Coverage too low in ${failCoverageChunks.length} chunk(s) (min=${MIN_COVERAGE_FAIL}). Details: ${details}`,
-        )
       }
 
       if (lowCoverageChunks.length > 0) {
@@ -175,8 +185,19 @@ export class ScriptMergeStep implements PipelineStep {
         jobId,
       })
 
-      logger.info('Script merge successful', { jobId, panels: allPanels.length })
-      return { success: true, data: { merged: true, panels: allPanels.length } }
+      logger.info('Script merge successful', {
+        jobId,
+        panels: allPanels.length,
+        coverageWarnings: coverageWarnings.length > 0 ? coverageWarnings.length : undefined,
+      })
+      return {
+        success: true,
+        data: {
+          merged: true,
+          panels: allPanels.length,
+          ...(coverageWarnings.length > 0 && { coverageWarnings }),
+        },
+      }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       const stack = error instanceof Error ? error.stack : undefined

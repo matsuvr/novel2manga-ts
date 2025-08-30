@@ -1,6 +1,7 @@
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
 import { getJobRepository, getNovelRepository } from '@/repositories'
+import { getDatabaseService } from '@/services/db-factory'
 
 // Import pipeline steps
 import {
@@ -11,11 +12,14 @@ import {
   PageBreakStep,
   RenderingStep,
   type StepContext,
+  type StepExecutionResult,
+  type AnalysisResult,
   TextAnalysisStep,
   TextChunkingStep,
 } from './steps'
 import { ChunkScriptStep } from './steps/chunk-script-step'
 import { ScriptMergeStep } from './steps/script-merge-step'
+import { EpisodeBreakEstimationStep } from './steps/episode-break-estimation-step'
 
 export interface AnalyzeOptions {
   isDemo?: boolean
@@ -59,6 +63,7 @@ export class AnalyzePipeline extends BasePipelineStep {
   // private readonly scriptStep = new ScriptConversionStep()
   private readonly chunkScriptStep = new ChunkScriptStep()
   private readonly scriptMergeStep = new ScriptMergeStep()
+  private readonly episodeBreakStep = new EpisodeBreakEstimationStep()
   private readonly pageBreakStep = new PageBreakStep()
   private readonly renderingStep = new RenderingStep()
   private readonly completionStep = new CompletionStep()
@@ -148,12 +153,10 @@ export class AnalyzePipeline extends BasePipelineStep {
       await this.markStepCompleted(jobId, 'split', { logger })
     }
 
-    // Text analysis step
-    const analysisResult = await this.analysisStep.analyzeChunks(
-      chunks,
-      existingJob || null,
-      context,
-    )
+    // Text analysis step (skip in demo mode to speed up tests and demos)
+    const analysisResult: StepExecutionResult<AnalysisResult> = options.isDemo
+      ? { success: true, data: { completed: true } }
+      : await this.analysisStep.analyzeChunks(chunks, existingJob || null, context)
     if (!analysisResult.success) {
       await this.updateJobStatus(jobId, 'failed', { logger }, analysisResult.error)
       throw new Error(analysisResult.error)
@@ -178,6 +181,11 @@ export class AnalyzePipeline extends BasePipelineStep {
       throw new Error(mergeRes.error)
     }
 
+    // Store coverage warnings if any
+    if (mergeRes.data.coverageWarnings && mergeRes.data.coverageWarnings.length > 0) {
+      await this.updateJobCoverageWarnings(jobId, mergeRes.data.coverageWarnings, { logger })
+    }
+
     // レイアウト段階の進捗開始
     await this.updateJobStep(jobId, 'layout', { logger }, totalChunks, totalChunks)
 
@@ -189,22 +197,85 @@ export class AnalyzePipeline extends BasePipelineStep {
       throw new Error('Combined script not found')
     }
     const combinedScript = JSON.parse(combinedText.text)
-    const pbRes = await this.pageBreakStep.estimatePageBreaks(combinedScript, 1, context)
+
+    // エピソード切れ目検出
+    const episodeRes = await this.episodeBreakStep.estimateEpisodeBreaks(combinedScript, context)
+    if (!episodeRes.success) {
+      await this.updateJobStatus(jobId, 'failed', { logger }, episodeRes.error)
+      throw new Error(episodeRes.error)
+    }
+
+    // エピソード境界をDBへ永続化（最小フィールドでのアップサート）
+    try {
+      const jobRepo = getJobRepository()
+      const job = await jobRepo.getJob(jobId)
+      if (!job) throw new Error(`Job not found for episode persistence: ${jobId}`)
+
+      const { EpisodeWriteService } = await import('@/services/application/episode-write')
+      const episodeWriter = new EpisodeWriteService()
+      const episodesForDb = episodeRes.data.episodeBreaks.episodes.map((ep) => ({
+        novelId: job.novelId,
+        jobId,
+        episodeNumber: ep.episodeNumber,
+        title: ep.title,
+        summary: undefined,
+        // Chunk-based fieldsは新フローでは必須でないため安全な最小値で保存
+        startChunk: 1,
+        startCharIndex: 0,
+        endChunk: 1,
+        endCharIndex: 0,
+        confidence: 1,
+      }))
+      await episodeWriter.bulkUpsert(episodesForDb)
+      try {
+        const db = getDatabaseService()
+        const persisted = await db.getEpisodesByJobId(jobId)
+        logger.info('Episode persistence summary', {
+          jobId,
+          requested: episodesForDb.length,
+          persisted: persisted.length,
+        })
+
+        // Early failure detection: Check episode persistence integrity
+        if (persisted.length < episodesForDb.length) {
+          const errorMessage = `Episode persistence mismatch (req=${episodesForDb.length}, got=${persisted.length})`
+          logger.error('Episode persistence integrity check failed', {
+            jobId,
+            requestedEpisodes: episodesForDb.length,
+            persistedEpisodes: persisted.length,
+            requestedEpisodeNumbers: episodesForDb.map((ep) => ep.episodeNumber),
+            persistedEpisodeNumbers: persisted.map((ep) => ep.episodeNumber),
+          })
+          await this.updateJobStatus(jobId, 'failed', { logger }, errorMessage)
+          throw new Error(errorMessage)
+        }
+      } catch (e) {
+        if (e instanceof Error && e.message.includes('Episode persistence mismatch')) {
+          // Re-throw early failure errors
+          throw e
+        }
+        logger.warn('Episode persistence summary failed', {
+          jobId,
+          error: e instanceof Error ? e.message : String(e),
+        })
+      }
+    } catch (persistEpisodesError) {
+      await this.updateJobStatus(jobId, 'failed', { logger }, String(persistEpisodesError))
+      throw persistEpisodesError
+    }
+
+    // importance-basedページ割り
+    const pbRes = await this.pageBreakStep.estimatePageBreaks(
+      combinedScript,
+      episodeRes.data.episodeBreaks,
+      context,
+    )
     if (!pbRes.success) {
       await this.updateJobStatus(jobId, 'failed', { logger }, pbRes.error)
       throw new Error(pbRes.error)
     }
 
-    // 束ね
-    const { EpisodeBundlingStep } = await import('./steps/episode-bundling-step')
-    const bundler = new EpisodeBundlingStep()
-    const bundleRes = await bundler.bundleFromFullPages(context)
-    if (!bundleRes.success) {
-      await this.updateJobStatus(jobId, 'failed', { logger }, bundleRes.error)
-      throw new Error(bundleRes.error)
-    }
-
-    const episodeNumbers = bundleRes.data.episodes
+    const episodeNumbers = episodeRes.data.episodeBreaks.episodes.map((ep) => ep.episodeNumber)
     const totalPages = pbRes.data?.totalPages ?? 0
     await this.updateJobTotalPages(jobId, totalPages, { logger })
     await this.markStepCompleted(jobId, 'layout', { logger })
@@ -223,6 +294,74 @@ export class AnalyzePipeline extends BasePipelineStep {
       }
     }
     await this.markStepCompleted(jobId, 'render', { logger })
+
+    // 強制整合性チェック: エピソードがDBに永続化されていない場合は完了扱いにしない
+    try {
+      logger.info('Running job completion integrity check', {
+        jobId,
+        expectedEpisodes: episodeNumbers.length,
+      })
+      const db = getDatabaseService()
+      const epCount = await db.recomputeJobProcessedEpisodes(jobId)
+      if (epCount === 0) {
+        // Collect detailed diagnostic information for troubleshooting
+        const diagInfo = {
+          episodesCount: 0,
+          layoutFileCount: 0,
+          layoutStatusCount: 0,
+          storageError: null as string | null,
+        }
+
+        try {
+          // Get episodes count
+          const episodes = await db.getEpisodesByJobId(jobId)
+          diagInfo.episodesCount = episodes.length
+
+          // Get layout_status count (use public method since db.db is private)
+          // For now, use the same logic as recomputeJobProcessedEpisodes to get count
+          diagInfo.layoutStatusCount = epCount // We already computed this above
+
+          // Check storage layout files
+          const { StorageFactory, StorageKeys } = await import('@/utils/storage')
+          const storage = await StorageFactory.getLayoutStorage()
+          for (const ep of episodes) {
+            const layoutKey = StorageKeys.episodeLayout(jobId, ep.episodeNumber)
+            const layoutExists = await storage.get(layoutKey)
+            if (layoutExists?.text) {
+              diagInfo.layoutFileCount++
+            }
+          }
+        } catch (diagError) {
+          diagInfo.storageError = diagError instanceof Error ? diagError.message : String(diagError)
+        }
+
+        // デモモードでのスキップ理由を明確化
+        const reason = options.isDemo
+          ? 'Demo mode - rendering skipped'
+          : `No episodes persisted for this job (episodes=${diagInfo.episodesCount}, layoutFiles=${diagInfo.layoutFileCount}, layoutStatus=${diagInfo.layoutStatusCount})`
+        const fullMessage = diagInfo.storageError
+          ? `${reason}; diagnostic error: ${diagInfo.storageError}`
+          : `${reason}; refusing to mark as completed`
+
+        logger.error('Job completion integrity check details', {
+          jobId,
+          epCount,
+          diagInfo,
+          isDemo: options.isDemo,
+        })
+
+        throw new Error(fullMessage)
+      }
+    } catch (guardError) {
+      const errorMessage = String(guardError)
+      logger.error('Job completion integrity check failed', {
+        jobId,
+        error: errorMessage,
+        isDemo: options.isDemo,
+      })
+      await this.updateJobStatus(jobId, 'failed', { logger }, errorMessage)
+      throw guardError
+    }
 
     // 完了
     await this.updateJobStep(jobId, 'complete', { logger })

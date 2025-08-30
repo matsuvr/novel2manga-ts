@@ -1,5 +1,6 @@
 import { executeStorageWithTracking } from '@/services/application/transaction-manager'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { getLogger } from '@/infrastructure/logging/logger'
 
 export interface ChunkStoragePort {
   getChunk(jobId: string, index: number): Promise<{ text: string } | null>
@@ -183,9 +184,12 @@ export function getStoragePorts(): StoragePorts {
         const key = StorageKeys.episodeLayout(jobId, episodeNumber)
         const obj = await storage.get(key)
         // Add migration monitoring - MEDIUM PRIORITY
-        console.log(
-          `Layout format migration: ${jobId}/episode_${episodeNumber} - using JSON format`,
-        )
+        getLogger()
+          .withContext({ service: 'storage-ports' })
+          .info('Layout format migration: using JSON format', {
+            jobId,
+            episodeNumber,
+          })
         return obj?.text ?? null
       },
       async putEpisodeLayoutProgress(jobId, episodeNumber, json) {

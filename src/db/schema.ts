@@ -68,6 +68,9 @@ export const jobs = sqliteTable(
     // 再開用の状態保存
     resumeDataPath: text('resume_data_path'),
 
+    // カバレッジ警告 (JSON)
+    coverageWarnings: text('coverage_warnings'),
+
     // タイムスタンプ
     createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
@@ -202,7 +205,7 @@ export const layoutStatus = sqliteTable(
   },
   (table) => ({
     jobIdIdx: index('idx_layout_status_job_id').on(table.jobId),
-    uniqueJobEpisode: index('unique_job_episode_layout').on(table.jobId, table.episodeNumber),
+    uniqueJobEpisode: unique('unique_job_episode_layout').on(table.jobId, table.episodeNumber),
   }),
 )
 

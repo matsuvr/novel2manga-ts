@@ -3,6 +3,7 @@ import { getModelLimits } from '@/config/llm.config'
 import type { GenerateStructuredParams, LlmClient, OpenAICompatibleConfig } from './types'
 import { extractFirstJsonChunk, sanitizeLlmJsonResponse } from './utils'
 import { defaultBaseUrl } from './base-url'
+import { getLogger } from '@/infrastructure/logging/logger'
 
 type ChatMessage = { role: 'system' | 'user'; content: string }
 
@@ -53,13 +54,14 @@ export class OpenAICompatibleClient implements LlmClient {
     }
 
     const body = this.useChatCompletions
-      ? this.buildChatCompletionsBody([system, user], options, spec.schema, schemaName)
-      : this.buildResponsesBody([system, user], options, spec.schema, schemaName)
+      ? await this.buildChatCompletionsBody([system, user], options, spec.schema, schemaName)
+      : await this.buildResponsesBody([system, user], options, spec.schema, schemaName)
 
     const endpoint = this.useChatCompletions ? '/chat/completions' : '/responses'
     const isVerbose = process.env.LOG_LLM_REQUESTS === '1' || process.env.NODE_ENV === 'development'
-    console.log(`[${this.provider}] Making request to ${this.baseUrl}${endpoint}`)
-    console.log(`[${this.provider}] Model: ${this.model}`)
+    const logger = getLogger().withContext({ service: `llm-${this.provider}`, model: this.model })
+    logger.info('Making request', { url: `${this.baseUrl}${endpoint}` })
+    logger.info('Model selected')
 
     if (
       (this.provider === 'groq' || this.provider === 'openai') &&
@@ -67,10 +69,10 @@ export class OpenAICompatibleClient implements LlmClient {
       spec.schemaName
     ) {
       if (isVerbose) {
-        console.log(`[${this.provider}] Using Structured Output with schema: ${spec.schemaName}`)
+        logger.debug('Using Structured Output with schema', { schema: spec.schemaName })
       }
     } else {
-      console.log(`[${this.provider}] Using basic JSON object response format`)
+      logger.info('Using basic JSON object response format')
     }
 
     // Redacted trace log for debugging
@@ -79,12 +81,12 @@ export class OpenAICompatibleClient implements LlmClient {
         process.env.LOG_LLM_REQUESTS === '1' || process.env.NODE_ENV === 'development'
       if (shouldLog) {
         const trace = buildRedactedTrace(this.provider, this.model, this.baseUrl + endpoint, body)
-        console.log(`[${this.provider}] Request trace:`, JSON.stringify(trace))
+        logger.debug('Request trace', { trace })
       }
     } catch (e) {
-      console.warn(
-        `[${this.provider}] Failed to build request trace: ${e instanceof Error ? e.message : String(e)}`,
-      )
+      logger.warn('Failed to build request trace', {
+        error: e instanceof Error ? e.message : String(e),
+      })
     }
 
     const res = await fetch(`${this.baseUrl}${endpoint}`, {
@@ -106,9 +108,9 @@ export class OpenAICompatibleClient implements LlmClient {
     if (isVerbose) {
       try {
         const meta = summarizeResponseMeta(data)
-        console.log(`[${this.provider}] Raw response meta: ${meta}`)
+        logger.debug('Raw response meta', { meta })
       } catch {
-        console.log(`[${this.provider}] Raw response received (meta unavailable)`)
+        logger.debug('Raw response received (meta unavailable)')
       }
     }
 
@@ -118,12 +120,12 @@ export class OpenAICompatibleClient implements LlmClient {
     }
 
     if (isVerbose) {
-      console.log(`[${this.provider}] Extracted content (preview):`, truncate(content, 800))
-      console.log(`[${this.provider}] Content length:`, content.length)
+      logger.debug('Extracted content (preview)', { preview: truncate(content, 800) })
+      logger.debug('Content length', { length: content.length })
     }
 
     const jsonText = extractFirstJsonChunk(content)
-    console.log(`[${this.provider}] Extracted JSON text:`, truncate(jsonText, 200))
+    logger.debug('Extracted JSON text (preview)', { preview: truncate(jsonText, 200) })
 
     let parsed: unknown
     try {
@@ -131,20 +133,13 @@ export class OpenAICompatibleClient implements LlmClient {
     } catch (jsonError) {
       // JSON パースエラー時に詳細なエラー情報をログ出力
       const errorMsg = jsonError instanceof Error ? jsonError.message : String(jsonError)
-      console.error(
-        JSON.stringify({
-          ts: new Date().toISOString(),
-          level: 'error',
-          service: `llm-${this.provider}`,
-          operation: 'JSON.parse',
-          msg: 'JSONパースエラーが発生しました。LLMレスポンスの形式を確認してください。',
-          error: errorMsg,
-          rawContent: truncate(jsonText, 500),
-          contentLength: jsonText.length,
-          provider: this.provider,
-          model: this.model,
-        }),
-      )
+      logger.error('JSON parse error for LLM response', {
+        error: errorMsg,
+        rawContent: truncate(jsonText, 500),
+        contentLength: jsonText.length,
+        provider: this.provider,
+        model: this.model,
+      })
       throw new Error(
         `${this.provider}: JSON parse failed: ${errorMsg}. Content preview: ${truncate(jsonText, 200)}`,
       )
@@ -155,9 +150,7 @@ export class OpenAICompatibleClient implements LlmClient {
     const originalJson = JSON.stringify(parsed)
     const sanitizedJson = JSON.stringify(sanitized)
     if (originalJson !== sanitizedJson) {
-      console.warn(
-        `[${this.provider}] Structured Output constraint violation detected. Sanitization applied.`,
-      )
+      logger.warn('Structured Output constraint violation detected. Sanitization applied.')
       if (isVerbose) {
         try {
           const origKeys = Array.isArray(parsed)
@@ -166,29 +159,27 @@ export class OpenAICompatibleClient implements LlmClient {
           const saniKeys = Array.isArray(sanitized)
             ? `array(len=${(sanitized as unknown[]).length})`
             : `keys=${Object.keys(sanitized as Record<string, unknown>).length}`
-          console.log(`[${this.provider}] Parsed object summary: ${origKeys}`)
-          console.log(`[${this.provider}] Sanitized object summary: ${saniKeys}`)
+          logger.debug('Parsed object summary', { summary: origKeys })
+          logger.debug('Sanitized object summary', { summary: saniKeys })
         } catch {
           // ignore preview failures
         }
       }
     } else {
-      console.log(`[${this.provider}] Structured Output worked correctly - no sanitization needed`)
+      logger.info('Structured Output worked correctly - no sanitization needed')
     }
     try {
       return spec.schema.parse(sanitized)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      console.error(`[${this.provider}] Schema validation failed:`)
-      console.error(`Schema name: ${schemaName}`)
-      console.error(`Validation error: ${msg}`)
+      logger.error('Schema validation failed', { schemaName, error: msg })
       try {
-        console.error(`Original parsed object keys:`, Object.keys(parsed || {}))
-        console.error(`Sanitized object keys:`, Object.keys(sanitized || {}))
+        logger.error('Original parsed object keys', { keys: Object.keys(parsed || {}) })
+        logger.error('Sanitized object keys', { keys: Object.keys(sanitized || {}) })
         if (isVerbose) {
           // In verbose mode, still avoid full dumps; provide small previews
-          console.error(`[${this.provider}] Parsed preview:`, safeObjectPreview(parsed))
-          console.error(`[${this.provider}] Sanitized preview:`, safeObjectPreview(sanitized))
+          logger.error('Parsed preview', { preview: safeObjectPreview(parsed) })
+          logger.error('Sanitized preview', { preview: safeObjectPreview(sanitized) })
         }
       } catch {
         // ignore preview failures
@@ -199,7 +190,7 @@ export class OpenAICompatibleClient implements LlmClient {
     }
   }
 
-  private buildChatCompletionsBody(
+  private async buildChatCompletionsBody(
     messages: ChatMessage[],
     options: { maxTokens: number },
     schema?: z.ZodType<unknown>,
@@ -225,7 +216,7 @@ export class OpenAICompatibleClient implements LlmClient {
 
     // Groq と OpenAI の厳密なStructured Outputsを使用
     if ((this.provider === 'groq' || this.provider === 'openai') && schema && schemaName) {
-      const { zodToJsonSchema } = require('zod-to-json-schema')
+      const { zodToJsonSchema } = await import('zod-to-json-schema')
       // 参照を生成しないことでスキーマの見かけ上のネストを抑制し、
       // Groq Structured Outputsの「最大ネスト深度<=5」要件に適合しやすくする
       const baseJsonSchema = zodToJsonSchema(schema, { name: schemaName, $refStrategy: 'none' })
@@ -245,7 +236,9 @@ export class OpenAICompatibleClient implements LlmClient {
         jsonSchema = stripUnsupportedKeywordsForGroqSO(jsonSchema)
       }
 
-      console.log(`[${this.provider}] Using Structured Output with JSON Schema for: ${schemaName}`)
+      getLogger()
+        .withContext({ service: `llm-${this.provider}`, model: this.model })
+        .debug('Using Structured Output with JSON Schema', { schema: schemaName })
 
       body.response_format = {
         type: 'json_schema',
@@ -264,7 +257,7 @@ export class OpenAICompatibleClient implements LlmClient {
     return body
   }
 
-  private buildResponsesBody(
+  private async buildResponsesBody(
     messages: ChatMessage[],
     options: { maxTokens: number },
     schema?: z.ZodType<unknown>,
@@ -281,12 +274,12 @@ export class OpenAICompatibleClient implements LlmClient {
 
     // Structured Outputs (Responses API): text.format = { type: 'json_schema', name, schema, strict }
     if (schema && schemaName) {
-      const { zodToJsonSchema } = require('zod-to-json-schema')
+      const { zodToJsonSchema } = await import('zod-to-json-schema')
       let jsonSchema = zodToJsonSchema(schema, { name: schemaName, $refStrategy: 'none' })
-      jsonSchema = flattenRootObjectSchema(jsonSchema)
-      jsonSchema = inlineAllRefsAndDropDefs(jsonSchema)
-      jsonSchema = dropUnionCombinators(jsonSchema)
-      jsonSchema = enforceJsonSchemaConstraintsForStructuredOutputs(jsonSchema)
+      jsonSchema = flattenRootObjectSchema(jsonSchema) as typeof jsonSchema
+      jsonSchema = inlineAllRefsAndDropDefs(jsonSchema) as typeof jsonSchema
+      jsonSchema = dropUnionCombinators(jsonSchema) as typeof jsonSchema
+      jsonSchema = enforceJsonSchemaConstraintsForStructuredOutputs(jsonSchema) as typeof jsonSchema
       ;(body as Record<string, unknown>).text = {
         format: {
           type: 'json_schema',
@@ -634,9 +627,12 @@ function decideSafeMaxTokens(
 
   // 最低限の完了トークン数は確保するが、設定値が明示されている場合は優先
   if (cap < limits.minCompletion) {
-    console.warn(
-      `[${provider}] Configured maxTokens (${configured}) is below minimum completion tokens (${limits.minCompletion}). Using minimum.`,
-    )
+    getLogger()
+      .withContext({ service: `llm-${provider}`, model })
+      .warn('Configured maxTokens below minimum completion tokens. Using minimum.', {
+        configured,
+        minCompletion: limits.minCompletion,
+      })
     return Math.min(limits.minCompletion, limits.hardCap)
   }
 
