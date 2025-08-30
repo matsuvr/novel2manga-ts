@@ -12,10 +12,7 @@ export function clampImportance(importance: number): number {
     return 1 // Default to minimum importance for invalid values
   }
 
-  if (importance <= 0) return 1
-  if (importance >= 6) return 6
-
-  // Round to nearest integer within valid range
+  // Round to nearest integer and clamp to valid range [1, 6]
   return Math.max(1, Math.min(6, Math.round(importance)))
 }
 
