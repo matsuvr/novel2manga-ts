@@ -2,13 +2,14 @@ import type { z } from 'zod'
 import { getModelLimits } from '@/config/llm.config'
 import type { GenerateStructuredParams, LlmClient, OpenAICompatibleConfig } from './types'
 import { extractFirstJsonChunk, sanitizeLlmJsonResponse } from './utils'
+import { defaultBaseUrl } from './base-url'
 
 type ChatMessage = { role: 'system' | 'user'; content: string }
 
 export class OpenAICompatibleClient implements LlmClient {
   readonly provider: Extract<
     import('./types').LlmProvider,
-    'openai' | 'groq' | 'openrouter' | 'gemini'
+    'openai' | 'groq' | 'grok' | 'openrouter' | 'gemini'
   >
   private readonly baseUrl: string
   private readonly apiKey: string
@@ -53,7 +54,7 @@ export class OpenAICompatibleClient implements LlmClient {
 
     const body = this.useChatCompletions
       ? this.buildChatCompletionsBody([system, user], options, spec.schema, schemaName)
-      : this.buildResponsesBody([system, user], options, spec.schema)
+      : this.buildResponsesBody([system, user], options, spec.schema, schemaName)
 
     const endpoint = this.useChatCompletions ? '/chat/completions' : '/responses'
     const isVerbose = process.env.LOG_LLM_REQUESTS === '1' || process.env.NODE_ENV === 'development'
@@ -207,7 +208,14 @@ export class OpenAICompatibleClient implements LlmClient {
     const body: Record<string, unknown> = {
       model: this.model,
       messages,
-      max_tokens: decideSafeMaxTokens(this.provider, this.model, options.maxTokens, messages),
+    }
+
+    // OpenAI gpt-5 系は chat/completions で max_tokens 非対応。max_completion_tokens を使用。
+    const max = decideSafeMaxTokens(this.provider, this.model, options.maxTokens, messages)
+    if (this.provider === 'openai' && /^gpt-5/i.test(this.model)) {
+      ;(body as Record<string, unknown>).max_completion_tokens = max
+    } else {
+      ;(body as Record<string, unknown>).max_tokens = max
     }
 
     // Groq GPT-OSS系は reasoning_format/effort は未対応。代わりに include_reasoning で制御
@@ -218,7 +226,9 @@ export class OpenAICompatibleClient implements LlmClient {
     // Groq と OpenAI の厳密なStructured Outputsを使用
     if ((this.provider === 'groq' || this.provider === 'openai') && schema && schemaName) {
       const { zodToJsonSchema } = require('zod-to-json-schema')
-      const baseJsonSchema = zodToJsonSchema(schema, { name: schemaName })
+      // 参照を生成しないことでスキーマの見かけ上のネストを抑制し、
+      // Groq Structured Outputsの「最大ネスト深度<=5」要件に適合しやすくする
+      const baseJsonSchema = zodToJsonSchema(schema, { name: schemaName, $refStrategy: 'none' })
 
       // ルートが$ref/definitionsベースになるzod-to-json-schemaの出力を実体化
       let jsonSchema = flattenRootObjectSchema(baseJsonSchema)
@@ -257,20 +267,39 @@ export class OpenAICompatibleClient implements LlmClient {
   private buildResponsesBody(
     messages: ChatMessage[],
     options: { maxTokens: number },
-    _schema: z.ZodType<unknown>,
+    schema?: z.ZodType<unknown>,
+    schemaName?: string,
   ) {
-    // 注意: OpenAI Responses APIの仕様はモデル/時期により変動するため、デフォルトで使用しない。
-    // ここでは安全側で text.format をJSONに固定するが、未対応プロバイダではHTTP 400となる可能性がある。
-    const input = messages.map((m) => ({
-      role: m.role,
-      content: [{ type: 'text' as const, text: m.content }],
-    }))
-    return {
+    // Responses API: 入力は role + content(文字列) の配列でも受け付ける（公式例準拠）
+    const input = messages.map((m) => ({ role: m.role, content: m.content }))
+
+    const body: Record<string, unknown> = {
       model: this.model,
       input,
       max_output_tokens: options.maxTokens,
-      text: { format: 'json' },
     }
+
+    // Structured Outputs (Responses API): text.format = { type: 'json_schema', name, schema, strict }
+    if (schema && schemaName) {
+      const { zodToJsonSchema } = require('zod-to-json-schema')
+      let jsonSchema = zodToJsonSchema(schema, { name: schemaName, $refStrategy: 'none' })
+      jsonSchema = flattenRootObjectSchema(jsonSchema)
+      jsonSchema = inlineAllRefsAndDropDefs(jsonSchema)
+      jsonSchema = dropUnionCombinators(jsonSchema)
+      jsonSchema = enforceJsonSchemaConstraintsForStructuredOutputs(jsonSchema)
+      ;(body as Record<string, unknown>).text = {
+        format: {
+          type: 'json_schema',
+          name: schemaName,
+          schema: jsonSchema,
+          strict: true,
+        },
+      }
+    } else {
+      ;(body as Record<string, unknown>).text = { format: 'json_object' }
+    }
+
+    return body
   }
 }
 
@@ -330,26 +359,42 @@ function extractTextFromResponse(data: unknown, useChat: boolean): string | null
     const t = d?.choices?.[0]?.message?.content
     return typeof t === 'string' ? t : null
   }
-  const d = data as ResponsesApiResponse
-  const t =
-    d?.output?.[0]?.content?.[0]?.text ?? d?.output_text ?? d?.choices?.[0]?.message?.content
-  return typeof t === 'string' ? t : null
+  const d = data as ResponsesApiResponse & Record<string, unknown>
+  // 1) 代表フィールド
+  if (typeof d?.output_text === 'string' && d.output_text.trim().length > 0) {
+    return d.output_text
+  }
+  // 2) output[].content[] を走査
+  const output = (d as { output?: Array<{ content?: Array<Record<string, unknown>> }> }).output
+  if (Array.isArray(output)) {
+    for (const msg of output) {
+      const parts = Array.isArray(msg?.content)
+        ? (msg.content as Array<Record<string, unknown>>)
+        : []
+      for (const p of parts) {
+        // output_text 型
+        if (typeof p.text === 'string' && p.text.trim().length > 0) return p.text as string
+        // JSONスキーマ型: { type: 'json_schema', json: {...} } の想定（将来の互換）
+        if (
+          (p as { type?: unknown }).type === 'json_schema' &&
+          typeof (p as { json?: unknown }).json === 'object' &&
+          (p as { json?: unknown }).json !== null
+        ) {
+          try {
+            return JSON.stringify((p as { json: unknown }).json)
+          } catch {
+            // ignore JSON stringify failure
+          }
+        }
+      }
+    }
+  }
+  // 3) 最後のフォールバック（Chat互換）
+  const t = (d as ChatCompletionsResponse)?.choices?.[0]?.message?.content
+  return typeof t === 'string' && t.trim().length > 0 ? t : null
 }
 
-function defaultBaseUrl(
-  provider: Extract<import('./types').LlmProvider, 'openai' | 'groq' | 'openrouter' | 'gemini'>,
-): string {
-  switch (provider) {
-    case 'groq':
-      return 'https://api.groq.com/openai/v1'
-    case 'openrouter':
-      return 'https://openrouter.ai/api/v1'
-    case 'gemini':
-      return 'https://generativelanguage.googleapis.com/v1'
-    default:
-      return 'https://api.openai.com/v1'
-  }
-}
+// defaultBaseUrl は src/agents/llm/base-url.ts に集約
 
 async function safeReadText(res: Response): Promise<string> {
   try {

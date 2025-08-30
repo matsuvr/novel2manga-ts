@@ -8,51 +8,63 @@ import { StorageFactory } from '@/utils/storage'
 // モック設定 - Script-based flow
 vi.mock('@/agents/script/script-converter', () => ({
   convertEpisodeTextToScript: vi.fn().mockResolvedValue({
-    title: 'テストエピソード',
-    scenes: [
+    style_tone: 'テスト用トーン',
+    style_art: 'テスト用アート',
+    style_sfx: 'テスト用効果音',
+    characters: [
       {
-        id: 'scene1',
-        title: 'テストシーン',
-        location: '公園',
-        time: '昼',
-        script: [
-          {
-            id: 'line1',
-            type: 'dialogue',
-            speaker: 'テスト太郎',
-            text: 'こんにちは！',
-            emotion: 'normal',
-          },
-          {
-            id: 'line2',
-            type: 'situation',
-            text: 'ベンチに座る',
-          },
-        ],
+        id: 'char_1',
+        name_ja: 'テスト太郎',
+        role: 'protagonist',
+        speech_style: 'カジュアル',
+        aliases: ['太郎'],
       },
     ],
+    locations: [
+      {
+        id: 'loc_park',
+        name_ja: '公園',
+        notes: '昼の公園',
+      },
+    ],
+    props: [],
+    panels: [
+      {
+        no: 1,
+        cut: 'テスト状況説明',
+        camera: 'medium',
+        dialogue: ['テスト太郎: こんにちは！'],
+      },
+      {
+        no: 2,
+        cut: 'ベンチに座る',
+        camera: 'close',
+        dialogue: [],
+      },
+    ],
+    continuity_checks: [],
   }),
 }))
 
 vi.mock('@/agents/script/page-break-estimator', () => ({
   estimatePageBreaks: vi.fn().mockResolvedValue({
-    pages: [
+    panels: [
       {
         pageNumber: 1,
-        scenes: [
+        panelIndex: 1,
+        content: 'テスト状況説明',
+        dialogue: [
           {
-            sceneId: 'scene1',
-            scriptLines: [
-              {
-                id: 'line1',
-                type: 'dialogue',
-                speaker: 'テスト太郎',
-                text: 'こんにちは！',
-                emotion: 'normal',
-              },
-            ],
+            speaker: 'テスト太郎',
+            text: 'こんにちは！',
           },
         ],
+      },
+      {
+        pageNumber: 1,
+        panelIndex: 2,
+        content: 'ベンチに座る',
+        dialogue: [],
       },
     ],
   }),

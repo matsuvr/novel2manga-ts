@@ -74,16 +74,53 @@ vi.mock('@/agents/narrative-arc-analyzer', () => ({
 // Script converter mock
 vi.mock('@/agents/script/script-converter', () => ({
   convertEpisodeTextToScript: vi.fn().mockResolvedValue({
-    scenes: [
+    style_tone: 'テスト用トーン',
+    style_art: 'テスト用アート',
+    style_sfx: 'テスト用効果音',
+    characters: [],
+    locations: [],
+    props: [],
+    panels: [
       {
-        setting: 'テスト設定',
-        description: 'テスト説明',
-        script: [
-          { index: 1, type: 'stage', text: 'テスト舞台設定', speaker: null },
-          { index: 2, type: 'dialogue', text: 'テストセリフ', speaker: '太郎' },
-        ],
+        no: 1,
+        cut: 'テスト舞台設定',
+        camera: 'medium',
+        narration: ['説明'],
+        dialogue: ['太郎: テストセリフ'],
       },
     ],
+    continuity_checks: [],
+  }),
+  convertChunkToMangaScript: vi.fn().mockResolvedValue({
+    style_tone: 'テスト用トーン',
+    style_art: 'テスト用アート',
+    style_sfx: 'テスト用効果音',
+    characters: [
+      {
+        id: 'char_1',
+        name_ja: '太郎',
+        role: 'protagonist',
+        speech_style: 'カジュアル',
+        aliases: ['太郎'],
+      },
+    ],
+    locations: [
+      {
+        id: 'loc_1',
+        name_ja: 'テスト場所',
+        notes: 'テスト用場所',
+      },
+    ],
+    props: [],
+    panels: [
+      {
+        no: 1,
+        cut: 'テストシーン説明',
+        camera: 'medium',
+        dialogue: ['太郎: テストセリフ'],
+      },
+    ],
+    continuity_checks: [],
   }),
 }))
 
@@ -489,19 +526,81 @@ describe('Service Integration Tests', () => {
     }))
 
     // Script converter も resetAllMocks の影響を受けるため、ここで毎回上書きする
-    vi.mocked(convertEpisodeTextToScript).mockResolvedValue({
-      title: 'Test Episode',
-      scenes: [
+    const { convertChunkToMangaScript } = await import('@/agents/script/script-converter')
+    vi.mocked(convertChunkToMangaScript).mockResolvedValue({
+      style_tone: 'テスト用トーン',
+      style_art: 'テスト用アート',
+      style_sfx: 'テスト用効果音',
+      characters: [
         {
-          id: '1',
-          setting: 'テスト設定',
-          description: 'テスト説明',
-          script: [
-            { index: 1, type: 'stage', text: 'テスト舞台設定', speaker: null },
-            { index: 2, type: 'dialogue', text: 'テストセリフ', speaker: '太郎' },
-          ],
+          id: 'char_1',
+          name_ja: '太郎',
+          role: 'protagonist',
+          speech_style: 'カジュアル',
+          aliases: ['太郎'],
         },
       ],
+      locations: [
+        {
+          id: 'loc_1',
+          name_ja: 'テスト場所',
+          notes: 'テスト用場所',
+        },
+      ],
+      props: [],
+      panels: [
+        {
+          no: 1,
+          cut: 'テスト舞台設定',
+          camera: 'medium',
+          dialogue: [],
+        },
+        {
+          no: 2,
+          cut: 'テストセリフ',
+          camera: 'close',
+          dialogue: ['太郎: テストセリフ'],
+        },
+      ],
+      continuity_checks: [],
+    })
+
+    vi.mocked(convertEpisodeTextToScript).mockResolvedValue({
+      style_tone: 'テスト用トーン',
+      style_art: 'テスト用アート',
+      style_sfx: 'テスト用効果音',
+      characters: [
+        {
+          id: 'char_1',
+          name_ja: '太郎',
+          role: 'protagonist',
+          speech_style: 'カジュアル',
+          aliases: ['太郎'],
+        },
+      ],
+      locations: [
+        {
+          id: 'loc_1',
+          name_ja: 'テスト場所',
+          notes: 'テスト用場所',
+        },
+      ],
+      props: [],
+      panels: [
+        {
+          no: 1,
+          cut: 'テスト舞台設定',
+          camera: 'medium',
+          dialogue: [],
+        },
+        {
+          no: 2,
+          cut: 'テストセリフ',
+          camera: 'close',
+          dialogue: ['太郎: テストセリフ'],
+        },
+      ],
+      continuity_checks: [],
     })
 
     // PageBreakStep を steps バレル経由で上書き（AnalyzePipeline は './steps' から import）

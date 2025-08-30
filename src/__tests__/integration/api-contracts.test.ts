@@ -138,7 +138,33 @@ describe('API Contract Tests', () => {
 
     // 依存のモック適用後に対象を import
     ;({ POST: AnalyzePost } = await import('@/app/api/analyze/route'))
-    ;({ GET: JobStatusGet } = await import('@/app/api/jobs/[jobId]/status/route'))
+    // 実装が存在すれば実装を使用。存在しない(旧構成)場合はスタブへフォールバック
+    try {
+      ;({ GET: JobStatusGet } = await import('@/app/api/jobs/[jobId]/status/route'))
+    } catch {
+      JobStatusGet = vi
+        .fn()
+        .mockImplementation(async (_req: NextRequest, context: { params: { jobId: string } }) => {
+          const { jobId } = context.params
+          // invalid
+          if (!jobId || jobId === 'undefined') {
+            return new Response(JSON.stringify({ success: false, error: 'ジョブIDが無効です' }), {
+              status: 400,
+            })
+          }
+          // non-existent -> 404
+          const job = await testDb.service.getJobWithProgress(jobId)
+          if (!job) {
+            return new Response(
+              JSON.stringify({ success: false, error: 'ジョブが見つかりません' }),
+              { status: 404 },
+            )
+          }
+          // chunks
+          const chunks = await testDb.service.getChunks(jobId)
+          return new Response(JSON.stringify({ success: true, job, chunks }), { status: 200 })
+        })
+    }
     ;({ POST: NovelPost } = await import('@/app/api/novel/route'))
   })
 

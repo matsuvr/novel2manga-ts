@@ -419,11 +419,6 @@ export function setupAgentMocks() {
       maxTokens: 1000,
       systemPrompt: 'テスト用レイアウト生成プロンプト',
     })),
-    getNarrativeAnalysisConfig: vi.fn(() => ({
-      provider: 'fake',
-      maxTokens: 1000,
-      systemPrompt: 'テスト用ナラティブ分析プロンプト',
-    })),
   }))
 
   // チャンクアナライザーのモック
@@ -434,11 +429,6 @@ export function setupAgentMocks() {
       usedProvider: 'fake',
       fallbackFrom: [],
     })),
-  }))
-
-  // ナラティブアーク分析のモック
-  vi.mock('@/agents/narrative-arc-analyzer', () => ({
-    analyzeNarrativeArc: vi.fn().mockResolvedValue(TEST_EPISODE_BOUNDARIES),
   }))
 
   // エピソード生成エージェントのモック（ファイルが存在しないため削除）
