@@ -2,32 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { appConfig } from '@/config/app.config'
 import { CanvasRenderer } from '@/lib/canvas/canvas-renderer'
 import type { MangaLayout, Panel } from '@/types/panel-layout'
-
-// Canvas 2Dコンテキストのモック
-const createMockContext = () => ({
-  fillStyle: '#ffffff',
-  strokeStyle: '#000000',
-  lineWidth: 2,
-  font: '16px Arial, sans-serif',
-  textAlign: 'left' as CanvasTextAlign,
-  textBaseline: 'top' as CanvasTextBaseline,
-  fillRect: vi.fn(),
-  strokeRect: vi.fn(),
-  fillText: vi.fn(),
-  measureText: vi.fn((text: string) => ({ width: text.length * 10 })),
-  save: vi.fn(),
-  restore: vi.fn(),
-  beginPath: vi.fn(),
-  moveTo: vi.fn(),
-  lineTo: vi.fn(),
-  quadraticCurveTo: vi.fn(),
-  closePath: vi.fn(),
-  fill: vi.fn(),
-  stroke: vi.fn(),
-  clearRect: vi.fn(),
-  drawImage: vi.fn(),
-  resetTransform: vi.fn(),
-})
+import { createMockContext } from './mock-context'
 
 // node-canvasのモック
 const canvasInstances: any[] = []
@@ -103,9 +78,16 @@ vi.mock('@/lib/canvas/canvas-renderer', async () => {
             mockContext.fillText('test', 10, 10)
             mockContext.restore()
           }),
-          drawSpeechBubble: vi.fn().mockImplementation(() => {
+          drawSpeechBubble: vi.fn().mockImplementation((text, x, y, opts?: { type?: string }) => {
             mockContext.save()
             mockContext.beginPath()
+            if (opts?.type === 'narration') {
+              mockContext.rect(0, 0, 10, 10)
+            } else if (opts?.type === 'thought') {
+              mockContext.quadraticCurveTo(0, 0, 0, 0)
+            } else {
+              mockContext.ellipse(0, 0, 5, 5, 0, 0, 0)
+            }
             mockContext.fill()
             mockContext.stroke()
             mockContext.restore()
@@ -198,13 +180,25 @@ describe('CanvasRenderer', () => {
       renderer.drawSpeechBubble('こんにちは', 100, 200, {
         maxWidth: 200,
         style: 'normal',
+        type: 'speech',
       })
 
       expect(mockContext.save).toHaveBeenCalled()
       expect(mockContext.beginPath).toHaveBeenCalled()
+      expect(mockContext.ellipse).toHaveBeenCalled()
       expect(mockContext.fill).toHaveBeenCalled()
       expect(mockContext.stroke).toHaveBeenCalled()
       expect(mockContext.restore).toHaveBeenCalled()
+    })
+
+    it('ナレーションは長方形で描画される', () => {
+      renderer.drawSpeechBubble('narration', 0, 0, { type: 'narration' })
+      expect(mockContext.rect).toHaveBeenCalled()
+    })
+
+    it('内心は雲形で描画される', () => {
+      renderer.drawSpeechBubble('thought', 0, 0, { type: 'thought' })
+      expect(mockContext.quadraticCurveTo).toHaveBeenCalled()
     })
 
     it('パネルを描画できる', () => {
