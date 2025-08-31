@@ -1,4 +1,5 @@
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
+import { COVERAGE_MESSAGES } from '@/constants/messages'
 
 export interface ScriptMergeResult {
   merged: boolean
@@ -108,7 +109,7 @@ export class ScriptMergeStep implements PipelineStep {
       const coverageWarnings = allLowCoverageChunks.map((c) => ({
         chunkIndex: c.index,
         coverageRatio: c.ratio,
-        message: `チャンク${c.index}のカバレッジが低くなっています (${(c.ratio * 100).toFixed(1)}%)`,
+        message: COVERAGE_MESSAGES.LOW_COVERAGE_WARNING(c.index, (c.ratio * 100).toFixed(1)),
       }))
 
       if (failCoverageChunks.length > 0) {

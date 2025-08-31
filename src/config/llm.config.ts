@@ -59,6 +59,10 @@ export function getProviderForUseCase(useCase: LLMUseCase): LLMProvider {
   ) {
     return envVal as LLMProvider
   }
+  // テスト環境では明示的な指定が無ければ fake を使用
+  if (process.env.NODE_ENV === 'test') {
+    return 'fake'
+  }
   return useCaseProviders[useCase] ?? getDefaultProvider()
 }
 
@@ -84,11 +88,16 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
     model: 'gemini-2.5-pro',
     maxTokens: 32768,
     timeout: 60_000,
+    // NOTE:
+    // - 環境変数の検証は実際に Vertex AI プロバイダーを使用する直前
+    //   (getLLMProviderConfig('vertexai') 呼び出し時) に遅延実行する。
+    // - ここで環境変数を即時参照して throw すると、テスト環境で
+    //   単に本モジュールを import しただけで失敗してしまうため禁止。
+    // - 値はプレースホルダで初期化し、実使用時に上書き・検証する。
     vertexai: {
-      project: process.env.VERTEX_AI_PROJECT || 'manganamemaker',
-      location: process.env.VERTEX_AI_LOCATION || 'us-central1',
-      serviceAccountPath:
-        process.env.GOOGLE_APPLICATION_CREDENTIALS || 'manganamemaker-e402457d75fd.json',
+      project: '',
+      location: '',
+      serviceAccountPath: undefined,
     },
   },
   cerebras: {
@@ -204,6 +213,37 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
         return undefined
     }
   })()
+
+  // Vertex AI はここで実際の環境変数を読み込み・検証する（遅延検証）
+  if (provider === 'vertexai') {
+    const project = process.env.VERTEX_AI_PROJECT
+    const location = process.env.VERTEX_AI_LOCATION
+    const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
+
+    // テストでは Vertex を使わない前提だが、もし明示的に Vertex を選んだ場合は
+    // ここで欠落を厳密に検出してエラーにする（フォールバック禁止）。
+    if (!project || !location || !serviceAccountPath) {
+      const missing = [
+        !project ? 'VERTEX_AI_PROJECT' : undefined,
+        !location ? 'VERTEX_AI_LOCATION' : undefined,
+        !serviceAccountPath ? 'GOOGLE_APPLICATION_CREDENTIALS' : undefined,
+      ]
+        .filter(Boolean)
+        .join(', ')
+      throw new Error(`Missing required environment for Vertex AI: ${missing}`)
+    }
+
+    return {
+      ...cfg,
+      apiKey: dynamicApiKey,
+      model: modelOverride && modelOverride.trim().length > 0 ? modelOverride : cfg.model,
+      vertexai: {
+        project,
+        location,
+        serviceAccountPath,
+      },
+    }
+  }
 
   return {
     ...cfg,

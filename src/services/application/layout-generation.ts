@@ -362,7 +362,7 @@ async function generateEpisodeLayoutInternal(
       await db.createEpisode({ jobId, episodeNumber, title: fallbackEpisode.title ?? undefined })
       logger.info('Episode created successfully', { jobId, episodeNumber })
     } catch (error) {
-      logger.error('Failed to create episode in database', {
+      logger.warn('Failed to create fallback demo episode', {
         jobId,
         episodeNumber,
         error: error instanceof Error ? error.message : String(error),
