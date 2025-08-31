@@ -23,6 +23,7 @@ export class JobRepository {
     title?: string
     totalChunks?: number
     status?: string
+    userId?: string
   }): Promise<string> {
     return this.db.createJob(payload)
   }
