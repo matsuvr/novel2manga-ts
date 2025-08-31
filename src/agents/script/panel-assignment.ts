@@ -143,6 +143,9 @@ export function buildLayoutFromPageBreaks(
       usedContentInPage.add(content)
       recentContentGlobal.add(content)
 
+      // Extract SFX data from the panel
+      const sfx = Array.isArray(pp.sfx) ? pp.sfx : []
+
       const shape = template.panels[idx % template.panels.length]
       return {
         id: nextId++,
@@ -150,6 +153,7 @@ export function buildLayoutFromPageBreaks(
         size: shape.size,
         content,
         dialogues,
+        sfx, // Include SFX in the layout panel
         sourceChunkIndex: 0,
         importance: Math.min(
           10,

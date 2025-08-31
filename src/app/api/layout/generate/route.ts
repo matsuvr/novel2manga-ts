@@ -55,7 +55,13 @@ export async function POST(request: NextRequest) {
         await renderBatchFromYaml(jobId, episodeNumber, yamlContent, undefined, undefined, ports)
       }
     } catch (e) {
-      console.warn('[/api/layout/generate] Render kick failed:', e)
+      const _logger = getLogger().withContext({
+        route: 'api/layout/generate',
+        method: 'POST',
+      })
+      _logger.warn('Render kick failed', {
+        error: e instanceof Error ? e.message : String(e),
+      })
     }
 
     return ApiResponder.success({

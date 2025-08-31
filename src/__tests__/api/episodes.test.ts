@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 // Stubbed functions for missing /api/jobs/[jobId]/episodes/route
 const GET = vi
   .fn()
@@ -58,6 +59,7 @@ const POST = vi
       return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 })
     }
   })
+
 import { DatabaseService } from '@/services/database'
 import { __resetDatabaseServiceForTest } from '@/services/db-factory'
 

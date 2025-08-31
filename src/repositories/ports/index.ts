@@ -95,6 +95,15 @@ export interface JobDbPort {
   updateJobProgress(id: string, progress: JobProgress): Promise<void>
   /** Set lastError and optionally increment retry */
   updateJobError(id: string, error: string, step: string, incrementRetry?: boolean): Promise<void>
+  /** Update job coverage warnings */
+  updateJobCoverageWarnings(
+    id: string,
+    warnings: Array<{
+      chunkIndex: number
+      coverageRatio: number
+      message: string
+    }>,
+  ): Promise<void>
 }
 
 // === Novel Port (RO / RW: ensureNovel が書込) ===
