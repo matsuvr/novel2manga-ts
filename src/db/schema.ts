@@ -29,6 +29,7 @@ export const jobs = sqliteTable(
       .notNull()
       .references(() => novels.id, { onDelete: 'cascade' }),
     jobName: text('job_name'),
+    userId: text('user_id').notNull().default('anonymous'),
 
     // ステータス管理
     status: text('status').notNull().default('pending'), // pending/processing/completed/failed/paused
@@ -82,6 +83,7 @@ export const jobs = sqliteTable(
     statusIdx: index('idx_jobs_status').on(table.status),
     novelIdStatusIdx: index('idx_jobs_novel_id_status').on(table.novelId, table.status),
     currentStepIdx: index('idx_jobs_current_step').on(table.currentStep),
+    userIdIdx: index('idx_jobs_user_id').on(table.userId),
   }),
 )
 

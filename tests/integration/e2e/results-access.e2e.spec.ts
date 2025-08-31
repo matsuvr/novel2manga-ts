@@ -1,0 +1,48 @@
+import { randomUUID } from 'node:crypto'
+import { encode } from 'next-auth/jwt'
+import { expect, test } from '@playwright/test'
+import { getDatabaseService } from '@/services/db-factory'
+import { getBaseURL } from '../utils/getBaseURL'
+
+const secret = process.env.NEXTAUTH_SECRET || 'test-secret'
+
+test('results pages enforce user access control', async ({ page }) => {
+  const db = getDatabaseService()
+  const novel1 = randomUUID()
+  await db.ensureNovel(novel1, {
+    title: 'N1',
+    author: '',
+    originalTextPath: 'n1.txt',
+    textLength: 10,
+    language: 'ja',
+    metadataPath: null,
+  })
+  const job1 = await db.createJob({ novelId: novel1, title: 'Job1', userId: 'user1' })
+
+  const novel2 = randomUUID()
+  await db.ensureNovel(novel2, {
+    title: 'N2',
+    author: '',
+    originalTextPath: 'n2.txt',
+    textLength: 10,
+    language: 'ja',
+    metadataPath: null,
+  })
+  await db.createJob({ novelId: novel2, title: 'Job2', userId: 'user2' })
+
+  const baseURL = getBaseURL()
+
+  // Login as user1 and confirm listing
+  const token1 = await encode({ token: { sub: 'user1', email: 'user1@example.com' }, secret })
+  await page.context().addCookies([{ name: 'authjs.session-token', value: token1, url: baseURL }])
+  await page.goto('/results')
+  await expect(page.locator('text=Job1')).toBeVisible()
+  await expect(page.locator('text=Job2')).not.toBeVisible()
+
+  // Login as user2 and attempt to access user1 job detail
+  await page.context().clearCookies()
+  const token2 = await encode({ token: { sub: 'user2', email: 'user2@example.com' }, secret })
+  await page.context().addCookies([{ name: 'authjs.session-token', value: token2, url: baseURL }])
+  const response = await page.goto(`/results/${job1}`)
+  expect(response?.status()).toBe(404)
+})
