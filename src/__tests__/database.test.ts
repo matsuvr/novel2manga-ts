@@ -23,6 +23,14 @@ vi.mock('@/db', () => ({
   })),
 }))
 
+// モック設定を拡張してLayoutStatusテーブルを含める
+vi.mock('@/db/schema', () => ({
+  layoutStatus: {
+    jobId: 'jobId',
+    episodeNumber: 'episodeNumber',
+  },
+}))
+
 describe('DatabaseService', () => {
   let service: DatabaseService
 
@@ -75,6 +83,63 @@ describe('DatabaseService', () => {
 
       // Test passes if no error is thrown
       expect(service.updateJobStatus).toBeDefined()
+    })
+  })
+
+  describe('getLayoutStatusByJobId', () => {
+    it('should get layout status by job id', async () => {
+      const mockLayoutStatuses = [
+        {
+          id: 'layout-1',
+          jobId: 'job-123',
+          episodeNumber: 1,
+          isGenerated: true,
+          totalPages: 5,
+          totalPanels: 15,
+          createdAt: new Date(),
+          retryCount: 0,
+        },
+        {
+          id: 'layout-2',
+          jobId: 'job-123',
+          episodeNumber: 2,
+          isGenerated: true,
+          totalPages: 4,
+          totalPanels: 12,
+          createdAt: new Date(),
+          retryCount: 0,
+        },
+      ]
+
+      // Drizzleのselect().from().where().orderBy()チェーンをモック
+      const mockOrderBy = vi.fn().mockResolvedValue(mockLayoutStatuses)
+      const mockWhere = vi.fn().mockReturnValue({ orderBy: mockOrderBy })
+      const mockFrom = vi.fn().mockReturnValue({ where: mockWhere })
+      const mockSelect = vi.fn().mockReturnValue({ from: mockFrom })
+
+      service.db = { select: mockSelect } as any
+
+      const result = await service.getLayoutStatusByJobId('job-123')
+
+      expect(mockSelect).toHaveBeenCalled()
+      expect(result).toEqual(mockLayoutStatuses)
+      expect(result).toHaveLength(2)
+      expect(result[0].totalPages).toBe(5)
+      expect(result[1].totalPages).toBe(4)
+    })
+
+    it('should return empty array when no layout status found', async () => {
+      const mockOrderBy = vi.fn().mockResolvedValue([])
+      const mockWhere = vi.fn().mockReturnValue({ orderBy: mockOrderBy })
+      const mockFrom = vi.fn().mockReturnValue({ where: mockWhere })
+      const mockSelect = vi.fn().mockReturnValue({ from: mockFrom })
+
+      service.db = { select: mockSelect } as any
+
+      const result = await service.getLayoutStatusByJobId('non-existent-job')
+
+      expect(result).toEqual([])
+      expect(result).toHaveLength(0)
     })
   })
 })
