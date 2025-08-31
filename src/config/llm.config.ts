@@ -121,7 +121,7 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
   },
   groq: {
     apiKey: process.env.GROQ_API_KEY,
-    model: 'openai/gpt-oss-120b',
+    model: 'moonshotai/kimi-k2-instruct',
     // Script conversion token limit reduced to prevent generation failure
     maxTokens: 16000,
     timeout: 30_000,

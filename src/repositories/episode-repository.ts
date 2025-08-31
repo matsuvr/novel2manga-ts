@@ -13,6 +13,20 @@ export class EpisodeRepository {
     return this.db.getEpisodesByJobId(jobId)
   }
 
+  /**
+   * Get episode numbers that contain the specified chunk
+   * @param jobId Job ID
+   * @param chunkIndex Chunk index (0-based)
+   * @returns Array of episode numbers containing the chunk
+   */
+  async getEpisodeNumbersByChunk(jobId: string, chunkIndex: number): Promise<number[]> {
+    const episodes = await this.db.getEpisodesByJobId(jobId)
+    return episodes
+      .filter((episode) => chunkIndex >= episode.startChunk && chunkIndex <= episode.endChunk)
+      .map((episode) => episode.episodeNumber)
+      .sort((a, b) => a - b)
+  }
+
   async bulkUpsert(episodes: Array<Omit<NewEpisode, 'id' | 'createdAt'>>): Promise<void> {
     if (episodes.length === 0) return
 

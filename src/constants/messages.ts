@@ -6,6 +6,8 @@
 export const COVERAGE_MESSAGES = {
   LOW_COVERAGE_WARNING: (chunkIndex: number, coveragePercent: string) =>
     `チャンク${chunkIndex}のカバレッジが低くなっています (${coveragePercent}%)`,
+  LOW_COVERAGE_WARNING_EPISODES: (episodeNumbers: number[], coveragePercent: string) =>
+    `エピソード${episodeNumbers.length > 0 ? episodeNumbers.join(', ') : '不明'}のカバレッジが低くなっています (${coveragePercent}%)`,
 } as const
 
 export const VALIDATION_MESSAGES = {
