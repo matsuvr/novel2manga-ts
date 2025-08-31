@@ -42,14 +42,9 @@ jobs:
           # Rollup optional dependencies workaround for CI
           npm rebuild || true
 
-      - name: Setup Biome CLI
-        uses: biomejs/setup-biome@v2
-        with:
-          version: 2.1.2
-
       - name: Verify Tools Installation
         run: |
-          biome --version
+          npx biome --version
           npx tsc --version
           echo "Node.js version: $(node --version)"
           echo "npm version: $(npm --version)"
@@ -59,8 +54,8 @@ jobs:
       - name: Type Check
         run: npx tsc --noEmit
 
-      - name: Lint
-        run: biome lint .
+      - name: Lint and Format Check
+        run: npm run check:ci
 
       - name: Unit Tests
         run: |

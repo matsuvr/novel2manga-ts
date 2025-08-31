@@ -406,6 +406,12 @@ console.log(result.trace)
 console.log(result.metadata?.provider)
 ```
 
+## 開発ツールとCI
+
+- **Lint**: Biome を使用し、`npm run lint` で静的解析を実行。
+- **Format**: Prettier により `npm run format` でコード整形。
+- **CI**: GitHub Actions が `check:ci` スクリプトとテストを全PRで自動実行。
+
 ## 今後の改善
 
 ### 短期目標
