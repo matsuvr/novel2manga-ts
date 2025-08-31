@@ -4,8 +4,9 @@ import { FakeLlmClient } from './fake'
 import { CerebrasClient, type CerebrasConfig } from './providers/cerebras'
 import { GeminiClient, type GeminiConfig } from './providers/gemini'
 import { OpenAIClient, type OpenAIConfig } from './providers/openai'
+import { OpenAICompatibleClient, type OpenAICompatibleConfig } from './providers/openai-compatible'
 
-export type LLMProvider = 'openai' | 'gemini' | 'groq' | 'openrouter' | 'cerebras' | 'fake'
+export type LLMProvider = 'openai' | 'gemini' | 'groq' | 'grok' | 'openrouter' | 'cerebras' | 'fake'
 
 export interface LlmFactoryConfig {
   provider: LLMProvider
@@ -51,14 +52,25 @@ export function createLlmClient(config: LlmFactoryConfig): LlmClient {
     }
 
     case 'groq': {
-      // groqはOpenAI互換のAPIを使用
-      const groqConfig: OpenAIConfig = {
+      const groqConfig: OpenAICompatibleConfig = {
         apiKey: config.apiKey || process.env.GROQ_API_KEY || '',
-        model: config.model,
         baseUrl: config.baseUrl || 'https://api.groq.com/openai/v1',
+        provider: 'groq',
+        model: config.model,
         timeout: config.timeout,
       }
-      return new OpenAIClient(groqConfig)
+      return new OpenAICompatibleClient(groqConfig)
+    }
+
+    case 'grok': {
+      const grokConfig: OpenAICompatibleConfig = {
+        apiKey: config.apiKey || process.env.XAI_API_KEY || '',
+        baseUrl: config.baseUrl || 'https://api.x.ai/v1',
+        provider: 'grok',
+        model: config.model,
+        timeout: config.timeout,
+      }
+      return new OpenAICompatibleClient(grokConfig)
     }
 
     case 'openrouter': {
@@ -138,3 +150,6 @@ export * from './fake'
 export * from './providers/cerebras'
 export * from './providers/gemini'
 export * from './providers/openai'
+export * from './providers/openai-compatible'
+export * from './structured-client'
+export * from './zod-helper'

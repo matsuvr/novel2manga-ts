@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 // Stubbed POST function for missing /api/jobs/[jobId]/route
 const POST = vi
   .fn()
@@ -23,6 +24,7 @@ const POST = vi
       status: 200,
     })
   })
+
 import { getJobQueue } from '@/services/queue'
 
 vi.mock('@/services/db-factory', () => ({

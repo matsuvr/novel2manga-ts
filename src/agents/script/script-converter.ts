@@ -4,9 +4,9 @@ import {
   getLlmStructuredGenerator,
 } from '@/agents/structured-generator'
 import { getAppConfigWithOverrides } from '@/config/app.config'
+import { getLogger } from '@/infrastructure/logging/logger'
 import { type NewMangaScript, NewMangaScriptSchema } from '@/types/script'
 import { sanitizeScript, validateImportanceFields } from '@/utils/script-validation'
-import { getLogger } from '@/infrastructure/logging/logger'
 
 export interface ScriptConversionInput {
   chunkText: string

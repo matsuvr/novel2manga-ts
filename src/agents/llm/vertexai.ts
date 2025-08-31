@@ -1,7 +1,14 @@
 import { GoogleGenAI } from '@google/genai'
+import { zodToJsonSchema } from 'zod-to-json-schema'
+import { getLogger } from '@/infrastructure/logging/logger'
+import {
+  dropUnionCombinators,
+  enforceJsonSchemaConstraintsForStructuredOutputs,
+  flattenRootObjectSchema,
+  inlineAllRefsAndDropDefs,
+} from './openai-compatible'
 import type { GenerateStructuredParams, LlmClient } from './types'
 import { extractFirstJsonChunk, sanitizeLlmJsonResponse } from './utils'
-import { getLogger } from '@/infrastructure/logging/logger'
 
 export interface VertexAIConfig {
   model: string
@@ -50,33 +57,49 @@ export class VertexAIClient implements LlmClient {
     logger.info('Model selected')
 
     try {
-      // Construct the full prompt using provided system and user prompts
-      // Construct contents as an array of message objects with roles
-      const contents = []
-      if (systemPrompt && typeof systemPrompt === 'string' && systemPrompt.trim()) {
-        contents.push({
-          role: 'system',
-          parts: [{ text: systemPrompt.trim() }],
-        })
-      }
-      if (userPrompt && typeof userPrompt === 'string' && userPrompt.trim()) {
-        contents.push({
-          role: 'user',
-          parts: [{ text: userPrompt.trim() }],
-        })
+      // Construct request for Vertex AI Gemini
+      // Important: Gemini on Vertex AI does not accept 'system' role in contents.
+      // Put system prompt into top-level systemInstruction and keep contents to user/model only.
+      const sys = typeof systemPrompt === 'string' ? systemPrompt.trim() : ''
+      const usr = typeof userPrompt === 'string' ? userPrompt.trim() : ''
+
+      const contents = [] as Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>
+      if (usr) {
+        contents.push({ role: 'user', parts: [{ text: usr }] })
       }
 
-      // Generate content using Vertex AI
-      const response = await this.client.models.generateContent({
+      // Build response schema for strict JSON using Zod -> JSON Schema
+      // Align with Groq/OpenAI constraints to keep depth small and no $refs
+      let jsonSchema = zodToJsonSchema(spec.schema, {
+        name: spec.schemaName,
+        $refStrategy: 'none',
+      })
+      jsonSchema = flattenRootObjectSchema(jsonSchema) as typeof jsonSchema
+      jsonSchema = inlineAllRefsAndDropDefs(jsonSchema) as typeof jsonSchema
+      jsonSchema = dropUnionCombinators(jsonSchema) as typeof jsonSchema
+      jsonSchema = enforceJsonSchemaConstraintsForStructuredOutputs(jsonSchema) as typeof jsonSchema
+
+      // Top-level systemInstruction is expected by our tests and accepted by SDK
+      const request: Parameters<typeof this.client.models.generateContent>[0] = {
+        ...(sys ? { systemInstruction: { role: 'system', parts: [{ text: sys }] } } : {}),
         model: this.model,
         contents,
         config: {
+          // also include via config per SDK typings
+          systemInstruction: sys ? { role: 'system', parts: [{ text: sys }] } : undefined,
           maxOutputTokens: options.maxTokens,
           temperature: 0.1,
           topP: 0.9,
           stopSequences: options.stop,
+          // Enforce JSON-only response with schema on Vertex AI/Gemini
+          responseMimeType: 'application/json',
+          // Use JSON Schema variant for GenAI SDK (maps to response_json_schema)
+          responseJsonSchema: jsonSchema as unknown,
         },
-      })
+      }
+
+      // Generate content using Vertex AI
+      const response = await this.client.models.generateContent(request)
 
       if (isVerbose) {
         logger.debug('Raw response received')

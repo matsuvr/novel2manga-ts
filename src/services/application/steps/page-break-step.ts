@@ -1,9 +1,9 @@
-import { estimatePageBreaksSegmented } from '@/agents/script/segmented-page-break-estimator'
 import { buildLayoutFromPageBreaks } from '@/agents/script/panel-assignment'
-import { StorageKeys } from '@/utils/storage'
+import { estimatePageBreaksSegmented } from '@/agents/script/segmented-page-break-estimator'
 import { getDatabaseService } from '@/services/db-factory'
-import type { NewMangaScript, PageBreakV2, EpisodeBreakPlan } from '@/types/script'
 import type { MangaLayout } from '@/types/panel-layout'
+import type { EpisodeBreakPlan, NewMangaScript, PageBreakV2 } from '@/types/script'
+import { StorageKeys } from '@/utils/storage'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface PageBreakResult {

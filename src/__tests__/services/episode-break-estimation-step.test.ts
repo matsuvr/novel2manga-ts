@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { StepContext } from '@/services/application/steps/base-step'
 import { EpisodeBreakEstimationStep } from '@/services/application/steps/episode-break-estimation-step'
 import type { NewMangaScript } from '@/types/script'
-import type { StepContext } from '@/services/application/steps/base-step'
 
 // Mock dependencies
 vi.mock('@/agents/structured-generator', () => ({

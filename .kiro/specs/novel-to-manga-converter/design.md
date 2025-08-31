@@ -176,6 +176,14 @@ const result = await agent.run({
 
 ## 設定
 
+## プロバイダー差異の吸収（2025-08-31 追加）
+
+- 共通インターフェース: すべてのLLM呼び出しは `LlmClient` を介して行い、プロバイダー毎の差異はアダプター層で吸収する。
+- Gemini/Vertex AI: `contents` に `role: 'system'` を含めない。代わりに `systemInstruction` トップレベルにシステムプロンプトを渡す。
+- OpenAI系/Groq系: OpenAI互換のメッセージ配列（`system`/`user`）を使用。Structured Outputsは対応プロバイダーのみ厳密化。
+- 役割マッピング: `assistant`→`model`（Gemini系）、`tool` は未サポートのため無効化または `user` 相当として取り扱い（現状は未使用）。
+- フォールバック禁止: 仕様差異で失敗した場合はエラーを明示し、その場で処理を停止する（自動フォールバックは実装しない）。
+
 ### 環境変数
 
 ```bash
