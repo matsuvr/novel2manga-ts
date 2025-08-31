@@ -912,6 +912,9 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
         let failedUpserts = 0
         let firstFailureDetail: { episode: number; error: string } | null = null
 
+        // Collect all layout status updates to batch them
+        const layoutStatusUpdates: Array<Parameters<typeof this.upsertLayoutStatus>[0]> = []
+
         for (const ep of episodes) {
           const layoutKey = StorageKeys.episodeLayout(jobId, ep.episodeNumber)
           const layoutExists = await storage.get(layoutKey)
@@ -923,14 +926,13 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
               const parsed = JSON.parse(layoutExists.text)
               const totalPages = Array.isArray(parsed?.pages) ? parsed.pages.length : 1
 
-              await this.upsertLayoutStatus({
+              layoutStatusUpdates.push({
                 jobId,
                 episodeNumber: ep.episodeNumber,
                 totalPages,
                 layoutPath: layoutKey,
               })
               count++
-              successfulUpserts++
             } catch (parseError) {
               failedUpserts++
               const errorMessage =
@@ -939,7 +941,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
                 firstFailureDetail = { episode: ep.episodeNumber, error: errorMessage }
               }
               // JSONパースエラーの場合は最小限の情報で修復
-              await this.upsertLayoutStatus({
+              layoutStatusUpdates.push({
                 jobId,
                 episodeNumber: ep.episodeNumber,
                 totalPages: 1,
@@ -947,7 +949,45 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
                 error: 'Layout file parsing failed during recovery',
               })
               count++
-              successfulUpserts++ // Minimal recovery succeeded
+            }
+          }
+        }
+
+        // Batch execute all layout status updates
+        if (layoutStatusUpdates.length > 0) {
+          try {
+            await this.db.transaction(async () => {
+              for (const update of layoutStatusUpdates) {
+                await this.upsertLayoutStatus(update)
+              }
+            })
+            successfulUpserts = layoutStatusUpdates.length
+          } catch (batchError) {
+            const errorMessage =
+              batchError instanceof Error ? batchError.message : String(batchError)
+            logger.error('Batch layout status update failed', {
+              jobId,
+              updatesCount: layoutStatusUpdates.length,
+              error: errorMessage,
+            })
+            // Fallback to individual updates
+            for (const update of layoutStatusUpdates) {
+              try {
+                await this.upsertLayoutStatus(update)
+                successfulUpserts++
+              } catch (individualError) {
+                failedUpserts++
+                const individualErrorMessage =
+                  individualError instanceof Error
+                    ? individualError.message
+                    : String(individualError)
+                if (!firstFailureDetail) {
+                  firstFailureDetail = {
+                    episode: update.episodeNumber,
+                    error: individualErrorMessage,
+                  }
+                }
+              }
             }
           }
         }

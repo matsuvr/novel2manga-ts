@@ -2,6 +2,7 @@ import type { z } from 'zod'
 import { DefaultLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getProviderForUseCase } from '@/config/llm.config'
 import { getAppConfigWithOverrides } from '@/config'
+import { EPISODE_CONSTANTS } from '@/config/constants'
 import { EpisodeBreakSchema, type EpisodeBreakPlan, type NewMangaScript } from '@/types/script'
 import {
   segmentScript,
@@ -36,8 +37,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
 
       // Small-script local rule: if panel count is small, confirm a single episode 1..N
       // This is NOT a fallback; it is a deterministic rule to avoid invalid LLM splits on tiny scripts.
-      const SMALL_PANEL_THRESHOLD = 8
-      if (totalPanels > 0 && totalPanels <= SMALL_PANEL_THRESHOLD) {
+      if (totalPanels > 0 && totalPanels <= EPISODE_CONSTANTS.SMALL_PANEL_THRESHOLD) {
         const plan: EpisodeBreakPlan = {
           episodes: [
             {
@@ -319,14 +319,14 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
 
       // Check episode length constraints
       const episodeLength = episode.endPanelIndex - episode.startPanelIndex + 1
-      const MIN_LEN = 10
-      const MAX_LEN = 50
-      const SMALL_PANEL_THRESHOLD = 8
       // For very small scripts, accept any length as long as coverage is continuous
-      if (totalPanels > SMALL_PANEL_THRESHOLD && episodeLength < MIN_LEN) {
+      if (
+        totalPanels > EPISODE_CONSTANTS.SMALL_PANEL_THRESHOLD &&
+        episodeLength < EPISODE_CONSTANTS.MIN_EPISODE_LENGTH
+      ) {
         issues.push(`Episode ${episode.episodeNumber}: too short (${episodeLength} panels)`)
       }
-      if (episodeLength > MAX_LEN) {
+      if (episodeLength > EPISODE_CONSTANTS.MAX_EPISODE_LENGTH) {
         issues.push(`Episode ${episode.episodeNumber}: too long (${episodeLength} panels)`)
       }
 

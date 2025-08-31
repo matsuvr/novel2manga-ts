@@ -56,13 +56,13 @@ export class VertexAIClient implements LlmClient {
       if (systemPrompt && typeof systemPrompt === 'string' && systemPrompt.trim()) {
         contents.push({
           role: 'system',
-          parts: [systemPrompt.trim()],
+          parts: [{ text: systemPrompt.trim() }],
         })
       }
       if (userPrompt && typeof userPrompt === 'string' && userPrompt.trim()) {
         contents.push({
           role: 'user',
-          parts: [userPrompt.trim()],
+          parts: [{ text: userPrompt.trim() }],
         })
       }
 
