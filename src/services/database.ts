@@ -11,6 +11,7 @@ import {
   type NewOutput,
   type Novel,
 } from '@/db'
+import type { LayoutStatusModel } from '@/types/database-models'
 import {
   chunks,
   episodes,
@@ -866,6 +867,29 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
           lastError: params.error ?? null,
         },
       })
+  }
+
+  async getLayoutStatusByJobId(jobId: string): Promise<LayoutStatusModel[]> {
+    const results = await this.db
+      .select()
+      .from(layoutStatus)
+      .where(eq(layoutStatus.jobId, jobId))
+      .orderBy(layoutStatus.episodeNumber)
+
+    // データベース結果をLayoutStatusModelに変換
+    return results.map((result) => ({
+      id: result.id,
+      jobId: result.jobId,
+      episodeNumber: result.episodeNumber,
+      isGenerated: result.isGenerated ?? false,
+      layoutPath: result.layoutPath ?? undefined,
+      totalPages: result.totalPages ?? undefined,
+      totalPanels: result.totalPanels ?? undefined,
+      generatedAt: result.generatedAt ? new Date(result.generatedAt) : undefined,
+      retryCount: result.retryCount ?? 0,
+      lastError: result.lastError ?? undefined,
+      createdAt: result.createdAt ? new Date(result.createdAt) : new Date(0),
+    }))
   }
 
   async recomputeJobTotalPages(jobId: string): Promise<number> {
