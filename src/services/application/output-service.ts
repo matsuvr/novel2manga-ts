@@ -85,42 +85,74 @@ export class OutputService {
     if (!job) throw new Error('指定されたジョブが見つかりません')
 
     let allEpisodes = await episodeRepo.getByJobId(jobId)
+    const logger = getLogger().withContext({
+      service: 'OutputService',
+      operation: 'export',
+      jobId,
+    })
+
+    logger.debug('Episodes found in database', { count: allEpisodes.length })
+
     if (allEpisodes.length === 0) {
       // Fallback: derive episode list from layout storage (JSON files)
       try {
-        const _layoutStorage = await this.ports.layout
-        const storage = await (await import('@/utils/storage')).StorageFactory.getLayoutStorage()
-        const keys = (await storage.list?.(jobId)) || []
-        const epNums = Array.from(
-          new Set(
-            keys
-              .map((k) => {
-                const m = k.match(/episode_(\d+)\.json$/)
-                return m ? Number(m[1]) : undefined
-              })
-              .filter((n): n is number => typeof n === 'number' && Number.isFinite(n)),
-          ),
-        ).sort((a, b) => a - b)
-        allEpisodes = epNums.map(
-          (n) =>
-            ({
-              id: `${jobId}-${n}`,
-              novelId: job.novelId,
-              jobId,
-              episodeNumber: n,
-              title: `エピソード${n}`,
-              summary: null,
-              startChunk: 0,
-              startCharIndex: 0,
-              endChunk: 0,
-              endCharIndex: 0,
-              confidence: 1,
-              episodeTextPath: null,
-              createdAt: new Date().toISOString(),
-            }) satisfies Episode,
-        )
-      } catch {
-        // ignore
+        logger.debug('Attempting fallback episode discovery from layout storage')
+
+        // Use layout port directly to find episodes
+        const episodeNumbers: number[] = []
+        let episodeNumber = 1
+
+        // Try to find episodes by checking for layout files (episode_1.json, episode_2.json, etc.)
+        while (episodeNumber <= 50) {
+          // Reasonable upper limit
+          try {
+            const layoutData = await this.ports.layout.getEpisodeLayout(jobId, episodeNumber)
+            if (layoutData) {
+              episodeNumbers.push(episodeNumber)
+              logger.debug('Found episode layout', { episodeNumber })
+            }
+          } catch (_error) {
+            // This episode doesn't exist, which is expected
+          }
+          episodeNumber++
+
+          // Early exit if we haven't found any episodes in the first few attempts
+          if (episodeNumber > 10 && episodeNumbers.length === 0) {
+            break
+          }
+        }
+
+        if (episodeNumbers.length > 0) {
+          logger.info('Found episodes via layout storage fallback', {
+            count: episodeNumbers.length,
+            episodes: episodeNumbers,
+          })
+
+          allEpisodes = episodeNumbers.map(
+            (n) =>
+              ({
+                id: `${jobId}-${n}`,
+                novelId: job.novelId,
+                jobId,
+                episodeNumber: n,
+                title: `エピソード${n}`,
+                summary: null,
+                startChunk: 0,
+                startCharIndex: 0,
+                endChunk: 0,
+                endCharIndex: 0,
+                confidence: 1,
+                episodeTextPath: null,
+                createdAt: new Date().toISOString(),
+              }) satisfies Episode,
+          )
+        } else {
+          logger.warn('No episodes found via layout storage fallback')
+        }
+      } catch (error) {
+        logger.error('Layout storage fallback failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
       }
     }
     let targetEpisodes = allEpisodes

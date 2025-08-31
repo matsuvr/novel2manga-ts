@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import type { NextRequest } from 'next/server'
+import { getLogger } from '@/infrastructure/logging/logger'
 import { adaptAll } from '@/repositories/adapters'
 import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
@@ -71,9 +72,11 @@ export async function POST(request: NextRequest): Promise<Response> {
     // 有効期限の計算
     const expiresAt = new Date(Date.now() + expiresIn * 60 * 60 * 1000)
 
-    console.log(
-      `共有リンク生成: Job ${body.jobId}, Token ${shareToken}, Expires: ${expiresAt.toISOString()}`,
-    )
+    getLogger().withContext({ route: 'api/share', method: 'POST' }).info('共有リンク生成', {
+      jobId: body.jobId,
+      token: shareToken,
+      expiresAt: expiresAt.toISOString(),
+    })
 
     // 共有情報をデータベースに保存
     // TODO: 共有テーブル（shares）を作成して共有情報を保存
@@ -91,7 +94,9 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     const shareUrl = `${baseUrl}/share/${shareToken}`
 
-    console.log(`共有リンク作成完了: ${shareUrl}`)
+    getLogger().withContext({ route: 'api/share', method: 'POST' }).info('共有リンク作成完了', {
+      url: shareUrl,
+    })
 
     return successResponse(
       {
@@ -105,7 +110,11 @@ export async function POST(request: NextRequest): Promise<Response> {
       201,
     )
   } catch (error) {
-    console.error('Share API error:', error)
+    getLogger()
+      .withContext({ route: 'api/share', method: 'POST' })
+      .error('Share API error', {
+        error: error instanceof Error ? error.message : String(error),
+      })
     return handleApiError(error)
   }
 }

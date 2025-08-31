@@ -95,20 +95,7 @@ function getScriptConversionConfig(): SimplePromptConfig {
     userPromptTemplate: prompts.userPromptTemplate,
   }
 }
-function getPageBreakEstimationConfig(): SimplePromptConfig {
-  const prompts = (appConfig.llm as unknown as Record<string, any>).pageBreakEstimation || {
-    systemPrompt: '',
-    userPromptTemplate: '',
-  }
-  const provider = resolveProvider()
-  const providerConfig = getLLMProviderConfig(provider)
-  return {
-    provider,
-    maxTokens: providerConfig.maxTokens,
-    systemPrompt: prompts.systemPrompt,
-    userPromptTemplate: prompts.userPromptTemplate,
-  }
-}
+// getPageBreakEstimationConfig removed - replaced with importance-based calculation
 
 // 期待JSONスキーマ（app.config.ts の仕様に合わせた緩めの検証）
 const TextAnalysisSchema = z
@@ -286,45 +273,7 @@ async function runScriptConversion(): Promise<NamedResult> {
   }
 }
 
-async function runPageBreakEstimation(): Promise<NamedResult> {
-  const cfg = getPageBreakEstimationConfig()
-  const script = {
-    script: [
-      { index: 0, type: 'dialogue', speaker: '太郎', text: '行くぞ！' },
-      { index: 1, type: 'narration', text: '雨が強くなる。' },
-      { index: 2, type: 'dialogue', speaker: '花子', text: '待って！' },
-      { index: 3, type: 'stage', text: '二人は走り出す。' },
-    ],
-  }
-  const prompt = (cfg.userPromptTemplate || '')
-    .replace('{{scriptJson}}', JSON.stringify(script))
-    .replace('{{targetPages}}', '4')
-    .replace('{{avgLinesPerPage}}', '8')
-
-  try {
-    const agent = new CompatAgent({
-      name: 'manual-pagebreak',
-      instructions: cfg.systemPrompt,
-      provider: cfg.provider,
-      maxTokens: cfg.maxTokens,
-    })
-    const obj = await agent.generateObject(PageBreakSchema, prompt)
-    return {
-      name: 'pageBreakEstimation',
-      ok: true,
-      provider: cfg.provider,
-      preview: JSON.stringify(obj).slice(0, 200),
-      jsonOk: true,
-    }
-  } catch (e) {
-    return {
-      name: 'pageBreakEstimation',
-      ok: false,
-      provider: cfg.provider,
-      error: (e as Error).message,
-    }
-  }
-}
+// runPageBreakEstimation removed - replaced with importance-based calculation
 
 async function main() {
   // プロバイダーの強制指定（任意）
@@ -334,7 +283,7 @@ async function main() {
   const results = [] as NamedResult[]
   results.push(await runTextAnalysis())
   results.push(await runScriptConversion())
-  results.push(await runPageBreakEstimation())
+  // runPageBreakEstimation removed - replaced with importance-based calculation
   console.log(JSON.stringify({ results }, null, 2))
 }
 

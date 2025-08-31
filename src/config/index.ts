@@ -108,22 +108,7 @@ export function getScriptConversionConfig() {
   }
 }
 
-// ページ切れ目推定設定を取得
-export function getPageBreakEstimationConfig() {
-  const prompts = getAppConfig().llm as unknown as Record<
-    string,
-    { systemPrompt?: string; userPromptTemplate?: string }
-  >
-  const pb = prompts.pageBreakEstimation || { systemPrompt: '', userPromptTemplate: '' }
-  const provider = getDefaultProvider()
-  const providerConfig = getProviderConfig(provider as LLMProvider)
-  return {
-    provider,
-    maxTokens: providerConfig.maxTokens,
-    systemPrompt: pb.systemPrompt as string,
-    userPromptTemplate: pb.userPromptTemplate as string,
-  }
-}
+// ページ切れ目推定設定は廃止 (importance-based calculation に置き換え)
 
 // コマ割り割当設定を取得
 export function getPanelAssignmentConfig() {

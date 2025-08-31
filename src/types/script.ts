@@ -35,6 +35,7 @@ export const MangaPanelSchema = z.object({
   narration: z.array(z.string()).optional(),
   dialogue: z.array(z.string()).optional(),
   sfx: z.array(z.string()).optional(),
+  importance: z.number().int(), // 1-6の重要度（プロンプトで制約、後でclamping処理）
 })
 
 // New manga script schema（panels直下）
@@ -81,6 +82,7 @@ export const PageBreakV2Schema = z.object({
           }),
         )
         .optional(),
+      sfx: z.array(z.string()).optional(), // SFX support added
     }),
   ),
 })
@@ -99,6 +101,24 @@ export const CoverageAssessmentSchema = z.object({
 })
 
 export type CoverageAssessment = z.infer<typeof CoverageAssessmentSchema>
+
+// ============================
+// Episode Break Detection Schema
+// ============================
+
+export const EpisodeBreakSchema = z.object({
+  episodes: z.array(
+    z.object({
+      episodeNumber: z.number().int().min(1),
+      title: z.string().optional(),
+      startPanelIndex: z.number().int().min(1),
+      endPanelIndex: z.number().int().min(1),
+      description: z.string().optional(),
+    }),
+  ),
+})
+
+export type EpisodeBreakPlan = z.infer<typeof EpisodeBreakSchema>
 
 // ============================
 // Panel Assignment Schema (retained for layout generation)

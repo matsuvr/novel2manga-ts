@@ -1,6 +1,14 @@
 import type { z } from 'zod'
 
-export type LlmProvider = 'openai' | 'groq' | 'grok' | 'openrouter' | 'cerebras' | 'gemini' | 'fake'
+export type LlmProvider =
+  | 'openai'
+  | 'groq'
+  | 'grok'
+  | 'openrouter'
+  | 'cerebras'
+  | 'gemini'
+  | 'vertexai'
+  | 'fake'
 
 export interface StructuredOutputSpec<T> {
   schema: z.ZodType<T>
