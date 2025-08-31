@@ -11,7 +11,6 @@ import {
   type NewOutput,
   type Novel,
 } from '@/db'
-import type { LayoutStatusModel } from '@/types/database-models'
 import {
   chunks,
   episodes,
@@ -24,6 +23,7 @@ import {
 } from '@/db/schema'
 import { getLogger } from '@/infrastructure/logging/logger'
 import type { TransactionPort, UnitOfWorkPort } from '@/repositories/ports'
+import type { LayoutStatusModel } from '@/types/database-models'
 import type { JobProgress, JobStatus, JobStep } from '@/types/job'
 import { makeEpisodeId } from '@/utils/ids'
 // Temporarily remove circular import - will be addressed in complete migration
