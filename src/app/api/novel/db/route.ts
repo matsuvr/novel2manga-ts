@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
+import { getLogger } from '@/infrastructure/logging/logger'
 import { adaptAll } from '@/repositories/adapters'
 import { JobRepository } from '@/repositories/job-repository'
 import { NovelRepository } from '@/repositories/novel-repository'
@@ -85,16 +86,18 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Novel保存エラー:', {
-      error,
-      // uuid がパースに失敗した場合 undefined の可能性があるため optional
-      uuid:
-        error instanceof Error && 'uuid' in error
-          ? (error as Error & { uuid?: string }).uuid
-          : undefined,
-      requestId: randomUUID(), // Add request tracing
-      timestamp: new Date().toISOString(),
-    })
+    getLogger()
+      .withContext({ route: 'api/novel/db', method: 'POST' })
+      .error('Novel保存エラー', {
+        error,
+        // uuid がパースに失敗した場合 undefined の可能性があるため optional
+        uuid:
+          error instanceof Error && 'uuid' in error
+            ? (error as Error & { uuid?: string }).uuid
+            : undefined,
+        requestId: randomUUID(), // Add request tracing
+        timestamp: new Date().toISOString(),
+      })
     return createErrorResponse(error, 'Novelの保存中にエラーが発生しました')
   }
 }
@@ -127,7 +130,7 @@ export async function GET(request: NextRequest) {
       return createSuccessResponse({ novels: novelsList })
     }
   } catch (error) {
-    console.error('Novel取得エラー:', {
+    getLogger().withContext({ route: 'api/novel/db', method: 'GET' }).error('Novel取得エラー', {
       error,
       requestId: randomUUID(), // Add request tracing
       timestamp: new Date().toISOString(),

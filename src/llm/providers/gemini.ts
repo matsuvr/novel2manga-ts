@@ -39,16 +39,27 @@ export class GeminiClient implements LlmClient {
         )
       }
 
-      // Convert messages to Gemini format
-      const geminiContents = messages.map((msg) => ({
-        role: this.convertRole(msg.role),
-        parts: [{ text: msg.content }],
-      }))
+      // Separate system messages and map others to Gemini format
+      const systemText = messages
+        .filter((m) => m.role === 'system' && typeof m.content === 'string')
+        .map((m) => m.content.trim())
+        .filter(Boolean)
+        .join('\n\n')
+
+      const geminiContents = messages
+        .filter((m) => m.role !== 'system')
+        .map((msg) => ({
+          role: this.convertRole(msg.role),
+          parts: [{ text: msg.content }],
+        }))
 
       const result = await this.client.models.generateContent({
         model,
         contents: geminiContents,
         config: {
+          systemInstruction: systemText
+            ? { role: 'system', parts: [{ text: systemText }] }
+            : undefined,
           maxOutputTokens: options.maxTokens,
           temperature: options.temperature,
           topP: options.topP,

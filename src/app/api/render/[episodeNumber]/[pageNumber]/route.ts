@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
+import { getLogger } from '@/infrastructure/logging/logger'
 import { createErrorResponse, handleApiError, validationError } from '@/utils/api-error'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
 import { validateJobId } from '@/utils/validators'
@@ -76,7 +77,11 @@ export async function GET(
       })
     }
   } catch (error) {
-    console.error('Render GET API error:', error)
+    getLogger()
+      .withContext({ route: 'api/render/[episodeNumber]/[pageNumber]', method: 'GET' })
+      .error('Render GET API error', {
+        error: error instanceof Error ? error.message : String(error),
+      })
     return handleApiError(error)
   }
 }

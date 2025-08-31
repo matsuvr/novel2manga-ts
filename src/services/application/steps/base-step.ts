@@ -190,6 +190,30 @@ export abstract class BasePipelineStep implements PipelineStep {
     }
   }
 
+  protected async updateJobCoverageWarnings(
+    jobId: string,
+    warnings: Array<{
+      chunkIndex: number
+      coverageRatio: number
+      message: string
+    }>,
+    context: ExecutionContext,
+  ): Promise<void> {
+    try {
+      const jobRepo = getJobRepository()
+      await jobRepo.updateCoverageWarnings(jobId, warnings)
+      context.logger.info('Job coverage warnings updated', { jobId, warningCount: warnings.length })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      context.logger.error('Failed to update job coverage warnings', {
+        jobId,
+        warningCount: warnings.length,
+        error: message,
+      })
+      throw error
+    }
+  }
+
   // Structured error logging for consistency
   protected logStructuredError(
     context: StepContext,
@@ -210,20 +234,17 @@ export abstract class BasePipelineStep implements PipelineStep {
       ...additionalContext,
     })
 
-    // Also log to console for immediate visibility
-    console.error(
-      JSON.stringify({
-        ts: new Date().toISOString(),
-        level: 'error',
-        service: 'analyze-pipeline',
-        stepName: this.stepName,
-        operation,
-        msg: `${this.stepName} - ${operation} failed`,
-        jobId: context.jobId,
-        error: errorMessage,
-        stack: errorStack?.slice(0, 500),
-        ...additionalContext,
-      }),
-    )
+    // Duplicate structured log to file-only via logger (console is managed globally)
+    context.logger.error('structured', {
+      ts: new Date().toISOString(),
+      service: 'analyze-pipeline',
+      stepName: this.stepName,
+      operation,
+      msg: `${this.stepName} - ${operation} failed`,
+      jobId: context.jobId,
+      error: errorMessage,
+      stack: errorStack?.slice(0, 500),
+      ...additionalContext,
+    })
   }
 }
