@@ -431,6 +431,13 @@ console.log(result.metadata?.provider)
 
 統合テストも完全に対応し、既存のコードベースとの互換性を保ちながら、段階的な移行が可能です。
 
+## Results Pages & Access Control (2025-02-14)
+
+- 追加ルート `/results` および `/results/[jobId]` を実装。
+- Auth.js の `getServerSession` を用いた認証を導入し、ジョブ閲覧をログインユーザーに限定。
+- `jobs` テーブルに `user_id` 列を追加し、各ジョブをユーザーに紐づけ。
+- 一覧・詳細ページは `user_id` でフィルタされ、他ユーザーのデータ参照を防止。
+
 ## 追加: エピソード本文の永続化（2025-08-21）
 
 - エピソード抽出後、本文テキストをストレージに保存（`analysis` ストレージ、キー: `StorageKeys.episodeText(jobId, episodeNumber)`）。

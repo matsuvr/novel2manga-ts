@@ -111,6 +111,26 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
     return await this.db.select().from(novels).orderBy(desc(novels.createdAt))
   }
 
+  async listJobsByUser(
+    userId: string,
+  ): Promise<
+    Array<{ id: string; title: string | null; createdAt: string | null; fileSize: number | null }>
+  > {
+    const rows = await this.db
+      .select({
+        id: jobs.id,
+        title: novels.title,
+        createdAt: jobs.createdAt,
+        fileSize: outputs.fileSize,
+      })
+      .from(jobs)
+      .leftJoin(novels, eq(jobs.novelId, novels.id))
+      .leftJoin(outputs, eq(outputs.jobId, jobs.id))
+      .where(eq(jobs.userId, userId))
+      .orderBy(desc(jobs.createdAt))
+    return rows
+  }
+
   // Job関連メソッド（統一シグネチャ）
   async createJob(payload: {
     id?: string
@@ -118,6 +138,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
     title?: string
     totalChunks?: number
     status?: string
+    userId?: string
   }): Promise<string> {
     const id = payload.id || crypto.randomUUID()
     await this.db.insert(jobs).values({
@@ -127,6 +148,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       status: (payload.status as Job['status']) || 'pending',
       currentStep: 'split',
       totalChunks: payload.totalChunks || 0,
+      userId: payload.userId || 'anonymous',
     })
     return id
   }
