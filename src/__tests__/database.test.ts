@@ -23,8 +23,22 @@ vi.mock('@/db', () => ({
   })),
 }))
 
-// モック設定を拡張してLayoutStatusテーブルを含める
+// モック設定を拡張して必要なテーブルを含める
 vi.mock('@/db/schema', () => ({
+  jobs: {
+    id: 'id',
+    novelId: 'novel_id',
+    jobName: 'job_name',
+    status: 'status',
+    currentStep: 'current_step',
+  },
+  chunks: {
+    id: 'id',
+    novelId: 'novel_id',
+    originalText: 'original_text',
+    startIndex: 'start_index',
+    endIndex: 'end_index',
+  },
   layoutStatus: {
     jobId: 'jobId',
     episodeNumber: 'episodeNumber',
