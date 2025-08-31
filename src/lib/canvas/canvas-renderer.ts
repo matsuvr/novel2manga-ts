@@ -237,60 +237,9 @@ export class CanvasRenderer {
           this.ctx.fillStyle = '#ffffff'
           this.ctx.lineWidth = dialogue.emotion === 'shout' ? 3 : 2
           // 形状切替: speech=楕円、thought=雲状、narration=長方形
-          const shapeType = (dialogue as { type?: 'speech' | 'thought' | 'narration' }).type
-          if (shapeType === 'narration') {
-            // 長方形（角丸なし）
-            this.ctx.beginPath()
-            this.ctx.rect(bx, by, bubbleW, bubbleH)
-            this.ctx.closePath()
-            this.ctx.fill()
-            this.ctx.stroke()
-          } else if (shapeType === 'thought') {
-            // 雲形（連続パス）: 楕円周囲に沿ってふくらみを連続的に描画
-            const bumps = 8
-            const r = Math.max(6, Math.min(bubbleW, bubbleH) * 0.08)
-            const cx = bx + bubbleW / 2
-            const cy = by + bubbleH / 2
-            const rx = bubbleW / 2
-            const ry = bubbleH / 2
-
-            this.ctx.beginPath()
-            // 開始点
-            let anglePrev = 0
-            let pxPrev = cx + Math.cos(anglePrev) * rx
-            let pyPrev = cy + Math.sin(anglePrev) * ry
-            this.ctx.moveTo(pxPrev, pyPrev)
-            for (let k = 1; k <= bumps; k++) {
-              const angle = (k / bumps) * Math.PI * 2
-              const px = cx + Math.cos(angle) * rx
-              const py = cy + Math.sin(angle) * ry
-              // 制御点: 前後点の外側へオフセットした位置
-              const midAngle = (anglePrev + angle) / 2
-              const cx1 = cx + Math.cos(midAngle) * (rx + r)
-              const cy1 = cy + Math.sin(midAngle) * (ry + r)
-              this.ctx.quadraticCurveTo(cx1, cy1, px, py)
-              anglePrev = angle
-              pxPrev = px
-              pyPrev = py
-            }
-            this.ctx.closePath()
-            this.ctx.fill()
-            this.ctx.stroke()
-          } else {
-            // speech または未指定は楕円
-            this.ctx.beginPath()
-            this.ctx.ellipse(
-              bx + bubbleW / 2,
-              by + bubbleH / 2,
-              bubbleW / 2,
-              bubbleH / 2,
-              0,
-              0,
-              Math.PI * 2,
-            )
-            this.ctx.fill()
-            this.ctx.stroke()
-          }
+          const shapeType =
+            (dialogue as { type?: 'speech' | 'thought' | 'narration' }).type || 'speech'
+          this.drawBubbleShape(shapeType, bx, by, bubbleW, bubbleH)
           this.ctx.restore()
 
           // 画像貼り付け（中央揃え）
@@ -391,6 +340,55 @@ export class CanvasRenderer {
     return lines
   }
 
+  /**
+   * Draws a bubble shape (ellipse, rectangle, or cloud) at the specified position
+   * @private
+   */
+  private drawBubbleShape(
+    type: 'speech' | 'thought' | 'narration',
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): void {
+    if (type === 'narration') {
+      this.ctx.beginPath()
+      this.ctx.rect(x, y, width, height)
+      this.ctx.fill()
+      this.ctx.stroke()
+    } else if (type === 'thought') {
+      const bumps = 8
+      const r = Math.max(6, Math.min(width, height) * 0.08)
+      const cx = x + width / 2
+      const cy = y + height / 2
+      const rx = width / 2
+      const ry = height / 2
+      this.ctx.beginPath()
+      let anglePrev = 0
+      const pxStart = cx + Math.cos(anglePrev) * rx
+      const pyStart = cy + Math.sin(anglePrev) * ry
+      this.ctx.moveTo(pxStart, pyStart)
+      for (let k = 1; k <= bumps; k++) {
+        const angle = (k / bumps) * Math.PI * 2
+        const px = cx + Math.cos(angle) * rx
+        const py = cy + Math.sin(angle) * ry
+        const midAngle = (anglePrev + angle) / 2
+        const cx1 = cx + Math.cos(midAngle) * (rx + r)
+        const cy1 = cy + Math.sin(midAngle) * (ry + r)
+        this.ctx.quadraticCurveTo(cx1, cy1, px, py)
+        anglePrev = angle
+      }
+      this.ctx.closePath()
+      this.ctx.fill()
+      this.ctx.stroke()
+    } else {
+      this.ctx.beginPath()
+      this.ctx.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2)
+      this.ctx.fill()
+      this.ctx.stroke()
+    }
+  }
+
   drawSpeechBubble(
     text: string,
     x: number,
@@ -420,45 +418,7 @@ export class CanvasRenderer {
     this.ctx.fillStyle = '#ffffff'
     this.ctx.lineWidth = style === 'shout' ? 3 : 2
 
-    if (type === 'narration') {
-      this.ctx.beginPath()
-      this.ctx.rect(x, y, width, height)
-      this.ctx.closePath()
-      this.ctx.fill()
-      this.ctx.stroke()
-    } else if (type === 'thought') {
-      const bumps = 8
-      const r = Math.max(6, Math.min(width, height) * 0.08)
-      const cx = x + width / 2
-      const cy = y + height / 2
-      const rx = width / 2
-      const ry = height / 2
-      this.ctx.beginPath()
-      let anglePrev = 0
-      let pxPrev = cx + Math.cos(anglePrev) * rx
-      let pyPrev = cy + Math.sin(anglePrev) * ry
-      this.ctx.moveTo(pxPrev, pyPrev)
-      for (let k = 1; k <= bumps; k++) {
-        const angle = (k / bumps) * Math.PI * 2
-        const px = cx + Math.cos(angle) * rx
-        const py = cy + Math.sin(angle) * ry
-        const midAngle = (anglePrev + angle) / 2
-        const cx1 = cx + Math.cos(midAngle) * (rx + r)
-        const cy1 = cy + Math.sin(midAngle) * (ry + r)
-        this.ctx.quadraticCurveTo(cx1, cy1, px, py)
-        anglePrev = angle
-        pxPrev = px
-        pyPrev = py
-      }
-      this.ctx.closePath()
-      this.ctx.fill()
-      this.ctx.stroke()
-    } else {
-      this.ctx.beginPath()
-      this.ctx.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2)
-      this.ctx.fill()
-      this.ctx.stroke()
-    }
+    this.drawBubbleShape(type, x, y, width, height)
 
     // テキストを描画
     this.ctx.fillStyle = '#000000'

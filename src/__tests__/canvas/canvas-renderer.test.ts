@@ -78,20 +78,24 @@ vi.mock('@/lib/canvas/canvas-renderer', async () => {
             mockContext.fillText('test', 10, 10)
             mockContext.restore()
           }),
-          drawSpeechBubble: vi.fn().mockImplementation((text, x, y, opts?: { type?: string }) => {
-            mockContext.save()
-            mockContext.beginPath()
-            if (opts?.type === 'narration') {
-              mockContext.rect(0, 0, 10, 10)
-            } else if (opts?.type === 'thought') {
-              mockContext.quadraticCurveTo(0, 0, 0, 0)
-            } else {
-              mockContext.ellipse(0, 0, 5, 5, 0, 0, 0)
-            }
-            mockContext.fill()
-            mockContext.stroke()
-            mockContext.restore()
-          }),
+          drawSpeechBubble: vi
+            .fn()
+            .mockImplementation(
+              (text, x, y, opts?: { type?: 'speech' | 'thought' | 'narration' }) => {
+                mockContext.save()
+                mockContext.beginPath()
+                if (opts?.type === 'narration') {
+                  mockContext.rect(0, 0, 10, 10)
+                } else if (opts?.type === 'thought') {
+                  mockContext.quadraticCurveTo(0, 0, 0, 0)
+                } else {
+                  mockContext.ellipse(0, 0, 5, 5, 0, 0, Math.PI * 2, false)
+                }
+                mockContext.fill()
+                mockContext.stroke()
+                mockContext.restore()
+              },
+            ),
           cleanup: vi.fn(),
         }
         return instance
