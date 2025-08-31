@@ -492,3 +492,14 @@ LLM構造化ジェネレーターにおけるエラー処理は、共通のエ�
 - イミュータブルな更新パターン
 - シーケンシャルなページ番号の保証
 - 包括的なJSDoc文書化
+
+## 追加: Legacy StorageService 完全削除（2025-09-01）
+
+- 旧 `src/services/storage.ts` を廃止し、全ストレージ操作は `StorageKeys` と `StorageFactory` を利用
+- 階層ディレクトリと `txt` ベース保存を排除し、フラットキー + JSON 形式に統一
+
+## 追加: Google OAuth 認証基盤（2025-09-02）
+
+- Auth.js v5 と Google プロバイダーによるログイン/ログアウトを実装
+- `@auth/drizzle-adapter` を用い、ユーザー・セッション情報を D1 に永続化
+- Next.js App Router 向けに `SessionProvider` を組み込み、クライアントでセッションを管理
