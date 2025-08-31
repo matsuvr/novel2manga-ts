@@ -888,7 +888,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       generatedAt: result.generatedAt ? new Date(result.generatedAt) : undefined,
       retryCount: result.retryCount ?? 0,
       lastError: result.lastError ?? undefined,
-      createdAt: new Date(result.createdAt ?? new Date().toISOString()),
+      createdAt: result.createdAt ? new Date(result.createdAt) : new Date(0),
     }))
   }
 
