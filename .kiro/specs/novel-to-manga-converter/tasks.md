@@ -168,3 +168,10 @@
 - [x] Chunking: 末尾の短いチャンクを直前に連結（原文スライスで重複抑止）
 - [x] Bundling: 末尾エピソードが下限未満なら直前に吸収
 - [ ] Tests: 端数吸収のユニット/統合テストを追加
+
+## New (2025-08-29): Manga Bubble Shapes
+
+- [x] Render speech bubbles as ellipses
+- [x] Render narration bubbles as rectangles
+- [x] Render thought bubbles as cloud shapes
+- [x] Ensure bubble padding prevents text overlap

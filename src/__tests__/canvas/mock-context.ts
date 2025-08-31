@@ -1,0 +1,28 @@
+import { vi } from 'vitest'
+
+export const createMockContext = () => ({
+  fillStyle: '#ffffff',
+  strokeStyle: '#000000',
+  lineWidth: 2,
+  font: '16px Arial, sans-serif',
+  textAlign: 'left' as CanvasTextAlign,
+  textBaseline: 'top' as CanvasTextBaseline,
+  fillRect: vi.fn(),
+  strokeRect: vi.fn(),
+  rect: vi.fn(),
+  ellipse: vi.fn(),
+  fillText: vi.fn(),
+  measureText: vi.fn((text: string) => ({ width: text.length * 10 })),
+  save: vi.fn(),
+  restore: vi.fn(),
+  beginPath: vi.fn(),
+  moveTo: vi.fn(),
+  lineTo: vi.fn(),
+  quadraticCurveTo: vi.fn(),
+  closePath: vi.fn(),
+  fill: vi.fn(),
+  stroke: vi.fn(),
+  clearRect: vi.fn(),
+  drawImage: vi.fn(),
+  resetTransform: vi.fn(),
+})
