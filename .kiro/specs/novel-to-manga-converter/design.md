@@ -56,6 +56,11 @@ src/
         └── health-check.ts    # APIヘルスチェックのビジネスロジック（DB/Storageを軽量 probe）
 ```
 
+## 出力ストレージ設計
+
+- 変換結果は Cloudflare R2 に保存し、ユーザー単位のパス `results/{userId}/{jobId}.{format}` を採用
+- 保存パスとメタ情報を D1 の `outputs` テーブルに記録し、ダウンロード URL 生成に利用
+
 ## パブリックAPI
 
 ### LlmClient

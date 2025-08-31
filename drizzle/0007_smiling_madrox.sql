@@ -1,0 +1,1 @@
+ALTER TABLE `outputs` ADD `user_id` text NOT NULL;

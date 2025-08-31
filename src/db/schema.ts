@@ -251,6 +251,7 @@ export const outputs = sqliteTable(
     jobId: text('job_id')
       .notNull()
       .references(() => jobs.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull(),
     outputType: text('output_type').notNull(), // pdf/cbz/images_zip/epub
     outputPath: text('output_path').notNull(),
     fileSize: integer('file_size'),

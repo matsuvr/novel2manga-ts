@@ -30,12 +30,12 @@ export class OutputService {
     return this.outputRepo.getById(id)
   }
 
-  async savePdf(jobId: string, data: Buffer): Promise<string> {
-    return this.ports.output.putExport(jobId, 'pdf', data, { jobId })
+  async savePdf(userId: string, jobId: string, data: Buffer): Promise<string> {
+    return this.ports.output.putExport(userId, jobId, 'pdf', data, { jobId })
   }
 
-  async saveZip(jobId: string, data: Buffer): Promise<string> {
-    return this.ports.output.putExport(jobId, 'zip', data, { jobId })
+  async saveZip(userId: string, jobId: string, data: Buffer): Promise<string> {
+    return this.ports.output.putExport(userId, jobId, 'zip', data, { jobId })
   }
 
   async getExportContent(path: string): Promise<Buffer | null> {
@@ -69,7 +69,8 @@ export class OutputService {
   async export(
     jobId: string,
     format: 'pdf' | 'images_zip',
-    episodeNumbers?: number[],
+    episodeNumbers: number[] | undefined,
+    userId: string,
   ): Promise<{
     outputId: string
     exportFilePath: string
@@ -168,14 +169,14 @@ export class OutputService {
     let pageCount = 0
     switch (format) {
       case 'pdf': {
-        const pdf = await this.exportToPDF(jobId, targetEpisodes)
+        const pdf = await this.exportToPDF(userId, jobId, targetEpisodes)
         exportFilePath = pdf.exportFilePath
         fileSize = pdf.fileSize
         pageCount = pdf.pageCount
         break
       }
       case 'images_zip': {
-        const zip = await this.exportToZIP(jobId, targetEpisodes)
+        const zip = await this.exportToZIP(userId, jobId, targetEpisodes)
         exportFilePath = zip.exportFilePath
         fileSize = zip.fileSize
         pageCount = zip.pageCount
@@ -193,6 +194,7 @@ export class OutputService {
         jobId,
         outputType: format === 'pdf' ? 'pdf' : 'images_zip',
         outputPath: exportFilePath,
+        userId,
         fileSize,
         pageCount,
         metadataPath: null,
@@ -227,6 +229,7 @@ export class OutputService {
   }
 
   private async exportToPDF(
+    userId: string,
     jobId: string,
     episodes: Episode[],
   ): Promise<{ exportFilePath: string; fileSize: number; pageCount: number }> {
@@ -271,7 +274,7 @@ export class OutputService {
       doc.on('end', async () => {
         try {
           const pdfBuffer = Buffer.concat(chunks)
-          const exportPath = await this.savePdf(jobId, pdfBuffer)
+          const exportPath = await this.savePdf(userId, jobId, pdfBuffer)
           resolve({
             exportFilePath: exportPath,
             fileSize: pdfBuffer.length,
@@ -285,6 +288,7 @@ export class OutputService {
   }
 
   private async exportToZIP(
+    userId: string,
     jobId: string,
     episodes: Episode[],
   ): Promise<{ exportFilePath: string; fileSize: number; pageCount: number }> {
@@ -335,7 +339,7 @@ export class OutputService {
     }
 
     const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' })
-    const exportPath = await this.saveZip(jobId, zipBuffer)
+    const exportPath = await this.saveZip(userId, jobId, zipBuffer)
     return {
       exportFilePath: exportPath,
       fileSize: zipBuffer.length,
