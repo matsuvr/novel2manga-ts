@@ -130,6 +130,10 @@ describe('EpisodeBreakEstimationStep', () => {
         minPanelsForSegmentation: 400,
         minTrailingSegmentSize: 320,
       },
+      episodeBundling: {
+        minPageCount: 20,
+        enabled: true,
+      },
     })
 
     mockSegmentScript = vi.mocked(
@@ -562,6 +566,214 @@ describe('EpisodeBreakEstimationStep', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('no episodes detected')
+    })
+  })
+
+  describe('Episode Bundling', () => {
+    it('should bundle episodes with less than 20 pages with next episode', async () => {
+      const script = createMockScript(100)
+      const context = createMockContext()
+
+      // Mock LLM result with episodes where some have < 20 pages
+      mockGenerator.generateObjectWithFallback.mockResolvedValue({
+        episodes: [
+          {
+            episodeNumber: 1,
+            title: 'Short Episode 1',
+            startPanelIndex: 1,
+            endPanelIndex: 15, // 15 pages - should be bundled with next
+          },
+          {
+            episodeNumber: 2,
+            title: 'Episode 2',
+            startPanelIndex: 16,
+            endPanelIndex: 45, // 30 pages - will receive bundled content
+          },
+          {
+            episodeNumber: 3,
+            title: 'Short Episode 3',
+            startPanelIndex: 46,
+            endPanelIndex: 55, // 10 pages - should be bundled with next
+          },
+          {
+            episodeNumber: 4,
+            title: 'Episode 4',
+            startPanelIndex: 56,
+            endPanelIndex: 100, // 45 pages - will receive bundled content
+          },
+        ],
+      })
+
+      const result = await step.estimateEpisodeBreaks(script, context)
+
+      expect(result.success).toBe(true)
+      expect(result.data?.episodeBreaks.episodes).toHaveLength(2) // Should be bundled into 2 episodes
+
+      const episodes = result.data?.episodeBreaks.episodes
+      expect(episodes?.[0].episodeNumber).toBe(1)
+      expect(episodes?.[0].startPanelIndex).toBe(1)
+      expect(episodes?.[0].endPanelIndex).toBe(45) // Combined range
+      expect(episodes?.[0].endPanelIndex - episodes?.[0].startPanelIndex + 1).toBe(45) // 45 pages total
+
+      expect(episodes?.[1].episodeNumber).toBe(2)
+      expect(episodes?.[1].startPanelIndex).toBe(46)
+      expect(episodes?.[1].endPanelIndex).toBe(100) // Combined range
+      expect(episodes?.[1].endPanelIndex - episodes?.[1].startPanelIndex + 1).toBe(55) // 55 pages total
+    })
+
+    it('should bundle last episode with previous episode if it has less than 20 pages', async () => {
+      const script = createMockScript(120)
+      const context = createMockContext()
+
+      // Mock LLM result where last episode has < 20 pages
+      mockGenerator.generateObjectWithFallback.mockResolvedValue({
+        episodes: [
+          {
+            episodeNumber: 1,
+            title: 'Episode 1',
+            startPanelIndex: 1,
+            endPanelIndex: 50, // 50 pages - good size
+          },
+          {
+            episodeNumber: 2,
+            title: 'Episode 2',
+            startPanelIndex: 51,
+            endPanelIndex: 100, // 50 pages - good size
+          },
+          {
+            episodeNumber: 3,
+            title: 'Last Short Episode',
+            startPanelIndex: 101,
+            endPanelIndex: 120, // 20 pages - exactly at threshold but treated as short in this context
+          },
+        ],
+      })
+
+      const result = await step.estimateEpisodeBreaks(script, context)
+
+      expect(result.success).toBe(true)
+      const episodes = result.data?.episodeBreaks.episodes
+
+      // The last episode should be bundled with the previous one
+      const lastEpisode = episodes?.[episodes.length - 1]
+      expect(lastEpisode?.endPanelIndex).toBe(120)
+      expect(
+        lastEpisode && lastEpisode.endPanelIndex - lastEpisode.startPanelIndex + 1,
+      ).toBeGreaterThanOrEqual(20)
+    })
+
+    it('should handle single episode correctly without bundling', async () => {
+      const script = createMockScript(15)
+      const context = createMockContext()
+
+      // Mock LLM result with single episode
+      mockGenerator.generateObjectWithFallback.mockResolvedValue({
+        episodes: [
+          {
+            episodeNumber: 1,
+            title: 'Single Episode',
+            startPanelIndex: 1,
+            endPanelIndex: 15,
+          },
+        ],
+      })
+
+      const result = await step.estimateEpisodeBreaks(script, context)
+
+      expect(result.success).toBe(true)
+      expect(result.data?.episodeBreaks.episodes).toHaveLength(1)
+
+      const episode = result.data?.episodeBreaks.episodes[0]
+      expect(episode?.episodeNumber).toBe(1)
+      expect(episode?.startPanelIndex).toBe(1)
+      expect(episode?.endPanelIndex).toBe(15)
+    })
+
+    it('should preserve episode titles and descriptions during bundling', async () => {
+      const script = createMockScript(50)
+      const context = createMockContext()
+
+      mockGenerator.generateObjectWithFallback.mockResolvedValue({
+        episodes: [
+          {
+            episodeNumber: 1,
+            title: 'First Title',
+            description: 'First description',
+            startPanelIndex: 1,
+            endPanelIndex: 15, // Short episode (15 pages)
+          },
+          {
+            episodeNumber: 2,
+            title: 'Second Title',
+            description: 'Second description',
+            startPanelIndex: 16,
+            endPanelIndex: 50, // Will receive bundled content (35 pages, total will be 50)
+          },
+        ],
+      })
+
+      const result = await step.estimateEpisodeBreaks(script, context)
+
+      expect(result.success).toBe(true)
+      expect(result.data?.episodeBreaks.episodes).toHaveLength(1)
+
+      const episode = result.data?.episodeBreaks.episodes[0]
+      expect(episode?.title).toBe('Second Title') // Should preserve the receiving episode's title
+      expect(episode?.description).toBe('Second description')
+      expect(episode?.startPanelIndex).toBe(1)
+      expect(episode?.endPanelIndex).toBe(50)
+    })
+
+    it('should log bundling operations correctly', async () => {
+      const script = createMockScript(60)
+      const context = createMockContext('bundle-test-job')
+
+      mockGenerator.generateObjectWithFallback.mockResolvedValue({
+        episodes: [
+          {
+            episodeNumber: 1,
+            title: 'Short Episode',
+            startPanelIndex: 1,
+            endPanelIndex: 10, // Short episode
+          },
+          {
+            episodeNumber: 2,
+            title: 'Normal Episode',
+            startPanelIndex: 11,
+            endPanelIndex: 60,
+          },
+        ],
+      })
+
+      await step.estimateEpisodeBreaks(script, context)
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        'Starting episode bundling process',
+        expect.objectContaining({
+          jobId: 'bundle-test-job',
+          originalEpisodes: 2,
+          minPageCount: 20,
+        }),
+      )
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        'Merged episode with next episode',
+        expect.objectContaining({
+          jobId: 'bundle-test-job',
+          mergedEpisode: 1,
+          intoEpisode: 2,
+        }),
+      )
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        'Episode bundling completed',
+        expect.objectContaining({
+          jobId: 'bundle-test-job',
+          originalEpisodeCount: 2,
+          finalEpisodeCount: 1,
+          removedCount: 1,
+        }),
+      )
     })
   })
 })

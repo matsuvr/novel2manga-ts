@@ -41,11 +41,16 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
 
   const episodes = await episodeRepo.getByJobId(job.id)
 
+  // レイアウトステータスを取得してページ数情報を含める
+  const layoutStatuses = await db.getLayoutStatusByJobId(job.id)
+  const layoutStatusMap = new Map(layoutStatuses.map((status) => [status.episodeNumber, status]))
+
   // Parse coverage warnings from job if any
   let coverageWarnings: Array<{
     chunkIndex: number
     coverageRatio: number
     message: string
+    episodeNumbers?: number[]
   }> = []
   if (job.coverageWarnings) {
     try {
@@ -82,7 +87,7 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
           <ul className="space-y-1">
             {coverageWarnings.map((warning) => (
               <li
-                key={`chunk-${warning.chunkIndex}-${warning.coverageRatio}`}
+                key={`warning-${warning.chunkIndex}-${warning.episodeNumbers?.join('-') || 'unknown'}-${warning.coverageRatio}`}
                 className="text-sm text-yellow-700"
               >
                 • {warning.message}
@@ -101,21 +106,28 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
         </a>
       </div>
       <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {episodes.map((e) => (
-          <li key={e.id} className="apple-card p-4">
-            <div className="font-semibold">Episode {e.episodeNumber}</div>
-            <div className="text-sm text-gray-600">{e.title}</div>
-            <div className="text-sm text-gray-600 mt-1">📄 レイアウト生成済み</div>
-            <div className="mt-2 flex gap-2">
-              <a
-                href={`/novel/${novelId}/results/${job.id}/episode/${e.episodeNumber}`}
-                className="btn-secondary text-sm"
-              >
-                プレビュー
-              </a>
-            </div>
-          </li>
-        ))}
+        {episodes.map((e) => {
+          const layoutStatus = layoutStatusMap.get(e.episodeNumber)
+          const pageCount = layoutStatus?.totalPages
+
+          return (
+            <li key={e.id} className="apple-card p-4">
+              <div className="font-semibold">Episode {e.episodeNumber}</div>
+              <div className="text-sm text-gray-600">{e.title}</div>
+              <div className="text-sm text-gray-600 mt-1">
+                {pageCount ? `📄 ${pageCount}ページ` : '📄 レイアウト生成済み'}
+              </div>
+              <div className="mt-2 flex gap-2">
+                <a
+                  href={`/novel/${novelId}/results/${job.id}/episode/${e.episodeNumber}`}
+                  className="btn-secondary text-sm"
+                >
+                  プレビュー
+                </a>
+              </div>
+            </li>
+          )
+        })}
       </ul>
     </main>
   )
