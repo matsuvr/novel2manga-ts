@@ -244,14 +244,13 @@ describe('Repository Adapters', () => {
     test('should handle output operations', async () => {
       const port = adaptOutputPort(dbService)
 
-      // Create output
       const outputId = await port.createOutput({
         id: 'output-1',
+        novelId: 'novel-1',
         jobId: 'job-1',
-        type: 'manga_page',
-        format: 'png',
-        path: 'output.png',
-        metadata: { width: 800, height: 1200 },
+        userId: 'user-1',
+        outputType: 'pdf',
+        outputPath: 'output.pdf',
       })
 
       expect(outputId).toBe('output-1')
@@ -311,11 +310,11 @@ describe('Repository Adapters', () => {
       // Test output operations
       await ports.output.createOutput({
         id: 'output-1',
+        novelId: 'novel-1',
         jobId: 'job-1',
-        type: 'manga_page',
-        format: 'png',
-        path: 'output.png',
-        metadata: {},
+        userId: 'user-1',
+        outputType: 'pdf',
+        outputPath: 'output.pdf',
       })
 
       // Verify all operations worked
