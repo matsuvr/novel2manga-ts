@@ -99,7 +99,8 @@
       "Bash(rg:*)",
       "Bash(npx @biomejs/biome lint .)",
       "Bash(true)",
-      "Bash(jq:*)"
+      "Bash(jq:*)",
+      "Bash(npx drizzle-kit:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
