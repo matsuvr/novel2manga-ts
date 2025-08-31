@@ -236,7 +236,7 @@ export class CanvasRenderer {
           this.ctx.strokeStyle = '#000000'
           this.ctx.fillStyle = '#ffffff'
           this.ctx.lineWidth = dialogue.emotion === 'shout' ? 3 : 2
-          // 形状切替: speech=角丸、thought=雲状、narration=長方形
+          // 形状切替: speech=楕円、thought=雲状、narration=長方形
           const shapeType = (dialogue as { type?: 'speech' | 'thought' | 'narration' }).type
           if (shapeType === 'narration') {
             // 長方形（角丸なし）
@@ -277,8 +277,19 @@ export class CanvasRenderer {
             this.ctx.fill()
             this.ctx.stroke()
           } else {
-            // speech または未指定は角丸矩形
-            this.drawRoundedRect(bx, by, bubbleW, bubbleH, 8)
+            // speech または未指定は楕円
+            this.ctx.beginPath()
+            this.ctx.ellipse(
+              bx + bubbleW / 2,
+              by + bubbleH / 2,
+              bubbleW / 2,
+              bubbleH / 2,
+              0,
+              0,
+              Math.PI * 2,
+            )
+            this.ctx.fill()
+            this.ctx.stroke()
           }
           this.ctx.restore()
 
@@ -384,10 +395,14 @@ export class CanvasRenderer {
     text: string,
     x: number,
     y: number,
-    options?: { maxWidth?: number; style?: string },
+    options?: {
+      maxWidth?: number
+      style?: string
+      type?: 'speech' | 'thought' | 'narration'
+    },
   ): void {
     // Legacy text-bubble drawer (kept for non-dialogue uses). Vertical text path uses pre-rendered images.
-    const { maxWidth = 200, style = 'normal' } = options || {}
+    const { maxWidth = 200, style = 'normal', type = 'speech' } = options || {}
 
     // テキストサイズを測定して吹き出しサイズを決定
     const fontSize = this.config.fontSize || 16
@@ -405,8 +420,45 @@ export class CanvasRenderer {
     this.ctx.fillStyle = '#ffffff'
     this.ctx.lineWidth = style === 'shout' ? 3 : 2
 
-    // 角丸矩形を描画
-    this.drawRoundedRect(x, y, width, height, 8)
+    if (type === 'narration') {
+      this.ctx.beginPath()
+      this.ctx.rect(x, y, width, height)
+      this.ctx.closePath()
+      this.ctx.fill()
+      this.ctx.stroke()
+    } else if (type === 'thought') {
+      const bumps = 8
+      const r = Math.max(6, Math.min(width, height) * 0.08)
+      const cx = x + width / 2
+      const cy = y + height / 2
+      const rx = width / 2
+      const ry = height / 2
+      this.ctx.beginPath()
+      let anglePrev = 0
+      let pxPrev = cx + Math.cos(anglePrev) * rx
+      let pyPrev = cy + Math.sin(anglePrev) * ry
+      this.ctx.moveTo(pxPrev, pyPrev)
+      for (let k = 1; k <= bumps; k++) {
+        const angle = (k / bumps) * Math.PI * 2
+        const px = cx + Math.cos(angle) * rx
+        const py = cy + Math.sin(angle) * ry
+        const midAngle = (anglePrev + angle) / 2
+        const cx1 = cx + Math.cos(midAngle) * (rx + r)
+        const cy1 = cy + Math.sin(midAngle) * (ry + r)
+        this.ctx.quadraticCurveTo(cx1, cy1, px, py)
+        anglePrev = angle
+        pxPrev = px
+        pyPrev = py
+      }
+      this.ctx.closePath()
+      this.ctx.fill()
+      this.ctx.stroke()
+    } else {
+      this.ctx.beginPath()
+      this.ctx.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2)
+      this.ctx.fill()
+      this.ctx.stroke()
+    }
 
     // テキストを描画
     this.ctx.fillStyle = '#000000'
@@ -418,29 +470,6 @@ export class CanvasRenderer {
     }
 
     this.ctx.restore()
-  }
-
-  private drawRoundedRect(
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    radius: number,
-  ): void {
-    this.ctx.beginPath()
-    this.ctx.moveTo(x + radius, y)
-    this.ctx.lineTo(x + width - radius, y)
-    this.ctx.quadraticCurveTo(x + width, y, x + width, y + radius)
-    this.ctx.lineTo(x + width, y + height - radius)
-    this.ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height)
-    this.ctx.lineTo(x + radius, y + height)
-    this.ctx.quadraticCurveTo(x, y + height, x, y + height - radius)
-    this.ctx.lineTo(x, y + radius)
-    this.ctx.quadraticCurveTo(x, y, x + radius, y)
-    this.ctx.closePath()
-
-    this.ctx.fill()
-    this.ctx.stroke()
   }
 
   renderMangaLayout(layout: MangaLayout): void {
