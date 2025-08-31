@@ -5,6 +5,7 @@ import { getDatabaseService } from '@/services/db-factory'
 
 // Import pipeline steps
 import {
+  type AnalysisResult,
   BasePipelineStep,
   CompletionStep,
   JobManagementStep,
@@ -13,13 +14,12 @@ import {
   RenderingStep,
   type StepContext,
   type StepExecutionResult,
-  type AnalysisResult,
   TextAnalysisStep,
   TextChunkingStep,
 } from './steps'
 import { ChunkScriptStep } from './steps/chunk-script-step'
-import { ScriptMergeStep } from './steps/script-merge-step'
 import { EpisodeBreakEstimationStep } from './steps/episode-break-estimation-step'
+import { ScriptMergeStep } from './steps/script-merge-step'
 
 export interface AnalyzeOptions {
   isDemo?: boolean

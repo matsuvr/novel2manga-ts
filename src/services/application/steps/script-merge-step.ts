@@ -1,5 +1,5 @@
-import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 import { COVERAGE_MESSAGES } from '@/constants/messages'
+import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface ScriptMergeResult {
   merged: boolean

@@ -4,11 +4,11 @@ import {
   getLLMProviderConfig,
 } from '../../config/llm.config'
 import { FakeLlmClient } from '../../llm/fake'
-import { CerebrasClient, type CerebrasClientConfig } from './cerebras'
-import { VertexAIClient, type VertexAIConfig } from './vertexai'
 import { defaultBaseUrl, type OpenAICompatProvider } from './base-url'
+import { CerebrasClient, type CerebrasClientConfig } from './cerebras'
 import { OpenAICompatibleClient } from './openai-compatible'
 import type { LlmClient, LlmProvider, OpenAICompatibleConfig } from './types'
+import { VertexAIClient, type VertexAIConfig } from './vertexai'
 
 export type ProviderConfig =
   | ({ provider: 'openai' | 'groq' | 'grok' | 'openrouter' | 'gemini' } & Omit<

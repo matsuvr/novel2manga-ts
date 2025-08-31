@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { appConfig } from '@/config/app.config'
 import type { Episode } from '@/db/schema'
+import { getLogger, runWithLogContext } from '@/infrastructure/logging/logger'
 import { adaptAll } from '@/repositories/adapters'
 import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
@@ -13,7 +14,6 @@ import {
 } from '@/utils/api-error'
 import { getLayoutStorage, StorageFactory, StorageKeys } from '@/utils/storage'
 import { validateJobId } from '@/utils/validators'
-import { getLogger, runWithLogContext } from '@/infrastructure/logging/logger'
 
 export async function GET(
   request: NextRequest,
