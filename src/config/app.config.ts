@@ -36,6 +36,15 @@ export const appConfig = {
     minTrailingSegmentSize: 320,
   },
 
+  // Episode bundling configuration
+  episodeBundling: {
+    // Minimum page count for episode bundling
+    // Episodes with fewer pages will be merged with adjacent episodes
+    minPageCount: 20,
+    // Enable bundling by default
+    enabled: true,
+  },
+
   // LLM設定（モデル・パラメータは llm.config.ts に集約。ここではプロンプトのみ保持）
   llm: {
     // テキスト分析用設定（プロンプトのみ）

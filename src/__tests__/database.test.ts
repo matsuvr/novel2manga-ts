@@ -23,6 +23,28 @@ vi.mock('@/db', () => ({
   })),
 }))
 
+// モック設定を拡張して必要なテーブルを含める
+vi.mock('@/db/schema', () => ({
+  jobs: {
+    id: 'id',
+    novelId: 'novel_id',
+    jobName: 'job_name',
+    status: 'status',
+    currentStep: 'current_step',
+  },
+  chunks: {
+    id: 'id',
+    novelId: 'novel_id',
+    originalText: 'original_text',
+    startIndex: 'start_index',
+    endIndex: 'end_index',
+  },
+  layoutStatus: {
+    jobId: 'jobId',
+    episodeNumber: 'episodeNumber',
+  },
+}))
+
 describe('DatabaseService', () => {
   let service: DatabaseService
 
@@ -75,6 +97,97 @@ describe('DatabaseService', () => {
 
       // Test passes if no error is thrown
       expect(service.updateJobStatus).toBeDefined()
+    })
+  })
+
+  describe('getLayoutStatusByJobId', () => {
+    it('should get layout status by job id and correctly map database results', async () => {
+      // モックデータは生のデータベース結果（日付は文字列、nullableフィールドはnull）
+      const mockRawResults = [
+        {
+          id: 'layout-1',
+          jobId: 'job-123',
+          episodeNumber: 1,
+          isGenerated: null,
+          layoutPath: '/path/to/layout1',
+          totalPages: 5,
+          totalPanels: null,
+          generatedAt: '2023-01-01T00:00:00Z',
+          retryCount: null,
+          lastError: null,
+          createdAt: '2023-01-01T00:00:00Z',
+        },
+        {
+          id: 'layout-2',
+          jobId: 'job-123',
+          episodeNumber: 2,
+          isGenerated: true,
+          layoutPath: null,
+          totalPages: 4,
+          totalPanels: 12,
+          generatedAt: null,
+          retryCount: 1,
+          lastError: 'Some error',
+          createdAt: null, // test null createdAt fallback
+        },
+      ]
+
+      // Drizzleのselect().from().where().orderBy()チェーンをモック
+      const mockOrderBy = vi.fn().mockResolvedValue(mockRawResults)
+      const mockWhere = vi.fn().mockReturnValue({ orderBy: mockOrderBy })
+      const mockFrom = vi.fn().mockReturnValue({ where: mockWhere })
+      const mockSelect = vi.fn().mockReturnValue({ from: mockFrom })
+
+      service.db = { select: mockSelect } as any
+
+      const result = await service.getLayoutStatusByJobId('job-123')
+
+      expect(mockSelect).toHaveBeenCalled()
+      expect(result).toHaveLength(2)
+
+      // 1st result - マッピング検証
+      expect(result[0]).toEqual({
+        id: 'layout-1',
+        jobId: 'job-123',
+        episodeNumber: 1,
+        isGenerated: false, // null → false
+        layoutPath: '/path/to/layout1',
+        totalPages: 5,
+        totalPanels: undefined, // null → undefined
+        generatedAt: new Date('2023-01-01T00:00:00Z'), // string → Date
+        retryCount: 0, // null → 0
+        lastError: undefined, // null → undefined
+        createdAt: new Date('2023-01-01T00:00:00Z'), // string → Date
+      })
+
+      // 2nd result - マッピング検証（null createdAtのテスト）
+      expect(result[1]).toEqual({
+        id: 'layout-2',
+        jobId: 'job-123',
+        episodeNumber: 2,
+        isGenerated: true,
+        layoutPath: undefined, // null → undefined
+        totalPages: 4,
+        totalPanels: 12,
+        generatedAt: undefined, // null → undefined
+        retryCount: 1,
+        lastError: 'Some error',
+        createdAt: new Date(0), // null → new Date(0)
+      })
+    })
+
+    it('should return empty array when no layout status found', async () => {
+      const mockOrderBy = vi.fn().mockResolvedValue([])
+      const mockWhere = vi.fn().mockReturnValue({ orderBy: mockOrderBy })
+      const mockFrom = vi.fn().mockReturnValue({ where: mockWhere })
+      const mockSelect = vi.fn().mockReturnValue({ from: mockFrom })
+
+      service.db = { select: mockSelect } as any
+
+      const result = await service.getLayoutStatusByJobId('non-existent-job')
+
+      expect(result).toEqual([])
+      expect(result).toHaveLength(0)
     })
   })
 })
