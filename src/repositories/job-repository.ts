@@ -81,6 +81,17 @@ export class JobRepository {
   async updateError(id: string, error: string, step: string, incrementRetry = true) {
     return this.db.updateJobError(id, error, step, incrementRetry)
   }
+
+  async updateCoverageWarnings(
+    id: string,
+    warnings: Array<{
+      chunkIndex: number
+      coverageRatio: number
+      message: string
+    }>,
+  ) {
+    return this.db.updateJobCoverageWarnings(id, warnings)
+  }
 }
 
 // ---- Local type guards for legacy compatibility (no any/unknown casts) ----

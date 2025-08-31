@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { decideNextPollingAction, type JobStatusLite } from '@/utils/polling'
 
 describe('decideNextPollingAction', () => {
-  it('redirects when renderCompleted is true', () => {
+  it('continues when renderCompleted is true but status is not completed', () => {
     const job: JobStatusLite = { renderCompleted: true, status: 'processing' }
-    expect(decideNextPollingAction(job, 0)).toBe('redirect')
+    expect(decideNextPollingAction(job, 0)).toBe('continue')
   })
 
   it('redirects when status is completed', () => {

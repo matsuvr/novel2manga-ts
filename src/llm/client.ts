@@ -32,6 +32,7 @@ export interface LlmResponse {
     completionTokens: number
     totalTokens: number
   }
+  refusal?: string | null // OpenAI Structured Outputsのrefusal対応
 }
 
 // LLM埋め込みの型定義
@@ -77,6 +78,13 @@ export interface LlmClient {
 
   // 埋め込み（オプション）
   embeddings?(input: string | string[], options?: { model?: string }): Promise<LlmEmbeddingResponse>
+}
+
+// Structured Outputs用の型安全なレスポンス
+export interface StructuredLlmResponse<T = unknown> extends Omit<LlmResponse, 'content'> {
+  content: string // 生のJSONレスポンス文字列
+  parsed?: T // パースされた構造化データ
+  refusal?: string | null
 }
 
 // LLMエラーの型定義

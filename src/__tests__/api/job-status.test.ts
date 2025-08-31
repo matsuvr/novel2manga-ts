@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 // Stubbed GET function for missing /api/jobs/[jobId]/status/route
 const GET = vi
   .fn()
@@ -44,6 +45,7 @@ const GET = vi
     }
     return new Response(JSON.stringify(mockStatus), { status: 200 })
   })
+
 import { DatabaseService } from '@/services/database'
 import { __resetDatabaseServiceForTest } from '@/services/db-factory'
 

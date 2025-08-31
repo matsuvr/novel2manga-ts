@@ -159,6 +159,7 @@ export class OpenAIClient implements LlmClient {
       }
 
       const content = choice.message.content || ''
+      const refusal = choice.message.refusal || null
       const toolCalls = choice.message.tool_calls?.map((call) => {
         if (call.type === 'function' && 'function' in call) {
           return {
@@ -184,6 +185,7 @@ export class OpenAIClient implements LlmClient {
       return {
         content,
         toolCalls,
+        refusal,
         usage: response.usage
           ? {
               promptTokens: response.usage.prompt_tokens,
