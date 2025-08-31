@@ -45,6 +45,7 @@ yarn-error.log*
 .env.test
 .env.production.local
 .env*.local
+manganamemaker-e402457d75fd.json
 
 # Vercel
 .vercel

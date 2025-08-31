@@ -4,7 +4,9 @@ import {
   getLlmStructuredGenerator,
 } from '@/agents/structured-generator'
 import { getAppConfigWithOverrides } from '@/config/app.config'
+import { getLogger } from '@/infrastructure/logging/logger'
 import { type NewMangaScript, NewMangaScriptSchema } from '@/types/script'
+import { sanitizeScript, validateImportanceFields } from '@/utils/script-validation'
 
 export interface ScriptConversionInput {
   chunkText: string
@@ -58,6 +60,7 @@ export async function convertChunkToMangaScript(
       narration?: string[]
       dialogue?: string[]
       sfx?: string[]
+      importance: number
     }> = [
       {
         no: 1,
@@ -65,6 +68,7 @@ export async function convertChunkToMangaScript(
         camera: 'WS・標準',
         narration: [`${input.chunkText.substring(0, Math.min(50, input.chunkText.length))}...`],
         dialogue: ['デモキャラ: サンプル発話'],
+        importance: 1,
       },
     ] as const
     return {
@@ -144,37 +148,37 @@ export async function convertChunkToMangaScript(
       })
 
       if (result && typeof result === 'object') {
-        const validatedResult = NewMangaScriptSchema.safeParse(result)
+        // Sanitize importance values before validation
+        const sanitizedResult = sanitizeScript(result as NewMangaScript)
+        const validatedResult = NewMangaScriptSchema.safeParse(sanitizedResult)
         if (validatedResult.success) {
           bestResult = validatedResult.data
+
+          // Log importance validation warnings if any
+          const importanceValidation = validateImportanceFields(bestResult)
+          if (!importanceValidation.valid && options?.jobId) {
+            getLogger()
+              .withContext({ service: 'script-converter', jobId: options.jobId })
+              .warn('Importance validation issues found (but corrected)', {
+                issues: importanceValidation.issues,
+              })
+          }
+
           break
         } else {
-          console.warn(
-            JSON.stringify({
-              ts: new Date().toISOString(),
-              level: 'warn',
-              msg: 'Manga script validation failed',
-              service: 'script-converter',
-              jobId: options?.jobId,
+          getLogger()
+            .withContext({ service: 'script-converter', jobId: options?.jobId })
+            .warn('Manga script validation failed', {
               errors: validatedResult.error.errors,
               attempt: attempt + 1,
-            }),
-          )
+            })
         }
       }
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error)
-      console.error(
-        JSON.stringify({
-          ts: new Date().toISOString(),
-          level: 'error',
-          msg: 'Manga script generation failed',
-          service: 'script-converter',
-          jobId: options?.jobId,
-          error: errMsg,
-          attempt: attempt + 1,
-        }),
-      )
+      getLogger()
+        .withContext({ service: 'script-converter', jobId: options?.jobId })
+        .error('Manga script generation failed', { error: errMsg, attempt: attempt + 1 })
       // フォールバック禁止原則: 途中で失敗した場合は直ちに停止
       // （再試行はこのループで行うが、最大回数に達したらthrow）
       if (attempt === maxRetries) {

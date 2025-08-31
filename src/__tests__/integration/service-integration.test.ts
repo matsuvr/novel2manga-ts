@@ -9,28 +9,31 @@ import { vi } from 'vitest'
 import { convertEpisodeTextToScript } from '@/agents/script/script-converter'
 
 // LLM structured generator モック - エラーの根本原因を解決
-vi.mock('@/agents/structured-generator', () => ({
-  getLlmStructuredGenerator: vi.fn(() => ({
+vi.mock('@/agents/structured-generator', () => {
+  const mockInstance = {
+    // EpisodeBreakEstimationStep 用: episodes を返す
     generateObjectWithFallback: vi.fn().mockResolvedValue({
-      pages: [
+      episodes: [
         {
-          pageNumber: 1,
-          panelCount: 2,
-          panels: [
-            { id: 1, scriptIndexes: [1, 2] },
-            { id: 2, scriptIndexes: [3, 4] },
-          ],
+          episodeNumber: 1,
+          title: 'Episode 1',
+          startPanelIndex: 1,
+          endPanelIndex: 1,
+          description: 'Mock episode',
         },
       ],
-      // Default analysis result for chunk analysis
-      theme: 'テストテーマ',
-      mood: 'neutral',
-      characters: ['太郎'],
-      keyPhrases: ['テスト', '統合テスト'],
-      importance: 5,
     }),
-  })),
-}))
+  }
+
+  // クラスコンストラクタをモック
+  const MockDefaultLlmStructuredGenerator = vi.fn(() => mockInstance)
+
+  return {
+    DefaultLlmStructuredGenerator: MockDefaultLlmStructuredGenerator,
+    // 既存のユースケースにも対応
+    getLlmStructuredGenerator: vi.fn(() => mockInstance),
+  }
+})
 
 // パネル割り当ては beforeEach で毎回モック上書き（テスト間のリセットの影響回避）
 
@@ -128,6 +131,31 @@ vi.mock('@/agents/script/script-converter', () => ({
 
 // 設定モック - 最初に定義する必要がある
 vi.mock('@/config', () => ({
+  getAppConfigWithOverrides: vi.fn(() => ({
+    chunking: {
+      defaultChunkSize: 3000,
+      defaultOverlapSize: 200,
+    },
+    processing: {
+      maxConcurrentChunks: 3,
+      batchSize: { chunks: 5 },
+      episode: {
+        targetCharsPerEpisode: 10000,
+        minCharsPerEpisode: 5000,
+        maxCharsPerEpisode: 20000,
+        maxChunksPerEpisode: 10,
+      },
+    },
+    features: {
+      enableParallelProcessing: true,
+    },
+    llm: {
+      textAnalysis: {
+        systemPrompt: 'Test system prompt',
+        userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
+      },
+    },
+  })),
   getTextAnalysisConfig: vi.fn(() => ({
     userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
   })),
@@ -286,6 +314,21 @@ vi.mock('@/services/application/steps/script-merge-step', () => ({
         const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
         const storage = await StorageFactory.getAnalysisStorage()
         const combined = {
+          // 最低限の NewMangaScript 互換構造を保存（panels が必須）
+          panels: [
+            {
+              no: 1,
+              cut: '統合シーン1',
+              camera: 'medium',
+              dialogue: ['太郎: 統合セリフ1'],
+            },
+            {
+              no: 2,
+              cut: '統合シーン2',
+              camera: 'close',
+              dialogue: ['花子: 統合セリフ2'],
+            },
+          ],
           scenes: [
             {
               setting: 'テスト設定',
@@ -306,13 +349,7 @@ vi.mock('@/services/application/steps/script-merge-step', () => ({
   },
 }))
 
-vi.mock('@/services/application/steps/episode-bundling-step', () => ({
-  EpisodeBundlingStep: class {
-    async bundleFromFullPages(_ctx: unknown) {
-      return { success: true, data: { episodes: [1] } }
-    }
-  },
-}))
+// EpisodeBundlingStep mock removed - replaced with episode break estimation
 
 // レイアウト生成サービス全体をモック
 vi.mock('@/services/application/layout-generation', () => ({
@@ -341,6 +378,7 @@ vi.mock('@/repositories/factory', () => {
   const factory = () => ({
     getJobRepository: () => ({
       create: (payload: any) => __testDbForFactory!.service.createJob(payload),
+      getJob: (id: string) => __testDbForFactory!.service.getJob(id),
       updateJobTotalPages: (id: string, totalPages: number) =>
         (__testDbForFactory!.service as any).updateJobTotalPages?.(id, totalPages),
       updateStep: (
@@ -425,11 +463,51 @@ describe('Service Integration Tests', () => {
 
     // エージェントモックのセットアップ
     setupAgentMocks()
+    // chunk-analyzer を安定化させる（常に結果を返す）
+    vi.doMock('@/agents/chunk-analyzer', () => ({
+      getChunkAnalyzerAgent: vi.fn().mockReturnValue({
+        invoke: vi.fn().mockResolvedValue({
+          result: TEST_CHUNK_ANALYSIS,
+        }),
+      }),
+      analyzeChunkWithFallback: vi.fn(async () => ({
+        result: TEST_CHUNK_ANALYSIS,
+        usedProvider: 'test-provider',
+        fallbackFrom: [],
+      })),
+    }))
+
+    // NOTE: repositories/index の上書きは副作用が大きいため行わない（factory 側で十分）
 
     // Remove duplicate prepareNarrativeAnalysisInput mock - storage consistency is handled above
 
     // setupAgentMocks内の '@/config' モックでは scriptConversion 設定が未定義のため、上書きする
     vi.doMock('@/config', () => ({
+      getAppConfigWithOverrides: vi.fn(() => ({
+        chunking: {
+          defaultChunkSize: 3000,
+          defaultOverlapSize: 200,
+        },
+        processing: {
+          maxConcurrentChunks: 3,
+          batchSize: { chunks: 5 },
+          episode: {
+            targetCharsPerEpisode: 10000,
+            minCharsPerEpisode: 5000,
+            maxCharsPerEpisode: 20000,
+            maxChunksPerEpisode: 10,
+          },
+        },
+        features: {
+          enableParallelProcessing: true,
+        },
+        llm: {
+          textAnalysis: {
+            systemPrompt: 'Test system prompt',
+            userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
+          },
+        },
+      })),
       getTextAnalysisConfig: vi.fn(() => ({
         userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
       })),

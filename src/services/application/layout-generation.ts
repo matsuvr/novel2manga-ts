@@ -360,8 +360,13 @@ async function generateEpisodeLayoutInternal(
       } as Episode
       const db = getDatabaseService()
       await db.createEpisode({ jobId, episodeNumber, title: fallbackEpisode.title ?? undefined })
-    } catch {
-      // noop
+      logger.info('Episode created successfully', { jobId, episodeNumber })
+    } catch (error) {
+      logger.warn('Failed to create fallback demo episode', {
+        jobId,
+        episodeNumber,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 
@@ -439,12 +444,14 @@ async function generateEpisodeLayoutInternal(
       throw new Error('Script conversion failed to produce valid script')
     }
 
-    const { estimatePageBreaks } = await import('@/agents/script/page-break-estimator')
-    const pageBreaks = await estimatePageBreaks(script, {
+    const { estimatePageBreaksSegmented } = await import(
+      '@/agents/script/segmented-page-break-estimator'
+    )
+    const segmentedResult = await estimatePageBreaksSegmented(script, {
       jobId,
-      episodeNumber: episode.episodeNumber,
-      isDemo,
+      useImportanceBased: true,
     })
+    const pageBreaks = segmentedResult.pageBreaks
 
     // Progress validation: Page breaks must be estimated
     if (!pageBreaks?.panels || pageBreaks.panels.length === 0) {

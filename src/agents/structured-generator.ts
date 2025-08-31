@@ -42,18 +42,14 @@ export class DefaultLlmStructuredGenerator {
         }
         const next = this.providerOrder[i + 1]
         if (!next) throw e
-        console.warn(
-          JSON.stringify({
-            ts: new Date().toISOString(),
-            level: 'warn',
-            msg: 'LLM provider switch due to connectivity error',
-            service: 'llm-structured-generator',
-            name,
+        const { getLogger } = await import('@/infrastructure/logging/logger')
+        getLogger()
+          .withContext({ service: 'llm-structured-generator', name })
+          .warn('LLM provider switch due to connectivity error', {
             from: provider,
             to: next,
             reason: truncate(reason, 500),
-          }),
-        )
+          })
       }
     }
     throw lastError instanceof Error ? lastError : new Error(String(lastError))
@@ -92,21 +88,17 @@ export class DefaultLlmStructuredGenerator {
           errorMessage.includes('schema validation failed') &&
           errorMessage.includes('dialogue')
         ) {
-          console.error(
-            JSON.stringify({
-              ts: new Date().toISOString(),
-              level: 'error',
-              msg: 'Dialogue schema validation failed - LLM returned invalid dialogue format',
-              service: 'llm-structured-generator',
-              name,
+          const { getLogger } = await import('@/infrastructure/logging/logger')
+          getLogger()
+            .withContext({ service: 'llm-structured-generator', name })
+            .error('Dialogue schema validation failed - invalid dialogue format', {
               provider: prov,
               attempt,
               error: errorMessage,
               rawResponseSample: errorMessage.includes('Raw:')
                 ? errorMessage.split('Raw:')[1]?.slice(0, 500)
                 : 'No raw response available',
-            }),
-          )
+            })
         }
 
         // JSON生成関連のエラーのみリトライ対象とする
@@ -118,19 +110,15 @@ export class DefaultLlmStructuredGenerator {
         }
 
         // リトライ実行をログ出力
-        console.warn(
-          JSON.stringify({
-            ts: new Date().toISOString(),
-            level: 'warn',
-            msg: 'LLM JSON generation failed, retrying',
-            service: 'llm-structured-generator',
-            name,
+        const { getLogger } = await import('@/infrastructure/logging/logger')
+        getLogger()
+          .withContext({ service: 'llm-structured-generator', name })
+          .warn('LLM JSON generation failed, retrying', {
             provider: prov,
             attempt,
             maxRetries,
             reason: truncate(errorMessage, 300),
-          }),
-        )
+          })
 
         // 少し待ってからリトライ（指数バックオフ）
         if (attempt < maxRetries) {
@@ -159,16 +147,8 @@ export class DefaultLlmStructuredGenerator {
     ) {
       try {
         return normalizeLLMResponse(result as Record<string, unknown>) as T
-      } catch (error) {
-        console.warn(
-          JSON.stringify({
-            ts: new Date().toISOString(),
-            level: 'warn',
-            msg: 'Failed to normalize dialogue format, using original result',
-            service: 'llm-structured-generator',
-            error: error instanceof Error ? error.message : String(error),
-          }),
-        )
+      } catch {
+        // 正常系優先のため、ここでのログは省略してスルー
         return result
       }
     }

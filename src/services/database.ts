@@ -132,17 +132,18 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
 
   async getJob(id: string): Promise<Job | null> {
     try {
-      console.log('[DatabaseService] getJob called for id:', id)
+      const logger = getLogger().withContext({ service: 'DatabaseService', method: 'getJob' })
+      logger.debug('getJob called', { id })
 
       // データベース接続確認
       const testQuery = await this.db.select({ count: sql`count(*)` }).from(jobs)
-      console.log('[DatabaseService] Total jobs in database:', testQuery[0]?.count)
+      logger.debug('Total jobs in database', { count: testQuery[0]?.count })
 
       const result = await this.db.select().from(jobs).where(eq(jobs.id, id)).limit(1)
-      console.log('[DatabaseService] getJob result:', result.length > 0 ? 'found' : 'not found')
+      logger.info('getJob result', { outcome: result.length > 0 ? 'found' : 'not found' })
 
       if (result.length > 0) {
-        console.log('[DatabaseService] Job data:', {
+        logger.debug('Job data', {
           id: result[0].id,
           status: result[0].status,
           currentStep: result[0].currentStep,
@@ -152,8 +153,8 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
 
       return result[0] || null
     } catch (error) {
-      console.error('[DatabaseService] getJob error:', error)
-      console.error('[DatabaseService] Error details:', {
+      const logger = getLogger().withContext({ service: 'DatabaseService', method: 'getJob' })
+      logger.error('getJob error', {
         name: error instanceof Error ? error.name : 'Unknown',
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack?.slice(0, 500) : undefined,
@@ -163,14 +164,18 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
   }
 
   async getJobWithProgress(id: string): Promise<(Job & { progress: JobProgress | null }) | null> {
-    console.log('[DatabaseService] getJobWithProgress called with id:', id)
+    const logger = getLogger().withContext({
+      service: 'DatabaseService',
+      method: 'getJobWithProgress',
+    })
+    logger.debug('getJobWithProgress called', { id })
 
     try {
       const job = await this.getJob(id)
-      console.log('[DatabaseService] getJob result:', job ? 'found' : 'not found')
+      logger.info('getJob result', { outcome: job ? 'found' : 'not found' })
 
       if (!job) {
-        console.log('[DatabaseService] Job not found, returning null')
+        logger.info('Job not found, returning null')
         return null
       }
 
@@ -187,23 +192,26 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
         episodes: [], // TODO: 実際のエピソードデータを取得
       }
 
-      console.log('[DatabaseService] Progress object created:', progress)
+      logger.debug('Progress object created', progress as unknown as Record<string, unknown>)
 
       const result = {
         ...job,
         progress,
       }
 
-      console.log('[DatabaseService] Returning job with progress')
+      logger.debug('Returning job with progress')
       return result
     } catch (error) {
       // ここで捕捉して詳細ログを出しつつ、例外を再スローして上位で適切に分類させる
-      console.error('[DatabaseService] getJobWithProgress error:', error)
-      console.error('[DatabaseService] Error context:', { jobId: id })
-      console.error(
-        '[DatabaseService] Error stack (head):',
-        error instanceof Error ? error.stack?.slice(0, 1000) : 'No stack',
-      )
+      const logger = getLogger().withContext({
+        service: 'DatabaseService',
+        method: 'getJobWithProgress',
+      })
+      logger.error('getJobWithProgress error', {
+        error: error instanceof Error ? error.message : String(error),
+        jobId: id,
+        stack: error instanceof Error ? error.stack?.slice(0, 1000) : 'No stack',
+      })
       throw error
     }
   }
@@ -807,6 +815,23 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       .where(eq(jobs.id, jobId))
   }
 
+  async updateJobCoverageWarnings(
+    id: string,
+    warnings: Array<{
+      chunkIndex: number
+      coverageRatio: number
+      message: string
+    }>,
+  ): Promise<void> {
+    await this.db
+      .update(jobs)
+      .set({
+        coverageWarnings: JSON.stringify(warnings),
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(jobs.id, id))
+  }
+
   // Layout status upsert and job totalPages recompute helpers
   async upsertLayoutStatus(params: {
     jobId: string
@@ -863,7 +888,124 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       .select({ generated: layoutStatus.isGenerated })
       .from(layoutStatus)
       .where(eq(layoutStatus.jobId, jobId))) as Array<{ generated: 0 | 1 | null }>
-    const count = rows.reduce((acc, r) => acc + (r.generated ? 1 : 0), 0)
+    let count = rows.reduce((acc, r) => acc + (r.generated ? 1 : 0), 0)
+
+    // フォールバック: layout_statusレコードがない場合、ストレージ確認
+    if (count === 0) {
+      const logger = getLogger().withContext({
+        service: 'DatabaseService',
+        method: 'recomputeJobProcessedEpisodes',
+      })
+      logger.warn('Starting fallback recovery: no layout_status records found', {
+        jobId,
+        layoutStatusCount: rows.length,
+      })
+
+      try {
+        const episodes = await this.getEpisodesByJobId(jobId)
+        const { StorageFactory } = await import('@/utils/storage')
+        const { StorageKeys } = await import('@/utils/storage')
+        const storage = await StorageFactory.getLayoutStorage()
+
+        let detectedLayoutFiles = 0
+        let successfulUpserts = 0
+        let failedUpserts = 0
+        let firstFailureDetail: { episode: number; error: string } | null = null
+
+        // Collect all layout status updates to batch them
+        const layoutStatusUpdates: Array<Parameters<typeof this.upsertLayoutStatus>[0]> = []
+
+        for (const ep of episodes) {
+          const layoutKey = StorageKeys.episodeLayout(jobId, ep.episodeNumber)
+          const layoutExists = await storage.get(layoutKey)
+          if (layoutExists?.text) {
+            detectedLayoutFiles++
+            // 不整合を検出・修復：ストレージにファイルが存在するがDBレコードがない
+            try {
+              // レイアウトファイルから実際のページ数を取得
+              const parsed = JSON.parse(layoutExists.text)
+              const totalPages = Array.isArray(parsed?.pages) ? parsed.pages.length : 1
+
+              layoutStatusUpdates.push({
+                jobId,
+                episodeNumber: ep.episodeNumber,
+                totalPages,
+                layoutPath: layoutKey,
+              })
+              count++
+            } catch (parseError) {
+              failedUpserts++
+              const errorMessage =
+                parseError instanceof Error ? parseError.message : String(parseError)
+              if (!firstFailureDetail) {
+                firstFailureDetail = { episode: ep.episodeNumber, error: errorMessage }
+              }
+              // JSONパースエラーの場合は最小限の情報で修復
+              layoutStatusUpdates.push({
+                jobId,
+                episodeNumber: ep.episodeNumber,
+                totalPages: 1,
+                layoutPath: layoutKey,
+                error: 'Layout file parsing failed during recovery',
+              })
+              count++
+            }
+          }
+        }
+
+        // Batch execute all layout status updates
+        if (layoutStatusUpdates.length > 0) {
+          try {
+            await this.db.transaction(async () => {
+              for (const update of layoutStatusUpdates) {
+                await this.upsertLayoutStatus(update)
+              }
+            })
+            successfulUpserts = layoutStatusUpdates.length
+          } catch (batchError) {
+            const errorMessage =
+              batchError instanceof Error ? batchError.message : String(batchError)
+            logger.error('Batch layout status update failed', {
+              jobId,
+              updatesCount: layoutStatusUpdates.length,
+              error: errorMessage,
+            })
+            // Fallback to individual updates
+            for (const update of layoutStatusUpdates) {
+              try {
+                await this.upsertLayoutStatus(update)
+                successfulUpserts++
+              } catch (individualError) {
+                failedUpserts++
+                const individualErrorMessage =
+                  individualError instanceof Error
+                    ? individualError.message
+                    : String(individualError)
+                if (!firstFailureDetail) {
+                  firstFailureDetail = {
+                    episode: update.episodeNumber,
+                    error: individualErrorMessage,
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        logger.warn('Fallback recovery completed', {
+          jobId,
+          totalEpisodes: episodes.length,
+          detectedLayoutFiles,
+          successfulUpserts,
+          failedUpserts,
+          finalProcessedCount: count,
+          firstFailureDetail,
+        })
+      } catch (_storageError) {
+        // ストレージエラーは無視して元のカウントを維持
+      }
+    }
+
     await this.db
       .update(jobs)
       .set({ processedEpisodes: count, updatedAt: new Date().toISOString() })

@@ -1,170 +1,123 @@
-# Tasks: Incremental Pagination Refactor
+# Tasks: Novel to Manga Converter - Current Implementation Status
 
-- [x] Add `episodeLayoutProgress` storage key and ports.
-- [x] Define page splitting types (`PageBatchPlan`, `PlannedPage`).
-- [x] Implement `PageSplitAgent` to plan 3-page batches with optional back-edits.
-- [x] Add `generateMangaLayoutForPlan` to generate only specified pages.
-- [x] Refactor `generateEpisodeLayout` to loop in batches, with atomic progress + YAML rewrite.
-- [ ] Back-edit guardrails: enforce max back-edit window (2 pages) at merge time, log violations.
-- [x] Job progress: expose per-episode page counts in job status for UI.
-- [x] Normalize progress completion logic between backend and frontend.
-- [x] Add radix to integer parsing in UI for robustness.
-- [x] Extract magic number for in-flight episode progress to `CURRENT_EPISODE_PROGRESS_WEIGHT`.
-- [x] Strengthen UI error handling (no silent catches; contextual logs).
-- [x] MCP verification: Cloudflare/Workers docs cross-check (no breaking changes impacting this PR)
-- [x] E2E: rendering API returns page image via renderKey
-- [ ] E2E: add a happy-path scenario for resume after one batch (progress present) then completion.
-- [x] Documentation: update README usage notes if needed.
-- [x] Add YAML-stage layout validator and reference fallback
-  - [x] Implement panel bounds/overlap/band-partition checks
-  - [x] Clamp + normalize panels into [0,1]
-  - [x] Fallback to closest reference from docs when invalid
-  - [x] Map contents to reference layout by Japanese reading order
-  - [x] Unit tests for validator and fallback
-  - [x] Embed references in code (Workers-safe); remove runtime file I/O
-  - [x] Surface validation into episode progress JSON and job status API
-  - [x] UI: episode-level and per-page “Normalized” badges
+## Core Pipeline Implementation ✅
 
-## Pending
+### Text Processing Pipeline
 
-- [ ] E2E: add a happy-path scenario for resume after one batch (progress present) then completion.
-- [ ] E2E: assert Normalized badges appear when validation data exists
-- [ ] Vertical Dialogue Rendering: add E2E happy path with mocked API
-- [ ] Vertical Dialogue Rendering: update README with feature flag/env placeholders (no secrets)
-- [ ] Vertical Dialogue Rendering: cache tuning and concurrency guard if needed
+- [x] **テキスト分析**: 長文テキストの効率的なチャンク分割
+- [x] **スライディング分析**: 前後コンテキストを保持した重複分析
+- [x] **5要素抽出**: 登場人物・シーン・対話・ハイライト・状況の自動抽出
+- [x] **スクリプト変換**: チャンクからマンガスクリプトへの変換
+- [x] **スクリプト結合**: 複数チャンクのスクリプトの一貫性を保った結合
 
-## New (2025-08-21): Episode Text Persistence
+### Episode Structure Generation
 
-- [x] Add StorageKeys.episodeText and storage port episodeText (analysis bucket)
-- [x] Persist episode text after extraction in AnalyzePipeline
-- [x] Add episodes.episode_text_path column and DatabaseService.updateEpisodeTextPath
-- [ ] Generate and apply Drizzle migration for episode_text_path
-- [ ] Add unit tests covering DB path update and retrieval API
+- [x] **エピソード分割**: スクリプトから連載マンガ用エピソード構造の生成
+- [x] **ページ分割推定**: エピソード内での適切なページ分割の自動計算
+- [x] **フォールバック処理**: 短いコンテンツの単一エピソード統合
+- [x] **端数吸収**: 末尾の短いエピソードの直前エピソードへの統合
 
-## New (2025-08-26): Episode Bundling Policy Update
+### Layout Generation System
 
-- [x] Treat 20–50 pages as advisory, not a hard validation.
-- [x] Implement fallback: when proposals are empty or total pages < 20, bundle all pages into a single episode and log a warning.
-- [x] Add unit test ensuring fallback behavior for <20 pages.
+- [x] **JSON統一**: すべてのレイアウトデータをJSON形式で定義・保存（YAML完全廃止）
+- [x] **パネルテンプレート**: パネル数に基づく自動コマ割りとテンプレート選択
+- [x] **レイアウト生成**: セリフとキャラクターに応じた吹き出し配置
+- [x] **バリデーション**: パネル重複チェック、境界正規化、参照テンプレートフォールバック
+- [x] **段階的進捗**: バッチ処理による段階的レイアウト生成と進捗保存
 
-## New (2025-08-16): Panel Count + Template Snap
+### Rendering System
 
-- [x] Loader: Read `public/docs/panel_layout_sample/<count>/*.json` and build `LayoutTemplate` candidates
-- [x] Selector: Prefer random sample template by exact `panelCount`, fallback to nearest built-in
-- [x] LLM Prompt: Change to output only `{ pages: [{ pageNumber, panelCount }] }`
-- [x] Agent: Map `panelCount` to selected template; create placeholder panels (content/dialogues empty) and keep downstream flow unchanged
-- [x] Validation: Add `bypassValidation` flag to normalization; service uses it to skip heavy overlap checks
-- [ ] Tests: Add E2E scenario verifying panel-count-only path produces pages without validation issues
+- [x] **Canvas描画**: HTMLCanvasを使用したストーリーボード描画
+- [x] **バッチレンダリング**: 複数ページの並列処理とプログレス管理
+- [x] **垂直テキスト**: 日本語縦書きテキスト描画の統合（オプション機能）
+- [x] **レンダーキー**: 生成されたページ画像の一意識別と取得
 
-## New (2025-08-18): Prompt Cleanup for New Flow
+### Data Persistence & Management
 
-- [x] Remove usage of commented-out `layoutGeneration` prompt from tests/scenarios
-- [x] Remove usage of commented-out `chunkBundleAnalysis` prompt from manual/prompt-wire tests
-- [x] Add prompt-wire checks for `scriptConversion` and `pageBreakEstimation`
-- [x] Ensure integration tests pass with script→page-break→render flow
+- [x] **ジョブ管理**: 処理状況の永続化と中断・再開機能
+- [x] **段階的保存**: 各処理段階でのデータ自動保存
+- [x] **プログレス追跡**: エピソード・ページレベルでの詳細進捗管理
+- [x] **エラー復旧**: 処理失敗時の状態復旧とリトライ機能
+- [x] **エピソードテキスト永続化**: 抽出されたエピソードテキストの保存
+- [x] **レンダーステータス追跡**: レンダリング状況の詳細追跡
 
-## New (2025-08-18): Orchestrator refresh + Sliding chunks
+### User Interface & API
 
-- [x] Replace DSL scenario with API-driven ideal flow (analyze → layout → render)
-- [x] Add mechanical sliding chunk splitter + unit tests
-- [x] Inject prev/next chunk context into analysis prompt
-- [x] Update `/api/scenario/run` to use refreshed DSL input/output
-- [x] E2E (demo path): scenario run endpoint returns render key successfully
+- [x] **API設計**: RESTful API設計による各機能のエンドポイント提供
+- [x] **リアルタイム更新**: 処理進捗のリアルタイム表示
+- [x] **結果ブラウジング**: 生成されたマンガレイアウトのページ別閲覧
+- [x] **共有機能**: 結果の共有とエクスポート
+- [x] **エラー表示**: 処理エラーの詳細情報表示とバリデーション結果
 
-## New (2025-08-18): Route responsibility separation
+## Technical Architecture Completed ✅
 
-- [x] Extract health check logic from API route into service layer
-- [x] Add HealthCheckService unit tests and structured error context
+### Infrastructure Integration
 
-## New: Vertical Dialogue Rendering (2025-08-16)
+- [x] **Cloudflare統合**: Workers/Pages/D1/R2/KVを活用した分散処理
+- [x] **LLMプロバイダー**: OpenRouter/Gemini/Claude/Cerebras/VertexAIのフォールバックチェーン
+- [x] **型安全性**: TypeScript strict modeによる型安全性確保
+- [x] **テスト戦略**: Unit/Integration/E2Eテストの包括的カバレッジ
 
-- [x] Design plan at `docs/vertical-text-integration-plan.md`
-- [x] Add client `src/services/vertical-text-client.ts` with zod validation
-- [x] Add types `src/types/vertical-text.ts`
-- [x] Add config `rendering.verticalText` (enabled + defaults)
-- [x] Integrate in `MangaPageRenderer` to request images per dialogue
-- [x] Extend `CanvasRenderer` to draw scaled vertical PNGs inside balloons, fitted to panel bounds
-- [x] Unit tests: client fetch success/error
-- [ ] Integration test: renderBatchFromYaml with mocked vertical API
-- [ ] E2E: basic flow using mocked API
+### Data Format & Quality Standards
 
-## Completed (2025-08-16): Service Layer Improvements
+- [x] **JSON統一**: すべてのデータフォーマットをJSONに統一（YAML完全廃止）
+- [x] **Zod検証**: すべてのデータ構造のスキーマ検証
+- [x] **エラーハンドリング**: 包括的エラー処理と詳細ログ記録
+- [x] **設定集約**: すべての設定の中央集権化
 
-- [x] **JobProgressService Enhancement**: Improved error handling and progress enrichment
-  - [x] Implement `safeOperation` pattern for graceful error handling
-  - [x] Add perEpisodePages enrichment with planned/rendered/total counts
-  - [x] Parallel processing of episode data for better performance
-  - [x] Comprehensive error logging without silencing failures
-  - [x] Robust JSON parsing with fallback mechanisms
+### Service Layer Architecture
 
-- [x] **Integration Test Coverage**: Comprehensive service-level testing
-  - [x] Test JobProgressService.getJobWithProgress with mock dependencies
-  - [x] Verify enrichment logic with real episode data
-  - [x] Test error scenarios: storage failures, parsing errors, database errors
-  - [x] Validate graceful degradation and fallback behavior
+- [x] **モジュール化**: 機能別の疎結合な設計
+- [x] **JobProgressService**: エラーハンドリング強化と進捗エンリッチメント
+- [x] **HealthCheckService**: ヘルスチェック機能の分離
+- [x] **トランザクション管理**: データ整合性を保証するトランザクション処理
 
-- [x] **Documentation Fixes**: Critical infrastructure improvements
-  - [x] **CRITICAL**: Fix corrupted dependency_chart.md with proper Mermaid syntax
-  - [x] Remove massive duplication and broken code blocks
-  - [x] Regenerate clean dependency chart reflecting current architecture
-  - [x] Update design.md with service layer improvements
+## Quality Assurance Standards Met ✅
 
-## Quality Assurance Completed
+### Code Quality
 
-- [x] TypeScript: Zero `any` types, strict type enforcement maintained
-- [x] Linting: All Biome lint checks passing with no errors
-- [x] Error Handling: Comprehensive logging patterns implemented
-- [x] UI/Endpoint Consistency: Completion logic aligned; redundant conditions removed
-- [x] Test Coverage: Integration tests validate core enrichment logic
-- [x] DRY Principle: No code duplication introduced, shared utilities properly factored
-- [x] MCP: 最新ドキュメント確認済（影響なし）
+- [x] **TypeScript**: Zero `any` types, strict type enforcement maintained
+- [x] **Linting**: All Biome lint checks passing with no errors
+- [x] **DRY Principle**: No code duplication, shared utilities properly factored
+- [x] **SOLID**: Single-responsibility, dependency inversion patterns
 
-## Acceptance Criteria
+### Error Handling & Observability
 
-- Can resume from `.progress.json` with no data loss.
-- Minor back-edits within 2 pages replace prior YAML pages by page number.
-- Rendering waits until episode YAML complete; can render ep N while generating YAML for ep N+1.
-- **NEW**: JobProgressService enriches job data with per-episode page progress without breaking on errors.
-- **NEW**: All service errors are logged with full context for debugging, never silenced.
-- **NEW**: Dependency chart renders correctly in GitHub with clean, current architecture.
+- [x] **エラーパターン統一**: 集約されたエラーパターン定義
+- [x] **ログ戦略**: 構造化ログによる詳細なデバッグ情報
+- [x] **フォールバック処理**: 各レイヤーでの適切なフォールバック実装
+- [x] **バリデーション**: 入力データの厳密な検証とフォールバック
 
-## New (2025-08-19): Emotion as Free-text String
+## Active Development Areas 🚧
 
-- [x] Remove `normalizeEmotion` implementation and all usages
-- [x] Ensure `EmotionSchema = z.string()` and `type Emotion = string`
-- [x] Do not inject or transform `emotion` values during layout/rendering
-- [x] Bubble style decision uses only text punctuation, not `emotion`
-- [x] Update unit tests to remove normalization expectations
-- [x] Update design.md to document free-text policy and style heuristics
-- Refactor: Consolidated `src/agent` into `src/agents`; updated imports project-wide; unified error handling to `src/agents/errors.ts`. Unit tests pass.
+### Testing & E2E Coverage
 
-## New (2025-08-27): Error Handling Architecture Improvements
+- [ ] **E2E Resume**: バッチ処理後の中断・再開シナリオテスト
+- [ ] **E2E Validation**: バリデーション結果表示のE2Eテスト
+- [ ] **垂直テキストE2E**: モックAPIを使用した垂直テキスト機能テスト
+- [ ] **統合テスト拡張**: パイプライン全体の検証ログ追加
 
-- [x] Extract shared error patterns into centralized constants (`src/errors/error-patterns.ts`)
-  - [x] Define connectivity, JSON/schema, retryable JSON, and HTTP error patterns
-  - [x] Remove duplication between `isPostResponseError` and `isRetryableJsonError` methods
-  - [x] Add comprehensive documentation for each error pattern category
-- [x] Enhance `normalizePageBreakResult` function with detailed JSDoc documentation
-  - [x] Document all supported LLM response formats (standard, array, nested, mixed, unknown)
-  - [x] Explain page numbering normalization and fallback behavior
-  - [x] Add usage examples and case-by-case explanations
-- [x] Review and document storage audit performance optimizations
-  - [x] Parallel storage key fetching using `Promise.all()`
-  - [x] Single-pass validation combining duplicate detection and format checking
-  - [x] Abort signal support for long-running operations
-- [x] Update design.md with new error handling architecture documentation
-- [x] Update tasks.md to reflect completed error handling improvements
+### Performance & Operations
 
-## New (2025-08-28): Script Conversion Guardrails
+- [ ] **垂直テキスト最適化**: キャッシュチューニングと同時実行制御
+- [ ] **端数吸収テスト**: チャンク・エピソード統合のテストカバレッジ
+- [ ] **DBマイグレーション**: episode_text_pathカラムのマイグレーション適用
 
-- [x] Chunk-script: 空scriptの早期失敗（保存せず即エラー）
-- [x] Script-merge: 0シーンの場合は結合保存せずエラー
-- [x] 観測性: `script_chunk_{i}.summary.json` を保存（scenes数・先頭行数・preview）
-- [x] Unit: 上記ガードの最小テストを追加
-- [ ] Integration: 実パイプラインで script*chunk*\* と combined の検証ログを追加
+## Legacy Tasks Archive 📁
 
-## New (2025-08-28): Remainder Absorption
+### Completed Major Refactors
 
-- [x] Chunking: 末尾の短いチャンクを直前に連結（原文スライスで重複抑止）
-- [x] Bundling: 末尾エピソードが下限未満なら直前に吸収
-- [ ] Tests: 端数吸収のユニット/統合テストを追加
+- ✅ **YAML廃止**: すべてのYAMLフォーマットをJSONに移行完了
+- ✅ **エージェント統合**: `src/agent` → `src/agents` への統合
+- ✅ **エラーハンドリング**: 中央集権化されたエラーパターンと処理
+- ✅ **感情表現**: 自由テキスト文字列への変更
+- ✅ **スクリプト変換**: ガードレール実装とバリデーション強化
+- ✅ **段階的レンダリング**: バッチ処理による効率的レンダリング
+
+### System Architecture Evolution
+
+- ✅ **パイプライン設計**: analyze → layout → render フローの確立
+- ✅ **プロンプト整理**: 新フロー対応のプロンプト更新
+- ✅ **オーケストレーター**: API駆動型の理想的フロー実装
+- ✅ **責任分離**: ルートとサービスレイヤーの明確な分離
+- ✅ **LLM差異吸収**: Vertex AI(Gemini)の`system`ロール非対応を`systemInstruction`へ正規化し、OpenAI/Groq/Gemini間での呼び出し差異をアダプター層で解消（2025-08-31）
