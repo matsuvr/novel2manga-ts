@@ -443,10 +443,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
 
       if (currentPageCount < bundlingConfig.minPageCount) {
         // Find next episode that's not already merged
-        let nextIndex = i + 1
-        while (nextIndex < bundledEpisodes.length && toRemove.has(nextIndex)) {
-          nextIndex++
-        }
+        const nextIndex = i + 1
 
         if (nextIndex < bundledEpisodes.length) {
           const nextEpisode = bundledEpisodes[nextIndex]

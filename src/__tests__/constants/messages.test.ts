@@ -22,7 +22,7 @@ describe('COVERAGE_MESSAGES', () => {
 
     it('handles empty episode array', () => {
       const message = COVERAGE_MESSAGES.LOW_COVERAGE_WARNING_EPISODES([], '78.0')
-      expect(message).toBe('エピソードのカバレッジが低くなっています (78.0%)')
+      expect(message).toBe('エピソード不明のカバレッジが低くなっています (78.0%)')
     })
   })
 })

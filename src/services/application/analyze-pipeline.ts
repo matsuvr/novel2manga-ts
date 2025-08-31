@@ -211,21 +211,32 @@ export class AnalyzePipeline extends BasePipelineStep {
       const job = await jobRepo.getJob(jobId)
       if (!job) throw new Error(`Job not found for episode persistence: ${jobId}`)
 
+      // パネル→チャンクマッピングを作成
+      const panelToChunkMapping = await this.buildPanelToChunkMapping(jobId, totalChunks, {
+        logger,
+      })
+
       const { EpisodeWriteService } = await import('@/services/application/episode-write')
       const episodeWriter = new EpisodeWriteService()
-      const episodesForDb = episodeRes.data.episodeBreaks.episodes.map((ep) => ({
-        novelId: job.novelId,
-        jobId,
-        episodeNumber: ep.episodeNumber,
-        title: ep.title,
-        summary: undefined,
-        // Chunk-based fieldsは新フローでは必須でないため安全な最小値で保存
-        startChunk: 1,
-        startCharIndex: 0,
-        endChunk: 1,
-        endCharIndex: 0,
-        confidence: 1,
-      }))
+      const episodesForDb = episodeRes.data.episodeBreaks.episodes.map((ep) => {
+        // パネル範囲からチャンク範囲を計算
+        const startChunk = this.getChunkForPanel(panelToChunkMapping, ep.startPanelIndex)
+        const endChunk = this.getChunkForPanel(panelToChunkMapping, ep.endPanelIndex)
+
+        return {
+          novelId: job.novelId,
+          jobId,
+          episodeNumber: ep.episodeNumber,
+          title: ep.title,
+          summary: undefined,
+          // 計算されたチャンク範囲を保存
+          startChunk,
+          startCharIndex: 0,
+          endChunk,
+          endCharIndex: 0,
+          confidence: 1,
+        }
+      })
       await episodeWriter.bulkUpsert(episodesForDb)
       try {
         const db = getDatabaseService()
@@ -497,5 +508,71 @@ export class AnalyzePipeline extends BasePipelineStep {
     })
 
     return { resumePoint }
+  }
+
+  /**
+   * パネル→チャンクマッピングを作成
+   * 各チャンクのパネル数を元に、パネルインデックス範囲を計算
+   */
+  private async buildPanelToChunkMapping(
+    jobId: string,
+    totalChunks: number,
+    context: { logger: ReturnType<typeof import('@/infrastructure/logging/logger').getLogger> },
+  ): Promise<Array<{ chunkIndex: number; startPanel: number; endPanel: number }>> {
+    const { logger } = context
+    const mapping: Array<{ chunkIndex: number; startPanel: number; endPanel: number }> = []
+    let currentPanelIndex = 1 // パネルは1から始まる
+
+    const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
+    const storage = await StorageFactory.getAnalysisStorage()
+
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+      const key = JsonStorageKeys.scriptChunk(jobId, chunkIndex)
+      const obj = await storage.get(key)
+
+      if (!obj) {
+        logger.warn('Missing script chunk for panel mapping', { jobId, chunkIndex })
+        continue
+      }
+
+      let panelCount = 0
+      try {
+        const scriptObj = JSON.parse(obj.text)
+        panelCount = Array.isArray(scriptObj.panels) ? scriptObj.panels.length : 0
+      } catch (_parseError) {
+        logger.warn('Failed to parse script chunk for panel mapping', { jobId, chunkIndex })
+        continue
+      }
+
+      if (panelCount > 0) {
+        const startPanel = currentPanelIndex
+        const endPanel = currentPanelIndex + panelCount - 1
+        mapping.push({
+          chunkIndex,
+          startPanel,
+          endPanel,
+        })
+        currentPanelIndex = endPanel + 1
+      }
+    }
+
+    logger.info('Built panel to chunk mapping', {
+      jobId,
+      totalMappings: mapping.length,
+      totalPanels: currentPanelIndex - 1,
+    })
+
+    return mapping
+  }
+
+  /**
+   * パネルインデックスに対応するチャンクインデックスを取得
+   */
+  private getChunkForPanel(
+    mapping: Array<{ chunkIndex: number; startPanel: number; endPanel: number }>,
+    panelIndex: number,
+  ): number {
+    const chunk = mapping.find((m) => panelIndex >= m.startPanel && panelIndex <= m.endPanel)
+    return chunk ? chunk.chunkIndex : 0 // フォールバック値として0を返す
   }
 }
