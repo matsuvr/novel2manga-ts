@@ -9,9 +9,9 @@
 - 統合テスト強化: サービス層のロジックを包括的にテスト
 - 依存関係チャート修復: 破損していたMermaid記法を正常な構造に再生成
 
-## 2025-08-12 更新（Legacy Service の現状とフラットキー方式）
+## 2025-09-01 更新（Legacy StorageService 完全削除とフラットキー方式）
 
-旧来の **階層ディレクトリ (novels/{novel_id}/jobs/{job_id}/...)** および `txt` ベース保存は廃止方向です。`src/services/storage.ts` のレガシー `StorageService` は現在も DEPRECATED として残置しており、参照が無いことを確認次第に削除します。現行の正規 API は `src/utils/storage.ts` の `StorageKeys` と各種 `get*Storage()` 群です。これにより以下を達成:
+旧来の **階層ディレクトリ (novels/{novel_id}/jobs/{job_id}/...)** および `txt` ベース保存は廃止されました。レガシー `StorageService` (`src/services/storage.ts`) は削除済みで、現行の正規 API は `src/utils/storage.ts` の `StorageKeys` と各種 `get*Storage()` 群のみです。これにより以下を達成:
 
 - 重複プレフィックス問題の解消 (例: `novels/novels/`)
 - 取り扱いフォーマットの JSON への統一（バイナリ画像等を除く）
@@ -160,7 +160,7 @@ private async safeOperation<T>(
 
 これにより API パラメータをそのまま key に用いた場合の階層逸脱を防止。
 
-### 2025-08-12 追加: Repository Ports & Storage 改善 (Legacy StorageService 削除反映)
+### 2025-09-01 追加: Repository Ports & Storage 改善 (Legacy StorageService 完全削除)
 
 #### Repository Layer Architecture
 
@@ -196,7 +196,7 @@ const novelRepo = new NovelRepository(ports.novel) // NovelDbPortRW
 
 **Path Duplication 修正 / Legacy 廃止:**
 
-- Legacy `src/services/storage.ts` は DEPRECATED として残置（今後削除）。
+- Legacy `src/services/storage.ts` を削除し、StorageKeys を単一ソースとして運用
 - StorageKeys が単一ソース・プレフィックス重複不可
 - `.local-storage/<category>/<key>` の最終形 (例: `.local-storage/novels/{uuid}.json`)
 
