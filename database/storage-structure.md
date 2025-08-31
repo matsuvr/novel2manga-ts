@@ -1,5 +1,11 @@
 # ストレージ構造設計
 
+## 2025-08-31 更新（ユーザーデータ連携）
+
+- Auth.js 対応の `users`/`accounts`/`sessions` テーブルを D1 に追加。
+- `novels` と `jobs` に `user_id` を追加し、ユーザー単位でのデータ分離を実現。
+- ストレージキー構造に変更はない。
+
 ## 2025-08-16 更新（Service Layer Progress Enhancement）
 
 **JobProgressService** の機能強化により、ジョブ進捗データの充実化を実現しました:
