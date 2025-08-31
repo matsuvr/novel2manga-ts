@@ -1,6 +1,6 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import fs from 'node:fs'
 import path from 'node:path'
-import { AsyncLocalStorage } from 'node:async_hooks'
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 

@@ -1,6 +1,6 @@
+import { getLogger } from '@/infrastructure/logging/logger'
 import { executeStorageWithTracking } from '@/services/application/transaction-manager'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
-import { getLogger } from '@/infrastructure/logging/logger'
 
 export interface ChunkStoragePort {
   getChunk(jobId: string, index: number): Promise<{ text: string } | null>

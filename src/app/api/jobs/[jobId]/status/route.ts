@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server'
-import { ApiResponder } from '@/utils/api-responder'
 import { getLogger, runWithLogContext } from '@/infrastructure/logging/logger'
 import { getJobDetails } from '@/services/application/job-details'
+import { ApiResponder } from '@/utils/api-responder'
 
 export async function GET(
   _request: NextRequest,

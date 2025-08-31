@@ -6,15 +6,15 @@
  */
 
 import type { NewMangaScript, PageBreakV2 } from '../../types/script'
+import { calculateImportanceBasedPageBreaks } from './importance-based-page-break'
 import type { ScriptSegment } from './script-segmenter'
 import {
-  segmentScript,
-  estimateSegmentJsonSize,
-  validateSegments,
   DEFAULT_SCRIPT_SEGMENTATION_CONFIG,
+  estimateSegmentJsonSize,
   type ScriptSegmentationConfig,
+  segmentScript,
+  validateSegments,
 } from './script-segmenter'
-import { calculateImportanceBasedPageBreaks } from './importance-based-page-break'
 
 /**
  * Options for segmented page break estimation

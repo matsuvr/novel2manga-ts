@@ -2,9 +2,9 @@ import { notFound } from 'next/navigation'
 import { adaptAll } from '@/repositories/adapters'
 import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
+import { loadEpisodePreview } from '@/services/application/episode-preview'
 import { getDatabaseService } from '@/services/db-factory'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
-import { loadEpisodePreview } from '@/services/application/episode-preview'
 
 interface Params {
   novelId: string

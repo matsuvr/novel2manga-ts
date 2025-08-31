@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server'
+import { getLogger } from '@/infrastructure/logging/logger'
 import {
   createErrorResponse,
   createSuccessResponse,
@@ -7,7 +8,6 @@ import {
 } from '@/utils/api-error'
 import { StorageFactory } from '@/utils/storage'
 import { generateUUID } from '@/utils/uuid'
-import { getLogger } from '@/infrastructure/logging/logger'
 
 export async function saveNovelToStorage(text: string) {
   const uuid = generateUUID()

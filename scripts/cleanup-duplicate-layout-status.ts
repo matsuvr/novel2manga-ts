@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+
 /**
  * Data migration script to clean up duplicate layout_status records
  * before the unique constraint is fully enforced.
@@ -7,10 +8,10 @@
  * that enforces the unique constraint on (jobId, episodeNumber).
  */
 
-import { drizzle } from 'drizzle-orm/better-sqlite3'
 import Database from 'better-sqlite3'
-import { layoutStatus } from '@/db/schema'
 import { sql } from 'drizzle-orm'
+import { drizzle } from 'drizzle-orm/better-sqlite3'
+import { layoutStatus } from '@/db/schema'
 
 // Simple console logger for migration script
 const logger = {

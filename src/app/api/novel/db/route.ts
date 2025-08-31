@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
+import { getLogger } from '@/infrastructure/logging/logger'
 import { adaptAll } from '@/repositories/adapters'
 import { JobRepository } from '@/repositories/job-repository'
 import { NovelRepository } from '@/repositories/novel-repository'
 import { getDatabaseService } from '@/services/db-factory'
 import { ApiError, createErrorResponse, createSuccessResponse } from '@/utils/api-error'
-import { getLogger } from '@/infrastructure/logging/logger'
 import { generateUUID } from '@/utils/uuid'
 
 // Novel要素を保存
