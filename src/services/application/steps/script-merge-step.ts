@@ -1,4 +1,7 @@
 import { COVERAGE_MESSAGES } from '@/constants/messages'
+import { adaptAll } from '@/repositories/adapters'
+import { EpisodeRepository } from '@/repositories/episode-repository'
+import { getDatabaseService } from '@/services/db-factory'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface ScriptMergeResult {
@@ -8,6 +11,7 @@ export interface ScriptMergeResult {
     chunkIndex: number
     coverageRatio: number
     message: string
+    episodeNumbers?: number[]
   }>
 }
 
@@ -104,13 +108,30 @@ export class ScriptMergeStep implements PipelineStep {
         }
       }
 
-      // Collect coverage warnings (including chunks below minimum acceptable coverage)
+      // Collect coverage warnings with episode information
       const allLowCoverageChunks = [...failCoverageChunks, ...lowCoverageChunks]
-      const coverageWarnings = allLowCoverageChunks.map((c) => ({
-        chunkIndex: c.index,
-        coverageRatio: c.ratio,
-        message: COVERAGE_MESSAGES.LOW_COVERAGE_WARNING(c.index, (c.ratio * 100).toFixed(1)),
-      }))
+
+      // Get episode repository to map chunks to episodes
+      const db = getDatabaseService()
+      const { episode: episodePort } = adaptAll(db)
+      const episodeRepo = new EpisodeRepository(episodePort)
+
+      const coverageWarnings = await Promise.all(
+        allLowCoverageChunks.map(async (c) => {
+          const episodeNumbers = await episodeRepo.getEpisodeNumbersByChunk(jobId, c.index)
+          const coveragePercent = (c.ratio * 100).toFixed(1)
+
+          return {
+            chunkIndex: c.index,
+            coverageRatio: c.ratio,
+            message:
+              episodeNumbers.length > 0
+                ? COVERAGE_MESSAGES.LOW_COVERAGE_WARNING_EPISODES(episodeNumbers, coveragePercent)
+                : COVERAGE_MESSAGES.LOW_COVERAGE_WARNING(c.index, coveragePercent),
+            episodeNumbers,
+          }
+        }),
+      )
 
       if (failCoverageChunks.length > 0) {
         const details = failCoverageChunks

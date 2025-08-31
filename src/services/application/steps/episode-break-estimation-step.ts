@@ -64,9 +64,12 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
           }
         }
 
+        // Apply episode bundling based on page count
+        const bundled = this.bundleEpisodesByPageCount(normalized, context)
+
         logger.info('Episode break determined by small-script rule', {
           jobId,
-          episodes: normalized.episodes.map((ep) => ({
+          episodes: bundled.episodes.map((ep) => ({
             episodeNumber: ep.episodeNumber,
             panelRange: `${ep.startPanelIndex}-${ep.endPanelIndex}`,
           })),
@@ -74,8 +77,8 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
         return {
           success: true,
           data: {
-            episodeBreaks: normalized,
-            totalEpisodes: normalized.episodes.length,
+            episodeBreaks: bundled,
+            totalEpisodes: bundled.episodes.length,
           },
         }
       }
@@ -165,10 +168,13 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
       throw new Error(`Episode break validation failed: ${validation.issues.join(', ')}`)
     }
 
+    // Apply episode bundling based on page count
+    const bundled = this.bundleEpisodesByPageCount(normalized, context)
+
     logger.info('Episode break estimation completed', {
       jobId,
-      totalEpisodes: normalized.episodes.length,
-      episodes: normalized.episodes.map((ep) => ({
+      totalEpisodes: bundled.episodes.length,
+      episodes: bundled.episodes.map((ep) => ({
         episodeNumber: ep.episodeNumber,
         title: ep.title,
         panelRange: `${ep.startPanelIndex}-${ep.endPanelIndex}`,
@@ -178,8 +184,8 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     return {
       success: true,
       data: {
-        episodeBreaks: normalized,
-        totalEpisodes: normalized.episodes.length,
+        episodeBreaks: bundled,
+        totalEpisodes: bundled.episodes.length,
       },
     }
   }
@@ -270,11 +276,14 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
       throw new Error(`Merged episode break validation failed: ${validation.issues.join(', ')}`)
     }
 
+    // Apply episode bundling based on page count
+    const bundled = this.bundleEpisodesByPageCount(normalized, context)
+
     logger.info('Sliding window episode break estimation completed', {
       jobId,
-      totalEpisodes: normalized.episodes.length,
+      totalEpisodes: bundled.episodes.length,
       totalSegments: segments.length,
-      episodes: normalized.episodes.map((ep) => ({
+      episodes: bundled.episodes.map((ep) => ({
         episodeNumber: ep.episodeNumber,
         title: ep.title,
         panelRange: `${ep.startPanelIndex}-${ep.endPanelIndex}`,
@@ -284,8 +293,8 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     return {
       success: true,
       data: {
-        episodeBreaks: normalized,
-        totalEpisodes: normalized.episodes.length,
+        episodeBreaks: bundled,
+        totalEpisodes: bundled.episodes.length,
       },
     }
   }
@@ -385,5 +394,160 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     })
 
     return { episodes: normalized }
+  }
+
+  /**
+   * Bundle episodes based on page count requirements
+   * - Episodes with < 20 pages are merged with the next episode
+   * - If the last episode has < 20 pages, it's merged with the previous episode
+   * - Episode numbers are renumbered after bundling
+   */
+  private bundleEpisodesByPageCount(
+    episodeBreaks: EpisodeBreakPlan,
+    context: StepContext,
+  ): EpisodeBreakPlan {
+    const { jobId, logger } = context
+
+    // Get episode bundling configuration
+    const appConfig = getAppConfigWithOverrides()
+    const bundlingConfig = appConfig.episodeBundling || { minPageCount: 20, enabled: true }
+
+    // Skip bundling if disabled
+    if (!bundlingConfig.enabled) {
+      logger.info('Episode bundling disabled by configuration', { jobId })
+      return episodeBreaks
+    }
+
+    if (episodeBreaks.episodes.length <= 1) {
+      logger.info('No bundling needed for single episode', { jobId })
+      return episodeBreaks
+    }
+
+    const bundledEpisodes = [...episodeBreaks.episodes].sort(
+      (a, b) => a.episodeNumber - b.episodeNumber,
+    )
+    const toRemove = new Set<number>()
+
+    logger.info('Starting episode bundling process', {
+      jobId,
+      originalEpisodes: bundledEpisodes.length,
+      minPageCount: bundlingConfig.minPageCount,
+    })
+
+    // First pass: merge episodes with < minPageCount with next episode
+    for (let i = 0; i < bundledEpisodes.length - 1; i++) {
+      if (toRemove.has(i)) continue
+
+      const currentEpisode = bundledEpisodes[i]
+      const currentPageCount = currentEpisode.endPanelIndex - currentEpisode.startPanelIndex + 1
+
+      if (currentPageCount < bundlingConfig.minPageCount) {
+        // Find next episode that's not already merged
+        let nextIndex = i + 1
+        while (nextIndex < bundledEpisodes.length && toRemove.has(nextIndex)) {
+          nextIndex++
+        }
+
+        if (nextIndex < bundledEpisodes.length) {
+          const nextEpisode = bundledEpisodes[nextIndex]
+
+          // Merge current episode with next episode
+          bundledEpisodes[nextIndex] = {
+            ...nextEpisode,
+            startPanelIndex: currentEpisode.startPanelIndex,
+            title: nextEpisode.title || currentEpisode.title,
+            description: nextEpisode.description || currentEpisode.description,
+          }
+
+          toRemove.add(i)
+
+          const newPageCount =
+            bundledEpisodes[nextIndex].endPanelIndex -
+            bundledEpisodes[nextIndex].startPanelIndex +
+            1
+          logger.info('Merged episode with next episode', {
+            jobId,
+            mergedEpisode: currentEpisode.episodeNumber,
+            intoEpisode: nextEpisode.episodeNumber,
+            originalPageCounts: [
+              currentPageCount,
+              nextEpisode.endPanelIndex - nextEpisode.startPanelIndex + 1,
+            ],
+            newPageCount,
+          })
+        }
+      }
+    }
+
+    // Check if the last episode (after first pass merges) has < minPageCount
+    // Find the last non-removed episode
+    let lastIndex = bundledEpisodes.length - 1
+    while (lastIndex >= 0 && toRemove.has(lastIndex)) {
+      lastIndex--
+    }
+
+    if (lastIndex >= 0) {
+      const lastEpisode = bundledEpisodes[lastIndex]
+      const lastPageCount = lastEpisode.endPanelIndex - lastEpisode.startPanelIndex + 1
+
+      if (lastPageCount < bundlingConfig.minPageCount) {
+        // Find the previous non-removed episode
+        let prevIndex = lastIndex - 1
+        while (prevIndex >= 0 && toRemove.has(prevIndex)) {
+          prevIndex--
+        }
+
+        if (prevIndex >= 0) {
+          const prevEpisode = bundledEpisodes[prevIndex]
+
+          // Merge last episode with previous episode
+          bundledEpisodes[prevIndex] = {
+            ...prevEpisode,
+            endPanelIndex: lastEpisode.endPanelIndex,
+            title: prevEpisode.title || lastEpisode.title,
+            description: prevEpisode.description || lastEpisode.description,
+          }
+
+          toRemove.add(lastIndex)
+
+          const newPageCount =
+            bundledEpisodes[prevIndex].endPanelIndex -
+            bundledEpisodes[prevIndex].startPanelIndex +
+            1
+          logger.info('Merged last episode with previous episode', {
+            jobId,
+            mergedEpisode: lastEpisode.episodeNumber,
+            intoPreviousEpisode: prevEpisode.episodeNumber,
+            originalPageCounts: [
+              prevEpisode.endPanelIndex - prevEpisode.startPanelIndex + 1,
+              lastPageCount,
+            ],
+            newPageCount,
+          })
+        }
+      }
+    }
+
+    // Filter out removed episodes and renumber
+    const finalEpisodes = bundledEpisodes
+      .filter((_, index) => !toRemove.has(index))
+      .map((episode, index) => ({
+        ...episode,
+        episodeNumber: index + 1,
+      }))
+
+    logger.info('Episode bundling completed', {
+      jobId,
+      originalEpisodeCount: bundledEpisodes.length,
+      finalEpisodeCount: finalEpisodes.length,
+      removedCount: toRemove.size,
+      finalEpisodes: finalEpisodes.map((ep) => ({
+        episodeNumber: ep.episodeNumber,
+        pageCount: ep.endPanelIndex - ep.startPanelIndex + 1,
+        panelRange: `${ep.startPanelIndex}-${ep.endPanelIndex}`,
+      })),
+    })
+
+    return { episodes: finalEpisodes }
   }
 }
