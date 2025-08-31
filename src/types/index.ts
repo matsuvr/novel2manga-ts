@@ -8,6 +8,8 @@ export type {
   NewJob,
   NewNovel,
   Novel,
+  User,
+  NewUser,
 } from '@/db/schema'
 // Analysis Types
 export * from './chunk'

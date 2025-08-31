@@ -55,7 +55,12 @@ describe('DatabaseService', () => {
 
   describe('createJob', () => {
     it('should create a new job', async () => {
-      await service.createJob('job-123', 'novel-123', 'Test Job')
+      await service.createJob({
+        id: 'job-123',
+        novelId: 'novel-123',
+        title: 'Test Job',
+        userId: 'user-1',
+      })
 
       // Note: The actual implementation uses Drizzle ORM, not raw SQL
       // This test checks that the service method is called correctly
