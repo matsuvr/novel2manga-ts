@@ -1,6 +1,7 @@
 import { appConfig } from '@/config/app.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { renderVerticalText } from '@/services/vertical-text-client'
+import { getFontForDialogue } from '@/types/vertical-text'
 import type {
   ChunkAnalysisResult,
   Dialogue,
@@ -163,6 +164,7 @@ export class MangaPageRenderer {
         size: layout.size,
         content,
         dialogues,
+        sfx: chunk.sfx, // Add SFX data from chunk analysis
         sourceChunkIndex: chunk.chunkIndex,
         importance: this.calculateImportance(chunk),
       }
@@ -314,11 +316,15 @@ export class MangaPageRenderer {
             })
           } else {
             // API コール
+            const selectedFont = getFontForDialogue(d)
             logger.debug('Calling vertical text API', {
               panelId: panel.id,
               dialogueIndex: i,
               text: d.text,
+              dialogueType: d.type,
+              selectedFont,
               apiParams: {
+                font: selectedFont,
                 fontSize: feature.defaults.fontSize,
                 lineHeight: feature.defaults.lineHeight,
                 letterSpacing: feature.defaults.letterSpacing,
@@ -330,6 +336,7 @@ export class MangaPageRenderer {
             const apiStartTime = Date.now()
             const { meta, pngBuffer } = await renderVerticalText({
               text: d.text,
+              font: selectedFont,
               fontSize: feature.defaults.fontSize,
               lineHeight: feature.defaults.lineHeight,
               letterSpacing: feature.defaults.letterSpacing,
