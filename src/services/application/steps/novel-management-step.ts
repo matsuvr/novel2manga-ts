@@ -72,6 +72,7 @@ export class NovelManagementStep implements PipelineStep {
         textLength: novelText.length,
         language: 'ja',
         metadataPath: null,
+        userId: 'anonymous',
       })
 
       // ストレージに小説テキストを保存
