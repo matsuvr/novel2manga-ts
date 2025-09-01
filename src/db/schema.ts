@@ -10,27 +10,29 @@ import {
   unique,
 } from 'drizzle-orm/sqlite-core'
 
-// ユーザーテーブル（Auth.js 用）
-export const users = sqliteTable('users', {
+
+// 認証テーブル群
+export const users = sqliteTable('user', {
   id: text('id')
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   name: text('name'),
   email: text('email').unique(),
-  emailVerified: integer('email_verified', { mode: 'timestamp_ms' }),
+
+  emailVerified: integer('emailVerified', { mode: 'timestamp_ms' }),
   image: text('image'),
 })
 
-// サードパーティアカウント
 export const accounts = sqliteTable(
-  'accounts',
+  'account',
   {
-    userId: text('user_id')
+    userId: text('userId')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     type: text('type').notNull(),
     provider: text('provider').notNull(),
-    providerAccountId: text('provider_account_id').notNull(),
+
+    providerAccountId: text('providerAccountId').notNull(),
     refreshToken: text('refresh_token'),
     accessToken: text('access_token'),
     expiresAt: integer('expires_at'),
@@ -40,22 +42,24 @@ export const accounts = sqliteTable(
     sessionState: text('session_state'),
   },
   (account) => ({
-    pk: primaryKey({ columns: [account.provider, account.providerAccountId] }),
+
+    compositePk: primaryKey({
+      columns: [account.provider, account.providerAccountId],
+    }),
   }),
 )
 
-// セッショントークン
-export const sessions = sqliteTable('sessions', {
-  sessionToken: text('session_token').primaryKey(),
-  userId: text('user_id')
+export const sessions = sqliteTable('session', {
+  sessionToken: text('sessionToken').primaryKey(),
+  userId: text('userId')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   expires: integer('expires', { mode: 'timestamp_ms' }).notNull(),
 })
 
-// メール確認・パスワードレス用トークン
+
 export const verificationTokens = sqliteTable(
-  'verification_tokens',
+  'verificationToken',
   {
     identifier: text('identifier').notNull(),
     token: text('token').notNull(),
@@ -83,6 +87,7 @@ export const authenticators = sqliteTable(
   },
   (authenticator) => ({
     pk: primaryKey({ columns: [authenticator.userId, authenticator.credentialId] }),
+
   }),
 )
 
@@ -340,6 +345,7 @@ export const outputs = sqliteTable(
     jobId: text('job_id')
       .notNull()
       .references(() => jobs.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull(),
     outputType: text('output_type').notNull(), // pdf/cbz/images_zip/epub
     outputPath: text('output_path').notNull(),
     fileSize: integer('file_size'),
@@ -542,6 +548,33 @@ export const tokenUsageRelations = relations(tokenUsage, ({ one }) => ({
   }),
 }))
 
+export const usersRelations = relations(users, ({ many }) => ({
+  accounts: many(accounts),
+  sessions: many(sessions),
+  authenticators: many(authenticators),
+}))
+
+export const accountsRelations = relations(accounts, ({ one }) => ({
+  user: one(users, {
+    fields: [accounts.userId],
+    references: [users.id],
+  }),
+}))
+
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, {
+    fields: [sessions.userId],
+    references: [users.id],
+  }),
+}))
+
+export const authenticatorsRelations = relations(authenticators, ({ one }) => ({
+  user: one(users, {
+    fields: [authenticators.userId],
+    references: [users.id],
+  }),
+}))
+
 // 型エクスポート
 export type Novel = typeof novels.$inferSelect
 export type NewNovel = typeof novels.$inferInsert
@@ -575,3 +608,4 @@ export type VerificationToken = typeof verificationTokens.$inferSelect
 export type NewVerificationToken = typeof verificationTokens.$inferInsert
 export type Authenticator = typeof authenticators.$inferSelect
 export type NewAuthenticator = typeof authenticators.$inferInsert
+
