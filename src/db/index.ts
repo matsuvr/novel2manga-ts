@@ -27,7 +27,12 @@ if (typeof process !== 'undefined') {
 export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
   if (!db) {
     const dbConfig = getDatabaseConfig()
-    const dbPath = dbConfig.sqlite.path || './database/novel2manga.db'
+    // テスト環境では既存ファイルDBのスキーマ差分によりマイグレーション競合が起きやすい。
+    // テスト簡素化のため、明示オプションが無い限り in-memory を使用する。
+    const useMemoryInTest = process.env.NODE_ENV === 'test' && process.env.TEST_FILE_DB !== '1'
+    const dbPath = useMemoryInTest
+      ? ':memory:'
+      : dbConfig.sqlite.path || './database/novel2manga.db'
 
     // Ensure the directory exists
     const dbDir = path.dirname(dbPath)

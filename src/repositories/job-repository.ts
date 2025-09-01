@@ -23,7 +23,9 @@ export class JobRepository {
     title?: string
     totalChunks?: number
     status?: string
+    userId?: string
   }): Promise<string> {
+    // パススルー: DB 層にデフォルト制約があり、ここでは改変しない
     return this.db.createJob(payload)
   }
 
