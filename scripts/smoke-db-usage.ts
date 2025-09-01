@@ -13,6 +13,7 @@ async function main() {
     textLength: 1234,
     language: 'ja',
     metadataPath: undefined,
+    userId: 'test-user',
   })
   console.log('✓ ensureNovel ok:', novelId)
 
@@ -22,6 +23,7 @@ async function main() {
     title: 'Smoke Job',
     totalChunks: 1,
     status: 'pending',
+    userId: 'test-user',
   })
   console.log('✓ createJob ok:', jobId)
 

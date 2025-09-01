@@ -345,11 +345,7 @@ export function getStoragePorts(): StoragePorts {
     output: {
       async putExport(userId, jobId, kind, data, meta) {
         const storage = await StorageFactory.getOutputStorage()
-        const key = StorageKeys.exportOutput(
-          userId,
-          jobId,
-          kind === 'pdf' ? 'pdf' : 'zip',
-        )
+        const key = StorageKeys.exportOutput(userId, jobId, kind === 'pdf' ? 'pdf' : 'zip')
 
         await executeStorageWithTracking({
           storage,
