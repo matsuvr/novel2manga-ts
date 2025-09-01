@@ -167,6 +167,11 @@ vi.mock('@/utils/storage', () => ({
     episodeLayout: (jobId: string, episodeNumber: number) =>
       `${jobId}/episode_${episodeNumber}.yaml`,
   },
+  JsonStorageKeys: {
+    scriptChunk: (jobId: string, index: number) => `${jobId}/script_chunk_${index}.json`,
+    scriptCombined: (jobId: string) => `${jobId}/script_combined.json`,
+    fullPages: (jobId: string) => `${jobId}/full_pages.json`,
+  },
   getAnalysisStorage: vi.fn().mockResolvedValue({
     get: vi.fn().mockResolvedValue({
       text: JSON.stringify({
@@ -188,11 +193,20 @@ vi.mock('@/services/database', () => ({
     createNovel: vi.fn(),
     createJob: vi.fn(),
     createEpisode: vi.fn(),
+    createEpisodes: vi.fn(),
+    getJob: vi.fn(),
     getJobWithProgress: vi.fn(),
+    getJobsByNovelId: vi.fn(),
     getEpisodesByJobId: vi.fn(),
-    // JobRepository.updateStep で使用
+    updateJobStatus: vi.fn(),
     updateJobStep: vi.fn(),
     markJobStepCompleted: vi.fn(),
+    updateJobProgress: vi.fn(),
+    updateJobError: vi.fn(),
+    updateJobTotalPages: vi.fn(),
+    updateJobCoverageWarnings: vi.fn(),
+    markStepCompleted: vi.fn(),
+    updateStep: vi.fn(),
     upsertLayoutStatus: vi.fn(),
     recomputeJobTotalPages: vi.fn(),
     recomputeJobProcessedEpisodes: vi.fn(),
@@ -206,6 +220,91 @@ vi.mock('@/services/application/transaction-manager', () => ({
     await storage.put(key, value)
     return key
   }),
+}))
+
+vi.mock('@/infrastructure/storage/ports', () => ({
+  getStoragePorts: vi.fn(() => ({
+    novel: {
+      getNovelText: vi.fn().mockResolvedValue({ text: 'テスト小説内容' }),
+      putNovelText: vi.fn().mockResolvedValue('test-novel-key'),
+    },
+    chunk: {
+      getChunk: vi.fn().mockResolvedValue({ text: 'チャンクのテキスト内容です' }),
+      putChunk: vi.fn().mockResolvedValue('test-chunk-key'),
+    },
+    analysis: {
+      getAnalysis: vi.fn().mockResolvedValue({
+        text: JSON.stringify({
+          characters: [{ id: '1', name: 'テスト太郎', description: 'テストキャラクター' }],
+          scenes: [{ id: '1', location: 'テスト場所', description: 'テスト場面' }],
+          dialogues: [{ id: '1', speakerId: 'テスト太郎', text: 'こんにちは', index: 0 }],
+          highlights: [],
+          situations: [],
+        }),
+      }),
+      putAnalysis: vi.fn().mockResolvedValue('test-analysis-key'),
+    },
+    layout: {
+      putEpisodeLayout: vi.fn().mockResolvedValue('test-layout-key'),
+      getEpisodeLayout: vi.fn().mockResolvedValue('{}'),
+      putEpisodeLayoutProgress: vi.fn().mockResolvedValue('test-progress-key'),
+      getEpisodeLayoutProgress: vi.fn().mockResolvedValue('{}'),
+    },
+    episodeText: {
+      putEpisodeText: vi.fn().mockResolvedValue('test-episode-text-key'),
+      getEpisodeText: vi.fn().mockResolvedValue('エピソードのテキスト内容'),
+    },
+    render: {
+      putPageRender: vi.fn().mockResolvedValue('test-render-key'),
+      putPageThumbnail: vi.fn().mockResolvedValue('test-thumb-key'),
+      getPageRender: vi.fn().mockResolvedValue('render-data'),
+    },
+    output: {
+      putExport: vi.fn().mockResolvedValue('test-export-key'),
+      getExport: vi.fn().mockResolvedValue({ text: 'export-data' }),
+      deleteExport: vi.fn().mockResolvedValue(undefined),
+    },
+  })),
+}))
+
+vi.mock('@/services/db-factory', () => ({
+  getDatabaseService: vi.fn(() => ({
+    createEpisode: vi.fn().mockResolvedValue(undefined),
+    createEpisodes: vi.fn().mockResolvedValue(undefined),
+    getJob: vi.fn(),
+    getJobWithProgress: vi.fn().mockResolvedValue({
+      id: 'test-job-id',
+      novelId: 'test-novel-id',
+      status: 'pending',
+    }),
+    getJobsByNovelId: vi.fn(),
+    getEpisodesByJobId: vi.fn().mockResolvedValue([
+      {
+        id: 'test-episode-id',
+        episodeNumber: 1,
+        title: 'Test Episode',
+        startChunk: 0,
+        endChunk: 0,
+        startCharIndex: 0,
+        endCharIndex: 100,
+        jobId: 'test-job-id',
+      },
+    ]),
+    updateJobStatus: vi.fn(),
+    updateJobStep: vi.fn(),
+    markJobStepCompleted: vi.fn(),
+    updateJobProgress: vi.fn(),
+    updateJobError: vi.fn(),
+    updateJobTotalPages: vi.fn(),
+    updateJobCoverageWarnings: vi.fn(),
+    markStepCompleted: vi.fn(),
+    updateStep: vi.fn(),
+    upsertLayoutStatus: vi.fn().mockResolvedValue(undefined),
+    recomputeJobTotalPages: vi.fn().mockResolvedValue(undefined),
+    recomputeJobProcessedEpisodes: vi.fn().mockResolvedValue(undefined),
+    updateProcessingPosition: vi.fn().mockResolvedValue(undefined),
+  })),
+  __resetDatabaseServiceForTest: vi.fn(),
 }))
 
 describe('/api/layout/generate', () => {
@@ -431,9 +530,43 @@ describe('/api/layout/generate', () => {
     })
 
     it('チャンク分析データが存在しない場合は500エラーを返す', async () => {
-      // Remove demo mode and mock storage to return undefined for analysis
-      vi.mocked(StorageFactory.getAnalysisStorage).mockResolvedValue({
-        get: vi.fn().mockResolvedValue(undefined),
+      // Import the getStoragePorts function and mock it to return undefined for analysis
+      const { getStoragePorts } = await import('@/infrastructure/storage/ports')
+
+      // Mock the ports to return undefined for analysis data
+      vi.mocked(getStoragePorts).mockReturnValue({
+        novel: {
+          getNovelText: vi.fn().mockResolvedValue({ text: 'テスト小説内容' }),
+          putNovelText: vi.fn().mockResolvedValue('test-novel-key'),
+        },
+        chunk: {
+          getChunk: vi.fn().mockResolvedValue({ text: 'チャンクのテキスト内容です' }),
+          putChunk: vi.fn().mockResolvedValue('test-chunk-key'),
+        },
+        analysis: {
+          getAnalysis: vi.fn().mockResolvedValue(undefined), // Return undefined for analysis
+          putAnalysis: vi.fn().mockResolvedValue('test-analysis-key'),
+        },
+        layout: {
+          putEpisodeLayout: vi.fn().mockResolvedValue('test-layout-key'),
+          getEpisodeLayout: vi.fn().mockResolvedValue('{}'),
+          putEpisodeLayoutProgress: vi.fn().mockResolvedValue('test-progress-key'),
+          getEpisodeLayoutProgress: vi.fn().mockResolvedValue('{}'),
+        },
+        episodeText: {
+          putEpisodeText: vi.fn().mockResolvedValue('test-episode-text-key'),
+          getEpisodeText: vi.fn().mockResolvedValue('エピソードのテキスト内容'),
+        },
+        render: {
+          putPageRender: vi.fn().mockResolvedValue('test-render-key'),
+          putPageThumbnail: vi.fn().mockResolvedValue('test-thumb-key'),
+          getPageRender: vi.fn().mockResolvedValue('render-data'),
+        },
+        output: {
+          putExport: vi.fn().mockResolvedValue('test-export-key'),
+          getExport: vi.fn().mockResolvedValue({ text: 'export-data' }),
+          deleteExport: vi.fn().mockResolvedValue(undefined),
+        },
       } as any)
 
       const requestBody = {
@@ -456,16 +589,47 @@ describe('/api/layout/generate', () => {
       expect(data.error).toBe('Analysis not found for chunk 0')
 
       // Reset the mock back to the original for subsequent tests
-      vi.mocked(StorageFactory.getAnalysisStorage).mockResolvedValue({
-        get: vi.fn().mockResolvedValue({
-          text: JSON.stringify({
-            characters: [{ id: '1', name: 'テスト太郎', description: 'テストキャラクター' }],
-            scenes: [{ id: '1', location: 'テスト場所', description: 'テスト場面' }],
-            dialogues: [{ id: '1', speakerId: 'テスト太郎', text: 'こんにちは', index: 0 }],
-            highlights: [],
-            situations: [],
+      vi.mocked(getStoragePorts).mockReturnValue({
+        novel: {
+          getNovelText: vi.fn().mockResolvedValue({ text: 'テスト小説内容' }),
+          putNovelText: vi.fn().mockResolvedValue('test-novel-key'),
+        },
+        chunk: {
+          getChunk: vi.fn().mockResolvedValue({ text: 'チャンクのテキスト内容です' }),
+          putChunk: vi.fn().mockResolvedValue('test-chunk-key'),
+        },
+        analysis: {
+          getAnalysis: vi.fn().mockResolvedValue({
+            text: JSON.stringify({
+              characters: [{ id: '1', name: 'テスト太郎', description: 'テストキャラクター' }],
+              scenes: [{ id: '1', location: 'テスト場所', description: 'テスト場面' }],
+              dialogues: [{ id: '1', speakerId: 'テスト太郎', text: 'こんにちは', index: 0 }],
+              highlights: [],
+              situations: [],
+            }),
           }),
-        }),
+          putAnalysis: vi.fn().mockResolvedValue('test-analysis-key'),
+        },
+        layout: {
+          putEpisodeLayout: vi.fn().mockResolvedValue('test-layout-key'),
+          getEpisodeLayout: vi.fn().mockResolvedValue('{}'),
+          putEpisodeLayoutProgress: vi.fn().mockResolvedValue('test-progress-key'),
+          getEpisodeLayoutProgress: vi.fn().mockResolvedValue('{}'),
+        },
+        episodeText: {
+          putEpisodeText: vi.fn().mockResolvedValue('test-episode-text-key'),
+          getEpisodeText: vi.fn().mockResolvedValue('エピソードのテキスト内容'),
+        },
+        render: {
+          putPageRender: vi.fn().mockResolvedValue('test-render-key'),
+          putPageThumbnail: vi.fn().mockResolvedValue('test-thumb-key'),
+          getPageRender: vi.fn().mockResolvedValue('render-data'),
+        },
+        output: {
+          putExport: vi.fn().mockResolvedValue('test-export-key'),
+          getExport: vi.fn().mockResolvedValue({ text: 'export-data' }),
+          deleteExport: vi.fn().mockResolvedValue(undefined),
+        },
       } as any)
     })
 
