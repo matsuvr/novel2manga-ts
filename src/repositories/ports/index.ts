@@ -72,7 +72,7 @@ export interface JobDbPort {
     title?: string
     totalChunks?: number
     status?: string
-    userId?: string
+    userId: string
   }): Promise<string>
   /** Update job status (and optionally error reason) */
   updateJobStatus(id: string, status: JobStatus, error?: string): Promise<void>

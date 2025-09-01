@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/auth'
+import { auth } from '@/auth'
 import { getDatabaseService } from '@/services/db-factory'
 
 function formatBytes(bytes: number | null): string {
@@ -17,7 +16,7 @@ function formatBytes(bytes: number | null): string {
 }
 
 export default async function ResultsPage() {
-  const session = await getServerSession(authOptions)
+  const session = await auth()
   const userId = session?.user?.id
   if (!userId) {
     redirect('/api/auth/signin?callbackUrl=/results')

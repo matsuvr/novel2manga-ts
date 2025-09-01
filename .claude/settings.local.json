@@ -100,7 +100,8 @@
       "Bash(npx @biomejs/biome lint .)",
       "Bash(true)",
       "Bash(jq:*)",
-      "Bash(npx drizzle-kit:*)"
+      "Bash(npx drizzle-kit:*)",
+      "mcp__serena__insert_after_symbol"
     ]
   },
   "enableAllProjectMcpServers": true,

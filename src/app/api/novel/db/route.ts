@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
       textLength: length,
       language: 'ja',
       metadataPath: null,
+      userId: 'anonymous',
     })
 
     // 処理ジョブを作成
