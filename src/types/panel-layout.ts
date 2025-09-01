@@ -59,6 +59,7 @@ export interface ChunkAnalysisResult {
   highlights: Highlight[]
   situations: Situation[]
   summary: string
+  sfx?: string[] // SFX data from script conversion
 }
 
 export interface Character {
