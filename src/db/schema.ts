@@ -1,5 +1,91 @@
 import { relations, sql } from 'drizzle-orm'
-import { index, integer, real, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core'
+import {
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  unique,
+} from 'drizzle-orm/sqlite-core'
+
+// 認証テーブル群
+export const users = sqliteTable('user', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  name: text('name'),
+  email: text('email').unique(),
+  emailVerified: integer('emailVerified', { mode: 'timestamp_ms' }),
+  image: text('image'),
+})
+
+export const accounts = sqliteTable(
+  'account',
+  {
+    userId: text('userId')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    type: text('type').notNull(),
+    provider: text('provider').notNull(),
+    providerAccountId: text('providerAccountId').notNull(),
+    refreshToken: text('refresh_token'),
+    accessToken: text('access_token'),
+    expiresAt: integer('expires_at'),
+    tokenType: text('token_type'),
+    scope: text('scope'),
+    idToken: text('id_token'),
+    sessionState: text('session_state'),
+  },
+  (account) => ({
+    compositePk: primaryKey({
+      columns: [account.provider, account.providerAccountId],
+    }),
+  }),
+)
+
+export const sessions = sqliteTable('session', {
+  sessionToken: text('sessionToken').primaryKey(),
+  userId: text('userId')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  expires: integer('expires', { mode: 'timestamp_ms' }).notNull(),
+})
+
+export const verificationTokens = sqliteTable(
+  'verificationToken',
+  {
+    identifier: text('identifier').notNull(),
+    token: text('token').notNull(),
+    expires: integer('expires', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (vt) => ({
+    compositePk: primaryKey({
+      columns: [vt.identifier, vt.token],
+    }),
+  }),
+)
+
+export const authenticators = sqliteTable(
+  'authenticator',
+  {
+    credentialId: text('credentialID').notNull().unique(),
+    userId: text('userId')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    providerAccountId: text('providerAccountId').notNull(),
+    credentialPublicKey: text('credentialPublicKey').notNull(),
+    counter: integer('counter').notNull(),
+    credentialDeviceType: text('credentialDeviceType').notNull(),
+    credentialBackedUp: integer('credentialBackedUp', { mode: 'boolean' }).notNull(),
+    transports: text('transports'),
+  },
+  (authenticator) => ({
+    compositePk: primaryKey({
+      columns: [authenticator.userId, authenticator.credentialId],
+    }),
+  }),
+)
 
 // 小説テーブル（最上位エンティティ）
 export const novels = sqliteTable(
@@ -417,6 +503,33 @@ export const tokenUsageRelations = relations(tokenUsage, ({ one }) => ({
   }),
 }))
 
+export const usersRelations = relations(users, ({ many }) => ({
+  accounts: many(accounts),
+  sessions: many(sessions),
+  authenticators: many(authenticators),
+}))
+
+export const accountsRelations = relations(accounts, ({ one }) => ({
+  user: one(users, {
+    fields: [accounts.userId],
+    references: [users.id],
+  }),
+}))
+
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, {
+    fields: [sessions.userId],
+    references: [users.id],
+  }),
+}))
+
+export const authenticatorsRelations = relations(authenticators, ({ one }) => ({
+  user: one(users, {
+    fields: [authenticators.userId],
+    references: [users.id],
+  }),
+}))
+
 // 型エクスポート
 export type Novel = typeof novels.$inferSelect
 export type NewNovel = typeof novels.$inferInsert
@@ -440,3 +553,8 @@ export type StorageFile = typeof storageFiles.$inferSelect
 export type NewStorageFile = typeof storageFiles.$inferInsert
 export type TokenUsage = typeof tokenUsage.$inferSelect
 export type NewTokenUsage = typeof tokenUsage.$inferInsert
+export type AuthUser = typeof users.$inferSelect
+export type AuthAccount = typeof accounts.$inferSelect
+export type AuthSession = typeof sessions.$inferSelect
+export type AuthVerificationToken = typeof verificationTokens.$inferSelect
+export type Authenticator = typeof authenticators.$inferSelect
