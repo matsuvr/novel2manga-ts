@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { and, asc, desc, eq, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, sql, type SQL } from 'drizzle-orm'
 import {
   type Chunk,
   type Episode,
@@ -40,7 +40,11 @@ import { makeEpisodeId } from '@/utils/ids'
  * - Transaction operations: Use db.transactions() from '@/services/database'
  */
 export class DatabaseService implements TransactionPort, UnitOfWorkPort {
-  private db = getDatabase()
+  private db: ReturnType<typeof getDatabase>
+
+  constructor(db?: ReturnType<typeof getDatabase>) {
+    this.db = db || getDatabase()
+  }
 
   async withTransaction<T>(fn: () => Promise<T>): Promise<T> {
     // Drizzle supports db.transaction; use it to ensure atomic operations
@@ -67,6 +71,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
 
     await this.db.insert(novels).values({
       id,
+      userId: novel.userId,
       title: novel.title,
       author: novel.author,
       originalTextPath: novel.originalTextPath,
@@ -90,6 +95,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       .insert(novels)
       .values({
         id,
+        userId: novel.userId,
         title: novel.title,
         author: novel.author,
         originalTextPath: novel.originalTextPath,
@@ -102,13 +108,23 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       .onConflictDoNothing()
   }
 
-  async getNovel(id: string): Promise<Novel | null> {
-    const result = await this.db.select().from(novels).where(eq(novels.id, id)).limit(1)
+  async getNovel(id: string, userId?: string): Promise<Novel | null> {
+    const conditions: SQL[] = [eq(novels.id, id)]
+    if (userId) conditions.push(eq(novels.userId, userId))
+    const result = await this.db
+      .select()
+      .from(novels)
+      .where(and(...conditions))
+      .limit(1)
     return result[0] || null
   }
 
-  async getAllNovels(): Promise<Novel[]> {
-    return await this.db.select().from(novels).orderBy(desc(novels.createdAt))
+  async getAllNovels(userId?: string): Promise<Novel[]> {
+    const query = this.db.select().from(novels)
+    if (userId) {
+      query.where(eq(novels.userId, userId))
+    }
+    return await query.orderBy(desc(novels.createdAt))
   }
 
   // Job関連メソッド（統一シグネチャ）
@@ -118,10 +134,12 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
     title?: string
     totalChunks?: number
     status?: string
+    userId?: string
   }): Promise<string> {
     const id = payload.id || crypto.randomUUID()
     await this.db.insert(jobs).values({
       id,
+      userId: payload.userId,
       novelId: payload.novelId,
       jobName: payload.title,
       status: (payload.status as Job['status']) || 'pending',
@@ -131,7 +149,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
     return id
   }
 
-  async getJob(id: string): Promise<Job | null> {
+  async getJob(id: string, userId?: string): Promise<Job | null> {
     try {
       const logger = getLogger().withContext({ service: 'DatabaseService', method: 'getJob' })
       logger.debug('getJob called', { id })
@@ -140,7 +158,13 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       const testQuery = await this.db.select({ count: sql`count(*)` }).from(jobs)
       logger.debug('Total jobs in database', { count: testQuery[0]?.count })
 
-      const result = await this.db.select().from(jobs).where(eq(jobs.id, id)).limit(1)
+      const conditions: SQL[] = [eq(jobs.id, id)]
+      if (userId) conditions.push(eq(jobs.userId, userId))
+      const result = await this.db
+        .select()
+        .from(jobs)
+        .where(and(...conditions))
+        .limit(1)
       logger.info('getJob result', { outcome: result.length > 0 ? 'found' : 'not found' })
 
       if (result.length > 0) {
