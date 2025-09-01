@@ -71,7 +71,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
 
     await this.db.insert(novels).values({
       id,
-      userId: novel.userId,
+      userId: (novel.userId as string | undefined) ?? 'anonymous',
       title: novel.title,
       author: novel.author,
       originalTextPath: novel.originalTextPath,
@@ -95,7 +95,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       .insert(novels)
       .values({
         id,
-        userId: novel.userId,
+        userId: (novel.userId as string | undefined) ?? 'anonymous',
         title: novel.title,
         author: novel.author,
         originalTextPath: novel.originalTextPath,
