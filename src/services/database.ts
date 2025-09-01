@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { and, asc, desc, eq, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, sql, type SQL } from 'drizzle-orm'
 import {
   type Chunk,
   type Episode,
@@ -11,7 +11,6 @@ import {
   type NewOutput,
   type Novel,
 } from '@/db'
-import type { LayoutStatusModel } from '@/types/database-models'
 import {
   chunks,
   episodes,
@@ -21,10 +20,10 @@ import {
   outputs,
   renderStatus,
   tokenUsage,
-  users,
 } from '@/db/schema'
 import { getLogger } from '@/infrastructure/logging/logger'
 import type { TransactionPort, UnitOfWorkPort } from '@/repositories/ports'
+import type { LayoutStatusModel } from '@/types/database-models'
 import type { JobProgress, JobStatus, JobStep } from '@/types/job'
 import { makeEpisodeId } from '@/utils/ids'
 // Temporarily remove circular import - will be addressed in complete migration
@@ -41,7 +40,11 @@ import { makeEpisodeId } from '@/utils/ids'
  * - Transaction operations: Use db.transactions() from '@/services/database'
  */
 export class DatabaseService implements TransactionPort, UnitOfWorkPort {
-  private db = getDatabase()
+  private db: ReturnType<typeof getDatabase>
+
+  constructor(db?: ReturnType<typeof getDatabase>) {
+    this.db = db || getDatabase()
+  }
 
   async withTransaction<T>(fn: () => Promise<T>): Promise<T> {
     // Drizzle supports db.transaction; use it to ensure atomic operations
@@ -62,25 +65,19 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
   }
 
   // Novel関連メソッド
-  async createNovel(
-    novel: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'> & { userId: string },
-  ): Promise<string> {
-    if (!novel.userId) {
-      throw new Error('userId is required for novel creation')
-    }
-
+  async createNovel(novel: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
 
     await this.db.insert(novels).values({
       id,
+      userId: novel.userId,
       title: novel.title,
       author: novel.author,
       originalTextPath: novel.originalTextPath,
       textLength: novel.textLength,
       language: novel.language || 'ja',
       metadataPath: novel.metadataPath,
-      userId: novel.userId,
       createdAt: now,
       updatedAt: now,
     })
@@ -90,25 +87,21 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
 
   async ensureNovel(
     id: string,
-    novel: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'> & { userId: string },
+    novel: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'>,
   ): Promise<void> {
-    if (!novel.userId) {
-      throw new Error('userId is required for novel creation')
-    }
-
     const now = new Date().toISOString()
 
     await this.db
       .insert(novels)
       .values({
         id,
+        userId: novel.userId,
         title: novel.title,
         author: novel.author,
         originalTextPath: novel.originalTextPath,
         textLength: novel.textLength,
         language: novel.language || 'ja',
         metadataPath: novel.metadataPath,
-        userId: novel.userId,
         createdAt: now,
         updatedAt: now,
       })
@@ -116,12 +109,8 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
   }
 
   async getNovel(id: string, userId?: string): Promise<Novel | null> {
-    const conditions = [eq(novels.id, id)]
-
-    if (userId) {
-      conditions.push(eq(novels.userId, userId))
-    }
-
+    const conditions: SQL[] = [eq(novels.id, id)]
+    if (userId) conditions.push(eq(novels.userId, userId))
     const result = await this.db
       .select()
       .from(novels)
@@ -130,53 +119,12 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
     return result[0] || null
   }
 
-  async getAllNovels(): Promise<Novel[]> {
-    return await this.db.select().from(novels).orderBy(desc(novels.createdAt))
-  }
-
-  async createUserIfNotExists(userId: string, email: string): Promise<void> {
-    const now = new Date().toISOString()
-
-    try {
-      // Users table is now imported at the top of the file
-
-      // Try to insert the user, ignore if it already exists
-      await this.db
-        .insert(users)
-        .values({
-          id: userId,
-          email,
-          createdAt: now,
-        })
-        .onConflictDoNothing()
-    } catch (error) {
-      // User might already exist, which is fine
-      const logger = getLogger().withContext({
-        service: 'DatabaseService',
-        method: 'createUserIfNotExists',
-      })
-      logger.debug('User creation attempt', { userId, email, error: String(error) })
+  async getAllNovels(userId?: string): Promise<Novel[]> {
+    const query = this.db.select().from(novels)
+    if (userId) {
+      query.where(eq(novels.userId, userId))
     }
-  }
-
-  async listJobsByUser(
-    userId: string,
-  ): Promise<
-    Array<{ id: string; title: string | null; createdAt: string | null; fileSize: number | null }>
-  > {
-    const rows = await this.db
-      .select({
-        id: jobs.id,
-        title: novels.title,
-        createdAt: jobs.createdAt,
-        fileSize: outputs.fileSize,
-      })
-      .from(jobs)
-      .leftJoin(novels, eq(jobs.novelId, novels.id))
-      .leftJoin(outputs, eq(outputs.jobId, jobs.id))
-      .where(eq(jobs.userId, userId))
-      .orderBy(desc(jobs.createdAt))
-    return rows
+    return await query.orderBy(desc(novels.createdAt))
   }
 
   // Job関連メソッド（統一シグネチャ）
@@ -186,21 +134,17 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
     title?: string
     totalChunks?: number
     status?: string
-    userId: string // Made required for security
+    userId?: string
   }): Promise<string> {
-    if (!payload.userId) {
-      throw new Error('userId is required for job creation')
-    }
-
     const id = payload.id || crypto.randomUUID()
     await this.db.insert(jobs).values({
       id,
+      userId: payload.userId,
       novelId: payload.novelId,
       jobName: payload.title,
       status: (payload.status as Job['status']) || 'pending',
       currentStep: 'split',
       totalChunks: payload.totalChunks || 0,
-      userId: payload.userId,
     })
     return id
   }
@@ -208,19 +152,14 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
   async getJob(id: string, userId?: string): Promise<Job | null> {
     try {
       const logger = getLogger().withContext({ service: 'DatabaseService', method: 'getJob' })
-      logger.debug('getJob called', { id, userId })
+      logger.debug('getJob called', { id })
 
       // データベース接続確認
       const testQuery = await this.db.select({ count: sql`count(*)` }).from(jobs)
       logger.debug('Total jobs in database', { count: testQuery[0]?.count })
 
-      // Build query with optional user filter
-      const conditions = [eq(jobs.id, id)]
-
-      if (userId) {
-        conditions.push(eq(jobs.userId, userId))
-      }
-
+      const conditions: SQL[] = [eq(jobs.id, id)]
+      if (userId) conditions.push(eq(jobs.userId, userId))
       const result = await this.db
         .select()
         .from(jobs)
@@ -234,7 +173,6 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
           status: result[0].status,
           currentStep: result[0].currentStep,
           novelId: result[0].novelId,
-          userId: result[0].userId,
         })
       }
 
@@ -651,6 +589,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       id,
       novelId: output.novelId,
       jobId: output.jobId,
+      userId: output.userId,
       outputType: output.outputType,
       outputPath: output.outputPath,
       fileSize: output.fileSize,
@@ -1128,6 +1067,14 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       .select()
       .from(jobs)
       .where(eq(jobs.novelId, novelId))
+      .orderBy(desc(jobs.createdAt))
+  }
+
+  async listJobsByUser(userId: string): Promise<Job[]> {
+    return await this.db
+      .select()
+      .from(jobs)
+      .where(eq(jobs.userId, userId))
       .orderBy(desc(jobs.createdAt))
   }
 }

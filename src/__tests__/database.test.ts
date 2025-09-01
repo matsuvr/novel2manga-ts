@@ -59,7 +59,7 @@ describe('DatabaseService', () => {
         id: 'job-123',
         novelId: 'novel-123',
         title: 'Test Job',
-        userId: 'user1',
+        userId: 'user-1',
       })
 
       // Note: The actual implementation uses Drizzle ORM, not raw SQL
