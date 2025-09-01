@@ -1,6 +1,18 @@
 import { relations, sql } from 'drizzle-orm'
 import { index, integer, real, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core'
 
+// ユーザーテーブル
+export const users = sqliteTable('users', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  name: text('name'),
+  email: text('email').unique(),
+  emailVerified: integer('email_verified', { mode: 'timestamp_ms' }),
+  image: text('image'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+})
+
 // 小説テーブル（最上位エンティティ）
 export const novels = sqliteTable(
   'novels',
@@ -12,6 +24,9 @@ export const novels = sqliteTable(
     textLength: integer('text_length').notNull(),
     language: text('language').default('ja'),
     metadataPath: text('metadata_path'),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
   },

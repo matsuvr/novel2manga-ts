@@ -25,7 +25,12 @@ export class JobRepository {
     status?: string
     userId?: string
   }): Promise<string> {
-    return this.db.createJob(payload)
+    // For backward compatibility, provide default userId if not specified
+    const jobPayload = {
+      ...payload,
+      userId: payload.userId || 'anonymous',
+    }
+    return this.db.createJob(jobPayload)
   }
 
   async getByNovelId(novelId: string): Promise<Job[]> {

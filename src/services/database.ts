@@ -21,6 +21,7 @@ import {
   outputs,
   renderStatus,
   tokenUsage,
+  users,
 } from '@/db/schema'
 import { getLogger } from '@/infrastructure/logging/logger'
 import type { TransactionPort, UnitOfWorkPort } from '@/repositories/ports'
@@ -61,7 +62,13 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
   }
 
   // Novel関連メソッド
-  async createNovel(novel: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+  async createNovel(
+    novel: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'> & { userId: string },
+  ): Promise<string> {
+    if (!novel.userId) {
+      throw new Error('userId is required for novel creation')
+    }
+
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
 
@@ -73,6 +80,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       textLength: novel.textLength,
       language: novel.language || 'ja',
       metadataPath: novel.metadataPath,
+      userId: novel.userId,
       createdAt: now,
       updatedAt: now,
     })
@@ -82,8 +90,12 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
 
   async ensureNovel(
     id: string,
-    novel: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'>,
+    novel: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'> & { userId: string },
   ): Promise<void> {
+    if (!novel.userId) {
+      throw new Error('userId is required for novel creation')
+    }
+
     const now = new Date().toISOString()
 
     await this.db
@@ -96,19 +108,55 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
         textLength: novel.textLength,
         language: novel.language || 'ja',
         metadataPath: novel.metadataPath,
+        userId: novel.userId,
         createdAt: now,
         updatedAt: now,
       })
       .onConflictDoNothing()
   }
 
-  async getNovel(id: string): Promise<Novel | null> {
-    const result = await this.db.select().from(novels).where(eq(novels.id, id)).limit(1)
+  async getNovel(id: string, userId?: string): Promise<Novel | null> {
+    const conditions = [eq(novels.id, id)]
+
+    if (userId) {
+      conditions.push(eq(novels.userId, userId))
+    }
+
+    const result = await this.db
+      .select()
+      .from(novels)
+      .where(and(...conditions))
+      .limit(1)
     return result[0] || null
   }
 
   async getAllNovels(): Promise<Novel[]> {
     return await this.db.select().from(novels).orderBy(desc(novels.createdAt))
+  }
+
+  async createUserIfNotExists(userId: string, email: string): Promise<void> {
+    const now = new Date().toISOString()
+
+    try {
+      // Users table is now imported at the top of the file
+
+      // Try to insert the user, ignore if it already exists
+      await this.db
+        .insert(users)
+        .values({
+          id: userId,
+          email,
+          createdAt: now,
+        })
+        .onConflictDoNothing()
+    } catch (error) {
+      // User might already exist, which is fine
+      const logger = getLogger().withContext({
+        service: 'DatabaseService',
+        method: 'createUserIfNotExists',
+      })
+      logger.debug('User creation attempt', { userId, email, error: String(error) })
+    }
   }
 
   async listJobsByUser(
@@ -138,8 +186,12 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
     title?: string
     totalChunks?: number
     status?: string
-    userId?: string
+    userId: string // Made required for security
   }): Promise<string> {
+    if (!payload.userId) {
+      throw new Error('userId is required for job creation')
+    }
+
     const id = payload.id || crypto.randomUUID()
     await this.db.insert(jobs).values({
       id,
@@ -148,21 +200,32 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       status: (payload.status as Job['status']) || 'pending',
       currentStep: 'split',
       totalChunks: payload.totalChunks || 0,
-      userId: payload.userId || 'anonymous',
+      userId: payload.userId,
     })
     return id
   }
 
-  async getJob(id: string): Promise<Job | null> {
+  async getJob(id: string, userId?: string): Promise<Job | null> {
     try {
       const logger = getLogger().withContext({ service: 'DatabaseService', method: 'getJob' })
-      logger.debug('getJob called', { id })
+      logger.debug('getJob called', { id, userId })
 
       // データベース接続確認
       const testQuery = await this.db.select({ count: sql`count(*)` }).from(jobs)
       logger.debug('Total jobs in database', { count: testQuery[0]?.count })
 
-      const result = await this.db.select().from(jobs).where(eq(jobs.id, id)).limit(1)
+      // Build query with optional user filter
+      const conditions = [eq(jobs.id, id)]
+
+      if (userId) {
+        conditions.push(eq(jobs.userId, userId))
+      }
+
+      const result = await this.db
+        .select()
+        .from(jobs)
+        .where(and(...conditions))
+        .limit(1)
       logger.info('getJob result', { outcome: result.length > 0 ? 'found' : 'not found' })
 
       if (result.length > 0) {
@@ -171,6 +234,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
           status: result[0].status,
           currentStep: result[0].currentStep,
           novelId: result[0].novelId,
+          userId: result[0].userId,
         })
       }
 
