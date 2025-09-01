@@ -292,7 +292,8 @@ export class AnalyzePipeline extends BasePipelineStep {
     await this.markStepCompleted(jobId, 'layout', { logger })
 
     // レンダ
-    await this.updateJobStep(jobId, 'render', { logger }, 0, totalPages)
+    // 注意: 第4引数はチャンク総数専用。ページ総数はjobs.total_pagesに保存済みのため渡さない
+    await this.updateJobStep(jobId, 'render', { logger }, 0)
     const renderingResult = await this.renderingStep.renderEpisodes(
       episodeNumbers,
       { isDemo: options.isDemo },
