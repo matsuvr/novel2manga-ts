@@ -331,21 +331,27 @@ export async function convertEpisodeTextToScript(
 /**
  * Assess the coverage quality of a generated script
  */
-function assessScriptCoverage(
+export function assessScriptCoverage(
   script: NewMangaScript,
   originalText: string,
 ): { coverageRatio: number; reasons: string[] } {
   const reasons: string[] = []
   let coverageScore = 1.0
 
+  // Get coverage scoring constants from config
+  const config = getAppConfigWithOverrides()
+  const coverage = config.scriptCoverage
+
   // Check panel count vs text length ratio
   const textLength = originalText.length
   const panelCount = script.panels.length
-  const expectedPanelsPerKChar = 2 // Expected panels per 1000 characters
-  const expectedPanels = Math.max(1, Math.floor((textLength / 1000) * expectedPanelsPerKChar))
+  const expectedPanels = Math.max(
+    1,
+    Math.floor((textLength / 1000) * coverage.expectedPanelsPerKChar),
+  )
 
-  if (panelCount < expectedPanels * 0.5) {
-    coverageScore -= 0.3
+  if (panelCount < expectedPanels * coverage.panelCountThresholdRatio) {
+    coverageScore -= coverage.panelCountPenalty
     reasons.push(`パネル数が不足（実際: ${panelCount}, 期待: ${expectedPanels}以上）`)
   }
 
@@ -358,9 +364,9 @@ function assessScriptCoverage(
 
   if (
     originalDialogueMatches.length > 0 &&
-    totalDialogueCount < originalDialogueMatches.length * 0.3
+    totalDialogueCount < originalDialogueMatches.length * coverage.dialogueThresholdRatio
   ) {
-    coverageScore -= 0.25
+    coverageScore -= coverage.dialoguePenalty
     reasons.push(
       `対話の反映が不十分（元テキスト: ${originalDialogueMatches.length}箇所, スクリプト: ${totalDialogueCount}箇所）`,
     )
@@ -372,8 +378,8 @@ function assessScriptCoverage(
     0,
   )
 
-  if (totalNarrationCount === 0 && textLength > 200) {
-    coverageScore -= 0.2
+  if (totalNarrationCount === 0 && textLength > coverage.minTextLengthForNarration) {
+    coverageScore -= coverage.narrationPenalty
     reasons.push('ナレーションが全く含まれていない')
   }
 
@@ -389,7 +395,7 @@ function assessScriptCoverage(
   })
 
   if (script.characters.length > uniqueCharacters.size) {
-    coverageScore -= 0.15
+    coverageScore -= coverage.unusedCharactersPenalty
     reasons.push('定義されたキャラクターの一部が台詞で使用されていない')
   }
 
