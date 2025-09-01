@@ -191,6 +191,7 @@ export const OutputSchema = z.object({
   id: z.string(),
   novelId: z.string(),
   jobId: z.string(),
+  userId: z.string(),
   outputType: z.enum(['pdf', 'cbz', 'images_zip', 'epub']),
   outputPath: z.string(),
   fileSize: z.number().optional(),
