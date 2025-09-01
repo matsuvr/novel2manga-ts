@@ -8,6 +8,7 @@ import ResultsDisplay from '@/components/ResultsDisplay'
 import TextInputArea from '@/components/TextInputArea'
 import type { Episode } from '@/types/database-models'
 import { decideNextPollingAction, isJobStatus } from '@/utils/polling'
+import { appConfig } from '@/config/app.config'
 
 type ViewMode = 'input' | 'processing' | 'progress' | 'results' | 'redirecting'
 
@@ -108,8 +109,8 @@ export default function HomeClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           novelId,
-          chunkSize: 5000,
-          overlapSize: 500,
+          chunkSize: appConfig.chunking.defaultChunkSize,
+          overlapSize: appConfig.chunking.defaultOverlapSize,
           ...(isDemo ? { mode: 'demo' } : {}),
         }),
       })
