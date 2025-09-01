@@ -654,12 +654,13 @@ export const StorageKeys = {
     validateId(jobId, 'jobId')
     return `${jobId}/episode_${episodeNumber}/thumbnails/page_${pageNumber}_thumb.png`
   },
-  exportOutput: (jobId: string, format: string) => {
+  exportOutput: (userId: string, jobId: string, format: string) => {
+    validateId(userId, 'userId')
     validateId(jobId, 'jobId')
     if (!/^[a-zA-Z0-9]+$/.test(format)) {
       throw new Error('StorageKeys: invalid export format')
     }
-    return `${jobId}/output.${format}`
+    return `results/${userId}/${jobId}.${format}`
   },
   renderStatus: (jobId: string, episodeNumber: number, pageNumber: number) => {
     validateId(jobId, 'jobId')

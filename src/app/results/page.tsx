@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { auth } from '@/auth'
 import { getDatabaseService } from '@/services/db-factory'
 
-function formatBytes(bytes: number | null): string {
+function _formatBytes(bytes: number | null): string {
   if (!bytes) return '-'
   const units = ['B', 'KB', 'MB', 'GB']
   let index = 0
@@ -30,11 +30,10 @@ export default async function ResultsPage() {
         {jobs.map((job) => (
           <li key={job.id} className="apple-card p-4 flex items-center justify-between">
             <div>
-              <div className="font-semibold">{job.title ?? '無題'}</div>
+              <div className="font-semibold">{job.jobName ?? '無題'}</div>
               <div className="text-sm text-gray-600">{job.createdAt}</div>
             </div>
             <div className="flex items-center gap-4">
-              <div className="text-sm text-gray-600">{formatBytes(job.fileSize)}</div>
               <Link className="btn-secondary text-sm" href={`/results/${job.id}`}>
                 詳細
               </Link>

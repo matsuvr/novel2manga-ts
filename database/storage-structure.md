@@ -1,5 +1,11 @@
 # ストレージ構造設計
 
+## 2025-08-31 更新（ユーザーデータ連携）
+
+- Auth.js 対応の `users`/`accounts`/`sessions` テーブルを D1 に追加。
+- `novels` と `jobs` に `user_id` を追加し、ユーザー単位でのデータ分離を実現。
+- ストレージキー構造に変更はない。
+
 ## 2025-08-16 更新（Service Layer Progress Enhancement）
 
 **JobProgressService** の機能強化により、ジョブ進捗データの充実化を実現しました:
@@ -9,9 +15,9 @@
 - 統合テスト強化: サービス層のロジックを包括的にテスト
 - 依存関係チャート修復: 破損していたMermaid記法を正常な構造に再生成
 
-## 2025-08-12 更新（Legacy Service の現状とフラットキー方式）
+## 2025-09-01 更新（Legacy StorageService 完全削除とフラットキー方式）
 
-旧来の **階層ディレクトリ (novels/{novel_id}/jobs/{job_id}/...)** および `txt` ベース保存は廃止方向です。`src/services/storage.ts` のレガシー `StorageService` は現在も DEPRECATED として残置しており、参照が無いことを確認次第に削除します。現行の正規 API は `src/utils/storage.ts` の `StorageKeys` と各種 `get*Storage()` 群です。これにより以下を達成:
+旧来の **階層ディレクトリ (novels/{novel_id}/jobs/{job_id}/...)** および `txt` ベース保存は廃止されました。レガシー `StorageService` (`src/services/storage.ts`) は削除済みで、現行の正規 API は `src/utils/storage.ts` の `StorageKeys` と各種 `get*Storage()` 群のみです。これにより以下を達成:
 
 - 重複プレフィックス問題の解消 (例: `novels/novels/`)
 - 取り扱いフォーマットの JSON への統一（バイナリ画像等を除く）
@@ -34,11 +40,11 @@
 
 以下は設計済み（計画中）のキーで、コード実装は未着手です。
 
-| 種別（計画中）     | 生成関数                                     | 形式例                                          |
-| ------------------ | -------------------------------------------- | ----------------------------------------------- |
-| サムネイル         | `StorageKeys.pageThumbnail(jobId, ep, page)` | `{jobId}/episode_1/thumbnails/page_1_thumb.png` |
-| エクスポート成果物 | `StorageKeys.exportOutput(jobId, fmt)`       | `{jobId}/output.pdf`                            |
-| レンダリング状態   | `StorageKeys.renderStatus(jobId, ep, page)`  | `{jobId}/episode_1/page_1.json`                 |
+| 種別（計画中）     | 生成関数                                       | 形式例                                          |
+| ------------------ | ---------------------------------------------- | ----------------------------------------------- |
+| サムネイル         | `StorageKeys.pageThumbnail(jobId, ep, page)`   | `{jobId}/episode_1/thumbnails/page_1_thumb.png` |
+| エクスポート成果物 | `StorageKeys.exportOutput(userId, jobId, fmt)` | `results/{userId}/{jobId}.pdf`                  |
+| レンダリング状態   | `StorageKeys.renderStatus(jobId, ep, page)`    | `{jobId}/episode_1/page_1.json`                 |
 
 注意: `getNovelStorage()` 等のストレージ取得関数でベースディレクトリ (`novels/`, `chunks/` など) が割り当てられるため、キー自体には上位カテゴリプレフィックスを含めません。
 
@@ -160,7 +166,7 @@ private async safeOperation<T>(
 
 これにより API パラメータをそのまま key に用いた場合の階層逸脱を防止。
 
-### 2025-08-12 追加: Repository Ports & Storage 改善 (Legacy StorageService 削除反映)
+### 2025-09-01 追加: Repository Ports & Storage 改善 (Legacy StorageService 完全削除)
 
 #### Repository Layer Architecture
 
@@ -196,7 +202,7 @@ const novelRepo = new NovelRepository(ports.novel) // NovelDbPortRW
 
 **Path Duplication 修正 / Legacy 廃止:**
 
-- Legacy `src/services/storage.ts` は DEPRECATED として残置（今後削除）。
+- Legacy `src/services/storage.ts` を削除し、StorageKeys を単一ソースとして運用
 - StorageKeys が単一ソース・プレフィックス重複不可
 - `.local-storage/<category>/<key>` の最終形 (例: `.local-storage/novels/{uuid}.json`)
 

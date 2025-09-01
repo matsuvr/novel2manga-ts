@@ -27,6 +27,58 @@ describe('vertical-text-client', () => {
     expect(res.pngBuffer.length).toBeGreaterThan(0)
   })
 
+  it('sends font parameter to API when specified', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ image_base64: PNG_1x1_BASE64, width: 1, height: 1 }),
+    })
+    // @ts-expect-error vi
+    global.fetch = mockFetch
+
+    await renderVerticalText({ text: 'ナレーション', font: 'mincho', fontSize: 20 })
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://example.com/render',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify({
+          text: 'ナレーション',
+          font: 'mincho',
+          font_size: 20,
+        }),
+      }),
+    )
+  })
+
+  it('does not send font parameter when not specified (uses default)', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ image_base64: PNG_1x1_BASE64, width: 1, height: 1 }),
+    })
+    // @ts-expect-error vi
+    global.fetch = mockFetch
+
+    await renderVerticalText({ text: 'セリフ', fontSize: 20 })
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://example.com/render',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify({
+          text: 'セリフ',
+          font: undefined,
+          font_size: 20,
+        }),
+      }),
+    )
+  })
+
   it('throws on non-200', async () => {
     // @ts-expect-error vi
     global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 })

@@ -3,6 +3,7 @@ import { getLogger } from '@/infrastructure/logging/logger'
 import { OutputService } from '@/services/application/output-service'
 import { ApiResponder } from '@/utils/api-responder'
 import { validateJobId } from '@/utils/validators'
+import { getCurrentUserId } from '@/utils/current-user'
 
 interface ExportRequest {
   jobId: string
@@ -35,10 +36,12 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const outputService = new OutputService()
+    const userId = getCurrentUserId()
     const { outputId, fileSize, pageCount } = await outputService.export(
       body.jobId as string,
       body.format as 'pdf' | 'images_zip',
       body.episodeNumbers,
+      userId,
     )
 
     return ApiResponder.success(
