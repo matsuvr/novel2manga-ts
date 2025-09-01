@@ -101,14 +101,7 @@
       "Bash(true)",
       "Bash(jq:*)",
       "Bash(npx drizzle-kit:*)",
-      "Read(/g:\\TsProjects\\novel2manga-ts\\.local-storage\\layouts\\93a14357-6344-4e2e-bf12-7978ace1f082/**)",
-      "Read(/g:\\TsProjects\\novel2manga-ts\\.local-storage\\layouts\\93a14357-6344-4e2e-bf12-7978ace1f082/**)",
-      "Read(/g:\\TsProjects\\novel2manga-ts\\.local-storage\\layouts\\93a14357-6344-4e2e-bf12-7978ace1f082/**)",
-      "Read(/g:\\TsProjects\\novel2manga-ts\\.local-storage\\layouts\\93a14357-6344-4e2e-bf12-7978ace1f082/**)",
-      "Read(/g:\\TsProjects\\novel2manga-ts\\.local-storage\\layouts\\93a14357-6344-4e2e-bf12-7978ace1f082/**)",
-      "Read(/g:\\TsProjects\\novel2manga-ts\\.local-storage\\scripts/**)",
-      "Read(/g:\\TsProjects\\novel2manga-ts\\.local-storage/**)",
-      "Read(/g:\\TsProjects\\novel2manga-ts/**)"
+      "Bash(npm install:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
