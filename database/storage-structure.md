@@ -34,11 +34,11 @@
 
 以下は設計済み（計画中）のキーで、コード実装は未着手です。
 
-| 種別（計画中）     | 生成関数                                     | 形式例                                          |
-| ------------------ | -------------------------------------------- | ----------------------------------------------- |
-| サムネイル         | `StorageKeys.pageThumbnail(jobId, ep, page)` | `{jobId}/episode_1/thumbnails/page_1_thumb.png` |
-| エクスポート成果物 | `StorageKeys.exportOutput(jobId, fmt)`       | `{jobId}/output.pdf`                            |
-| レンダリング状態   | `StorageKeys.renderStatus(jobId, ep, page)`  | `{jobId}/episode_1/page_1.json`                 |
+| 種別（計画中）     | 生成関数                                       | 形式例                                          |
+| ------------------ | ---------------------------------------------- | ----------------------------------------------- |
+| サムネイル         | `StorageKeys.pageThumbnail(jobId, ep, page)`   | `{jobId}/episode_1/thumbnails/page_1_thumb.png` |
+| エクスポート成果物 | `StorageKeys.exportOutput(userId, jobId, fmt)` | `results/{userId}/{jobId}.pdf`                  |
+| レンダリング状態   | `StorageKeys.renderStatus(jobId, ep, page)`    | `{jobId}/episode_1/page_1.json`                 |
 
 注意: `getNovelStorage()` 等のストレージ取得関数でベースディレクトリ (`novels/`, `chunks/` など) が割り当てられるため、キー自体には上位カテゴリプレフィックスを含めません。
 

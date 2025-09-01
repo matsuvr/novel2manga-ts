@@ -565,6 +565,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       id,
       novelId: output.novelId,
       jobId: output.jobId,
+      userId: output.userId,
       outputType: output.outputType,
       outputPath: output.outputPath,
       fileSize: output.fileSize,

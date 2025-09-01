@@ -78,10 +78,16 @@ pages:
         (jobId: string, episode: number, page: number) =>
           `${jobId}/renders/episode_${episode}/page_${page}.png`,
       ),
-      exportOutput: vi.fn((jobId: string, format: string) => `${jobId}/exports/output.${format}`),
+      exportOutput: vi.fn(
+        (userId: string, jobId: string, format: string) => `results/${userId}/${jobId}.${format}`,
+      ),
     },
   }
 })
+
+vi.mock('@/utils/current-user', () => ({
+  getCurrentUserId: vi.fn(() => 'test-user'),
+}))
 
 vi.mock('@/services/database', () => ({
   DatabaseService: vi.fn().mockImplementation(() => ({
