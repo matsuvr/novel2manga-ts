@@ -29,6 +29,7 @@
     "fix": "npm run format && npm run lint:unsafe",
     "fix:staged": "lint-staged",
     "check": "npm run lint && npm run format:check",
+    "check:ci": "npm run check",
     "typecheck": "tsc --noEmit",
     "verify:prepush": "npm run -s typecheck && npm run -s lint && npm run -s test && npm run -s test:integration",
     "validate:templates": "tsx ./scripts/validate-panel-templates.ts",
