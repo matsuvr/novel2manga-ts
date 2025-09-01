@@ -49,6 +49,7 @@ function readEnv() {
 function toSnakeCasePayload(req: VerticalTextRenderRequest) {
   return {
     text: req.text,
+    font: req.font,
     font_size: req.fontSize,
     line_height: req.lineHeight,
     letter_spacing: req.letterSpacing,

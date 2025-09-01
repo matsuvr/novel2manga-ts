@@ -56,6 +56,11 @@ src/
         └── health-check.ts    # APIヘルスチェックのビジネスロジック（DB/Storageを軽量 probe）
 ```
 
+## 出力ストレージ設計
+
+- 変換結果は Cloudflare R2 に保存し、ユーザー単位のパス `results/{userId}/{jobId}.{format}` を採用
+- 保存パスとメタ情報を D1 の `outputs` テーブルに記録し、ダウンロード URL 生成に利用
+
 ## パブリックAPI
 
 ### LlmClient
@@ -406,6 +411,12 @@ console.log(result.trace)
 console.log(result.metadata?.provider)
 ```
 
+## 開発ツールとCI
+
+- **Lint**: Biome を使用し、`npm run lint` で静的解析を実行。
+- **Format**: Prettier により `npm run format` でコード整形。
+- **CI**: GitHub Actions が `check:ci` スクリプトとテストを全PRで自動実行。
+
 ## 今後の改善
 
 ### 短期目標
@@ -498,3 +509,18 @@ LLM構造化ジェネレーターにおけるエラー処理は、共通のエ�
 - イミュータブルな更新パターン
 - シーケンシャルなページ番号の保証
 - 包括的なJSDoc文書化
+
+## 追加: Legacy StorageService 完全削除（2025-09-01）
+
+- 旧 `src/services/storage.ts` を廃止し、全ストレージ操作は `StorageKeys` と `StorageFactory` を利用
+- 階層ディレクトリと `txt` ベース保存を排除し、フラットキー + JSON 形式に統一
+
+## 追加: Google OAuth 認証基盤（2025-09-02）
+
+- Auth.js v5 と Google プロバイダーによるログイン/ログアウトを実装
+- `@auth/drizzle-adapter` を用い、ユーザー・セッション情報を D1 に永続化
+- Next.js App Router 向けに `SessionProvider` を組み込み、クライアントでセッションを管理
+## サインアップ同意フロー（2025-09-?? 更新）
+
+- サインアップ画面で利用規約への同意チェックを導入。
+- チェックが入るまで送信ボタンは無効化され、同意しない限り登録を進められない。
