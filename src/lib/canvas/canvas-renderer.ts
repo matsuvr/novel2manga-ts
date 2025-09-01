@@ -1,4 +1,5 @@
 import type { MangaLayout, Panel } from '@/types/panel-layout'
+import { getAppConfigWithOverrides } from '@/config/app.config'
 
 // Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
 const isServer = typeof window === 'undefined'
@@ -70,6 +71,7 @@ export class CanvasRenderer {
   canvas: HTMLCanvasElement | NodeCanvas
   private ctx: CanvasRenderingContext2D
   private config: CanvasConfig
+  private appConfig: ReturnType<typeof getAppConfigWithOverrides>
   private dialogueAssets?: Record<string, { image: unknown; width: number; height: number }>
 
   // Async factory method for proper initialization
@@ -79,6 +81,7 @@ export class CanvasRenderer {
   }
 
   constructor(config: CanvasConfig) {
+    this.appConfig = getAppConfigWithOverrides()
     this.config = {
       backgroundColor: '#ffffff',
       fontFamily: 'Arial, sans-serif',
@@ -240,9 +243,12 @@ export class CanvasRenderer {
 
           // 吹き出し背景
           this.ctx.save()
-          this.ctx.strokeStyle = '#000000'
-          this.ctx.fillStyle = '#ffffff'
-          this.ctx.lineWidth = dialogue.emotion === 'shout' ? 3 : 2
+          this.ctx.strokeStyle = this.appConfig.rendering.canvas.bubble.strokeStyle
+          this.ctx.fillStyle = this.appConfig.rendering.canvas.bubble.fillStyle
+          this.ctx.lineWidth =
+            dialogue.emotion === 'shout'
+              ? this.appConfig.rendering.canvas.bubble.shoutLineWidth
+              : this.appConfig.rendering.canvas.bubble.normalLineWidth
           // 形状切替: speech=楕円、thought=雲状、narration=長方形
           const shapeType =
             (dialogue as { type?: 'speech' | 'thought' | 'narration' }).type || 'speech'
@@ -273,8 +279,13 @@ export class CanvasRenderer {
       this.ctx.clip()
 
       try {
-        const sfxFontSize = Math.max(24, (this.config.fontSize || 16) * 1.8) // 大きめのフォント
-        let sfxY = y + 30 // SFXの開始位置（上部）
+        const appConfig = getAppConfigWithOverrides()
+        const sfxConfig = appConfig.rendering.canvas.sfx
+        const sfxFontSize = Math.max(
+          sfxConfig.minFontSize,
+          (this.config.fontSize || sfxConfig.defaultFontSize) * sfxConfig.fontSizeMultiplier,
+        ) // 大きめのフォント
+        let sfxY = y + sfxConfig.startPositionOffset // SFXの開始位置（上部）
 
         for (let i = 0; i < panel.sfx.length; i++) {
           const rawSfx = panel.sfx[i]
@@ -287,12 +298,12 @@ export class CanvasRenderer {
             this.ctx.save()
             this.ctx.font = `bold ${sfxFontSize}px ${this.config.fontFamily || 'Arial, sans-serif'}`
             this.ctx.fillStyle = '#000000'
-            this.ctx.strokeStyle = '#ffffff'
-            this.ctx.lineWidth = 3
-            this.ctx.textAlign = 'center'
-            this.ctx.textBaseline = 'top'
+            this.ctx.strokeStyle = this.appConfig.rendering.canvas.sfx.strokeStyle
+            this.ctx.lineWidth = this.appConfig.rendering.canvas.sfx.lineWidth
+            this.ctx.textAlign = this.appConfig.rendering.canvas.sfx.textAlign
+            this.ctx.textBaseline = this.appConfig.rendering.canvas.sfx.textBaseline
 
-            const sfxX = x + width * 0.3 // 左寄り（吹き出しを避ける）
+            const sfxX = x + width * this.appConfig.rendering.canvas.sfx.positionFactor // 位置係数に基づく配置
 
             // 白い縁取り（アウトライン効果）
             this.ctx.strokeText(cleanedSfx.main, sfxX, sfxY)
@@ -524,9 +535,12 @@ export class CanvasRenderer {
 
     this.ctx.save()
 
-    this.ctx.strokeStyle = '#000000'
-    this.ctx.fillStyle = '#ffffff'
-    this.ctx.lineWidth = style === 'shout' ? 3 : 2
+    this.ctx.strokeStyle = this.appConfig.rendering.canvas.bubble.strokeStyle
+    this.ctx.fillStyle = this.appConfig.rendering.canvas.bubble.fillStyle
+    this.ctx.lineWidth =
+      style === 'shout'
+        ? this.appConfig.rendering.canvas.bubble.shoutLineWidth
+        : this.appConfig.rendering.canvas.bubble.normalLineWidth
 
     this.drawBubbleShape(type, x, y, width, height)
 

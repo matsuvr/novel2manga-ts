@@ -259,29 +259,20 @@ async function buildChunkData(
 
         // Retrieve SFX data from script conversion
         const sfxData: string[] = []
-        try {
-          const scriptKey = JsonStorageKeys.scriptChunk(ensured.jobId, i)
-          const scriptObj = await analysisStorage.get(scriptKey)
-          if (scriptObj) {
-            const scriptParsed = JSON.parse(scriptObj.text) as {
-              panels?: Array<{ sfx?: string[] }>
-            }
-            if (scriptParsed.panels) {
-              // Collect all SFX from all panels in this chunk
-              for (const panel of scriptParsed.panels) {
-                if (panel.sfx && Array.isArray(panel.sfx)) {
-                  sfxData.push(...panel.sfx)
-                }
+        const scriptKey = JsonStorageKeys.scriptChunk(ensured.jobId, i)
+        const scriptObj = await analysisStorage.get(scriptKey)
+        if (scriptObj) {
+          const scriptParsed = JSON.parse(scriptObj.text) as {
+            panels?: Array<{ sfx?: string[] }>
+          }
+          if (scriptParsed.panels) {
+            // Collect all SFX from all panels in this chunk
+            for (const panel of scriptParsed.panels) {
+              if (panel.sfx && Array.isArray(panel.sfx)) {
+                sfxData.push(...panel.sfx)
               }
             }
           }
-        } catch (scriptError) {
-          logger.warn('Could not retrieve SFX data from script', {
-            chunkIndex: i,
-            jobId: ensured.jobId,
-            error: (scriptError as Error).message,
-          })
-          // Don't fail the whole process for missing SFX data
         }
 
         // Add SFX data to analysis
