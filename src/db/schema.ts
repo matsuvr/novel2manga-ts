@@ -64,6 +64,7 @@ export const authenticators = sqliteTable(
     credentialId: text('credential_id').notNull().unique(),
     userId: text('user_id')
       .notNull()
+      .default('anonymous')
       .references(() => users.id, { onDelete: 'cascade' }),
     providerAccountId: text('provider_account_id').notNull(),
     credentialPublicKey: text('credential_public_key').notNull(),

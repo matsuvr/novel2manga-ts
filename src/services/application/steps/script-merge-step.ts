@@ -111,13 +111,20 @@ export class ScriptMergeStep implements PipelineStep {
       // Collect coverage warnings with episode information
       const allLowCoverageChunks = [...failCoverageChunks, ...lowCoverageChunks]
 
-      // Get episode repository to map chunks to episodes
-      const db = getDatabaseService()
-      const { episode: episodePort } = adaptAll(db)
-      const episodeRepo = new EpisodeRepository(episodePort)
-
-      // Fetch all episodes for the job once to avoid multiple DB calls
-      const allEpisodes = await episodeRepo.getByJobId(jobId)
+      // Get episode repository to map chunks to episodes (best-effort)
+      // DB の取得や参照に失敗してもマージ自体は継続し、エピソード番号の付与を省略する
+      let allEpisodes: Array<{ startChunk: number; endChunk: number; episodeNumber: number }> = []
+      try {
+        const db = getDatabaseService()
+        const { episode: episodePort } = adaptAll(db)
+        const episodeRepo = new EpisodeRepository(episodePort)
+        allEpisodes = await episodeRepo.getByJobId(jobId)
+      } catch (e) {
+        logger.warn('Failed to load episodes for coverage mapping (continuing without episodes)', {
+          jobId,
+          error: e instanceof Error ? e.message : String(e),
+        })
+      }
 
       const coverageWarnings = allLowCoverageChunks.map((c) => {
         const episodeNumbers = allEpisodes
