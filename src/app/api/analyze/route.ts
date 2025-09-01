@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
             : 0) || 1,
         language: 'ja',
         metadataPath: null,
+        userId: 'anonymous',
       })
 
       const jobId = generateUUID()
@@ -119,6 +120,7 @@ export async function POST(request: NextRequest) {
           textLength: typeof inputText === 'string' ? inputText.length : 0,
           language: 'ja',
           metadataPath: null,
+          userId: 'anonymous',
         })
       } catch (e) {
         return ApiResponder.error(e, '小説の準備に失敗しました')

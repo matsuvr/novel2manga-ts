@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
         textLength: data.length,
         language: 'ja',
         metadataPath: null,
+        userId: 'anonymous',
       })
 
       logger.info('Novel successfully saved to database', {

@@ -10,18 +10,7 @@ import {
   unique,
 } from 'drizzle-orm/sqlite-core'
 
-
 // 認証テーブル群
-export const users = sqliteTable('user', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  name: text('name'),
-  email: text('email').unique(),
-
-  emailVerified: integer('emailVerified', { mode: 'timestamp_ms' }),
-  image: text('image'),
-})
 
 export const accounts = sqliteTable(
   'account',
@@ -42,7 +31,6 @@ export const accounts = sqliteTable(
     sessionState: text('session_state'),
   },
   (account) => ({
-
     compositePk: primaryKey({
       columns: [account.provider, account.providerAccountId],
     }),
@@ -56,7 +44,6 @@ export const sessions = sqliteTable('session', {
     .references(() => users.id, { onDelete: 'cascade' }),
   expires: integer('expires', { mode: 'timestamp_ms' }).notNull(),
 })
-
 
 export const verificationTokens = sqliteTable(
   'verificationToken',
@@ -77,6 +64,7 @@ export const authenticators = sqliteTable(
     credentialId: text('credential_id').notNull().unique(),
     userId: text('user_id')
       .notNull()
+      .default('anonymous')
       .references(() => users.id, { onDelete: 'cascade' }),
     providerAccountId: text('provider_account_id').notNull(),
     credentialPublicKey: text('credential_public_key').notNull(),
@@ -87,22 +75,35 @@ export const authenticators = sqliteTable(
   },
   (authenticator) => ({
     pk: primaryKey({ columns: [authenticator.userId, authenticator.credentialId] }),
-
   }),
 )
+
+// ユーザーテーブルを拡張（NextAuthのusersテーブルを使用）
+export const users = sqliteTable('user', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  name: text('name'),
+  email: text('email').unique(),
+  emailVerified: integer('emailVerified', { mode: 'timestamp_ms' }),
+  image: text('image'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+})
 
 // 小説テーブル（最上位エンティティ）
 export const novels = sqliteTable(
   'novels',
   {
     id: text('id').primaryKey(),
-    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
     title: text('title'),
     author: text('author'),
     originalTextPath: text('original_text_path'),
     textLength: integer('text_length').notNull(),
     language: text('language').default('ja'),
     metadataPath: text('metadata_path'),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
   },
@@ -117,11 +118,11 @@ export const jobs = sqliteTable(
   'jobs',
   {
     id: text('id').primaryKey(),
-    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
     novelId: text('novel_id')
       .notNull()
       .references(() => novels.id, { onDelete: 'cascade' }),
     jobName: text('job_name'),
+    userId: text('user_id').notNull().default('anonymous'),
 
     // ステータス管理
     status: text('status').notNull().default('pending'), // pending/processing/completed/failed/paused
@@ -171,11 +172,11 @@ export const jobs = sqliteTable(
     completedAt: text('completed_at'),
   },
   (table) => ({
-    userIdIdx: index('idx_jobs_user_id').on(table.userId),
     novelIdIdx: index('idx_jobs_novel_id').on(table.novelId),
     statusIdx: index('idx_jobs_status').on(table.status),
     novelIdStatusIdx: index('idx_jobs_novel_id_status').on(table.novelId, table.status),
     currentStepIdx: index('idx_jobs_current_step').on(table.currentStep),
+    userIdIdx: index('idx_jobs_user_id').on(table.userId),
   }),
 )
 
@@ -548,33 +549,6 @@ export const tokenUsageRelations = relations(tokenUsage, ({ one }) => ({
   }),
 }))
 
-export const usersRelations = relations(users, ({ many }) => ({
-  accounts: many(accounts),
-  sessions: many(sessions),
-  authenticators: many(authenticators),
-}))
-
-export const accountsRelations = relations(accounts, ({ one }) => ({
-  user: one(users, {
-    fields: [accounts.userId],
-    references: [users.id],
-  }),
-}))
-
-export const sessionsRelations = relations(sessions, ({ one }) => ({
-  user: one(users, {
-    fields: [sessions.userId],
-    references: [users.id],
-  }),
-}))
-
-export const authenticatorsRelations = relations(authenticators, ({ one }) => ({
-  user: one(users, {
-    fields: [authenticators.userId],
-    references: [users.id],
-  }),
-}))
-
 // 型エクスポート
 export type Novel = typeof novels.$inferSelect
 export type NewNovel = typeof novels.$inferInsert
@@ -608,4 +582,3 @@ export type VerificationToken = typeof verificationTokens.$inferSelect
 export type NewVerificationToken = typeof verificationTokens.$inferInsert
 export type Authenticator = typeof authenticators.$inferSelect
 export type NewAuthenticator = typeof authenticators.$inferInsert
-

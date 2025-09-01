@@ -40,7 +40,7 @@ export class JobDatabaseService extends BaseDatabaseService {
   /**
    * Create a new job
    */
-  createJob(novelId: string, initialStep = 'split'): Job {
+  createJob(novelId: string, initialStep = 'split', userId = 'anonymous'): Job {
     const jobId = crypto.randomUUID()
     const now = new Date().toISOString()
 
@@ -48,6 +48,7 @@ export class JobDatabaseService extends BaseDatabaseService {
       const newJob: NewJob = {
         id: jobId,
         novelId,
+        userId,
         status: 'processing',
         currentStep: initialStep,
         createdAt: now,

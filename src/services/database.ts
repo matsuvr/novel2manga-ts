@@ -71,7 +71,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
 
     await this.db.insert(novels).values({
       id,
-      userId: novel.userId,
+      userId: (novel.userId as string | undefined) ?? 'anonymous',
       title: novel.title,
       author: novel.author,
       originalTextPath: novel.originalTextPath,
@@ -95,7 +95,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       .insert(novels)
       .values({
         id,
-        userId: novel.userId,
+        userId: (novel.userId as string | undefined) ?? 'anonymous',
         title: novel.title,
         author: novel.author,
         originalTextPath: novel.originalTextPath,
@@ -1067,6 +1067,14 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       .select()
       .from(jobs)
       .where(eq(jobs.novelId, novelId))
+      .orderBy(desc(jobs.createdAt))
+  }
+
+  async listJobsByUser(userId: string): Promise<Job[]> {
+    return await this.db
+      .select()
+      .from(jobs)
+      .where(eq(jobs.userId, userId))
       .orderBy(desc(jobs.createdAt))
   }
 }
