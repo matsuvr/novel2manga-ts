@@ -46,6 +46,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
       const id = crypto.randomUUID()
       await db.insert(schema.novels).values({
         id,
+        userId: 'anonymous',
         title: novel.title,
         author: novel.author || null,
         originalTextPath: novel.originalTextPath || null,
@@ -64,6 +65,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
         .insert(schema.novels)
         .values({
           id,
+          userId: 'anonymous',
           title: novel.title,
           author: novel.author || null,
           originalTextPath: novel.originalTextPath || null,
@@ -278,6 +280,7 @@ export class TestDataFactory {
       title: 'Test Novel',
       textLength: 1000,
       language: 'ja' as const,
+      userId: 'anonymous' as const,
       ...overrides,
     }
 
