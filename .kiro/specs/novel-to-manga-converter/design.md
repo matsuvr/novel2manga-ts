@@ -442,6 +442,12 @@ console.log(result.metadata?.provider)
 
 統合テストも完全に対応し、既存のコードベースとの互換性を保ちながら、段階的な移行が可能です。
 
+## 認証とユーザー管理（2025-08-31 追加）
+
+- Auth.js 互換の `users`/`accounts`/`sessions` スキーマを導入し、D1 データベースでの認証情報を管理。
+- `novels` と `jobs` テーブルに `user_id` 外部キーを追加し、ユーザー単位でデータを紐付け。
+- これにより、マルチユーザー環境でのデータ分離とアクセス制御が可能になった。
+
 ## 追加: エピソード本文の永続化（2025-08-21）
 
 - エピソード抽出後、本文テキストをストレージに保存（`analysis` ストレージ、キー: `StorageKeys.episodeText(jobId, episodeNumber)`）。

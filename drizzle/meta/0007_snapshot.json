@@ -1,6 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
+
   "id": "d42bb914-c03f-4b2e-a978-53db9110d895",
   "prevId": "92b4f089-52cf-4a5e-adaa-e428c2d046ea",
   "tables": {
@@ -106,6 +107,7 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+
     "authenticator": {
       "name": "authenticator",
       "columns": {
@@ -116,6 +118,7 @@
           "notNull": true,
           "autoincrement": false
         },
+
         "userId": {
           "name": "userId",
           "type": "text",
@@ -123,6 +126,7 @@
           "notNull": true,
           "autoincrement": false
         },
+
         "providerAccountId": {
           "name": "providerAccountId",
           "type": "text",
@@ -130,6 +134,7 @@
           "notNull": true,
           "autoincrement": false
         },
+
         "credentialPublicKey": {
           "name": "credentialPublicKey",
           "type": "text",
@@ -151,6 +156,7 @@
           "notNull": true,
           "autoincrement": false
         },
+
         "credentialBackedUp": {
           "name": "credentialBackedUp",
           "type": "integer",
@@ -174,6 +180,7 @@
         }
       },
       "foreignKeys": {
+
         "authenticator_userId_user_id_fk": {
           "name": "authenticator_userId_user_id_fk",
           "tableFrom": "authenticator",
@@ -185,6 +192,7 @@
         }
       },
       "compositePrimaryKeys": {
+
         "authenticator_userId_credentialID_pk": {
           "columns": ["userId", "credentialID"],
           "name": "authenticator_userId_credentialID_pk"
@@ -657,6 +665,14 @@
           "notNull": true,
           "autoincrement": false
         },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+
         "novel_id": {
           "name": "novel_id",
           "type": "text",
@@ -892,6 +908,12 @@
         }
       },
       "indexes": {
+        "idx_jobs_user_id": {
+          "name": "idx_jobs_user_id",
+          "columns": ["user_id"],
+          "isUnique": false
+        },
+
         "idx_jobs_novel_id": {
           "name": "idx_jobs_novel_id",
           "columns": ["novel_id"],
@@ -914,6 +936,16 @@
         }
       },
       "foreignKeys": {
+        "jobs_user_id_users_id_fk": {
+          "name": "jobs_user_id_users_id_fk",
+          "tableFrom": "jobs",
+          "tableTo": "users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+
         "jobs_novel_id_novels_id_fk": {
           "name": "jobs_novel_id_novels_id_fk",
           "tableFrom": "jobs",
@@ -1049,6 +1081,14 @@
           "notNull": true,
           "autoincrement": false
         },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+
         "title": {
           "name": "title",
           "type": "text",
@@ -1110,13 +1150,30 @@
         }
       },
       "indexes": {
+        "idx_novels_user_id": {
+          "name": "idx_novels_user_id",
+          "columns": ["user_id"],
+          "isUnique": false
+        },
+
         "idx_novels_created_at": {
           "name": "idx_novels_created_at",
           "columns": ["created_at"],
           "isUnique": false
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "novels_user_id_users_id_fk": {
+          "name": "novels_user_id_users_id_fk",
+          "tableFrom": "novels",
+          "tableTo": "users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -1145,6 +1202,7 @@
           "notNull": true,
           "autoincrement": false
         },
+
         "user_id": {
           "name": "user_id",
           "type": "text",
@@ -1364,6 +1422,7 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+
     "session": {
       "name": "session",
       "columns": {
@@ -1374,6 +1433,7 @@
           "notNull": true,
           "autoincrement": false
         },
+
         "userId": {
           "name": "userId",
           "type": "text",
@@ -1391,11 +1451,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "session_userId_user_id_fk": {
-          "name": "session_userId_user_id_fk",
-          "tableFrom": "session",
-          "tableTo": "user",
-          "columnsFrom": ["userId"],
+        "sessions_user_id_users_id_fk": {
+          "name": "sessions_user_id_users_id_fk",
+          "tableFrom": "sessions",
+          "tableTo": "users",
+          "columnsFrom": ["user_id"],
+
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -1642,8 +1703,9 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "user": {
-      "name": "user",
+    "users": {
+      "name": "users",
+
       "columns": {
         "id": {
           "name": "id",
@@ -1666,8 +1728,9 @@
           "notNull": false,
           "autoincrement": false
         },
-        "emailVerified": {
-          "name": "emailVerified",
+        "email_verified": {
+          "name": "email_verified",
+
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
@@ -1682,8 +1745,9 @@
         }
       },
       "indexes": {
-        "user_email_unique": {
-          "name": "user_email_unique",
+        "users_email_unique": {
+          "name": "users_email_unique",
+
           "columns": ["email"],
           "isUnique": true
         }
@@ -1693,8 +1757,9 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "verificationToken": {
-      "name": "verificationToken",
+    "verification_tokens": {
+      "name": "verification_tokens",
+
       "columns": {
         "identifier": {
           "name": "identifier",
@@ -1721,9 +1786,10 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "verificationToken_identifier_token_pk": {
+        "verification_tokens_identifier_token_pk": {
           "columns": ["identifier", "token"],
-          "name": "verificationToken_identifier_token_pk"
+          "name": "verification_tokens_identifier_token_pk"
+
         }
       },
       "uniqueConstraints": {},
