@@ -40,7 +40,11 @@ import { makeEpisodeId } from '@/utils/ids'
  * - Transaction operations: Use db.transactions() from '@/services/database'
  */
 export class DatabaseService implements TransactionPort, UnitOfWorkPort {
-  private db = getDatabase()
+  private db: ReturnType<typeof getDatabase>
+
+  constructor(db?: ReturnType<typeof getDatabase>) {
+    this.db = db || getDatabase()
+  }
 
   async withTransaction<T>(fn: () => Promise<T>): Promise<T> {
     // Drizzle supports db.transaction; use it to ensure atomic operations

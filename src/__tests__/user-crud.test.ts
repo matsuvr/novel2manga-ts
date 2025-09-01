@@ -12,8 +12,7 @@ describe('user linked CRUD', () => {
     const db = drizzle(sqlite, { schema })
     migrate(db, { migrationsFolder: path.join(process.cwd(), 'drizzle') })
 
-    const service = new DatabaseService() as any
-    service.db = db
+    const service = new DatabaseService(db)
 
     const userId = 'user-test'
     await db.insert(schema.users).values({ id: userId, email: 'u@example.com' })
