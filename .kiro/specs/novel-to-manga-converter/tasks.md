@@ -40,6 +40,8 @@
 - [x] **エラー復旧**: 処理失敗時の状態復旧とリトライ機能
 - [x] **エピソードテキスト永続化**: 抽出されたエピソードテキストの保存
 - [x] **レンダーステータス追跡**: レンダリング状況の詳細追跡
+- [x] **ユーザー紐付け**: Auth.js スキーマを追加し、novels・jobs に userId 外部キーを設定
+- [x] **変換結果のR2保存**: ユーザー単位のパス設計とメタ情報のD1記録
 
 ### User Interface & API
 
@@ -48,7 +50,8 @@
 - [x] **結果ブラウジング**: 生成されたマンガレイアウトのページ別閲覧
 - [x] **共有機能**: 結果の共有とエクスポート
 - [x] **エラー表示**: 処理エラーの詳細情報表示とバリデーション結果
-- [x] **変換結果一覧・詳細ページ**: ログインユーザーのみが自分のジョブを閲覧可能
+- [x] **Google OAuth 認証**: Auth.js v5 + D1 セッション管理でログイン/ログアウト
+- [x] **サインアップ同意チェック**: 利用規約に同意しないと登録を進められない
 
 ## Technical Architecture Completed ✅
 
@@ -79,6 +82,7 @@
 
 - [x] **TypeScript**: Zero `any` types, strict type enforcement maintained
 - [x] **Linting**: All Biome lint checks passing with no errors
+- [x] **CI Checks**: GitHub Actions run lint, format, typecheck, and tests on each push and PR
 - [x] **DRY Principle**: No code duplication, shared utilities properly factored
 - [x] **SOLID**: Single-responsibility, dependency inversion patterns
 
@@ -114,6 +118,7 @@
 - ✅ **感情表現**: 自由テキスト文字列への変更
 - ✅ **スクリプト変換**: ガードレール実装とバリデーション強化
 - ✅ **段階的レンダリング**: バッチ処理による効率的レンダリング
+- ✅ **StorageService削除**: レガシーストレージサービスを廃止し、`StorageKeys` と `StorageFactory` に統一
 
 ### System Architecture Evolution
 

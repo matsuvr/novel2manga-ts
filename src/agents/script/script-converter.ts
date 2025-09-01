@@ -115,29 +115,93 @@ export async function convertChunkToMangaScript(
     generator = getLlmStructuredGenerator()
   }
   const appCfg = getAppConfigWithOverrides()
-  const sc = appCfg.llm.scriptConversion || { systemPrompt: '', userPromptTemplate: '' }
+  const sc = appCfg.llm.scriptConversion
+  if (!sc) {
+    throw new Error(
+      'Script conversion configuration is missing in app.config.ts. Please configure llm.scriptConversion.',
+    )
+  }
+  if (!sc.systemPrompt) {
+    throw new Error(
+      'Script conversion systemPrompt is missing in app.config.ts. Please configure llm.scriptConversion.systemPrompt.',
+    )
+  }
+  if (!sc.userPromptTemplate) {
+    throw new Error(
+      'Script conversion userPromptTemplate is missing in app.config.ts. Please configure llm.scriptConversion.userPromptTemplate.',
+    )
+  }
+
   const cfg = {
     systemPrompt: sc.systemPrompt,
     userPromptTemplate: sc.userPromptTemplate,
   }
 
-  const prompt = (cfg.userPromptTemplate || 'Chunk: {{chunkText}}')
+  const basePrompt = cfg.userPromptTemplate
     .replace('{{chunkText}}', input.chunkText)
     .replace('{{chunkIndex}}', input.chunkIndex.toString())
     .replace('{{chunksNumber}}', input.chunksNumber.toString())
-    .replace('{{previousText}}', input.previousText || '（本文の開始）')
-    .replace('{{nextChunk}}', input.nextChunk || '（本文終了）')
-    .replace('{{charactersList}}', input.charactersList || '')
-    .replace('{{scenesList}}', input.scenesList || '')
-    .replace('{{dialoguesList}}', input.dialoguesList || '')
-    .replace('{{highlightLists}}', input.highlightLists || '')
-    .replace('{{situations}}', input.situations || '')
+    .replace('{{previousText}}', input.previousText ?? '（本文の開始）')
+    .replace('{{nextChunk}}', input.nextChunk ?? '（本文終了）')
+    .replace('{{charactersList}}', input.charactersList ?? '')
+    .replace('{{scenesList}}', input.scenesList ?? '')
+    .replace('{{dialoguesList}}', input.dialoguesList ?? '')
+    .replace('{{highlightLists}}', input.highlightLists ?? '')
+    .replace('{{situations}}', input.situations ?? '')
 
   const maxRetries = 2
   let attempt = 0
   let bestResult: NewMangaScript | null = null
+  let coverageRetryUsed = false
+
+  // カバレッジ設定の必須チェック
+  if (typeof sc.coverageThreshold !== 'number') {
+    throw new Error(
+      'Script conversion coverageThreshold must be a number in app.config.ts. Please configure llm.scriptConversion.coverageThreshold.',
+    )
+  }
+  if (typeof sc.enableCoverageRetry !== 'boolean') {
+    throw new Error(
+      'Script conversion enableCoverageRetry must be a boolean in app.config.ts. Please configure llm.scriptConversion.enableCoverageRetry.',
+    )
+  }
+
+  const coverageThreshold = sc.coverageThreshold
+  const enableCoverageRetry = sc.enableCoverageRetry
 
   while (attempt <= maxRetries) {
+    let prompt = basePrompt
+
+    // カバレッジリトライの場合は追加指示を含める
+    if (attempt === 1 && !coverageRetryUsed && bestResult && enableCoverageRetry) {
+      const coverage = assessScriptCoverage(bestResult, input.chunkText)
+      if (coverage.coverageRatio < coverageThreshold) {
+        coverageRetryUsed = true
+
+        // 設定ファイルからリトライプロンプトテンプレートを取得
+        if (!sc.coverageRetryPromptTemplate) {
+          throw new Error(
+            'Script conversion coverageRetryPromptTemplate is missing in app.config.ts. Please configure llm.scriptConversion.coverageRetryPromptTemplate.',
+          )
+        }
+        const retryTemplate = sc.coverageRetryPromptTemplate
+
+        const coverageReasonsList = coverage.reasons.map((reason) => `- ${reason}`).join('\n')
+        const retryPrompt = retryTemplate
+          .replace('{{coveragePercentage}}', Math.round(coverage.coverageRatio * 100).toString())
+          .replace('{{coverageReasons}}', coverageReasonsList)
+
+        prompt = `${basePrompt}\n\n${retryPrompt}`
+
+        getLogger()
+          .withContext({ service: 'script-converter', jobId: options?.jobId })
+          .info('Retrying script generation due to low coverage', {
+            coverageRatio: coverage.coverageRatio,
+            reasons: coverage.reasons,
+          })
+      }
+    }
+
     try {
       const result = await generator.generateObjectWithFallback<NewMangaScript>({
         name: 'manga-script-conversion',
@@ -152,10 +216,10 @@ export async function convertChunkToMangaScript(
         const sanitizedResult = sanitizeScript(result as NewMangaScript)
         const validatedResult = NewMangaScriptSchema.safeParse(sanitizedResult)
         if (validatedResult.success) {
-          bestResult = validatedResult.data
+          const currentResult = validatedResult.data
 
           // Log importance validation warnings if any
-          const importanceValidation = validateImportanceFields(bestResult)
+          const importanceValidation = validateImportanceFields(currentResult)
           if (!importanceValidation.valid && options?.jobId) {
             getLogger()
               .withContext({ service: 'script-converter', jobId: options.jobId })
@@ -164,7 +228,44 @@ export async function convertChunkToMangaScript(
               })
           }
 
-          break
+          // カバレッジ評価
+          const coverage = assessScriptCoverage(currentResult, input.chunkText)
+
+          // ベストリザルトの更新判定
+          if (
+            !bestResult ||
+            (coverage.coverageRatio > coverageThreshold &&
+              coverage.coverageRatio >
+                assessScriptCoverage(bestResult, input.chunkText).coverageRatio)
+          ) {
+            bestResult = currentResult
+
+            getLogger()
+              .withContext({ service: 'script-converter', jobId: options?.jobId })
+              .info('Script generation successful', {
+                coverageRatio: coverage.coverageRatio,
+                panelCount: currentResult.panels.length,
+                attempt: attempt + 1,
+                isRetry: coverageRetryUsed && attempt === 1,
+              })
+
+            // カバレッジが十分な場合は即座に完了
+            if (coverage.coverageRatio >= coverageThreshold) {
+              break
+            }
+          }
+
+          // 最初の試行でカバレッジが不十分な場合、次の試行でリトライを実行
+          if (attempt === 0 && coverage.coverageRatio < coverageThreshold) {
+            // ベストリザルトは保持して次の試行へ
+            attempt++
+            continue
+          }
+
+          // 2回目の試行が完了したらループを抜ける
+          if (attempt > 0) {
+            break
+          }
         } else {
           getLogger()
             .withContext({ service: 'script-converter', jobId: options?.jobId })
@@ -225,6 +326,77 @@ export async function convertEpisodeTextToScript(
   }
 
   return convertChunkToMangaScript(chunkInput, options)
+}
+
+/**
+ * Assess the coverage quality of a generated script
+ */
+function assessScriptCoverage(
+  script: NewMangaScript,
+  originalText: string,
+): { coverageRatio: number; reasons: string[] } {
+  const reasons: string[] = []
+  let coverageScore = 1.0
+
+  // Check panel count vs text length ratio
+  const textLength = originalText.length
+  const panelCount = script.panels.length
+  const expectedPanelsPerKChar = 2 // Expected panels per 1000 characters
+  const expectedPanels = Math.max(1, Math.floor((textLength / 1000) * expectedPanelsPerKChar))
+
+  if (panelCount < expectedPanels * 0.5) {
+    coverageScore -= 0.3
+    reasons.push(`パネル数が不足（実際: ${panelCount}, 期待: ${expectedPanels}以上）`)
+  }
+
+  // Check for dialogue coverage
+  const totalDialogueCount = script.panels.reduce(
+    (sum, panel) => sum + (panel.dialogue?.length ?? 0),
+    0,
+  )
+  const originalDialogueMatches = originalText.match(/「[^」]*」/g) ?? []
+
+  if (
+    originalDialogueMatches.length > 0 &&
+    totalDialogueCount < originalDialogueMatches.length * 0.3
+  ) {
+    coverageScore -= 0.25
+    reasons.push(
+      `対話の反映が不十分（元テキスト: ${originalDialogueMatches.length}箇所, スクリプト: ${totalDialogueCount}箇所）`,
+    )
+  }
+
+  // Check for narration coverage
+  const totalNarrationCount = script.panels.reduce(
+    (sum, panel) => sum + (panel.narration?.length ?? 0),
+    0,
+  )
+
+  if (totalNarrationCount === 0 && textLength > 200) {
+    coverageScore -= 0.2
+    reasons.push('ナレーションが全く含まれていない')
+  }
+
+  // Check character coverage
+  const uniqueCharacters = new Set<string>()
+  script.panels.forEach((panel) => {
+    panel.dialogue?.forEach((dialogue) => {
+      const charMatch = dialogue.match(/^([^:：]+)[：:]/)
+      if (charMatch) {
+        uniqueCharacters.add(charMatch[1])
+      }
+    })
+  })
+
+  if (script.characters.length > uniqueCharacters.size) {
+    coverageScore -= 0.15
+    reasons.push('定義されたキャラクターの一部が台詞で使用されていない')
+  }
+
+  return {
+    coverageRatio: Math.max(0, coverageScore),
+    reasons,
+  }
 }
 
 // 後方互換ユーティリティは撤去済み（scenesを扱わない）

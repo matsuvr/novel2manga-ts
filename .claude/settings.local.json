@@ -101,7 +101,7 @@
       "Bash(true)",
       "Bash(jq:*)",
       "Bash(npx drizzle-kit:*)",
-      "mcp__serena__insert_after_symbol"
+      "Bash(npm install:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -50,6 +50,14 @@
       "when": 1756574903198,
       "tag": "0006_burly_kree",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1756667451842,
+      "tag": "0007_icy_vivisector",
+
+      "breakpoints": true
     }
   ]
 }

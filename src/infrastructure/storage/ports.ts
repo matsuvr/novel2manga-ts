@@ -50,6 +50,7 @@ export interface RenderStoragePort {
 
 export interface OutputStoragePort {
   putExport(
+    userId: string,
     jobId: string,
     kind: 'pdf' | 'zip',
     data: Buffer,
@@ -342,9 +343,9 @@ export function getStoragePorts(): StoragePorts {
       },
     },
     output: {
-      async putExport(jobId, kind, data, meta) {
+      async putExport(userId, jobId, kind, data, meta) {
         const storage = await StorageFactory.getOutputStorage()
-        const key = StorageKeys.exportOutput(jobId, kind === 'pdf' ? 'pdf' : 'zip')
+        const key = StorageKeys.exportOutput(userId, jobId, kind === 'pdf' ? 'pdf' : 'zip')
 
         await executeStorageWithTracking({
           storage,
@@ -352,6 +353,7 @@ export function getStoragePorts(): StoragePorts {
           value: data,
           metadata: {
             contentType: kind === 'pdf' ? 'application/pdf' : 'application/zip',
+            userId,
             jobId,
             type: kind === 'pdf' ? 'pdf_export' : 'zip_export',
             ...(meta ?? {}),

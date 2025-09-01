@@ -1,14 +1,90 @@
+import crypto from 'node:crypto'
 import { relations, sql } from 'drizzle-orm'
-import { index, integer, real, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core'
+import {
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  unique,
+} from 'drizzle-orm/sqlite-core'
 
-// ユーザーテーブル
-export const users = sqliteTable('users', {
+// 認証テーブル群
+
+export const accounts = sqliteTable(
+  'account',
+  {
+    userId: text('userId')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    type: text('type').notNull(),
+    provider: text('provider').notNull(),
+
+    providerAccountId: text('providerAccountId').notNull(),
+    refreshToken: text('refresh_token'),
+    accessToken: text('access_token'),
+    expiresAt: integer('expires_at'),
+    tokenType: text('token_type'),
+    scope: text('scope'),
+    idToken: text('id_token'),
+    sessionState: text('session_state'),
+  },
+  (account) => ({
+    compositePk: primaryKey({
+      columns: [account.provider, account.providerAccountId],
+    }),
+  }),
+)
+
+export const sessions = sqliteTable('session', {
+  sessionToken: text('sessionToken').primaryKey(),
+  userId: text('userId')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  expires: integer('expires', { mode: 'timestamp_ms' }).notNull(),
+})
+
+export const verificationTokens = sqliteTable(
+  'verificationToken',
+  {
+    identifier: text('identifier').notNull(),
+    token: text('token').notNull(),
+    expires: integer('expires', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (vt) => ({
+    pk: primaryKey({ columns: [vt.identifier, vt.token] }),
+  }),
+)
+
+// WebAuthn などの認証情報
+export const authenticators = sqliteTable(
+  'authenticators',
+  {
+    credentialId: text('credential_id').notNull().unique(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    providerAccountId: text('provider_account_id').notNull(),
+    credentialPublicKey: text('credential_public_key').notNull(),
+    counter: integer('counter').notNull(),
+    credentialDeviceType: text('credential_device_type').notNull(),
+    credentialBackedUp: integer('credential_backed_up', { mode: 'boolean' }).notNull(),
+    transports: text('transports'),
+  },
+  (authenticator) => ({
+    pk: primaryKey({ columns: [authenticator.userId, authenticator.credentialId] }),
+  }),
+)
+
+// ユーザーテーブルを拡張（NextAuthのusersテーブルを使用）
+export const users = sqliteTable('user', {
   id: text('id')
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   name: text('name'),
   email: text('email').unique(),
-  emailVerified: integer('email_verified', { mode: 'timestamp_ms' }),
+  emailVerified: integer('emailVerified', { mode: 'timestamp_ms' }),
   image: text('image'),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 })
@@ -31,6 +107,7 @@ export const novels = sqliteTable(
     updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => ({
+    userIdIdx: index('idx_novels_user_id').on(table.userId),
     createdAtIdx: index('idx_novels_created_at').on(table.createdAt),
   }),
 )
@@ -268,6 +345,7 @@ export const outputs = sqliteTable(
     jobId: text('job_id')
       .notNull()
       .references(() => jobs.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull(),
     outputType: text('output_type').notNull(), // pdf/cbz/images_zip/epub
     outputPath: text('output_path').notNull(),
     fileSize: integer('file_size'),
@@ -331,18 +409,26 @@ export const tokenUsage = sqliteTable(
 )
 
 // リレーション定義
-export const novelsRelations = relations(novels, ({ many }) => ({
+export const novelsRelations = relations(novels, ({ many, one }) => ({
   jobs: many(jobs),
   chunks: many(chunks),
   episodes: many(episodes),
   outputs: many(outputs),
   storageFiles: many(storageFiles),
+  user: one(users, {
+    fields: [novels.userId],
+    references: [users.id],
+  }),
 }))
 
 export const jobsRelations = relations(jobs, ({ one, many }) => ({
   novel: one(novels, {
     fields: [jobs.novelId],
     references: [novels.id],
+  }),
+  user: one(users, {
+    fields: [jobs.userId],
+    references: [users.id],
   }),
   stepHistory: many(jobStepHistory),
   chunks: many(chunks),
@@ -358,6 +444,35 @@ export const jobStepHistoryRelations = relations(jobStepHistory, ({ one }) => ({
   job: one(jobs, {
     fields: [jobStepHistory.jobId],
     references: [jobs.id],
+  }),
+}))
+
+export const usersRelations = relations(users, ({ many }) => ({
+  accounts: many(accounts),
+  sessions: many(sessions),
+  authenticators: many(authenticators),
+  novels: many(novels),
+  jobs: many(jobs),
+}))
+
+export const accountsRelations = relations(accounts, ({ one }) => ({
+  user: one(users, {
+    fields: [accounts.userId],
+    references: [users.id],
+  }),
+}))
+
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, {
+    fields: [sessions.userId],
+    references: [users.id],
+  }),
+}))
+
+export const authenticatorsRelations = relations(authenticators, ({ one }) => ({
+  user: one(users, {
+    fields: [authenticators.userId],
+    references: [users.id],
   }),
 }))
 
@@ -456,3 +571,13 @@ export type StorageFile = typeof storageFiles.$inferSelect
 export type NewStorageFile = typeof storageFiles.$inferInsert
 export type TokenUsage = typeof tokenUsage.$inferSelect
 export type NewTokenUsage = typeof tokenUsage.$inferInsert
+export type User = typeof users.$inferSelect
+export type NewUser = typeof users.$inferInsert
+export type Account = typeof accounts.$inferSelect
+export type NewAccount = typeof accounts.$inferInsert
+export type Session = typeof sessions.$inferSelect
+export type NewSession = typeof sessions.$inferInsert
+export type VerificationToken = typeof verificationTokens.$inferSelect
+export type NewVerificationToken = typeof verificationTokens.$inferInsert
+export type Authenticator = typeof authenticators.$inferSelect
+export type NewAuthenticator = typeof authenticators.$inferInsert
