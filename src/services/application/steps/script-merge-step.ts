@@ -26,10 +26,35 @@ export class ScriptMergeStep implements PipelineStep {
     context: StepContext,
   ): Promise<StepExecutionResult<ScriptMergeResult>> {
     const { jobId, logger } = context
+
+    // actualTotalChunksをtryブロックの外で宣言
+    let actualTotalChunks = 0
+
     try {
-      logger.info('Starting script merge process', { jobId, totalChunks })
       const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
       const storage = await StorageFactory.getAnalysisStorage()
+
+      // 実際に存在するscript chunkファイル数を取得（DBのtotalChunksではなく実際のファイル数を使用）
+      const actualChunks: number[] = []
+      let chunkIndex = 0
+      while (true) {
+        const key = JsonStorageKeys.scriptChunk(jobId, chunkIndex)
+        const obj = await storage.get(key)
+        if (!obj) break
+        actualChunks.push(chunkIndex)
+        chunkIndex++
+      }
+      actualTotalChunks = actualChunks.length
+
+      logger.info('Starting script merge process', {
+        jobId,
+        expectedTotalChunks: totalChunks,
+        actualTotalChunks,
+        note:
+          actualTotalChunks !== totalChunks
+            ? 'DB totalChunks mismatch detected - using actual file count'
+            : 'totalChunks match',
+      })
 
       const allPanels: Array<{
         no: number
@@ -45,7 +70,7 @@ export class ScriptMergeStep implements PipelineStep {
       const lowCoverageChunks: Array<{ index: number; ratio: number }> = []
       const failCoverageChunks: Array<{ index: number; ratio: number }> = []
 
-      for (let i = 0; i < totalChunks; i++) {
+      for (let i = 0; i < actualTotalChunks; i++) {
         const key = JsonStorageKeys.scriptChunk(jobId, i)
         logger.info('Processing script chunk', { jobId, chunkIndex: i, key })
 
@@ -197,7 +222,8 @@ export class ScriptMergeStep implements PipelineStep {
       if (allPanels.length === 0) {
         logger.error('Script merge aborted: no panels collected from any chunk', {
           jobId,
-          totalChunks,
+          expectedTotalChunks: totalChunks,
+          actualTotalChunks,
         })
         throw new Error('Script merge failed: collected 0 panels from all chunks')
       }
@@ -239,7 +265,8 @@ export class ScriptMergeStep implements PipelineStep {
         jobId,
         error: msg,
         stack,
-        totalChunks,
+        expectedTotalChunks: totalChunks,
+        actualTotalChunks,
         step: 'script-merge',
       })
       return { success: false, error: `Script merge failed: ${msg}` }

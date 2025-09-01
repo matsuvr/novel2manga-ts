@@ -19,6 +19,17 @@ export const appConfig = {
       fragmentConversionThreshold: 0,
     },
   },
+  // Script coverage scoring constants
+  scriptCoverage: {
+    expectedPanelsPerKChar: 2, // Expected panels per 1000 characters
+    panelCountThresholdRatio: 0.5, // Minimum ratio of expected panels to avoid penalty
+    panelCountPenalty: 0.3, // Penalty for insufficient panel count
+    dialogueThresholdRatio: 0.3, // Minimum ratio of original dialogue to avoid penalty
+    dialoguePenalty: 0.25, // Penalty for insufficient dialogue coverage
+    narrationPenalty: 0.2, // Penalty for missing narration (when text > 200 chars)
+    minTextLengthForNarration: 200, // Minimum text length to expect narration
+    unusedCharactersPenalty: 0.15, // Penalty for defined but unused characters
+  },
 
   // Script segmentation configuration (for long scripts)
   scriptSegmentation: {
@@ -370,6 +381,28 @@ JSONのみ出力。説明文禁止。`,
         maxCharsPerLine: 14,
       },
       maxConcurrent: 4,
+    },
+    // Canvas描画設定
+    canvas: {
+      // SFXテキスト描画設定
+      sfx: {
+        strokeStyle: '#ffffff', // SFX縁取り色
+        lineWidth: 3, // SFX縁取り線幅
+        textAlign: 'center' as CanvasTextAlign, // SFXテキスト配置
+        textBaseline: 'top' as CanvasTextBaseline, // SFXベースライン
+        positionFactor: 0.5, // SFX位置係数（0.3 = 左寄り、0.5 = 中央）
+        minFontSize: 24, // SFX最小フォントサイズ
+        defaultFontSize: 16, // SFXデフォルトフォントサイズ
+        fontSizeMultiplier: 1.8, // SFXフォントサイズ倍率
+        startPositionOffset: 30, // SFX開始位置オフセット
+      },
+      // 吹き出し描画設定
+      bubble: {
+        fillStyle: '#ffffff', // 吹き出し背景色
+        strokeStyle: '#000000', // 吹き出し枠線色
+        normalLineWidth: 2, // 通常の線幅
+        shoutLineWidth: 3, // 叫び系の線幅
+      },
     },
   },
 
