@@ -205,8 +205,12 @@ export class CanvasRenderer {
           let drawW = asset.width * scale
           let drawH = asset.height * scale
           const padding = 10
-          let bubbleW = drawW + padding * 2
-          let bubbleH = drawH + padding * 2
+          // テキストの長方形（パディング含む）を外接する楕円のサイズを計算
+          // √2 アルゴリズム: 長方形を外接する楕円は長方形の各辺を √2 で割った半径を持つ
+          const textRectW = drawW + padding * 2
+          const textRectH = drawH + padding * 2
+          let bubbleW = textRectW * Math.sqrt(2)
+          let bubbleH = textRectH * Math.sqrt(2)
 
           // パネル下端に収まるよう自動縮小
           const availableVertical = y + height - bubbleY
@@ -215,12 +219,15 @@ export class CanvasRenderer {
             Math.min(perBubbleMaxHeight, availableVertical - 2),
           )
           if (bubbleH > maxThisBubbleHeight) {
-            const shrink = (maxThisBubbleHeight - padding * 2) / Math.max(1, drawH)
-            scale = Math.min(scale, shrink)
+            // 楕円が収まるよう縮小
+            const shrinkFactor = maxThisBubbleHeight / bubbleH
+            scale = Math.min(scale, scale * shrinkFactor)
             drawW = asset.width * scale
             drawH = asset.height * scale
-            bubbleW = drawW + padding * 2
-            bubbleH = drawH + padding * 2
+            const textRectW = drawW + padding * 2
+            const textRectH = drawH + padding * 2
+            bubbleW = textRectW * Math.sqrt(2)
+            bubbleH = textRectH * Math.sqrt(2)
           }
 
           // これでもはみ出す場合は描画を中止
@@ -250,6 +257,75 @@ export class CanvasRenderer {
           this.ctx.drawImage(asset.image as unknown as CanvasImageSource, imgX, imgY, drawW, drawH)
 
           bubbleY += bubbleH + 10 // 次の吹き出し位置
+        }
+      } finally {
+        // クリッピング解除
+        this.ctx.restore()
+      }
+    }
+
+    // パネル内のSFXテキストを描画（大きめのフォントで背景なし）
+    if (panel.sfx && panel.sfx.length > 0) {
+      // クリッピング: SFXテキストもパネル枠の内側に限定
+      this.ctx.save()
+      this.ctx.beginPath()
+      this.ctx.rect(x, y, width, height)
+      this.ctx.clip()
+
+      try {
+        const sfxFontSize = Math.max(24, (this.config.fontSize || 16) * 1.8) // 大きめのフォント
+        let sfxY = y + 30 // SFXの開始位置（上部）
+
+        for (let i = 0; i < panel.sfx.length; i++) {
+          const rawSfx = panel.sfx[i]
+
+          // 〈〉を削除し、()内の補足テキストを分離
+          const cleanedSfx = this.processSfxText(rawSfx)
+
+          // メインSFXテキスト（大きいフォント）
+          if (cleanedSfx.main) {
+            this.ctx.save()
+            this.ctx.font = `bold ${sfxFontSize}px ${this.config.fontFamily || 'Arial, sans-serif'}`
+            this.ctx.fillStyle = '#000000'
+            this.ctx.strokeStyle = '#ffffff'
+            this.ctx.lineWidth = 3
+            this.ctx.textAlign = 'center'
+            this.ctx.textBaseline = 'top'
+
+            const sfxX = x + width * 0.3 // 左寄り（吹き出しを避ける）
+
+            // 白い縁取り（アウトライン効果）
+            this.ctx.strokeText(cleanedSfx.main, sfxX, sfxY)
+            // テキスト本体
+            this.ctx.fillText(cleanedSfx.main, sfxX, sfxY)
+
+            this.ctx.restore()
+
+            const mainTextHeight = sfxFontSize * 1.2
+            sfxY += mainTextHeight
+
+            // 補足テキスト（小さいフォント）
+            if (cleanedSfx.supplement) {
+              this.ctx.save()
+              const supplementFontSize = Math.max(12, sfxFontSize * 0.6)
+              this.ctx.font = `${supplementFontSize}px ${this.config.fontFamily || 'Arial, sans-serif'}`
+              this.ctx.fillStyle = '#333333'
+              this.ctx.textAlign = 'center'
+              this.ctx.textBaseline = 'top'
+
+              this.ctx.fillText(cleanedSfx.supplement, sfxX, sfxY)
+
+              this.ctx.restore()
+              sfxY += supplementFontSize * 1.2 + 5
+            } else {
+              sfxY += 10 // 次のSFXとの間隔
+            }
+          }
+
+          // パネル下端に近づいたら描画を中止
+          if (sfxY > y + height - 30) {
+            break
+          }
         }
       } finally {
         // クリッピング解除
@@ -341,6 +417,39 @@ export class CanvasRenderer {
   }
 
   /**
+   * SFXテキストを処理：〈〉を削除し、()内の補足テキストを分離
+   * @param rawSfx 生のSFXテキスト（例：「〈ドーン！〉」「〈バタン（ドアが閉まる音）〉」）
+   * @returns メインテキストと補足テキストを分離したオブジェクト
+   */
+  private processSfxText(rawSfx: string): { main: string; supplement?: string } {
+    // 〈〉を削除
+    const cleanedText = rawSfx.replace(/[〈〉⟨⟩]/g, '')
+
+    // ()内の補足テキストを検出して分離
+    const supplementMatch = cleanedText.match(/^(.*?)（(.+?)）$/)
+    if (supplementMatch) {
+      return {
+        main: supplementMatch[1].trim(),
+        supplement: supplementMatch[2].trim(),
+      }
+    }
+
+    // 半角括弧でも試す
+    const supplementMatchHalf = cleanedText.match(/^(.*?)\((.+?)\)$/)
+    if (supplementMatchHalf) {
+      return {
+        main: supplementMatchHalf[1].trim(),
+        supplement: supplementMatchHalf[2].trim(),
+      }
+    }
+
+    // 補足テキストがない場合
+    return {
+      main: cleanedText.trim(),
+    }
+  }
+
+  /**
    * Draws a bubble shape (ellipse, rectangle, or cloud) at the specified position
    * @private
    */
@@ -382,6 +491,7 @@ export class CanvasRenderer {
       this.ctx.fill()
       this.ctx.stroke()
     } else {
+      // 楕円の描画: テキスト領域を外接する楕円
       this.ctx.beginPath()
       this.ctx.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2)
       this.ctx.fill()
