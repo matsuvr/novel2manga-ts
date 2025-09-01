@@ -70,7 +70,7 @@ export const verificationTokens = sqliteTable(
 export const authenticators = sqliteTable(
   'authenticators',
   {
-    credentialID: text('credential_id').notNull().unique(),
+    credentialId: text('credential_id').notNull().unique(),
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -82,7 +82,7 @@ export const authenticators = sqliteTable(
     transports: text('transports'),
   },
   (authenticator) => ({
-    pk: primaryKey({ columns: [authenticator.userId, authenticator.credentialID] }),
+    pk: primaryKey({ columns: [authenticator.userId, authenticator.credentialId] }),
   }),
 )
 
