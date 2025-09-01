@@ -163,6 +163,7 @@ async function resolveEpisodeData(
 
 /**
  * Build chunk data for episode - handles both demo and real data
+ * Now includes SFX data from script conversion
  */
 async function buildChunkData(
   episode: {
@@ -226,6 +227,10 @@ async function buildChunkData(
       const { getStoragePorts } = await import('@/infrastructure/storage/ports')
       const ports = getStoragePorts()
 
+      // First, load the storage utils to get script data
+      const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
+      const analysisStorage = await StorageFactory.getAnalysisStorage()
+
       for (let i = ensured.startChunk; i <= ensured.endChunk; i++) {
         const chunkContent = await ports.chunk.getChunk(ensured.jobId, i)
         if (!chunkContent) {
@@ -251,6 +256,40 @@ async function buildChunkData(
           )
         }
         const analysis = (parsed.analysis ?? parsed) as EpisodeData['chunks'][number]['analysis']
+
+        // Retrieve SFX data from script conversion
+        const sfxData: string[] = []
+        try {
+          const scriptKey = JsonStorageKeys.scriptChunk(ensured.jobId, i)
+          const scriptObj = await analysisStorage.get(scriptKey)
+          if (scriptObj) {
+            const scriptParsed = JSON.parse(scriptObj.text) as {
+              panels?: Array<{ sfx?: string[] }>
+            }
+            if (scriptParsed.panels) {
+              // Collect all SFX from all panels in this chunk
+              for (const panel of scriptParsed.panels) {
+                if (panel.sfx && Array.isArray(panel.sfx)) {
+                  sfxData.push(...panel.sfx)
+                }
+              }
+            }
+          }
+        } catch (scriptError) {
+          logger.warn('Could not retrieve SFX data from script', {
+            chunkIndex: i,
+            jobId: ensured.jobId,
+            error: (scriptError as Error).message,
+          })
+          // Don't fail the whole process for missing SFX data
+        }
+
+        // Add SFX data to analysis
+        const enrichedAnalysis = {
+          ...analysis,
+          sfx: sfxData.length > 0 ? sfxData : undefined,
+        }
+
         const isPartial = i === ensured.startChunk || i === ensured.endChunk
         const startOffset = i === ensured.startChunk ? ensured.startCharIndex : 0
         const endOffset = i === ensured.endChunk ? ensured.endCharIndex : chunkContent.text.length
@@ -258,7 +297,7 @@ async function buildChunkData(
         chunkDataArray.push({
           chunkIndex: i,
           text: chunkContent.text.substring(startOffset, endOffset),
-          analysis,
+          analysis: enrichedAnalysis,
           isPartial,
           startOffset,
           endOffset,
