@@ -99,3 +99,4 @@ logs/
 # Test artifacts
 test-results/
 playwright-report/
+codex_auth.json
