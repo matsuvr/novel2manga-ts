@@ -48,10 +48,13 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
       // initializeDatabaseServiceFactory(db)
 
       // In dev/test, run migrations only when it's safe to do so.
+      // 明示的にスキップ指定がある場合はマイグレーションを行わない
+      const skipMigrate = process.env.DB_SKIP_MIGRATE === '1'
       if (
-        process.env.NODE_ENV === 'development' ||
-        process.env.NODE_ENV === 'test' ||
-        process.env.VITEST
+        !skipMigrate &&
+        (process.env.NODE_ENV === 'development' ||
+          process.env.NODE_ENV === 'test' ||
+          process.env.VITEST)
       ) {
         // Detect if the DB already has application tables but lacks drizzle's meta table.
         // In that case, running migrations may fail with "table already exists"; skip with a clear warning.
