@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import { encode } from 'next-auth/jwt'
 import { expect, test } from '@playwright/test'
+import { encode } from 'next-auth/jwt'
 import { getDatabaseService } from '@/services/db-factory'
 import { getBaseURL } from '../utils/getBaseURL'
 
-const secret = process.env.NEXTAUTH_SECRET || 'test-secret'
+// next-auth v5 は AUTH_SECRET を利用するため、テスト側も AUTH_SECRET に合わせる
+const secret = process.env.AUTH_SECRET || 'test-secret'
 
 test('results pages enforce user access control', async ({ page }) => {
   const db = getDatabaseService()
@@ -33,9 +34,10 @@ test('results pages enforce user access control', async ({ page }) => {
   const baseURL = getBaseURL()
 
   // Login as user1 and confirm listing
+  // NextAuth v5のJWT設定に合わせて、saltを削除（サーバー側設定と一致させる）
   const token1 = await encode({ token: { sub: 'user1', email: 'user1@example.com' }, secret })
   await page.context().addCookies([{ name: 'authjs.session-token', value: token1, url: baseURL }])
-  await page.goto('/results')
+  await page.goto('/results', { waitUntil: 'domcontentloaded' })
   await expect(page.locator('text=Job1')).toBeVisible()
   await expect(page.locator('text=Job2')).not.toBeVisible()
 

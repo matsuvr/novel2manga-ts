@@ -7,8 +7,6 @@ import type { NextRequest } from 'next/server'
 import { getMissingAuthEnv } from '@/utils/auth-env'
 import { logAuthMetric, measure } from '@/utils/auth-metrics'
 
-const db = getDatabase()
-
 const missing = getMissingAuthEnv()
 
 // Response の有無に依存せず、安全に status を取得するための型ガード
@@ -57,8 +55,9 @@ function createAuthModule(): Handlers {
   }
 
   const { AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET, AUTH_SECRET } = process.env
+  // DB初期化は必要時にのみ実行し、初回描画の遅延を避ける
   const configured = NextAuth({
-    adapter: DrizzleAdapter(db),
+    adapter: DrizzleAdapter(getDatabase()),
     // DBアクセスを抑制するため、セッションはJWT方式へ切替
     // BREAKING CHANGE: セッション管理をDBストアからJWTへ変更しました。
     // - セッションはステートレス（DB未保存）
@@ -69,6 +68,16 @@ function createAuthModule(): Handlers {
       Google({ clientId: String(AUTH_GOOGLE_ID), clientSecret: String(AUTH_GOOGLE_SECRET) }),
     ],
     secret: String(AUTH_SECRET),
+    callbacks: {
+      async session({ session, token }) {
+        // JWTのsub(=ユーザーID)をsession.user.idに反映
+        if (session.user) {
+          ;(session.user as { id?: string }).id =
+            (token?.sub as string | undefined) || (session.user as { id?: string }).id
+        }
+        return session
+      },
+    },
   })
 
   const baseGET = configured.handlers.GET
