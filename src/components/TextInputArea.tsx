@@ -17,13 +17,8 @@ export default function TextInputArea({
   isProcessing,
   maxLength = 100000,
 }: TextInputAreaProps) {
-  // ハイドレーション確認
-  console.log('[TextInputArea] render')
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // クリック/入力の疎通を確認
-  const onLocalClick = () => console.log('[TextInputArea] click submit button')
 
   const handleDragOver = (e: DragEvent<HTMLTextAreaElement>) => {
     e.preventDefault()
@@ -136,7 +131,6 @@ export default function TextInputArea({
         <button
           type="button"
           onClick={(_e) => {
-            onLocalClick()
             onSubmit()
           }}
           disabled={isProcessing || !value.trim()}

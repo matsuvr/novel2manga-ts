@@ -668,6 +668,9 @@ function ProcessingProgress({
     setOverallProgress(Math.round(STEP_PERCENT))
     addLog('info', `処理を開始しました。Job ID: ${jobId}`)
 
+    // TODO(#128): 現状はSSE + サーバ側軽量ポーリングで進捗更新。
+    // 今後はPub/Sub(例: Redis Pub/Sub, Cloudflare Pub/Sub)を用いて
+    // ワーカーがpublish、本UIはSSE経由でsubscribeしpush配信に切替える。
     const es = new EventSource(`/api/jobs/${jobId}/events`)
 
     const handlePayload = (raw: string) => {

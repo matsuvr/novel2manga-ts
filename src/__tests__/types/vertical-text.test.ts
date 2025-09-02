@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { getFontForDialogue } from '@/types/vertical-text'
 import type { Dialogue } from '@/types/panel-layout'
+import { getFontForDialogue } from '@/types/vertical-text'
 
 describe('getFontForDialogue', () => {
   it('returns mincho for narration type', () => {

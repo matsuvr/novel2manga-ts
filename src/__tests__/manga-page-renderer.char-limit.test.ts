@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { appConfig } from '@/config/app.config'
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import type { MangaLayout } from '@/types/panel-layout'
-import { appConfig } from '@/config/app.config'
 
 // Mock vertical-text client (spy on arguments)
 vi.mock('@/services/vertical-text-client', () => ({
