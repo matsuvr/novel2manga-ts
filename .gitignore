@@ -46,6 +46,7 @@ yarn-error.log*
 .env.production.local
 .env*.local
 manganamemaker-e402457d75fd.json
+codex_auth.json
 
 # Vercel
 .vercel
