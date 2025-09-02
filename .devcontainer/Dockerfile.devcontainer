@@ -1,0 +1,51 @@
+FROM mcr.microsoft.com/devcontainers/typescript-node:20-bullseye
+
+# システムパッケージの更新と必要なツールのインストール
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    wget \
+    unzip \
+    sqlite3 \
+    libsqlite3-dev \
+    build-essential \
+    python3 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node.js 20.19.4のインストール（Voltaを使用）
+RUN curl -fsSL https://get.volta.sh | bash
+ENV PATH="/root/.volta/bin:$PATH"
+RUN volta install node@20.19.4
+RUN volta install npm@latest
+
+# グローバルパッケージのインストール
+RUN npm install -g \
+    @biomejs/biome \
+    typescript \
+    tsx \
+    dotenv-cli \
+    cross-env \
+    @openai/codex \
+    @google/gemini-cli
+
+# Playwrightのブラウザーをインストール
+RUN npx playwright install --with-deps
+
+# Wrangler CLIのインストール
+RUN npm install -g wrangler && npm install -g opennextjs-cloudflare
+
+# 作業ディレクトリの設定
+WORKDIR /workspace
+
+# ユーザー権限の設定
+RUN chown -R node:node /workspace
+USER node
+
+# 環境変数の設定（機密情報はここに書かない）
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PATH="/home/node/.volta/bin:$PATH"
+
+# デフォルトコマンド
+CMD ["sleep", "infinity"]
