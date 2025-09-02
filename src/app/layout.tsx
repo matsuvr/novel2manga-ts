@@ -64,7 +64,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="ja">
-      <body className={`antialiased`}>
+      <body className="antialiased">
         <Providers session={session}>{children}</Providers>
       </body>
     </html>
