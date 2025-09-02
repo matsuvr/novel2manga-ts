@@ -84,6 +84,26 @@ CLOUDFLARE_ACCOUNT_ID=your-account-id
 DATABASE_URL=file:./database/novel2manga.db
 ```
 
+重要: APIキー等の機密情報はDockerfileやGitにコミットしないでください。DevContainerでは以下のいずれかの方法で安全に注入してください。
+
+- `.env` / `.env.local` に保存（ローカル専用。絶対にリポジトリへコミットしない）
+- `devcontainer.json` の `remoteEnv` を使用してホストから渡す（共有禁止の注意喚起を添える）
+- VS Codeの「環境変数の秘密管理」やOSキーリングを利用
+
+例（devcontainer.json）:
+
+```jsonc
+{
+  // ...
+  "remoteEnv": {
+    // 例: 開発者ローカルでのみ設定する。リポジトリへは置かないこと。
+    // "CEREBRAS_API_KEY": "${localEnv:CEREBRAS_API_KEY}"
+  },
+}
+```
+
+本リポジトリでは、Dockerfile等に秘密情報をハードコードしません。既に機密値が含まれていた場合は直ちに削除し、キーのローテーションを行ってください。
+
 ## トラブルシューティング
 
 ### コンテナが起動しない場合
@@ -145,3 +165,8 @@ npx playwright install --with-deps
 - `node_modules` はコンテナ内のボリュームに保存されます
 - データベースファイルはホストマシンと共有されます
 - 環境変数は `.env` ファイルで管理してください
+
+### セキュリティに関する補足（Codex/Codingエージェントの設定）
+
+- `codex_config.toml` の `sandbox_mode` は原則として最小権限（`workspace-write` など）を使用します。
+- `danger-full-access` は強い権限を与えるため推奨しません。やむを得ず使用する場合は、実行前の差分確認・承認フロー（`approval_policy = "on-request"` 等）を厳格に運用してください。

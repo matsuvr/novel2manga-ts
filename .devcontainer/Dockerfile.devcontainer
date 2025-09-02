@@ -42,10 +42,9 @@ WORKDIR /workspace
 RUN chown -R node:node /workspace
 USER node
 
-# 環境変数の設定
+# 環境変数の設定（機密情報はここに書かない）
 ENV NODE_ENV=development
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV CEREBRAS_API_KEY=csk-6vren326de244kvecrm2c2fxcr9m4f3n8k2the6xx4m3pfje
 ENV PATH="/home/node/.volta/bin:$PATH"
 
 # デフォルトコマンド

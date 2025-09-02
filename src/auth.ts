@@ -22,40 +22,48 @@ function extractStatus(input: unknown): number | undefined {
   return hasStatus(input) ? input.status : undefined
 }
 
-// ここでエクスポートを宣言し、下で環境に応じて代入する
-let GET: (req: NextRequest) => Promise<Response> | Response
-let POST: (req: NextRequest) => Promise<Response> | Response
-let auth: () => Promise<import('next-auth').Session | null>
-let signIn: (provider?: string) => Promise<Response> | Response
-let signOut: () => Promise<Response> | Response
+type Handlers = {
+  GET: (req: NextRequest) => Promise<Response> | Response
+  POST: (req: NextRequest) => Promise<Response> | Response
+  auth: () => Promise<import('next-auth').Session | null>
+  signIn: (provider?: string) => Promise<Response> | Response
+  signOut: () => Promise<Response> | Response
+}
 
-if (missing.length > 0) {
-  const message =
-    `Authentication is not configured. Missing environment variables: ${missing.join(', ')}`
+function createAuthModule(): Handlers {
+  if (missing.length > 0) {
+    const message = `Authentication is not configured. Missing environment variables: ${missing.join(', ')}`
 
-  const errorBody = {
-    error: 'Missing authentication environment variables',
-    missing,
-    howToFix:
-      'Set AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET, and AUTH_SECRET in .env/.env.local. See .env.example for details.',
-  } as const
+    const errorBody = {
+      error: 'Missing authentication environment variables',
+      missing,
+      howToFix:
+        'Set AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET, and AUTH_SECRET in .env/.env.local. See .env.example for details.',
+    } as const
 
-  // 認証ルートは明示的に503を返し、処理を停止する
-  const handler = () => NextResponse.json(errorBody, { status: 503 })
-  GET = handler
-  POST = handler
+    // 認証ルートは明示的に503を返し、処理を停止する
+    const handler = () => NextResponse.json(errorBody, { status: 503 })
 
-  // 直接呼び出し時はエラーで明示停止（フォールバック禁止方針に準拠）
-  auth = async () => {
-    throw new Error(message)
+    return {
+      GET: handler,
+      POST: handler,
+      // 直接呼び出し時はエラーで明示停止（フォールバック禁止方針に準拠）
+      auth: async () => {
+        throw new Error(message)
+      },
+      signIn: () => NextResponse.json(errorBody, { status: 503 }),
+      signOut: () => NextResponse.json(errorBody, { status: 503 }),
+    }
   }
-  signIn = () => NextResponse.json(errorBody, { status: 503 })
-  signOut = () => NextResponse.json(errorBody, { status: 503 })
-} else {
+
   const { AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET, AUTH_SECRET } = process.env
   const configured = NextAuth({
     adapter: DrizzleAdapter(db),
     // DBアクセスを抑制するため、セッションはJWT方式へ切替
+    // BREAKING CHANGE: セッション管理をDBストアからJWTへ変更しました。
+    // - セッションはステートレス（DB未保存）
+    // - ログアウトしても既発行JWTは即時失効しません（失効戦略は別途設計が必要）
+    // - セッション永続性/失効動作に影響があります
     session: { strategy: 'jwt' },
     providers: [
       Google({ clientId: String(AUTH_GOOGLE_ID), clientSecret: String(AUTH_GOOGLE_SECRET) }),
@@ -69,53 +77,41 @@ if (missing.length > 0) {
   const baseSignIn = configured.signIn
   const baseSignOut = configured.signOut
 
-  GET = async (req: NextRequest) => {
-    const url = (() => {
-      try {
-        return req.nextUrl?.pathname ?? new URL(req.url).pathname
-      } catch {
-        return undefined
-      }
-    })()
-    const { ms, value } = await measure(() => baseGET(req))
-    const status = extractStatus(value)
-    logAuthMetric('auth:GET', { ms, path: url, status })
-    return value
-  }
-
-  POST = async (req: NextRequest) => {
-    const url = (() => {
-      try {
-        return req.nextUrl?.pathname ?? new URL(req.url).pathname
-      } catch {
-        return undefined
-      }
-    })()
-    const { ms, value } = await measure(() => basePOST(req))
-    const status = extractStatus(value)
-    logAuthMetric('auth:POST', { ms, path: url, status })
-    return value
-  }
-
-  auth = async () => {
-    const { ms, value } = await measure(() => baseAuth())
-    logAuthMetric('auth', { ms })
-    return value
-  }
-
-  signIn = async (provider?: string) => {
-    const { ms, value } = await measure(() => baseSignIn(provider))
-    const status = extractStatus(value)
-    logAuthMetric('auth:signIn', { ms, status })
-    return value
-  }
-
-  signOut = async () => {
-    const { ms, value } = await measure(() => baseSignOut())
-    const status = extractStatus(value)
-    logAuthMetric('auth:signOut', { ms, status })
-    return value
+  return {
+    GET: async (req: NextRequest) => {
+      const url = req.nextUrl.pathname
+      const { ms, value } = await measure(() => baseGET(req))
+      const status = extractStatus(value)
+      logAuthMetric('auth:GET', { ms, path: url, status })
+      return value
+    },
+    POST: async (req: NextRequest) => {
+      const url = req.nextUrl.pathname
+      const { ms, value } = await measure(() => basePOST(req))
+      const status = extractStatus(value)
+      logAuthMetric('auth:POST', { ms, path: url, status })
+      return value
+    },
+    auth: async () => {
+      const { ms, value } = await measure(() => baseAuth())
+      logAuthMetric('auth', { ms })
+      return value
+    },
+    signIn: async (provider?: string) => {
+      const { ms, value } = await measure(() => baseSignIn(provider))
+      const status = extractStatus(value)
+      logAuthMetric('auth:signIn', { ms, status })
+      return value
+    },
+    signOut: async () => {
+      const { ms, value } = await measure(() => baseSignOut())
+      const status = extractStatus(value)
+      logAuthMetric('auth:signOut', { ms, status })
+      return value
+    },
   }
 }
+
+const { GET, POST, auth, signIn, signOut } = createAuthModule()
 
 export { GET, POST, auth, signIn, signOut }
