@@ -186,8 +186,10 @@ export class AnalyzePipeline extends BasePipelineStep {
       await this.updateJobCoverageWarnings(jobId, mergeRes.data.coverageWarnings, { logger })
     }
 
-    // レイアウト段階の進捗開始
-    await this.updateJobStep(jobId, 'layout', { logger }, totalChunks, totalChunks)
+    // エピソード分割ステップを明示
+    // UIとSSEで「エピソード構成」がスキップに見えないように、
+    // ここで currentStep=episode をセットし、完了時に markStepCompleted する。
+    await this.updateJobStep(jobId, 'episode', { logger }, 0, 0)
 
     // 統合台本を読み出してページ割り
     const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
@@ -270,6 +272,11 @@ export class AnalyzePipeline extends BasePipelineStep {
           error: e instanceof Error ? e.message : String(e),
         })
       }
+      // エピソード構成を完了にマーク
+      await this.markStepCompleted(jobId, 'episode', { logger })
+
+      // レイアウト段階の進捗開始（ここからはレイアウト処理）
+      await this.updateJobStep(jobId, 'layout', { logger }, totalChunks, totalChunks)
     } catch (persistEpisodesError) {
       await this.updateJobStatus(jobId, 'failed', { logger }, String(persistEpisodesError))
       throw persistEpisodesError

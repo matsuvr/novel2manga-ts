@@ -1,5 +1,5 @@
-import type { MangaLayout, Panel } from '@/types/panel-layout'
 import { getAppConfigWithOverrides } from '@/config/app.config'
+import type { MangaLayout, Panel } from '@/types/panel-layout'
 
 // Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
 const isServer = typeof window === 'undefined'

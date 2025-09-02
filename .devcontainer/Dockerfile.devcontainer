@@ -49,3 +49,4 @@ ENV PATH="/home/node/.volta/bin:$PATH"
 
 # デフォルトコマンド
 CMD ["sleep", "infinity"]
+

@@ -27,12 +27,19 @@ const nextConfig = {
     VERTICAL_TEXT_API_KEY: process.env.VERTICAL_TEXT_API_KEY,
     VERTICAL_TEXT_API_TOKEN: process.env.VERTICAL_TEXT_API_TOKEN,
   },
-  // Fast Refreshの最適化
+  // Fast Refreshの最適化とパフォーマンス改善
   webpack: (config, { dev, isServer }) => {
     if (dev && !isServer) {
       config.watchOptions = {
         poll: 1000,
         aggregateTimeout: 300,
+      }
+      // 開発環境でのビルド最適化
+      config.optimization = {
+        ...config.optimization,
+        removeAvailableModules: false,
+        removeEmptyChunks: false,
+        splitChunks: false,
       }
     }
     return config

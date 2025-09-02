@@ -6,18 +6,17 @@ import React, { useCallback, useState } from 'react'
 import ProcessingProgress from '@/components/ProcessingProgress'
 import ResultsDisplay from '@/components/ResultsDisplay'
 import TextInputArea from '@/components/TextInputArea'
-import type { Episode } from '@/types/database-models'
-import { decideNextPollingAction, isJobStatus } from '@/utils/polling'
 import { appConfig } from '@/config/app.config'
+import type { Episode } from '@/types/database-models'
 
 type ViewMode = 'input' | 'processing' | 'progress' | 'results' | 'redirecting'
 
 async function loadSample(path: string): Promise<string> {
-  // Next.jsでアプリ直下のdocsは静的配信されないため、API経由で返す
-  // もしくはpublic/docsに置く場合は /docs/... で直接fetch可能
+  // public/docs 配下は直接配信されるため優先して利用
+  // それ以外のパスのみ API 経由
   const url = path.startsWith('/docs/')
-    ? `/api/docs?path=${encodeURIComponent(path.replace(/^\//, ''))}`
-    : path
+    ? path // public/docs 直配信
+    : `/api/docs?path=${encodeURIComponent(path.replace(/^\//, ''))}`
   const res = await fetch(url, { cache: 'no-store' })
   if (!res.ok) throw new Error('サンプルの読み込みに失敗しました')
   return res.text()
@@ -61,8 +60,18 @@ export default function HomeClient() {
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const isDemo =
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === '1'
+  // SSR/CSRの不一致を避けるため、クエリ依存のフラグはクライアント側で設定
+  const [isDemo, setIsDemo] = useState(false)
+
+  React.useEffect(() => {
+    try {
+      const search = typeof window !== 'undefined' ? window.location.search : ''
+      const demo = new URLSearchParams(search).get('demo') === '1'
+      setIsDemo(demo)
+    } catch {
+      setIsDemo(false)
+    }
+  }, [])
 
   const handleSubmit = async () => {
     if (!novelText.trim()) return
@@ -257,55 +266,7 @@ export default function HomeClient() {
 
   const [pendingRedirect, setPendingRedirect] = useState<string | null>(null)
 
-  // 冗長監視: 完了を取りこぼさないため、軽量ポーリングで状態を監視し、完了時に確実に遷移
-  // ProcessingProgress 側でも onComplete を呼ぶが、UI側の状態遷移競合を避けるため二重でも問題なし
-  // （router.push は同一URLへの重複呼び出しを無視する）
-
-  React.useEffect(() => {
-    if (!jobId) return
-    let aborted = false
-    let timer: ReturnType<typeof setTimeout> | null = null
-    // 失敗の連続観測カウンタ（このエフェクトのライフタイムに紐づく）
-    let consecutiveFailed = 0
-    const poll = async () => {
-      if (aborted) return
-      try {
-        const res = await fetch(`/api/jobs/${jobId}/status`, { cache: 'no-store' })
-        if (!res.ok) throw new Error(`status ${res.status}`)
-        const data = (await res.json().catch(() => ({}))) as {
-          job?: { status?: string; renderCompleted?: boolean }
-        }
-        const rawStatus = data?.job?.status
-        const status = isJobStatus(rawStatus) ? rawStatus : undefined
-        const action = decideNextPollingAction(
-          { status, renderCompleted: data?.job?.renderCompleted },
-          consecutiveFailed,
-        )
-        if (action === 'redirect') {
-          await handleProcessComplete()
-          return
-        }
-        if (action === 'stop_failed') {
-          // ユーザーにも分かるようにエラーメッセージを提示し、ポーリング停止
-          setError(
-            '処理が失敗状態のままです。ログをご確認の上、内容を調整して再度お試しください。必要であれば再開機能をご利用ください。',
-          )
-          return
-        }
-        // ここまで来たら継続。failedでなければ連続カウントをリセット
-        if (data?.job?.status !== 'failed') consecutiveFailed = 0
-        else consecutiveFailed += 1
-      } catch {
-        // noop
-      }
-      timer = setTimeout(poll, 2500)
-    }
-    timer = setTimeout(poll, 1200)
-    return () => {
-      aborted = true
-      if (timer) clearTimeout(timer)
-    }
-  }, [jobId, handleProcessComplete])
+  // 完了検知は ProcessingProgress の SSE に一本化（DRY）。
 
   return (
     <div

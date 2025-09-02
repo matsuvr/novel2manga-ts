@@ -1,7 +1,7 @@
 import type { Chunk } from '@/db/schema'
+import type { LoggerPort } from '@/infrastructure/logging/logger'
 import { getChunkRepository } from '@/repositories'
 import type { JobStep } from '@/types/job'
-import type { LoggerPort } from '@/infrastructure/logging/logger'
 
 /**
  * Interface for step-specific integrity verification
