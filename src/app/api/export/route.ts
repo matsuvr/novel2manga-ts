@@ -2,8 +2,8 @@ import type { NextRequest } from 'next/server'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { OutputService } from '@/services/application/output-service'
 import { ApiResponder } from '@/utils/api-responder'
-import { validateJobId } from '@/utils/validators'
 import { getCurrentUserId } from '@/utils/current-user'
+import { validateJobId } from '@/utils/validators'
 
 interface ExportRequest {
   jobId: string

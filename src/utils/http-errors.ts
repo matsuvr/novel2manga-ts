@@ -4,6 +4,7 @@ export class HttpError extends Error {
   public readonly status: number
   public readonly code?: string
   public readonly details?: unknown
+  public readonly cause?: unknown
 
   constructor(
     message: string,

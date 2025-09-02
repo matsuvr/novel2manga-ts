@@ -130,7 +130,9 @@ export default function TextInputArea({
         </div>
         <button
           type="button"
-          onClick={onSubmit}
+          onClick={(_e) => {
+            onSubmit()
+          }}
           disabled={isProcessing || !value.trim()}
           className={`px-8 py-4 rounded-2xl font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 shadow-lg shadow-blue-500/25 transition-all duration-300 ease-out hover:shadow-xl hover:shadow-blue-500/40 hover:-translate-y-0.5 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none ${isProcessing ? 'animate-pulse' : ''}`}
         >
