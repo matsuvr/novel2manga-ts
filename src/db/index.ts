@@ -10,6 +10,15 @@ import * as schema from './schema'
 
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null
 
+export function shouldRunMigrations(env: NodeJS.ProcessEnv = process.env): boolean {
+  const skipMigrate = env.DB_SKIP_MIGRATE === '1'
+  if (skipMigrate) return false
+  const nodeEnv = env.NODE_ENV
+  const isDevOrTest = nodeEnv === 'development' || nodeEnv === 'test'
+  const isVitest = Boolean(env.VITEST)
+  return isDevOrTest || isVitest
+}
+
 // Setup cleanup handlers for graceful shutdown
 if (typeof process !== 'undefined') {
   const handleShutdown = () => {
@@ -49,13 +58,7 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
 
       // In dev/test, run migrations only when it's safe to do so.
       // 明示的にスキップ指定がある場合はマイグレーションを行わない
-      const skipMigrate = process.env.DB_SKIP_MIGRATE === '1'
-      if (
-        !skipMigrate &&
-        (process.env.NODE_ENV === 'development' ||
-          process.env.NODE_ENV === 'test' ||
-          process.env.VITEST)
-      ) {
+      if (shouldRunMigrations()) {
         // Detect if the DB already has application tables but lacks drizzle's meta table.
         // In that case, running migrations may fail with "table already exists"; skip with a clear warning.
         const hasDrizzleMeta = (() => {

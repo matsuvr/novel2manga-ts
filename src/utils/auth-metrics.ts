@@ -6,8 +6,16 @@ interface EventDataBase {
   status?: number
 }
 
+function normalizeEnv(val: unknown): string {
+  if (typeof val === 'string') return val.trim().toLowerCase()
+  return ''
+}
+
 export function authMetricsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.AUTH_METRICS === '1'
+  const val = normalizeEnv(env.AUTH_METRICS)
+  if (!val) return false
+  // より柔軟な真偽値解釈を許容（利便性向上）。既存の '1' は後方互換で維持。
+  return val === '1' || val === 'true' || val === 'yes' || val === 'on'
 }
 
 function nowMs(): number {
