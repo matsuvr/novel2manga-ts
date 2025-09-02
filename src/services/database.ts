@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { and, asc, desc, eq, sql, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, type SQL, sql } from 'drizzle-orm'
 import {
   type Chunk,
   type Episode,
@@ -165,7 +165,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
         .from(jobs)
         .where(and(...conditions))
         .limit(1)
-      logger.info('getJob result', { outcome: result.length > 0 ? 'found' : 'not found' })
+      logger.debug('getJob result', { outcome: result.length > 0 ? 'found' : 'not found' })
 
       if (result.length > 0) {
         logger.debug('Job data', {
@@ -197,10 +197,10 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
 
     try {
       const job = await this.getJob(id)
-      logger.info('getJob result', { outcome: job ? 'found' : 'not found' })
+      logger.debug('getJob result', { outcome: job ? 'found' : 'not found' })
 
       if (!job) {
-        logger.info('Job not found, returning null')
+        logger.debug('Job not found, returning null')
         return null
       }
 
@@ -691,6 +691,70 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
         renderStatus.episodeNumber,
         renderStatus.pageNumber,
       )) as import('@/db/schema').RenderStatus[]
+  }
+
+  /**
+   * ジョブ内の各エピソードごとのレンダリング進捗を軽量に集計して返す。
+   * 負荷を抑えるため、ストレージ走査は行わず DB の集計のみを利用する。
+   *
+   * 戻り値の型は UI 側の期待に合わせた簡易構造。
+   */
+  async getPerEpisodeRenderProgress(
+    jobId: string,
+  ): Promise<Record<number, { planned: number; rendered: number; total?: number }>> {
+    // layout_status から各エピソードの total_pages（計画ページ数）を取得
+    const layoutRows = (await this.db
+      .select({
+        episodeNumber: layoutStatus.episodeNumber,
+        total: layoutStatus.totalPages,
+      })
+      .from(layoutStatus)
+      .where(eq(layoutStatus.jobId, jobId))) as Array<{
+      episodeNumber: number
+      total: number | null
+    }>
+
+    // render_status から is_rendered の合計をエピソード別に算出
+    const renderRows = (await this.db
+      .select({
+        episodeNumber: renderStatus.episodeNumber,
+        rendered: sql<number>`sum(${renderStatus.isRendered})`,
+      })
+      .from(renderStatus)
+      .where(eq(renderStatus.jobId, jobId))
+      .groupBy(renderStatus.episodeNumber)) as Array<{
+      episodeNumber: number
+      rendered: number | null
+    }>
+
+    const renderedMap = new Map<number, number>()
+    for (const row of renderRows) {
+      const ep = Number(row.episodeNumber)
+      const rendered = Math.max(0, Number(row.rendered || 0))
+      renderedMap.set(ep, rendered)
+    }
+
+    const result: Record<number, { planned: number; rendered: number; total?: number }> = {}
+
+    for (const row of layoutRows) {
+      const ep = Number(row.episodeNumber)
+      const total = Math.max(0, Number(row.total || 0))
+      const rendered = Math.max(0, renderedMap.get(ep) || 0)
+      result[ep] = {
+        planned: total, // 計画値として layout の総ページ数を採用
+        rendered,
+        total, // total がある場合は設定（UI 側の完了判定用）
+      }
+    }
+
+    // layout_status にまだ記録がないが render_status があるケースも取り込む
+    for (const [ep, rendered] of renderedMap.entries()) {
+      if (!result[ep]) {
+        result[ep] = { planned: rendered, rendered }
+      }
+    }
+
+    return result
   }
 
   async updateRenderStatus(

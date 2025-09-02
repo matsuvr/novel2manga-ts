@@ -82,10 +82,7 @@ const DEFAULT_CURRENT_EPISODE_PROGRESS_WEIGHT = 0.5 as const
 // sufficient history for debugging and user feedback
 const MAX_LOG_ENTRIES = 50 as const
 
-// CONFIGURATION: Polling intervals for job status updates
-// These values balance responsiveness with server load
-const POLLING_INTERVAL_MS: number = 2000 // 2 seconds between status checks
-const INITIAL_POLLING_DELAY_MS: number = 1000 // 1 second delay before first poll
+// 旧ポーリング間隔（SSE移行により未使用）
 
 // CONFIGURATION: UI layout constants
 const MAX_VISIBLE_LOG_HEIGHT = 60 as const // vh units for log container height
@@ -209,14 +206,8 @@ function ProcessingProgress({
   >({})
   const [currentLayoutEpisode, setCurrentLayoutEpisode] = useState<number | null>(null)
 
-  // Ref to track component mount state for proper cleanup
+  // マウント状態
   const isMountedRef = useRef(true)
-  // AbortController for in-flight fetch to avoid leaks on unmount/reschedule
-  const pollAbortRef = useRef<AbortController | null>(null)
-  // Pause polling when tab is hidden
-  const isPausedRef = useRef<boolean>(false)
-  // Recursive timeout driver for polling
-  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 進捗重み（クランプ）
   const inProgressWeight = useMemo(() => {
@@ -292,6 +283,24 @@ function ProcessingProgress({
   const updateStepsFromJobData = useCallback(
     (data: JobData) => {
       // データが変化していない場合は処理をスキップ
+      // 重要: レンダリング中の細かな進捗（processingPage/processingEpisode、perEpisodePagesの変化）も
+      // 重複判定に含め、UIが「止まって見える」状態を避ける。
+      // perEpisodePages 全体を文字列化すると重くなるため、要約情報（キー数とrendered合計）で検出。
+      const perEpisodeSummary = (() => {
+        const pep = data.job.progress?.perEpisodePages as
+          | Record<string, { planned?: number; rendered?: number; total?: number }>
+          | undefined
+        if (!pep) return { count: 0, renderedSum: 0, totalSum: 0 }
+        let renderedSum = 0
+        let totalSum = 0
+        const entries = Object.entries(pep)
+        for (const [, v] of entries) {
+          if (typeof v?.rendered === 'number') renderedSum += v.rendered
+          if (typeof v?.total === 'number') totalSum += v.total
+        }
+        return { count: entries.length, renderedSum, totalSum }
+      })()
+
       const jobDataString = JSON.stringify({
         status: data.job.status,
         currentStep: data.job.currentStep,
@@ -306,6 +315,11 @@ function ProcessingProgress({
         totalEpisodes: data.job.totalEpisodes,
         renderedPages: data.job.renderedPages,
         totalPages: data.job.totalPages,
+        processingEpisode: data.job.processingEpisode,
+        processingPage: data.job.processingPage,
+        perEpisodeCount: perEpisodeSummary.count,
+        perEpisodeRenderedSum: perEpisodeSummary.renderedSum,
+        perEpisodeTotalSum: perEpisodeSummary.totalSum,
         lastError: data.job.lastError,
       })
 
@@ -348,8 +362,37 @@ function ProcessingProgress({
           const episodeNumber = Number(k)
           if (Number.isNaN(episodeNumber)) continue
           const parsed = EpisodePageDataSchema.safeParse(v)
-          if (!parsed.success) continue
-          const val = parsed.data
+          let val: z.infer<typeof EpisodePageDataSchema> | null = null
+          if (parsed.success) {
+            val = parsed.data
+          } else if (
+            v &&
+            typeof v === 'object' &&
+            typeof (v as { actualPages?: unknown }).actualPages === 'number' &&
+            typeof (v as { rendered?: unknown }).rendered === 'number'
+          ) {
+            // 後方互換: JobProgressServiceが actualPages を返すケースを許容
+            const legacy = v as unknown as {
+              actualPages: number
+              rendered: number
+              validation?: unknown
+            }
+            val = {
+              planned: legacy.actualPages,
+              rendered: legacy.rendered,
+              total: legacy.actualPages,
+              validation: legacy.validation as
+                | {
+                    normalizedPages: number[]
+                    pagesWithIssueCounts: Record<number, number>
+                    issuesCount: number
+                  }
+                | undefined,
+            }
+          } else {
+            continue
+          }
+          // val はここで必ず非null
           normalized[episodeNumber] = {
             planned: val.planned,
             rendered: val.rendered,
@@ -618,108 +661,52 @@ function ProcessingProgress({
   useEffect(() => {
     if (!jobId) return
 
-    // 初期状態を設定（一度だけ）
+    // 初期状態（アップロード完了）
     setSteps((prev) =>
       prev.map((step, index) => (index === 0 ? { ...step, status: 'completed' as const } : step)),
     )
     setOverallProgress(Math.round(STEP_PERCENT))
     addLog('info', `処理を開始しました。Job ID: ${jobId}`)
 
-    // Visibility: pause when hidden
-    const onVisibility = () => {
-      isPausedRef.current = document.hidden
-    }
-    document.addEventListener('visibilitychange', onVisibility)
+    // TODO(#128): 現状はSSE + サーバ側軽量ポーリングで進捗更新。
+    // 今後はPub/Sub(例: Redis Pub/Sub, Cloudflare Pub/Sub)を用いて
+    // ワーカーがpublish、本UIはSSE経由でsubscribeしpush配信に切替える。
+    const es = new EventSource(`/api/jobs/${jobId}/events`)
 
-    const scheduleNext = (delay: number) => {
-      if (!isMountedRef.current) return
-      if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current)
-      pollTimeoutRef.current = setTimeout(runOnce, delay)
-    }
-
-    const runOnce = async () => {
-      if (!isMountedRef.current) return
-      if (isPausedRef.current) {
-        scheduleNext(POLLING_INTERVAL_MS * 2)
-        return
-      }
-      if (pollAbortRef.current) pollAbortRef.current.abort()
-      const controller = new AbortController()
-      pollAbortRef.current = controller
+    const handlePayload = (raw: string) => {
       try {
-        const response = await fetch(`/api/jobs/${jobId}/status`, {
-          signal: controller.signal,
-        })
-        if (!response.ok) {
-          // 404 NOT_FOUND の場合はジョブが存在しないため、ポーリングを停止
-          if (response.status === 404) {
-            addLog('error', 'ジョブが見つかりません。ポーリングを停止します。')
-            addLog('info', '新しいファイルをアップロードしてジョブを作成してください。')
-            return // ポーリング停止
-          }
-          throw new Error(`API呼び出しに失敗: ${response.status} ${response.statusText}`)
-        }
-        const data: JobData = await response.json()
-        if (!isMountedRef.current) return
-
+        const data = JSON.parse(raw) as JobData
         const result = updateStepsFromJobData(data)
         if (result === 'stop') {
-          addLog('info', 'ポーリングを停止しました')
-          try {
-            const statusCompleted =
-              data.job.status === 'completed' || data.job.status === 'complete'
-            if (data.job.renderCompleted === true || statusCompleted) {
-              addLog('info', '処理が完了しました。上部のエクスポートからダウンロードできます。')
-              // 念のためここでも onComplete を呼ぶ（UI側の遷移を確実に発火）
-              if (onComplete) onComplete()
-            } else if (data.job.status === 'failed') {
-              const errorStep = data.job.lastErrorStep || data.job.currentStep || '不明'
-              const errorMessage = data.job.lastError || 'エラーの詳細が不明です'
-              addLog('error', `処理が失敗しました - ${errorStep}: ${errorMessage}`)
-              addLog('info', 'エラーが解決しない場合は、新しいファイルで再度お試しください。')
-            }
-          } catch (e) {
-            console.error('post-complete message handling failed', e)
-            addLog(
-              'error',
-              `完了処理メッセージの処理中にエラー: ${e instanceof Error ? e.message : String(e)}`,
-            )
+          const completed = data.job.status === 'completed' || data.job.status === 'complete'
+          if (completed || data.job.renderCompleted === true) {
+            addLog('info', '処理が完了しました。上部のエクスポートからダウンロードできます。')
+            if (onComplete) onComplete()
+          } else if (data.job.status === 'failed') {
+            const errorStep = data.job.lastErrorStep || data.job.currentStep || '不明'
+            const errorMessage = data.job.lastError || 'エラーの詳細が不明です'
+            addLog('error', `処理が失敗しました - ${errorStep}: ${errorMessage}`)
           }
-          return
         }
-
-        // Adaptive interval based on step
-        const step = data.job.currentStep || ''
-        let next = POLLING_INTERVAL_MS
-        if (step.startsWith('layout') || step.startsWith('analyze'))
-          next = POLLING_INTERVAL_MS * 1.5
-        if (step.startsWith('render')) next = Math.max(1000, POLLING_INTERVAL_MS * 0.75)
-        if (document.hidden) next = POLLING_INTERVAL_MS * 2
-        scheduleNext(next)
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          return
-        }
-        if (isMountedRef.current) {
-          addLog(
-            'error',
-            `Job状態の取得に失敗: ${error instanceof Error ? error.message : String(error)}`,
-          )
-        }
-        // Back off on error
-        scheduleNext(POLLING_INTERVAL_MS * 2)
+      } catch (e) {
+        addLog('error', `SSEデータの解析に失敗: ${e instanceof Error ? e.message : String(e)}`)
       }
     }
 
-    // kick-off with initial delay
-    const startTimer = setTimeout(() => scheduleNext(0), INITIAL_POLLING_DELAY_MS)
+    es.addEventListener('init', (ev) => handlePayload((ev as MessageEvent).data))
+    es.addEventListener('message', (ev) => handlePayload((ev as MessageEvent).data))
+    es.addEventListener('final', (ev) => handlePayload((ev as MessageEvent).data))
+    es.addEventListener('ping', () => {
+      // keep-alive: UIには表示しない
+    })
+    es.addEventListener('error', (ev) => {
+      // EventSource は自動再接続する。ユーザー向けに簡潔に記録。
+      addLog('warning', 'SSE接続に問題が発生しました。再接続を試行します。', ev)
+    })
 
     return () => {
       isMountedRef.current = false
-      document.removeEventListener('visibilitychange', onVisibility)
-      clearTimeout(startTimer)
-      if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current)
-      if (pollAbortRef.current) pollAbortRef.current.abort()
+      es.close()
     }
   }, [jobId, addLog, updateStepsFromJobData, onComplete])
 

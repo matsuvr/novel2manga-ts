@@ -25,6 +25,7 @@ npm install -g @openai/codex @google/gemini-cli @charmland/crush
 echo "✅ Codex CLI installed"
 
 mkdir -p ~/.codex && cp /workspace/codex_config.toml ~/.codex/config.toml
+cp /workspace/codex_auth.json ~/.codex/auth.json
 
 # データベースの初期化
 echo "🗄️ Initializing database..."
@@ -59,3 +60,4 @@ echo "   test    - Run tests"
 echo "   lint    - Run linting"
 echo "   format  - Format code"
 echo ""
+

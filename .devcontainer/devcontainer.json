@@ -80,6 +80,7 @@
 
   "environmentVariables": {
     "NODE_ENV": "development",
-    "NEXT_TELEMETRY_DISABLED": "1"
+    "NEXT_TELEMETRY_DISABLED": "1",
+    "DISABLE_REMOTE_FONTS": "1"
   }
 }
