@@ -1,0 +1,8 @@
+approval_policy = "on-request"
+sandbox_mode    = "danger-full-access"
+network_access = true
+
+[mcp_servers.cloudflare]
+command = "npx"
+args = ["mcp-remote", "https://docs.mcp.cloudflare.com/sse"]
+

@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.devcontainer
+    volumes:
+      - ..:/workspace:cached
+      - node_modules:/workspace/node_modules
+      - /workspace/.next
+      - /workspace/coverage
+      - /workspace/test-results
+      - /workspace/playwright-report
+      - /workspace/.open-next
+      - /workspace/tmp_test
+      - /workspace/logs
+      - /workspace/.local-storage
+      - /workspace/.test-storage
+    ports:
+      - '3000:3000'
+      - '8788:8788'
+    environment:
+      - NODE_ENV=development
+      - NEXT_TELEMETRY_DISABLED=1
+    working_dir: /workspace
+    command: sleep infinity
+    networks:
+      - novel2manga-network
+
+  # SQLiteデータベース用のボリューム（必要に応じて）
+  # 実際のSQLiteファイルはホストマシンと共有されるため、
+  # 別途コンテナは不要ですが、将来的な拡張性のために定義
+
+volumes:
+  node_modules:
+
+networks:
+  novel2manga-network:
+    driver: bridge
