@@ -1,7 +1,6 @@
 import { appConfig } from '@/config/app.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { renderVerticalText } from '@/services/vertical-text-client'
-import { getFontForDialogue } from '@/types/vertical-text'
 import type {
   ChunkAnalysisResult,
   Dialogue,
@@ -11,6 +10,7 @@ import type {
   Page,
   Panel,
 } from '@/types/panel-layout'
+import { getFontForDialogue } from '@/types/vertical-text'
 import { CanvasRenderer, type NodeCanvas } from './canvas-renderer'
 import { PanelLayoutEngine } from './panel-layout-engine'
 import { SpeechBubblePlacer } from './speech-bubble-placer'
@@ -211,6 +211,19 @@ export class MangaPageRenderer {
   }
 
   /**
+   * パネルの縦幅比率から、縦書きAPIへ渡す1行最大文字数を算出
+   * - height <= 0.2: 6文字
+   * - height <= 0.3: 8文字
+   * - otherwise: 設定のデフォルト値
+   */
+  private computeMaxCharsPerLine(panelHeightRatio: number): number {
+    const defaults = appConfig.rendering.verticalText.defaults
+    if (panelHeightRatio <= 0.2) return 6
+    if (panelHeightRatio <= 0.3) return 8
+    return defaults.maxCharsPerLine
+  }
+
+  /**
    * チャンクの重要度を計算
    */
   private calculateImportance(chunk: ChunkAnalysisResult): number {
@@ -296,6 +309,9 @@ export class MangaPageRenderer {
     logger.info('Processing dialogues', { totalDialogues, isTest })
 
     for (const panel of page.panels) {
+      // パネル縦幅に応じて1行の最大文字数を決定（縦書きAPIに渡す）
+      const panelHeightRatio = panel.size.height
+      const maxCharsForPanel = this.computeMaxCharsPerLine(panelHeightRatio)
       const dialogues = panel.dialogues || []
       for (let i = 0; i < dialogues.length; i++) {
         const d = dialogues[i]
@@ -329,8 +345,9 @@ export class MangaPageRenderer {
                 lineHeight: feature.defaults.lineHeight,
                 letterSpacing: feature.defaults.letterSpacing,
                 padding: feature.defaults.padding,
-                maxCharsPerLine: feature.defaults.maxCharsPerLine,
+                maxCharsPerLine: maxCharsForPanel,
               },
+              panelHeightRatio,
             })
 
             const apiStartTime = Date.now()
@@ -341,7 +358,7 @@ export class MangaPageRenderer {
               lineHeight: feature.defaults.lineHeight,
               letterSpacing: feature.defaults.letterSpacing,
               padding: feature.defaults.padding,
-              maxCharsPerLine: feature.defaults.maxCharsPerLine,
+              maxCharsPerLine: maxCharsForPanel,
             })
             const apiDuration = Date.now() - apiStartTime
 

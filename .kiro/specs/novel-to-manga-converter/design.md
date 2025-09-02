@@ -111,6 +111,22 @@ const result = await agent.run({
 })
 ```
 
+## ランタイム進捗同期（SSE）
+
+- Next.js App Router + OpenNext(Cloudflare Workers)でのSSE連携を採用。
+- バックエンド: `/api/jobs/[jobId]/events` が `ReadableStream` を用いて `text/event-stream` を配信。
+- フロントエンド: `EventSource` で購読し、ジョブ状態・ページ描画進捗・エピソード単位のページ内訳を反映。
+- UIの重複判定は `processingPage/processingEpisode` と per-episode の要約（件数・rendered合計）も監視し、
+  「ページ番号のまま止まって見える」事象を防止。
+- パイプラインではエピソード境界推定の期間に `currentStep=episode` を明示し、完了時に `episodeCompleted` を更新。
+  これにより「エピソード構成がスキップに見える」問題を解消。
+
+### ログ設計（開発体験の改善）
+
+- コンソール出力は環境変数 `LOG_CONSOLE_LEVEL` で最小レベルを制御（`debug|info|warn|error`）。
+  既定は `warn`。大量アクセス時もコンソールは静かで、`dev.log` に全レベルの詳細が記録される。
+  例: `LOG_CONSOLE_LEVEL=warn npm run dev`。
+
 ### ツール付きの使用
 
 ```typescript
@@ -181,6 +197,14 @@ const result = await agent.run({
 
 ## 設定
 
+### 吹き出し文字組（2025-09-02 追加）
+
+- 縦書きレンダリングAPIへ渡す `maxCharsPerLine` はコマの相対縦幅に応じて動的決定。
+  - `height <= 0.2`: 6 文字/行
+  - `height <= 0.3`: 8 文字/行
+  - それ以外: `appConfig.rendering.verticalText.defaults.maxCharsPerLine` を使用（既定は 14）
+- 改行処理はレンダリングAPI側で行うため、当該値のみ指定し、フォールバックは実装しない。
+
 ## プロバイダー差異の吸収（2025-08-31 追加）
 
 - 共通インターフェース: すべてのLLM呼び出しは `LlmClient` を介して行い、プロバイダー毎の差異はアダプター層で吸収する。
@@ -197,6 +221,17 @@ OPENAI_API_KEY=your-key
 ANTHROPIC_API_KEY=your-key
 # その他のプロバイダー固有の設定
 ```
+
+## 進捗ストリーミング（SSE）
+
+- エンドポイント: `GET /api/jobs/{jobId}/events`（`text/event-stream`）。OpenNext + Cloudflare Workers で `ReadableStream` により配信。
+- イベント:
+  - `init`: 接続時スナップショット `{ job, chunks }`
+  - `message`: 状態が変化した際の差分push（同上フォーマット）
+  - `final`: 完了/失敗の最終通知（同上）
+  - `ping`: 20秒毎のkeepalive
+- クライアント: `EventSource`で購読。`ProcessingProgress` は受信データを既存の更新関数へ渡してUIに反映。
+- 参考: Cloudflare Workers は Next.js でレスポンスストリーミングをサポート（Workers公式 Next.js ガイド）。
 
 ### 設定ファイル
 

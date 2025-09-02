@@ -31,6 +31,7 @@
 - [x] **バッチレンダリング**: 複数ページの並列処理とプログレス管理
 - [x] **垂直テキスト**: 日本語縦書きテキスト描画の統合（オプション機能）
 - [x] **レンダーキー**: 生成されたページ画像の一意識別と取得
+- [x] **吹き出し字数スケーリング**: コマ縦幅比率に応じて `maxCharsPerLine` を 6/8/デフォルト に切替（改行処理はAPI側）
 
 ### Data Persistence & Management
 
@@ -47,6 +48,8 @@
 
 - [x] **API設計**: RESTful API設計による各機能のエンドポイント提供
 - [x] **リアルタイム更新**: 処理進捗のリアルタイム表示
+- [x] **SSE強化**: Cloudflare Workers対応のSSEでUIとバックエンドの進捗を厳密同期（processingPage/processingEpisode, perEpisode概要を反映）
+- [x] **ステップ整合**: パイプラインで`episode`ステップを明示的に通知し、UIでのスキップ誤認を解消
 - [x] **結果ブラウジング**: 生成されたマンガレイアウトのページ別閲覧
 - [x] **共有機能**: 結果の共有とエクスポート
 - [x] **エラー表示**: 処理エラーの詳細情報表示とバリデーション結果
@@ -94,6 +97,12 @@
 - [x] **バリデーション**: 入力データの厳密な検証とフォールバック
 
 ## Recently Completed Features ✅
+
+### Realtime Progress via SSE (2025-09-02)
+
+- [x] クライアントのポーリングを廃止し、SSEに移行（`/api/jobs/{jobId}/events`）。
+- [x] Cloudflare Workers（OpenNext）上での`ReadableStream`ベース実装。`init/message/final/ping`イベントを配信。
+- [x] `ProcessingProgress`と`HomeClient`をEventSource購読に更新。
 
 ### Script Conversion Quality Enhancement (2025-09-01)
 
