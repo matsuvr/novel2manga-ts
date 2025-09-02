@@ -1,9 +1,9 @@
+import { DrizzleAdapter } from '@auth/drizzle-adapter'
+import type { NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
 import NextAuth from 'next-auth'
 import Google from 'next-auth/providers/google'
-import { DrizzleAdapter } from '@auth/drizzle-adapter'
 import { getDatabase } from '@/db'
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
 import { getMissingAuthEnv } from '@/utils/auth-env'
 import { logAuthMetric, measure } from '@/utils/auth-metrics'
 

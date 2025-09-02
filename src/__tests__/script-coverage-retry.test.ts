@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  convertChunkToMangaScript,
   assessScriptCoverage,
+  convertChunkToMangaScript,
   type ScriptConversionInput,
 } from '@/agents/script/script-converter'
-import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getLlmStructuredGenerator } from '@/agents/structured-generator'
+import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import type { NewMangaScript } from '@/types/script'
 
 /**

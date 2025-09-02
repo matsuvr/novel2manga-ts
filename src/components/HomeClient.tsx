@@ -6,8 +6,8 @@ import React, { useCallback, useState } from 'react'
 import ProcessingProgress from '@/components/ProcessingProgress'
 import ResultsDisplay from '@/components/ResultsDisplay'
 import TextInputArea from '@/components/TextInputArea'
-import type { Episode } from '@/types/database-models'
 import { appConfig } from '@/config/app.config'
+import type { Episode } from '@/types/database-models'
 
 type ViewMode = 'input' | 'processing' | 'progress' | 'results' | 'redirecting'
 
@@ -35,10 +35,8 @@ function SampleButton({
     <button
       type="button"
       onClick={async () => {
-        console.log('[SampleButton] click', path)
         try {
           const text = await loadSample(path)
-          console.log('[SampleButton] loaded length', text.length)
           onLoad(text)
         } catch (e) {
           console.error(e)
@@ -53,8 +51,6 @@ function SampleButton({
 }
 
 export default function HomeClient() {
-  // クライアントハイドレーション確認用ログ
-  console.log('[HomeClient] render')
   const router = useRouter()
   const [viewMode, setViewMode] = useState<ViewMode>('input')
   const [novelText, setNovelText] = useState('')
@@ -68,7 +64,6 @@ export default function HomeClient() {
   const [isDemo, setIsDemo] = useState(false)
 
   React.useEffect(() => {
-    console.log('[HomeClient] mounted')
     try {
       const search = typeof window !== 'undefined' ? window.location.search : ''
       const demo = new URLSearchParams(search).get('demo') === '1'

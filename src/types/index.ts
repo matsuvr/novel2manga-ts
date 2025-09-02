@@ -7,9 +7,9 @@ export type {
   NewEpisode,
   NewJob,
   NewNovel,
+  NewUser,
   Novel,
   User,
-  NewUser,
 } from '@/db/schema'
 // Analysis Types
 export * from './chunk'
