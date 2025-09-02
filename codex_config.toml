@@ -5,3 +5,7 @@ network_access = true
 [mcp_servers.cloudflare]
 command = "npx"
 args = ["mcp-remote", "https://docs.mcp.cloudflare.com/sse"]
+
+[mcp_servers.playwright]
+command = "npx"
+args = ["@playwright/mcp@latest"]
