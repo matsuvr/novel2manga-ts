@@ -88,6 +88,9 @@ export async function renderBatchFromJson(
     }
 
     try {
+      // 現在処理中のページを更新
+      await dbService.updateProcessingPosition(jobId, { episode: episodeNumber, page: pageNumber })
+
       // 事前検証: パネルの存在とサイズ
       const panels = targetPage.panels || []
       if (panels.length === 0) {
@@ -216,8 +219,27 @@ export async function renderFromPageBreakPlan(
   let skippedCount = 0
   let failedCount = 0
 
+  const panels = Array.isArray(pageBreakPlan?.panels) ? pageBreakPlan.panels : []
+  if (panels.length === 0) {
+    logger.error('PageBreakPlan has no panels; aborting renderFromPageBreakPlan', {
+      jobId,
+      episodeNumber,
+    })
+    return {
+      success: false,
+      jobId,
+      episodeNumber,
+      totalPages: 0,
+      renderedPages: 0,
+      skippedPages: 0,
+      failedPages: 0,
+      results: [],
+      duration: 0,
+    }
+  }
+
   logger.info('Starting pageBreakPlan based rendering', {
-    totalPages: Math.max(...pageBreakPlan.panels.map((p) => p.pageNumber), 1),
+    totalPages: Math.max(...panels.map((p) => p.pageNumber), 1),
   })
 
   // Initialize renderer with proper async initialization
@@ -232,8 +254,8 @@ export async function renderFromPageBreakPlan(
 
   try {
     // PageBreakV2をページごとにグループ化
-    const pageMap = new Map<number, (typeof pageBreakPlan.panels)[0][]>()
-    for (const panel of pageBreakPlan.panels) {
+    const pageMap = new Map<number, (typeof panels)[0][]>()
+    for (const panel of panels) {
       if (!pageMap.has(panel.pageNumber)) {
         pageMap.set(panel.pageNumber, [])
       }
@@ -246,6 +268,13 @@ export async function renderFromPageBreakPlan(
     for (const [pageNumber, panels] of Array.from(pageMap.entries())) {
       const page = { pageNumber, panels, panelCount: panels.length }
       try {
+        // 現在処理中のページを更新
+        const dbService = getDatabaseService()
+        await dbService.updateProcessingPosition(jobId, {
+          episode: episodeNumber,
+          page: pageNumber,
+        })
+
         // Check if page already exists
         if (options.skipExisting) {
           const existingImage = await ports.render.getPageRender(
@@ -333,8 +362,7 @@ export async function renderFromPageBreakPlan(
         )
 
         // Update render status in database
-        const db = getDatabaseService()
-        await db.updateRenderStatus(jobId, episodeNumber, page.pageNumber, {
+        await dbService.updateRenderStatus(jobId, episodeNumber, page.pageNumber, {
           isRendered: true,
           imagePath: renderKey,
           thumbnailPath: thumbnailKey,
@@ -378,7 +406,7 @@ export async function renderFromPageBreakPlan(
   const duration = Date.now() - startTime
 
   logger.info('PageBreakPlan rendering completed', {
-    totalPages: Math.max(...pageBreakPlan.panels.map((p) => p.pageNumber), 1),
+    totalPages: Math.max(...panels.map((p) => p.pageNumber), 1),
     renderedPages: renderedCount,
     skippedPages: skippedCount,
     failedPages: failedCount,
@@ -389,7 +417,7 @@ export async function renderFromPageBreakPlan(
     success: true,
     jobId,
     episodeNumber,
-    totalPages: Math.max(...pageBreakPlan.panels.map((p) => p.pageNumber), 1),
+    totalPages: Math.max(...panels.map((p) => p.pageNumber), 1),
     renderedPages: renderedCount,
     skippedPages: skippedCount,
     failedPages: failedCount,

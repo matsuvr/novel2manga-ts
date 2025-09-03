@@ -1,4 +1,4 @@
-import type { Panel, Dialogue } from '@/types/panel-layout'
+import type { Dialogue, Panel } from '@/types/panel-layout'
 
 export interface SfxPlacement {
   text: string
@@ -69,10 +69,19 @@ export class SfxPlacer {
    * SFXテキストをパース（sfx: プレフィックス除去・〈〉削除・補足切り出し）
    */
   private parseSfxText(rawSfx: string): { main: string; supplement?: string } {
-    // 「sfx:」または「SFX:」を除去
-    let cleanedText = rawSfx.replace(/^sfx:\s*/i, '').trim()
-    // 〈〉/⟨⟩ を削除
-    cleanedText = cleanedText.replace(/[〈〉⟨⟩]/g, '')
+    // NOTE: 入力は仕様上「〈SFX：…〉」の形が想定される。
+    // 以前は「SFX: …」プレフィクス除去を先に行っていたため、
+    // 先頭が角括弧（〈）で始まるケースではマッチしない不具合があった。
+    // 対策として、まず括弧類を除去してからプレフィクス除去を実施する。
+
+    // 〈〉/⟨⟩ を先に削除（全角・別字形対応）
+    let cleanedText = rawSfx.replace(/[〈〉⟨⟩]/g, '')
+
+    // 先頭の空白・不可視文字（BOM/ゼロ幅スペース等）を許容しつつ、
+    // 半角/全角いずれの「SFX」「:」「：」にもマッチして除去する
+    // - 例: "SFX: ...", " SFX：...", "ＳＦＸ：...", "\uFEFFSFX: ..."
+    const PREFIX_RE = /^(?:\s|[\uFEFF\u200B-\u200D\u2060])*([sSｓＳ][fFｆＦ][xXｘＸ])\s*[:：]\s*/
+    cleanedText = cleanedText.replace(PREFIX_RE, '').trim()
 
     // （）全角の補足
     const mFull = cleanedText.match(/^(.*?)（(.+?)）$/)

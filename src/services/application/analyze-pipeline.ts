@@ -168,6 +168,15 @@ export class AnalyzePipeline extends BasePipelineStep {
     }
 
     // 新フロー: チャンクごと台本化 → 台本統合 → ページ割り（全体） → 束ね → レンダ
+
+    // UI遷移の空白時間対策:
+    // 要素分析(analyze)完了後、チャンク台本化/統合の間にUIが"停止"して見えないよう、
+    // ここで先に currentStep=episode をセットしてスピナーを継続表示させる。
+    // 進捗の総数は 4（準備→検出開始→検出完了→DB保存）として宣言し、最初は0/4にする。
+    await this.updateJobStep(jobId, 'episode', { logger }, 0, 4)
+    // UI反映のための短い待機（進捗表示を確実にするため）
+    await new Promise((resolve) => setTimeout(resolve, 300))
+
     // チャンク台本化
     const chunkScriptRes = await this.chunkScriptStep.convertChunksToScripts(chunks, context)
     if (!chunkScriptRes.success) {
@@ -186,11 +195,6 @@ export class AnalyzePipeline extends BasePipelineStep {
       await this.updateJobCoverageWarnings(jobId, mergeRes.data.coverageWarnings, { logger })
     }
 
-    // エピソード分割ステップを明示
-    // UIとSSEで「エピソード構成」がスキップに見えないように、
-    // ここで currentStep=episode をセットし、完了時に markStepCompleted する。
-    await this.updateJobStep(jobId, 'episode', { logger }, 0, 0)
-
     // 統合台本を読み出してページ割り
     const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
     const analysisStorage = await StorageFactory.getAnalysisStorage()
@@ -200,12 +204,24 @@ export class AnalyzePipeline extends BasePipelineStep {
     }
     const combinedScript = JSON.parse(combinedText.text)
 
+    // エピソード切れ目検出の進捗を25%に更新
+    await this.updateJobStep(jobId, 'episode', { logger }, 1, 4)
+    logger.info('エピソード構成: 切れ目検出を開始', { jobId, progress: '25%' })
+
     // エピソード切れ目検出
     const episodeRes = await this.episodeBreakStep.estimateEpisodeBreaks(combinedScript, context)
     if (!episodeRes.success) {
       await this.updateJobStatus(jobId, 'failed', { logger }, episodeRes.error)
       throw new Error(episodeRes.error)
     }
+
+    // エピソード検出完了を50%に更新
+    await this.updateJobStep(jobId, 'episode', { logger }, 2, 4)
+    logger.info('エピソード構成: 切れ目検出完了', {
+      jobId,
+      progress: '50%',
+      episodeCount: episodeRes.data.episodeBreaks.episodes.length,
+    })
 
     // エピソード境界をDBへ永続化（最小フィールドでのアップサート）
     try {
@@ -239,6 +255,14 @@ export class AnalyzePipeline extends BasePipelineStep {
           confidence: 1,
         }
       })
+      // エピソードデータ保存の進捗を75%に更新
+      await this.updateJobStep(jobId, 'episode', { logger }, 3, 4)
+      logger.info('エピソード構成: データベース保存を開始', {
+        jobId,
+        progress: '75%',
+        episodeCount: episodesForDb.length,
+      })
+
       await episodeWriter.bulkUpsert(episodesForDb)
       try {
         const db = getDatabaseService()
@@ -273,6 +297,7 @@ export class AnalyzePipeline extends BasePipelineStep {
         })
       }
       // エピソード構成を完了にマーク
+      logger.info('エピソード構成: 完了', { jobId, progress: '100%' })
       await this.markStepCompleted(jobId, 'episode', { logger })
 
       // レイアウト段階の進捗開始（ここからはレイアウト処理）

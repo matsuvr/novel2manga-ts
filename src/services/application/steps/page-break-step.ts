@@ -1,4 +1,5 @@
 import { buildLayoutFromPageBreaks } from '@/agents/script/panel-assignment'
+import { extractSpeakerAndText } from '@/agents/script/dialogue-utils'
 import { estimatePageBreaksSegmented } from '@/agents/script/segmented-page-break-estimator'
 import { getDatabaseService } from '@/services/db-factory'
 import type { MangaLayout } from '@/types/panel-layout'
@@ -66,15 +67,26 @@ export class PageBreakStep implements PipelineStep {
           .filter((panel) => {
             // Find the original panel number in the script
             const originalPanelIndex =
-              script.panels?.findIndex(
-                (p) =>
-                  p.cut === panel.content ||
-                  panel.dialogue?.some((d) =>
-                    script.panels?.some((sp) =>
-                      sp.dialogue?.some((spd) => spd.includes(`${d.speaker}: ${d.text}`)),
-                    ),
-                  ),
-              ) || -1
+              script.panels?.findIndex((p) => {
+                // content マッチ: panel.content に p.cut が含まれる（cut+camera統合後の互換）
+                const contentMatch = typeof p.cut === 'string' && panel.content.includes(p.cut)
+
+                // dialogue マッチ: 両者を正規化して話者・本文一致を確認
+                const panelDialogue = Array.isArray(panel.dialogue) ? panel.dialogue : []
+                const dialogueMatch = panelDialogue.some((d) => {
+                  const spLines = Array.isArray(p.dialogue) ? p.dialogue : []
+                  for (const spd of spLines) {
+                    if (typeof spd !== 'string') continue
+                    const norm = extractSpeakerAndText(spd)
+                    if (norm.speaker === d.speaker && norm.text === d.text) {
+                      return true
+                    }
+                  }
+                  return false
+                })
+
+                return contentMatch || dialogueMatch
+              }) || -1
 
             return (
               originalPanelIndex >= episode.startPanelIndex - 1 &&

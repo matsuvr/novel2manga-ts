@@ -75,16 +75,14 @@ export class LocalFileStorage implements Storage {
       // ランタイム無変換で安全に受け渡せるように型を Uint8Array へアサートする。
       await fs.writeFile(filePath, value as unknown as Uint8Array)
 
-      // メタデータは別ファイルに保存（必要な場合のみ）
-      if (metadata && Object.keys(metadata).length > 0) {
-        const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
-        const metadataContent = {
-          ...metadata,
-          createdAt: new Date().toISOString(),
-          isBinary: true,
-        }
-        await fs.writeFile(metadataPath, JSON.stringify(metadataContent), { encoding: 'utf8' })
+      // メタデータは別ファイルに保存（常に isBinary:true を記録して復元時の誤判定を避ける）
+      const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
+      const metadataContent = {
+        ...(metadata || {}),
+        createdAt: new Date().toISOString(),
+        isBinary: true,
       }
+      await fs.writeFile(metadataPath, JSON.stringify(metadataContent), { encoding: 'utf8' })
     } else {
       // テキストデータの場合：明示的にBufferに変換してからUTF-8で保存
       // Windows環境での文字化け問題を回避するため、Bufferを経由

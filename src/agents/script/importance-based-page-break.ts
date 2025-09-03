@@ -6,6 +6,7 @@
  */
 
 import type { NewMangaScript, PageBreakV2 } from '../../types/script'
+import { buildPanelContentFromScript, parseDialogueAndNarration } from './dialogue-utils'
 
 /**
  * Result of importance-based page break calculation
@@ -51,27 +52,13 @@ export function calculateImportanceBasedPageBreaks(
     // Track importance distribution
     importanceDistribution[importance] = (importanceDistribution[importance] || 0) + 1
 
-    // Parse dialogue from "Speaker: Text" format to structured format
-    const dialogue =
-      panel.dialogue?.map((dialogueStr) => {
-        const colonIndex = dialogueStr.indexOf(':')
-        if (colonIndex > 0) {
-          return {
-            speaker: dialogueStr.substring(0, colonIndex).trim(),
-            text: dialogueStr.substring(colonIndex + 1).trim(),
-          }
-        } else {
-          return {
-            speaker: 'ナレーション',
-            text: dialogueStr,
-          }
-        }
-      }) || []
+    // dialogue/narration を統合して構造化
+    const dialogue = parseDialogueAndNarration(panel.dialogue, panel.narration)
 
     resultPanels.push({
       pageNumber: currentPage,
       panelIndex: currentPanelIndex,
-      content: panel.cut || '',
+      content: buildPanelContentFromScript({ cut: panel.cut, camera: panel.camera }),
       dialogue,
       // Add SFX support (will be added to schema later)
       ...(panel.sfx && { sfx: panel.sfx }),

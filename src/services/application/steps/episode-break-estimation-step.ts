@@ -309,7 +309,10 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     const issues: string[] = []
 
     // Check if episodes cover all panels
-    const sortedEpisodes = episodeBreaks.episodes.sort((a, b) => a.episodeNumber - b.episodeNumber)
+    // sort() は破壊的なためコピーしてからソートする
+    const sortedEpisodes = [...episodeBreaks.episodes].sort(
+      (a, b) => a.episodeNumber - b.episodeNumber,
+    )
 
     // Check continuous coverage
     let expectedStart = 1
@@ -385,12 +388,13 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
       starts.unshift(1)
     }
 
-    // Step 2: build normalized episodes with deterministic ends = nextStart - 1
-    const normalized = sorted.map((ep, idx) => {
-      const start = idx < starts.length ? starts[idx] : starts[starts.length - 1]
+    // Step 2: build normalized episodes strictly from unique, ordered starts
+    // エピソード数は starts の長さに合わせる（重複 start を与えた余剰エピソードは破棄）
+    const normalized = starts.map((start, idx) => {
+      const base = sorted[Math.min(idx, sorted.length - 1)]
       const nextStart = idx + 1 < starts.length ? starts[idx + 1] : totalPanels + 1
       const end = Math.min(totalPanels, Math.max(start, nextStart - 1))
-      return { ...ep, startPanelIndex: start, endPanelIndex: end }
+      return { ...base, startPanelIndex: start, endPanelIndex: end }
     })
 
     return { episodes: normalized }
