@@ -5,7 +5,7 @@ import { getStoragePorts } from '@/infrastructure/storage/ports'
 import { JobProgressService } from '@/services/application/job-progress'
 import { generateEpisodeLayout } from '@/services/application/layout-generation'
 import { renderBatchFromYaml } from '@/services/application/render'
-import { ApiResponder } from '@/utils/api-responder'
+import { createErrorResponse, createSuccessResponse } from '@/utils/api-error'
 import { detectDemoMode } from '@/utils/request-mode'
 
 const requestSchema = z.object({
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    return ApiResponder.success({
+    return createSuccessResponse({
       message: 'Layout generated successfully',
       jobId,
       episodeNumber,
@@ -95,6 +95,6 @@ export async function POST(request: NextRequest) {
     } catch {
       // noop
     }
-    return ApiResponder.error(error, 'Failed to generate layout')
+    return createErrorResponse(error, 'Failed to generate layout')
   }
 }

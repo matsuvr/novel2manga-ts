@@ -7,7 +7,7 @@ import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
 import { renderBatchFromYaml } from '@/services/application/render'
 import { getDatabaseService } from '@/services/db-factory'
-import { ApiResponder } from '@/utils/api-responder'
+import { createErrorResponse, createSuccessResponse, ValidationError } from '@/utils/api-error'
 import { detectDemoMode } from '@/utils/request-mode'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
 import { validateJobId } from '@/utils/validators'
@@ -30,12 +30,15 @@ export async function POST(request: NextRequest) {
     // Demoモード: 依存（DB, layout YAML）をスキップし、プレースホルダーPNGを生成
     const isDemo = detectDemoMode(request, body)
     if (isDemo) {
-      if (!body.jobId) return ApiResponder.validation('jobIdが必要です（demoモード）')
+      if (!body.jobId)
+        return createErrorResponse(new ValidationError('jobIdが必要です（demoモード）'))
       validateJobId(body.jobId)
       if (typeof body.episodeNumber !== 'number' || body.episodeNumber < 1)
-        return ApiResponder.validation('有効なepisodeNumberが必要です（demoモード）')
+        return createErrorResponse(
+          new ValidationError('有効なepisodeNumberが必要です（demoモード）'),
+        )
       if (typeof body.pageNumber !== 'number' || body.pageNumber < 1)
-        return ApiResponder.validation('有効なpageNumberが必要です（demoモード）')
+        return createErrorResponse(new ValidationError('有効なpageNumberが必要です（demoモード）'))
 
       // 1x1 PNG（透明）のベース64（最小）
       const base64Png =
@@ -56,7 +59,7 @@ export async function POST(request: NextRequest) {
         'content-type': 'image/png',
       })
 
-      return ApiResponder.success(
+      return createSuccessResponse(
         {
           success: true,
           renderKey,
@@ -77,18 +80,18 @@ export async function POST(request: NextRequest) {
     }
 
     // 入力バリデーション
-    if (!body.jobId) return ApiResponder.validation('jobIdが必要です')
+    if (!body.jobId) return createErrorResponse(new ValidationError('jobIdが必要です'))
     validateJobId(body.jobId)
     if (typeof body.episodeNumber !== 'number' || body.episodeNumber < 1)
-      return ApiResponder.validation('有効なepisodeNumberが必要です')
+      return createErrorResponse(new ValidationError('有効なepisodeNumberが必要です'))
     if (typeof body.pageNumber !== 'number' || body.pageNumber < 1)
-      return ApiResponder.validation('有効なpageNumberが必要です')
+      return createErrorResponse(new ValidationError('有効なpageNumberが必要です'))
     // layoutYaml が未指定ならストレージポートから取得
     let layoutYaml = body.layoutYaml
     if (!layoutYaml) {
       const ports = getStoragePorts()
       const text = await ports.layout.getEpisodeLayout(body.jobId, body.episodeNumber)
-      if (!text) return ApiResponder.validation('layoutYamlが必要です')
+      if (!text) return createErrorResponse(new ValidationError('layoutYamlが必要です'))
       layoutYaml = text
     }
 
@@ -98,11 +101,13 @@ export async function POST(request: NextRequest) {
     const episodeRepo = new EpisodeRepository(episodePort)
     const jobRepo = new JobRepository(jobPort)
     const job = await jobRepo.getJob(body.jobId)
-    if (!job) return ApiResponder.validation('指定されたジョブが見つかりません')
+    if (!job) return createErrorResponse(new ValidationError('指定されたジョブが見つかりません'))
     const episodes = await episodeRepo.getByJobId(body.jobId)
     const targetEpisode = episodes.find((e) => e.episodeNumber === body.episodeNumber)
     if (!targetEpisode)
-      return ApiResponder.validation(`エピソード ${body.episodeNumber} が見つかりません`)
+      return createErrorResponse(
+        new ValidationError(`エピソード ${body.episodeNumber} が見つかりません`),
+      )
 
     // サービスに委譲（単ページでもバッチAPIを活用）
     const result = await renderBatchFromYaml(
@@ -114,9 +119,9 @@ export async function POST(request: NextRequest) {
     )
     const first = result.results[0]
     if (!first || first.status !== 'success') {
-      return ApiResponder.error(new Error(first?.error || 'レンダリングに失敗しました'))
+      return createErrorResponse(new Error(first?.error || 'レンダリングに失敗しました'))
     }
-    return ApiResponder.success(
+    return createSuccessResponse(
       {
         success: true,
         renderKey: first.renderKey,
@@ -135,6 +140,6 @@ export async function POST(request: NextRequest) {
       201,
     )
   } catch (error) {
-    return ApiResponder.error(error)
+    return createErrorResponse(error)
   }
 }

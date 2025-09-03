@@ -1,5 +1,8 @@
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import type { MangaLayout, Panel } from '@/types/panel-layout'
+import { SfxPlacer, type SfxPlacement } from './sfx-placer'
+import type { AppCanvasConfig } from '@/types/canvas-config'
+import { PanelLayoutCoordinator } from './panel-layout-coordinator'
 
 // Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
 const isServer = typeof window === 'undefined'
@@ -73,6 +76,8 @@ export class CanvasRenderer {
   private config: CanvasConfig
   private appConfig: ReturnType<typeof getAppConfigWithOverrides>
   private dialogueAssets?: Record<string, { image: unknown; width: number; height: number }>
+  private sfxPlacer: SfxPlacer
+  private layoutCoordinator: PanelLayoutCoordinator
 
   // Async factory method for proper initialization
   static async create(config: CanvasConfig): Promise<CanvasRenderer> {
@@ -112,6 +117,8 @@ export class CanvasRenderer {
     this.ctx = ctx
 
     this.setupCanvas()
+    this.sfxPlacer = new SfxPlacer()
+    this.layoutCoordinator = new PanelLayoutCoordinator()
   }
 
   private setupCanvas(): void {
@@ -164,34 +171,27 @@ export class CanvasRenderer {
   }
 
   drawPanel(panel: Panel): void {
+    // レイアウトコーディネーターをリセット
+    this.layoutCoordinator.reset()
+
     // パネルの位置とサイズを実際のピクセル値に変換
     const x = panel.position.x * this.config.width
     const y = panel.position.y * this.config.height
     const width = panel.size.width * this.config.width
     const height = panel.size.height * this.config.height
+    const panelBounds = { x, y, width, height }
 
     // パネルのフレームを描画
     this.drawFrame(x, y, width, height)
 
-    // パネル内のコンテンツを描画
-    if (panel.content) {
-      // 状況説明テキストを描画
-      this.drawText(panel.content, x + 10, y + 20, {
-        maxWidth: width - 20,
-        font: `${this.config.defaultFontSize}px ${this.config.font}`,
-        color: this.config.textColor,
-      })
-    }
-
-    // パネル内の対話を吹き出しとして描画（縦書き画像が提供されている場合は画像を使用）
+    // 吹き出しを描画し、占有領域を登録
     if (panel.dialogues && panel.dialogues.length > 0) {
-      // クリッピング: 吹き出しをパネル枠の内側に限定
       this.ctx.save()
       this.ctx.beginPath()
       this.ctx.rect(x, y, width, height)
       this.ctx.clip()
       try {
-        let bubbleY = y + height * 0.2 // 吹き出しの開始Y位置（やや上）
+        let bubbleY = y + height * 0.2
         const maxAreaWidth = width * 0.45
         const maxAreaHeightTotal = height * 0.7
         const perBubbleMaxHeight = Math.max(60, maxAreaHeightTotal / panel.dialogues.length)
@@ -200,45 +200,35 @@ export class CanvasRenderer {
           const dialogue = panel.dialogues[i]
           const key = `${panel.id}:${i}`
           const asset = this.dialogueAssets?.[key]
-          if (!asset) {
-            throw new Error(`Vertical dialogue asset missing for ${key}`)
-          }
-          // ベースのスケール
+          if (!asset) throw new Error(`Vertical dialogue asset missing for ${key}`)
+
           let scale = Math.min(maxAreaWidth / asset.width, perBubbleMaxHeight / asset.height, 1)
           let drawW = asset.width * scale
           let drawH = asset.height * scale
           const padding = 10
-          // テキストの長方形（パディング含む）を外接する楕円のサイズを計算
-          // √2 アルゴリズム: 長方形を外接する楕円は長方形の各辺を √2 で割った半径を持つ
           const textRectW = drawW + padding * 2
           const textRectH = drawH + padding * 2
           let bubbleW = textRectW * Math.sqrt(2)
           let bubbleH = textRectH * Math.sqrt(2)
 
-          // パネル下端に収まるよう自動縮小
           const availableVertical = y + height - bubbleY
           const maxThisBubbleHeight = Math.max(
             30,
             Math.min(perBubbleMaxHeight, availableVertical - 2),
           )
           if (bubbleH > maxThisBubbleHeight) {
-            // 楕円が収まるよう縮小
             const shrinkFactor = maxThisBubbleHeight / bubbleH
             scale = Math.min(scale, scale * shrinkFactor)
             drawW = asset.width * scale
             drawH = asset.height * scale
-            const textRectW = drawW + padding * 2
-            const textRectH = drawH + padding * 2
-            bubbleW = textRectW * Math.sqrt(2)
-            bubbleH = textRectH * Math.sqrt(2)
+            const textRectW2 = drawW + padding * 2
+            const textRectH2 = drawH + padding * 2
+            bubbleW = textRectW2 * Math.sqrt(2)
+            bubbleH = textRectH2 * Math.sqrt(2)
           }
+          if (bubbleH <= 0 || bubbleY + bubbleH > y + height) break
 
-          // これでもはみ出す場合は描画を中止
-          if (bubbleH <= 0 || bubbleY + bubbleH > y + height) {
-            break
-          }
-
-          const bx = x + width - bubbleW - width * 0.05 // 右寄せ
+          const bx = x + width - bubbleW - width * 0.05
           const by = bubbleY
 
           // 吹き出し背景
@@ -249,98 +239,127 @@ export class CanvasRenderer {
             dialogue.emotion === 'shout'
               ? this.appConfig.rendering.canvas.bubble.shoutLineWidth
               : this.appConfig.rendering.canvas.bubble.normalLineWidth
-          // 形状切替: speech=楕円、thought=雲状、narration=長方形
           const shapeType =
             (dialogue as { type?: 'speech' | 'thought' | 'narration' }).type || 'speech'
           this.drawBubbleShape(shapeType, bx, by, bubbleW, bubbleH)
           this.ctx.restore()
 
-          // 画像貼り付け（中央揃え）
+          // 画像（縦書きセリフ）
           const imgX = bx + (bubbleW - drawW) / 2
           const imgY = by + (bubbleH - drawH) / 2
-          // node-canvas: ctx.drawImage(Image, dx, dy, dWidth, dHeight)
-          // browser: HTMLImageElement でも同じ
           this.ctx.drawImage(asset.image as unknown as CanvasImageSource, imgX, imgY, drawW, drawH)
 
-          bubbleY += bubbleH + 10 // 次の吹き出し位置
+          // 占有領域登録
+          this.layoutCoordinator.registerDialogueArea(dialogue, {
+            x: bx,
+            y: by,
+            width: bubbleW,
+            height: bubbleH,
+          })
+
+          // 話者ラベル
+          const speakerLabelCfg = this.appConfig.rendering.canvas.speakerLabel
+          if (
+            speakerLabelCfg?.enabled &&
+            typeof dialogue.speaker === 'string' &&
+            dialogue.speaker.trim() !== ''
+          ) {
+            const baseFontSize = this.config.fontSize || 16
+            const fontSize = Math.max(10, baseFontSize * (speakerLabelCfg.fontSize || 0.7))
+            const paddingLabel = speakerLabelCfg.padding ?? 4
+            const bg = speakerLabelCfg.backgroundColor ?? '#ffffff'
+            const border = speakerLabelCfg.borderColor ?? '#333333'
+            const textColor = speakerLabelCfg.textColor ?? '#333333'
+            const offsetXRatio = speakerLabelCfg.offsetX ?? 0.3
+            const offsetYRatio = speakerLabelCfg.offsetY ?? 0.7
+            const borderRadius = speakerLabelCfg.borderRadius ?? 3
+            this.drawSpeakerLabel(dialogue.speaker, bx + bubbleW, by, {
+              fontSize,
+              padding: paddingLabel,
+              backgroundColor: bg,
+              borderColor: border,
+              textColor,
+              offsetXRatio,
+              offsetYRatio,
+              borderRadius,
+            })
+          }
+
+          bubbleY += bubbleH + 10
         }
       } finally {
-        // クリッピング解除
         this.ctx.restore()
       }
     }
 
-    // パネル内のSFXテキストを描画（大きめのフォントで背景なし）
+    // SFXを配置・描画し、占有領域を登録
     if (panel.sfx && panel.sfx.length > 0) {
-      // クリッピング: SFXテキストもパネル枠の内側に限定
       this.ctx.save()
       this.ctx.beginPath()
       this.ctx.rect(x, y, width, height)
       this.ctx.clip()
-
       try {
-        const appConfig = getAppConfigWithOverrides()
-        const sfxConfig = appConfig.rendering.canvas.sfx
-        const sfxFontSize = Math.max(
-          sfxConfig.minFontSize,
-          (this.config.fontSize || sfxConfig.defaultFontSize) * sfxConfig.fontSizeMultiplier,
-        ) // 大きめのフォント
-        let sfxY = y + sfxConfig.startPositionOffset // SFXの開始位置（上部）
-
-        for (let i = 0; i < panel.sfx.length; i++) {
-          const rawSfx = panel.sfx[i]
-
-          // 〈〉を削除し、()内の補足テキストを分離
-          const cleanedSfx = this.processSfxText(rawSfx)
-
-          // メインSFXテキスト（大きいフォント）
-          if (cleanedSfx.main) {
-            this.ctx.save()
-            this.ctx.font = `bold ${sfxFontSize}px ${this.config.fontFamily || 'Arial, sans-serif'}`
-            this.ctx.fillStyle = '#000000'
-            this.ctx.strokeStyle = this.appConfig.rendering.canvas.sfx.strokeStyle
-            this.ctx.lineWidth = this.appConfig.rendering.canvas.sfx.lineWidth
-            this.ctx.textAlign = this.appConfig.rendering.canvas.sfx.textAlign
-            this.ctx.textBaseline = this.appConfig.rendering.canvas.sfx.textBaseline
-
-            const sfxX = x + width * this.appConfig.rendering.canvas.sfx.positionFactor // 位置係数に基づく配置
-
-            // 白い縁取り（アウトライン効果）
-            this.ctx.strokeText(cleanedSfx.main, sfxX, sfxY)
-            // テキスト本体
-            this.ctx.fillText(cleanedSfx.main, sfxX, sfxY)
-
-            this.ctx.restore()
-
-            const mainTextHeight = sfxFontSize * 1.2
-            sfxY += mainTextHeight
-
-            // 補足テキスト（小さいフォント）
-            if (cleanedSfx.supplement) {
-              this.ctx.save()
-              const supplementFontSize = Math.max(12, sfxFontSize * 0.6)
-              this.ctx.font = `${supplementFontSize}px ${this.config.fontFamily || 'Arial, sans-serif'}`
-              this.ctx.fillStyle = '#333333'
-              this.ctx.textAlign = 'center'
-              this.ctx.textBaseline = 'top'
-
-              this.ctx.fillText(cleanedSfx.supplement, sfxX, sfxY)
-
-              this.ctx.restore()
-              sfxY += supplementFontSize * 1.2 + 5
-            } else {
-              sfxY += 10 // 次のSFXとの間隔
-            }
+        const sfxPlacements = this.sfxPlacer.placeSfx(panel.sfx, panel, panelBounds)
+        for (const placement of sfxPlacements) {
+          this.drawSfxWithPlacement(placement)
+          const estBounds = {
+            width: Math.max(1, placement.text.length * placement.fontSize * 0.8),
+            height: placement.fontSize * (placement.supplement ? 1.8 : 1.2),
           }
-
-          // パネル下端に近づいたら描画を中止
-          if (sfxY > y + height - 30) {
-            break
-          }
+          this.layoutCoordinator.registerSfxArea(placement, estBounds)
         }
       } finally {
-        // クリッピング解除
         this.ctx.restore()
+      }
+    }
+
+    // 説明テキストの最適配置と描画
+    if (panel.content && panel.content.trim() !== '') {
+      const contentCfg = (this.appConfig.rendering.canvas as AppCanvasConfig).contentText
+
+      if (contentCfg.enabled !== false) {
+        const placement = this.layoutCoordinator.calculateContentTextPlacement(
+          panel.content,
+          panelBounds,
+          this.ctx,
+          {
+            minFontSize: contentCfg.fontSize.min,
+            maxFontSize: contentCfg.fontSize.max,
+            padding: contentCfg.padding,
+            lineHeight: contentCfg.lineHeight,
+            maxWidthRatio: contentCfg.maxWidthRatio,
+            maxHeightRatio: contentCfg.maxHeightRatio,
+            minAreaSize: contentCfg.placement.minAreaSize,
+          },
+        )
+        if (placement) {
+          this.ctx.save()
+          // 背景ボックス
+          this.ctx.fillStyle = contentCfg.background.color
+          this.ctx.strokeStyle = contentCfg.background.borderColor
+          this.ctx.lineWidth = contentCfg.background.borderWidth
+          this.drawRoundedRect(
+            placement.x - contentCfg.padding / 2,
+            placement.y - contentCfg.padding / 2,
+            placement.width + contentCfg.padding,
+            placement.height + contentCfg.padding,
+            contentCfg.background.borderRadius,
+          )
+          this.ctx.fill()
+          this.ctx.stroke()
+
+          // テキスト
+          this.ctx.font = `${placement.fontSize}px ${this.config.fontFamily || 'Arial, sans-serif'}`
+          this.ctx.fillStyle = contentCfg.textColor
+          this.ctx.textAlign = 'left'
+          this.ctx.textBaseline = 'top'
+          let cy = placement.y
+          for (const line of placement.lines) {
+            this.ctx.fillText(line, placement.x, cy)
+            cy += placement.fontSize * contentCfg.lineHeight
+          }
+          this.ctx.restore()
+        }
       }
     }
   }
@@ -428,36 +447,49 @@ export class CanvasRenderer {
   }
 
   /**
-   * SFXテキストを処理：〈〉を削除し、()内の補足テキストを分離
-   * @param rawSfx 生のSFXテキスト（例：「〈ドーン！〉」「〈バタン（ドアが閉まる音）〉」）
-   * @returns メインテキストと補足テキストを分離したオブジェクト
+   * 計算された配置情報に基づいてSFXを描画
    */
-  private processSfxText(rawSfx: string): { main: string; supplement?: string } {
-    // 〈〉を削除
-    const cleanedText = rawSfx.replace(/[〈〉⟨⟩]/g, '')
+  private drawSfxWithPlacement(placement: SfxPlacement): void {
+    const cfg = this.appConfig.rendering.canvas.sfx
+    this.ctx.save()
 
-    // ()内の補足テキストを検出して分離
-    const supplementMatch = cleanedText.match(/^(.*?)（(.+?)）$/)
-    if (supplementMatch) {
-      return {
-        main: supplementMatch[1].trim(),
-        supplement: supplementMatch[2].trim(),
-      }
+    // 回転適用
+    if (cfg.rotation?.enabled && placement.rotation) {
+      this.ctx.translate(placement.x, placement.y)
+      this.ctx.rotate(placement.rotation)
+      this.ctx.translate(-placement.x, -placement.y)
     }
 
-    // 半角括弧でも試す
-    const supplementMatchHalf = cleanedText.match(/^(.*?)\((.+?)\)$/)
-    if (supplementMatchHalf) {
-      return {
-        main: supplementMatchHalf[1].trim(),
-        supplement: supplementMatchHalf[2].trim(),
-      }
+    // メインSFX
+    const weightMain = cfg.mainTextStyle?.fontWeight === 'bold' ? 'bold' : 'normal'
+    this.ctx.font = `${weightMain} ${placement.fontSize}px ${this.config.fontFamily || 'Arial, sans-serif'}`
+    this.ctx.fillStyle = cfg.mainTextStyle?.fillStyle || '#000000'
+    this.ctx.strokeStyle = cfg.mainTextStyle?.strokeStyle || '#ffffff'
+    this.ctx.lineWidth = cfg.mainTextStyle?.lineWidth ?? 4
+    this.ctx.textAlign = 'left'
+    this.ctx.textBaseline = 'top'
+    this.ctx.strokeText(placement.text, placement.x, placement.y)
+    this.ctx.fillText(placement.text, placement.x, placement.y)
+
+    // 補足テキスト
+    if (placement.supplement) {
+      const ratio = cfg.supplementFontSize?.scaleFactor ?? 0.35
+      const minSup = cfg.supplementFontSize?.min ?? 10
+      const supSize = Math.max(minSup, placement.fontSize * ratio)
+      const weightSup = cfg.supplementTextStyle?.fontWeight === 'bold' ? 'bold' : 'normal'
+      this.ctx.font = `${weightSup} ${supSize}px ${this.config.fontFamily || 'Arial, sans-serif'}`
+      this.ctx.fillStyle = cfg.supplementTextStyle?.fillStyle || '#666666'
+      this.ctx.strokeStyle = cfg.supplementTextStyle?.strokeStyle || '#ffffff'
+      this.ctx.lineWidth = cfg.supplementTextStyle?.lineWidth ?? 2
+      this.ctx.textAlign = 'left'
+      this.ctx.textBaseline = 'top'
+      const supX = placement.x
+      const supY = placement.y + placement.fontSize * 1.1
+      this.ctx.strokeText(placement.supplement, supX, supY)
+      this.ctx.fillText(placement.supplement, supX, supY)
     }
 
-    // 補足テキストがない場合
-    return {
-      main: cleanedText.trim(),
-    }
+    this.ctx.restore()
   }
 
   /**
@@ -508,6 +540,91 @@ export class CanvasRenderer {
       this.ctx.fill()
       this.ctx.stroke()
     }
+  }
+
+  /**
+   * 角丸長方形のパスを作成（話者ラベル用）
+   */
+  private drawRoundedRect(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number,
+  ): void {
+    this.ctx.beginPath()
+    this.ctx.moveTo(x + radius, y)
+    this.ctx.lineTo(x + width - radius, y)
+    this.ctx.quadraticCurveTo(x + width, y, x + width, y + radius)
+    this.ctx.lineTo(x + width, y + height - radius)
+    this.ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height)
+    this.ctx.lineTo(x + radius, y + height)
+    this.ctx.quadraticCurveTo(x, y + height, x, y + height - radius)
+    this.ctx.lineTo(x, y + radius)
+    this.ctx.quadraticCurveTo(x, y, x + radius, y)
+    this.ctx.closePath()
+  }
+
+  /**
+   * 話者ラベルを吹き出しの右上に描画
+   */
+  private drawSpeakerLabel(
+    speaker: string,
+    xRightEdge: number,
+    yTopEdge: number,
+    options: {
+      fontSize?: number
+      padding?: number
+      backgroundColor?: string
+      borderColor?: string
+      textColor?: string
+      offsetXRatio?: number
+      offsetYRatio?: number
+      borderRadius?: number
+    } = {},
+  ): void {
+    const {
+      fontSize = 12,
+      padding = 4,
+      backgroundColor = '#ffffff',
+      borderColor = '#333333',
+      textColor = '#333333',
+      offsetXRatio = 0.3,
+      offsetYRatio = 0.7,
+      borderRadius = 3,
+    } = options
+
+    if (!speaker || speaker.trim() === '') return
+
+    this.ctx.save()
+    this.ctx.font = `${fontSize}px ${this.config.fontFamily || 'Arial, sans-serif'}`
+
+    // テキストサイズ計測
+    const metrics = this.ctx.measureText(speaker)
+    const labelWidth = metrics.width + padding * 2
+    const labelHeight = fontSize + padding * 2
+
+    // 位置: 吹き出し右上の少し外側
+    const labelX = xRightEdge - labelWidth * offsetXRatio
+    const labelY = yTopEdge - labelHeight * offsetYRatio
+
+    // 背景（角丸）
+    this.drawRoundedRect(labelX, labelY, labelWidth, labelHeight, borderRadius)
+    this.ctx.fillStyle = backgroundColor
+    this.ctx.fill()
+
+    // 枠線
+    this.ctx.strokeStyle = borderColor
+    this.ctx.lineWidth = 1
+    this.ctx.stroke()
+
+    // テキスト
+    this.ctx.fillStyle = textColor
+    this.ctx.textAlign = 'center'
+    this.ctx.textBaseline = 'middle'
+    this.ctx.fillText(speaker, labelX + labelWidth / 2, labelY + labelHeight / 2)
+
+    this.ctx.restore()
   }
 
   drawSpeechBubble(

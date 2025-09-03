@@ -315,6 +315,8 @@ export class MangaPageRenderer {
       const dialogues = panel.dialogues || []
       for (let i = 0; i < dialogues.length; i++) {
         const d = dialogues[i]
+        // セリフテキストを正規化（話者プレフィックス/外側のカギ括弧を除去）
+        const cleanedText = this.extractDialogueText(d.text)
         let imageObj: unknown
         let w = 1
         let h = 1
@@ -323,12 +325,12 @@ export class MangaPageRenderer {
           if (isTest) {
             // In unit tests, avoid network. Provide deterministic placeholder sizes.
             w = feature.defaults.fontSize + feature.defaults.padding * 2
-            h = Math.max(40, Math.ceil(d.text.length * (feature.defaults.fontSize * 0.9)))
+            h = Math.max(40, Math.ceil(cleanedText.length * (feature.defaults.fontSize * 0.9)))
             imageObj = { __test_placeholder: true }
             logger.debug('Created test placeholder', {
               panelId: panel.id,
               dialogueIndex: i,
-              text: d.text,
+              text: cleanedText,
             })
           } else {
             // API コール
@@ -336,7 +338,7 @@ export class MangaPageRenderer {
             logger.debug('Calling vertical text API', {
               panelId: panel.id,
               dialogueIndex: i,
-              text: d.text,
+              text: cleanedText,
               dialogueType: d.type,
               selectedFont,
               apiParams: {
@@ -352,7 +354,7 @@ export class MangaPageRenderer {
 
             const apiStartTime = Date.now()
             const { meta, pngBuffer } = await renderVerticalText({
-              text: d.text,
+              text: cleanedText,
               font: selectedFont,
               fontSize: feature.defaults.fontSize,
               lineHeight: feature.defaults.lineHeight,
@@ -410,7 +412,7 @@ export class MangaPageRenderer {
           logger.error('Failed to create dialogue asset', {
             panelId: panel.id,
             dialogueIndex: i,
-            text: d.text,
+            text: cleanedText,
             error: error instanceof Error ? error.message : 'Unknown error occurred',
             stack: error instanceof Error ? error.stack : undefined,
             progress: `${processedDialogues}/${totalDialogues}`,
@@ -465,5 +467,51 @@ export class MangaPageRenderer {
    */
   cleanup(): void {
     this.canvasRenderer.cleanup()
+  }
+
+  /**
+   * セリフテキストから話者部分を除去し、最初と最後のカギ括弧を取り除く
+   * 例: 「太郎：「こんにちは」」または「「こんにちは」」→「こんにちは」
+   */
+  /**
+   * セリフテキストから話者部分を除去し、最初と最後のカギ括弧を取り除く
+   * 例: 「太郎：「こんにちは」」または「「こんにちは」」→「こんにちは」
+   */
+  private extractDialogueText(text: string): string {
+    let cleanedText = text
+
+    // 話者部分の除去 (全角コロンと半角コロンの両方に対応)
+    const speakerPattern = /^(.+?)[：:](.+)$/
+    const match = cleanedText.match(speakerPattern)
+    if (match) {
+      cleanedText = match[2].trim()
+    }
+
+    // 外側のカギ括弧のみ除去（内側は保持）
+    cleanedText = this.removeOuterQuotes(cleanedText)
+
+    return cleanedText
+  }
+
+  /**
+   * テキストの最初と最後にあるカギ括弧を除去（「」/『』/""/''）
+   * 文中のカギ括弧は保持
+   */
+  private removeOuterQuotes(text: string): string {
+    let result = text.trim()
+
+    if (result.length >= 2) {
+      if (result.startsWith('「') && result.endsWith('」')) {
+        result = result.slice(1, -1)
+      } else if (result.startsWith('『') && result.endsWith('』')) {
+        result = result.slice(1, -1)
+      } else if (result.startsWith('"') && result.endsWith('"')) {
+        result = result.slice(1, -1)
+      } else if (result.startsWith("'") && result.endsWith("'")) {
+        result = result.slice(1, -1)
+      }
+    }
+
+    return result.trim()
   }
 }
