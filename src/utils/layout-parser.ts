@@ -1,5 +1,6 @@
 import { load as yamlLoad } from 'js-yaml'
 import { z } from 'zod'
+import { getLogger } from '@/infrastructure/logging/logger'
 import type { MangaLayout } from '@/types/panel-layout'
 import { DialogueSchema, MangaLayoutSchema } from '@/types/panel-layout.zod'
 
@@ -69,20 +70,19 @@ function toCanonicalFromBBox(input: z.infer<typeof MangaLayoutBBoxSchema>): Mang
 export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
   const raw = yamlLoad(layoutYaml)
   const __debug = process.env.DEBUG_LAYOUT_PARSER === '1'
+  const logger = getLogger().withContext({ service: 'layout-parser' })
   if (__debug) {
     try {
-      // eslint-disable-next-line no-console
-      console.log('[layout-parser] YAML raw preview:', JSON.stringify(raw))
+      logger.debug('[layout-parser] YAML raw preview', { preview: JSON.stringify(raw) })
     } catch {
-      // eslint-disable-next-line no-console
-      console.log('[layout-parser] YAML raw preview: <unserializable>')
+      logger.debug('[layout-parser] YAML raw preview: <unserializable>')
     }
   }
 
   // 1) 既存の正規スキーマ（そのまま通る場合）
   const canon = MangaLayoutSchema.safeParse(raw)
   if (canon.success) {
-    if (__debug) console.log('[layout-parser] matched: canonical schema')
+    if (__debug) logger.debug('[layout-parser] matched: canonical schema')
     return canon.data
   }
 
@@ -112,7 +112,7 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
     )
 
   if (isCanonicalLike(raw)) {
-    if (__debug) console.log('[layout-parser] matched: canonical-like normalization path')
+    if (__debug) logger.debug('[layout-parser] matched: canonical-like normalization path')
     // dialogues の要素に string が混在していても正規化し、type を保持
     const rawCreated = (raw as { created_at?: unknown }).created_at
     const normalized = {
@@ -176,17 +176,19 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
     }
     const parsed = MangaLayoutSchema.safeParse(normalized)
     if (parsed.success) {
-      if (__debug) console.log('[layout-parser] canonical-like normalized -> valid')
+      if (__debug) logger.debug('[layout-parser] canonical-like normalized -> valid')
       return parsed.data
     }
     if (__debug)
-      console.log('[layout-parser] canonical-like normalized -> INVALID', parsed.error?.errors)
+      logger.debug('[layout-parser] canonical-like normalized -> INVALID', {
+        errors: parsed.error?.errors,
+      })
   }
 
   // 2) BBox形式
   const bbox = MangaLayoutBBoxSchema.safeParse(raw)
   if (bbox.success) {
-    if (__debug) console.log('[layout-parser] matched: bbox schema')
+    if (__debug) logger.debug('[layout-parser] matched: bbox schema')
     return toCanonicalFromBBox(bbox.data)
   }
 
@@ -207,7 +209,7 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
         ),
     )
   ) {
-    if (__debug) console.log('[layout-parser] matched: pages array object-map path')
+    if (__debug) logger.debug('[layout-parser] matched: pages array object-map path')
     const arr = (
       raw as {
         pages: Array<
@@ -253,11 +255,13 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
       pages,
     })
     if (parsed.success) {
-      if (__debug) console.log('[layout-parser] pages array object-map -> valid')
+      if (__debug) logger.debug('[layout-parser] pages array object-map -> valid')
       return parsed.data
     }
     if (__debug)
-      console.log('[layout-parser] pages array object-map -> INVALID', parsed.error?.errors)
+      logger.debug('[layout-parser] pages array object-map -> INVALID', {
+        errors: parsed.error?.errors,
+      })
   }
 
   // 4) 互換形式: { pages: { "page_22": { ... }, "page_23": { ... } } }（オブジェクトマップ）
@@ -269,7 +273,7 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
     typeof (raw as { pages: unknown }).pages === 'object' &&
     !Array.isArray((raw as { pages: unknown }).pages)
   ) {
-    if (__debug) console.log('[layout-parser] matched: pages object-map path')
+    if (__debug) logger.debug('[layout-parser] matched: pages object-map path')
     const map = (
       raw as {
         title?: string
@@ -355,17 +359,20 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
       pages,
     })
     if (parsed.success) {
-      if (__debug) console.log('[layout-parser] pages object-map -> valid')
+      if (__debug) logger.debug('[layout-parser] pages object-map -> valid')
       return parsed.data
     }
-    if (__debug) console.log('[layout-parser] pages object-map -> INVALID', parsed.error?.errors)
+    if (__debug)
+      logger.debug('[layout-parser] pages object-map -> INVALID', {
+        errors: parsed.error?.errors,
+      })
   }
 
   // 5) 互換形式: { "page_22": { panels_count, panels: [...] } } 単体
   if (raw && typeof raw === 'object') {
     const keys = Object.keys(raw as Record<string, unknown>)
     if (keys.length === 1 && /^page_\d+$/.test(keys[0])) {
-      if (__debug) console.log('[layout-parser] matched: single page_* object path')
+      if (__debug) logger.debug('[layout-parser] matched: single page_* object path')
       const pageNum = Number(keys[0].split('_')[1])
       const pageObj = (
         raw as Record<
@@ -430,11 +437,13 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
         pages: [{ page_number: pageNum, panels }],
       })
       if (parsed.success) {
-        if (__debug) console.log('[layout-parser] single page_* object -> valid')
+        if (__debug) logger.debug('[layout-parser] single page_* object -> valid')
         return parsed.data
       }
       if (__debug)
-        console.log('[layout-parser] single page_* object -> INVALID', parsed.error?.errors)
+        logger.debug('[layout-parser] single page_* object -> INVALID', {
+          errors: parsed.error?.errors,
+        })
     }
   }
 

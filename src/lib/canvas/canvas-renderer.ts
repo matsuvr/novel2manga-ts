@@ -189,11 +189,8 @@ export class CanvasRenderer {
     if (panel.dialogues && panel.dialogues.length > 0) {
       this.ctx.save()
       this.ctx.beginPath()
-      const hasRect = typeof (this.ctx as unknown as { rect?: unknown }).rect === 'function'
-      if (hasRect) {
-        ;(
-          this.ctx as unknown as { rect: (x: number, y: number, w: number, h: number) => void }
-        ).rect(x, y, width, height)
+      if (this.hasRect(this.ctx)) {
+        this.ctx.rect(x, y, width, height)
         this.ctx.clip()
       } else {
         // 一部のテストモックで rect が未実装のことがあるため、クリップをスキップ
@@ -431,6 +428,15 @@ export class CanvasRenderer {
       this.ctx.fillText(line, x, currentY)
       currentY += lineHeight
     }
+  }
+
+  // 一部のテストモック環境で CanvasRenderingContext2D.rect が未実装の場合があるため、型ガードを用意
+  private hasRect(
+    ctx: CanvasRenderingContext2D,
+  ): ctx is CanvasRenderingContext2D & {
+    rect: (x: number, y: number, w: number, h: number) => void
+  } {
+    return typeof (ctx as unknown as { rect?: unknown }).rect === 'function'
   }
 
   private wrapText(text: string, maxWidth: number): string[] {

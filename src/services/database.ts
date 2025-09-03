@@ -801,30 +801,12 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       hasThumb: !!status.thumbnailPath,
     })
 
-    // ON CONFLICT には対象となる UNIQUE/PK が必要だが、
-    // 現行スキーマでは (jobId, episodeNumber, pageNumber) がユニークではないため
-    // まず存在確認し、update/insert を分岐して整合性を保つ。
-    if (existing.length > 0) {
-      await this.db
-        .update(renderStatus)
-        .set({
-          isRendered: status.isRendered,
-          imagePath: status.imagePath,
-          thumbnailPath: status.thumbnailPath,
-          width: status.width,
-          height: status.height,
-          fileSize: status.fileSize,
-          renderedAt: now,
-        })
-        .where(
-          and(
-            eq(renderStatus.jobId, jobId),
-            eq(renderStatus.episodeNumber, episodeNumber),
-            eq(renderStatus.pageNumber, pageNumber),
-          ),
-        )
-    } else {
-      await this.db.insert(renderStatus).values({
+    // ON CONFLICT は UNIQUE/PK が前提。
+    // 現行スキーマは (jobId, episodeNumber, pageNumber) にユニーク制約がある（unique_job_episode_page）。
+    // 遷移検知のため先に現在状態を取得し、その後 upsert で整合性を保つ。
+    await this.db
+      .insert(renderStatus)
+      .values({
         id: crypto.randomUUID(),
         jobId,
         episodeNumber,
@@ -837,7 +819,19 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
         fileSize: status.fileSize,
         renderedAt: now,
       })
-    }
+      .onConflictDoUpdate({
+        target: [renderStatus.jobId, renderStatus.episodeNumber, renderStatus.pageNumber],
+        set: {
+          // INSERT 側の値で更新（excluded.*）
+          isRendered: sql`excluded.is_rendered`,
+          imagePath: sql`excluded.image_path`,
+          thumbnailPath: sql`excluded.thumbnail_path`,
+          width: sql`excluded.width`,
+          height: sql`excluded.height`,
+          fileSize: sql`excluded.file_size`,
+          renderedAt: sql`excluded.rendered_at`,
+        },
+      })
 
     // If this page transitioned to rendered, increment job.renderedPages
     if (status.isRendered && !wasRendered) {
