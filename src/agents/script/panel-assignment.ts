@@ -98,6 +98,10 @@ export function buildLayoutFromPageBreaks(
         speaker: d.speaker,
         text:
           (d as { text?: string; lines?: string }).text ?? (d as { lines?: string }).lines ?? '',
+        // PageBreakV2 の dialogue 要素に type があれば引き継ぐ（後段の書体選択に使用）
+        ...((d as { type?: 'speech' | 'thought' | 'narration' }).type
+          ? { type: (d as { type?: 'speech' | 'thought' | 'narration' }).type }
+          : {}),
       }))
       // セリフ0〜2制約（配列長で抑制、詳しいtypeは既存型に委ねる）
       if (dialogues.length > 2) {
@@ -160,11 +164,7 @@ export function buildLayoutFromPageBreaks(
           Math.max(
             3,
             // セリフ/心の声を高く評価、次点で長い状況説明
-            dialogues.filter(
-              (d) =>
-                (d as { type?: 'speech' | 'thought' | 'narration' }).type === 'speech' ||
-                (d as { type?: 'speech' | 'thought' | 'narration' }).type === 'thought',
-            ).length >= 2
+            dialogues.filter((d) => d.type === 'speech' || d.type === 'thought').length >= 2
               ? 7
               : content.length >= 50
                 ? 6

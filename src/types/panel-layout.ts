@@ -18,6 +18,7 @@ export type Dialogue = z.infer<typeof DialogueSchema>
 export type Panel = z.infer<typeof PanelSchema>
 export type Page = z.infer<typeof PageSchema>
 export type MangaLayout = z.infer<typeof MangaLayoutSchema>
+export type DialogueType = Dialogue['type']
 
 // Compile-time structural compatibility assertion (fails on drift if manually reintroduced)
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -83,6 +84,9 @@ export interface DialogueElement {
   speaker: string
   text: string
   context: string
+  // 新フォーマット対応: レンダリングスタイル判定用の種別
+  // panel-layout.zod.ts の DialogueSchema と整合（optional）
+  type?: 'speech' | 'thought' | 'narration'
 }
 
 export interface Highlight {

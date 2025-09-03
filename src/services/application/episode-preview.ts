@@ -50,18 +50,20 @@ export async function loadEpisodePreview(
     }
   }
 
-  // Fallback: レンダーキー列挙
-  if (pageNumbers.length === 0 && typeof renderStorage.list === 'function') {
+  // Fallback: レンダーキー列挙（常にマージして冗長性を確保）
+  if (typeof renderStorage.list === 'function') {
     try {
       const prefix = `${jobId}/episode_${episodeNumber}/`
       const keys = await renderStorage.list(prefix)
-      pageNumbers = keys
+      const fromRenders = keys
         .map((k) => {
           const m = k.match(/episode_\d+\/page_(\d+)\.png$/)
           return m ? Number(m[1]) : undefined
         })
         .filter((n): n is number => typeof n === 'number' && Number.isFinite(n))
-        .sort((a, b) => a - b)
+      // レイアウト由来のページ番号と結合（重複排除）
+      const set = new Set<number>([...pageNumbers, ...fromRenders])
+      pageNumbers = Array.from(set.values()).sort((a, b) => a - b)
     } catch (error) {
       getLogger()
         .withContext({ service: 'loadEpisodePreview', jobId, episodeNumber })
@@ -107,9 +109,11 @@ export async function loadEpisodePreview(
   for (const p of pageNumbers) {
     const key = StorageKeys.pageRender(jobId, episodeNumber, p)
     const file = await renderStorage.get(key)
-    if (file?.text) {
+    // ファイルが存在しない場合でも、ページ情報は返す（UI側で欠落を検知表示できるようにする）
+    let base64 = ''
+    if (file) {
       // R2/Local両対応：常にBase64へ正規化
-      let base64 = file.text
+      base64 = file.text || ''
       try {
         const normalized = base64.replace(/\s+/g, '')
         const reencoded = Buffer.from(normalized, 'base64').toString('base64')
@@ -122,18 +126,19 @@ export async function loadEpisodePreview(
       } catch {
         base64 = Buffer.from(file.text, 'utf-8').toString('base64')
       }
-      images.push({
-        page: p,
-        base64,
-        isNormalized: normalizedPages.includes(p),
-        issueCount: pagesWithIssueCounts[p] || 0,
-      })
     }
+    images.push({
+      page: p,
+      base64,
+      isNormalized: normalizedPages.includes(p),
+      issueCount: pagesWithIssueCounts[p] || 0,
+    })
   }
 
   return {
     episodeNumber,
-    totalPages: images.length,
+    // 総ページ数はレイアウトのページ数をソースオブトゥルースとする
+    totalPages: pageNumbers.length,
     images,
   }
 }

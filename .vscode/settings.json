@@ -105,5 +105,6 @@
 
   // 問題レポート除外設定
   "problems.decorations.enabled": true,
-  "problems.showCurrentInStatus": true
+  "problems.showCurrentInStatus": true,
+  "kiroAgent.configureMCP": "Disabled"
 }

@@ -46,4 +46,17 @@ describe('SFX Text Processing', () => {
     expect(result4.main).toBe('ドーン')
     expect(result4.supplement).toBe('バン（内側）外側')
   })
+
+  test('parseSfxText should strip prefix even when inside angle brackets', () => {
+    const placer = new SfxPlacer()
+
+    // @ts-expect-error private access for test
+    const c1 = placer['parseSfxText']('〈SFX： ハッ…！〉')
+    expect(c1.main).toBe('ハッ…！')
+
+    // full-width letters and brackets variant
+    // @ts-expect-error private access for test
+    const c2 = placer['parseSfxText']('⟨ＳＦＸ： キラキラ…⟩')
+    expect(c2.main).toBe('キラキラ…')
+  })
 })

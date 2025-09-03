@@ -99,8 +99,6 @@ export const appConfig = {
 
 ---
 
-## 1) 変換パラメータ（必要に応じて編集）
-
 * 作品情報
 
   * 小説全文を{{chunksNumber}}個に分けたチャンクの中の{{chunkIndex}}番目のチャンクです
@@ -116,7 +114,7 @@ export const appConfig = {
   * カメラは**基本固定→必要時のみ移動**、唐突なジャンプカット禁止。
   * 地の文は**(a)カット指示**か**(b)ナレーション/心の声**へ確実に変換。
   * 原文にあるセリフは省略不可。長いセリフは分割しつつ、全てのセリフを漏れなく台本に入れること。
-  
+
 * 表記規約
 
   * キャラ名は初出でフル、その後は短縮可。
@@ -158,6 +156,12 @@ export const appConfig = {
 
 ## 3) 出力仕様（JSONのみ・未知プロパティ禁止）
 
+セリフ種類の判定ルール（重要）:
+* 地の文から抽出した語り・説明は type:"narration" として「ナレーション」話者で dialogue に含める
+* キャラクターの内面・思考は type:"thought" として「キャラ名（心の声）」話者で dialogue に含める
+* 通常の発話は type:"speech" として「キャラ名」話者で dialogue に含める
+* narration フィールドは使用しない（後方互換性のため空配列とする）
+
 ルートはオブジェクト。以下のフィールドのみを含めること（additionalProperties=false 相当）：
 
 \`\`\`json
@@ -179,8 +183,11 @@ export const appConfig = {
       "no": 1,
       "cut": "ワシントン・スクエア西の路地の迷宮が広がる絵",
       "camera": "WS/俯瞰・曇天・濡れた石畳",
-      "narration": ["ワシントン・スクエア西の小地区は、道が入り組み…芸術家たちが集った。"],
-      "dialogue": ["キャラ名: セリフ内容"],
+      "narration": [],
+      "dialogue": [
+        {"type": "narration", "text": "ワシントン・スクエア西の小地区は、道が入り組み…芸術家たちが集った。"},
+        {"type": "speech", "speaker": "キャラ名", "text": "セリフ内容"}
+      ],
       "sfx": ["ざあ…（遠景の雨/風、必要時）"],
       "importance": 1
     }
@@ -193,8 +200,9 @@ export const appConfig = {
 
 制約:
 - 必須キーのみ。未知キーは出力禁止。
-- \`dialogue\` は文字列配列（形式: "名前: セリフ"）。
-- ネスト深度は最大4階層（ルート→panels→panel→dialogue(文字列)）。
+- \`dialogue\` はオブジェクト配列（各要素: { type: "speech|narration|thought", speaker?: string, text: string }）。
+- narration フィールドは使用しない（常に空配列）。
+- ネスト深度は最大4階層（ルート→panels→panel→dialogue要素）。
 - 日本語のみ出力。説明文・Markdown・コードブロック禁止。
 
 ---
@@ -443,6 +451,8 @@ JSONのみ出力。説明文禁止。`,
         offsetX: 0.3,
         offsetY: 0.7,
         borderRadius: 3,
+        // BudouXを用いた行分割の1行最大文字数（単語境界優先）
+        maxCharsPerLine: 8,
       },
       // 説明テキスト（状況説明）描画設定
       contentText: {

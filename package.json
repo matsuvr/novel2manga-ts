@@ -64,6 +64,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "autoprefixer": "^10.4.21",
+    "budoux": "^0.7.0",
     "canvas": "^3.1.2",
     "date-fns": "^4.1.0",
     "drizzle-kit": "^0.31.4",

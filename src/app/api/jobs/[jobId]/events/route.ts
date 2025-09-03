@@ -101,8 +101,8 @@ export async function GET(
               send('ping', 'keepalive')
             }
 
-            // small delay between checks
-            await new Promise((r) => setTimeout(r, 1000))
+            // small delay between checks (短縮して進捗の反映を早める)
+            await new Promise((r) => setTimeout(r, 500))
           }
         } finally {
           request.signal.removeEventListener('abort', onAbort)

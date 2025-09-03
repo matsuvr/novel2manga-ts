@@ -5,10 +5,12 @@ import type { MangaLayout } from '@/types/panel-layout'
 
 // Mock vertical-text client (spy on arguments)
 vi.mock('@/services/vertical-text-client', () => ({
-  renderVerticalText: vi.fn().mockResolvedValue({
-    meta: { image_base64: 'x', width: 120, height: 300 },
-    pngBuffer: Buffer.from('iVBOR', 'base64'),
-  }),
+  renderVerticalTextBatch: vi.fn().mockImplementation(async ({ items }) =>
+    items.map(() => ({
+      meta: { image_base64: 'x', width: 120, height: 300 },
+      pngBuffer: Buffer.from('iVBOR', 'base64'),
+    })),
+  ),
 }))
 
 // Spy-able CanvasRenderer mock that exposes setDialogueAssets and static createImageFromBuffer
@@ -73,7 +75,7 @@ describe('MangaPageRenderer: maxCharsPerLine scaling by panel height', () => {
   }
 
   it('height <= 0.2 uses 6 chars per line', async () => {
-    const { renderVerticalText } = await import('@/services/vertical-text-client')
+    const { renderVerticalTextBatch } = await import('@/services/vertical-text-client')
     const canvasMod = await import('@/lib/canvas/canvas-renderer')
     const renderer = new MangaPageRenderer()
     const mockInstance = await (canvasMod as any).CanvasRenderer.create()
@@ -82,13 +84,13 @@ describe('MangaPageRenderer: maxCharsPerLine scaling by panel height', () => {
     const layout = makeLayout(0.2)
     await renderer.renderToCanvas(layout, 1)
 
-    expect((renderVerticalText as any).mock.calls.length).toBe(2)
-    const firstArg = (renderVerticalText as any).mock.calls[0][0]
-    expect(firstArg.maxCharsPerLine).toBe(6)
+    expect((renderVerticalTextBatch as any).mock.calls.length).toBe(1)
+    const firstCallArg = (renderVerticalTextBatch as any).mock.calls[0][0]
+    expect(firstCallArg.items[0].maxCharsPerLine).toBe(6)
   })
 
   it('height <= 0.3 uses 8 chars per line', async () => {
-    const { renderVerticalText } = await import('@/services/vertical-text-client')
+    const { renderVerticalTextBatch } = await import('@/services/vertical-text-client')
     const canvasMod = await import('@/lib/canvas/canvas-renderer')
     const renderer = new MangaPageRenderer()
     const mockInstance = await (canvasMod as any).CanvasRenderer.create()
@@ -97,13 +99,13 @@ describe('MangaPageRenderer: maxCharsPerLine scaling by panel height', () => {
     const layout = makeLayout(0.25)
     await renderer.renderToCanvas(layout, 1)
 
-    expect((renderVerticalText as any).mock.calls.length).toBe(2)
-    const firstArg = (renderVerticalText as any).mock.calls[0][0]
-    expect(firstArg.maxCharsPerLine).toBe(8)
+    expect((renderVerticalTextBatch as any).mock.calls.length).toBe(1)
+    const firstCallArg = (renderVerticalTextBatch as any).mock.calls[0][0]
+    expect(firstCallArg.items[0].maxCharsPerLine).toBe(8)
   })
 
   it('height > 0.3 uses default from config', async () => {
-    const { renderVerticalText } = await import('@/services/vertical-text-client')
+    const { renderVerticalTextBatch } = await import('@/services/vertical-text-client')
     const canvasMod = await import('@/lib/canvas/canvas-renderer')
     const renderer = new MangaPageRenderer()
     const mockInstance = await (canvasMod as any).CanvasRenderer.create()
@@ -112,8 +114,10 @@ describe('MangaPageRenderer: maxCharsPerLine scaling by panel height', () => {
     const layout = makeLayout(0.4)
     await renderer.renderToCanvas(layout, 1)
 
-    expect((renderVerticalText as any).mock.calls.length).toBe(2)
-    const firstArg = (renderVerticalText as any).mock.calls[0][0]
-    expect(firstArg.maxCharsPerLine).toBe(appConfig.rendering.verticalText.defaults.maxCharsPerLine)
+    expect((renderVerticalTextBatch as any).mock.calls.length).toBe(1)
+    const firstCallArg = (renderVerticalTextBatch as any).mock.calls[0][0]
+    expect(firstCallArg.items[0].maxCharsPerLine).toBe(
+      appConfig.rendering.verticalText.defaults.maxCharsPerLine,
+    )
   })
 })

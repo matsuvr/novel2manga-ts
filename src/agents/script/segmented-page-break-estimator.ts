@@ -6,6 +6,7 @@
  */
 
 import type { NewMangaScript, PageBreakV2 } from '../../types/script'
+import { buildPanelContentFromScript, parseDialogueAndNarration } from './dialogue-utils'
 import { calculateImportanceBasedPageBreaks } from './importance-based-page-break'
 import type { ScriptSegment } from './script-segmenter'
 import {
@@ -61,29 +62,28 @@ export async function estimatePageBreaksSegmented(
         {
           pageNumber: 1,
           panelIndex: 1,
-          content: script.panels?.[0]?.cut || 'デモコンテンツ',
-          dialogue: [
-            {
-              speaker: '太郎',
-              text: 'やってみよう！',
-            },
-          ],
+          content:
+            buildPanelContentFromScript({
+              cut: script.panels?.[0]?.cut,
+              camera: script.panels?.[0]?.camera,
+            }) || 'デモコンテンツ',
+          dialogue: parseDialogueAndNarration(
+            script.panels?.[0]?.dialogue || ['太郎: やってみよう！'],
+            script.panels?.[0]?.narration,
+          ),
         },
         {
           pageNumber: 1,
           panelIndex: 2,
-          content: script.panels?.[1]?.cut || '太郎のセリフ',
-          dialogue: [
-            {
-              speaker: '太郎',
-              text:
-                (script.panels?.[1]?.dialogue?.[0] || '太郎: セリフ')
-                  .split(':')
-                  .slice(1)
-                  .join(':')
-                  .trim() || '太郎のセリフ',
-            },
-          ],
+          content:
+            buildPanelContentFromScript({
+              cut: script.panels?.[1]?.cut,
+              camera: script.panels?.[1]?.camera,
+            }) || '太郎のセリフ',
+          dialogue: parseDialogueAndNarration(
+            script.panels?.[1]?.dialogue || ['太郎: セリフ'],
+            script.panels?.[1]?.narration,
+          ),
         },
       ],
     }

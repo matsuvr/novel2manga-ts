@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import {
+  type VerticalTextBatchRequest,
+  VerticalTextBatchRequestSchema,
+  type VerticalTextBatchResponse,
+  VerticalTextBatchResponseSchema,
   type VerticalTextRenderRequest,
   VerticalTextRenderRequestSchema,
   type VerticalTextRenderResponse,
@@ -46,7 +50,7 @@ function readEnv() {
   }
 }
 
-function toSnakeCasePayload(req: VerticalTextRenderRequest) {
+function toSnakeCasePayload(req: Partial<VerticalTextRenderRequest>) {
   return {
     text: req.text,
     font: req.font,
@@ -119,6 +123,73 @@ export async function renderVerticalText(
     }
 
     return { meta, pngBuffer }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+export interface RenderedVerticalTextBatchItem extends RenderedVerticalText {}
+
+export async function renderVerticalTextBatch(
+  input: VerticalTextBatchRequest,
+  signal?: AbortSignal,
+): Promise<RenderedVerticalTextBatchItem[]> {
+  const { url, token } = readEnv()
+  const validated = VerticalTextBatchRequestSchema.parse(input)
+
+  const controller = new AbortController()
+  const timeout = setTimeout(
+    () => controller.abort(),
+    Math.min(60000, Number(process.env.VERTICAL_TEXT_API_TIMEOUT_MS) || 30000),
+  )
+  try {
+    const body = {
+      // defaults は text を含まないため Partial で変換し、未定義のキーは JSON.stringify で落ちる
+      defaults: validated.defaults ? toSnakeCasePayload(validated.defaults) : undefined,
+      items: validated.items.map((it) => toSnakeCasePayload(it)),
+    }
+
+    const res = await fetch(`${url.replace(/\/$/, '')}/render/batch`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: signal ?? controller.signal,
+    })
+
+    if (!res.ok) {
+      throw new Error(`vertical-text API failed: ${res.status}`)
+    }
+
+    const json = (await res.json()) as unknown
+    const parsed: VerticalTextBatchResponse = VerticalTextBatchResponseSchema.parse(json)
+
+    const results: RenderedVerticalTextBatchItem[] = parsed.results.map((meta) => {
+      if (typeof meta.image_base64 !== 'string' || meta.image_base64.length < 10) {
+        throw new Error(
+          `vertical-text API returned invalid image_base64 (length: ${meta.image_base64?.length ?? 'undefined'})`,
+        )
+      }
+      const pngBuffer = Buffer.from(meta.image_base64, 'base64')
+      const isPng =
+        pngBuffer.length > 8 &&
+        pngBuffer[0] === 0x89 &&
+        pngBuffer[1] === 0x50 &&
+        pngBuffer[2] === 0x4e &&
+        pngBuffer[3] === 0x47 &&
+        pngBuffer[4] === 0x0d &&
+        pngBuffer[5] === 0x0a &&
+        pngBuffer[6] === 0x1a &&
+        pngBuffer[7] === 0x0a
+      if (!isPng) {
+        throw new Error('vertical-text API did not return a valid PNG image')
+      }
+      return { meta, pngBuffer }
+    })
+
+    return results
   } finally {
     clearTimeout(timeout)
   }
