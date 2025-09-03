@@ -129,33 +129,94 @@ export class PanelLayoutCoordinator {
     width: number
     height: number
   }): { x: number; y: number; width: number; height: number } | null {
-    const minX = panelBounds.x + 10
-    let maxX = panelBounds.x + panelBounds.width * 0.4
-    let minY = panelBounds.y + 10
-    let maxY = panelBounds.y + panelBounds.height - 10
+    const padding = 10
+    const leftBounds = {
+      x: panelBounds.x + padding,
+      y: panelBounds.y + padding,
+      width: Math.max(0, panelBounds.width * 0.4 - padding),
+      height: Math.max(0, panelBounds.height - padding * 2),
+    }
 
-    for (const occupied of this.occupiedAreas) {
-      if (occupied.type === 'dialogue') {
-        maxX = Math.min(maxX, occupied.x - 10)
-      } else if (occupied.type === 'sfx') {
-        if (
-          this.isOverlapping(
-            { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
-            occupied,
-          )
-        ) {
-          if (occupied.y > panelBounds.y + panelBounds.height * 0.5) {
-            maxY = Math.min(maxY, occupied.y - 10)
-          } else {
-            minY = Math.max(minY, occupied.y + occupied.height + 10)
+    const rect = this.getLargestEmptyRect(leftBounds, this.occupiedAreas, padding)
+    return rect ?? null
+  }
+
+  /** 汎用: 指定領域内で占有矩形群を避けた最大の空き矩形を探索 */
+  private getLargestEmptyRect(
+    bounds: { x: number; y: number; width: number; height: number },
+    obstacles: ReadonlyArray<{ x: number; y: number; width: number; height: number }>,
+    margin: number,
+  ): { x: number; y: number; width: number; height: number } | null {
+    const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
+    const bx0 = bounds.x
+    const by0 = bounds.y
+    const bx1 = bounds.x + bounds.width
+    const by1 = bounds.y + bounds.height
+
+    if (bounds.width <= 0 || bounds.height <= 0) return null
+
+    // bounds と交差する障害物のみを対象にし、マージンを考慮して座標を拡張
+    const relevant = obstacles
+      .map((o) => ({ x0: o.x, y0: o.y, x1: o.x + o.width, y1: o.y + o.height }))
+      .map((o) => ({ x0: o.x0 - margin, y0: o.y0 - margin, x1: o.x1 + margin, y1: o.y1 + margin }))
+      .map((o) => ({
+        x0: clamp(o.x0, bx0, bx1),
+        y0: clamp(o.y0, by0, by1),
+        x1: clamp(o.x1, bx0, bx1),
+        y1: clamp(o.y1, by0, by1),
+      }))
+      .filter((o) => o.x0 < o.x1 && o.y0 < o.y1)
+      .filter((o) => !(o.x1 <= bx0 || o.x0 >= bx1 || o.y1 <= by0 || o.y0 >= by1))
+
+    // 候補座標（bounds の端と障害物の端）
+    const xs = new Set<number>([bx0, bx1])
+    const ys = new Set<number>([by0, by1])
+    for (const o of relevant) {
+      xs.add(o.x0)
+      xs.add(o.x1)
+      ys.add(o.y0)
+      ys.add(o.y1)
+    }
+    const xList = Array.from(xs).sort((a, b) => a - b)
+    const yList = Array.from(ys).sort((a, b) => a - b)
+
+    let best: { x: number; y: number; width: number; height: number } | null = null
+    let bestArea = 0
+
+    // 全組み合わせから最大の空き矩形を探索
+    for (let i = 0; i < xList.length; i++) {
+      for (let j = i + 1; j < xList.length; j++) {
+        const x0 = xList[i]
+        const x1 = xList[j]
+        if (x1 - x0 <= 0) continue
+        for (let k = 0; k < yList.length; k++) {
+          for (let l = k + 1; l < yList.length; l++) {
+            const y0 = yList[k]
+            const y1 = yList[l]
+            if (y1 - y0 <= 0) continue
+            const candidate = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
+            const overlaps = relevant.some(
+              (o) =>
+                !(
+                  candidate.x + candidate.width <= o.x0 ||
+                  o.x1 <= candidate.x ||
+                  candidate.y + candidate.height <= o.y0 ||
+                  o.y1 <= candidate.y
+                ),
+            )
+            if (!overlaps) {
+              const area = candidate.width * candidate.height
+              if (area > bestArea) {
+                best = candidate
+                bestArea = area
+              }
+            }
           }
         }
       }
     }
 
-    if (maxX > minX && maxY > minY)
-      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
-    return null
+    return best
   }
 
   /** 上部の空き領域を計算 */
@@ -324,18 +385,5 @@ export class PanelLayoutCoordinator {
       if (currentLine) lines.push(currentLine)
     }
     return lines
-  }
-
-  /** 領域の重なりチェック */
-  private isOverlapping(
-    area1: { x: number; y: number; width: number; height: number },
-    area2: { x: number; y: number; width: number; height: number },
-  ): boolean {
-    return !(
-      area1.x + area1.width < area2.x ||
-      area2.x + area2.width < area1.x ||
-      area1.y + area1.height < area2.y ||
-      area2.y + area2.height < area1.y
-    )
   }
 }

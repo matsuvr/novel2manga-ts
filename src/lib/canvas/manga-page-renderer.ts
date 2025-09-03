@@ -473,22 +473,18 @@ export class MangaPageRenderer {
    * セリフテキストから話者部分を除去し、最初と最後のカギ括弧を取り除く
    * 例: 「太郎：「こんにちは」」または「「こんにちは」」→「こんにちは」
    */
+  /**
+   * セリフテキストから話者部分を除去し、最初と最後のカギ括弧を取り除く
+   * 例: 「太郎：「こんにちは」」または「「こんにちは」」→「こんにちは」
+   */
   private extractDialogueText(text: string): string {
     let cleanedText = text
 
-    // 話者部分の除去
-    // パターン1: 全角コロン
-    const speakerPattern1 = /^(.+?)：(.+)$/
-    const m1 = cleanedText.match(speakerPattern1)
-    if (m1) {
-      cleanedText = m1[2].trim()
-    } else {
-      // パターン2: 半角コロン
-      const speakerPattern2 = /^(.+?):(.+)$/
-      const m2 = cleanedText.match(speakerPattern2)
-      if (m2) {
-        cleanedText = m2[2].trim()
-      }
+    // 話者部分の除去 (全角コロンと半角コロンの両方に対応)
+    const speakerPattern = /^(.+?)[：:](.+)$/
+    const match = cleanedText.match(speakerPattern)
+    if (match) {
+      cleanedText = match[2].trim()
     }
 
     // 外側のカギ括弧のみ除去（内側は保持）
