@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { SfxPlacer } from '@/lib/canvas/sfx-placer'
 import type { Panel } from '@/types/panel-layout'
 

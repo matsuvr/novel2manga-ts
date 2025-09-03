@@ -139,15 +139,21 @@ function calculateRenderProgress(job: Record<string, unknown>): number {
     return 0
   }
 
-  const baseProgress = Math.round((renderedPages / totalPages) * 100)
-  const processingPage = job.processingPage
-
-  // 現在処理中のページがある場合は部分的な進捗を追加
-  if (typeof processingPage === 'number' && processingPage > 0) {
-    return Math.min(90, baseProgress + 10) // 最大90%まで
+  if (totalPages === 0) {
+    return 0
   }
 
-  return baseProgress
+  // 実際の進捗を正確に反映
+  const baseProgress = Math.round((renderedPages / totalPages) * 100)
+
+  // 処理中のページがある場合は、そのページを50%完了として扱う
+  const processingPage = job.processingPage
+  if (typeof processingPage === 'number' && processingPage > 0 && renderedPages < totalPages) {
+    const partialProgress = Math.round((0.5 / totalPages) * 100) // 0.5ページ分の進捗
+    return Math.min(99, baseProgress + partialProgress) // 最大99%まで（完了は100%のみ）
+  }
+
+  return Math.min(100, baseProgress)
 }
 
 // ヘルパー関数: 全体進捗の計算
@@ -205,6 +211,11 @@ function ProcessingProgress({
     >
   >({})
   const [currentLayoutEpisode, setCurrentLayoutEpisode] = useState<number | null>(null)
+  // DB集計のページ数（SSEのJobDataから反映）。UI表示で優先使用。
+  const [dbPageTotals, setDbPageTotals] = useState<{ totalPages: number; renderedPages: number }>({
+    totalPages: 0,
+    renderedPages: 0,
+  })
 
   // マウント状態
   const isMountedRef = useRef(true)
@@ -336,6 +347,11 @@ function ProcessingProgress({
       }
 
       setLastJobData(jobDataString)
+      // DB集計値を保持（表示用の最終値として優先）
+      setDbPageTotals({
+        totalPages: Number(data.job.totalPages || 0),
+        renderedPages: Number(data.job.renderedPages || 0),
+      })
       // 詳細メッセージ
       addLog('info', describeStep(data.job.currentStep))
       if (data.job.lastError) {
@@ -515,6 +531,12 @@ function ProcessingProgress({
             data.job.currentStep?.startsWith('episode_')
           ) {
             updatedSteps[3].status = 'processing'
+            // エピソード構成の進捗を表示（processedChunks/totalChunksを流用）
+            if (data.job.totalChunks && data.job.processedChunks !== undefined) {
+              updatedSteps[3].progress = Math.round(
+                (data.job.processedChunks / data.job.totalChunks) * 100,
+              )
+            }
             currentIndex = 3
           }
 
@@ -600,6 +622,26 @@ function ProcessingProgress({
           const total = data.job.totalChunks || 0
           hints.split = `現在: チャンク ${Math.min(done, total || done)} / ${total || '?'} を作成中`
         }
+        if ((stepId === 'episode' || stepId.startsWith('episode_')) && !data.job.episodeCompleted) {
+          const processedChunks = data.job.processedChunks ?? 0
+          const totalChunks = data.job.totalChunks || 4
+          const progressSteps = [
+            '統合スクリプト読み込み',
+            'エピソード切れ目検出',
+            'エピソードデータ保存',
+            '完了処理',
+          ]
+          const currentStepName = progressSteps[Math.min(processedChunks, progressSteps.length - 1)]
+          hints.episode = `現在: ${currentStepName}中 (${processedChunks}/${totalChunks})`
+
+          // デバッグ情報をログに追加（開発環境のみ）
+          if (process.env.NODE_ENV === 'development') {
+            addLog(
+              'info',
+              `エピソード構成進捗: ${processedChunks}/${totalChunks} - ${currentStepName}`,
+            )
+          }
+        }
         const layoutMatch = stepId.match(/^layout_episode_(\d+)$/)
         if (layoutMatch && !data.job.layoutCompleted) {
           const ep = Number(layoutMatch[1])
@@ -616,18 +658,24 @@ function ProcessingProgress({
         }
         if ((stepId === 'render' || stepId.startsWith('render_')) && !data.job.renderCompleted) {
           const total = data.job.totalPages || 0
-          const inFlightPage = data.job.processingPage
-          const doneBase = data.job.renderedPages ?? 0
-          const done = Math.min(
-            total || doneBase + 1,
-            typeof inFlightPage === 'number' && inFlightPage > 0 ? inFlightPage : doneBase + 1,
-          )
+          const rendered = data.job.renderedPages ?? 0
+          const processingPage = data.job.processingPage
+          const processingEpisode = data.job.processingEpisode
+
           // より詳細なレンダリング進捗表示
           if (total > 0) {
-            const progressPercent = Math.round((done / total) * 100)
-            hints.render = `現在: ページ ${done} / ${total} をレンダリング中 (${progressPercent}%)`
+            const progressPercent = Math.round((rendered / total) * 100)
+            if (processingPage && processingEpisode) {
+              hints.render = `現在: EP${processingEpisode} ページ${processingPage}をレンダリング中 (${rendered}/${total}完了 ${progressPercent}%)`
+            } else {
+              hints.render = `現在: ${rendered}/${total}ページ完了 (${progressPercent}%)`
+            }
           } else {
-            hints.render = `現在: ページ ${done} をレンダリング中`
+            if (processingPage && processingEpisode) {
+              hints.render = `現在: EP${processingEpisode} ページ${processingPage}をレンダリング中`
+            } else {
+              hints.render = `現在: ${rendered}ページ完了`
+            }
           }
         }
         setRuntimeHints(hints)
@@ -927,8 +975,16 @@ function ProcessingProgress({
                           <span>レンダリング詳細:</span>
                           <span>
                             {(() => {
-                              const totalPages = totalPagesByEpisodes
-                              const renderedPages = renderedPagesByEpisodes
+                              // データベースから直接取得した値を優先
+                              const dbTotalPages = dbPageTotals.totalPages || 0
+                              const dbRenderedPages = dbPageTotals.renderedPages || 0
+                              const episodeTotalPages = totalPagesByEpisodes
+                              const episodeRenderedPages = renderedPagesByEpisodes
+
+                              // より正確な値を使用
+                              const totalPages = Math.max(dbTotalPages, episodeTotalPages)
+                              const renderedPages = Math.max(dbRenderedPages, episodeRenderedPages)
+
                               if (totalPages > 0) {
                                 const progressPercent = Math.round(
                                   (renderedPages / totalPages) * 100,

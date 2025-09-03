@@ -27,13 +27,21 @@ export const MangaPropsSchema = z.object({
   continuity: z.string(),
 })
 
-// Panel schema（dialogueは "名前: セリフ" の文字列配列）
+// Dialogue line schema with explicit type for rendering styles
+export const DialogueLineSchema = z.object({
+  type: z.enum(['speech', 'narration', 'thought']),
+  speaker: z.string().optional(),
+  text: z.string(),
+})
+
+// Panel schema（dialogueはオブジェクト配列に更新）
 export const MangaPanelSchema = z.object({
   no: z.number().int().min(1),
   cut: z.string(),
   camera: z.string(),
+  // narration は後方互換のため暫定維持（最終的にdialogueへ統合）
   narration: z.array(z.string()).optional(),
-  dialogue: z.array(z.string()).optional(),
+  dialogue: z.array(DialogueLineSchema).optional(),
   sfx: z.array(z.string()).optional(),
   importance: z.number().int(), // 1-6の重要度（プロンプトで制約、後でclamping処理）
 })
@@ -63,6 +71,7 @@ export type MangaCharacter = z.infer<typeof MangaCharacterSchema>
 export type MangaLocation = z.infer<typeof MangaLocationSchema>
 export type MangaProps = z.infer<typeof MangaPropsSchema>
 export type MangaPanel = z.infer<typeof MangaPanelSchema>
+export type DialogueLine = z.infer<typeof DialogueLineSchema>
 
 // ============================
 // Page Break V2 Schema (retained for layout generation)
@@ -79,6 +88,8 @@ export const PageBreakV2Schema = z.object({
           z.object({
             speaker: z.string(),
             text: z.string(),
+            // セリフ種別（後段レンダリングで書体選択に使用）
+            type: z.enum(['speech', 'narration', 'thought']).optional(),
           }),
         )
         .optional(),

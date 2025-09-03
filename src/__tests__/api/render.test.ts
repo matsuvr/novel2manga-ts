@@ -27,7 +27,25 @@ vi.mock('@/services/database', () => ({
     getEpisodesByJobId: vi.fn(),
     getJobWithProgress: vi.fn(),
     updateRenderStatus: vi.fn(),
+    updateProcessingPosition: vi.fn(),
   })),
+}))
+
+// Mock db-factory to return the mockDbService
+const mockDbService = {
+  createNovel: vi.fn(),
+  createJob: vi.fn(),
+  createEpisode: vi.fn(),
+  getJob: vi.fn(),
+  getEpisodesByJobId: vi.fn(),
+  getJobWithProgress: vi.fn(),
+  updateRenderStatus: vi.fn(),
+  updateProcessingPosition: vi.fn(),
+}
+
+vi.mock('@/services/db-factory', () => ({
+  getDatabaseService: vi.fn(() => mockDbService),
+  __resetDatabaseServiceForTest: vi.fn(),
 }))
 
 // サムネイル生成のモック
@@ -147,7 +165,6 @@ describe('/api/render', () => {
   let testJobId: string
   let testNovelId: string
   let testDir: string
-  let mockDbService: any
 
   const validYaml = `
 title: テストマンガ
@@ -182,41 +199,38 @@ pages:
     testDir = path.join(process.cwd(), '.test-storage')
     await fs.mkdir(testDir, { recursive: true })
 
-    // モックサービスの設定
-    mockDbService = {
-      createNovel: vi.fn().mockResolvedValue(testNovelId),
-      createJob: vi.fn(),
-      createEpisode: vi.fn(),
-      getJob: vi.fn().mockResolvedValue({
-        id: testJobId,
-        novelId: testNovelId,
-        status: 'pending',
+    // モックサービスの設定 - Update the existing mock functions
+    mockDbService.createNovel.mockResolvedValue(testNovelId)
+    mockDbService.getJob.mockResolvedValue({
+      id: testJobId,
+      novelId: testNovelId,
+      status: 'pending',
+      currentStep: 'render',
+      renderCompleted: false,
+    })
+    mockDbService.getEpisodesByJobId.mockResolvedValue([{ episodeNumber: 1, title: 'Episode 1' }])
+    mockDbService.getJobWithProgress.mockResolvedValue({
+      id: testJobId,
+      novelId: testNovelId,
+      status: 'pending',
+      currentStep: 'render',
+      renderCompleted: false,
+      progress: {
         currentStep: 'render',
-        renderCompleted: false,
-      }),
-      getEpisodesByJobId: vi.fn().mockResolvedValue([{ episodeNumber: 1, title: 'Episode 1' }]),
-      getJobWithProgress: vi.fn().mockResolvedValue({
-        id: testJobId,
-        novelId: testNovelId,
-        status: 'pending',
-        currentStep: 'render',
-        renderCompleted: false,
-        progress: {
-          currentStep: 'render',
-          processedChunks: 5,
-          totalChunks: 5,
-          episodes: [
-            {
-              episodeNumber: 1,
-              title: 'Episode 1',
-              startChunk: 0,
-              endChunk: 2,
-            },
-          ],
-        },
-      }),
-      updateRenderStatus: vi.fn().mockResolvedValue(undefined),
-    }
+        processedChunks: 5,
+        totalChunks: 5,
+        episodes: [
+          {
+            episodeNumber: 1,
+            title: 'Episode 1',
+            startChunk: 0,
+            endChunk: 2,
+          },
+        ],
+      },
+    })
+    mockDbService.updateRenderStatus.mockResolvedValue(undefined)
+    mockDbService.updateProcessingPosition.mockResolvedValue(undefined)
 
     vi.mocked(DatabaseService).mockReturnValue(mockDbService)
   })

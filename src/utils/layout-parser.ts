@@ -68,22 +68,146 @@ function toCanonicalFromBBox(input: z.infer<typeof MangaLayoutBBoxSchema>): Mang
  */
 export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
   const raw = yamlLoad(layoutYaml)
+  const __debug = process.env.DEBUG_LAYOUT_PARSER === '1'
+  if (__debug) {
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[layout-parser] YAML raw preview:', JSON.stringify(raw))
+    } catch {
+      // eslint-disable-next-line no-console
+      console.log('[layout-parser] YAML raw preview: <unserializable>')
+    }
+  }
 
-  // 1) 既存の正規スキーマ
+  // 1) 既存の正規スキーマ（そのまま通る場合）
   const canon = MangaLayoutSchema.safeParse(raw)
-  if (canon.success) return canon.data
+  if (canon.success) {
+    if (__debug) console.log('[layout-parser] matched: canonical schema')
+    return canon.data
+  }
+
+  // 1.5) 正規っぽい構造だが微妙な差異がある場合は正規化してから検証
+  const isCanonicalLike = (
+    v: unknown,
+  ): v is {
+    title?: unknown
+    author?: unknown
+    created_at?: unknown
+    episodeNumber?: unknown
+    episodeTitle?: unknown
+    pages?: unknown
+  } =>
+    !!(
+      v &&
+      typeof v === 'object' &&
+      'pages' in (v as Record<string, unknown>) &&
+      Array.isArray((v as Record<string, unknown>).pages) &&
+      (v as { pages: unknown[] }).pages.every(
+        (p) =>
+          p &&
+          typeof p === 'object' &&
+          'page_number' in (p as Record<string, unknown>) &&
+          'panels' in (p as Record<string, unknown>),
+      )
+    )
+
+  if (isCanonicalLike(raw)) {
+    if (__debug) console.log('[layout-parser] matched: canonical-like normalization path')
+    // dialogues の要素に string が混在していても正規化し、type を保持
+    const rawCreated = (raw as { created_at?: unknown }).created_at
+    const normalized = {
+      title: (raw as { title?: string }).title ?? 'Untitled',
+      author: (raw as { author?: string }).author,
+      created_at:
+        typeof rawCreated === 'string'
+          ? rawCreated
+          : rawCreated instanceof Date
+            ? rawCreated.toISOString()
+            : new Date().toISOString(),
+      episodeNumber: (raw as { episodeNumber?: number }).episodeNumber ?? 1,
+      episodeTitle: (raw as { episodeTitle?: string }).episodeTitle,
+      pages: (raw as { pages: Array<{ page_number: number; panels: unknown[] }> }).pages.map(
+        (p) => ({
+          page_number: (p as { page_number: number }).page_number,
+          panels: (p as { panels: Array<unknown> }).panels.map((panel) => {
+            const pos = (panel as { position?: { x: number; y: number } }).position || {
+              x: 0,
+              y: 0,
+            }
+            const size = (panel as { size?: { width: number; height: number } }).size || {
+              width: 0,
+              height: 0,
+            }
+            const dialoguesRaw = (panel as { dialogues?: Array<unknown> }).dialogues
+            const normalizedDialogs = Array.isArray(dialoguesRaw)
+              ? dialoguesRaw.map((d) =>
+                  typeof d === 'string'
+                    ? { speaker: '', text: d }
+                    : (() => {
+                        if (!d || typeof d !== 'object') {
+                          return { speaker: '', text: '' }
+                        }
+                        const obj = d as Record<string, unknown>
+                        const speaker = typeof obj.speaker === 'string' ? obj.speaker : ''
+                        const text = typeof obj.text === 'string' ? obj.text : ''
+                        const emotion = typeof obj.emotion === 'string' ? obj.emotion : undefined
+                        const tRaw = typeof obj.type === 'string' ? obj.type : undefined
+                        const allowed: ReadonlyArray<string> = ['speech', 'thought', 'narration']
+                        const type =
+                          tRaw && allowed.includes(tRaw)
+                            ? (tRaw as 'speech' | 'thought' | 'narration')
+                            : undefined
+                        return { speaker, text, emotion, type }
+                      })(),
+                )
+              : []
+            return {
+              id: (panel as { id: string | number }).id,
+              position: { x: pos.x, y: pos.y },
+              size: { width: size.width, height: size.height },
+              content: (panel as { content?: string }).content ?? '',
+              dialogues: normalizedDialogs,
+              sourceChunkIndex: (panel as { sourceChunkIndex?: number }).sourceChunkIndex,
+              importance: (panel as { importance?: number }).importance,
+            }
+          }),
+        }),
+      ),
+    }
+    const parsed = MangaLayoutSchema.safeParse(normalized)
+    if (parsed.success) {
+      if (__debug) console.log('[layout-parser] canonical-like normalized -> valid')
+      return parsed.data
+    }
+    if (__debug)
+      console.log('[layout-parser] canonical-like normalized -> INVALID', parsed.error?.errors)
+  }
 
   // 2) BBox形式
   const bbox = MangaLayoutBBoxSchema.safeParse(raw)
-  if (bbox.success) return toCanonicalFromBBox(bbox.data)
+  if (bbox.success) {
+    if (__debug) console.log('[layout-parser] matched: bbox schema')
+    return toCanonicalFromBBox(bbox.data)
+  }
 
   // 3) 互換形式: { pages: [ { "page_22": { panels_count, panels: [...] } }, ... ] }
+  //    要素が単一キーで page_\d+ に一致する場合のみ適用（正規形式と誤判定しない）
   if (
     raw &&
     typeof raw === 'object' &&
     'pages' in (raw as Record<string, unknown>) &&
-    Array.isArray((raw as Record<string, unknown>).pages)
+    Array.isArray((raw as Record<string, unknown>).pages) &&
+    (raw as { pages: unknown[] }).pages.every(
+      (obj) =>
+        !!(
+          obj &&
+          typeof obj === 'object' &&
+          Object.keys(obj as Record<string, unknown>).length === 1 &&
+          /^page_\d+$/.test(Object.keys(obj as Record<string, unknown>)[0] || '')
+        ),
+    )
   ) {
+    if (__debug) console.log('[layout-parser] matched: pages array object-map path')
     const arr = (
       raw as {
         pages: Array<
@@ -128,7 +252,12 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
       episodeNumber: 1,
       pages,
     })
-    if (parsed.success) return parsed.data
+    if (parsed.success) {
+      if (__debug) console.log('[layout-parser] pages array object-map -> valid')
+      return parsed.data
+    }
+    if (__debug)
+      console.log('[layout-parser] pages array object-map -> INVALID', parsed.error?.errors)
   }
 
   // 4) 互換形式: { pages: { "page_22": { ... }, "page_23": { ... } } }（オブジェクトマップ）
@@ -140,6 +269,7 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
     typeof (raw as { pages: unknown }).pages === 'object' &&
     !Array.isArray((raw as { pages: unknown }).pages)
   ) {
+    if (__debug) console.log('[layout-parser] matched: pages object-map path')
     const map = (
       raw as {
         title?: string
@@ -186,6 +316,15 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
                     speaker: d.speaker || '',
                     text: d.text,
                     emotion: 'emotion' in d ? d.emotion : undefined,
+                    // 新フォーマットの type を保持（存在すれば）
+                    type: (() => {
+                      const tVal = (d as { type?: unknown }).type
+                      const t = typeof tVal === 'string' ? tVal : undefined
+                      const allowed: ReadonlyArray<string> = ['speech', 'thought', 'narration']
+                      return t && allowed.includes(t)
+                        ? (t as 'speech' | 'thought' | 'narration')
+                        : undefined
+                    })(),
                   },
             )
           : panel.dialogue
@@ -203,19 +342,30 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
       return { page_number: pageNum, panels }
     })
 
+    const rawCreated2 = (raw as { created_at?: unknown }).created_at
     const parsed = MangaLayoutSchema.safeParse({
       title: (raw as { title?: string }).title ?? 'Untitled',
-      created_at: (raw as { created_at?: string }).created_at ?? new Date().toISOString(),
+      created_at:
+        typeof rawCreated2 === 'string'
+          ? rawCreated2
+          : rawCreated2 instanceof Date
+            ? rawCreated2.toISOString()
+            : new Date().toISOString(),
       episodeNumber: (raw as { episodeNumber?: number }).episodeNumber ?? 1,
       pages,
     })
-    if (parsed.success) return parsed.data
+    if (parsed.success) {
+      if (__debug) console.log('[layout-parser] pages object-map -> valid')
+      return parsed.data
+    }
+    if (__debug) console.log('[layout-parser] pages object-map -> INVALID', parsed.error?.errors)
   }
 
   // 5) 互換形式: { "page_22": { panels_count, panels: [...] } } 単体
   if (raw && typeof raw === 'object') {
     const keys = Object.keys(raw as Record<string, unknown>)
     if (keys.length === 1 && /^page_\d+$/.test(keys[0])) {
+      if (__debug) console.log('[layout-parser] matched: single page_* object path')
       const pageNum = Number(keys[0].split('_')[1])
       const pageObj = (
         raw as Record<
@@ -252,6 +402,14 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
                     speaker: d.speaker || '',
                     text: d.text,
                     emotion: 'emotion' in d ? d.emotion : undefined,
+                    type: (() => {
+                      const tVal = (d as { type?: unknown }).type
+                      const t = typeof tVal === 'string' ? tVal : undefined
+                      const allowed: ReadonlyArray<string> = ['speech', 'thought', 'narration']
+                      return t && allowed.includes(t)
+                        ? (t as 'speech' | 'thought' | 'narration')
+                        : undefined
+                    })(),
                   },
             )
           : panel.dialogue
@@ -271,7 +429,12 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
         episodeNumber: 1,
         pages: [{ page_number: pageNum, panels }],
       })
-      if (parsed.success) return parsed.data
+      if (parsed.success) {
+        if (__debug) console.log('[layout-parser] single page_* object -> valid')
+        return parsed.data
+      }
+      if (__debug)
+        console.log('[layout-parser] single page_* object -> INVALID', parsed.error?.errors)
     }
   }
 

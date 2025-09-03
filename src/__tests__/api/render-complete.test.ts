@@ -36,6 +36,7 @@ const mockDbService = {
   getJob: vi.fn(),
   getEpisodesByJobId: vi.fn(),
   updateRenderStatus: vi.fn(),
+  updateProcessingPosition: vi.fn(),
 }
 
 // DatabaseService モックの実装を上書き

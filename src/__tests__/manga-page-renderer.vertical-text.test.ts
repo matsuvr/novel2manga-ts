@@ -4,7 +4,7 @@ import type { MangaLayout } from '@/types/panel-layout'
 
 // Mock vertical-text client
 vi.mock('@/services/vertical-text-client', () => ({
-  renderVerticalText: vi.fn(),
+  renderVerticalTextBatch: vi.fn(),
 }))
 
 // Spy-able CanvasRenderer mock that exposes setDialogueAssets and static createImageFromBuffer
@@ -75,7 +75,7 @@ describe('MangaPageRenderer vertical text integration', () => {
 
   it('test mode: prepares placeholder assets without calling API', async () => {
     process.env.NODE_ENV = 'test'
-    const { renderVerticalText } = await import('@/services/vertical-text-client')
+    const { renderVerticalTextBatch } = await import('@/services/vertical-text-client')
     const canvasRendererMock = await getCanvasRendererMock()
 
     const renderer = new MangaPageRenderer()
@@ -85,7 +85,7 @@ describe('MangaPageRenderer vertical text integration', () => {
 
     await renderer.renderToCanvas(MockLayout, 1)
     expect(mockInstance.setDialogueAssets).toHaveBeenCalledTimes(1)
-    expect(renderVerticalText as any).not.toHaveBeenCalled()
+    expect(renderVerticalTextBatch as any).not.toHaveBeenCalled()
     // assets contain two entries for two dialogues
     const callArg = mockInstance.setDialogueAssets.mock.calls[0][0] as Record<
       string,
@@ -98,11 +98,17 @@ describe('MangaPageRenderer vertical text integration', () => {
 
   it('non-test mode: calls vertical text API and passes image sizes to CanvasRenderer', async () => {
     process.env.NODE_ENV = 'development'
-    const { renderVerticalText } = await import('@/services/vertical-text-client')
-    ;(renderVerticalText as any).mockResolvedValue({
-      meta: { image_base64: 'x', width: 120, height: 300 },
-      pngBuffer: Buffer.from('iVBOR', 'base64'),
-    })
+    const { renderVerticalTextBatch } = await import('@/services/vertical-text-client')
+    ;(renderVerticalTextBatch as any).mockResolvedValue([
+      {
+        meta: { image_base64: 'x', width: 120, height: 300 },
+        pngBuffer: Buffer.from('iVBOR', 'base64'),
+      },
+      {
+        meta: { image_base64: 'x', width: 120, height: 300 },
+        pngBuffer: Buffer.from('iVBOR', 'base64'),
+      },
+    ])
 
     const canvasRendererMock = await getCanvasRendererMock()
     const renderer = new MangaPageRenderer()
@@ -111,7 +117,7 @@ describe('MangaPageRenderer vertical text integration', () => {
     renderer['canvasRenderer'] = mockInstance
 
     await renderer.renderToCanvas(MockLayout, 1)
-    expect(renderVerticalText as any).toHaveBeenCalled()
+    expect(renderVerticalTextBatch as any).toHaveBeenCalledTimes(1)
     expect(mockInstance.setDialogueAssets).toHaveBeenCalledTimes(1)
     const arg = mockInstance.setDialogueAssets.mock.calls[0][0] as Record<
       string,

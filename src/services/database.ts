@@ -801,9 +801,30 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       hasThumb: !!status.thumbnailPath,
     })
 
-    await this.db
-      .insert(renderStatus)
-      .values({
+    // ON CONFLICT には対象となる UNIQUE/PK が必要だが、
+    // 現行スキーマでは (jobId, episodeNumber, pageNumber) がユニークではないため
+    // まず存在確認し、update/insert を分岐して整合性を保つ。
+    if (existing.length > 0) {
+      await this.db
+        .update(renderStatus)
+        .set({
+          isRendered: status.isRendered,
+          imagePath: status.imagePath,
+          thumbnailPath: status.thumbnailPath,
+          width: status.width,
+          height: status.height,
+          fileSize: status.fileSize,
+          renderedAt: now,
+        })
+        .where(
+          and(
+            eq(renderStatus.jobId, jobId),
+            eq(renderStatus.episodeNumber, episodeNumber),
+            eq(renderStatus.pageNumber, pageNumber),
+          ),
+        )
+    } else {
+      await this.db.insert(renderStatus).values({
         id: crypto.randomUUID(),
         jobId,
         episodeNumber,
@@ -816,18 +837,7 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
         fileSize: status.fileSize,
         renderedAt: now,
       })
-      .onConflictDoUpdate({
-        target: [renderStatus.jobId, renderStatus.episodeNumber, renderStatus.pageNumber],
-        set: {
-          isRendered: status.isRendered,
-          imagePath: status.imagePath,
-          thumbnailPath: status.thumbnailPath,
-          width: status.width,
-          height: status.height,
-          fileSize: status.fileSize,
-          renderedAt: now,
-        },
-      })
+    }
 
     // If this page transitioned to rendered, increment job.renderedPages
     if (status.isRendered && !wasRendered) {

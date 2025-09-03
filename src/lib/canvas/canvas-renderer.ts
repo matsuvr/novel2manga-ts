@@ -1,8 +1,9 @@
 import { getAppConfigWithOverrides } from '@/config/app.config'
-import type { MangaLayout, Panel } from '@/types/panel-layout'
-import { SfxPlacer, type SfxPlacement } from './sfx-placer'
 import type { AppCanvasConfig } from '@/types/canvas-config'
+import type { MangaLayout, Panel } from '@/types/panel-layout'
 import { PanelLayoutCoordinator } from './panel-layout-coordinator'
+import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
+import { type SfxPlacement, SfxPlacer } from './sfx-placer'
 
 // Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
 const isServer = typeof window === 'undefined'
@@ -188,8 +189,16 @@ export class CanvasRenderer {
     if (panel.dialogues && panel.dialogues.length > 0) {
       this.ctx.save()
       this.ctx.beginPath()
-      this.ctx.rect(x, y, width, height)
-      this.ctx.clip()
+      const hasRect = typeof (this.ctx as unknown as { rect?: unknown }).rect === 'function'
+      if (hasRect) {
+        ;(
+          this.ctx as unknown as { rect: (x: number, y: number, w: number, h: number) => void }
+        ).rect(x, y, width, height)
+        this.ctx.clip()
+      } else {
+        // 一部のテストモックで rect が未実装のことがあるため、クリップをスキップ
+        // フレームは既に drawFrame 済みであるため視覚上の影響は小さい
+      }
       try {
         let bubbleY = y + height * 0.2
         const maxAreaWidth = width * 0.45
@@ -239,8 +248,7 @@ export class CanvasRenderer {
             dialogue.emotion === 'shout'
               ? this.appConfig.rendering.canvas.bubble.shoutLineWidth
               : this.appConfig.rendering.canvas.bubble.normalLineWidth
-          const shapeType =
-            (dialogue as { type?: 'speech' | 'thought' | 'narration' }).type || 'speech'
+          const shapeType = dialogue.type || 'speech'
           this.drawBubbleShape(shapeType, bx, by, bubbleW, bubbleH)
           this.ctx.restore()
 
@@ -259,11 +267,14 @@ export class CanvasRenderer {
 
           // 話者ラベル
           const speakerLabelCfg = this.appConfig.rendering.canvas.speakerLabel
-          if (
-            speakerLabelCfg?.enabled &&
+          const dialogueType = dialogue.type
+          // ナレーションでは話者ラベルを表示しない
+          const shouldShowLabel =
+            speakerLabelCfg?.enabled === true &&
+            dialogueType !== 'narration' &&
             typeof dialogue.speaker === 'string' &&
             dialogue.speaker.trim() !== ''
-          ) {
+          if (shouldShowLabel) {
             const baseFontSize = this.config.fontSize || 16
             const fontSize = Math.max(10, baseFontSize * (speakerLabelCfg.fontSize || 0.7))
             const paddingLabel = speakerLabelCfg.padding ?? 4
@@ -599,10 +610,19 @@ export class CanvasRenderer {
     this.ctx.save()
     this.ctx.font = `${fontSize}px ${this.config.fontFamily || 'Arial, sans-serif'}`
 
-    // テキストサイズ計測
-    const metrics = this.ctx.measureText(speaker)
-    const labelWidth = metrics.width + padding * 2
-    const labelHeight = fontSize + padding * 2
+    // BudouXで安全な改行。上限は設定から取得（既定値8）
+    const maxChars = this.appConfig.rendering.canvas.speakerLabel.maxCharsPerLine ?? 8
+    const lines = wrapJapaneseByBudoux(speaker, maxChars)
+    const lineHeight = Math.ceil(fontSize * 1.2)
+
+    // ラベルのサイズを行単位で算出
+    let textMaxWidth = 0
+    for (const line of lines.length > 0 ? lines : [speaker]) {
+      const w = this.ctx.measureText(line).width
+      textMaxWidth = Math.max(textMaxWidth, w)
+    }
+    const labelWidth = textMaxWidth + padding * 2
+    const labelHeight = (lines.length > 0 ? lines.length : 1) * lineHeight + padding * 2
 
     // 位置: 吹き出し右上の少し外側
     const labelX = xRightEdge - labelWidth * offsetXRatio
@@ -618,11 +638,19 @@ export class CanvasRenderer {
     this.ctx.lineWidth = 1
     this.ctx.stroke()
 
-    // テキスト
+    // テキスト（中央揃え、行ごとに描画）
     this.ctx.fillStyle = textColor
     this.ctx.textAlign = 'center'
     this.ctx.textBaseline = 'middle'
-    this.ctx.fillText(speaker, labelX + labelWidth / 2, labelY + labelHeight / 2)
+    const cx = labelX + labelWidth / 2
+    if (lines.length === 0) {
+      this.ctx.fillText(speaker, cx, labelY + labelHeight / 2)
+    } else {
+      for (let i = 0; i < lines.length; i++) {
+        const lineCy = labelY + padding + i * lineHeight + lineHeight / 2
+        this.ctx.fillText(lines[i], cx, lineCy)
+      }
+    }
 
     this.ctx.restore()
   }
