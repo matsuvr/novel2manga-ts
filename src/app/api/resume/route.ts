@@ -2,8 +2,12 @@ import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { JobResumeService } from '@/services/application/job-resume-service'
-import { extractErrorMessage } from '@/utils/api-error'
-import { ApiResponder } from '@/utils/api-responder'
+import {
+  createErrorResponse,
+  createSuccessResponse,
+  extractErrorMessage,
+  ValidationError,
+} from '@/utils/api-error'
 
 const resumeRequestSchema = z.object({
   novelId: z.string().uuid(),
@@ -20,17 +24,19 @@ export async function POST(request: NextRequest) {
     try {
       rawBody = await request.json()
     } catch {
-      return ApiResponder.validation('無効なJSONが送信されました')
+      return createErrorResponse(new ValidationError('無効なJSONが送信されました'))
     }
 
     const parsed = resumeRequestSchema.safeParse(rawBody)
     if (!parsed.success) {
-      return ApiResponder.validation('リクエストボディが無効です', {
-        issues: parsed.error.issues.map((i) => ({
-          field: i.path.join('.'),
-          message: i.message,
-        })),
-      })
+      return createErrorResponse(
+        new ValidationError('リクエストボディが無効です', undefined, {
+          issues: parsed.error.issues.map((i) => ({
+            field: i.path.join('.'),
+            message: i.message,
+          })),
+        }),
+      )
     }
 
     const { novelId } = parsed.data
@@ -39,7 +45,7 @@ export async function POST(request: NextRequest) {
     const resumeService = new JobResumeService()
     const result = await resumeService.resumeByNovelId(novelId)
 
-    return ApiResponder.success({
+    return createSuccessResponse({
       success: result.success,
       jobId: result.jobId,
       novelId: result.novelId,
@@ -51,6 +57,6 @@ export async function POST(request: NextRequest) {
     _logger.error('Resume request failed', {
       error: extractErrorMessage(error),
     })
-    return ApiResponder.error(error, 'ジョブの再開中にエラーが発生しました')
+    return createErrorResponse(error, 'ジョブの再開中にエラーが発生しました')
   }
 }

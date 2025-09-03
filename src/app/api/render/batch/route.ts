@@ -5,7 +5,7 @@ import { EpisodeRepository } from '@/repositories/episode-repository'
 import { JobRepository } from '@/repositories/job-repository'
 import { renderBatchFromYaml } from '@/services/application/render'
 import { getDatabaseService } from '@/services/db-factory'
-import { ApiResponder } from '@/utils/api-responder'
+import { createErrorResponse, createSuccessResponse, ValidationError } from '@/utils/api-error'
 import { validateJobId } from '@/utils/validators'
 
 interface BatchRenderRequest {
@@ -30,15 +30,15 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as Partial<BatchRenderRequest>
 
     // バリデーション
-    if (!body.jobId) return ApiResponder.validation('jobIdが必要です')
+    if (!body.jobId) return createErrorResponse(new ValidationError('jobIdが必要です'))
     validateJobId(body.jobId)
 
     if (typeof body.episodeNumber !== 'number' || body.episodeNumber < 1) {
-      return ApiResponder.validation('有効なepisodeNumberが必要です')
+      return createErrorResponse(new ValidationError('有効なepisodeNumberが必要です'))
     }
 
     if (!body.layoutYaml) {
-      return ApiResponder.validation('layoutYamlが必要です')
+      return createErrorResponse(new ValidationError('layoutYamlが必要です'))
     }
 
     // バリデーション後に型アサーション
@@ -56,14 +56,16 @@ export async function POST(request: NextRequest) {
     // ジョブの存在確認（メソッドがある場合のみチェック）
     const job = await jobRepo.getJob(validatedBody.jobId)
     if (!job) {
-      return ApiResponder.validation('指定されたジョブが見つかりません')
+      return createErrorResponse(new ValidationError('指定されたジョブが見つかりません'))
     }
 
     // エピソードの存在確認（メソッドがある場合のみチェック）
     const episodes = await episodeRepo.getByJobId(validatedBody.jobId)
     const targetEpisode = episodes.find((e) => e.episodeNumber === validatedBody.episodeNumber)
     if (!targetEpisode) {
-      return ApiResponder.validation(`エピソード ${validatedBody.episodeNumber} が見つかりません`)
+      return createErrorResponse(
+        new ValidationError(`エピソード ${validatedBody.episodeNumber} が見つかりません`),
+      )
     }
 
     const response = await renderBatchFromYaml(
@@ -81,8 +83,8 @@ export async function POST(request: NextRequest) {
       failed: response.failedPages,
       duration: response.duration,
     })
-    return ApiResponder.success(response, 201)
+    return createSuccessResponse(response, 201)
   } catch (error) {
-    return ApiResponder.error(error)
+    return createErrorResponse(error)
   }
 }

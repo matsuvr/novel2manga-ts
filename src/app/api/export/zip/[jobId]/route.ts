@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { OutputService } from '@/services/application/output-service'
-import { ApiResponder } from '@/utils/api-responder'
+import { createErrorResponse, ValidationError } from '@/utils/api-error'
 import { getCurrentUserId } from '@/utils/current-user'
 import { validateJobId } from '@/utils/validators'
 
@@ -23,7 +23,7 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ jobId:
 
     const buffer = await output.getExportContent(exportFilePath)
     if (!buffer) {
-      return ApiResponder.validation('ZIPの生成に失敗しました')
+      return createErrorResponse(new ValidationError('ZIPの生成に失敗しました'))
     }
 
     logger.info('ZIP export generated for job')
@@ -37,6 +37,6 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ jobId:
       },
     })
   } catch (error) {
-    return ApiResponder.error(error)
+    return createErrorResponse(error)
   }
 }

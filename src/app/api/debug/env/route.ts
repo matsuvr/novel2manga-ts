@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { getLogger } from '@/infrastructure/logging/logger'
-import { ApiResponder } from '@/utils/api-responder'
+import { createErrorResponse, createSuccessResponse } from '@/utils/api-error'
 
 export async function GET(_request: NextRequest) {
   try {
@@ -58,12 +58,12 @@ export async function GET(_request: NextRequest) {
 
     logger.info('Environment debug check', { envState, clientTest })
 
-    return ApiResponder.success({
+    return createSuccessResponse({
       timestamp: new Date().toISOString(),
       environment: envState,
       verticalTextClient: clientTest,
     })
   } catch (error) {
-    return ApiResponder.error(error)
+    return createErrorResponse(error)
   }
 }

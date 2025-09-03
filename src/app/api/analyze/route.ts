@@ -6,8 +6,13 @@ import { JobRepository } from '@/repositories/job-repository'
 import { NovelRepository } from '@/repositories/novel-repository'
 import { AnalyzePipeline } from '@/services/application/analyze-pipeline'
 import { getDatabaseService } from '@/services/db-factory'
-import { extractErrorMessage } from '@/utils/api-error'
-import { ApiResponder } from '@/utils/api-responder'
+import {
+  ApiError,
+  createErrorResponse,
+  createSuccessResponse,
+  extractErrorMessage,
+  ValidationError,
+} from '@/utils/api-error'
 import { detectDemoMode } from '@/utils/request-mode'
 import { generateUUID } from '@/utils/uuid'
 
@@ -34,18 +39,20 @@ export async function POST(request: NextRequest) {
     try {
       rawBody = await request.json()
     } catch {
-      return ApiResponder.validation('無効なJSONが送信されました')
+      return createErrorResponse(new ValidationError('無効なJSONが送信されました'))
     }
 
     const isDemo = detectDemoMode(request, rawBody)
     const parsed = analyzeRequestSchema.safeParse(rawBody)
     if (!parsed.success) {
-      return ApiResponder.validation('リクエストボディが無効です', {
-        issues: parsed.error.issues.map((i) => ({
-          field: i.path.join('.'),
-          message: i.message,
-        })),
-      })
+      return createErrorResponse(
+        new ValidationError('リクエストボディが無効です', undefined, {
+          issues: parsed.error.issues.map((i) => ({
+            field: i.path.join('.'),
+            message: i.message,
+          })),
+        }),
+      )
     }
 
     const { novelId: inputNovelId, text: inputText, title } = parsed.data
@@ -76,7 +83,7 @@ export async function POST(request: NextRequest) {
       const jobId = generateUUID()
       await jobRepo.create({ id: jobId, novelId, title: 'Demo Analyze Job', status: 'processing' })
 
-      return ApiResponder.success(
+      return createSuccessResponse(
         {
           success: true,
           id: jobId,
@@ -99,7 +106,7 @@ export async function POST(request: NextRequest) {
       novelText = '__FETCH_FROM_STORAGE__'
       novelId = inputNovelId
     } else {
-      return ApiResponder.validation('novelId か text が必要です')
+      return createErrorResponse(new ValidationError('novelId か text が必要です'))
     }
 
     // リポジトリ準備
@@ -123,15 +130,14 @@ export async function POST(request: NextRequest) {
           userId: 'anonymous',
         })
       } catch (e) {
-        return ApiResponder.error(e, '小説の準備に失敗しました')
+        return createErrorResponse(e, '小説の準備に失敗しました')
       }
     } else {
       // novelId のみが与えられた場合、外部キー制約違反を避けるため事前にDB存在を確認する。
       // 見つからない場合はテスト互換の文言で404を返す。
       const existing = await novelRepo.get(novelId as string)
       if (!existing) {
-        const { ApiError } = await import('@/utils/api-error')
-        return ApiResponder.error(
+        return createErrorResponse(
           new ApiError('小説ID がデータベースに見つかりません', 404, 'NOT_FOUND'),
         )
       }
@@ -174,7 +180,7 @@ export async function POST(request: NextRequest) {
                 existingJobId: jobId,
               })
 
-        return ApiResponder.success(
+        return createSuccessResponse(
           {
             success: true,
             id: jobId,
@@ -187,7 +193,7 @@ export async function POST(request: NextRequest) {
         )
       } catch (e) {
         // パイプラインの明示的エラー（404含む）をそのまま返す
-        return ApiResponder.error(e, 'テキストの分析中にエラーが発生しました')
+        return createErrorResponse(e, 'テキストの分析中にエラーが発生しました')
       }
     }
 
@@ -220,7 +226,7 @@ export async function POST(request: NextRequest) {
       }
     })()
 
-    return ApiResponder.success(
+    return createSuccessResponse(
       {
         success: true,
         id: jobId,
@@ -238,6 +244,6 @@ export async function POST(request: NextRequest) {
     logger.error('Unhandled analyze error', {
       message: extractErrorMessage(error),
     })
-    return ApiResponder.error(error, 'テキストの分析中にエラーが発生しました')
+    return createErrorResponse(error, 'テキストの分析中にエラーが発生しました')
   }
 }

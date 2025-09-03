@@ -1,8 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { getJobDetails } from '@/services/application/job-details'
-import { ValidationError } from '@/utils/api-error'
-import { ApiResponder } from '@/utils/api-responder'
+import { createErrorResponse, createSuccessResponse, ValidationError } from '@/utils/api-error'
 
 export async function GET(
   _request: NextRequest,
@@ -20,8 +19,8 @@ export async function GET(
 
     const { job, chunks } = await getJobDetails(id)
     logger.info('Job details fetched', { id })
-    return ApiResponder.success({ job, chunks })
+    return createSuccessResponse({ job, chunks })
   } catch (error) {
-    return ApiResponder.error(error, 'Failed to get job details')
+    return createErrorResponse(error, 'Failed to get job details')
   }
 }
