@@ -384,17 +384,44 @@ JSONのみ出力。説明文禁止。`,
     },
     // Canvas描画設定
     canvas: {
-      // SFXテキスト描画設定
+      // SFX（描き文字）描画設定（新仕様）
       sfx: {
-        strokeStyle: '#ffffff', // SFX縁取り色
-        lineWidth: 3, // SFX縁取り線幅
-        textAlign: 'center' as CanvasTextAlign, // SFXテキスト配置
-        textBaseline: 'top' as CanvasTextBaseline, // SFXベースライン
-        positionFactor: 0.5, // SFX位置係数（0.3 = 左寄り、0.5 = 中央）
-        minFontSize: 24, // SFX最小フォントサイズ
-        defaultFontSize: 16, // SFXデフォルトフォントサイズ
-        fontSizeMultiplier: 1.8, // SFXフォントサイズ倍率
-        startPositionOffset: 30, // SFX開始位置オフセット
+        enabled: true,
+        mainFontSize: {
+          min: 24,
+          max: 48,
+          scaleFactor: 0.12, // パネル高さに対する比率
+        },
+        supplementFontSize: {
+          scaleFactor: 0.35, // メインフォントサイズに対する比率
+          min: 10,
+        },
+        mainTextStyle: {
+          fillStyle: '#000000',
+          strokeStyle: '#ffffff',
+          lineWidth: 4,
+          fontWeight: 'bold' as 'bold' | 'normal',
+        },
+        supplementTextStyle: {
+          fillStyle: '#666666',
+          strokeStyle: '#ffffff',
+          lineWidth: 2,
+          fontWeight: 'normal' as 'bold' | 'normal',
+        },
+        rotation: {
+          enabled: true,
+          maxAngle: 0.15, // ラジアン
+        },
+        placement: {
+          avoidOverlap: true,
+          preferredPositions: [
+            'top-left',
+            'bottom-left',
+            'top-center',
+            'middle-left',
+            'bottom-right',
+          ],
+        },
       },
       // 吹き出し描画設定
       bubble: {
@@ -402,6 +429,45 @@ JSONのみ出力。説明文禁止。`,
         strokeStyle: '#000000', // 吹き出し枠線色
         normalLineWidth: 2, // 通常の線幅
         shoutLineWidth: 3, // 叫び系の線幅
+      },
+      // 話者ラベル描画設定（オプション）
+      speakerLabel: {
+        enabled: true,
+        // メインフォントサイズに対する比率
+        fontSize: 0.7,
+        padding: 4,
+        backgroundColor: '#ffffff',
+        borderColor: '#333333',
+        textColor: '#333333',
+        // ラベル幅・高さに対する外側オフセット比率
+        offsetX: 0.3,
+        offsetY: 0.7,
+        borderRadius: 3,
+      },
+      // 説明テキスト（状況説明）描画設定
+      contentText: {
+        enabled: true,
+        fontSize: {
+          min: 10,
+          max: 14,
+          default: 12,
+        },
+        padding: 8,
+        lineHeight: 1.4,
+        background: {
+          color: 'rgba(255, 255, 255, 0.85)',
+          borderColor: '#cccccc',
+          borderWidth: 1,
+          borderRadius: 4,
+        },
+        textColor: '#333333',
+        placement: {
+          strategy: 'auto',
+          preferredAreas: ['left', 'top', 'bottom'],
+          minAreaSize: 80,
+        },
+        maxWidthRatio: 0.4,
+        maxHeightRatio: 0.3,
       },
     },
   },

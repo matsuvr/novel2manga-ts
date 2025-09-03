@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { OutputService } from '@/services/application/output-service'
-import { ApiResponder } from '@/utils/api-responder'
+import { createErrorResponse, createSuccessResponse, ValidationError } from '@/utils/api-error'
 import { getCurrentUserId } from '@/utils/current-user'
 import { validateJobId } from '@/utils/validators'
 
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     const validFormats = ['pdf', 'images_zip']
     if (!body.format || !validFormats.includes(body.format)) {
-      return ApiResponder.validation('有効なformatが必要です（pdf, images_zip）')
+      return createErrorResponse(new ValidationError('有効なformatが必要です（pdf, images_zip）'))
     }
 
     const outputService = new OutputService()
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       userId,
     )
 
-    return ApiResponder.success(
+    return createSuccessResponse(
       {
         success: true,
         jobId: body.jobId as string,
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       201,
     )
   } catch (error) {
-    return ApiResponder.error(error)
+    return createErrorResponse(error)
   }
 }
 
@@ -73,14 +73,14 @@ export async function GET(_request: NextRequest): Promise<Response> {
     // 形式: /api/export/download/[outputId]
     const segments = url.pathname.split('/').filter(Boolean)
     const outputId = segments[segments.length - 1] || ''
-    if (!outputId) return ApiResponder.validation('outputIdが必要です')
+    if (!outputId) return createErrorResponse(new ValidationError('outputIdが必要です'))
 
     // outputId -> outputs 内の実ファイルパスはDBに記録済み（OutputRepository）
     const outputService = new OutputService()
     const record = await outputService.getById(outputId as string)
-    if (!record) return ApiResponder.validation('出力が見つかりません')
+    if (!record) return createErrorResponse(new ValidationError('出力が見つかりません'))
     const buffer = await outputService.getExportContent(record.outputPath)
-    if (!buffer) return ApiResponder.validation('ファイルが存在しません')
+    if (!buffer) return createErrorResponse(new ValidationError('ファイルが存在しません'))
 
     // 形式に応じてContent-Type
     const isPdf = record.outputType === 'pdf'
@@ -98,6 +98,6 @@ export async function GET(_request: NextRequest): Promise<Response> {
       },
     })
   } catch (error) {
-    return ApiResponder.error(error)
+    return createErrorResponse(error)
   }
 }

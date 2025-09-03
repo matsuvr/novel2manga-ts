@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { ZodError } from 'zod'
 import { isRateLimitError } from '@/errors/rate-limit-error'
 import { isRetryableError } from '@/errors/retryable-error'
-import { HttpError } from './http-errors'
+// HttpError 系は段階的移行を完了したため依存を排除
 
 // ========================================
 // Error Code System (typed constants)
@@ -177,16 +177,7 @@ export function createErrorResponse(
     return NextResponse.json(response, { status: error.statusCode })
   }
 
-  // 既存の HttpError 互換
-  if (error instanceof HttpError) {
-    const response = {
-      success: false as const,
-      error: error.message,
-      code: error.code,
-      details: error.details,
-    }
-    return NextResponse.json(response, { status: error.status })
-  }
+  // 既存の HttpError 互換は削除（使用箇所なしのため）
 
   // Node.js システムエラー
   if (error instanceof Error) {
@@ -380,15 +371,7 @@ export function toLegacyErrorResponse(
     return NextResponse.json(body, { status: error.statusCode })
   }
 
-  // Legacy HttpError
-  if (error instanceof HttpError) {
-    const body: Record<string, unknown> = { error: error.message }
-    if (env !== 'production') {
-      body.details = error.details
-      body.code = error.code
-    }
-    return NextResponse.json(body, { status: error.status })
-  }
+  // Legacy HttpError: 互換レイヤは撤去済み（個別クラス分岐は行わない）
 
   // Node/system errors
   if (error instanceof Error) {

@@ -5,8 +5,7 @@ import { getLogger } from '@/infrastructure/logging/logger'
 import { adaptAll } from '@/repositories/adapters'
 import { NovelRepository } from '@/repositories/novel-repository'
 import { getDatabaseService } from '@/services/db-factory'
-import { ValidationError } from '@/utils/api-error'
-import { ApiResponder } from '@/utils/api-responder'
+import { createErrorResponse, createSuccessResponse, ValidationError } from '@/utils/api-error'
 import { saveNovelToStorage } from './storage/route'
 
 export async function POST(request: NextRequest) {
@@ -25,7 +24,7 @@ export async function POST(request: NextRequest) {
         error: error instanceof Error ? error.message : String(error),
         operation: 'json_parse',
       })
-      return ApiResponder.validation('無効なJSONが送信されました')
+      return createErrorResponse(new ValidationError('無効なJSONが送信されました'))
     }
 
     const { text } = (body || {}) as { text: unknown }
@@ -37,7 +36,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (typeof text !== 'string' || text.length === 0) {
-      return ApiResponder.validation('テキストが必要です')
+      return createErrorResponse(new ValidationError('テキストが必要です'))
     }
 
     const data = await saveNovelToStorage(text)
@@ -73,7 +72,7 @@ export async function POST(request: NextRequest) {
       // DBエラーがあってもストレージには保存されているので、処理は続行
     }
 
-    return ApiResponder.success(
+    return createSuccessResponse(
       {
         preview: data.preview || text.slice(0, 100),
         originalLength: text.length,
@@ -98,7 +97,7 @@ export async function POST(request: NextRequest) {
         timestamp: new Date().toISOString(),
       })
 
-    return ApiResponder.error(
+    return createErrorResponse(
       error instanceof Error ? new ValidationError(error.message) : error,
       'サーバーエラーが発生しました',
     )
