@@ -3,7 +3,12 @@ import { z } from 'zod'
 import { analyzeChunkWithFallback } from '@/agents/chunk-analyzer'
 import { getTextAnalysisConfig } from '@/config'
 import { getLogger } from '@/infrastructure/logging/logger'
-import { ApiResponder } from '@/utils/api-responder'
+import {
+  ApiError,
+  createErrorResponse,
+  createSuccessResponse,
+  ValidationError,
+} from '@/utils/api-error'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
 
 // リクエストボディのバリデーションスキーマ
@@ -78,7 +83,7 @@ export async function POST(request: NextRequest) {
     if (existingAnalysis) {
       logger.info('Analysis already exists', { chunkIndex })
       const analysisData = JSON.parse(existingAnalysis.text)
-      return ApiResponder.success({
+      return createSuccessResponse({
         cached: true,
         data: analysisData.analysis,
       })
@@ -90,8 +95,7 @@ export async function POST(request: NextRequest) {
 
     if (!chunkFile) {
       // Explicit 404 ApiError so tests receive 404 status
-      const { ApiError } = await import('@/utils/api-error')
-      return ApiResponder.error(
+      return createErrorResponse(
         new ApiError(`Chunk file not found: ${chunkPath}`, 404, 'NOT_FOUND'),
       )
     }
@@ -144,7 +148,7 @@ export async function POST(request: NextRequest) {
     logger.info('Saved analysis', { analysisPath })
 
     // レスポンスを返却
-    return ApiResponder.success({
+    return createSuccessResponse({
       cached: false,
       data: result,
       usedProvider,
@@ -160,14 +164,13 @@ export async function POST(request: NextRequest) {
     })
 
     if (error instanceof z.ZodError) {
-      return ApiResponder.validation('Invalid request data')
+      return createErrorResponse(new ValidationError('Invalid request data'))
     }
 
     // Preserve original not found status
     if (error instanceof Error && error.message.startsWith('Chunk file not found')) {
-      const { ApiError } = await import('@/utils/api-error')
-      return ApiResponder.error(new ApiError(error.message, 404, 'NOT_FOUND'))
+      return createErrorResponse(new ApiError(error.message, 404, 'NOT_FOUND'))
     }
-    return ApiResponder.error(error, 'Failed to analyze chunk')
+    return createErrorResponse(error, 'Failed to analyze chunk')
   }
 }
