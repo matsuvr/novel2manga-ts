@@ -1,6 +1,7 @@
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import type { MangaLayout, Panel } from '@/types/panel-layout'
 import { SfxPlacer, type SfxPlacement } from './sfx-placer'
+import type { AppCanvasConfig } from '@/types/canvas-config'
 import { PanelLayoutCoordinator } from './panel-layout-coordinator'
 
 // Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
@@ -314,40 +315,7 @@ export class CanvasRenderer {
 
     // 説明テキストの最適配置と描画
     if (panel.content && panel.content.trim() !== '') {
-      const cfgCT = this.appConfig.rendering.canvas as unknown as {
-        contentText?: {
-          enabled?: boolean
-          fontSize?: { min: number; max: number; default: number }
-          padding?: number
-          lineHeight?: number
-          background?: {
-            color: string
-            borderColor: string
-            borderWidth: number
-            borderRadius: number
-          }
-          textColor?: string
-          placement?: { minAreaSize?: number }
-          maxWidthRatio?: number
-          maxHeightRatio?: number
-        }
-      }
-      const contentCfg = cfgCT.contentText || {
-        enabled: true,
-        fontSize: { min: 10, max: 14, default: 12 },
-        padding: 8,
-        lineHeight: 1.4,
-        background: {
-          color: 'rgba(255,255,255,0.85)',
-          borderColor: '#cccccc',
-          borderWidth: 1,
-          borderRadius: 4,
-        },
-        textColor: '#333333',
-        placement: { minAreaSize: 80 },
-        maxWidthRatio: 0.4,
-        maxHeightRatio: 0.3,
-      }
+      const contentCfg = (this.appConfig.rendering.canvas as AppCanvasConfig).contentText
 
       if (contentCfg.enabled !== false) {
         const placement = this.layoutCoordinator.calculateContentTextPlacement(
@@ -355,40 +323,40 @@ export class CanvasRenderer {
           panelBounds,
           this.ctx,
           {
-            minFontSize: contentCfg.fontSize?.min ?? 10,
-            maxFontSize: contentCfg.fontSize?.max ?? 14,
-            padding: contentCfg.padding ?? 8,
-            lineHeight: contentCfg.lineHeight ?? 1.4,
-            maxWidthRatio: contentCfg.maxWidthRatio ?? 0.4,
-            maxHeightRatio: contentCfg.maxHeightRatio ?? 0.3,
-            minAreaSize: contentCfg.placement?.minAreaSize ?? 80,
+            minFontSize: contentCfg.fontSize.min,
+            maxFontSize: contentCfg.fontSize.max,
+            padding: contentCfg.padding,
+            lineHeight: contentCfg.lineHeight,
+            maxWidthRatio: contentCfg.maxWidthRatio,
+            maxHeightRatio: contentCfg.maxHeightRatio,
+            minAreaSize: contentCfg.placement.minAreaSize,
           },
         )
         if (placement) {
           this.ctx.save()
           // 背景ボックス
-          this.ctx.fillStyle = contentCfg.background?.color ?? 'rgba(255,255,255,0.85)'
-          this.ctx.strokeStyle = contentCfg.background?.borderColor ?? '#cccccc'
-          this.ctx.lineWidth = contentCfg.background?.borderWidth ?? 1
+          this.ctx.fillStyle = contentCfg.background.color
+          this.ctx.strokeStyle = contentCfg.background.borderColor
+          this.ctx.lineWidth = contentCfg.background.borderWidth
           this.drawRoundedRect(
-            placement.x - (contentCfg.padding ?? 8) / 2,
-            placement.y - (contentCfg.padding ?? 8) / 2,
-            placement.width + (contentCfg.padding ?? 8),
-            placement.height + (contentCfg.padding ?? 8),
-            contentCfg.background?.borderRadius ?? 4,
+            placement.x - contentCfg.padding / 2,
+            placement.y - contentCfg.padding / 2,
+            placement.width + contentCfg.padding,
+            placement.height + contentCfg.padding,
+            contentCfg.background.borderRadius,
           )
           this.ctx.fill()
           this.ctx.stroke()
 
           // テキスト
           this.ctx.font = `${placement.fontSize}px ${this.config.fontFamily || 'Arial, sans-serif'}`
-          this.ctx.fillStyle = contentCfg.textColor ?? '#333333'
+          this.ctx.fillStyle = contentCfg.textColor
           this.ctx.textAlign = 'left'
           this.ctx.textBaseline = 'top'
           let cy = placement.y
           for (const line of placement.lines) {
             this.ctx.fillText(line, placement.x, cy)
-            cy += placement.fontSize * (contentCfg.lineHeight ?? 1.4)
+            cy += placement.fontSize * contentCfg.lineHeight
           }
           this.ctx.restore()
         }

@@ -2,6 +2,19 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { SfxPlacer } from '@/lib/canvas/sfx-placer'
 import type { Panel } from '@/types/panel-layout'
 
+// Helper function to check for rectangle overlap (inclusive)
+function rectsOverlap(
+  r1: { x: number; y: number; width: number; height: number },
+  r2: { x: number; y: number; width: number; height: number },
+): boolean {
+  return !(
+    r1.x + r1.width <= r2.x ||
+    r2.x + r2.width <= r1.x ||
+    r1.y + r1.height <= r2.y ||
+    r2.y + r2.height <= r1.y
+  )
+}
+
 describe('SfxPlacer', () => {
   let placer: SfxPlacer
 
@@ -79,14 +92,8 @@ describe('SfxPlacer', () => {
         width: Math.max(1, p.text.length * p.fontSize * 0.8),
         height: p.fontSize * 1.5,
       }
-      // overlap check (inclusive)
       const occ = preOccupied[0]
-      const overlap = !(
-        sfxRect.x + sfxRect.width <= occ.x ||
-        occ.x + occ.width <= sfxRect.x ||
-        sfxRect.y + sfxRect.height <= occ.y ||
-        occ.y + occ.height <= sfxRect.y
-      )
+      const overlap = rectsOverlap(sfxRect, occ)
       expect(overlap).toBe(false)
     })
   })
