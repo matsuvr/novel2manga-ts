@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PanelLayoutCoordinator } from '@/lib/canvas/panel-layout-coordinator'
 import type { Dialogue } from '@/types/panel-layout'
 

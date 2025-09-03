@@ -53,3 +53,41 @@ export function validateImportanceFields(script: NewMangaScript): {
     issues,
   }
 }
+
+/**
+ * Validate dialogue objects in panels conform to the new format
+ */
+export function validateDialogueFields(script: NewMangaScript): {
+  valid: boolean
+  issues: string[]
+} {
+  const issues: string[] = []
+
+  script.panels.forEach((panel, panelIndex) => {
+    const ds = panel.dialogue
+    if (!ds) return
+    ds.forEach((d: unknown, dialogueIndex: number) => {
+      if (!d || typeof d !== 'object') {
+        issues.push(`Panel ${panelIndex + 1}, Dialogue ${dialogueIndex + 1}: Must be an object`)
+        return
+      }
+      const anyd = d as { type?: unknown; speaker?: unknown; text?: unknown }
+      const t = anyd.type
+      if (t !== 'speech' && t !== 'narration' && t !== 'thought') {
+        issues.push(
+          `Panel ${panelIndex + 1}, Dialogue ${dialogueIndex + 1}: Invalid type "${String(t)}"`,
+        )
+      }
+      if (t !== 'narration' && (!anyd.speaker || String(anyd.speaker).trim() === '')) {
+        issues.push(
+          `Panel ${panelIndex + 1}, Dialogue ${dialogueIndex + 1}: Speaker required for type "${String(t)}"`,
+        )
+      }
+      if (!anyd.text || String(anyd.text).trim() === '') {
+        issues.push(`Panel ${panelIndex + 1}, Dialogue ${dialogueIndex + 1}: Text cannot be empty`)
+      }
+    })
+  })
+
+  return { valid: issues.length === 0, issues }
+}

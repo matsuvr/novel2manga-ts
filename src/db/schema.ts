@@ -327,7 +327,7 @@ export const renderStatus = sqliteTable(
   },
   (table) => ({
     jobIdIdx: index('idx_render_status_job_id').on(table.jobId),
-    uniqueJobEpisodePage: index('unique_job_episode_page').on(
+    uniqueJobEpisodePage: unique('unique_job_episode_page').on(
       table.jobId,
       table.episodeNumber,
       table.pageNumber,

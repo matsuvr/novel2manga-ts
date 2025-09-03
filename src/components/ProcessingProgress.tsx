@@ -139,15 +139,21 @@ function calculateRenderProgress(job: Record<string, unknown>): number {
     return 0
   }
 
-  const baseProgress = Math.round((renderedPages / totalPages) * 100)
-  const processingPage = job.processingPage
-
-  // 現在処理中のページがある場合は部分的な進捗を追加
-  if (typeof processingPage === 'number' && processingPage > 0) {
-    return Math.min(90, baseProgress + 10) // 最大90%まで
+  if (totalPages === 0) {
+    return 0
   }
 
-  return baseProgress
+  // 実際の進捗を正確に反映
+  const baseProgress = Math.round((renderedPages / totalPages) * 100)
+
+  // 処理中のページがある場合は、そのページを50%完了として扱う
+  const processingPage = job.processingPage
+  if (typeof processingPage === 'number' && processingPage > 0 && renderedPages < totalPages) {
+    const partialProgress = Math.round((0.5 / totalPages) * 100) // 0.5ページ分の進捗
+    return Math.min(99, baseProgress + partialProgress) // 最大99%まで（完了は100%のみ）
+  }
+
+  return Math.min(100, baseProgress)
 }
 
 // ヘルパー関数: 全体進捗の計算
@@ -185,7 +191,10 @@ function ProcessingProgress({
   const [currentStepIndex, setCurrentStepIndex] = useState(-1)
   const [overallProgress, setOverallProgress] = useState(0)
   const [logs, setLogs] = useState<LogEntry[]>([])
-  const [showLogs, setShowLogs] = useState(process.env.NODE_ENV === 'development')
+  const showLogsFlag =
+    (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SHOW_PROGRESS_LOGS === '1') ||
+    process.env.NODE_ENV === 'development'
+  const [showLogs, setShowLogs] = useState(showLogsFlag)
   const [lastJobData, setLastJobData] = useState<string>('')
   type HintStep = 'split' | 'analyze' | 'layout' | 'render'
   const [runtimeHints, setRuntimeHints] = useState<Partial<Record<HintStep, string>>>({})
@@ -205,6 +214,11 @@ function ProcessingProgress({
     >
   >({})
   const [currentLayoutEpisode, setCurrentLayoutEpisode] = useState<number | null>(null)
+  // DB集計のページ数（SSEのJobDataから反映）。UI表示で優先使用。
+  const [dbPageTotals, setDbPageTotals] = useState<{ totalPages: number; renderedPages: number }>({
+    totalPages: 0,
+    renderedPages: 0,
+  })
 
   // マウント状態
   const isMountedRef = useRef(true)
@@ -336,6 +350,11 @@ function ProcessingProgress({
       }
 
       setLastJobData(jobDataString)
+      // DB集計値を保持（表示用の最終値として優先）
+      setDbPageTotals({
+        totalPages: Number(data.job.totalPages || 0),
+        renderedPages: Number(data.job.renderedPages || 0),
+      })
       // 詳細メッセージ
       addLog('info', describeStep(data.job.currentStep))
       if (data.job.lastError) {
@@ -515,6 +534,12 @@ function ProcessingProgress({
             data.job.currentStep?.startsWith('episode_')
           ) {
             updatedSteps[3].status = 'processing'
+            // エピソード構成の進捗を表示（processedChunks/totalChunksを流用）
+            if (data.job.totalChunks && data.job.processedChunks !== undefined) {
+              updatedSteps[3].progress = Math.round(
+                (data.job.processedChunks / data.job.totalChunks) * 100,
+              )
+            }
             currentIndex = 3
           }
 
@@ -600,6 +625,30 @@ function ProcessingProgress({
           const total = data.job.totalChunks || 0
           hints.split = `現在: チャンク ${Math.min(done, total || done)} / ${total || '?'} を作成中`
         }
+        if ((stepId === 'episode' || stepId.startsWith('episode_')) && !data.job.episodeCompleted) {
+          const processedChunks = data.job.processedChunks ?? 0
+          const totalChunks = data.job.totalChunks || 4
+          const progressSteps = [
+            '統合スクリプト読み込み',
+            'エピソード切れ目検出',
+            'エピソードデータ保存',
+            '完了処理',
+          ]
+          const currentStepName = progressSteps[Math.min(processedChunks, progressSteps.length - 1)]
+          hints.episode = `現在: ${currentStepName}中 (${processedChunks}/${totalChunks})`
+
+          // デバッグ情報をログに追加（環境フラグで制御）
+          if (
+            (typeof process !== 'undefined' &&
+              process.env.NEXT_PUBLIC_SHOW_PROGRESS_LOGS === '1') ||
+            process.env.NODE_ENV === 'development'
+          ) {
+            addLog(
+              'info',
+              `エピソード構成進捗: ${processedChunks}/${totalChunks} - ${currentStepName}`,
+            )
+          }
+        }
         const layoutMatch = stepId.match(/^layout_episode_(\d+)$/)
         if (layoutMatch && !data.job.layoutCompleted) {
           const ep = Number(layoutMatch[1])
@@ -616,18 +665,24 @@ function ProcessingProgress({
         }
         if ((stepId === 'render' || stepId.startsWith('render_')) && !data.job.renderCompleted) {
           const total = data.job.totalPages || 0
-          const inFlightPage = data.job.processingPage
-          const doneBase = data.job.renderedPages ?? 0
-          const done = Math.min(
-            total || doneBase + 1,
-            typeof inFlightPage === 'number' && inFlightPage > 0 ? inFlightPage : doneBase + 1,
-          )
+          const rendered = data.job.renderedPages ?? 0
+          const processingPage = data.job.processingPage
+          const processingEpisode = data.job.processingEpisode
+
           // より詳細なレンダリング進捗表示
           if (total > 0) {
-            const progressPercent = Math.round((done / total) * 100)
-            hints.render = `現在: ページ ${done} / ${total} をレンダリング中 (${progressPercent}%)`
+            const progressPercent = Math.round((rendered / total) * 100)
+            if (processingPage && processingEpisode) {
+              hints.render = `現在: EP${processingEpisode} ページ${processingPage}をレンダリング中 (${rendered}/${total}完了 ${progressPercent}%)`
+            } else {
+              hints.render = `現在: ${rendered}/${total}ページ完了 (${progressPercent}%)`
+            }
           } else {
-            hints.render = `現在: ページ ${done} をレンダリング中`
+            if (processingPage && processingEpisode) {
+              hints.render = `現在: EP${processingEpisode} ページ${processingPage}をレンダリング中`
+            } else {
+              hints.render = `現在: ${rendered}ページ完了`
+            }
           }
         }
         setRuntimeHints(hints)
@@ -807,15 +862,17 @@ function ProcessingProgress({
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xl font-semibold gradient-text">処理進捗</h3>
-            {process.env.NODE_ENV === 'development' && (
-              <button
-                type="button"
-                onClick={() => setShowLogs(!showLogs)}
-                className="px-3 py-1 text-xs bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition-colors"
-              >
-                {showLogs ? '🔽 ログを隠す' : '▶️ ログを表示'}
-              </button>
-            )}
+            {typeof process !== 'undefined' &&
+              (process.env.NEXT_PUBLIC_SHOW_PROGRESS_LOGS === '1' ||
+                process.env.NODE_ENV === 'development') && (
+                <button
+                  type="button"
+                  onClick={() => setShowLogs(!showLogs)}
+                  className="px-3 py-1 text-xs bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition-colors"
+                >
+                  {showLogs ? '🔽 ログを隠す' : '▶️ ログを表示'}
+                </button>
+              )}
           </div>
           {modeHint && (
             <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
@@ -927,8 +984,16 @@ function ProcessingProgress({
                           <span>レンダリング詳細:</span>
                           <span>
                             {(() => {
-                              const totalPages = totalPagesByEpisodes
-                              const renderedPages = renderedPagesByEpisodes
+                              // データベースから直接取得した値を優先
+                              const dbTotalPages = dbPageTotals.totalPages || 0
+                              const dbRenderedPages = dbPageTotals.renderedPages || 0
+                              const episodeTotalPages = totalPagesByEpisodes
+                              const episodeRenderedPages = renderedPagesByEpisodes
+
+                              // より正確な値を使用
+                              const totalPages = Math.max(dbTotalPages, episodeTotalPages)
+                              const renderedPages = Math.max(dbRenderedPages, episodeRenderedPages)
+
                               if (totalPages > 0) {
                                 const progressPercent = Math.round(
                                   (renderedPages / totalPages) * 100,
@@ -1059,49 +1124,54 @@ function ProcessingProgress({
       )}
 
       {/* 開発環境でのログ表示 */}
-      {process.env.NODE_ENV === 'development' && showLogs && (
-        <div className="apple-card p-4">
-          <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-            <span className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
-            開発ログ ({logs.length}/{MAX_LOG_ENTRIES})
-          </h4>
-          <div
-            className="space-y-1 overflow-y-auto text-xs"
-            style={{ maxHeight: `${MAX_VISIBLE_LOG_HEIGHT}vh` }}
-          >
-            {logs.length === 0 ? (
-              <p className="text-gray-500 italic">ログはまだありません</p>
-            ) : (
-              logs.map((log, index) => (
-                <div
-                  key={`${log.timestamp}-${index}`}
-                  className={`flex items-start space-x-2 py-1 px-2 rounded ${
-                    log.level === 'error'
-                      ? 'bg-red-50 text-red-700'
-                      : log.level === 'warning'
-                        ? 'bg-yellow-50 text-yellow-700'
-                        : 'bg-gray-50 text-gray-600'
-                  }`}
-                >
-                  <span className="text-gray-400 font-mono whitespace-nowrap">{log.timestamp}</span>
-                  <span
-                    className={`uppercase text-xs font-bold ${
+      {typeof process !== 'undefined' &&
+        (process.env.NEXT_PUBLIC_SHOW_PROGRESS_LOGS === '1' ||
+          process.env.NODE_ENV === 'development') &&
+        showLogs && (
+          <div className="apple-card p-4">
+            <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+              <span className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
+              開発ログ ({logs.length}/{MAX_LOG_ENTRIES})
+            </h4>
+            <div
+              className="space-y-1 overflow-y-auto text-xs"
+              style={{ maxHeight: `${MAX_VISIBLE_LOG_HEIGHT}vh` }}
+            >
+              {logs.length === 0 ? (
+                <p className="text-gray-500 italic">ログはまだありません</p>
+              ) : (
+                logs.map((log, index) => (
+                  <div
+                    key={`${log.timestamp}-${index}`}
+                    className={`flex items-start space-x-2 py-1 px-2 rounded ${
                       log.level === 'error'
-                        ? 'text-red-500'
+                        ? 'bg-red-50 text-red-700'
                         : log.level === 'warning'
-                          ? 'text-yellow-500'
-                          : 'text-blue-500'
+                          ? 'bg-yellow-50 text-yellow-700'
+                          : 'bg-gray-50 text-gray-600'
                     }`}
                   >
-                    {log.level}
-                  </span>
-                  <span className="flex-1">{log.message}</span>
-                </div>
-              ))
-            )}
+                    <span className="text-gray-400 font-mono whitespace-nowrap">
+                      {log.timestamp}
+                    </span>
+                    <span
+                      className={`uppercase text-xs font-bold ${
+                        log.level === 'error'
+                          ? 'text-red-500'
+                          : log.level === 'warning'
+                            ? 'text-yellow-500'
+                            : 'text-blue-500'
+                      }`}
+                    >
+                      {log.level}
+                    </span>
+                    <span className="flex-1">{log.message}</span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
     </div>
   )
 }

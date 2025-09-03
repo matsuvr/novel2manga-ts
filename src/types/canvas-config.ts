@@ -73,6 +73,8 @@ export interface SpeakerLabelConfig {
   offsetX: number
   offsetY: number
   borderRadius: number
+  /** 1行あたりの最大文字数（BudouXで安全に折り返し） */
+  maxCharsPerLine?: number
 }
 
 export interface AppCanvasConfig {

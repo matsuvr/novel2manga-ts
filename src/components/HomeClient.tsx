@@ -50,6 +50,44 @@ function SampleButton({
   )
 }
 
+function RedirectingView({ pendingRedirect }: { pendingRedirect: string }) {
+  const _router = useRouter()
+
+  React.useEffect(() => {
+    // フォールバック用の自動遷移（3秒後）
+    const fallbackTimer = setTimeout(() => {
+      if (typeof window !== 'undefined' && window.location.pathname !== pendingRedirect) {
+        console.log('フォールバック遷移を実行:', pendingRedirect)
+        window.location.href = pendingRedirect
+      }
+    }, 3000)
+
+    return () => clearTimeout(fallbackTimer)
+  }, [pendingRedirect])
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="apple-card p-8 text-center space-y-3">
+        <div className="text-4xl">➡️</div>
+        <h3 className="text-xl font-semibold">結果ページへ移動します…</h3>
+        <p className="text-gray-600">
+          自動的に移動しない場合は
+          <a className="text-blue-600 underline ml-1" href={pendingRedirect}>
+            こちらをクリック
+          </a>
+          してください。
+        </p>
+        <div className="mt-4">
+          <div className="inline-flex items-center space-x-2 text-sm text-gray-500">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+            <span>3秒後に自動的に移動します</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function HomeClient() {
   const router = useRouter()
   const [viewMode, setViewMode] = useState<ViewMode>('input')
@@ -177,11 +215,20 @@ export default function HomeClient() {
       const url = `/novel/${encodeURIComponent(novelIdState)}/results/${encodeURIComponent(jobId)}`
       setPendingRedirect(url)
       setViewMode('redirecting')
+
       try {
-        router.push(url)
-      } catch {
-        // noop: ユーザが手動クリックできるUIを表示
-      } finally {
+        // 少し遅延を入れてからリダイレクトを実行（UIの更新を確実にするため）
+        setTimeout(async () => {
+          try {
+            await router.push(url)
+            setIsProcessing(false)
+          } catch (error) {
+            console.error('自動遷移に失敗しました:', error)
+            setIsProcessing(false)
+          }
+        }, 1000) // 1秒後に遷移
+      } catch (error) {
+        console.error('遷移処理の設定に失敗しました:', error)
         setIsProcessing(false)
       }
       return
@@ -442,19 +489,7 @@ export default function HomeClient() {
         )}
 
         {viewMode === 'redirecting' && pendingRedirect && (
-          <div className="max-w-2xl mx-auto">
-            <div className="apple-card p-8 text-center space-y-3">
-              <div className="text-4xl">➡️</div>
-              <h3 className="text-xl font-semibold">結果ページへ移動します…</h3>
-              <p className="text-gray-600">
-                自動的に移動しない場合は
-                <a className="text-blue-600 underline ml-1" href={pendingRedirect}>
-                  こちらをクリック
-                </a>
-                してください。
-              </p>
-            </div>
-          </div>
+          <RedirectingView pendingRedirect={pendingRedirect} />
         )}
 
         {viewMode === 'results' && jobId && (

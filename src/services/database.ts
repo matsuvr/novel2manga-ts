@@ -801,6 +801,9 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       hasThumb: !!status.thumbnailPath,
     })
 
+    // ON CONFLICT は UNIQUE/PK が前提。
+    // 現行スキーマは (jobId, episodeNumber, pageNumber) にユニーク制約がある（unique_job_episode_page）。
+    // 遷移検知のため先に現在状態を取得し、その後 upsert で整合性を保つ。
     await this.db
       .insert(renderStatus)
       .values({
@@ -819,13 +822,14 @@ export class DatabaseService implements TransactionPort, UnitOfWorkPort {
       .onConflictDoUpdate({
         target: [renderStatus.jobId, renderStatus.episodeNumber, renderStatus.pageNumber],
         set: {
-          isRendered: status.isRendered,
-          imagePath: status.imagePath,
-          thumbnailPath: status.thumbnailPath,
-          width: status.width,
-          height: status.height,
-          fileSize: status.fileSize,
-          renderedAt: now,
+          // INSERT 側の値で更新（excluded.*）
+          isRendered: sql`excluded.is_rendered`,
+          imagePath: sql`excluded.image_path`,
+          thumbnailPath: sql`excluded.thumbnail_path`,
+          width: sql`excluded.width`,
+          height: sql`excluded.height`,
+          fileSize: sql`excluded.file_size`,
+          renderedAt: sql`excluded.rendered_at`,
         },
       })
 

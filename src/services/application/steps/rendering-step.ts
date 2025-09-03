@@ -56,13 +56,49 @@ export class RenderingStep implements PipelineStep {
       try {
         // Render pages for each episode
         const ports = getStoragePorts()
+
+        // 進捗管理のためのヘルパー関数
+        const { getDatabaseService } = await import('@/services/db-factory')
+        const db = getDatabaseService()
+
+        let totalPagesProcessed = 0
+        let totalPagesExpected = 0
+
+        // 全エピソードの総ページ数を事前に計算
+        for (const ep of episodeNumbers) {
+          const layoutText = await ports.layout.getEpisodeLayout(jobId, ep)
+          if (layoutText) {
+            const parsed = JSON.parse(layoutText)
+            if (Array.isArray(parsed?.pages)) {
+              totalPagesExpected += parsed.pages.length
+            } else if (Array.isArray(parsed?.panels)) {
+              const panels = parsed.panels as Array<{ pageNumber?: number }>
+              const maxPage = Math.max(...panels.map((p) => p.pageNumber ?? 1))
+              totalPagesExpected += maxPage
+            }
+          }
+        }
+
+        logger.info('レンダリング開始', {
+          jobId,
+          episodeCount: episodeNumbers.length,
+          totalPagesExpected,
+        })
+
         for (const ep of episodeNumbers) {
           // ここで「ストレージ（ファイル）からページ割り計画/YAMLレイアウトを読み込む」
           const layoutText = await ports.layout.getEpisodeLayout(jobId, ep)
           if (layoutText) {
             const parsed = JSON.parse(layoutText)
-            const isMangaLayout =
-              Array.isArray(parsed?.pages) && parsed.pages[0]?.panels?.[0]?.position
+            const hasPagesArray = Array.isArray(parsed?.pages)
+            const isEmptyPages = hasPagesArray && parsed.pages.length === 0
+            const isMangaLayout = hasPagesArray && parsed.pages[0]?.panels?.[0]?.position
+
+            if (isEmptyPages) {
+              logger.warn('Skipping rendering for episode with 0 pages', { jobId, episode: ep })
+              continue
+            }
+
             if (isMangaLayout) {
               const { normalizeAndValidateLayout } = await import('@/utils/layout-normalizer')
               const normalized = normalizeAndValidateLayout(parsed)
@@ -79,6 +115,9 @@ export class RenderingStep implements PipelineStep {
               })
               try {
                 for (const p of normalized.layout.pages) {
+                  // 現在処理中のページを更新
+                  await db.updateProcessingPosition(jobId, { episode: ep, page: p.page_number })
+
                   const imageBlob = await renderer.renderToImage(
                     normalized.layout,
                     p.page_number,
@@ -95,16 +134,55 @@ export class RenderingStep implements PipelineStep {
                   })
                   const thumbnailBuffer = Buffer.from(await thumbBlob.arrayBuffer())
                   await ports.render.putPageThumbnail(jobId, ep, p.page_number, thumbnailBuffer)
+
+                  // レンダリング状態をDBに記録（これによりrenderedPagesが自動的に増加）
+                  await db.updateRenderStatus(jobId, ep, p.page_number, {
+                    isRendered: true,
+                    imagePath: `${jobId}/episode_${ep}/page_${p.page_number}.png`,
+                    thumbnailPath: `${jobId}/episode_${ep}/thumbnails/page_${p.page_number}_thumb.png`,
+                    width: renderer.pageWidth,
+                    height: renderer.pageHeight,
+                    fileSize: imageBuffer.length,
+                  })
+
+                  totalPagesProcessed++
+
+                  // 進捗ログ
+                  logger.info(`レンダリング進捗: EP${ep} ページ${p.page_number}完了`, {
+                    jobId,
+                    episode: ep,
+                    page: p.page_number,
+                    progress: `${totalPagesProcessed}/${totalPagesExpected}`,
+                    progressPercent: Math.round((totalPagesProcessed / totalPagesExpected) * 100),
+                  })
                 }
               } finally {
                 renderer.cleanup()
               }
-            } else {
+            } else if (Array.isArray(parsed?.panels) && parsed.panels.length > 0) {
               const pageBreakPlan: PageBreakV2 = parsed
               const { renderFromPageBreakPlan } = await import('@/services/application/render')
-              await renderFromPageBreakPlan(jobId, ep, pageBreakPlan, ports, {
+
+              // PageBreakPlan形式でのレンダリング（進捗更新付き）
+              const result = await renderFromPageBreakPlan(jobId, ep, pageBreakPlan, ports, {
                 skipExisting: false,
                 concurrency: 3,
+              })
+
+              totalPagesProcessed += result.renderedPages
+
+              logger.info(`レンダリング完了: EP${ep}`, {
+                jobId,
+                episode: ep,
+                renderedPages: result.renderedPages,
+                totalPages: result.totalPages,
+                progress: `${totalPagesProcessed}/${totalPagesExpected}`,
+              })
+            } else {
+              logger.warn('Layout JSON is neither MangaLayout nor valid PageBreakV2; skipping', {
+                jobId,
+                episode: ep,
+                keys: Object.keys(parsed || {}),
               })
             }
           }

@@ -53,24 +53,23 @@ export async function convertChunkToMangaScript(
 
   // Demo mode: return fixed script structure for testing
   if (options?.isDemo || isTestEnv) {
-    const panels: Array<{
-      no: number
-      cut: string
-      camera: string
-      narration?: string[]
-      dialogue?: string[]
-      sfx?: string[]
-      importance: number
-    }> = [
+    const panels = [
       {
         no: 1,
         cut: 'デモ用のカット',
         camera: 'WS・標準',
-        narration: [`${input.chunkText.substring(0, Math.min(50, input.chunkText.length))}...`],
-        dialogue: ['デモキャラ: サンプル発話'],
+        narration: [],
+        dialogue: [
+          {
+            type: 'narration' as const,
+            text: `${input.chunkText.substring(0, Math.min(50, input.chunkText.length))}...`,
+          },
+          { type: 'speech' as const, speaker: 'デモキャラ', text: 'サンプル発話' },
+        ],
+        sfx: [],
         importance: 1,
       },
-    ] as const
+    ]
     return {
       style_tone: 'デモ用',
       style_art: 'アニメ調',
@@ -373,10 +372,13 @@ export function assessScriptCoverage(
   }
 
   // Check for narration coverage
-  const totalNarrationCount = script.panels.reduce(
-    (sum, panel) => sum + (panel.narration?.length ?? 0),
-    0,
-  )
+  const totalNarrationCount = script.panels.reduce((sum, panel) => {
+    const narrationInDialogue = (panel.dialogue || []).reduce((acc, d) => {
+      if (typeof d === 'object' && d && 'type' in d && d.type === 'narration') return acc + 1
+      return acc
+    }, 0)
+    return sum + (panel.narration?.length ?? 0) + narrationInDialogue
+  }, 0)
 
   if (totalNarrationCount === 0 && textLength > coverage.minTextLengthForNarration) {
     coverageScore -= coverage.narrationPenalty
@@ -386,10 +388,18 @@ export function assessScriptCoverage(
   // Check character coverage
   const uniqueCharacters = new Set<string>()
   script.panels.forEach((panel) => {
-    panel.dialogue?.forEach((dialogue) => {
-      const charMatch = dialogue.match(/^([^:：]+)[：:]/)
-      if (charMatch) {
-        uniqueCharacters.add(charMatch[1])
+    panel.dialogue?.forEach((d) => {
+      const item: unknown = d
+      if (typeof item === 'string') {
+        const charMatch = item.match(/^([^:：]+)[：:]/)
+        if (charMatch) uniqueCharacters.add(charMatch[1])
+        return
+      }
+      if (item && typeof item === 'object' && 'speaker' in (item as { speaker?: unknown })) {
+        const sp = (item as { speaker?: unknown }).speaker
+        if (typeof sp === 'string' && sp.trim() !== '') {
+          uniqueCharacters.add(sp)
+        }
       }
     })
   })
