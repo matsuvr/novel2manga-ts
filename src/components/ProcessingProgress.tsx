@@ -191,7 +191,10 @@ function ProcessingProgress({
   const [currentStepIndex, setCurrentStepIndex] = useState(-1)
   const [overallProgress, setOverallProgress] = useState(0)
   const [logs, setLogs] = useState<LogEntry[]>([])
-  const [showLogs, setShowLogs] = useState(process.env.NODE_ENV === 'development')
+  const showLogsFlag =
+    (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SHOW_PROGRESS_LOGS === '1') ||
+    process.env.NODE_ENV === 'development'
+  const [showLogs, setShowLogs] = useState(showLogsFlag)
   const [lastJobData, setLastJobData] = useState<string>('')
   type HintStep = 'split' | 'analyze' | 'layout' | 'render'
   const [runtimeHints, setRuntimeHints] = useState<Partial<Record<HintStep, string>>>({})
@@ -634,8 +637,12 @@ function ProcessingProgress({
           const currentStepName = progressSteps[Math.min(processedChunks, progressSteps.length - 1)]
           hints.episode = `現在: ${currentStepName}中 (${processedChunks}/${totalChunks})`
 
-          // デバッグ情報をログに追加（開発環境のみ）
-          if (process.env.NODE_ENV === 'development') {
+          // デバッグ情報をログに追加（環境フラグで制御）
+          if (
+            (typeof process !== 'undefined' &&
+              process.env.NEXT_PUBLIC_SHOW_PROGRESS_LOGS === '1') ||
+            process.env.NODE_ENV === 'development'
+          ) {
             addLog(
               'info',
               `エピソード構成進捗: ${processedChunks}/${totalChunks} - ${currentStepName}`,
@@ -855,15 +862,17 @@ function ProcessingProgress({
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xl font-semibold gradient-text">処理進捗</h3>
-            {process.env.NODE_ENV === 'development' && (
-              <button
-                type="button"
-                onClick={() => setShowLogs(!showLogs)}
-                className="px-3 py-1 text-xs bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition-colors"
-              >
-                {showLogs ? '🔽 ログを隠す' : '▶️ ログを表示'}
-              </button>
-            )}
+            {typeof process !== 'undefined' &&
+              (process.env.NEXT_PUBLIC_SHOW_PROGRESS_LOGS === '1' ||
+                process.env.NODE_ENV === 'development') && (
+                <button
+                  type="button"
+                  onClick={() => setShowLogs(!showLogs)}
+                  className="px-3 py-1 text-xs bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition-colors"
+                >
+                  {showLogs ? '🔽 ログを隠す' : '▶️ ログを表示'}
+                </button>
+              )}
           </div>
           {modeHint && (
             <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
@@ -1115,49 +1124,54 @@ function ProcessingProgress({
       )}
 
       {/* 開発環境でのログ表示 */}
-      {process.env.NODE_ENV === 'development' && showLogs && (
-        <div className="apple-card p-4">
-          <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-            <span className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
-            開発ログ ({logs.length}/{MAX_LOG_ENTRIES})
-          </h4>
-          <div
-            className="space-y-1 overflow-y-auto text-xs"
-            style={{ maxHeight: `${MAX_VISIBLE_LOG_HEIGHT}vh` }}
-          >
-            {logs.length === 0 ? (
-              <p className="text-gray-500 italic">ログはまだありません</p>
-            ) : (
-              logs.map((log, index) => (
-                <div
-                  key={`${log.timestamp}-${index}`}
-                  className={`flex items-start space-x-2 py-1 px-2 rounded ${
-                    log.level === 'error'
-                      ? 'bg-red-50 text-red-700'
-                      : log.level === 'warning'
-                        ? 'bg-yellow-50 text-yellow-700'
-                        : 'bg-gray-50 text-gray-600'
-                  }`}
-                >
-                  <span className="text-gray-400 font-mono whitespace-nowrap">{log.timestamp}</span>
-                  <span
-                    className={`uppercase text-xs font-bold ${
+      {typeof process !== 'undefined' &&
+        (process.env.NEXT_PUBLIC_SHOW_PROGRESS_LOGS === '1' ||
+          process.env.NODE_ENV === 'development') &&
+        showLogs && (
+          <div className="apple-card p-4">
+            <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+              <span className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
+              開発ログ ({logs.length}/{MAX_LOG_ENTRIES})
+            </h4>
+            <div
+              className="space-y-1 overflow-y-auto text-xs"
+              style={{ maxHeight: `${MAX_VISIBLE_LOG_HEIGHT}vh` }}
+            >
+              {logs.length === 0 ? (
+                <p className="text-gray-500 italic">ログはまだありません</p>
+              ) : (
+                logs.map((log, index) => (
+                  <div
+                    key={`${log.timestamp}-${index}`}
+                    className={`flex items-start space-x-2 py-1 px-2 rounded ${
                       log.level === 'error'
-                        ? 'text-red-500'
+                        ? 'bg-red-50 text-red-700'
                         : log.level === 'warning'
-                          ? 'text-yellow-500'
-                          : 'text-blue-500'
+                          ? 'bg-yellow-50 text-yellow-700'
+                          : 'bg-gray-50 text-gray-600'
                     }`}
                   >
-                    {log.level}
-                  </span>
-                  <span className="flex-1">{log.message}</span>
-                </div>
-              ))
-            )}
+                    <span className="text-gray-400 font-mono whitespace-nowrap">
+                      {log.timestamp}
+                    </span>
+                    <span
+                      className={`uppercase text-xs font-bold ${
+                        log.level === 'error'
+                          ? 'text-red-500'
+                          : log.level === 'warning'
+                            ? 'text-yellow-500'
+                            : 'text-blue-500'
+                      }`}
+                    >
+                      {log.level}
+                    </span>
+                    <span className="flex-1">{log.message}</span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
     </div>
   )
 }

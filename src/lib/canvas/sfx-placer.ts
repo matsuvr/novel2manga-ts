@@ -1,5 +1,19 @@
 import type { Dialogue, Panel } from '@/types/panel-layout'
 
+/**
+ * SFX プレフィクス除去用の正規表現。
+ *
+ * - 先頭許容: 空白および不可視文字
+ *   - `\s`（空白全般）
+ *   - `\uFEFF`（BOM）
+ *   - `\u200B-\u200D`（ゼロ幅空白/結合子）
+ *   - `\u2060`（単語結合子）
+ * - ラベル: 半角/全角の "SFX"（大小・全角対応: s/S/ｓ/Ｓ, f/F/ｆ/Ｆ, x/X/ｘ/Ｘ）
+ * - 区切り: 半角/全角コロン `:` / `：`
+ * - 例: "SFX: ...", " SFX：...", "ＳＦＸ：...", "\uFEFFSFX: ..."
+ */
+const SFX_PREFIX_RE = /^(?:\s|[\uFEFF\u200B-\u200D\u2060])*([sSｓＳ][fFｆＦ][xXｘＸ])\s*[:：]\s*/
+
 export interface SfxPlacement {
   text: string
   supplement?: string
@@ -80,8 +94,7 @@ export class SfxPlacer {
     // 先頭の空白・不可視文字（BOM/ゼロ幅スペース等）を許容しつつ、
     // 半角/全角いずれの「SFX」「:」「：」にもマッチして除去する
     // - 例: "SFX: ...", " SFX：...", "ＳＦＸ：...", "\uFEFFSFX: ..."
-    const PREFIX_RE = /^(?:\s|[\uFEFF\u200B-\u200D\u2060])*([sSｓＳ][fFｆＦ][xXｘＸ])\s*[:：]\s*/
-    cleanedText = cleanedText.replace(PREFIX_RE, '').trim()
+    cleanedText = cleanedText.replace(SFX_PREFIX_RE, '').trim()
 
     // （）全角の補足
     const mFull = cleanedText.match(/^(.*?)（(.+?)）$/)

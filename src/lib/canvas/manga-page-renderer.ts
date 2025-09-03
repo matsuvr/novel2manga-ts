@@ -377,30 +377,45 @@ export class MangaPageRenderer {
           },
         })
 
-        const apiStartTime = Date.now()
-        const results = await renderVerticalTextBatch({
-          defaults: {
-            fontSize: feature.defaults.fontSize,
-            lineHeight: feature.defaults.lineHeight,
-            letterSpacing: feature.defaults.letterSpacing,
-            padding: feature.defaults.padding,
-          },
-          items,
-        })
-        const apiDuration = Date.now() - apiStartTime
-        logger.debug('Vertical text batch API completed', {
-          duration: apiDuration,
-          results: results.length,
-        })
+        // API 仕様上、items は最大 50 件の制限があるため分割して実行
+        const BATCH_LIMIT = 50 as const
+        const defaults = {
+          fontSize: feature.defaults.fontSize,
+          lineHeight: feature.defaults.lineHeight,
+          letterSpacing: feature.defaults.letterSpacing,
+          padding: feature.defaults.padding,
+        }
 
-        if (results.length !== items.length) {
+        const allResults: Array<{ meta: { width: number; height: number }; pngBuffer: Buffer }> = []
+        let offset = 0
+        while (offset < items.length) {
+          const slice = items.slice(offset, offset + BATCH_LIMIT)
+          const apiStartTime = Date.now()
+          const res = await renderVerticalTextBatch({ defaults, items: slice })
+          const apiDuration = Date.now() - apiStartTime
+          logger.debug('Vertical text batch API completed (chunk)', {
+            duration: apiDuration,
+            chunkStart: offset,
+            chunkSize: slice.length,
+            results: res.length,
+          })
+          if (res.length !== slice.length) {
+            throw new Error(
+              `vertical-text batch size mismatch: requested ${slice.length}, got ${res.length} (offset ${offset})`,
+            )
+          }
+          allResults.push(...res)
+          offset += BATCH_LIMIT
+        }
+
+        if (allResults.length !== items.length) {
           throw new Error(
-            `vertical-text batch size mismatch: requested ${items.length}, got ${results.length}`,
+            `vertical-text batch size mismatch: requested ${items.length}, got ${allResults.length}`,
           )
         }
 
-        for (let idx = 0; idx < results.length; idx++) {
-          const { meta, pngBuffer } = results[idx]
+        for (let idx = 0; idx < allResults.length; idx++) {
+          const { meta, pngBuffer } = allResults[idx]
           const { key, panelId, dialogueIndex } = map[idx]
 
           if (typeof CanvasRenderer.createImageFromBuffer !== 'function') {

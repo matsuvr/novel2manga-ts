@@ -463,7 +463,7 @@ console.log(result.metadata?.provider)
 - **Prettier設定の維持**: JSONファイルのフォーマットチェックを継続的に実施
 - **CI/CDパイプラインの安定化**: GitHub Actions でのビルドとテストの実行を最適化
 
-## 開発ツールとCI
+### 基本設定
 
 - **Lint**: Biome を使用し、`npm run lint` で静的解析を実行。
 - **Format**: Prettier により `npm run format` でコード整形。

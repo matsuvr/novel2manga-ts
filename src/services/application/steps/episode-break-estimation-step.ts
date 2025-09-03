@@ -309,9 +309,10 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     const issues: string[] = []
 
     // Check if episodes cover all panels
-    // sort() は破壊的なためコピーしてからソートする
+    // sort() は破壊的なためコピーしてからソートする（toSorted は TS/lib 設定に依存するため未使用）
+    type Ep = EpisodeBreakPlan['episodes'][number]
     const sortedEpisodes = [...episodeBreaks.episodes].sort(
-      (a, b) => a.episodeNumber - b.episodeNumber,
+      (a: Ep, b: Ep) => a.episodeNumber - b.episodeNumber,
     )
 
     // Check continuous coverage
