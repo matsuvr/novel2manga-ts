@@ -1,7 +1,7 @@
-import { buildLayoutFromPageBreaks } from '@/agents/script/panel-assignment'
 import { extractSpeakerAndText } from '@/agents/script/dialogue-utils'
+import { buildLayoutFromPageBreaks } from '@/agents/script/panel-assignment'
 import { estimatePageBreaksSegmented } from '@/agents/script/segmented-page-break-estimator'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 import type { MangaLayout } from '@/types/panel-layout'
 import type { EpisodeBreakPlan, NewMangaScript, PageBreakV2 } from '@/types/script'
 import { StorageKeys } from '@/utils/storage'
@@ -128,8 +128,7 @@ export class PageBreakStep implements PipelineStep {
           })
           // Upsert layout status per episode for accurate progress and export discovery
           try {
-            const db = getDatabaseService()
-            await db.upsertLayoutStatus({
+            db.layout().upsertLayoutStatus({
               jobId,
               episodeNumber: episode.episodeNumber,
               totalPages: episodeLayout.pages.length,

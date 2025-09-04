@@ -199,6 +199,25 @@ const result = await agent.run({
 
 ### 吹き出し文字組（2025-09-02 追加）
 
+## データベースアクセス層の抽象化（2025-09-04 追加）
+
+- 目的: better-sqlite3（同期）と Cloudflare D1（非同期）の差異をアダプタ層で吸収し、業務ロジックから同期/非同期分岐を排除。
+- 主要コンポーネント:
+  - `src/infrastructure/database/adapters/base-adapter.ts`: `DatabaseAdapter` 抽象クラス（`transaction`/`runSync`/`isSync`）。
+  - `src/infrastructure/database/adapters/sqlite-adapter.ts`: Drizzle + better-sqlite3 用の同期アダプタ。同期 `transaction` を提供。非同期コールバックは明示エラーで拒否。
+  - `src/infrastructure/database/adapters/d1-adapter.ts`: Cloudflare D1 用の非同期アダプタ。`transaction` はコールバックを await。原子性は D1 の `batch()` 利用を前提とし、隠蔽フォールバックは実装しない。
+  - `src/infrastructure/database/connection.ts`: 接続生成とアダプタ自動判定（D1-like なら D1Adapter、それ以外は SqliteAdapter）。
+
+- 設計上の制約:
+  - フォールバック禁止: 非同期トランザクションを擬似的に同期化しない。better-sqlite3 のトランザクション内で `async` を投げると明示的に失敗させる。
+  - 型安全: `any` 不使用。D1 は `@cloudflare/workers-types` の `D1Database` を参照。
+  - テスト: アダプタはユニットテストで契約を検証（同期/非同期、エラー動作）。
+
+### 実装インパクト（Phase 1）
+
+- God Object（`src/services/database.ts`）の段階的移行前提で、まず同期/非同期境界をアダプタで確立。
+- 既存の Drizzle（better-sqlite3）パスは動作維持。Workers/D1 導入時は `createDatabaseConnection({ d1 })` で切替可能。
+
 - 縦書きレンダリングAPIへ渡す `maxCharsPerLine` はコマの相対縦幅に応じて動的決定。
   - `height <= 0.2`: 6 文字/行
   - `height <= 0.3`: 8 文字/行

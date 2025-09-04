@@ -8,8 +8,25 @@ import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
 import { DatabaseService } from '@/services/database'
 import { StorageFactory } from '@/utils/storage'
 
-// モック設定
-vi.mock('@/services/database')
+// モック設定（vi.mock より前に宣言）
+let mockJobsService: any
+let mockEpisodesService: any
+let mockRenderService: any
+
+vi.mock('@/services/database', () => ({
+  DatabaseService: vi.fn().mockImplementation(() => ({
+    getJob: vi.fn(),
+    getEpisodesByJobId: vi.fn(),
+    updateRenderStatus: vi.fn(),
+    updateProcessingPosition: vi.fn(),
+  })),
+  db: {
+    jobs: () => mockJobsService,
+    episodes: () => mockEpisodesService,
+    render: () => mockRenderService,
+  },
+}))
+
 vi.mock('@/utils/storage')
 vi.mock('@/lib/canvas/manga-page-renderer')
 vi.mock('@/lib/canvas/thumbnail-generator')
@@ -31,16 +48,6 @@ vi.mock('@/config', () => ({
   })),
   getLLMDefaultProvider: vi.fn(() => 'openai'),
 }))
-
-const mockDbService = {
-  getJob: vi.fn(),
-  getEpisodesByJobId: vi.fn(),
-  updateRenderStatus: vi.fn(),
-  updateProcessingPosition: vi.fn(),
-}
-
-// DatabaseService モックの実装を上書き
-vi.mocked(DatabaseService).mockImplementation(() => mockDbService as any)
 
 const mockStorage = {
   put: vi.fn(),
@@ -108,14 +115,28 @@ pages:
 `
 
 describe('/api/render エンドポイント', () => {
+  let mockDbService: any
+
   beforeEach(() => {
     vi.clearAllMocks()
 
     // DatabaseServiceのモック設定
+    mockDbService = {
+      getJob: vi.fn().mockResolvedValue(mockJob),
+      getEpisodesByJobId: vi.fn().mockResolvedValue(mockEpisodes),
+      updateRenderStatus: vi.fn().mockResolvedValue(undefined),
+      updateProcessingPosition: vi.fn(),
+    }
     vi.mocked(DatabaseService).mockImplementation(() => mockDbService as any)
-    mockDbService.getJob.mockResolvedValue(mockJob)
-    mockDbService.getEpisodesByJobId.mockResolvedValue(mockEpisodes)
-    mockDbService.updateRenderStatus.mockResolvedValue(undefined)
+
+    // db関数用のモック設定（同期API想定 -> returnValue）
+    mockJobsService = { getJob: vi.fn(), updateProcessingPosition: vi.fn() }
+    mockEpisodesService = { getEpisodesByJobId: vi.fn() }
+    mockRenderService = { upsertRenderStatus: vi.fn() }
+
+    mockJobsService.getJob.mockReturnValue(mockJob)
+    mockEpisodesService.getEpisodesByJobId.mockReturnValue(mockEpisodes)
+    mockRenderService.upsertRenderStatus.mockReturnValue(undefined)
 
     // StorageFactoryのモック設定
     vi.mocked(StorageFactory.getRenderStorage).mockResolvedValue(mockStorage as any)
@@ -165,6 +186,7 @@ describe('/api/render エンドポイント', () => {
 
     it('無効なjobIdでエラーが返される', async () => {
       mockDbService.getJob.mockResolvedValue(null)
+      mockJobsService.getJob.mockResolvedValue(null)
 
       const requestBody = {
         jobId: 'invalid-job',

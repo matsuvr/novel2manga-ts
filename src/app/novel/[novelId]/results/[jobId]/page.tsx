@@ -1,23 +1,15 @@
 import { notFound, redirect } from 'next/navigation'
-import { adaptAll } from '@/repositories/adapters'
-import { EpisodeRepository } from '@/repositories/episode-repository'
-import { JobRepository } from '@/repositories/job-repository'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 
 interface Params {
   novelId: string
   jobId: string
 }
 
-export default async function NovelJobResultsPage({ params }: { params: Promise<Params> }) {
-  const { novelId, jobId } = await params
-  const db = getDatabaseService()
-  const { episode: episodePort, job: jobPort } = adaptAll(db)
-  const episodeRepo = new EpisodeRepository(episodePort)
-  const jobRepo = new JobRepository(jobPort)
-
+export default async function NovelJobResultsPage({ params }: { params: Params }) {
+  const { novelId, jobId } = params
   // 指定されたジョブを取得
-  const job = await jobRepo.getJob(jobId)
+  const job = await db.jobs().getJob(jobId)
   if (!job || job.novelId !== novelId) return notFound()
 
   // ジョブが完了していない場合は404
@@ -39,11 +31,11 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
 
   if (job.status !== 'completed' && job.status !== 'complete') return notFound()
 
-  const episodes = await episodeRepo.getByJobId(job.id)
+  const episodes = await db.episodes().getEpisodesByJobId(job.id)
 
-  // レイアウトステータスを取得してページ数情報を含める
-  const layoutStatuses = await db.getLayoutStatusByJobId(job.id)
-  const layoutStatusMap = new Map(layoutStatuses.map((status) => [status.episodeNumber, status]))
+  // レイアウトステータスを取得してページ数情報を含める（責務をLayoutDatabaseServiceへ委譲）
+  const layoutStatuses = await db.layout().getLayoutStatusByJobId(job.id)
+  const layoutStatusMap = new Map(layoutStatuses.map((s) => [s.episodeNumber, s]))
 
   // Parse coverage warnings from job if any
   let coverageWarnings: Array<{

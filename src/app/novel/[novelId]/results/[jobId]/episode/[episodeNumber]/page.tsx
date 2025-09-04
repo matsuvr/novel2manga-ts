@@ -1,9 +1,6 @@
 import { notFound } from 'next/navigation'
-import { adaptAll } from '@/repositories/adapters'
-import { EpisodeRepository } from '@/repositories/episode-repository'
-import { JobRepository } from '@/repositories/job-repository'
 import { loadEpisodePreview } from '@/services/application/episode-preview'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
 
 interface Params {
@@ -12,20 +9,14 @@ interface Params {
   episodeNumber: string
 }
 
-export default async function EpisodePreviewPage({ params }: { params: Promise<Params> }) {
-  const { novelId, jobId, episodeNumber } = await params
+export default async function EpisodePreviewPage({ params }: { params: Params }) {
+  const { novelId, jobId, episodeNumber } = params
   const epNum = Number(episodeNumber)
   if (!epNum || epNum < 1) return notFound()
 
-  const db = getDatabaseService()
-  const { episode: episodePort, job: jobPort } = adaptAll(db)
-  const episodeRepo = new EpisodeRepository(episodePort)
-  const jobRepo = new JobRepository(jobPort)
-
-  const job = await jobRepo.getJob(jobId)
+  const job = await db.jobs().getJob(jobId)
   if (!job || job.novelId !== novelId) return notFound()
-
-  const episodes = await episodeRepo.getByJobId(jobId)
+  const episodes = await db.episodes().getEpisodesByJobId(jobId)
   const target = episodes.find((e) => e.episodeNumber === epNum)
   if (!target) {
     // Fallback: layout 存在で許可

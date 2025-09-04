@@ -2,9 +2,7 @@ import type { NextRequest } from 'next/server'
 export const runtime = 'nodejs'
 
 import { getLogger } from '@/infrastructure/logging/logger'
-import { adaptAll } from '@/repositories/adapters'
-import { NovelRepository } from '@/repositories/novel-repository'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 import { createErrorResponse, createSuccessResponse, ValidationError } from '@/utils/api-error'
 import { saveNovelToStorage } from './storage/route'
 
@@ -41,14 +39,9 @@ export async function POST(request: NextRequest) {
 
     const data = await saveNovelToStorage(text)
 
-    // Repositoryを使用してDBに保存
+    // DBに保存（ドメインサービス使用）
     try {
-      const dbService = getDatabaseService()
-      const { novel: novelPort } = adaptAll(dbService)
-      const novelRepo = new NovelRepository(novelPort)
-
-      // 小説情報をDBに保存（UUIDを指定）
-      await novelRepo.ensure(data.uuid, {
+      await db.novels().ensureNovel(data.uuid, {
         title: `Novel ${data.uuid.slice(0, 8)}`,
         author: 'Unknown',
         originalTextPath: data.fileName,

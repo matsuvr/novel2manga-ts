@@ -1,12 +1,15 @@
 import crypto from 'node:crypto'
-import { DatabaseService } from '../src/services/database'
+import { db } from '../src/services/database/index'
 
 async function main() {
-  const db = new DatabaseService()
+  const jobs = db.jobs()
+  const novels = db.novels()
+  const chunks = db.chunks()
+  const episodes = db.episodes()
 
   // 1) Create or ensure a novel
   const novelId = crypto.randomUUID()
-  await db.ensureNovel(novelId, {
+  await novels.ensureNovel(novelId, {
     title: 'Smoke Test Novel',
     author: 'Tester',
     originalTextPath: 'storage/smoke-test.txt',
@@ -18,17 +21,22 @@ async function main() {
   console.log('✓ ensureNovel ok:', novelId)
 
   // 2) Create a job for the novel
-  const jobId = await db.createJob({
-    novelId,
-    title: 'Smoke Job',
-    totalChunks: 1,
-    status: 'pending',
-    userId: 'test-user',
-  })
+  const jobId = await (async () => {
+    const id = crypto.randomUUID()
+    jobs.createJobRecord({
+      id,
+      novelId,
+      title: 'Smoke Job',
+      totalChunks: 1,
+      status: 'pending',
+      userId: 'test-user',
+    })
+    return id
+  })()
   console.log('✓ createJob ok:', jobId)
 
   // 3) Insert a chunk (unique constraint on (job_id, chunk_index) must hold)
-  const chunkId = await db.createChunk({
+  const chunkId = await chunks.createChunk({
     novelId,
     jobId,
     chunkIndex: 0,
@@ -42,7 +50,7 @@ async function main() {
   // 3b) Try to insert duplicate (job_id, chunk_index) to ensure unique constraint is enforced
   let duplicateEnforced = false
   try {
-    await db.createChunk({
+    await chunks.createChunk({
       novelId,
       jobId,
       chunkIndex: 0,
@@ -60,13 +68,35 @@ async function main() {
   }
 
   // 4) Create a minimal episode (unique (job_id, episode_number) must hold)
-  await db.createEpisode({ jobId, episodeNumber: 1, title: 'Ep1' })
+  await episodes.createEpisode({
+    novelId,
+    jobId,
+    episodeNumber: 1,
+    title: 'Ep1',
+    summary: undefined,
+    startChunk: 0,
+    startCharIndex: 0,
+    endChunk: 0,
+    endCharIndex: 0,
+    confidence: 1,
+  })
   console.log('✓ createEpisode ok: episode 1')
 
   // 4b) Duplicate episode number should fail
   let epDuplicateEnforced = false
   try {
-    await db.createEpisode({ jobId, episodeNumber: 1, title: 'Ep1-dup' })
+    await episodes.createEpisode({
+      novelId,
+      jobId,
+      episodeNumber: 1,
+      title: 'Ep1-dup',
+      summary: undefined,
+      startChunk: 0,
+      startCharIndex: 0,
+      endChunk: 0,
+      endCharIndex: 0,
+      confidence: 1,
+    })
   } catch (_e) {
     epDuplicateEnforced = true
     console.log('✓ unique (job_id, episode_number) enforced for episodes')
@@ -76,7 +106,7 @@ async function main() {
   }
 
   // 5) Read back job with progress (used by /api/jobs/[jobId]/status)
-  const jobWithProgress = await db.getJobWithProgress(jobId)
+  const jobWithProgress = await jobs.getJobWithProgress(jobId)
   if (!jobWithProgress) throw new Error('Job not found after creation')
   console.log('✓ getJobWithProgress ok:', {
     id: jobWithProgress.id,
