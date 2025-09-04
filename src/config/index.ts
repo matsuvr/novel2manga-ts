@@ -256,6 +256,36 @@ export function getDatabaseConfig() {
   }
 }
 
+// キャラクターメモリ設定を取得 - app.config.tsから直接取得
+export function getCharacterMemoryConfig() {
+  const config = getAppConfig()
+  return {
+    summaryMaxLength: config.characterMemory.summaryMaxLength,
+    promptMemory: {
+      maxTokens: config.characterMemory.promptMemory.maxTokens,
+      recentChunkWindow: config.characterMemory.promptMemory.recentChunkWindow,
+      topProminentCount: config.characterMemory.promptMemory.topProminentCount,
+      tokenEstimatePerChar: config.characterMemory.promptMemory.tokenEstimatePerChar,
+    },
+    matching: {
+      confidenceThreshold: config.characterMemory.matching.confidenceThreshold,
+    },
+    prominence: {
+      weights: {
+        events: config.characterMemory.prominence.weights.events,
+        dialogue: config.characterMemory.prominence.weights.dialogue,
+        chunkSpan: config.characterMemory.prominence.weights.chunkSpan,
+        recent: config.characterMemory.prominence.weights.recent,
+      },
+      recentWindow: config.characterMemory.prominence.recentWindow,
+    },
+    majorActions: {
+      min: config.characterMemory.majorActions.min,
+      max: config.characterMemory.majorActions.max,
+    },
+  }
+}
+
 // 環境判定 - 環境変数から直接取得
 export function isDevelopment(): boolean {
   const env = process.env.NODE_ENV || 'development'

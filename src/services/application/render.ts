@@ -8,6 +8,8 @@ import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
 import { db } from '@/services/database/index'
 import type { PageBreakV2 } from '@/types/script'
 import { normalizeAndValidateLayout } from '@/utils/layout-normalizer'
+import { validatePageBreakV2 } from '@/utils/pagebreak-validator'
+import { normalizePlanPanels, type LoosePanel } from '@/utils/page-normalizer'
 // YAML依存を排除: 直接JSONのMangaLayoutを構築して使用する
 
 export interface BatchOptions {
@@ -221,8 +223,6 @@ export async function renderFromPageBreakPlan(
   let failedCount = 0
 
   // Validate PageBreakV2 and normalize page numbers to contiguous safe range to avoid pathological plans
-  const { appConfig } = require('@/config/app.config')
-  const { validatePageBreakV2 } = require('@/utils/pagebreak-validator')
   const MAX_PAGES: number = appConfig.rendering.limits.maxPages
   const validation = validatePageBreakV2(pageBreakPlan, { maxPages: MAX_PAGES })
   if (!validation.valid) {
@@ -232,32 +232,27 @@ export async function renderFromPageBreakPlan(
       }`,
     )
   }
-  type LoosePanel = Partial<PageBreakV2['panels'][0]> & { pageNumber?: number }
   const panelsRaw: LoosePanel[] = Array.isArray(pageBreakPlan?.panels)
     ? (pageBreakPlan.panels as LoosePanel[])
     : []
-  const cleaned = panelsRaw.map((p) => ({
-    pageNumber: Math.max(1, Math.floor(Number(p.pageNumber ?? 1))),
+  const { normalized: normalizedPanels, report } = normalizePlanPanels(panelsRaw, {
+    maxPages: MAX_PAGES,
+  })
+  const panels: PageBreakV2['panels'] = normalizedPanels.map((p) => ({
+    pageNumber: p.pageNumber,
     panelIndex: p.panelIndex ?? 1,
     content: p.content ?? '',
     dialogue: p.dialogue ?? [],
-  }))
-  const uniqSorted = Array.from(new Set(cleaned.map((p) => p.pageNumber))).sort((a, b) => a - b)
-  const limited = uniqSorted.slice(0, MAX_PAGES)
-  const map = new Map<number, number>(limited.map((v, i) => [v, i + 1]))
-  const panels = cleaned.map((p) => ({ ...p, pageNumber: map.get(p.pageNumber) ?? 1 }))
-  if (
-    validation.needsNormalization ||
-    uniqSorted.length !== limited.length ||
-    !uniqSorted.every((v, i) => v === limited[i])
-  ) {
+    sfx: p.sfx ?? [],
+  })) as PageBreakV2['panels']
+  if (validation.needsNormalization || report.wasNormalized) {
     getLogger()
       .withContext({ service: 'render' })
       .warn('PageBreakV2 page numbers normalized (safety cap applied)', {
         jobId,
         episodeNumber,
-        uniquePages: uniqSorted.length,
-        limitedTo: limited.length,
+        uniquePages: report.uniqueCount,
+        limitedTo: report.limitedTo,
         maxCap: MAX_PAGES,
       })
   }
@@ -300,9 +295,9 @@ export async function renderFromPageBreakPlan(
       if (!pageMap.has(panel.pageNumber)) {
         pageMap.set(panel.pageNumber, [])
       }
-      const panels = pageMap.get(panel.pageNumber)
-      if (panels) {
-        panels.push(panel)
+      const list = pageMap.get(panel.pageNumber)
+      if (list) {
+        list.push(panel)
       }
     }
 

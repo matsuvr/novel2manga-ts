@@ -15,6 +15,18 @@ export function validatePageBreakV2(
   plan: unknown,
   opts: { maxPages: number },
 ): PageBreakValidationResult {
+  // Validate input option: maxPages must be a positive integer
+  if (!Number.isInteger(opts.maxPages) || opts.maxPages <= 0) {
+    return {
+      valid: false,
+      issues: [
+        `Invalid validator option: maxPages must be a positive integer (got ${String(
+          opts.maxPages,
+        )})`,
+      ],
+      needsNormalization: false,
+    }
+  }
   const parsed = PageBreakV2Schema.safeParse(plan)
   if (!parsed.success) {
     return {

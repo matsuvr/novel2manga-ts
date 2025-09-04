@@ -7,16 +7,11 @@ import {
   savePromptMemory,
 } from '@/character/persistence'
 import { buildIdMapping, recordEvents, summarizeMemory } from '@/character/state'
-import { getTextAnalysisConfig } from '@/config'
+import { getCharacterMemoryConfig } from '@/config'
 import type { Job } from '@/db/schema'
 import { generateExtractionV2UserPrompt, getExtractionV2SystemPrompt } from '@/prompts/extractionV2'
 import { db } from '@/services/database/index'
-import type {
-  AliasIndex,
-  CharacterMemoryIndex,
-  ExtractionV2,
-  TempCharacterId,
-} from '@/types/extractionV2'
+import type { AliasIndex, CharacterMemoryIndex, ExtractionV2 } from '@/types/extractionV2'
 import { isTempCharacterId } from '@/types/extractionV2'
 import { ExtractionV2Schema } from '@/validation/extractionV2'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
@@ -64,11 +59,9 @@ export class TextAnalysisStep implements PipelineStep {
         }
       }
 
-      // Analyze chunks with limited concurrency
-      const maxConcurrent = Math.max(1, Math.min(3, chunks.length))
+      // V2は人物状態を維持するため逐次処理を行う
       await this.analyzeConcurrentlyV2(
         chunks,
-        maxConcurrent,
         { jobId, logger, ports },
         { memoryIndex, aliasIndex, nextIdCounter, storagePaths },
       )
@@ -83,7 +76,6 @@ export class TextAnalysisStep implements PipelineStep {
 
   private async analyzeConcurrentlyV2(
     chunks: string[],
-    _maxConcurrent: number,
     context: Pick<StepContext, 'jobId' | 'logger' | 'ports'>,
     memoryContext: {
       memoryIndex: CharacterMemoryIndex
@@ -124,22 +116,11 @@ export class TextAnalysisStep implements PipelineStep {
 
       try {
         const { analyzeChunkWithFallback } = await import('@/agents/chunk-analyzer')
-
-        // Override the config to use V2 prompts
-        const originalConfig = getTextAnalysisConfig()
-        const v2Config = {
-          ...originalConfig,
-          systemPrompt,
-          userPromptTemplate: userPrompt,
-        }
-
-        // Temporarily override the global config
-        const _mockGetConfig = () => v2Config
-
         const analysis = await analyzeChunkWithFallback(
           userPrompt, // The user prompt is already formatted
           textAnalysisOutputSchema,
           {
+            systemPrompt,
             maxRetries: 0,
             jobId,
             chunkIndex: i,
@@ -157,6 +138,7 @@ export class TextAnalysisStep implements PipelineStep {
         try {
           const { analyzeChunkWithFallback } = await import('@/agents/chunk-analyzer')
           const analysis = await analyzeChunkWithFallback(userPrompt, textAnalysisOutputSchema, {
+            systemPrompt,
             maxRetries: 0,
             jobId,
             chunkIndex: i,
@@ -194,7 +176,7 @@ export class TextAnalysisStep implements PipelineStep {
       // Rewrite IDs in character events
       const rewrittenEvents = result.characterEvents.map((event) => {
         if (isTempCharacterId(event.characterId)) {
-          const mapped = idMapping.get(event.characterId as TempCharacterId)
+          const mapped = idMapping.get(event.characterId)
           return { ...event, characterId: mapped ?? event.characterId }
         }
         return event
@@ -203,7 +185,7 @@ export class TextAnalysisStep implements PipelineStep {
       // Rewrite IDs in dialogues
       const rewrittenDialogues = result.dialogues.map((dialogue) => {
         if (isTempCharacterId(dialogue.speakerId)) {
-          const mapped = idMapping.get(dialogue.speakerId as TempCharacterId)
+          const mapped = idMapping.get(dialogue.speakerId)
           return { ...dialogue, speakerId: mapped ?? dialogue.speakerId }
         }
         return dialogue
@@ -213,9 +195,10 @@ export class TextAnalysisStep implements PipelineStep {
       recordEvents(memoryIndex, rewrittenEvents, i, idMapping)
 
       // Summarize memory for characters that have grown too large
+      const { summaryMaxLength } = getCharacterMemoryConfig()
       for (const [characterId, memory] of memoryIndex) {
-        if (memory.summary && memory.summary.length > 700) {
-          summarizeMemory(memoryIndex, characterId)
+        if (memory.summary && memory.summary.length > summaryMaxLength) {
+          summarizeMemory(memoryIndex, characterId, summaryMaxLength)
         }
       }
 

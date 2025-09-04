@@ -3,6 +3,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
 import { appConfig } from '@/config/app.config'
+const _MAX_PAGES = appConfig.rendering.limits.maxPages
 
 interface ProcessStep {
   id: string

@@ -23,6 +23,7 @@ import {
 } from '@/prompts/extractionV2'
 import type { AliasIndex, CharacterMemoryIndex, ExtractionV2 } from '@/types/extractionV2'
 import { isTempCharacterId } from '@/types/extractionV2'
+import { getAppConfig, getCharacterMemoryConfig } from '@/config'
 import {
   formatValidationErrors,
   validateExtraction,
@@ -194,7 +195,7 @@ export async function processChunkV2(
 
   // Call LLM
   let retries = 0
-  const maxRetries = config.maxRetries || 3
+  const maxRetries = config.maxRetries ?? getAppConfig().processing.retry.maxAttempts
 
   while (retries < maxRetries) {
     try {
@@ -302,20 +303,18 @@ export function updateCharacterMemory(
 
   // Rewrite IDs in character events
   const rewrittenEvents = extraction.characterEvents.map((event) => {
-    if (isTempCharacterId(String(event.characterId))) {
-      const tempId = event.characterId as unknown as import('@/types/extractionV2').TempCharacterId
-      const mapped = idMapping.get(tempId)
-      return { ...event, characterId: mapped ?? tempId }
+    if (isTempCharacterId(event.characterId)) {
+      const mapped = idMapping.get(event.characterId)
+      return { ...event, characterId: mapped ?? event.characterId }
     }
     return event
   }) as typeof extraction.characterEvents
 
   // Rewrite IDs in dialogues
   const rewrittenDialogues = extraction.dialogues.map((dialogue) => {
-    if (isTempCharacterId(String(dialogue.speakerId))) {
-      const tempId = dialogue.speakerId as unknown as import('@/types/extractionV2').TempCharacterId
-      const mapped = idMapping.get(tempId)
-      return { ...dialogue, speakerId: mapped ?? tempId }
+    if (isTempCharacterId(dialogue.speakerId)) {
+      const mapped = idMapping.get(dialogue.speakerId)
+      return { ...dialogue, speakerId: mapped ?? dialogue.speakerId }
     }
     return dialogue
   }) as typeof extraction.dialogues
@@ -324,9 +323,10 @@ export function updateCharacterMemory(
   recordEvents(memoryIndex, rewrittenEvents, chunkIndex, idMapping)
 
   // Summarize memory for characters that have grown too large
+  const { summaryMaxLength } = getCharacterMemoryConfig()
   for (const [characterId, memory] of memoryIndex) {
-    if (memory.summary.length > 700) {
-      summarizeMemory(memoryIndex, characterId)
+    if (memory.summary.length > summaryMaxLength) {
+      summarizeMemory(memoryIndex, characterId, summaryMaxLength)
       logger.debug(`Summarized memory for character ${characterId}`)
     }
   }

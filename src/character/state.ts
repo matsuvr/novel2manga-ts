@@ -15,11 +15,14 @@ import {
   isTempCharacterId,
   type TempCharacterId,
 } from '@/types/extractionV2'
+import { getCharacterMemoryConfig } from '@/config'
 
 /**
  * Normalize a character name for consistent matching
  * Handles Japanese-specific normalization (kana, width, etc.)
  */
+import { JAPANESE_HONORIFICS } from '@/character/character.config'
+
 export function normalizeName(name: string): string {
   if (!name) return ''
 
@@ -38,8 +41,7 @@ export function normalizeName(name: string): string {
   })
 
   // Remove common honorifics for matching
-  const honorifics = ['さん', '様', '君', 'ちゃん', '殿', '氏', '先生', '先輩', '後輩']
-  for (const honorific of honorifics) {
+  for (const honorific of JAPANESE_HONORIFICS) {
     if (normalized.endsWith(honorific)) {
       normalized = normalized.slice(0, -honorific.length)
     }
@@ -143,8 +145,9 @@ export function upsertFromCandidate(
   candidate: CharacterCandidateV2,
   chunkIndex: number,
   nextIdCounter: () => number,
-  threshold = 0.75,
+  threshold?: number,
 ): CharacterId {
+  const thresholdValue = threshold ?? getCharacterMemoryConfig().matching.confidenceThreshold
   // If already a stable ID, just update
   if (isCharacterId(candidate.id)) {
     mergeTempIntoStable(
@@ -161,7 +164,7 @@ export function upsertFromCandidate(
   // 1. Try to resolve by possibleMatchIds with confidence >= threshold
   if (candidate.possibleMatchIds && candidate.possibleMatchIds.length > 0) {
     const bestMatch = candidate.possibleMatchIds
-      .filter((match) => match.confidence >= threshold)
+      .filter((match) => match.confidence >= thresholdValue)
       .sort((a, b) => b.confidence - a.confidence)[0]
 
     if (bestMatch) {
@@ -196,11 +199,8 @@ export function upsertFromCandidate(
     const mostRecent = nameMatches.reduce((best, current) => {
       const bestMemory = memoryIndex.get(best)
       const currentMemory = memoryIndex.get(current)
-      if (!bestMemory && currentMemory) return current
-      if (!currentMemory && bestMemory) return best
-      if (!bestMemory && !currentMemory) return best
-      // At this point, both memories exist; add an explicit guard for TS narrowing
-      if (!bestMemory || !currentMemory) return best
+      if (!currentMemory) return best
+      if (!bestMemory) return current
       return currentMemory.lastSeenChunk > bestMemory.lastSeenChunk ? current : best
     })
     mergeTempIntoStable(
@@ -291,10 +291,24 @@ export function recordEvents(
  * Summarize character memory to keep within size limits
  * Keeps rolling summary under ~700 characters
  */
+/**
+ * Summarize character memory to keep within size limits.
+ *
+ * Strategy:
+ * - If the rolling summary exceeds `maxLength`, split into older half and recent half.
+ * - Condense the older half by taking the first line as a base and appending up to two
+ *   lines that include important keywords (初登場/死亡/変化/関係/能力/特徴) to retain salient facts.
+ * - Concatenate the condensed older info with the recent half to prioritize fresh context.
+ * - Truncate to `maxLength` as a final safety cap.
+ *
+ * Note:
+ * - Default `maxLength` is sourced from app config via `getCharacterMemoryConfig().summaryMaxLength`.
+ *   Callers may override explicitly, but magic numbers must not be hardcoded.
+ */
 export function summarizeMemory(
   memoryIndex: CharacterMemoryIndex,
   characterId: CharacterId,
-  maxLength = 700,
+  maxLength = getCharacterMemoryConfig().summaryMaxLength,
 ): void {
   const memory = memoryIndex.get(characterId)
   if (!memory) return
