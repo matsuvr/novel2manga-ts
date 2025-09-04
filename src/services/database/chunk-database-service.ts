@@ -25,7 +25,7 @@ export class ChunkDatabaseService extends BaseDatabaseService {
         tx.insert(chunks)
           .values({
             id,
-            novelId: (chunk as unknown as NewChunk).novelId,
+            novelId: chunk.novelId,
             jobId: chunk.jobId,
             chunkIndex: chunk.chunkIndex,
             contentPath: chunk.contentPath,
@@ -39,7 +39,7 @@ export class ChunkDatabaseService extends BaseDatabaseService {
       await this.adapter.transaction(async (tx: DrizzleDatabase) => {
         await tx.insert(chunks).values({
           id,
-          novelId: (chunk as unknown as NewChunk).novelId,
+          novelId: chunk.novelId,
           jobId: chunk.jobId,
           chunkIndex: chunk.chunkIndex,
           contentPath: chunk.contentPath,

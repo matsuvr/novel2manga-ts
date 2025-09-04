@@ -12,6 +12,23 @@ type DrizzleDatabase = BetterSQLite3Database<typeof schema>
  * Follows Single Responsibility Principle
  */
 export class RenderDatabaseService extends BaseDatabaseService {
+  private buildRenderStatusSelect(
+    db: DrizzleDatabase,
+    jobId: string,
+    episodeNumber: number,
+    pageNumber: number,
+  ) {
+    return db
+      .select()
+      .from(renderStatus)
+      .where(
+        and(
+          eq(renderStatus.jobId, jobId),
+          eq(renderStatus.episodeNumber, episodeNumber),
+          eq(renderStatus.pageNumber, pageNumber),
+        ),
+      )
+  }
   /**
    * Get render status for a specific page
    */
@@ -22,33 +39,18 @@ export class RenderDatabaseService extends BaseDatabaseService {
   ): Promise<RenderStatus | null> {
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
-
-      const rows = drizzleDb
-        .select()
-        .from(renderStatus)
-        .where(
-          and(
-            eq(renderStatus.jobId, jobId),
-            eq(renderStatus.episodeNumber, episodeNumber),
-            eq(renderStatus.pageNumber, pageNumber),
-          ),
-        )
+      const rows = this.buildRenderStatusSelect(drizzleDb, jobId, episodeNumber, pageNumber)
         .limit(1)
         .all()
       return (rows[0] as RenderStatus | undefined) ?? null
     } else {
       const drizzleDb = this.db as DrizzleDatabase
-      const rows = await drizzleDb
-        .select()
-        .from(renderStatus)
-        .where(
-          and(
-            eq(renderStatus.jobId, jobId),
-            eq(renderStatus.episodeNumber, episodeNumber),
-            eq(renderStatus.pageNumber, pageNumber),
-          ),
-        )
-        .limit(1)
+      const rows = await this.buildRenderStatusSelect(
+        drizzleDb,
+        jobId,
+        episodeNumber,
+        pageNumber,
+      ).limit(1)
       return (rows[0] as RenderStatus | undefined) ?? null
     }
   }

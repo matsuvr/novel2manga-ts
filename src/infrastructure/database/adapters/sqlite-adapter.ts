@@ -20,7 +20,8 @@ export class SqliteAdapter extends DatabaseAdapter {
       if (out instanceof Promise) {
         // Explicitly fail to avoid hidden fallback/partial commits.
         throw new Error(
-          'Async work inside a synchronous (better-sqlite3) transaction is not supported',
+          'Async work inside a synchronous (better-sqlite3) transaction is not supported. ' +
+            'Ensure all DB operations within this transaction are synchronous, or use the async transaction path instead.',
         )
       }
       return out
