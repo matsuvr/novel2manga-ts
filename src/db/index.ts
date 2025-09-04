@@ -22,18 +22,28 @@ export function shouldRunMigrations(env: NodeJS.ProcessEnv = process.env): boole
   return isDevOrTest || isVitest
 }
 
-// Setup cleanup handlers for graceful shutdown
+// Setup cleanup handlers for graceful shutdown (register once in dev/HMR)
 if (typeof process !== 'undefined') {
-  const handleShutdown = () => {
-    cleanup()
-    if (db) {
-      db = null
+  // Use a global flag to prevent duplicate listener registration across HMR reloads
+  const g = globalThis as unknown as { __n2m_db_cleanup_registered__?: boolean }
+  if (!g.__n2m_db_cleanup_registered__) {
+    const handleShutdown = () => {
+      try {
+        cleanup()
+      } catch {
+        // ignore cleanup errors intentionally (no fallback behavior)
+      }
+      if (db) {
+        db = null
+      }
     }
-  }
 
-  process.on('SIGINT', handleShutdown)
-  process.on('SIGTERM', handleShutdown)
-  process.on('exit', handleShutdown)
+    // Use once-listeners to avoid accumulation
+    process.once('SIGINT', handleShutdown)
+    process.once('SIGTERM', handleShutdown)
+    process.once('exit', handleShutdown)
+    g.__n2m_db_cleanup_registered__ = true
+  }
 }
 
 export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {

@@ -220,7 +220,47 @@ export async function renderFromPageBreakPlan(
   let skippedCount = 0
   let failedCount = 0
 
-  const panels = Array.isArray(pageBreakPlan?.panels) ? pageBreakPlan.panels : []
+  // Validate PageBreakV2 and normalize page numbers to contiguous safe range to avoid pathological plans
+  const { appConfig } = require('@/config/app.config')
+  const { validatePageBreakV2 } = require('@/utils/pagebreak-validator')
+  const MAX_PAGES: number = appConfig.rendering.limits.maxPages
+  const validation = validatePageBreakV2(pageBreakPlan, { maxPages: MAX_PAGES })
+  if (!validation.valid) {
+    throw new Error(
+      `Invalid PageBreakV2: ${validation.issues.slice(0, 5).join('; ')}${
+        validation.issues.length > 5 ? ' ...' : ''
+      }`,
+    )
+  }
+  type LoosePanel = Partial<PageBreakV2['panels'][0]> & { pageNumber?: number }
+  const panelsRaw: LoosePanel[] = Array.isArray(pageBreakPlan?.panels)
+    ? (pageBreakPlan.panels as LoosePanel[])
+    : []
+  const cleaned = panelsRaw.map((p) => ({
+    pageNumber: Math.max(1, Math.floor(Number(p.pageNumber ?? 1))),
+    panelIndex: p.panelIndex ?? 1,
+    content: p.content ?? '',
+    dialogue: p.dialogue ?? [],
+  }))
+  const uniqSorted = Array.from(new Set(cleaned.map((p) => p.pageNumber))).sort((a, b) => a - b)
+  const limited = uniqSorted.slice(0, MAX_PAGES)
+  const map = new Map<number, number>(limited.map((v, i) => [v, i + 1]))
+  const panels = cleaned.map((p) => ({ ...p, pageNumber: map.get(p.pageNumber) ?? 1 }))
+  if (
+    validation.needsNormalization ||
+    uniqSorted.length !== limited.length ||
+    !uniqSorted.every((v, i) => v === limited[i])
+  ) {
+    getLogger()
+      .withContext({ service: 'render' })
+      .warn('PageBreakV2 page numbers normalized (safety cap applied)', {
+        jobId,
+        episodeNumber,
+        uniquePages: uniqSorted.length,
+        limitedTo: limited.length,
+        maxCap: MAX_PAGES,
+      })
+  }
   if (panels.length === 0) {
     logger.error('PageBreakPlan has no panels; aborting renderFromPageBreakPlan', {
       jobId,

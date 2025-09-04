@@ -13,6 +13,19 @@
  * - Dependency Inversion: Services depend on abstractions
  */
 
+// Ensure database/factory initialization on first import of this module.
+// 明示初期化: このモジュールを使う全ての呼び出しでDBファクトリが確実に初期化されるようにする。
+// フォールバックではなく、明示的な依存初期化として扱う。
+import { getDatabase } from '@/db'
+import { isFactoryInitialized } from './database-service-factory'
+
+// 初回インポート時に初期化（失敗時は例外をそのまま投げて停止: フォールバック禁止方針）
+if (!isFactoryInitialized()) {
+  // getDatabase() 内で initializeDatabaseServiceFactory(...) が呼ばれる
+  // ここでは副作用のスコープをこのバレルに限定する
+  void getDatabase()
+}
+
 // Core services
 export { BaseDatabaseService } from './base-database-service'
 export { ChunkDatabaseService } from './chunk-database-service'
