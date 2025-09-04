@@ -10,6 +10,8 @@ import type {
   CharacterMemoryIndex,
   CharacterProminence,
 } from '@/types/extractionV2'
+import { ACTION_CATEGORIES, PRIORITY_CATEGORIES } from '@/character/character.config'
+import { getCharacterMemoryConfig } from '@/config'
 
 /**
  * Calculate prominence score for a character
@@ -18,6 +20,7 @@ export function calculateProminence(
   memory: CharacterMemory,
   totalChunks: number,
 ): CharacterProminence {
+  const cm = getCharacterMemoryConfig()
   const dialogueCount = memory.timeline.filter(
     (entry) =>
       entry.action.includes('言') ||
@@ -28,8 +31,8 @@ export function calculateProminence(
 
   const eventCount = memory.timeline.length
 
-  // Get recent chunks (last 10 chunks)
-  const recentThreshold = Math.max(0, totalChunks - 10)
+  // Get recent chunks (configurable recent window)
+  const recentThreshold = Math.max(0, totalChunks - cm.prominence.recentWindow)
   const recentChunks = [
     ...new Set(
       memory.timeline
@@ -38,13 +41,14 @@ export function calculateProminence(
     ),
   ]
 
-  // Calculate score based on:
-  // - Total events (40%)
-  // - Dialogue count (30%)
-  // - Chunk span (20%)
-  // - Recent activity (10%)
+  // Calculate score based on configured weights
   const chunkSpan = memory.lastSeenChunk - memory.firstAppearanceChunk + 1
-  const score = eventCount * 0.4 + dialogueCount * 0.3 + chunkSpan * 0.2 + recentChunks.length * 0.1
+  const w = cm.prominence.weights
+  const score =
+    eventCount * w.events +
+    dialogueCount * w.dialogue +
+    chunkSpan * w.chunkSpan +
+    recentChunks.length * w.recent
 
   return {
     id: memory.id,
@@ -61,9 +65,13 @@ export function calculateProminence(
  */
 export function extractMajorActions(
   memory: CharacterMemory,
-  minActions = 3,
-  maxActions = 7,
+  minActions?: number,
+  maxActions?: number,
 ): string[] {
+  const { getCharacterMemoryConfig } = require('@/config') as typeof import('@/config')
+  const cm = getCharacterMemoryConfig()
+  const min = minActions ?? cm.majorActions.min
+  const max = maxActions ?? cm.majorActions.max
   if (memory.timeline.length === 0) {
     return ['物語に登場']
   }
@@ -73,30 +81,15 @@ export function extractMajorActions(
 
   for (const entry of memory.timeline) {
     const action = entry.action
-
-    // Categorize actions
     let category = 'その他'
-    if (action.includes('戦') || action.includes('攻撃') || action.includes('倒')) {
-      category = '戦闘'
-    } else if (action.includes('死') || action.includes('殺')) {
-      category = '死亡関連'
-    } else if (action.includes('愛') || action.includes('恋') || action.includes('結婚')) {
-      category = '恋愛'
-    } else if (action.includes('発見') || action.includes('見つ') || action.includes('気づ')) {
-      category = '発見'
-    } else if (action.includes('決') || action.includes('誓') || action.includes('約束')) {
-      category = '決意'
-    } else if (action.includes('助') || action.includes('救')) {
-      category = '救助'
-    } else if (action.includes('裏切') || action.includes('欺') || action.includes('騙')) {
-      category = '裏切り'
-    } else if (action.includes('変') || action.includes('成長') || action.includes('覚醒')) {
-      category = '変化'
+    for (const cat of Object.keys(ACTION_CATEGORIES)) {
+      const keywords = ACTION_CATEGORIES[cat]
+      if (keywords.length > 0 && keywords.some((kw) => action.includes(kw))) {
+        category = cat
+        break
+      }
     }
-
-    if (!actionGroups.has(category)) {
-      actionGroups.set(category, [])
-    }
+    if (!actionGroups.has(category)) actionGroups.set(category, [])
     actionGroups.get(category)?.push(action)
   }
 
@@ -104,19 +97,7 @@ export function extractMajorActions(
   const majorActions: string[] = []
 
   // Priority categories
-  const priorityCategories = [
-    '死亡関連',
-    '変化',
-    '決意',
-    '裏切り',
-    '戦闘',
-    '救助',
-    '恋愛',
-    '発見',
-    'その他',
-  ]
-
-  for (const category of priorityCategories) {
+  for (const category of PRIORITY_CATEGORIES) {
     if (actionGroups.has(category)) {
       const actions = actionGroups.get(category) ?? []
 
@@ -128,25 +109,25 @@ export function extractMajorActions(
       majorActions.push(bestAction)
 
       // Stop if we have enough actions
-      if (majorActions.length >= maxActions) {
+      if (majorActions.length >= max) {
         break
       }
     }
   }
 
   // Ensure minimum number of actions
-  if (majorActions.length < minActions) {
+  if (majorActions.length < min) {
     // Add more actions from timeline
     const additionalActions = memory.timeline
       .map((entry) => entry.action)
       .filter((action) => !majorActions.includes(action))
-      .slice(0, minActions - majorActions.length)
+      .slice(0, min - majorActions.length)
 
     majorActions.push(...additionalActions)
   }
 
   // Limit to maximum
-  return majorActions.slice(0, maxActions)
+  return majorActions.slice(0, max)
 }
 
 /**

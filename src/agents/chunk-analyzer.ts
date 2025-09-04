@@ -42,7 +42,7 @@ export const chunkAnalyzerAgent = {
 export async function analyzeChunkWithFallback<T extends z.ZodTypeAny>(
   prompt: string,
   schema: T,
-  _options?: { maxRetries?: number; jobId?: string; chunkIndex?: number },
+  _options?: { maxRetries?: number; jobId?: string; chunkIndex?: number; systemPrompt?: string },
 ): Promise<{
   result: z.infer<T>
   usedProvider: string
@@ -53,7 +53,7 @@ export async function analyzeChunkWithFallback<T extends z.ZodTypeAny>(
   const generator = getLlmStructuredGenerator()
   const result = await generator.generateObjectWithFallback({
     name: 'chunk-analyzer',
-    systemPrompt: config.systemPrompt,
+    systemPrompt: _options?.systemPrompt ?? config.systemPrompt,
     userPrompt: prompt,
     schema,
     schemaName: 'ChunkAnalysis',

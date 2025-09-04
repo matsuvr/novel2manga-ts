@@ -8,14 +8,15 @@ import type { CharacterId, TempCharacterId } from '@/types/extractionV2'
 
 // ========== ID Schemas ==========
 
-const CharacterIdSchema = z.custom<CharacterId>(
-  (val) => typeof val === 'string' && val.startsWith('char_'),
-  { message: 'Invalid CharacterId format' },
+// Use strict regex-based validators to avoid accepting malformed IDs
+export const CharacterIdSchema = z.custom<CharacterId>(
+  (val): val is CharacterId => typeof val === 'string' && /^char_\d+$/.test(val),
+  { message: 'Invalid CharacterId format (expected char_<number>)' },
 )
 
-const TempCharacterIdSchema = z.custom<TempCharacterId>(
-  (val) => typeof val === 'string' && val.startsWith('temp_char_'),
-  { message: 'Invalid TempCharacterId format' },
+export const TempCharacterIdSchema = z.custom<TempCharacterId>(
+  (val): val is TempCharacterId => typeof val === 'string' && /^temp_char_\d+_\d+$/.test(val),
+  { message: 'Invalid TempCharacterId format (expected temp_char_<number>_<number>)' },
 )
 
 // ========== Character Schemas ==========

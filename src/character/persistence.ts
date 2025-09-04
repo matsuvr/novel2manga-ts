@@ -191,10 +191,12 @@ export async function savePromptMemory(
   paths: StoragePaths,
   options: PromptMemoryOptions = {},
 ): Promise<void> {
+  const { getCharacterMemoryConfig } = await import('@/config')
+  const cm = getCharacterMemoryConfig()
   const {
-    maxTokens = 4000,
-    recentChunkWindow = 15,
-    topProminentCount = 10,
+    maxTokens = cm.promptMemory.maxTokens,
+    recentChunkWindow = cm.promptMemory.recentChunkWindow,
+    topProminentCount = cm.promptMemory.topProminentCount,
     currentChunk = 0,
   } = options
 
@@ -215,7 +217,8 @@ export async function savePromptMemory(
 
   // Convert selected characters to prompt format
   let estimatedTokens = 0
-  const tokensPerChar = 2.5 // Rough estimate for Japanese text
+  // Rough estimate for Japanese text tokenization; model-dependent and adjustable via config
+  const tokensPerChar = cm.promptMemory.tokenEstimatePerChar
 
   for (const id of selectedCharacters) {
     const memory = memoryIndex.get(id)

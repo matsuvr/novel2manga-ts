@@ -41,6 +41,7 @@ import {
 import { generateExtractionV2UserPrompt, getExtractionV2SystemPrompt } from '@/prompts/extractionV2'
 import type { AliasIndex, CharacterMemoryIndex, ExtractionV2 } from '@/types/extractionV2'
 import { isCharacterId, isTempCharacterId } from '@/types/extractionV2'
+import { getCharacterMemoryConfig } from '@/config'
 import {
   formatValidationErrors,
   validateExtraction,
@@ -337,9 +338,10 @@ export async function processChunkEnhanced(
       recordEvents(memoryIndex, extraction.characterEvents, chunkIndex, idMapping)
 
       // Summarize large memories
+      const { summaryMaxLength } = getCharacterMemoryConfig()
       for (const [characterId, memory] of memoryIndex) {
-        if (memory.summary && memory.summary.length > 700) {
-          summarizeMemory(memoryIndex, characterId)
+        if (memory.summary && memory.summary.length > summaryMaxLength) {
+          summarizeMemory(memoryIndex, characterId, summaryMaxLength)
           logger.debug('Memory', `Summarized memory for ${characterId}`, null, { characterId })
         }
       }

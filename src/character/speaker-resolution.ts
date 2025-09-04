@@ -11,6 +11,7 @@ import {
   isUnknownSpeaker,
   type TempCharacterId,
 } from '@/types/extractionV2'
+import { COMMON_JAPANESE_WORDS } from '@/character/character.config'
 
 /**
  * Speaker resolution context
@@ -136,53 +137,7 @@ function extractSpeakerFromProximity(
  * Check if a word is a common word that shouldn't be treated as a character name
  */
 function isCommonWord(word: string): boolean {
-  const commonWords = [
-    '私',
-    '僕',
-    '俺',
-    '彼',
-    '彼女',
-    'あなた',
-    '君',
-    'お前',
-    'みんな',
-    '全員',
-    '誰か',
-    'だれ',
-    '何',
-    'なに',
-    'これ',
-    'それ',
-    'あれ',
-    'ここ',
-    'そこ',
-    'あそこ',
-    '今',
-    '昨日',
-    '今日',
-    '明日',
-    '時',
-    '頃',
-    '前',
-    '後',
-    '上',
-    '下',
-    '左',
-    '右',
-    '中',
-    '外',
-    '内',
-    '人',
-    '者',
-    '方',
-    '様',
-    '事',
-    '物',
-    '所',
-    '場所',
-  ]
-
-  return commonWords.includes(word)
+  return COMMON_JAPANESE_WORDS.includes(word)
 }
 
 /**
