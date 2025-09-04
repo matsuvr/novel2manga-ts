@@ -115,22 +115,17 @@ export class EpisodeDatabaseService extends BaseDatabaseService {
    * Get episodes by job ID
    */
   async getEpisodesByJobId(jobId: string): Promise<Episode[]> {
+    const drizzleDb = this.db as DrizzleDatabase
+    const query = drizzleDb
+      .select()
+      .from(episodes)
+      .where(eq(episodes.jobId, jobId))
+      .orderBy(asc(episodes.episodeNumber))
+
     if (this.isSync()) {
-      const drizzleDb = this.db as DrizzleDatabase
-      return drizzleDb
-        .select()
-        .from(episodes)
-        .where(eq(episodes.jobId, jobId))
-        .orderBy(asc(episodes.episodeNumber))
-        .all()
-    } else {
-      const drizzleDb = this.db as DrizzleDatabase
-      return await drizzleDb
-        .select()
-        .from(episodes)
-        .where(eq(episodes.jobId, jobId))
-        .orderBy(asc(episodes.episodeNumber))
+      return query.all()
     }
+    return await query
   }
 
   /**

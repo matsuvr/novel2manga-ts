@@ -33,15 +33,9 @@ export default async function NovelJobResultsPage({ params }: { params: Params }
 
   const episodes = await db.episodes().getEpisodesByJobId(job.id)
 
-  // レイアウトステータスを取得してページ数情報を含める
-  // Derive page count from render status (fallback)
-  const renderRows = await db.render().getAllRenderStatusByJob(job.id)
-  const layoutStatusMap = new Map<number, { totalPages?: number }>()
-  for (const row of renderRows) {
-    const entry = layoutStatusMap.get(row.episodeNumber) || { totalPages: 0 }
-    entry.totalPages = Math.max(entry.totalPages ?? 0, row.pageNumber)
-    layoutStatusMap.set(row.episodeNumber, entry)
-  }
+  // レイアウトステータスを取得してページ数情報を含める（責務をLayoutDatabaseServiceへ委譲）
+  const layoutStatuses = await db.layout().getLayoutStatusByJobId(job.id)
+  const layoutStatusMap = new Map(layoutStatuses.map((s) => [s.episodeNumber, s]))
 
   // Parse coverage warnings from job if any
   let coverageWarnings: Array<{

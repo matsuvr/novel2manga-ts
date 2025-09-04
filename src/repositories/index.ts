@@ -2,6 +2,7 @@
 // Internally delegates to domain services in src/services/database.
 import crypto from 'node:crypto'
 import { db } from '@/services/database/index'
+import type { Job } from '@/db/schema'
 
 export function getJobRepository() {
   return {
@@ -12,7 +13,7 @@ export function getJobRepository() {
       return db.jobs().getJob(id)
     },
     async updateStatus(id: string, status: string, error?: string) {
-      return db.jobs().updateJobStatus(id, status as never, error)
+      return db.jobs().updateJobStatus(id, status as Job['status'], error)
     },
     async updateStep(
       id: string,
@@ -56,13 +57,10 @@ export function getJobRepository() {
       id: string,
       warnings: Array<{ chunkIndex: number; coverageRatio: number; message: string }>,
     ) {
-      // Persist as JSON in jobs.coverageWarnings
-      const s = JSON.stringify(warnings)
-      // Use updateJobStatus to touch updatedAt and leave other columns
-      db.jobs().updateJobStatus(id, 'processing')
-      // Direct DB access unavailable here; callers use this for side-info only.
-      // Consider adding a dedicated method in JobDatabaseService in a later pass.
-      void s
+      // 互換シム: 旧リポジトリの副作用を新実装にマップ
+      // jobs.coverageWarnings にJSONとして永続化（schema.tsに対応カラムあり）
+      // サイレントなNO-OPは避け、実際の保存に委譲する
+      await db.jobs().updateJobCoverageWarnings(id, warnings)
     },
   }
 }
@@ -95,8 +93,7 @@ export function getChunkRepository() {
     async createChunksBatch(
       payloads: Array<Parameters<ReturnType<(typeof db)['chunks']>['createChunk']>[0]>,
     ) {
-      // simple sequential insert
-      for (const p of payloads) await db.chunks().createChunk(p)
+      return db.chunks().createChunksBatch(payloads)
     },
   }
 }
