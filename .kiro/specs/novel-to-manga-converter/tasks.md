@@ -181,6 +181,15 @@
 
 ## Legacy Tasks Archive 📁
 
+### Database Access Refactoring (Phase 1, 2025-09-04)
+
+- [x] アダプタ層の導入（`DatabaseAdapter` 抽象 + `SqliteAdapter`/`D1Adapter` 実装）
+- [x] 接続管理の統一（`createDatabaseConnection` と `detectAdapter`）
+- [x] ユニットテスト追加（同期/非同期動作、エラー挙動、検出ロジック）
+- [ ] ドメイン別サービスの完全移行（Novel/Job/Episode/Chunk/Output/Render）
+- [ ] 参照更新と God Object (`src/services/database.ts`) の削除
+- [ ] Cloudflare D1 バインディング導入時の統合テスト
+
 ### Completed Major Refactors
 
 - ✅ **YAML廃止**: すべてのYAMLフォーマットをJSONに移行完了

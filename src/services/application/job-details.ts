@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import type { Job } from '@/db'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 import { ApiError } from '@/utils/api-error'
 import { StorageFactory } from '@/utils/storage'
 
@@ -13,13 +13,12 @@ export type ChunkRecord = {
 
 export async function getJobDetails(jobId: string): Promise<{ job: Job; chunks: ChunkRecord[] }> {
   // DatabaseService を直接利用することで、テストでの DatabaseService モックが有効に働く
-  const dbSvc = getDatabaseService()
-  const job = (await dbSvc.getJob(jobId)) as Job | null
+  const job = await db.jobs().getJob(jobId)
   if (!job) throw new ApiError('ジョブが見つかりません', 404, 'NOT_FOUND')
 
   // 軽量なDB集計でエピソード別のレンダリング進捗を取得（UIへ即時反映させる）
   // ストレージ走査は行わないため低負荷
-  const perEpisode = await getPerEpisodeProgressSafe(dbSvc, jobId)
+  const perEpisode = await computePerEpisodeProgress(jobId)
   // 合計値（totalPages/renderedPages）の再算出（未設定時や遅延時の補助）
   const totals = Object.entries(perEpisode).reduce(
     (acc, [, v]) => {
@@ -73,22 +72,24 @@ interface WithPerEpisodeProgress {
   getPerEpisodeRenderProgress(jobId: string): Promise<PerEpisodeProgress>
 }
 
-function hasPerEpisodeProgress(x: unknown): x is WithPerEpisodeProgress {
+function _hasPerEpisodeProgress(x: unknown): x is WithPerEpisodeProgress {
   return (
     typeof (x as { getPerEpisodeRenderProgress?: unknown })?.getPerEpisodeRenderProgress ===
     'function'
   )
 }
 
-async function getPerEpisodeProgressSafe(
-  dbSvc: unknown,
-  jobId: string,
-): Promise<PerEpisodeProgress> {
-  if (hasPerEpisodeProgress(dbSvc)) {
-    return await dbSvc.getPerEpisodeRenderProgress(jobId)
+async function computePerEpisodeProgress(jobId: string): Promise<PerEpisodeProgress> {
+  const renderRows = await db.render().getAllRenderStatusByJob(jobId)
+  const map = new Map<number, { planned: number; rendered: number; total?: number }>()
+  for (const row of renderRows) {
+    const key = row.episodeNumber
+    const entry = map.get(key) || { planned: 0, rendered: 0 }
+    entry.planned = Math.max(entry.planned, row.pageNumber)
+    if (row.isRendered) entry.rendered += 1
+    map.set(key, entry)
   }
-  // モックがメソッド未実装の場合は安全なデフォルトを返す
-  return {}
+  return Object.fromEntries(Array.from(map.entries()))
 }
 
 async function loadChunkRecords(jobId: string): Promise<ChunkRecord[]> {

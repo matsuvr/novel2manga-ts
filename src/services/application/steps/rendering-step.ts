@@ -58,8 +58,9 @@ export class RenderingStep implements PipelineStep {
         const ports = getStoragePorts()
 
         // 進捗管理のためのヘルパー関数
-        const { getDatabaseService } = await import('@/services/db-factory')
-        const db = getDatabaseService()
+        const { db } = await import('@/services/database/index')
+        const jobDb = db.jobs()
+        const renderDb = db.render()
 
         let totalPagesProcessed = 0
         let totalPagesExpected = 0
@@ -116,7 +117,7 @@ export class RenderingStep implements PipelineStep {
               try {
                 for (const p of normalized.layout.pages) {
                   // 現在処理中のページを更新
-                  await db.updateProcessingPosition(jobId, { episode: ep, page: p.page_number })
+                  jobDb.updateProcessingPosition(jobId, { episode: ep, page: p.page_number })
 
                   const imageBlob = await renderer.renderToImage(
                     normalized.layout,
@@ -136,7 +137,7 @@ export class RenderingStep implements PipelineStep {
                   await ports.render.putPageThumbnail(jobId, ep, p.page_number, thumbnailBuffer)
 
                   // レンダリング状態をDBに記録（これによりrenderedPagesが自動的に増加）
-                  await db.updateRenderStatus(jobId, ep, p.page_number, {
+                  renderDb.upsertRenderStatus(jobId, ep, p.page_number, {
                     isRendered: true,
                     imagePath: `${jobId}/episode_${ep}/page_${p.page_number}.png`,
                     thumbnailPath: `${jobId}/episode_${ep}/thumbnails/page_${p.page_number}_thumb.png`,

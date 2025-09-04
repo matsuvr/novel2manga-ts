@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { wrapJapaneseByBudoux, insertZwspByBudoux } from '@/utils/jp-linebreak'
+import { describe, expect, it } from 'vitest'
+import { insertZwspByBudoux, wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
 
 describe('wrapJapaneseByBudoux', () => {
   it('keeps total content equal and respects max length per line', () => {

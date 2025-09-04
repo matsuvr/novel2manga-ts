@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST } from '@/app/api/export/route'
 import { appConfig } from '@/config/app.config'
-import { DatabaseService } from '@/services/database'
+import { DatabaseService, db } from '@/services/database'
 import { __resetDatabaseServiceForTest } from '@/services/db-factory'
 
 // 設定モック
@@ -17,6 +17,7 @@ vi.mock('@/config', () => ({
     maxTokens: 1000,
   })),
   getLLMDefaultProvider: vi.fn(() => 'openai'),
+  getDatabaseConfig: vi.fn(() => ({ sqlite: { path: ':memory:' } })),
 }))
 
 // ストレージとデータベースのモック
@@ -89,11 +90,24 @@ vi.mock('@/utils/current-user', () => ({
   getCurrentUserId: vi.fn(() => 'test-user'),
 }))
 
+// モック用のヘルパー関数を定義（vi.mock より前に宣言）
+let mockJobsService: any
+let mockEpisodesService: any
+let mockOutputsService: any
+
 vi.mock('@/services/database', () => ({
   DatabaseService: vi.fn().mockImplementation(() => ({
     createNovel: vi.fn(),
     createJob: vi.fn(),
+    getJob: vi.fn(),
+    getEpisodesByJobId: vi.fn(),
+    createOutput: vi.fn(),
   })),
+  db: {
+    jobs: () => mockJobsService,
+    episodes: () => mockEpisodesService,
+    outputs: () => mockOutputsService,
+  },
 }))
 
 // PDFKit のモック
@@ -194,6 +208,10 @@ describe('/api/export', () => {
     testNovelId = 'test-novel-id'
 
     // モックサービスの設定
+    mockJobsService = { getJob: vi.fn(), createJobRecord: vi.fn(), updateJobStatus: vi.fn() }
+    mockEpisodesService = { getEpisodesByJobId: vi.fn() }
+    mockOutputsService = { createOutput: vi.fn() }
+
     mockDbService = {
       createNovel: vi.fn().mockResolvedValue(testNovelId),
       createJob: vi.fn(),
@@ -211,6 +229,24 @@ describe('/api/export', () => {
     }
 
     vi.mocked(DatabaseService).mockReturnValue(mockDbService)
+
+    // db関数用のモック設定
+    // dbファクトリは同期APIを想定しているため、returnValue を使用
+    ;(db as any).jobs = () => mockJobsService
+    ;(db as any).episodes = () => mockEpisodesService
+    ;(db as any).outputs = () => mockOutputsService
+
+    mockJobsService.getJob.mockReturnValue({
+      id: testJobId,
+      novelId: testNovelId,
+      status: 'completed',
+      renderCompleted: true,
+    })
+    mockEpisodesService.getEpisodesByJobId.mockReturnValue([
+      { episodeNumber: 1, title: 'Episode 1' },
+      { episodeNumber: 2, title: 'Episode 2' },
+    ])
+    mockOutputsService.createOutput.mockReturnValue('output-id')
   })
 
   afterEach(async () => {
@@ -289,6 +325,7 @@ describe('/api/export', () => {
 
     it('存在しないジョブIDでは500/エラーメッセージを返す', async () => {
       mockDbService.getJob.mockResolvedValue(null)
+      mockJobsService.getJob.mockReturnValue(null)
 
       const requestBody = {
         jobId: 'non-existent-job',
@@ -308,16 +345,18 @@ describe('/api/export', () => {
       const data = await response.json()
 
       expect(response.status).toBe(500)
-      expect(data.error).toContain('指定されたジョブが見つかりません')
+      expect(String(data.error)).toContain('指定されたジョブが見つかりません')
     })
 
     it('レンダリング未完了でも必要リソースがあればエクスポート可能', async () => {
-      mockDbService.getJob.mockResolvedValue({
+      const incompleteJob = {
         id: testJobId,
         novelId: testNovelId,
         status: 'processing',
         renderCompleted: false,
-      })
+      }
+      mockDbService.getJob.mockResolvedValue(incompleteJob)
+      vi.mocked(db).jobs().getJob.mockResolvedValue(incompleteJob)
 
       const requestBody = {
         jobId: testJobId,

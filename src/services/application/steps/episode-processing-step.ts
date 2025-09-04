@@ -1,11 +1,8 @@
 import type { Chunk } from '@/db/schema'
 import { getChunkRepository } from '@/repositories'
-import { adaptAll } from '@/repositories/adapters'
-import { EpisodeRepository } from '@/repositories/episode-repository'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 import type { EpisodeBoundary } from '@/types/episode'
 import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
-import { hasUpdateEpisodeTextPath } from '@/utils/type-guards'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface EpisodeTextResult {
@@ -30,14 +27,9 @@ export class EpisodeProcessingStep implements PipelineStep {
     const { jobId, logger } = context
 
     try {
-      // Get episode metadata from database
-      const db = getDatabaseService()
-      const { episode: episodePort } = adaptAll(db)
-      const episodeRepo = new EpisodeRepository(episodePort)
-
       // ここで「DBからエピソード情報を読み込む」
       logger.info('Fetching episodes from database', { jobId })
-      const episodes = await episodeRepo.getByJobId(jobId)
+      const episodes = await db.episodes().getEpisodesByJobId(jobId)
       logger.info('Episodes fetched from database', {
         jobId,
         foundEpisodes: episodes.length,
@@ -330,10 +322,8 @@ export class EpisodeProcessingStep implements PipelineStep {
         episode: String(episodeNumber),
       },
       dbOperation: async () => {
-        const dbService = getDatabaseService()
-        if (hasUpdateEpisodeTextPath(dbService)) {
-          await dbService.updateEpisodeTextPath(jobId, episodeNumber, key)
-        }
+        const { db } = await import('@/services/database/index')
+        db.episodes().updateEpisodeTextPath(jobId, episodeNumber, key)
       },
       tracking: {
         filePath: key,

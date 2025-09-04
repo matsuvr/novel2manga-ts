@@ -1,5 +1,5 @@
 import { convertChunkToMangaScript } from '@/agents/script/script-converter'
-import { getJobRepository } from '@/repositories'
+import { db } from '@/services/database/index'
 import type { NewMangaScript } from '@/types/script'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
@@ -16,7 +16,7 @@ export class ChunkScriptStep implements PipelineStep {
     context: StepContext,
   ): Promise<StepExecutionResult<ChunkScriptResult>> {
     const { jobId, logger } = context
-    const jobRepo = getJobRepository()
+    const jobDb = db.jobs()
     try {
       const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
       const storage = await StorageFactory.getAnalysisStorage()
@@ -71,7 +71,7 @@ export class ChunkScriptStep implements PipelineStep {
         while (true) {
           const i = indices.shift()
           if (i === undefined) break
-          await jobRepo.updateStep(jobId, `script_chunk_${i}`, i, chunks.length)
+          jobDb.updateJobStep(jobId, `script_chunk_${i}`)
           const text = chunks[i]
 
           // Get previous and next chunks for context
@@ -269,7 +269,7 @@ export class ChunkScriptStep implements PipelineStep {
             jobId,
             chunk: String(i),
           })
-          await jobRepo.updateStep(jobId, `script_chunk_${i}_done`, i + 1, chunks.length)
+          jobDb.updateJobStep(jobId, `script_chunk_${i}_done`)
         }
       }
 

@@ -55,9 +55,10 @@ export async function loadEpisodePreview(
     try {
       const prefix = `${jobId}/episode_${episodeNumber}/`
       const keys = await renderStorage.list(prefix)
+      // Windows/UNIXのパス区切り差異に対応（\\/ のいずれも許容）
       const fromRenders = keys
         .map((k) => {
-          const m = k.match(/episode_\d+\/page_(\d+)\.png$/)
+          const m = k.match(/episode_\d+[\\/]page_(\d+)\.png$/)
           return m ? Number(m[1]) : undefined
         })
         .filter((n): n is number => typeof n === 'number' && Number.isFinite(n))

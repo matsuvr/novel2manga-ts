@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { buildLayoutFromPageBreaks } from '@/agents/script/panel-assignment'
 import type { PageBreakV2 } from '@/types/script'
 

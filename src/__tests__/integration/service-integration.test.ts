@@ -203,7 +203,7 @@ vi.mock('@/config', () => ({
 }))
 
 import crypto from 'node:crypto'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, describe as baseDescribe, beforeEach, describe, expect, it, vi } from 'vitest'
 // AnalyzePipeline は下のモック適用後に動的import
 import {
   resetAgentMocks,
@@ -213,6 +213,17 @@ import {
 } from './__helpers/test-agents'
 import type { TestDatabase } from './__helpers/test-database'
 import { cleanupTestDatabase, createTestDatabase, TestDataFactory } from './__helpers/test-database'
+
+// 環境に better-sqlite3 が無い場合はこのスイートをスキップ
+let __nativeSqliteAvailable = true
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require('better-sqlite3')
+} catch {
+  __nativeSqliteAvailable = false
+}
+const describe = __nativeSqliteAvailable ? baseDescribe : baseDescribe.skip
+
 import { TestStorageDataFactory, TestStorageFactory } from './__helpers/test-storage'
 
 // StorageFactoryのモック
@@ -446,6 +457,46 @@ describe('Service Integration Tests', () => {
     // DatabaseServiceのモック
     vi.doMock('@/services/database', () => ({
       DatabaseService: vi.fn(() => testDb.service),
+      // dbファクトリーを追加
+      db: {
+        novels: () => ({
+          getNovel: vi.fn((id: string) => testDb.service.getNovel(id)),
+          ensureNovel: vi.fn((id: string, payload: any) => testDb.service.ensureNovel(id, payload)),
+          createNovel: vi.fn((payload: any) => testDb.service.createNovel(payload)),
+        }),
+        jobs: () => ({
+          createJobRecord: vi.fn((payload: any) => testDb.service.createJob(payload)),
+          updateJobStatus: vi.fn((id: string, status: any, error?: string) =>
+            testDb.service.updateJobStatus(id, status, error),
+          ),
+          updateJobStep: vi.fn((id: string, step: any) =>
+            (testDb.service as any).updateJobStep?.(id, step),
+          ),
+          markJobStepCompleted: vi.fn((id: string, step: any) =>
+            (testDb.service as any).markJobStepCompleted?.(id, step),
+          ),
+          updateJobTotalPages: vi.fn((id: string, totalPages: number) =>
+            (testDb.service as any).updateJobTotalPages?.(id, totalPages),
+          ),
+          getJobWithProgress: vi.fn((id: string) => testDb.service.getJobWithProgress(id)),
+          getJob: vi.fn((id: string) => testDb.service.getJob(id)),
+        }),
+        episodes: () => ({
+          getEpisodesByJobId: vi.fn((jobId: string) => testDb.service.getEpisodesByJobId(jobId)),
+          // AnalyzePipeline -> EpisodeWriteService.bulkUpsert で呼ばれる
+          createEpisodes: vi.fn((episodes: any[]) => testDb.service.createEpisodes(episodes)),
+        }),
+        chunks: () => ({
+          createChunk: vi.fn((payload: any) => testDb.service.createChunk(payload)),
+        }),
+        render: () => ({
+          getAllRenderStatusByJob: vi.fn(() => []),
+        }),
+      },
+      getDatabaseServiceFactory: vi.fn(),
+      initializeDatabaseServiceFactory: vi.fn(),
+      isFactoryInitialized: vi.fn(() => true),
+      cleanup: vi.fn(),
     }))
 
     // db-factoryのモック（アプリ側が取得するDBサービスをテストDBに固定）
@@ -777,7 +828,7 @@ describe('Service Integration Tests', () => {
         pipeline.runWithNovelId('nonexistent-novel-id', {
           userEmail: 'test@example.com',
         }),
-      ).rejects.toThrow('小説ID がデータベースに見つかりません')
+      ).rejects.toThrow('小説のテキストがストレージに見つかりません')
     })
 
     it('ストレージにテキストが存在しない場合は適切なエラーが発生する', async () => {

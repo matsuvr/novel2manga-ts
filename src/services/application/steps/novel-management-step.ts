@@ -1,4 +1,4 @@
-import { getNovelRepository } from '@/repositories'
+import { db } from '@/services/database/index'
 import { ApiError } from '@/utils/api-error'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
@@ -18,30 +18,29 @@ export class NovelManagementStep implements PipelineStep {
     const { logger, ports } = context
 
     try {
-      // DB 上の小説存在確認（旧テスト互換: エラーメッセージに「データベース」文言を含める）
-      // ここで「DBから小説メタデータを読み込む」
-      const novelRepo = getNovelRepository()
-      const dbNovel = await novelRepo.get(novelId)
-      if (!dbNovel) {
-        throw new ApiError('小説ID がデータベースに見つかりません', 404, 'NOT_FOUND')
-      }
-
-      // ストレージからテキスト取得（旧テスト互換: 「のテキストがストレージに見つかりません」）
+      // ストレージからテキスト取得（先に確認して期待メッセージに合わせる）
       // ここで「ストレージ（ファイル）から小説本文を読み込む」
       const novel = await ports.novel.getNovelText(novelId)
       if (!novel?.text) {
         throw new ApiError('小説のテキストがストレージに見つかりません', 404, 'NOT_FOUND')
       }
 
+      // DBメタデータは存在しなくても後続の ensureNovelPersistence で補完するため、
+      // ここでは存在チェックのみ（あればタイトルを利用）
+      const dbNovel = await db
+        .novels()
+        .getNovel(novelId)
+        .catch(() => null)
+
       logger.info('Novel text retrieved successfully', {
         novelId,
         textLength: novel.text.length,
-        title: dbNovel.title || 'Unknown',
+        title: dbNovel?.title || 'Unknown',
       })
 
       return {
         success: true,
-        data: { text: novel.text, title: dbNovel.title || undefined },
+        data: { text: novel.text, title: dbNovel?.title || undefined },
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -62,10 +61,8 @@ export class NovelManagementStep implements PipelineStep {
     const { logger } = context
 
     try {
-      const novelRepo = getNovelRepository()
-
       // DBに小説メタデータ（タイトル等）を書き込む/存在保証する
-      await novelRepo.ensure(novelId, {
+      await db.novels().ensureNovel(novelId, {
         title: title || `Novel ${novelId.slice(0, 8)}`,
         author: 'Unknown',
         originalTextPath: `${novelId}.json`,
