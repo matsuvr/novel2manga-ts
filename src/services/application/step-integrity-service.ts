@@ -1,6 +1,6 @@
 import type { Chunk } from '@/db/schema'
 import type { LoggerPort } from '@/infrastructure/logging/logger'
-import { getChunkRepository } from '@/repositories'
+import { db } from '@/services/database/index'
 import type { JobStep } from '@/types/job'
 
 /**
@@ -112,8 +112,7 @@ class SplitStepVerifier implements StepIntegrityVerifier {
       }
 
       // Check DB chunks
-      const chunkRepo = getChunkRepository()
-      const dbChunks = await chunkRepo.getByJobId(jobId)
+      const dbChunks = await db.chunks().getChunksByJobId(jobId)
 
       if (dbChunks.length === 0) {
         return {
@@ -186,8 +185,7 @@ class AnalyzeStepVerifier implements StepIntegrityVerifier {
       }
 
       // Get chunk count from DB
-      const chunkRepo = getChunkRepository()
-      const dbChunks = await chunkRepo.getByJobId(jobId)
+      const dbChunks = await db.chunks().getChunksByJobId(jobId)
 
       if (dbChunks.length === 0) {
         return {

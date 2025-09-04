@@ -1,6 +1,6 @@
 import type { LoggerPort } from '@/infrastructure/logging/logger'
 import type { StoragePorts } from '@/infrastructure/storage/ports'
-import { getJobRepository } from '@/repositories'
+import { db } from '@/services/database/index'
 import type { JobStatus, JobStep } from '@/types/job'
 
 /**
@@ -102,8 +102,7 @@ export abstract class BasePipelineStep implements PipelineStep {
     errorMessage?: string,
   ): Promise<void> {
     try {
-      const jobRepo = getJobRepository()
-      await jobRepo.updateStatus(jobId, status, errorMessage)
+      db.jobs().updateJobStatus(jobId, status, errorMessage)
       context.logger.info('Job status updated', { jobId, status, errorMessage })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -118,7 +117,7 @@ export abstract class BasePipelineStep implements PipelineStep {
     context: ExecutionContext,
   ): Promise<void> {
     try {
-      const jobRepo = getJobRepository()
+      const jobDb = db.jobs()
       // Only certain steps can be marked as completed in the repository
       const completableSteps: Array<'split' | 'analyze' | 'episode' | 'layout' | 'render'> = [
         'split',
@@ -131,7 +130,7 @@ export abstract class BasePipelineStep implements PipelineStep {
       if (
         completableSteps.includes(step as 'split' | 'analyze' | 'episode' | 'layout' | 'render')
       ) {
-        await jobRepo.markStepCompleted(
+        jobDb.markJobStepCompleted(
           jobId,
           step as 'split' | 'analyze' | 'episode' | 'layout' | 'render',
         )
@@ -154,8 +153,7 @@ export abstract class BasePipelineStep implements PipelineStep {
     total: number = 0,
   ): Promise<void> {
     try {
-      const jobRepo = getJobRepository()
-      await jobRepo.updateStep(jobId, step, completed, total)
+      db.jobs().updateJobStep(jobId, step)
       context.logger.info('Job step updated', { jobId, step, completed, total })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -176,8 +174,7 @@ export abstract class BasePipelineStep implements PipelineStep {
     context: ExecutionContext,
   ): Promise<void> {
     try {
-      const jobRepo = getJobRepository()
-      await jobRepo.updateJobTotalPages(jobId, totalPages)
+      db.jobs().updateJobTotalPages(jobId, totalPages)
       context.logger.info('Job total pages updated', { jobId, totalPages })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -200,8 +197,7 @@ export abstract class BasePipelineStep implements PipelineStep {
     context: ExecutionContext,
   ): Promise<void> {
     try {
-      const jobRepo = getJobRepository()
-      await jobRepo.updateCoverageWarnings(jobId, warnings)
+      db.jobs().updateJobCoverageWarnings?.(jobId, warnings)
       context.logger.info('Job coverage warnings updated', { jobId, warningCount: warnings.length })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

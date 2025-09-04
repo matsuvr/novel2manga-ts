@@ -1,6 +1,6 @@
 import { getChunkingConfig } from '@/config'
 import type { Chunk, Job } from '@/db/schema'
-import { getChunkRepository } from '@/repositories'
+import { db } from '@/services/database/index'
 import { splitTextIntoSlidingChunks } from '@/utils/text-splitter'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
@@ -25,7 +25,6 @@ export class TextChunkingStep implements PipelineStep {
     context: StepContext,
   ): Promise<StepExecutionResult<ChunkingResult>> {
     const { jobId, novelId, logger, ports } = context
-    const chunkRepo = getChunkRepository()
 
     try {
       let chunks: string[] = []
@@ -34,7 +33,7 @@ export class TextChunkingStep implements PipelineStep {
       // Check if chunks already exist for resumed jobs
       if (existingJob?.splitCompleted) {
         logger.info('Split step already completed, loading existing chunks', { jobId })
-        const existingChunks = await chunkRepo.getByJobId(jobId)
+        const existingChunks = await db.chunks().getChunksByJobId(jobId)
         logger.info('DEBUG: Chunk query result', {
           jobId,
           chunkCount: existingChunks.length,
@@ -158,7 +157,6 @@ export class TextChunkingStep implements PipelineStep {
     context: StepContext,
   ): Promise<StepExecutionResult<void>> {
     const { jobId, novelId, logger, ports } = context
-    const chunkRepo = getChunkRepository()
 
     try {
       logger.info('DEBUG: Starting chunk persistence', { jobId, totalChunks: chunks.length })
@@ -180,7 +178,7 @@ export class TextChunkingStep implements PipelineStep {
         })
 
         try {
-          await chunkRepo.create({
+          await db.chunks().createChunk({
             novelId,
             jobId,
             chunkIndex: i,

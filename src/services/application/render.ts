@@ -5,7 +5,7 @@ import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 import type { PageBreakV2 } from '@/types/script'
 import { normalizeAndValidateLayout } from '@/utils/layout-normalizer'
 // YAML依存を排除: 直接JSONのMangaLayoutを構築して使用する
@@ -48,7 +48,8 @@ export async function renderBatchFromJson(
   logger: LoggerPort = getLogger().withContext({ jobId, episodeNumber, service: 'render' }),
 ): Promise<BatchRenderResult> {
   const startTime = Date.now()
-  const dbService = getDatabaseService()
+  const jobDb = db.jobs()
+  const renderDb = db.render()
 
   // layoutはJSONとして渡される前提
   const parsedLayout = mangaLayoutJson as Parameters<typeof normalizeAndValidateLayout>[0]
@@ -89,7 +90,7 @@ export async function renderBatchFromJson(
 
     try {
       // 現在処理中のページを更新
-      await dbService.updateProcessingPosition(jobId, { episode: episodeNumber, page: pageNumber })
+      jobDb.updateProcessingPosition(jobId, { episode: episodeNumber, page: pageNumber })
 
       // 事前検証: パネルの存在とサイズ
       const panels = targetPage.panels || []
@@ -124,7 +125,7 @@ export async function renderBatchFromJson(
         thumbnailBuffer,
       )
 
-      await dbService.updateRenderStatus(jobId, episodeNumber, pageNumber, {
+      renderDb.upsertRenderStatus(jobId, episodeNumber, pageNumber, {
         isRendered: true,
         imagePath: renderKey,
         thumbnailPath: thumbnailKey,
@@ -269,8 +270,8 @@ export async function renderFromPageBreakPlan(
       const page = { pageNumber, panels, panelCount: panels.length }
       try {
         // 現在処理中のページを更新
-        const dbService = getDatabaseService()
-        await dbService.updateProcessingPosition(jobId, {
+        const jobDb2 = db.jobs()
+        jobDb2.updateProcessingPosition(jobId, {
           episode: episodeNumber,
           page: pageNumber,
         })
@@ -362,7 +363,8 @@ export async function renderFromPageBreakPlan(
         )
 
         // Update render status in database
-        await dbService.updateRenderStatus(jobId, episodeNumber, page.pageNumber, {
+        const renderDb2 = db.render()
+        renderDb2.upsertRenderStatus(jobId, episodeNumber, page.pageNumber, {
           isRendered: true,
           imagePath: renderKey,
           thumbnailPath: thumbnailKey,

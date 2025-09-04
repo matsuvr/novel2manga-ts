@@ -1,10 +1,8 @@
 import type { Episode } from '@/db'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
-import { adaptAll } from '@/repositories/adapters'
-import { EpisodeRepository } from '@/repositories/episode-repository'
-import { JobRepository } from '@/repositories/job-repository'
-import { getDatabaseService } from '@/services/db-factory'
+import type { JobWithProgress } from '@/services/database/index'
+import { db as dbFactory } from '@/services/database/index'
 import type { EpisodeData, MangaLayout } from '@/types/panel-layout'
 import { StorageKeys } from '@/utils/storage'
 
@@ -94,11 +92,16 @@ export async function generateEpisodeLayout(
  * Initialize dependencies and repositories for layout generation
  */
 function initializeLayoutDependencies(_jobId: string, _episodeNumber: number, _logger: LoggerPort) {
-  const db = getDatabaseService()
-  const { episode: episodePort, job: jobPort } = adaptAll(db)
-  const episodeRepo = new EpisodeRepository(episodePort)
-  const jobRepo = new JobRepository(jobPort)
-
+  const episodeRepo = {
+    getByJobId: (jobId: string) => Promise.resolve(dbFactory.episodes().getEpisodesByJobId(jobId)),
+  }
+  const jobRepo = {
+    getJobWithProgress: (id: string) => Promise.resolve(dbFactory.jobs().getJobWithProgress(id)),
+    markStepCompleted: (id: string, step: 'split' | 'analyze' | 'episode' | 'layout' | 'render') =>
+      Promise.resolve(dbFactory.jobs().markJobStepCompleted(id, step)),
+    updateStep: (id: string, step: string) =>
+      Promise.resolve(dbFactory.jobs().updateJobStep(id, step)),
+  }
   return { episodeRepo, jobRepo }
 }
 
@@ -109,8 +112,8 @@ async function resolveEpisodeData(
   jobId: string,
   episodeNumber: number,
   isDemo: boolean,
-  episodeRepo: EpisodeRepository,
-  jobRepo: JobRepository,
+  episodeRepo: { getByJobId: (jobId: string) => Promise<Episode[]> },
+  jobRepo: { getJobWithProgress: (id: string) => Promise<JobWithProgress | null> },
   logger: LoggerPort,
 ) {
   const job = await jobRepo.getJobWithProgress(jobId).catch((e) => {
@@ -388,8 +391,18 @@ async function generateEpisodeLayoutInternal(
         createdAt: new Date().toISOString(),
         episodeTextPath: null,
       } as Episode
-      const db = getDatabaseService()
-      await db.createEpisode({ jobId, episodeNumber, title: fallbackEpisode.title ?? undefined })
+      await dbFactory.episodes().createEpisode({
+        novelId: fallbackEpisode.novelId,
+        jobId,
+        episodeNumber,
+        title: fallbackEpisode.title ?? undefined,
+        summary: fallbackEpisode.summary ?? undefined,
+        startChunk: 0,
+        startCharIndex: 0,
+        endChunk: 0,
+        endCharIndex: 0,
+        confidence: 0.9,
+      })
       logger.info('Episode created successfully', { jobId, episodeNumber })
     } catch (error) {
       logger.warn('Failed to create fallback demo episode', {
@@ -412,7 +425,7 @@ async function generateEpisodeLayoutInternal(
 
   const episodeData: EpisodeData = {
     chunkAnalyses: chunkDataArray.map((c) => c.analysis),
-    author: job?.jobName || 'Unknown Author',
+    author: 'Unknown Author',
     title: `Episode ${episode.episodeNumber}` as const,
     episodeNumber: episode.episodeNumber,
     episodeTitle: episode.title || undefined,
@@ -580,17 +593,23 @@ async function generateEpisodeLayoutInternal(
     // デモモードまたはジョブ未発見時はDB更新をスキップ（明示ログ）。
     if (!isDemo && job) {
       try {
-        const db = getDatabaseService()
-        await db.upsertLayoutStatus({
+        // Persist layout status using new domain service
+        const totalPagesEp = normalized.layout.pages.length
+        const totalPanelsEp = normalized.layout.pages.reduce(
+          (acc, p) => acc + (Array.isArray(p.panels) ? p.panels.length : 0),
+          0,
+        )
+        dbFactory.layout().upsertLayoutStatus({
           jobId,
           episodeNumber,
-          totalPages: normalized.layout.pages.length,
+          totalPages: totalPagesEp,
+          totalPanels: totalPanelsEp,
           layoutPath: StorageKeys.episodeLayout(jobId, episodeNumber),
         })
-        await db.recomputeJobTotalPages(jobId)
-        await db.recomputeJobProcessedEpisodes(jobId)
+        // Update job total pages conservatively
+        dbFactory.jobs().updateJobTotalPages(jobId, totalPagesEp)
         // 現在処理中のエピソードを記録（ページは未確定のためnull）
-        await db.updateProcessingPosition(jobId, { episode: episodeNumber, page: null })
+        dbFactory.jobs().updateProcessingPosition(jobId, { episode: episodeNumber, page: null })
       } catch (dbError) {
         logger.error('Failed to persist layout totals to database', {
           error: (dbError as Error).message,

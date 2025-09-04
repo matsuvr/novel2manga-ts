@@ -2,10 +2,7 @@ import type { NextRequest } from 'next/server'
 import { appConfig } from '@/config/app.config'
 import type { Episode } from '@/db/schema'
 import { getLogger, runWithLogContext } from '@/infrastructure/logging/logger'
-import { adaptAll } from '@/repositories/adapters'
-import { EpisodeRepository } from '@/repositories/episode-repository'
-import { JobRepository } from '@/repositories/job-repository'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 import {
   ApiError,
   createErrorResponse,
@@ -28,13 +25,8 @@ export async function GET(
       const episodeParam = searchParams.get('episode')
       const pageParam = searchParams.get('page')
 
-      const dbService = getDatabaseService()
-      const { episode: episodePort, job: jobPort } = adaptAll(dbService)
-      const episodeRepo = new EpisodeRepository(episodePort)
-      const jobRepo = new JobRepository(jobPort)
-
       // ジョブの存在確認
-      const job = await jobRepo.getJob(params.jobId)
+      const job = await db.jobs().getJob(params.jobId)
       if (!job) {
         throw new ApiError('Job not found', 404, 'NOT_FOUND')
       }
@@ -58,7 +50,7 @@ export async function GET(
       }
 
       // エピソード一覧を取得
-      let episodes = await episodeRepo.getByJobId(params.jobId)
+      let episodes = await db.episodes().getEpisodesByJobId(params.jobId)
       // Fallback: derive episodes from layout storage (JSON files) when DB has none
       if (episodes.length === 0) {
         try {

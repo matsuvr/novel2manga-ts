@@ -4,8 +4,11 @@ import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { getDatabaseConfig } from '@/config'
-import { cleanup } from '@/services/database/database-service-factory'
-// Import will be added when migration is complete to avoid circular dependency
+import { createDatabaseConnection } from '@/infrastructure/database/connection'
+import {
+  cleanup,
+  initializeDatabaseServiceFactory,
+} from '@/services/database/database-service-factory'
 import * as schema from './schema'
 
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null
@@ -53,8 +56,9 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
       const sqliteDb = new Database(dbPath)
       db = drizzle(sqliteDb, { schema })
 
-      // TODO: Initialize the new database service architecture when migration is complete
-      // initializeDatabaseServiceFactory(db)
+      // Initialize the new database service architecture
+      const connection = createDatabaseConnection({ sqlite: db })
+      initializeDatabaseServiceFactory(connection)
 
       // In dev/test, run migrations only when it's safe to do so.
       // 明示的にスキップ指定がある場合はマイグレーションを行わない

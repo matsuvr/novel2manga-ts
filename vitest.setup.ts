@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom'
+import { vi } from 'vitest'
 
 // Mock HTMLCanvasElement globally for all tests
 Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
@@ -79,3 +80,116 @@ globalThis.Image = class MockImage {
 } as typeof Image
 
 // Note: createImageFromBuffer will be mocked per test as needed
+
+// Provide a default mock for the new database factory to avoid brittle test-specific mocks.
+// If a test sets up its own `vi.doMock('@/services/database', ...)`, delegate `db` to it.
+vi.mock('@/services/database/index', async () => {
+  const actual = await vi.importActual<typeof import('@/services/database/index')>(
+    '@/services/database/index',
+  )
+
+  // Try to delegate to test-provided db (from '@/services/database') if available
+  let delegatedDb: unknown
+  try {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-imports
+    const wrapper = (await import('@/services/database')) as typeof import('@/services/database')
+    // Some tests expose `db` on the wrapper; if so, use it
+    delegatedDb = (wrapper as unknown as { db?: unknown }).db
+  } catch {
+    // noop: fallback to stubbed db below
+  }
+
+  const fallbackDb = {
+    jobs: () => ({
+      getJob: vi.fn(),
+      getJobsByNovelId: vi.fn().mockReturnValue([]),
+      getJobWithProgress: vi.fn(),
+      updateJobStatus: vi.fn(),
+      updateJobStep: vi.fn(),
+      markJobStepCompleted: vi.fn(),
+      updateJobTotalPages: vi.fn(),
+      updateJobError: vi.fn(),
+      updateProcessingPosition: vi.fn(),
+    }),
+    episodes: () => ({
+      getEpisodesByJobId: vi.fn().mockReturnValue([]),
+      updateEpisodeTextPath: vi.fn(),
+      createEpisodes: vi.fn(),
+    }),
+    chunks: () => ({
+      getChunksByJobId: vi.fn().mockReturnValue([]),
+      createChunk: vi.fn().mockResolvedValue('chunk-id'),
+    }),
+    novels: () => ({
+      ensureNovel: vi.fn(),
+      getNovel: vi.fn(),
+      getAllNovels: vi.fn().mockReturnValue([]),
+      createNovel: vi.fn().mockResolvedValue({ id: 'novel-id' }),
+    }),
+    render: () => ({
+      upsertRenderStatus: vi.fn(),
+      getAllRenderStatusByJob: vi.fn().mockReturnValue([]),
+    }),
+    layout: () => ({
+      upsertLayoutStatus: vi.fn(),
+    }),
+    outputs: () => ({
+      createOutput: vi.fn().mockResolvedValue('output-id'),
+      getOutput: vi.fn(),
+    }),
+  }
+
+  return {
+    ...actual,
+    db: (delegatedDb as typeof fallbackDb | undefined) ?? fallbackDb,
+  }
+})
+
+// Also mock the factory module used by the legacy-compatible DatabaseService wrapper
+vi.mock('@/services/database/database-service-factory', () => ({
+  db: {
+    jobs: () => ({
+      getJob: vi.fn().mockReturnValue(null),
+      getJobsByNovelId: vi.fn().mockReturnValue([]),
+      getJobWithProgress: vi.fn(),
+      createJobRecord: vi.fn().mockImplementation(({ id }: { id: string }) => id),
+      updateJobStatus: vi.fn(),
+      updateJobStep: vi.fn(),
+      markJobStepCompleted: vi.fn(),
+      updateJobTotalPages: vi.fn(),
+      updateJobError: vi.fn(),
+      updateProcessingPosition: vi.fn(),
+    }),
+    episodes: () => ({
+      getEpisodesByJobId: vi.fn().mockReturnValue([]),
+      updateEpisodeTextPath: vi.fn(),
+      createEpisodes: vi.fn(),
+    }),
+    chunks: () => ({
+      getChunksByJobId: vi.fn().mockReturnValue([]),
+      createChunk: vi.fn().mockResolvedValue('chunk-id'),
+    }),
+    novels: () => ({
+      ensureNovel: vi.fn(),
+      getNovel: vi.fn(),
+      getAllNovels: vi.fn().mockReturnValue([]),
+      createNovel: vi.fn().mockResolvedValue({ id: 'novel-id' }),
+    }),
+    render: () => ({
+      upsertRenderStatus: vi.fn(),
+      getAllRenderStatusByJob: vi.fn().mockReturnValue([]),
+    }),
+    layout: () => ({
+      upsertLayoutStatus: vi.fn(),
+    }),
+    outputs: () => ({
+      createOutput: vi.fn().mockResolvedValue('output-id'),
+      getOutput: vi.fn(),
+    }),
+  },
+  DatabaseServiceFactory: class {},
+  getDatabaseServiceFactory: vi.fn(),
+  initializeDatabaseServiceFactory: vi.fn(),
+  isFactoryInitialized: vi.fn(() => true),
+  cleanup: vi.fn(),
+}))
