@@ -121,6 +121,14 @@ const result = await agent.run({
 - パイプラインではエピソード境界推定の期間に `currentStep=episode` を明示し、完了時に `episodeCompleted` を更新。
   これにより「エピソード構成がスキップに見える」問題を解消。
 
+### 進捗ページの永続URL（復帰性の担保）
+
+- novelId 発行後は、進捗表示を `/novel/{novelId}/progress` のユニークURLで提供する。
+- ユーザーがブラウザの戻る/再読み込みを行っても、同URLに戻ればフロントエンドが `/api/resume` を呼び出し、
+  対応する最新ジョブの `jobId` を取得・再開し、SSEを再接続する。
+- SSEの一時的切断は `onerror` で警告ログのみを記録し、`EventSource` の自動再接続に任せて処理を継続する。
+  これにより、フロントエンド由来の一時的エラーで全処理が停止することを防止する。
+
 ### ログ設計（開発体験の改善）
 
 - コンソール出力は環境変数 `LOG_CONSOLE_LEVEL` で最小レベルを制御（`debug|info|warn|error`）。

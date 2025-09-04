@@ -65,6 +65,37 @@ export class RenderingStep implements PipelineStep {
         let totalPagesProcessed = 0
         let totalPagesExpected = 0
 
+        // 全エピソードの総ページ数を事前に計算（安全のためページ番号を正規化してから計算）
+        const normalizePlanPages = (panels: Array<{ pageNumber?: number }>) => {
+          const { appConfig } = require('@/config/app.config')
+          const MAX_PAGES: number = appConfig.rendering.limits.maxPages
+          // 1) 不正な値を1以上の整数に補正
+          const cleaned = panels.map((p) => ({
+            pageNumber: Math.max(1, Math.floor(Number(p.pageNumber ?? 1))),
+          }))
+          // 2) 実際に現れるページ番号を昇順でユニーク化
+          const uniqSorted = Array.from(new Set(cleaned.map((p) => p.pageNumber))).sort(
+            (a, b) => a - b,
+          )
+          // 3) 上限キャップ（極端な誤出力対策）
+          const limited = uniqSorted.slice(0, MAX_PAGES)
+          // 4) マッピング表を作り、密な 1..N に再割当
+          const map = new Map<number, number>(limited.map((v, i) => [v, i + 1]))
+          const normalized = cleaned.map((p) => ({ pageNumber: map.get(p.pageNumber) ?? 1 }))
+          if (
+            uniqSorted.length !== limited.length ||
+            !uniqSorted.every((v, i) => v === limited[i])
+          ) {
+            logger.warn('Page number normalization applied to PageBreakPlan', {
+              jobId,
+              uniquePages: uniqSorted.length,
+              limitedTo: limited.length,
+              maxCap: MAX_PAGES,
+            })
+          }
+          return normalized
+        }
+
         // 全エピソードの総ページ数を事前に計算
         for (const ep of episodeNumbers) {
           const layoutText = await ports.layout.getEpisodeLayout(jobId, ep)
@@ -74,7 +105,8 @@ export class RenderingStep implements PipelineStep {
               totalPagesExpected += parsed.pages.length
             } else if (Array.isArray(parsed?.panels)) {
               const panels = parsed.panels as Array<{ pageNumber?: number }>
-              const maxPage = Math.max(...panels.map((p) => p.pageNumber ?? 1))
+              const normalized = normalizePlanPages(panels)
+              const maxPage = Math.max(...normalized.map((p) => p.pageNumber))
               totalPagesExpected += maxPage
             }
           }
@@ -161,7 +193,54 @@ export class RenderingStep implements PipelineStep {
                 renderer.cleanup()
               }
             } else if (Array.isArray(parsed?.panels) && parsed.panels.length > 0) {
-              const pageBreakPlan: PageBreakV2 = parsed
+              // Validate PageBreakV2 (hard invalid → stop with explicit error)
+              const { appConfig } = require('@/config/app.config')
+              const { validatePageBreakV2 } = require('@/utils/pagebreak-validator')
+              const validation = validatePageBreakV2(parsed, {
+                maxPages: appConfig.rendering.limits.maxPages,
+              })
+              if (!validation.valid) {
+                throw new Error(
+                  `Invalid PageBreakV2: ${validation.issues.slice(0, 5).join('; ')}${
+                    validation.issues.length > 5 ? ' ...' : ''
+                  }`,
+                )
+              }
+              // Normalize page numbers to a safe contiguous range before rendering
+              const MAX_PAGES: number = appConfig.rendering.limits.maxPages
+              type LoosePanel = Partial<PageBreakV2['panels'][0]> & { pageNumber?: number }
+              const rawPanels = parsed.panels as LoosePanel[]
+              const cleaned = rawPanels.map((p) => ({
+                pageNumber: Math.max(1, Math.floor(Number(p.pageNumber ?? 1))),
+                panelIndex: p.panelIndex ?? 1,
+                content: p.content ?? '',
+                dialogue: p.dialogue ?? [],
+                sfx: p.sfx ?? [],
+              }))
+              const uniqSorted = Array.from(new Set(cleaned.map((p) => p.pageNumber))).sort(
+                (a, b) => a - b,
+              )
+              const limited = uniqSorted.slice(0, MAX_PAGES)
+              const map = new Map<number, number>(limited.map((v, i) => [v, i + 1]))
+              const normalizedPanels = cleaned.map((p) => ({
+                ...p,
+                pageNumber: map.get(p.pageNumber) ?? 1,
+              })) as PageBreakV2['panels']
+              if (
+                validation.needsNormalization ||
+                uniqSorted.length !== limited.length ||
+                !uniqSorted.every((v, i) => v === limited[i])
+              ) {
+                logger.warn('PageBreakV2 panels normalized due to out-of-range page numbers', {
+                  jobId,
+                  episode: ep,
+                  uniquePages: uniqSorted.length,
+                  limitedTo: limited.length,
+                  maxCap: MAX_PAGES,
+                })
+              }
+
+              const pageBreakPlan: PageBreakV2 = { panels: normalizedPanels }
               const { renderFromPageBreakPlan } = await import('@/services/application/render')
 
               // PageBreakPlan形式でのレンダリング（進捗更新付き）

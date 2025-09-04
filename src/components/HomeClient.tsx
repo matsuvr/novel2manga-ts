@@ -146,9 +146,8 @@ export default function HomeClient() {
       }
 
       setNovelIdState(novelId)
-
-      // アップロード完了後すぐに進捗表示に移行
-      setViewMode('progress')
+      // アップロード完了後は、novelId付きの進捗URLへ遷移可能に切替
+      // 以降の処理は従来通り開始するが、UIは専用ページに委譲する
 
       const analyzeEndpoint = isDemo ? '/api/analyze?demo=1' : '/api/analyze'
       const analyzeResponse = await fetch(analyzeEndpoint, {
@@ -177,6 +176,16 @@ export default function HomeClient() {
       const jobId = analyzeData.id || analyzeData.data?.jobId || analyzeData.jobId
       if (!jobId) throw new Error('jobId を取得できませんでした')
       setJobId(jobId)
+
+      // 進捗専用ページへ遷移（戻る操作に強いURL設計）
+      try {
+        const url = `/novel/${encodeURIComponent(novelId)}/progress`
+        await router.push(url)
+      } catch (e) {
+        console.error('進捗ページへの遷移に失敗しました:', e)
+        // 遷移失敗時のみ従来の進捗表示にフォールバック
+        setViewMode('progress')
+      }
     } catch (err) {
       console.error('Process error:', err)
       setError(err instanceof Error ? err.message : 'エラーが発生しました')
@@ -299,9 +308,28 @@ export default function HomeClient() {
       setJobId(jobId)
       setNovelIdState(resumeData.novelId || resumeNovelId)
 
-      // 既に完了している場合は直接結果ページへ
+      // 進捗専用ページへ遷移
+      try {
+        const url = `/novel/${encodeURIComponent(resumeData.novelId || resumeNovelId)}/progress`
+        await router.push(url)
+        return
+      } catch (e) {
+        console.error('進捗ページへの遷移に失敗しました:', e)
+        // 遷移失敗時のみ従来の進捗表示にフォールバック
+        setViewMode('progress')
+      }
+
+      // 既に完了している場合は結果ページへ（上のpushが成功していればそこで処理される）
       if (resumeData.status === 'completed') {
-        await handleProcessComplete()
+        try {
+          await router.push(
+            `/novel/${encodeURIComponent(resumeData.novelId || resumeNovelId)}/results/${encodeURIComponent(jobId)}`,
+          )
+          return
+        } catch {
+          // フォールバックとして従来の完了ハンドラ
+          await handleProcessComplete()
+        }
       }
     } catch (err) {
       console.error('Resume error:', err)

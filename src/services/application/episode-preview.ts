@@ -89,7 +89,12 @@ export async function loadEpisodePreview(
         }
       }
       const np = progress.validation?.normalizedPages
-      if (Array.isArray(np)) normalizedPages = np as number[]
+      if (Array.isArray(np)) {
+        // 数値・文字列混在に頑健化して数値へ正規化
+        normalizedPages = np
+          .map((v) => (typeof v === 'string' ? Number(v) : v))
+          .filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+      }
       const iw = progress.validation?.pagesWithIssueCounts
       if (iw && typeof iw === 'object') {
         pagesWithIssueCounts = Object.fromEntries(

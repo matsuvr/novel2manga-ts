@@ -7,8 +7,8 @@ interface Params {
   jobId: string
 }
 
-export default async function JobResultsPage({ params }: { params: Params }) {
-  const { jobId } = params
+export default async function JobResultsPage({ params }: { params: Promise<Params> }) {
+  const { jobId } = await params
   const session = await auth()
   const userId = session?.user?.id
   if (!userId) {

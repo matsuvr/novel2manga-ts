@@ -26,6 +26,13 @@ think in English, output in Japanese
 - Formatting/Linting: Biome. Keep files formatted; CI enforces `format:check`/`lint:check`.
 - Naming: PascalCase React components; camelCase functions/vars; kebab-case files. Next.js routes live under `src/app/`.
 
+### マジックナンバー禁止・設定の一元化（新規ルール）
+
+- マジックナンバーのハードコーディングは禁止です。
+- 閾値・上限・タイムアウト・ページ数などの設定値は、すべて `*.config.ts` に定義し、そこからのみ参照してください。
+- 既存コードにハードコードが見つかった場合は、即時に `*.config.ts` へ移動して参照を置換すること。
+- 例: レンダリング最大ページ数 `maxPages` は `app.config.ts` の `rendering.limits.maxPages` を唯一の参照源とする。
+
 ## Testing Guidelines
 
 - Frameworks: Vitest for unit/integration; Playwright for E2E.

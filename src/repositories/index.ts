@@ -1,8 +1,8 @@
 // Compatibility shim for legacy repository access.
 // Internally delegates to domain services in src/services/database.
 import crypto from 'node:crypto'
-import { db } from '@/services/database/index'
 import type { Job } from '@/db/schema'
+import { db } from '@/services/database/index'
 
 export function getJobRepository() {
   return {
