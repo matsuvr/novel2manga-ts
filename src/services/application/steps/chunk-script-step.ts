@@ -15,7 +15,7 @@ export class ChunkScriptStep implements PipelineStep {
     chunks: string[],
     context: StepContext,
   ): Promise<StepExecutionResult<ChunkScriptResult>> {
-    const { jobId, logger } = context
+    const { jobId, logger, ports } = context
     const jobDb = db.jobs()
     try {
       const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
@@ -67,16 +67,34 @@ export class ChunkScriptStep implements PipelineStep {
         }
       }
 
+      const resolveChunkText = async (index: number): Promise<string | undefined> => {
+        if (index < 0 || index >= chunks.length) return undefined
+        const inMemory = chunks[index]
+        if (typeof inMemory === 'string' && inMemory.trim().length > 0) return inMemory
+        try {
+          const fromStorage = await ports.chunk.getChunk(jobId, index)
+          const text = fromStorage?.text ?? ''
+          return text
+        } catch (e) {
+          logger.warn('Failed to load chunk text from storage', {
+            jobId,
+            chunkIndex: index,
+            error: e instanceof Error ? e.message : String(e),
+          })
+          return undefined
+        }
+      }
+
       const worker = async () => {
         while (true) {
           const i = indices.shift()
           if (i === undefined) break
           jobDb.updateJobStep(jobId, `script_chunk_${i}`)
-          const text = chunks[i]
+          const text = (await resolveChunkText(i)) ?? ''
 
-          // Get previous and next chunks for context
-          const previousText = i > 0 ? chunks[i - 1] : undefined
-          const nextChunk = i < chunks.length - 1 ? chunks[i + 1] : undefined
+          // Get previous and next chunks for context (load from storage if not in memory)
+          const previousText = await resolveChunkText(i - 1)
+          const nextChunk = await resolveChunkText(i + 1)
 
           // Read analysis data for this chunk
           const analysisData = await readChunkAnalysis(i)
@@ -86,10 +104,16 @@ export class ChunkScriptStep implements PipelineStep {
             chunkIndex: i,
             textLength: text.length,
             totalChunks: chunks.length,
-            hasPrevious: !!previousText,
-            hasNext: !!nextChunk,
+            hasPrevious: typeof previousText === 'string' && previousText.length > 0,
+            hasNext: typeof nextChunk === 'string' && nextChunk.length > 0,
             hasAnalysis: Object.values(analysisData).some((v) => v !== ''),
           })
+
+          if (!text || text.trim().length === 0) {
+            const msg = `Chunk text is required and cannot be empty`
+            logger.error('Chunk script conversion failed', { jobId, chunkIndex: i, error: msg })
+            throw new Error(msg)
+          }
 
           let script: NewMangaScript
           try {

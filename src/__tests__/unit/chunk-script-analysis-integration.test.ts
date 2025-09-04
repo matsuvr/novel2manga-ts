@@ -251,4 +251,36 @@ describe('ChunkScriptStep - Analysis Integration', () => {
       }),
     )
   })
+
+  it('loads chunk text from storage when in-memory chunks are empty (resume scenario)', async () => {
+    const jobId = 'resume-job-001'
+    const chunks = ['']
+    const context = { jobId, logger: mockLogger }
+
+    // Mock chunk storage port to return text
+    const mockChunkText = 'abcdefg resume text'
+    ;(mockPorts.chunk as any).getChunk = vi.fn().mockResolvedValue({ text: mockChunkText })
+
+    // No analysis data
+    mockStorage.get.mockResolvedValue(null)
+
+    const result = await chunkScriptStep.convertChunksToScripts(chunks, {
+      ...context,
+      novelId: 'n1',
+      ports: mockPorts as any,
+    })
+
+    expect(result.success).toBe(true)
+    expect(convertChunkToMangaScript).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chunkText: mockChunkText,
+        chunkIndex: 1,
+        chunksNumber: 1,
+      }),
+      { jobId, isDemo: undefined },
+    )
+
+    // Ensure storage loader was used
+    expect((mockPorts.chunk as any).getChunk).toHaveBeenCalledWith(jobId, 0)
+  })
 })

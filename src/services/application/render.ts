@@ -8,6 +8,8 @@ import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
 import { db } from '@/services/database/index'
 import type { PageBreakV2 } from '@/types/script'
 import { normalizeAndValidateLayout } from '@/utils/layout-normalizer'
+import { validatePageBreakV2 } from '@/utils/pagebreak-validator'
+import { normalizePlanPanels, type LoosePanel } from '@/utils/page-normalizer'
 // YAML依存を排除: 直接JSONのMangaLayoutを構築して使用する
 
 export interface BatchOptions {
@@ -220,7 +222,40 @@ export async function renderFromPageBreakPlan(
   let skippedCount = 0
   let failedCount = 0
 
-  const panels = Array.isArray(pageBreakPlan?.panels) ? pageBreakPlan.panels : []
+  // Validate PageBreakV2 and normalize page numbers to contiguous safe range to avoid pathological plans
+  const MAX_PAGES: number = appConfig.rendering.limits.maxPages
+  const validation = validatePageBreakV2(pageBreakPlan, { maxPages: MAX_PAGES })
+  if (!validation.valid) {
+    throw new Error(
+      `Invalid PageBreakV2: ${validation.issues.slice(0, 5).join('; ')}${
+        validation.issues.length > 5 ? ' ...' : ''
+      }`,
+    )
+  }
+  const panelsRaw: LoosePanel[] = Array.isArray(pageBreakPlan?.panels)
+    ? (pageBreakPlan.panels as LoosePanel[])
+    : []
+  const { normalized: normalizedPanels, report } = normalizePlanPanels(panelsRaw, {
+    maxPages: MAX_PAGES,
+  })
+  const panels: PageBreakV2['panels'] = normalizedPanels.map((p) => ({
+    pageNumber: p.pageNumber,
+    panelIndex: p.panelIndex ?? 1,
+    content: p.content ?? '',
+    dialogue: p.dialogue ?? [],
+    sfx: p.sfx ?? [],
+  })) as PageBreakV2['panels']
+  if (validation.needsNormalization || report.wasNormalized) {
+    getLogger()
+      .withContext({ service: 'render' })
+      .warn('PageBreakV2 page numbers normalized (safety cap applied)', {
+        jobId,
+        episodeNumber,
+        uniquePages: report.uniqueCount,
+        limitedTo: report.limitedTo,
+        maxCap: MAX_PAGES,
+      })
+  }
   if (panels.length === 0) {
     logger.error('PageBreakPlan has no panels; aborting renderFromPageBreakPlan', {
       jobId,
@@ -260,9 +295,9 @@ export async function renderFromPageBreakPlan(
       if (!pageMap.has(panel.pageNumber)) {
         pageMap.set(panel.pageNumber, [])
       }
-      const panels = pageMap.get(panel.pageNumber)
-      if (panels) {
-        panels.push(panel)
+      const list = pageMap.get(panel.pageNumber)
+      if (list) {
+        list.push(panel)
       }
     }
 
