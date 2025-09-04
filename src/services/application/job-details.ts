@@ -87,9 +87,10 @@ async function computePerEpisodeProgress(jobId: string): Promise<PerEpisodeProgr
     typeof renderSvc === 'object' &&
     hasMethod(renderSvc as Record<string, unknown>, 'getPerEpisodeRenderProgress')
   ) {
-    const fn = (renderSvc as { getPerEpisodeRenderProgress: (id: string) => unknown })
-      .getPerEpisodeRenderProgress
-    const result = await fn(jobId)
+    // 注意: メソッド参照を切り出すと this が失われるため、直接呼び出して this バインドを保持する
+    const result = await (
+      renderSvc as { getPerEpisodeRenderProgress: (id: string) => unknown }
+    ).getPerEpisodeRenderProgress(jobId)
     // 型安全のため最小限のバリデーション
     if (result && typeof result === 'object') {
       return result as PerEpisodeProgress

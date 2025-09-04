@@ -5,8 +5,8 @@ interface Params {
   novelId: string
 }
 
-export default async function NovelResultsPage({ params }: { params: Params }) {
-  const { novelId } = params
+export default async function NovelResultsPage({ params }: { params: Promise<Params> }) {
+  const { novelId } = await params
   // 最新完了ジョブを取得（存在しなければ404）
   const jobs = await db.jobs().getJobsByNovelId(novelId)
   const finished = jobs.filter((j) => j.status === 'completed' || j.status === 'complete')

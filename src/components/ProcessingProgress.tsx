@@ -2,6 +2,8 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
+import { appConfig } from '@/config/app.config'
+const _MAX_PAGES = appConfig.rendering.limits.maxPages
 
 interface ProcessStep {
   id: string
@@ -219,6 +221,10 @@ function ProcessingProgress({
     totalPages: 0,
     renderedPages: 0,
   })
+  // 完了検知を描画外（エフェクト）で実施するためのフラグ
+  const [completed, setCompleted] = useState(false)
+  // 正規化トースト表示の一回限りフラグ
+  const [normalizationToastShown, setNormalizationToastShown] = useState(false)
 
   // マウント状態
   const isMountedRef = useRef(true)
@@ -355,6 +361,21 @@ function ProcessingProgress({
         totalPages: Number(data.job.totalPages || 0),
         renderedPages: Number(data.job.renderedPages || 0),
       })
+      // 正規化適用（推定）通知: totalPages が上限に達した場合に一度だけトースト
+      const MAX_PAGES = appConfig.rendering.limits.maxPages
+      if (
+        !normalizationToastShown &&
+        typeof data.job.totalPages === 'number' &&
+        data.job.totalPages >= MAX_PAGES &&
+        (data.job.currentStep === 'render' ||
+          String(data.job.currentStep || '').startsWith('render'))
+      ) {
+        addLog(
+          'warning',
+          `安全装置: ページ番号の正規化を適用しました（上限 ${MAX_PAGES} ページにキャップ）`,
+        )
+        setNormalizationToastShown(true)
+      }
       // 詳細メッセージ
       addLog('info', describeStep(data.job.currentStep))
       if (data.job.lastError) {
@@ -452,7 +473,7 @@ function ProcessingProgress({
             completedCount++
           })
           addLog('info', '全ての処理が完了しました')
-          if (onComplete) onComplete()
+          setCompleted(true)
           return updatedSteps
         } else if (data.job.status === 'failed') {
           const failedStepMap: Record<string, number> = {
@@ -705,11 +726,11 @@ function ProcessingProgress({
     [
       lastJobData,
       addLog,
-      onComplete,
       describeStep,
       isDemoMode,
       inProgressWeight,
       EpisodePageDataSchema.safeParse,
+      normalizationToastShown,
     ],
   )
 
@@ -736,7 +757,7 @@ function ProcessingProgress({
           const completed = data.job.status === 'completed' || data.job.status === 'complete'
           if (completed || data.job.renderCompleted === true) {
             addLog('info', '処理が完了しました。上部のエクスポートからダウンロードできます。')
-            if (onComplete) onComplete()
+            setCompleted(true)
           } else if (data.job.status === 'failed') {
             const errorStep = data.job.lastErrorStep || data.job.currentStep || '不明'
             const errorMessage = data.job.lastError || 'エラーの詳細が不明です'
@@ -763,7 +784,15 @@ function ProcessingProgress({
       isMountedRef.current = false
       es.close()
     }
-  }, [jobId, addLog, updateStepsFromJobData, onComplete])
+  }, [jobId, addLog, updateStepsFromJobData])
+
+  // 画面更新（render）の外でのみルーター更新を行う
+  useEffect(() => {
+    if (!completed) return
+    // onComplete内でのrouter操作はここから呼ぶことで、
+    // 「別コンポーネントのレンダー中にsetStateする」警告を回避
+    onComplete?.()
+  }, [completed, onComplete])
 
   // jobIdが未確定でも進捗カードを表示（初期段階からUX向上）
   useEffect(() => {
@@ -831,6 +860,14 @@ function ProcessingProgress({
 
   return (
     <div className="space-y-6">
+      {normalizationToastShown && (
+        <div className="fixed top-20 right-6 z-40">
+          <div className="px-4 py-2 rounded-xl shadow bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm">
+            安全装置: ページ番号の正規化を適用しました（上限 {appConfig.rendering.limits.maxPages}{' '}
+            ページ）
+          </div>
+        </div>
+      )}
       {hasFailedStep && failedStep && (
         <div className="apple-card p-4 bg-red-50 border-red-200 border-2">
           <div className="flex items-start space-x-3">

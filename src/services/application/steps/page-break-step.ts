@@ -1,4 +1,3 @@
-import { extractSpeakerAndText } from '@/agents/script/dialogue-utils'
 import { buildLayoutFromPageBreaks } from '@/agents/script/panel-assignment'
 import { estimatePageBreaksSegmented } from '@/agents/script/segmented-page-break-estimator'
 import { db } from '@/services/database/index'
@@ -6,6 +5,7 @@ import type { MangaLayout } from '@/types/panel-layout'
 import type { EpisodeBreakPlan, NewMangaScript, PageBreakV2 } from '@/types/script'
 import { StorageKeys } from '@/utils/storage'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
+import type { PageBreakV2 as _PageBreakV2 } from '@/types/script'
 
 export interface PageBreakResult {
   pageBreakPlan: PageBreakV2
@@ -52,55 +52,51 @@ export class PageBreakStep implements PipelineStep {
         segmentationInfo: segmentedResult.segmentationInfo,
       })
 
+      // Align episode boundaries to page boundaries (no cross-page episodes)
+      const totalPanels = script.panels?.length || 0
+      const alignedEpisodes = alignEpisodesToPages(episodeBreaks, pageBreakPlan, totalPanels)
+
+      logger.info('Episode boundaries aligned to page boundaries', {
+        jobId,
+        originalEpisodes: episodeBreaks.episodes.map((e) => ({
+          no: e.episodeNumber,
+          range: `${e.startPanelIndex}-${e.endPanelIndex}`,
+        })),
+        alignedEpisodes: alignedEpisodes.episodes.map((e) => ({
+          no: e.episodeNumber,
+          range: `${e.startPanelIndex}-${e.endPanelIndex}`,
+        })),
+      })
+
       // Generate layouts for each episode
       const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
       const layoutStorage = await StorageFactory.getLayoutStorage()
 
       const allPages: MangaLayout['pages'] = []
-      let pageOffset = 0
       let successfulUpserts = 0
       let failedUpserts = 0
 
-      for (const episode of episodeBreaks.episodes) {
+      for (const episode of alignedEpisodes.episodes) {
         // Filter panels for this episode
         const episodePanels = pageBreakPlan.panels
-          .filter((panel) => {
-            // Find the original panel number in the script
-            const originalPanelIndex =
-              script.panels?.findIndex((p) => {
-                // content マッチ: panel.content に p.cut が含まれる（cut+camera統合後の互換）
-                const contentMatch = typeof p.cut === 'string' && panel.content.includes(p.cut)
+          .map((p, idx) => ({ p, idx: idx + 1 }))
+          .filter(({ idx }) => idx >= episode.startPanelIndex && idx <= episode.endPanelIndex)
+          .map(({ p }) => p)
 
-                // dialogue マッチ: 両者を正規化して話者・本文一致を確認
-                const panelDialogue = Array.isArray(panel.dialogue) ? panel.dialogue : []
-                const dialogueMatch = panelDialogue.some((d) => {
-                  const spLines = Array.isArray(p.dialogue) ? p.dialogue : []
-                  for (const spd of spLines) {
-                    if (typeof spd !== 'string') continue
-                    const norm = extractSpeakerAndText(spd)
-                    if (norm.speaker === d.speaker && norm.text === d.text) {
-                      return true
-                    }
-                  }
-                  return false
-                })
-
-                return contentMatch || dialogueMatch
-              }) || -1
-
-            return (
-              originalPanelIndex >= episode.startPanelIndex - 1 &&
-              originalPanelIndex <= episode.endPanelIndex - 1
-            )
-          })
-          .map((panel) => ({
-            ...panel,
-            pageNumber: panel.pageNumber + pageOffset,
-          }))
+        // Normalize page numbers to start from 1 within the episode
+        const pageOrder = Array.from(new Set(episodePanels.map((p) => p.pageNumber))).sort(
+          (a, b) => a - b,
+        )
+        const pageMap = new Map<number, number>()
+        pageOrder.forEach((pg, i) => pageMap.set(pg, i + 1))
+        const remappedPanels = episodePanels.map((p) => ({
+          ...p,
+          pageNumber: pageMap.get(p.pageNumber) || 1,
+        }))
 
         // Build layout for this episode
         const episodeLayout = buildLayoutFromPageBreaks(
-          { panels: episodePanels },
+          { panels: remappedPanels },
           {
             title: episode.title || `Episode ${episode.episodeNumber}`,
             episodeNumber: episode.episodeNumber,
@@ -109,7 +105,6 @@ export class PageBreakStep implements PipelineStep {
         )
 
         allPages.push(...episodeLayout.pages)
-        pageOffset += Math.max(...episodePanels.map((p) => p.pageNumber), 0)
 
         logger.info('Generated layout for episode', {
           jobId,
@@ -173,8 +168,11 @@ export class PageBreakStep implements PipelineStep {
         title: 'Combined Episodes',
         episodeNumber: 1,
         episodeTitle: 'Combined Episodes',
-        pages: allPages,
-        episodes: episodeBreaks.episodes,
+        // 重要: pageNumber の二重オフセットにより番号が飛ぶ問題を避けるため、
+        // ここでは各エピソード内で付与された page_number をそのまま集約し、
+        // 昇順で安定化して保存する（再番号付けは行わない）
+        pages: allPages.sort((a, b) => a.page_number - b.page_number),
+        episodes: alignedEpisodes.episodes,
       }
 
       await layoutStorage.put(
@@ -189,13 +187,13 @@ export class PageBreakStep implements PipelineStep {
       logger.info('Saved combined full_pages.json', {
         jobId,
         totalPages: allPages.length,
-        totalEpisodes: episodeBreaks.episodes.length,
+        totalEpisodes: alignedEpisodes.episodes.length,
       })
 
       // Log upsert summary
       logger.info('Layout status upsert summary', {
         jobId,
-        totalEpisodes: episodeBreaks.episodes.length,
+        totalEpisodes: alignedEpisodes.episodes.length,
         successfulUpserts,
         failedUpserts,
         upsertSuccessRate: successfulUpserts / (successfulUpserts + failedUpserts),
@@ -218,4 +216,99 @@ export class PageBreakStep implements PipelineStep {
       return { success: false, error: errorMessage }
     }
   }
+}
+
+// ============ Helpers for page-aligned episodes ============
+interface PageRange {
+  page: number
+  start: number // 1-based script index inclusive
+  end: number // 1-based script index inclusive
+}
+
+function buildPageRanges(pageBreakPlan: _PageBreakV2, totalPanels: number): PageRange[] {
+  if (!pageBreakPlan.panels || pageBreakPlan.panels.length === 0 || totalPanels <= 0) return []
+  const ranges: PageRange[] = []
+  let currentPage = pageBreakPlan.panels[0].pageNumber
+  let startIdx = 1
+  for (let i = 1; i <= totalPanels; i++) {
+    const p = pageBreakPlan.panels[i - 1]
+    const page = p.pageNumber
+    if (page !== currentPage) {
+      ranges.push({ page: currentPage, start: startIdx, end: i - 1 })
+      currentPage = page
+      startIdx = i
+    }
+  }
+  ranges.push({ page: currentPage, start: startIdx, end: totalPanels })
+  return ranges
+}
+
+function pageOf(index: number, ranges: PageRange[]): number {
+  for (const r of ranges) {
+    if (index >= r.start && index <= r.end) return r.page
+  }
+  return ranges.length > 0 ? ranges[ranges.length - 1].page : 1
+}
+
+function firstIndexOfPage(page: number, ranges: PageRange[]): number {
+  const r = ranges.find((x) => x.page === page)
+  return r ? r.start : 1
+}
+
+function lastIndexOfPage(page: number, ranges: PageRange[]): number {
+  const r = ranges.find((x) => x.page === page)
+  return r ? r.end : 1
+}
+
+function alignEpisodesToPages(
+  episodeBreaks: EpisodeBreakPlan,
+  pageBreakPlan: _PageBreakV2,
+  totalPanels: number,
+): EpisodeBreakPlan {
+  if (!episodeBreaks.episodes || episodeBreaks.episodes.length === 0 || totalPanels <= 0)
+    return episodeBreaks
+
+  const ranges = buildPageRanges(pageBreakPlan, totalPanels)
+  if (ranges.length === 0) return episodeBreaks
+
+  const eps = [...episodeBreaks.episodes].sort((a, b) => a.episodeNumber - b.episodeNumber)
+  const aligned: EpisodeBreakPlan['episodes'] = []
+
+  let prevEnd = 0
+  for (let i = 0; i < eps.length; i++) {
+    const ep = eps[i]
+    const startPage = pageOf(ep.startPanelIndex, ranges)
+    const endPage = pageOf(ep.endPanelIndex, ranges)
+
+    const snappedStart = firstIndexOfPage(startPage, ranges)
+    const snappedEnd = lastIndexOfPage(endPage, ranges)
+
+    const start = Math.max(1, i === 0 ? snappedStart : prevEnd + 1)
+    const end = i === eps.length - 1 ? ranges[ranges.length - 1].end : snappedEnd
+
+    if (end < start) {
+      throw new Error(
+        `Page alignment produced invalid range: episode ${ep.episodeNumber} start ${start} > end ${end}`,
+      )
+    }
+
+    aligned.push({
+      episodeNumber: aligned.length + 1,
+      title: ep.title,
+      description: ep.description,
+      startPanelIndex: start,
+      endPanelIndex: end,
+    })
+
+    prevEnd = end
+  }
+
+  // Ensure continuous coverage 1..totalPanels
+  aligned[0].startPanelIndex = 1
+  aligned[aligned.length - 1].endPanelIndex = totalPanels
+  for (let i = 1; i < aligned.length; i++) {
+    aligned[i].startPanelIndex = aligned[i - 1].endPanelIndex + 1
+  }
+
+  return { episodes: aligned }
 }

@@ -1,4 +1,7 @@
 import { getStoragePorts } from '@/infrastructure/storage/ports'
+import { appConfig } from '@/config/app.config'
+import { validatePageBreakV2 } from '@/utils/pagebreak-validator'
+import { getMaxNormalizedPage, normalizePlanPanels, type LoosePanel } from '@/utils/page-normalizer'
 import type { PageBreakV2 } from '@/types/script'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
@@ -65,6 +68,8 @@ export class RenderingStep implements PipelineStep {
         let totalPagesProcessed = 0
         let totalPagesExpected = 0
 
+        // 全エピソードの総ページ数を事前に計算（安全のためページ番号を正規化してから計算）
+
         // 全エピソードの総ページ数を事前に計算
         for (const ep of episodeNumbers) {
           const layoutText = await ports.layout.getEpisodeLayout(jobId, ep)
@@ -74,7 +79,7 @@ export class RenderingStep implements PipelineStep {
               totalPagesExpected += parsed.pages.length
             } else if (Array.isArray(parsed?.panels)) {
               const panels = parsed.panels as Array<{ pageNumber?: number }>
-              const maxPage = Math.max(...panels.map((p) => p.pageNumber ?? 1))
+              const maxPage = getMaxNormalizedPage(panels)
               totalPagesExpected += maxPage
             }
           }
@@ -161,7 +166,38 @@ export class RenderingStep implements PipelineStep {
                 renderer.cleanup()
               }
             } else if (Array.isArray(parsed?.panels) && parsed.panels.length > 0) {
-              const pageBreakPlan: PageBreakV2 = parsed
+              // Validate PageBreakV2 (hard invalid → stop with explicit error)
+              const validation = validatePageBreakV2(parsed, {
+                maxPages: appConfig.rendering.limits.maxPages,
+              })
+              if (!validation.valid) {
+                throw new Error(
+                  `Invalid PageBreakV2: ${validation.issues.slice(0, 5).join('; ')}${
+                    validation.issues.length > 5 ? ' ...' : ''
+                  }`,
+                )
+              }
+              // Normalize page numbers to a safe contiguous range before rendering
+              const rawPanels = parsed.panels as LoosePanel[]
+              const { normalized: normalizedPanels, report } = normalizePlanPanels(rawPanels)
+              if (validation.needsNormalization || report.wasNormalized) {
+                logger.warn('PageBreakV2 panels normalized due to out-of-range page numbers', {
+                  jobId,
+                  episode: ep,
+                  uniquePages: report.uniqueCount,
+                  limitedTo: report.limitedTo,
+                  maxCap: appConfig.rendering.limits.maxPages,
+                })
+              }
+              const panelsFull: PageBreakV2['panels'] = normalizedPanels.map((p) => ({
+                pageNumber: p.pageNumber,
+                panelIndex: p.panelIndex ?? 1,
+                content: p.content ?? '',
+                dialogue: p.dialogue ?? [],
+                sfx: p.sfx ?? [],
+              })) as PageBreakV2['panels']
+
+              const pageBreakPlan: PageBreakV2 = { panels: panelsFull }
               const { renderFromPageBreakPlan } = await import('@/services/application/render')
 
               // PageBreakPlan形式でのレンダリング（進捗更新付き）

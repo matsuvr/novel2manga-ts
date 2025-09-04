@@ -1,11 +1,11 @@
+import type { D1Database } from '@cloudflare/workers-types'
 import { and, desc, eq, type SQL } from 'drizzle-orm'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import type { NewNovel, Novel } from '@/db/schema'
 import { novels } from '@/db/schema'
-import { BaseDatabaseService } from './base-database-service'
-import type { D1Database } from '@cloudflare/workers-types'
 import { isD1Like } from '@/infrastructure/database/adapters/d1-adapter'
+import { BaseDatabaseService } from './base-database-service'
 
 type DrizzleDatabase = BetterSQLite3Database<typeof schema>
 
