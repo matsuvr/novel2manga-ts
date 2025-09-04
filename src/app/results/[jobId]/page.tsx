@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
 import { auth } from '@/auth'
 import ResultsDisplay from '@/components/ResultsDisplay'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 
 interface Params {
   jobId: string
@@ -14,10 +14,9 @@ export default async function JobResultsPage({ params }: { params: Params }) {
   if (!userId) {
     redirect('/api/auth/signin')
   }
-  const db = getDatabaseService()
-  const job = await db.getJob(jobId, userId)
+  const job = await db.jobs().getJob(jobId)
   if (!job) return notFound()
-  const episodes = await db.getEpisodesByJobId(jobId)
+  const episodes = await db.episodes().getEpisodesByJobId(jobId)
 
   // Convert string dates to Date objects and handle nulls to match component expectations
   const formattedEpisodes = episodes.map((ep) => ({

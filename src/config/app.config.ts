@@ -452,7 +452,7 @@ JSONのみ出力。説明文禁止。`,
         offsetY: 0.7,
         borderRadius: 3,
         // BudouXを用いた行分割の1行最大文字数（単語境界優先）
-        maxCharsPerLine: 8,
+        maxCharsPerLine: 5,
       },
       // 説明テキスト（状況説明）描画設定
       contentText: {

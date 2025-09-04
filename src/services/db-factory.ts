@@ -1,15 +1,12 @@
-import { DatabaseService } from './database'
+import { DatabaseService } from '@/services/database/index'
 
-// 単純なモジュールスコープのシングルトン
-let instance: DatabaseService | null = null
-
+// Minimal shim for legacy tests. Application code should not use this.
+let _instance: DatabaseService | null = null
 export function getDatabaseService(): DatabaseService {
-  // テスト環境では毎回新規インスタンスを返してモック差し替えを確実にする
-  if (!instance || process.env.NODE_ENV === 'test') instance = new DatabaseService()
-  return instance
+  if (!_instance) _instance = new DatabaseService()
+  return _instance
 }
 
-// テスト用: 必要に応じてリセット可能
-export function __resetDatabaseServiceForTest() {
-  instance = null
+export function __resetDatabaseServiceForTest(): void {
+  _instance = null
 }

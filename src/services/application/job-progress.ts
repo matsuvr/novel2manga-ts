@@ -1,18 +1,11 @@
 import { getStoragePorts } from '@/infrastructure/storage/ports'
-import { adaptAll } from '@/repositories/adapters'
-import { JobRepository } from '@/repositories/job-repository'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
+
+type JobStep = 'initialized' | 'split' | 'analyze' | 'episode' | 'layout' | 'render' | 'complete'
+
 import type { JobProgress, JobStatus } from '@/types/job'
 
 export class JobProgressService {
-  private readonly jobRepo: JobRepository
-
-  constructor() {
-    const db = getDatabaseService()
-    const { job } = adaptAll(db)
-    this.jobRepo = new JobRepository(job)
-  }
-
   /**
    * Type guard for layout progress data
    */
@@ -128,15 +121,14 @@ export class JobProgressService {
   }
 
   async getJobWithProgress(id: string) {
-    const job = await this.jobRepo.getJobWithProgress(id)
+    const job = await db.jobs().getJobWithProgress(id)
     if (!job) {
       return null
     }
 
     // Enrich with perEpisodePages data
     try {
-      const db = getDatabaseService()
-      const episodes = await db.getEpisodesByJobId(id)
+      const episodes = await db.episodes().getEpisodesByJobId(id)
       const { layout } = getStoragePorts()
 
       if (episodes && episodes.length > 0) {
@@ -156,13 +148,11 @@ export class JobProgressService {
             : { normalizedPages: [], pagesWithIssueCounts: {}, issuesCount: 0 }
 
           // Get rendered pages count (from database)
-          const renderStatus = await this.safeOperation(
-            () => db.getRenderStatusByEpisode(id, episodeNumber),
-            'getRenderStatusByEpisode',
-            { jobId: id, episodeNumber },
-          )
-
-          const rendered = renderStatus && Array.isArray(renderStatus) ? renderStatus.length : 0
+          // Rendered pages count from render status rows
+          const renderStatuses = await db.render().getAllRenderStatusByJob(id)
+          const rendered = renderStatuses.filter(
+            (r) => r.episodeNumber === episodeNumber && r.isRendered,
+          ).length
 
           return [
             episodeNumber,
@@ -223,37 +213,37 @@ export class JobProgressService {
   }
 
   async updateStatus(id: string, status: JobStatus, error?: string): Promise<void> {
-    await this.jobRepo.updateStatus(id, status, error)
+    db.jobs().updateJobStatus(id, status, error)
   }
 
   async updateStep(
     id: string,
-    currentStep: Parameters<JobRepository['updateStep']>[1],
-    processedChunks?: number,
-    totalChunks?: number,
-    error?: string,
-    errorStep?: string,
+    currentStep: JobStep,
+    _processedChunks?: number,
+    _totalChunks?: number,
+    _error?: string,
+    _errorStep?: string,
   ): Promise<void> {
-    await this.jobRepo.updateStep(id, currentStep, processedChunks, totalChunks, error, errorStep)
+    db.jobs().updateJobStep(id, currentStep)
   }
 
   async markStepCompleted(
     id: string,
-    step: Parameters<JobRepository['markStepCompleted']>[1],
+    step: 'split' | 'analyze' | 'episode' | 'layout' | 'render',
   ): Promise<void> {
-    await this.jobRepo.markStepCompleted(id, step)
+    db.jobs().markJobStepCompleted(id, step)
   }
 
   async updateProgress(id: string, progress: JobProgress): Promise<void> {
-    await this.jobRepo.updateProgress(id, progress)
+    db.jobs().updateJobProgress(id, progress.processedChunks)
   }
 
   async updateError(
     id: string,
     error: string,
-    step: string,
+    _step: string,
     incrementRetry: boolean = true,
   ): Promise<void> {
-    await this.jobRepo.updateError(id, error, step, incrementRetry)
+    db.jobs().updateJobError(id, error, incrementRetry)
   }
 }

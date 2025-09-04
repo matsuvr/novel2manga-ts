@@ -1,27 +1,19 @@
 import { notFound } from 'next/navigation'
-import { adaptAll } from '@/repositories/adapters'
-import { EpisodeRepository } from '@/repositories/episode-repository'
-import { JobRepository } from '@/repositories/job-repository'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 
 interface Params {
   novelId: string
 }
 
-export default async function NovelResultsPage({ params }: { params: Promise<Params> }) {
-  const { novelId } = await params
-  const db = getDatabaseService()
-  const { episode: episodePort, job: jobPort } = adaptAll(db)
-  const episodeRepo = new EpisodeRepository(episodePort)
-  const jobRepo = new JobRepository(jobPort)
-
+export default async function NovelResultsPage({ params }: { params: Params }) {
+  const { novelId } = params
   // 最新完了ジョブを取得（存在しなければ404）
-  const jobs = await jobRepo.getByNovelId(novelId)
+  const jobs = await db.jobs().getJobsByNovelId(novelId)
   const finished = jobs.filter((j) => j.status === 'completed' || j.status === 'complete')
   const latest = finished.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || '')).pop()
   if (!latest) return notFound()
 
-  const episodes = await episodeRepo.getByJobId(latest.id)
+  const episodes = await db.episodes().getEpisodesByJobId(latest.id)
 
   return (
     <main className="max-w-6xl mx-auto p-6 space-y-6">

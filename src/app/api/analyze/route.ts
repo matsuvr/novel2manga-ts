@@ -1,11 +1,8 @@
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { getLogger } from '@/infrastructure/logging/logger'
-import { adaptAll } from '@/repositories/adapters'
-import { JobRepository } from '@/repositories/job-repository'
-import { NovelRepository } from '@/repositories/novel-repository'
 import { AnalyzePipeline } from '@/services/application/analyze-pipeline'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 import {
   ApiError,
   createErrorResponse,
@@ -61,13 +58,8 @@ export async function POST(request: NextRequest) {
     // DEMOモード: LLM/分析はスキップ。ただし後続のAPIでFK制約が問題にならないよう
     // 最小限の Novel/Job をDBに作成して返す。
     if (isDemo) {
-      const db = getDatabaseService()
-      const { job, novel } = adaptAll(db)
-      const jobRepo = new JobRepository(job)
-      const novelRepo = new NovelRepository(novel)
-
       const novelId = generateUUID()
-      await novelRepo.ensure(novelId, {
+      await db.novels().ensureNovel(novelId, {
         title: `Demo Novel ${novelId.slice(0, 8)}`,
         author: 'Demo',
         originalTextPath: `${novelId}.json`,
@@ -81,7 +73,12 @@ export async function POST(request: NextRequest) {
       })
 
       const jobId = generateUUID()
-      await jobRepo.create({ id: jobId, novelId, title: 'Demo Analyze Job', status: 'processing' })
+      db.jobs().createJobRecord({
+        id: jobId,
+        novelId,
+        title: 'Demo Analyze Job',
+        status: 'processing',
+      })
 
       return createSuccessResponse(
         {
@@ -110,17 +107,14 @@ export async function POST(request: NextRequest) {
     }
 
     // リポジトリ準備
-    const db = getDatabaseService()
-    const { job, novel } = adaptAll(db)
-    const jobRepo = new JobRepository(job)
-    const novelRepo = new NovelRepository(novel)
+    // use domain services directly
 
     // 外部キー制約のための Novel 事前処理
     // - text が与えられている場合のみ ensure（新規作成または更新）
     // - novelId のみの場合は存在確認を行い、無ければ 404 を返す
     if (novelText !== '__FETCH_FROM_STORAGE__') {
       try {
-        await novelRepo.ensure(novelId as string, {
+        await db.novels().ensureNovel(novelId as string, {
           title: title || `Novel ${(novelId as string).slice(0, 8)}`,
           author: 'Unknown',
           originalTextPath: `${novelId}.json`,
@@ -135,7 +129,7 @@ export async function POST(request: NextRequest) {
     } else {
       // novelId のみが与えられた場合、外部キー制約違反を避けるため事前にDB存在を確認する。
       // 見つからない場合はテスト互換の文言で404を返す。
-      const existing = await novelRepo.get(novelId as string)
+      const existing = await db.novels().getNovel(novelId as string)
       if (!existing) {
         return createErrorResponse(
           new ApiError('小説ID がデータベースに見つかりません', 404, 'NOT_FOUND'),
@@ -144,14 +138,14 @@ export async function POST(request: NextRequest) {
     }
 
     const jobId = generateUUID()
-    await jobRepo.create({
+    db.jobs().createJobRecord({
       id: jobId,
       novelId: novelId as string,
       title: `Analysis Job for ${title ?? 'Novel'}`,
     })
     // 一部のテストモックでは updateJobStatus が未実装のため保護
     try {
-      await jobRepo.updateStatus(jobId, 'processing')
+      db.jobs().updateJobStatus(jobId, 'processing')
     } catch (e) {
       getLogger()
         .withContext({ route: 'api/analyze', method: 'POST' })
@@ -160,7 +154,7 @@ export async function POST(request: NextRequest) {
           error: extractErrorMessage(e),
         })
     }
-    await jobRepo.updateStep(jobId, 'initialized')
+    db.jobs().updateJobStep(jobId, 'initialized')
 
     // テスト環境では同期実行して結果を返す（契約テスト互換）
     if (isTestEnv) {
@@ -219,7 +213,7 @@ export async function POST(request: NextRequest) {
         // エラーの詳細ログはAnalyzePipeline内で出力済み
         // API層では最小限のエラーハンドリングのみ
         try {
-          await jobRepo.updateStatus(jobId, 'failed', extractErrorMessage(e))
+          db.jobs().updateJobStatus(jobId, 'failed', extractErrorMessage(e))
         } catch {
           // Job status update failed - logged elsewhere
         }
