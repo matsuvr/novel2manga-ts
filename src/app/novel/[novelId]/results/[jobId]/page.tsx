@@ -62,7 +62,7 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
         <div className="apple-card p-4 space-y-2">
           <div className="text-sm text-gray-600">Job: {job.id}</div>
           <div className="text-sm text-red-600">
-            エラー: {(e as Error).message} (Storage Key: {JsonStorageKeys.fullPages(job.id)})
+            エラー: {e instanceof Error ? e.message : String(e)} (Storage Key: {JsonStorageKeys.fullPages(job.id)})
           </div>
         </div>
       </main>
