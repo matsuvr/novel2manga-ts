@@ -640,12 +640,12 @@ describe('EpisodeBreakEstimationStep', () => {
             episodeNumber: 2,
             title: 'Too Long',
             startPanelIndex: 6,
-            endPanelIndex: 60, // 55 panels (> 50 limit)
+            endPanelIndex: 1106, // 1101 panels (> 1000 limit)
           },
         ],
       }
 
-      const validation = (step as any).validateEpisodeBreaks(episodeBreaks, 60)
+      const validation = (step as any).validateEpisodeBreaks(episodeBreaks, 1106)
       expect(validation.valid).toBe(false)
       expect(validation.issues.some((issue: string) => issue.includes('too short'))).toBe(true)
       expect(validation.issues.some((issue: string) => issue.includes('too long'))).toBe(true)
@@ -694,10 +694,10 @@ describe('EpisodeBreakEstimationStep', () => {
   // 明日見せるので今日はいったんスキップ
   describe('Episode Bundling', () => {
     it('should fail validation if bundling makes an episode exceed max length', async () => {
-      const script = createMockScript(100)
+      const script = createMockScript(1200)
       const context = createMockContext()
 
-      // LLM suggests a short first episode that will be bundled into the next, exceeding 50
+      // LLM suggests a short first episode that will be bundled into the next, exceeding 1000
       mockGenerator.generateObjectWithFallback.mockResolvedValue({
         episodes: [
           {
@@ -710,20 +710,20 @@ describe('EpisodeBreakEstimationStep', () => {
             episodeNumber: 2,
             title: 'Main Episode',
             startPanelIndex: 16,
-            endPanelIndex: 60, // 45 pages -> after bundling becomes 60 (> 50)
+            endPanelIndex: 1100, // 1085 pages -> after bundling becomes 1100 (> 1000)
           },
           {
             episodeNumber: 3,
             title: 'Tail',
-            startPanelIndex: 61,
-            endPanelIndex: 100,
+            startPanelIndex: 1101,
+            endPanelIndex: 1200,
           },
         ],
       })
 
       const result = ensureError(await step.estimateEpisodeBreaks(script, context))
       expect(result.success).toBe(false)
-      // Error message should include reason like 'too long (60 panels)'
+      // Error message should include reason like 'too long (1100 panels)'
       expect(result.error).toContain('too long')
     })
     it.skip('should bundle episodes with less than 20 pages with next episode', async () => {

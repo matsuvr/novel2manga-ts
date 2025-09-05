@@ -5,8 +5,7 @@ import {
   segmentScript,
 } from '@/agents/script/script-segmenter'
 import { DefaultLlmStructuredGenerator } from '@/agents/structured-generator'
-import { getAppConfigWithOverrides } from '@/config'
-import { EPISODE_CONSTANTS } from '@/config/constants'
+import { getAppConfigWithOverrides, getEpisodeConfig } from '@/config'
 import { getProviderForUseCase } from '@/config/llm.config'
 import { type EpisodeBreakPlan, EpisodeBreakSchema, type NewMangaScript } from '@/types/script'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
@@ -32,6 +31,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
       const totalPanels = combinedScript.panels?.length || 0
       // Fetch app config once to avoid inconsistent per-call overrides
       const appCfg = this.getAppConfig()
+      const episodeCfg = getEpisodeConfig()
       logger.info('Starting episode break estimation', {
         jobId,
         panelCount: totalPanels,
@@ -39,7 +39,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
 
       // Small-script local rule: if panel count is small, confirm a single episode 1..N
       // This is NOT a fallback; it is a deterministic rule to avoid invalid LLM splits on tiny scripts.
-      if (totalPanels > 0 && totalPanels <= EPISODE_CONSTANTS.SMALL_PANEL_THRESHOLD) {
+      if (totalPanels > 0 && totalPanels <= episodeCfg.smallPanelThreshold) {
         const plan: EpisodeBreakPlan = {
           episodes: [
             {
@@ -307,6 +307,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     totalPanels: number,
   ): { valid: boolean; issues: string[] } {
     const issues: string[] = []
+    const cfg = getEpisodeConfig()
 
     // Check if episodes cover all panels
     // sort() は破壊的なためコピーしてからソートする（toSorted は TS/lib 設定に依存するため未使用）
@@ -333,13 +334,10 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
       // Check episode length constraints
       const episodeLength = episode.endPanelIndex - episode.startPanelIndex + 1
       // For very small scripts, accept any length as long as coverage is continuous
-      if (
-        totalPanels > EPISODE_CONSTANTS.SMALL_PANEL_THRESHOLD &&
-        episodeLength < EPISODE_CONSTANTS.MIN_EPISODE_LENGTH
-      ) {
+      if (totalPanels > cfg.smallPanelThreshold && episodeLength < cfg.minPanelsPerEpisode) {
         issues.push(`Episode ${episode.episodeNumber}: too short (${episodeLength} panels)`)
       }
-      if (episodeLength > EPISODE_CONSTANTS.MAX_EPISODE_LENGTH) {
+      if (episodeLength > cfg.maxPanelsPerEpisode) {
         issues.push(`Episode ${episode.episodeNumber}: too long (${episodeLength} panels)`)
       }
 
@@ -409,11 +407,11 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
 
   /**
    * Enforce maximum episode length by deterministically splitting
-   * episodes that exceed EPISODE_CONSTANTS.MAX_EPISODE_LENGTH.
+   * episodes that exceed the configured maximum.
    * This is not a fallback; it guarantees constraints before validation.
    */
   private enforceEpisodeMaxLength(episodeBreaks: EpisodeBreakPlan): EpisodeBreakPlan {
-    const maxLen = EPISODE_CONSTANTS.MAX_EPISODE_LENGTH
+    const maxLen = getEpisodeConfig().maxPanelsPerEpisode
     if (episodeBreaks.episodes.length === 0) return episodeBreaks
 
     // Work on a copy sorted by episodeNumber
