@@ -6,9 +6,9 @@ class MockEventSource extends EventTarget implements EventSource {
   url: string
   withCredentials: boolean = false
   readyState: number = 0
-  onopen: ((this: EventSource, ev: Event) => any) | null = null
-  onmessage: ((this: EventSource, ev: MessageEvent) => any) | null = null
-  onerror: ((this: EventSource, ev: Event) => any) | null = null
+  onopen: ((this: EventSource, ev: Event) => void) | null = null
+  onmessage: ((this: EventSource, ev: MessageEvent) => void) | null = null
+  onerror: ((this: EventSource, ev: Event) => void) | null = null
 
   static readonly CONNECTING = 0
   static readonly OPEN = 1
@@ -25,16 +25,16 @@ class MockEventSource extends EventTarget implements EventSource {
 
   addEventListener<K extends keyof EventSourceEventMap>(
     type: K,
-    listener: (this: EventSource, ev: EventSourceEventMap[K]) => any,
-    options?: boolean | AddEventListenerOptions
+    listener: (this: EventSource, ev: EventSourceEventMap[K]) => void,
+    options?: boolean | AddEventListenerOptions,
   ): void {
     super.addEventListener(type, listener as EventListener, options)
   }
 
   removeEventListener<K extends keyof EventSourceEventMap>(
     type: K,
-    listener: (this: EventSource, ev: EventSourceEventMap[K]) => any,
-    options?: boolean | EventListenerOptions
+    listener: (this: EventSource, ev: EventSourceEventMap[K]) => void,
+    options?: boolean | EventListenerOptions,
   ): void {
     super.removeEventListener(type, listener as EventListener, options)
   }
@@ -44,8 +44,7 @@ class MockEventSource extends EventTarget implements EventSource {
   }
 }
 
-;(globalThis as { EventSource?: typeof EventSource }).EventSource =
-  MockEventSource
+;(globalThis as { EventSource?: typeof EventSource }).EventSource = MockEventSource
 
 // Mock HTMLCanvasElement globally for all tests
 Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
