@@ -808,8 +808,8 @@ export function getAppConfigWithOverrides(): AppConfig {
     config.features.enableCaching = process.env.APP_ENABLE_CACHING === 'true'
   }
 
-  if (process.env.APP_COVERAGE_CHECK !== undefined) {
-    config.features.enableCoverageCheck = process.env.APP_COVERAGE_CHECK === 'true'
+  if (process.env.APP_ENABLE_COVERAGE_CHECK !== undefined) {
+    config.features.enableCoverageCheck = process.env.APP_ENABLE_COVERAGE_CHECK === 'true'
   }
 
   if (process.env.APP_LOG_LEVEL) {
