@@ -192,7 +192,7 @@
 ### Performance & Operations
 
 - [ ] **垂直テキスト最適化**: キャッシュチューニングと同時実行制御
-- [ ] **カバレッジ評価チューニング**: 品質評価指標の精度向上
+- [ ] **カバレッジ評価チューニング**: 品質評価指標の精度向上（`features.enableCoverageCheck` はデフォルト無効）
 - [x] **バンドリングロジック拡張**: ページ割り後の実ページ数に基づくエピソード統合（最小20p、最終話は直前に統合）。設定は `app.config.ts > episodeBundling` に集約
 
 ### Script Conversion Normalization

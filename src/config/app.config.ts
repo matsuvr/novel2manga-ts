@@ -690,6 +690,7 @@ JSONのみ出力。説明文禁止。`,
     enableImageGeneration: false, // 将来的な機能
     enableAutoSave: true,
     enableCaching: true,
+    enableCoverageCheck: false,
     enableParallelProcessing: true,
     enableProgressTracking: true,
   },
@@ -805,6 +806,10 @@ export function getAppConfigWithOverrides(): AppConfig {
 
   if (process.env.APP_ENABLE_CACHING !== undefined) {
     config.features.enableCaching = process.env.APP_ENABLE_CACHING === 'true'
+  }
+
+  if (process.env.APP_ENABLE_COVERAGE_CHECK !== undefined) {
+    config.features.enableCoverageCheck = process.env.APP_ENABLE_COVERAGE_CHECK === 'true'
   }
 
   if (process.env.APP_LOG_LEVEL) {

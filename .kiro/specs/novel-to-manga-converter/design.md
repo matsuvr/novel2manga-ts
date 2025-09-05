@@ -660,6 +660,12 @@ console.log(result.metadata?.provider)
 - Scene と Highlight のスキーマで `endIndex` が `startIndex` と同一の場合も許容。
 - 単一点のシーンやハイライトに対するバリデーションエラーを解消。
 
+### Feature Toggle: Script Coverage Check (2025-09-??)
+
+- `app.config.ts` に `features.enableCoverageCheck` を追加。
+- 既定は `false` とし、`true` の場合のみスクリプト変換でカバレッジ評価とリトライを実行。
+- 一時的に機能を無効化しつつ、必要に応じて再有効化できるようにする。
+
 ## エラーハンドリングアーキテクチャ（2025-08-27 更新）
 
 ### 統一エラーパターン管理
