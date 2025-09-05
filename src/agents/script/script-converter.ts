@@ -8,10 +8,7 @@ import { getLogger } from '@/infrastructure/logging/logger'
 import { type NewMangaScript, NewMangaScriptSchema } from '@/types/script'
 import { enforceDialogueBubbleLimit } from '@/utils/script-postprocess'
 import { sanitizeScript, validateImportanceFields } from '@/utils/script-validation'
-import {
-  applyConsistencySuggestions,
-  checkCharacterConsistency,
-} from './character-consistency-checker'
+import { checkCharacterConsistency } from './character-consistency-checker'
 
 export interface ScriptConversionInput {
   chunkText: string
@@ -226,7 +223,7 @@ export async function convertChunkToMangaScript(
         const validatedResult = NewMangaScriptSchema.safeParse(sanitizedResult)
         if (validatedResult.success) {
           // 文字数上限・分割ポリシー（Script Conversion直後に適用）
-          let currentResult = enforceDialogueBubbleLimit(validatedResult.data)
+          const currentResult = enforceDialogueBubbleLimit(validatedResult.data)
 
           // Log importance validation warnings if any
           const importanceValidation = validateImportanceFields(currentResult)
@@ -267,19 +264,6 @@ export async function convertChunkToMangaScript(
 
                 attempt++
                 continue
-              }
-
-              // Apply automatic fixes for minor issues
-              if (consistencyResult.score >= 0.5) {
-                const fixedResult = applyConsistencySuggestions(currentResult, consistencyResult)
-                currentResult = fixedResult as NewMangaScript
-
-                getLogger()
-                  .withContext({ service: 'script-converter', jobId: options?.jobId })
-                  .info('Applied character consistency fixes', {
-                    fixesApplied: consistencyResult.issues.length,
-                    chunkIndex: input.chunkIndex,
-                  })
               }
             }
           }
