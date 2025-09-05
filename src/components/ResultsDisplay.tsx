@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { groupByProviderModel } from '@/utils/token-usage'
 import type { Episode } from '@/types/database-models'
+import { groupByProviderModel } from '@/utils/token-usage'
 
 interface TokenUsage {
   agentName: string

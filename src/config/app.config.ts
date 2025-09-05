@@ -329,6 +329,53 @@ JSONのみ出力。説明文禁止。`,
       // カバレッジ判定の閾値設定
       coverageThreshold: 0.8, // 80%未満でリトライ
       enableCoverageRetry: true, // カバレッジリトライ機能の有効/無効
+
+      // 分析結果のフォーマット設定
+      analysisFormatting: {
+        scenesHeader: '【シーン情報】',
+        dialoguesHeader: '【セリフ情報】',
+        highlightsHeader: '【重要ポイント】',
+        situationsHeader: '【状況】',
+        emotionUnknown: '感情不明',
+        importanceLabel: '重要度',
+      },
+    },
+
+    // Character consistency check prompt (for script conversion)
+    characterConsistency: {
+      systemPrompt: `あなたはマンガ制作における登場人物の一貫性を確認する専門家です。
+与えられた登場人物情報と生成されたスクリプトを比較し、キャラクターの一貫性が保たれているかを判定してください。
+
+【チェック項目】
+1. キャラクター名の一貫性（別名も含む）
+2. キャラクターの性格・口調の一貫性
+3. キャラクター間の関係性の一貫性
+4. まだ登場していないはずのキャラクターが出現していないか
+5. キャラクターの行動が過去の描写と矛盾していないか
+
+【出力形式】
+{
+  "isConsistent": boolean,
+  "issues": [
+    {
+      "type": "name_inconsistency" | "personality_inconsistency" | "relationship_inconsistency" | "premature_appearance" | "action_contradiction",
+      "characterId": "string",
+      "description": "問題の詳細説明",
+      "suggestion": "修正案"
+    }
+  ],
+  "score": number // 0.0-1.0の一貫性スコア
+}
+
+説明文やJSON以外の出力は禁止。`,
+
+      userPromptTemplate: `【登場人物情報（チャンク{{chunkIndex}}まで）】
+{{characterMemory}}
+
+【生成されたスクリプト】
+{{scriptJson}}
+
+上記のスクリプトにおける登場人物の一貫性を確認し、問題があれば指摘してください。`,
     },
 
     // カバレッジ判定用プロンプト（インライン化）
@@ -731,6 +778,18 @@ JSONのみ出力。説明文禁止。`,
     majorActions: {
       min: 3,
       max: 7,
+    },
+    // スナップショットフォーマット設定
+    snapshotFormatting: {
+      header: '【登場人物情報（これまでに登場済み）】',
+      emptyMessage: '',
+      characterPrefix: '◆',
+      aliasesLabel: '別名',
+      summaryLabel: '説明',
+      actionsLabel: '主な行動',
+      maxAliases: 5,
+      maxSummaryLength: 150,
+      maxActions: 3,
     },
   },
 

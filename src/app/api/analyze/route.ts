@@ -15,8 +15,8 @@ import { generateUUID } from '@/utils/uuid'
 
 const analyzeRequestSchema = z
   .object({
-    novelId: z.string().min(1).optional(),
-    text: z.string().min(1).optional(),
+    novelId: z.string().optional(),
+    text: z.string().optional(),
     title: z.string().optional(),
     jobName: z.string().optional(),
   })

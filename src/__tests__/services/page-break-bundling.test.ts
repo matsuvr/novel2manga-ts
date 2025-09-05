@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  PageBreakStep,
   bundleEpisodesByActualPageCount,
+  PageBreakStep,
 } from '@/services/application/steps/page-break-step'
 import type { EpisodeBreakPlan, PageBreakV2 } from '@/types/script'
 

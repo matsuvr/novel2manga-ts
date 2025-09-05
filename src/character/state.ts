@@ -3,6 +3,12 @@
  * Core functions for managing character memory across chunks
  */
 
+/**
+ * Normalize a character name for consistent matching
+ * Handles Japanese-specific normalization (kana, width, etc.)
+ */
+import { JAPANESE_HONORIFICS } from '@/character/character.config'
+import { getCharacterMemoryConfig } from '@/config'
 import {
   type AliasIndex,
   type CharacterCandidateV2,
@@ -15,13 +21,6 @@ import {
   isTempCharacterId,
   type TempCharacterId,
 } from '@/types/extractionV2'
-import { getCharacterMemoryConfig } from '@/config'
-
-/**
- * Normalize a character name for consistent matching
- * Handles Japanese-specific normalization (kana, width, etc.)
- */
-import { JAPANESE_HONORIFICS } from '@/character/character.config'
 
 export function normalizeName(name: string): string {
   if (!name) return ''

@@ -30,7 +30,7 @@ const MathStepSchema = z.object({
 
 // 全体の推論スキーマ
 const MathReasoningSchema = z.object({
-  steps: z.array(MathStepSchema).min(1).describe('解法ステップの配列'),
+  steps: z.array(MathStepSchema).describe('解法ステップの配列'),
   final_answer: z.string().describe('問題の最終回答'),
 })
 
@@ -258,13 +258,13 @@ export class ProductRecommendationAgent {
     ユーザーの入力と、性別、年齢層、季節などの追加コンテキストが提供されます。
     ユーザーのプロファイルと好みにマッチする衣類をデータベースから検索するツールが装備されています。
     ユーザー入力とコンテキストに基づいて、データベース検索に使用する最も適切なパラメータ値を決定してください。
-    
+
     ウェブサイトで利用可能な異なるカテゴリ:
     - shoes: ブーツ、スニーカー、サンダル
     - jackets: 冬用コート、カーディガン、パーカー、レインジャケット
     - tops: シャツ、ブラウス、Tシャツ、クロップトップ、セーター
     - bottoms: ジーンズ、スカート、ズボン、ジョガー
-    
+
     幅広い色が利用可能ですが、一般的な色名を使用してください。
   `.trim()
 
@@ -450,9 +450,8 @@ if (result.success) {
 
 1. **スキーマ設計**: 複雑すぎるスキーマは避け、必要最小限の構造にする
 2. **説明の追加**: `.describe()`を使用して各フィールドの目的を明確にする
-3. **バリデーション**: 適切な制約（`.min()`, `.positive()`, `.optional()`など）を追加
-4. **エラーハンドリング**: Refusalと解析エラーの両方に対応する
-5. **プロバイダー制限**: 各プロバイダーのStructured Outputs対応状況を確認
+3. **エラーハンドリング**: Refusalと解析エラーの両方に対応する
+4. **プロバイダー制限**: 各プロバイダーのStructured Outputs対応状況を確認
 
 ## 制限事項
 

@@ -58,7 +58,7 @@ export const NewMangaScriptSchema = z.object({
   continuity_checks: z.array(z.string()),
   coverageStats: z
     .object({
-      coverageRatio: z.number().min(0).max(1),
+      coverageRatio: z.number(),
       missingPoints: z.array(z.string()).default([]),
       overSummarized: z.boolean().default(false),
     })
@@ -105,7 +105,7 @@ export type PageBreakV2 = z.infer<typeof PageBreakV2Schema>
 // ============================
 
 export const CoverageAssessmentSchema = z.object({
-  coverageRatio: z.number().min(0).max(1),
+  coverageRatio: z.number(),
   missingPoints: z.array(z.string()).default([]),
   overSummarized: z.boolean().default(false),
   notes: z.string().optional(),
@@ -138,11 +138,11 @@ export type EpisodeBreakPlan = z.infer<typeof EpisodeBreakSchema>
 export const PanelAssignmentSchema = z.object({
   pages: z.array(
     z.object({
-      pageNumber: z.number().int().min(1),
-      panelCount: z.number().int().min(1).max(8),
+      pageNumber: z.number().int(),
+      panelCount: z.number().int(),
       panels: z.array(
         z.object({
-          id: z.number().int().min(1),
+          id: z.number().int(),
           scriptIndexes: z.array(z.number().int().nonnegative()),
         }),
       ),

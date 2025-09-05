@@ -1,10 +1,10 @@
 import type { z } from 'zod'
 import { getModelLimits } from '@/config/llm.config'
 import { getLogger } from '@/infrastructure/logging/logger'
+import { db } from '@/services/database'
 import { defaultBaseUrl } from './base-url'
 import type { GenerateStructuredParams, LlmClient, OpenAICompatibleConfig } from './types'
 import { extractFirstJsonChunk, sanitizeLlmJsonResponse } from './utils'
-import { db } from '@/services/database'
 
 type ChatMessage = { role: 'system' | 'user'; content: string }
 

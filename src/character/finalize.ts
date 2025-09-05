@@ -3,6 +3,8 @@
  * Generate final cast list with summaries and major actions
  */
 
+import { ACTION_CATEGORIES, PRIORITY_CATEGORIES } from '@/character/character.config'
+import { getCharacterMemoryConfig } from '@/config'
 import type {
   CharacterCastEntry,
   CharacterId,
@@ -10,8 +12,6 @@ import type {
   CharacterMemoryIndex,
   CharacterProminence,
 } from '@/types/extractionV2'
-import { ACTION_CATEGORIES, PRIORITY_CATEGORIES } from '@/character/character.config'
-import { getCharacterMemoryConfig } from '@/config'
 
 /**
  * Calculate prominence score for a character

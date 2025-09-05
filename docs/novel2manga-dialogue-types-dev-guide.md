@@ -45,7 +45,7 @@ export const DialogueLineSchema = z.object({
 
 // MangaPanelSchemaを更新
 export const MangaPanelSchema = z.object({
-  no: z.number().int().min(1),
+  no: z.number().int(),
   cut: z.string(),
   camera: z.string(),
   narration: z.array(z.string()).optional(), // 削除予定（dialogueに統合）

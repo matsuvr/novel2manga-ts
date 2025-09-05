@@ -1,8 +1,8 @@
-import { getStoragePorts } from '@/infrastructure/storage/ports'
 import { appConfig } from '@/config/app.config'
-import { validatePageBreakV2 } from '@/utils/pagebreak-validator'
-import { getMaxNormalizedPage, normalizePlanPanels, type LoosePanel } from '@/utils/page-normalizer'
+import { getStoragePorts } from '@/infrastructure/storage/ports'
 import type { PageBreakV2 } from '@/types/script'
+import { getMaxNormalizedPage, type LoosePanel, normalizePlanPanels } from '@/utils/page-normalizer'
+import { validatePageBreakV2 } from '@/utils/pagebreak-validator'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface RenderingOptions {

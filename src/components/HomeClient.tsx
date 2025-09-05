@@ -3,12 +3,12 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import React, { useCallback, useState } from 'react'
-import { isRenderCompletelyDone } from '@/utils/completion'
 import ProcessingProgress from '@/components/ProcessingProgress'
 import ResultsDisplay from '@/components/ResultsDisplay'
 import TextInputArea from '@/components/TextInputArea'
 import { appConfig } from '@/config/app.config'
 import type { Episode } from '@/types/database-models'
+import { isRenderCompletelyDone } from '@/utils/completion'
 
 type ViewMode = 'input' | 'processing' | 'progress' | 'results' | 'redirecting'
 

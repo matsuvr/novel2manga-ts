@@ -15,6 +15,7 @@ import {
   saveChunkCache,
   savePromptMemory,
 } from '@/character/persistence'
+import { saveCharacterSnapshot } from '@/character/snapshot'
 import {
   applyResolutions,
   getResolutionStats,
@@ -29,6 +30,7 @@ import {
   recordEvents,
   summarizeMemory,
 } from '@/character/state'
+import { getCharacterMemoryConfig } from '@/config'
 import {
   createLogger,
   type EnhancedLogger,
@@ -41,7 +43,6 @@ import {
 import { generateExtractionV2UserPrompt, getExtractionV2SystemPrompt } from '@/prompts/extractionV2'
 import type { AliasIndex, CharacterMemoryIndex, ExtractionV2 } from '@/types/extractionV2'
 import { isCharacterId, isTempCharacterId } from '@/types/extractionV2'
-import { getCharacterMemoryConfig } from '@/config'
 import {
   formatValidationErrors,
   validateExtraction,
@@ -412,6 +413,8 @@ export async function runEnhancedExtractionPipeline(
           await savePromptMemory(context.memoryIndex, context.storagePaths, {
             currentChunk: i,
           })
+          // Save character snapshot for this chunk
+          await saveCharacterSnapshot(context.memoryIndex, i, config.dataDir)
         },
         { chunkIndex: i },
       )
