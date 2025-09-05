@@ -794,7 +794,7 @@ function ProcessingProgress({
   // 画面更新（render）の外でのみルーター更新を行う
   useEffect(() => {
     if (!completed) return
-    // 厳密完了（ページ数一致）を満たしてから遷移を許可
+    // Allow route transition only after strict completion (page count matches)
     if (!isRenderCompletelyDone(lastJobRef.current)) return
     // onComplete内でのrouter操作はここから呼ぶことで、
     // 「別コンポーネントのレンダー中にsetStateする」警告を回避

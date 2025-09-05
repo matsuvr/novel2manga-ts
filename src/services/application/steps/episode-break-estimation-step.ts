@@ -613,14 +613,9 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
 
   // Read app config via a typed helper (single source per run)
   private getAppConfig(): AppConfig {
-    const raw = getAppConfigWithOverrides() as unknown
-    const candidate = raw as Record<string, unknown>
-    const cfg: AppConfig = {
-      llm: (candidate?.llm as AppConfig['llm']) || {},
-      scriptSegmentation: candidate?.scriptSegmentation as AppConfig['scriptSegmentation'],
-      episodeBundling: candidate?.episodeBundling as AppConfig['episodeBundling'],
-    }
-    return cfg
+    // getAppConfigWithOverrides は AppConfig を返すため、そのまま返却する
+    // 余計な型アサーションは不要（安全性のため排除）
+    return getAppConfigWithOverrides()
   }
 }
 
