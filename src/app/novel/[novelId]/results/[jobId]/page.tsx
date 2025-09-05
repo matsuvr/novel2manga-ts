@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 import { db } from '@/services/database/index'
 import { isRenderCompletelyDone } from '@/utils/completion'
 import { StorageFactory, JsonStorageKeys } from '@/utils/storage'
-import type { EpisodeBreakPlan } from '@/types/script'
+import { EpisodeBreakSchema, type EpisodeBreakPlan } from '@/types/script'
 
 interface Params {
   novelId: string
@@ -39,10 +39,36 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
   const layoutStorage = await StorageFactory.getLayoutStorage()
   const fullPages = await layoutStorage.get(JsonStorageKeys.fullPages(job.id))
   if (!fullPages) {
-    throw new Error('full_pages.json not found')
+    return (
+      <main className="max-w-3xl mx-auto p-6 space-y-4">
+        <h1 className="text-2xl font-bold">処理結果の表示に失敗しました</h1>
+        <div className="apple-card p-4 space-y-2">
+          <div className="text-sm text-gray-600">Job: {job.id}</div>
+          <div className="text-sm text-red-600">
+            エラー: 結果ファイル (full_pages.json) が見つかりませんでした。処理が正常に完了しなかった可能性があります。
+          </div>
+        </div>
+      </main>
+    )
   }
-  const parsedFull = JSON.parse(fullPages.text) as { episodes?: EpisodeBreakPlan['episodes'] }
-  const episodes = parsedFull.episodes || []
+  let parsedFull: EpisodeBreakPlan
+  try {
+    parsedFull = EpisodeBreakSchema.parse(JSON.parse(fullPages.text))
+  } catch (e) {
+    console.error(`Failed to parse full_pages.json for job ${job.id}:`, e)
+    return (
+      <main className="max-w-3xl mx-auto p-6 space-y-4">
+        <h1 className="text-2xl font-bold">処理結果の表示に失敗しました</h1>
+        <div className="apple-card p-4 space-y-2">
+          <div className="text-sm text-gray-600">Job: {job.id}</div>
+          <div className="text-sm text-red-600">
+            エラー: 結果ファイル (full_pages.json) の解析に失敗しました。{(e as Error).message}
+          </div>
+        </div>
+      </main>
+    )
+  }
+  const episodes = parsedFull.episodes
 
   // レイアウトステータスを取得してページ数情報を含める（責務をLayoutDatabaseServiceへ委譲）
   const layoutStatuses = await db.layout().getLayoutStatusByJobId(job.id)
