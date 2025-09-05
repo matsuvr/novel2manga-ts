@@ -30,6 +30,7 @@ vi.mock('@/agents/structured-generator', () => ({
 }))
 vi.mock('@/config/app.config', () => ({
   getAppConfigWithOverrides: () => ({
+    features: { enableCoverageCheck: true },
     llm: {
       scriptConversion: {
         systemPrompt: 'Test system prompt',
