@@ -38,7 +38,21 @@ function splitJapaneseByLimit(text: string, limit: number): string[] {
 export function enforceDialogueBubbleLimit(script: NewMangaScript): NewMangaScript {
   const cfg = getAppConfigWithOverrides().scriptConstraints.dialogue
   const limit = cfg.maxCharsPerBubble
-  const applySet = new Set<DialogueType>(cfg.applyToTypes as readonly DialogueType[])
+  // 設定の型安全性を担保：構成値が許可済みの DialogueType のみであることを検証
+  const allowed: readonly DialogueType[] = ['speech', 'narration', 'thought'] as const
+  const typesFromConfig = Array.isArray(cfg.applyToTypes) ? cfg.applyToTypes : []
+  const validatedTypes = typesFromConfig.filter((t): t is DialogueType =>
+    (allowed as readonly string[]).includes(String(t)),
+  )
+  if (validatedTypes.length === 0) {
+    // フォールバックは禁止方針。設定不正は明示エラーとして停止。
+    throw new Error(
+      `Invalid config: scriptConstraints.dialogue.applyToTypes must include at least one of ${allowed.join(
+        ', ',
+      )}. Actual: ${JSON.stringify(cfg.applyToTypes)}`,
+    )
+  }
+  const applySet = new Set<DialogueType>(validatedTypes)
 
   const newPanels: typeof script.panels = []
 

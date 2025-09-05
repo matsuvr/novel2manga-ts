@@ -536,10 +536,11 @@ export class CanvasRenderer {
       // 基本ふくらみ量（短い方の半径に対する比率を使用）
       const baseBulge = Math.max(cfg.minRadiusPx, Math.min(rx, ry) * cfg.amplitudeRatio)
 
-      // 乱数をテスト安定性のために疑似的に決定（x,y,w,h依存で決まる）
-      const seedConst = (cx + cy + rx + ry) * 0.01337
+      // 疑似乱数はテスト安定性のために決定論的（x,y,w,h依存）
+      const prngCfg = this.appConfig.rendering.canvas.bubble.thoughtShape.prng
+      const seedConst = (cx + cy + rx + ry) * prngCfg.seedScale
       const prand = (i: number): number => {
-        const s = Math.sin((i + 1) * 12.9898 * seedConst) * 43758.5453
+        const s = Math.sin((i + 1) * prngCfg.sinScale * seedConst) * prngCfg.multiplier
         return s - Math.floor(s)
       }
 

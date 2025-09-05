@@ -40,6 +40,13 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
   const layoutStatuses = await db.layout().getLayoutStatusByJobId(job.id)
   const layoutStatusMap = new Map(layoutStatuses.map((s) => [s.episodeNumber, s]))
 
+  // 冗長計算を事前に集約
+  const processingTimeMs =
+    job.completedAt && job.createdAt
+      ? new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()
+      : null
+  const totalPageCount = layoutStatuses.reduce((sum, status) => sum + (status.totalPages || 0), 0)
+
   // Parse coverage warnings from job if any
   let coverageWarnings: Array<{
     chunkIndex: number
@@ -74,34 +81,18 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
           <div className="text-sm text-gray-600">完了日時: {job.completedAt}</div>
         )}
         {/* 完了と作成日時の差から、処理時間を表示 */}
-        {job.completedAt && job.createdAt && (
+        {processingTimeMs !== null && (
           <div className="text-sm text-gray-600">
-            処理時間:{' '}
-            {(
-              (new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()) /
-              1000
-            ).toFixed(1)}{' '}
-            秒
+            処理時間: {(processingTimeMs / 1000).toFixed(1)} 秒
           </div>
         )}
         {/*総ページ数を表示*/}
-        <div className="text-sm text-gray-600">
-          総ページ数: {layoutStatuses.reduce((sum, status) => sum + (status.totalPages || 0), 0)}{' '}
-          ページ
-        </div>
+        <div className="text-sm text-gray-600">総ページ数: {totalPageCount} ページ</div>
         {/*１ページあたりの平均所要時間を表示*/}
-        {job.completedAt && job.createdAt && (
+        {processingTimeMs !== null && (
           <div className="text-sm text-gray-600">
             1ページあたりの平均所要時間:{' '}
-            {(
-              (new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()) /
-              1000 /
-              Math.max(
-                1,
-                layoutStatuses.reduce((sum, status) => sum + (status.totalPages || 0), 0),
-              )
-            ).toFixed(1)}{' '}
-            秒
+            {(processingTimeMs / 1000 / Math.max(1, totalPageCount)).toFixed(1)} 秒
           </div>
         )}
         <div className="text-sm text-gray-600">ジョブID: {job.id}</div>
