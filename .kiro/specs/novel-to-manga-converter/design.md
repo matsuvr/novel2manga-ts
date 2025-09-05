@@ -637,6 +637,7 @@ console.log(result.metadata?.provider)
 - キャラクターメモリを `JsonStorageKeys.characterMemoryFull` / `JsonStorageKeys.characterMemoryPrompt` 経由でストレージ保存。
 - `jobs` テーブルに `character_memory_path` と `prompt_memory_path` を追加し、保存したキーを記録。
 - これによりデータディレクトリ依存を排し、全処理がリポジトリ層を介して一貫化。
+- スクリプト変換後のLLMによるキャラクター一貫性チェックを廃止し、チャンク毎のメモリ永続化に一本化。
 
 ## エラーハンドリングアーキテクチャ（2025-08-27 更新）
 
