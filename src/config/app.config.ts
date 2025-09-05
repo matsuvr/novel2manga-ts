@@ -341,43 +341,6 @@ JSONのみ出力。説明文禁止。`,
       },
     },
 
-    // Character consistency check prompt (for script conversion)
-    characterConsistency: {
-      systemPrompt: `あなたはマンガ制作における登場人物の一貫性を確認する専門家です。
-与えられた登場人物情報と生成されたスクリプトを比較し、キャラクターの一貫性が保たれているかを判定してください。
-
-【チェック項目】
-1. キャラクター名の一貫性（別名も含む）
-2. キャラクターの性格・口調の一貫性
-3. キャラクター間の関係性の一貫性
-4. まだ登場していないはずのキャラクターが出現していないか
-5. キャラクターの行動が過去の描写と矛盾していないか
-
-【出力形式】
-{
-  "isConsistent": boolean,
-  "issues": [
-    {
-      "type": "name_inconsistency" | "personality_inconsistency" | "relationship_inconsistency" | "premature_appearance" | "action_contradiction",
-      "characterId": "string",
-      "description": "問題の詳細説明",
-      "suggestion": "修正案"
-    }
-  ],
-  "score": number // 0.0-1.0の一貫性スコア
-}
-
-説明文やJSON以外の出力は禁止。`,
-
-      userPromptTemplate: `【登場人物情報（チャンク{{chunkIndex}}まで）】
-{{characterMemory}}
-
-【生成されたスクリプト】
-{{scriptJson}}
-
-上記のスクリプトにおける登場人物の一貫性を確認し、問題があれば指摘してください。`,
-    },
-
     // カバレッジ判定用プロンプト（インライン化）
     coverageJudge: {
       systemPrompt: `あなたは「過剰要約を検出する監査員」です。入力として与えられた原文のチャンクと、そのチャンクから生成されたマンガ台本（panels直下スキーマ）を突き合わせ、セリフや重要な情報がどれだけ保持されているかを数値化してください。

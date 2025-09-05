@@ -36,7 +36,6 @@ export type LLMUseCase =
   | 'pageBreak'
   | 'panelAssignment'
   | 'episodeBreak'
-  | 'characterConsistency'
 
 // Mapping for use-case specific provider preferences.
 // NOTE: Do not hardcode in application code; change preferences here.
@@ -45,8 +44,6 @@ const useCaseProviders: Partial<Record<LLMUseCase, LLMProvider>> = {
   scriptConversion: 'vertexai',
   // エピソード切れ目検出もVertex AI（Gemini）を使用
   episodeBreak: 'vertexai',
-  // キャラクター一貫性チェックも高性能モデルを使用
-  characterConsistency: 'vertexai',
   // その他はデフォルト（groq）を使用
 }
 
