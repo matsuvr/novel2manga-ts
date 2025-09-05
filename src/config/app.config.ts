@@ -446,8 +446,8 @@ JSONのみ出力。説明文禁止。`,
   rendering: {
     // デフォルトページサイズ（A4縦）
     defaultPageSize: {
-      width: 595, // A4縦の幅（px）
-      height: 842, // A4縦の高さ（px）
+      width: 1190, // A4縦の幅（px）
+      height: 1684, // A4縦の高さ（px）
     },
     // サポートされているページサイズプリセット
     pageSizePresets: {
