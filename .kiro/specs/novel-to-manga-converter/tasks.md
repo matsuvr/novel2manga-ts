@@ -152,6 +152,11 @@
 - [x] 結果ページでバンドル後のエピソード数とタイトルが不一致となる問題を修正。
 - [x] `full_pages.json` から最終エピソード情報を読み込み、UI表示を更新。
 
+### Bugfix: Scene/Highlight index validation (2025-09-07)
+
+- [x] Scene と Highlight のスキーマで `endIndex` が `startIndex` と同一の場合を許容。
+- [x] 単一点のシーンやハイライトがバリデーションエラーになる問題を修正。
+
 ### Code Structure Refactoring (2025-09-04)
 
 - [x] **コンポーネントのリファクタリング**: 各種コンポーネントの構造を改善し、保守性を向上
