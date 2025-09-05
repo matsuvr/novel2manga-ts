@@ -167,22 +167,24 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     const normalized = this.normalizeEpisodeBreaks(result, totalPanels)
     // Enforce max-length deterministically before validation
     const lengthConstrained = this.enforceEpisodeMaxLength(normalized)
-    const validation = this.validateEpisodeBreaks(lengthConstrained, totalPanels)
-    if (!validation.valid) {
-      logger.error('Episode break validation failed after normalization', {
-        jobId,
-        issues: validation.issues,
-        totalPanels,
-      })
-      throw new Error(`Episode break validation failed: ${validation.issues.join(', ')}`)
-    }
-
     // Apply episode bundling based on page count
     const bundled = this.bundleEpisodesByPageCount(
       lengthConstrained,
       context,
       appCfg.episodeBundling || { minPageCount: 20, enabled: true },
     )
+
+    const validation = this.validateEpisodeBreaks(bundled, totalPanels)
+    if (!validation.valid) {
+      logger.error('Episode break validation failed after bundling', {
+        jobId,
+        issues: validation.issues,
+        totalPanels,
+      })
+      throw new Error(
+        `Episode break validation failed after bundling: ${validation.issues.join(', ')}`,
+      )
+    }
 
     logger.info('Episode break estimation completed', {
       jobId,
@@ -284,21 +286,24 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     // Validate the merged results
     // Enforce max-length deterministically before validation
     const lengthConstrained = this.enforceEpisodeMaxLength(normalized)
-    const validation = this.validateEpisodeBreaks(lengthConstrained, totalPanels)
-    if (!validation.valid) {
-      logger.error('Merged episode break validation failed', {
-        jobId,
-        issues: validation.issues,
-      })
-      throw new Error(`Merged episode break validation failed: ${validation.issues.join(', ')}`)
-    }
-
     // Apply episode bundling based on page count
     const bundled = this.bundleEpisodesByPageCount(
       lengthConstrained,
       context,
       appCfg.episodeBundling || { minPageCount: 20, enabled: true },
     )
+
+    // Validate the merged results
+    const validation = this.validateEpisodeBreaks(bundled, totalPanels)
+    if (!validation.valid) {
+      logger.error('Merged episode break validation failed after bundling', {
+        jobId,
+        issues: validation.issues,
+      })
+      throw new Error(
+        `Merged episode break validation failed after bundling: ${validation.issues.join(', ')}`,
+      )
+    }
 
     logger.info('Sliding window episode break estimation completed', {
       jobId,
