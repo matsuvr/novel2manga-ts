@@ -34,7 +34,7 @@ export function validateEpisodeBoundaries(
       const prev = boundaries[i - 1]
       if (
         boundary.startChunk < prev.endChunk ||
-        (boundary.startChunk === prev.endChunk && boundary.startCharIndex < prev.endCharIndex)
+        (boundary.startChunk === prev.endChunk && boundary.startCharIndex <= prev.endCharIndex)
       ) {
         return false
       }
