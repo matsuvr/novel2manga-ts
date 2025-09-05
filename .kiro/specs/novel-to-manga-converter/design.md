@@ -207,6 +207,11 @@ const result = await agent.run({
 
 ### 吹き出し文字組（2025-09-02 追加）
 
+– 1吹き出しの最大文字数を50に統一（`app.config.ts > scriptConstraints.dialogue.maxCharsPerBubble`）。
+– Script Conversionの直後に自動ポストプロセスを適用し、上限超過の発話はパネル分割で処理。
+– 分割により増えた2コマ目以降の`cut`は「前のコマを引き継ぐ」を使用し、`camera`や`importance`は元パネルを継承。
+– 対象は `speech`/`thought`/`narration`（設定 `applyToTypes` で制御）。
+
 ## データベースアクセス層の抽象化（2025-09-04 追加）
 
 - 目的: better-sqlite3（同期）と Cloudflare D1（非同期）の差異をアダプタ層で吸収し、業務ロジックから同期/非同期分岐を排除。

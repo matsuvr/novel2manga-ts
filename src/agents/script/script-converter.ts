@@ -215,7 +215,9 @@ export async function convertChunkToMangaScript(
         const sanitizedResult = sanitizeScript(result as NewMangaScript)
         const validatedResult = NewMangaScriptSchema.safeParse(sanitizedResult)
         if (validatedResult.success) {
-          const currentResult = validatedResult.data
+          // 文字数上限・分割ポリシー（Script Conversion直後に適用）
+          const { enforceDialogueBubbleLimit } = await import('@/utils/script-postprocess')
+          const currentResult = enforceDialogueBubbleLimit(validatedResult.data)
 
           // Log importance validation warnings if any
           const importanceValidation = validateImportanceFields(currentResult)

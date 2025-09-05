@@ -40,6 +40,16 @@ vi.mock('@/config/app.config', () => ({
           '【重要】前回生成されたスクリプトのカバレッジが不十分でした（{{coveragePercentage}}%）。以下の点を改善してください：\n{{coverageReasons}}\n\nより詳細で完全なスクリプトを生成してください。',
       },
     },
+    // New constraints for dialogue bubble splitting (added by tests to avoid undefined)
+    scriptConstraints: {
+      dialogue: {
+        maxCharsPerBubble: 50,
+        splitPolicy: 'split-panel',
+        continuationPanelCutText: '前のコマを引き継ぐ',
+        applyStage: 'post-script-conversion-early',
+        applyToTypes: ['speech', 'thought', 'narration'],
+      },
+    },
     scriptCoverage: {
       expectedPanelsPerKChar: 1.5,
       panelCountThresholdRatio: 0.7,
