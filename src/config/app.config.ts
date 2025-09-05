@@ -679,7 +679,7 @@ JSONのみ出力。説明文禁止。`,
       maxCharsPerEpisode: 12000, // 最大文字数 - 削減
       smallPanelThreshold: 8, // パネル数がこの値以下なら単一エピソードとして扱う
       minPanelsPerEpisode: 10, // 1エピソードの最小コマ数
-      maxPanelsPerEpisode: 1000, // 1エピソードの最大コマ数
+      maxPanelsPerEpisode: 1000, // 1エピソードの最大コマ数（従来の50から拡張。詳細は設計ドキュメント参照）
     },
   },
 
