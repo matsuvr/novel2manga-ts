@@ -121,6 +121,12 @@ const result = await agent.run({
 - パイプラインではエピソード境界推定の期間に `currentStep=episode` を明示し、完了時に `episodeCompleted` を更新。
   これにより「エピソード構成がスキップに見える」問題を解消。
 
+### トークン使用量の記録と表示（2025-09 追加）
+
+- すべてのLLM呼び出しで、入出力トークンを `token_usage` テーブルに記録（`jobId`/`agentName`/`provider`/`model`/`promptTokens`/`completionTokens`）。
+- 結果ページでは、モデル別に「<provider> <model> 入力Xトークン・出力Yトークン」を一覧表示。
+- 進捗画面では、完了済み呼び出しの累積として「現在 入力X/出力Y トークン消費中…」を定期更新（間隔は `app.config.ts` にて一元管理）。
+
 ### 進捗ページの永続URL（復帰性の担保）
 
 - novelId 発行後は、進捗表示を `/novel/{novelId}/progress` のユニークURLで提供する。
@@ -201,6 +207,7 @@ const result = await agent.run({
 
 - チャンク分割後: 末尾チャンクが `minChunkSize` 未満なら直前チャンクへ連結。オーバーラップ重複を避けるため、原文から再スライスして結合。
 - エピソード束ね後: 末尾エピソードが最小目安（20p）未満なら直前エピソードに吸収。
+- 実ページ数基準の最終統合（2025-09-05 追加）: ページ割り確定後（PageBreakStep）、各エピソードの実ページ数を計測し、`app.config.ts > episodeBundling.minPageCount` 未満は次話へ順次統合（連鎖統合可）。最終話が閾値未満の場合は直前話に統合する。
 - 目的: 機械的な閾値エラーで停止せず、自然な分割単位に収束させる。
 
 ## 設定

@@ -75,6 +75,11 @@ export class LayoutGeneratorAgent {
       userPrompt: prompt,
       schema: layoutPanelCountOutputSchema,
       schemaName: 'LayoutPanelCount',
+      telemetry: {
+        jobId: _options?.jobId,
+        episodeNumber: episodeData.episodeNumber,
+        stepName: 'layout',
+      },
     })
 
     // LLMの出力（ページごとのコマ数）を実際のレイアウトに変換
