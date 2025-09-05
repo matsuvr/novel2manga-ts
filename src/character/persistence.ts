@@ -241,7 +241,8 @@ export async function loadChunkCache(
     const content = await readFile(cachePath, 'utf-8')
     const cache: ChunkCache = JSON.parse(content)
     return cache.extraction
-  } catch {
+  } catch (err) {
+    console.error(`Failed to load chunk cache from ${cachePath}:`, err)
     return null
   }
 }
