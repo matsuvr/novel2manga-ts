@@ -41,9 +41,9 @@ export type LLMUseCase =
 // NOTE: Do not hardcode in application code; change preferences here.
 const useCaseProviders: Partial<Record<LLMUseCase, LLMProvider>> = {
   // 指示: スクリプト変換に高性能なLLMを使用
-  scriptConversion: 'grok',
+  scriptConversion: 'vertexai',
   // エピソード切れ目検出もVertex AI（Gemini）を使用
-  episodeBreak: 'grok',
+  episodeBreak: 'vertexai',
   // その他はデフォルト（groq）を使用
 }
 

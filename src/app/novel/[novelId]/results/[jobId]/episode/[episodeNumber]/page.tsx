@@ -9,8 +9,8 @@ interface Params {
   episodeNumber: string
 }
 
-export default async function EpisodePreviewPage({ params }: { params: Params }) {
-  const { novelId, jobId, episodeNumber } = params
+export default async function EpisodePreviewPage({ params }: { params: Promise<Params> }) {
+  const { novelId, jobId, episodeNumber } = await params
   const epNum = Number(episodeNumber)
   if (!epNum || epNum < 1) return notFound()
 

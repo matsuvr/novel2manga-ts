@@ -5,7 +5,6 @@ import { db } from '@/services/database/index'
 
 // Import pipeline steps
 import {
-  type AnalysisResult,
   BasePipelineStep,
   CompletionStep,
   JobManagementStep,
@@ -14,9 +13,13 @@ import {
   RenderingStep,
   type StepContext,
   type StepExecutionResult,
-  TextAnalysisStep,
   TextChunkingStep,
 } from './steps'
+// Use V2 text analysis (ExtractionV2) for schema compatibility with prompts
+import {
+  TextAnalysisStep as TextAnalysisStepV2,
+  type AnalysisResult,
+} from './steps/text-analysis-step-v2'
 import { ChunkScriptStep } from './steps/chunk-script-step'
 import { EpisodeBreakEstimationStep } from './steps/episode-break-estimation-step'
 import { ScriptMergeStep } from './steps/script-merge-step'
@@ -57,7 +60,7 @@ export class AnalyzePipeline extends BasePipelineStep {
   private readonly novelStep = new NovelManagementStep()
   private readonly jobStep = new JobManagementStep()
   private readonly chunkingStep = new TextChunkingStep()
-  private readonly analysisStep = new TextAnalysisStep()
+  private readonly analysisStep = new TextAnalysisStepV2()
   // 新フローでは物語弧/旧エピソード抽出を使用しない
   // private readonly narrativeStep = new NarrativeAnalysisStep()
   // private readonly scriptStep = new ScriptConversionStep()
