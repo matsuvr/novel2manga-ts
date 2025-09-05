@@ -203,6 +203,7 @@ export function getFeatureConfig() {
   return {
     enableCaching: config.features.enableCaching,
     enableTextAnalysis: config.features.enableTextAnalysis,
+    enableCoverageCheck: config.features.enableCoverageCheck,
     enableBatchProcessing: true, // 固定値
   }
 }
