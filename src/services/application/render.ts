@@ -8,8 +8,8 @@ import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
 import { db } from '@/services/database/index'
 import type { PageBreakV2 } from '@/types/script'
 import { normalizeAndValidateLayout } from '@/utils/layout-normalizer'
+import { type LoosePanel, normalizePlanPanels } from '@/utils/page-normalizer'
 import { validatePageBreakV2 } from '@/utils/pagebreak-validator'
-import { normalizePlanPanels, type LoosePanel } from '@/utils/page-normalizer'
 // YAML依存を排除: 直接JSONのMangaLayoutを構築して使用する
 
 export interface BatchOptions {

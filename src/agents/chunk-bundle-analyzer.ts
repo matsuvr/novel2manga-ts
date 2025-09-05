@@ -25,7 +25,7 @@ export const bundleAnalysisSchema = z.object({
     .array(
       z.object({
         text: z.string().describe('重要な場面の内容'),
-        importance: z.number().min(1).max(10).describe('重要度（1-10）'),
+        importance: z.number().describe('重要度（1-10）'),
         context: z.string().nullable().optional().describe('場面の文脈や意味'),
       }),
     )

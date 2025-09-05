@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
       length: z.number().int().nonnegative(),
       totalChunks: z.number().int().positive(),
       chunkSize: z.number().int().positive(),
-      overlapSize: z.number().int().min(0),
+      overlapSize: z.number().int(),
     })
 
     let json: unknown

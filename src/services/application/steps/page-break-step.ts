@@ -3,10 +3,14 @@ import { estimatePageBreaksSegmented } from '@/agents/script/segmented-page-brea
 import { getAppConfigWithOverrides } from '@/config'
 import { db } from '@/services/database/index'
 import type { MangaLayout } from '@/types/panel-layout'
-import type { EpisodeBreakPlan, NewMangaScript, PageBreakV2 } from '@/types/script'
+import type {
+  PageBreakV2 as _PageBreakV2,
+  EpisodeBreakPlan,
+  NewMangaScript,
+  PageBreakV2,
+} from '@/types/script'
 import { StorageKeys } from '@/utils/storage'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
-import type { PageBreakV2 as _PageBreakV2 } from '@/types/script'
 
 export interface PageBreakResult {
   pageBreakPlan: PageBreakV2

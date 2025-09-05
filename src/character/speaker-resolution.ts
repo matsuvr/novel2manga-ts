@@ -3,6 +3,7 @@
  * Heuristic resolution for unknown speakers in dialogues
  */
 
+import { COMMON_JAPANESE_WORDS } from '@/character/character.config'
 import {
   type CharacterId,
   type CharacterMemoryIndex,
@@ -11,7 +12,6 @@ import {
   isUnknownSpeaker,
   type TempCharacterId,
 } from '@/types/extractionV2'
-import { COMMON_JAPANESE_WORDS } from '@/character/character.config'
 
 /**
  * Speaker resolution context
