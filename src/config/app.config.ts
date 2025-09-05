@@ -655,10 +655,6 @@ JSONのみ出力。説明文禁止。`,
         requests: 100, // リクエスト数
         window: 60 * 1000, // ウィンドウ（ミリ秒）
       },
-      narrativeAnalysis: {
-        requests: 50,
-        window: 60 * 1000,
-      },
       layoutGeneration: {
         requests: 30,
         window: 60 * 1000,
@@ -677,7 +673,6 @@ JSONのみ出力。説明文禁止。`,
     timeout: {
       default: 30000, // デフォルトタイムアウト（ミリ秒）
       textAnalysis: 180000, // テキスト分析タイムアウト（gpt-5-nano-2025-08-07用に3分に増加）
-      narrativeAnalysis: 90000, // 物語弧分析タイムアウト
       layoutGeneration: 45000, // レイアウト生成タイムアウト
       imageGeneration: 120000, // 画像生成タイムアウト
       pageRender: 60000, // ページレンダリングタイムアウト
@@ -723,7 +718,6 @@ JSONのみ出力。説明文禁止。`,
     cache: {
       ttl: 24 * 60 * 60, // キャッシュ有効期限（秒）
       analysisCache: true, // 分析結果のキャッシュ有効化
-      narrativeCache: true, // 物語弧分析のキャッシュ有効化
       layoutCache: true, // レイアウトのキャッシュ有効化
     },
 
@@ -732,15 +726,12 @@ JSONのみ出力。説明文禁止。`,
       targetCharsPerEpisode: 8000, // エピソードあたりの目標文字数 - 削減
       minCharsPerEpisode: 1, // 最小文字数 - 削減
       maxCharsPerEpisode: 12000, // 最大文字数 - 削減
-      // ナラティブアーク分析用チャンク数設定
-      maxChunksPerEpisode: 15, // エピソードあたりの最大チャンク数 - 削減
     },
   },
 
   // フィーチャーフラグ
   features: {
     enableTextAnalysis: true,
-    enableNarrativeAnalysis: true,
     enableLayoutGeneration: true,
     enableImageGeneration: false, // 将来的な機能
     enableAutoSave: true,
