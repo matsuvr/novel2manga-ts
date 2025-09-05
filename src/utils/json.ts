@@ -5,11 +5,7 @@ import type { z } from 'zod'
  * Throws if sanitized text is not valid JSON.
  */
 export function parseJson(text: string): unknown {
-  let end = text.length
-  while (end > 0 && text.charCodeAt(end - 1) === 0) {
-    end--
-  }
-  const sanitized = end === text.length ? text : text.slice(0, end)
+  const sanitized = text.replace(/\0+$/, '');
   return JSON.parse(sanitized)
 }
 
