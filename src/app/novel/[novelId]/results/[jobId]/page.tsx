@@ -32,8 +32,8 @@ function summarizeErrorMessage(msg: string): { summary: string; details?: string
   }
 }
 
-export default async function NovelJobResultsPage({ params }: { params: Params }) {
-  const { novelId, jobId } = params
+export default async function NovelJobResultsPage({ params }: { params: Promise<Params> }) {
+  const { novelId, jobId } = await params
   // 指定されたジョブを取得
   const job = await db.jobs().getJob(jobId)
   if (!job || job.novelId !== novelId) return notFound()
