@@ -15,6 +15,8 @@ export interface EpisodeBreakResult {
   totalEpisodes: number
 }
 
+type EpisodeConfig = ReturnType<typeof getEpisodeConfig>
+
 export class EpisodeBreakEstimationStep implements PipelineStep {
   readonly stepName = 'episode-break-estimation'
 
@@ -53,7 +55,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
         }
 
         const normalized = this.normalizeEpisodeBreaks(plan, totalPanels)
-        const validation = this.validateEpisodeBreaks(normalized, totalPanels)
+        const validation = this.validateEpisodeBreaks(normalized, totalPanels, episodeCfg)
         if (!validation.valid) {
           logger.error('Local small-script episode validation failed', {
             jobId,
@@ -101,7 +103,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
           jobId,
           panelCount: totalPanels,
         })
-        return await this.estimateEpisodeBreaksDirect(combinedScript, context, appCfg)
+        return await this.estimateEpisodeBreaksDirect(combinedScript, context, appCfg, episodeCfg)
       } else {
         logger.info('Using sliding window episode break estimation (large script)', {
           jobId,
@@ -113,6 +115,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
           segmentationConfig,
           context,
           appCfg,
+          episodeCfg,
         )
       }
     } catch (error) {
@@ -133,6 +136,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     combinedScript: NewMangaScript,
     context: StepContext,
     appCfg: AppConfig,
+    episodeCfg: EpisodeConfig,
   ): Promise<StepExecutionResult<EpisodeBreakResult>> {
     const { jobId, logger } = context
 
@@ -171,6 +175,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
       totalPanels,
       context,
       appCfg,
+      episodeCfg,
       'Episode break validation',
     )
 
@@ -201,6 +206,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     segmentationConfig: ScriptSegmentationConfig,
     context: StepContext,
     appCfg: AppConfig,
+    episodeCfg: EpisodeConfig,
   ): Promise<StepExecutionResult<EpisodeBreakResult>> {
     const { jobId, logger } = context
 
@@ -238,6 +244,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
         segmentScriptWithRenumberedPanels,
         context,
         appCfg,
+        episodeCfg,
       )
       if (!segmentResult.success) {
         throw new Error(
@@ -276,6 +283,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
       totalPanels,
       context,
       appCfg,
+      episodeCfg,
       'Merged episode break validation',
     )
 
@@ -305,9 +313,9 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
   private validateEpisodeBreaks(
     episodeBreaks: EpisodeBreakPlan,
     totalPanels: number,
+    cfg: EpisodeConfig,
   ): { valid: boolean; issues: string[] } {
     const issues: string[] = []
-    const cfg = getEpisodeConfig()
 
     // Check if episodes cover all panels
     // sort() は破壊的なためコピーしてからソートする（toSorted は TS/lib 設定に依存するため未使用）
@@ -410,8 +418,11 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
    * episodes that exceed the configured maximum.
    * This is not a fallback; it guarantees constraints before validation.
    */
-  private enforceEpisodeMaxLength(episodeBreaks: EpisodeBreakPlan): EpisodeBreakPlan {
-    const maxLen = getEpisodeConfig().maxPanelsPerEpisode
+  private enforceEpisodeMaxLength(
+    episodeBreaks: EpisodeBreakPlan,
+    cfg: EpisodeConfig,
+  ): EpisodeBreakPlan {
+    const maxLen = cfg.maxPanelsPerEpisode
     if (episodeBreaks.episodes.length === 0) return episodeBreaks
 
     // Work on a copy sorted by episodeNumber
@@ -605,17 +616,18 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     totalPanels: number,
     context: StepContext,
     appCfg: AppConfig,
+    episodeCfg: EpisodeConfig,
     errorContext: string,
   ): EpisodeBreakPlan {
     const { jobId, logger } = context
-    const lengthConstrained = this.enforceEpisodeMaxLength(breaks)
+    const lengthConstrained = this.enforceEpisodeMaxLength(breaks, episodeCfg)
     const bundled = this.bundleEpisodesByPageCount(
       lengthConstrained,
       context,
       appCfg.episodeBundling || { minPageCount: 20, enabled: true },
     )
 
-    const validation = this.validateEpisodeBreaks(bundled, totalPanels)
+    const validation = this.validateEpisodeBreaks(bundled, totalPanels, episodeCfg)
     if (!validation.valid) {
       logger.error(`${errorContext} failed after bundling`, {
         jobId,
