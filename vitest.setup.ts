@@ -26,7 +26,7 @@ class MockEventSource extends EventTarget implements EventSource {
   addEventListener<K extends keyof EventSourceEventMap>(
     type: K,
     listener: (this: EventSource, ev: EventSourceEventMap[K]) => void,
-    options?: boolean | AddEventListenerOptions,
+    super.addEventListener(type, listener, options)
   ): void {
     super.addEventListener(type, listener as EventListener, options)
   }
