@@ -1,6 +1,8 @@
 import { notFound, redirect } from 'next/navigation'
 import { db } from '@/services/database/index'
 import { isRenderCompletelyDone } from '@/utils/completion'
+import { StorageFactory, JsonStorageKeys } from '@/utils/storage'
+import type { EpisodeBreakPlan } from '@/types/script'
 
 interface Params {
   novelId: string
@@ -34,7 +36,13 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
     return notFound()
   }
 
-  const episodes = await db.episodes().getEpisodesByJobId(job.id)
+  const layoutStorage = await StorageFactory.getLayoutStorage()
+  const fullPages = await layoutStorage.get(JsonStorageKeys.fullPages(job.id))
+  if (!fullPages) {
+    throw new Error('full_pages.json not found')
+  }
+  const parsedFull = JSON.parse(fullPages.text) as { episodes?: EpisodeBreakPlan['episodes'] }
+  const episodes = parsedFull.episodes || []
 
   // レイアウトステータスを取得してページ数情報を含める（責務をLayoutDatabaseServiceへ委譲）
   const layoutStatuses = await db.layout().getLayoutStatusByJobId(job.id)
@@ -130,7 +138,7 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
           const pageCount = layoutStatus?.totalPages
 
           return (
-            <li key={e.id} className="apple-card p-4">
+            <li key={`episode-${e.episodeNumber}`} className="apple-card p-4">
               <div className="font-semibold">Episode {e.episodeNumber}</div>
               <div className="text-sm text-gray-600">{e.title}</div>
               <div className="text-sm text-gray-600 mt-1">

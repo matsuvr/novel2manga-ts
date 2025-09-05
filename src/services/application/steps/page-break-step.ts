@@ -407,8 +407,8 @@ export function bundleEpisodesByActualPageCount(
         episodes[j] = {
           ...nxt,
           startPanelIndex: cur.startPanelIndex,
-          title: nxt.title || cur.title,
-          description: nxt.description || cur.description,
+          title: cur.title || nxt.title,
+          description: cur.description || nxt.description,
         }
         toRemove.add(i)
 

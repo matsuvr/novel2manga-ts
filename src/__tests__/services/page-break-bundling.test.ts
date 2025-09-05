@@ -61,11 +61,11 @@ describe('PageBreakStep page-based bundling', () => {
     // E1: merged (E1+E2) => 1..21 (21 pages)
     expect(e1.startPanelIndex).toBe(1)
     expect(e1.endPanelIndex).toBe(21)
-    expect(e1.title).toBe('E2') // receiver title preserved
+    expect(e1.title).toBe('E1') // first episode title preserved
 
     // E2: merged (E3+E4+E5+E6) => 22..70 (49 pages)
     expect(e2.startPanelIndex).toBe(22)
     expect(e2.endPanelIndex).toBe(70)
-    expect(e2.title).toBe('E5') // receiver title preserved across merges
+    expect(e2.title).toBe('E3') // first episode title preserved across merges
   })
 })
