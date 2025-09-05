@@ -11,7 +11,7 @@ type ChatMessage = { role: 'system' | 'user'; content: string }
 export class OpenAICompatibleClient implements LlmClient {
   readonly provider: Extract<
     import('./types').LlmProvider,
-    'openai' | 'groq' | 'grok' | 'openrouter' | 'gemini'
+    'openai' | 'groq' | 'grok' | 'openrouter'
   >
   private readonly baseUrl: string
   private readonly apiKey: string

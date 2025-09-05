@@ -47,7 +47,7 @@ export interface OpenAICompatibleConfig {
   baseUrl?: string
   apiKey: string
   model: string
-  provider: Extract<LlmProvider, 'openai' | 'groq' | 'grok' | 'openrouter' | 'gemini'>
+  provider: Extract<LlmProvider, 'openai' | 'groq' | 'grok' | 'openrouter'>
   useChatCompletions?: boolean
 }
 
