@@ -12,7 +12,7 @@
     "test:e2e:headed": "npx playwright test --headed",
     "playwright:install": "npx playwright install --with-deps chromium firefox webkit",
     "playwright:doctor": "npx playwright doctor",
-    "test:coverage": "npx vitest run --coverage",
+    "test:coverage": "npx vitest run",
     "test:integration": "npx vitest run --config vitest.integration.config.ts",
     "test:integration:watch": "npx vitest --config vitest.integration.config.ts",
     "dev": "next dev -p 3000",

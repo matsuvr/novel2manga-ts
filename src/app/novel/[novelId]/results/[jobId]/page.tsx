@@ -5,26 +5,62 @@ import { StorageFactory, JsonStorageKeys } from '@/utils/storage'
 import { EpisodeBreakSchema, type EpisodeBreakPlan } from '@/types/script'
 import { parseJsonWithSchema } from '@/utils/json'
 
+// Node.js ランタイムを明示（Edge での fs/better-sqlite3 解決エラーを防止）
+export const runtime = 'nodejs'
+
 interface Params {
   novelId: string
   jobId: string
 }
 
-export default async function NovelJobResultsPage({ params }: { params: Promise<Params> }) {
-  const { novelId, jobId } = await params
+// 外部サービスからのHTMLエラー本文などが入った場合に、概要を整形して表示する
+function summarizeErrorMessage(msg: string): { summary: string; details?: string } {
+  const trimmed = msg.trim()
+  const looksLikeHtml = /^<!DOCTYPE html>|<html[\s>/]/i.test(trimmed)
+  if (!looksLikeHtml) {
+    // 長すぎる場合は先頭だけ表示し、詳細は折りたたみ
+    if (trimmed.length > 500) {
+      return { summary: `${trimmed.slice(0, 500)}…`, details: trimmed }
+    }
+    return { summary: trimmed }
+  }
+  // 代表的なHTMLエラーメッセージ（例: Googleの502 HTML）
+  const firstLine = trimmed.split(/\r?\n/)[0] || 'HTML error response'
+  return {
+    summary: `外部サービスからHTMLエラーレスポンスを受信しました（概要: ${firstLine.slice(0, 200)}）`,
+    details: trimmed,
+  }
+}
+
+export default async function NovelJobResultsPage({ params }: { params: Params }) {
+  const { novelId, jobId } = params
   // 指定されたジョブを取得
   const job = await db.jobs().getJob(jobId)
   if (!job || job.novelId !== novelId) return notFound()
 
   // ジョブが完了していない場合は404
   if (job.status === 'failed') {
+    const lastError = job.lastError ?? null
+    const summarized = lastError ? summarizeErrorMessage(lastError) : null
     return (
       <main className="max-w-3xl mx-auto p-6 space-y-4">
         <h1 className="text-2xl font-bold">処理に失敗しました</h1>
         <div className="apple-card p-4 space-y-2">
           <div className="text-sm text-gray-600">Job: {job.id}</div>
           <div className="text-sm text-gray-600">Status: {job.status}</div>
-          {job.lastError && <div className="text-sm text-red-600">Error: {job.lastError}</div>}
+          {summarized && (
+            <div className="text-sm text-red-600">
+              エラー: {summarized.summary}
+              {summarized.details && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-red-700">詳細を表示</summary>
+                  <pre className="mt-1 whitespace-pre-wrap break-all text-xs text-red-700 bg-red-50 p-2 rounded">
+                    {summarized.details}
+                  </pre>
+                </details>
+              )}
+            </div>
+          )}
           {job.lastErrorStep && (
             <div className="text-sm text-gray-600">Step: {job.lastErrorStep}</div>
           )}
