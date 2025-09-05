@@ -496,6 +496,32 @@ export class JobDatabaseService extends BaseDatabaseService {
     }
   }
 
+  /** Update character memory file paths */
+  async updateCharacterMemoryPaths(
+    jobId: string,
+    paths: { full?: string; prompt?: string },
+  ): Promise<void> {
+    const updateData: Record<string, unknown> = {
+      updatedAt: new Date().toISOString(),
+    }
+    if (paths.full) {
+      updateData.characterMemoryPath = paths.full
+    }
+    if (paths.prompt) {
+      updateData.promptMemoryPath = paths.prompt
+    }
+    if (this.isSync()) {
+      const drizzleDb = this.db as DrizzleDatabase
+      drizzleDb.transaction((tx) => {
+        tx.update(jobs).set(updateData).where(eq(jobs.id, jobId)).run()
+      })
+    } else {
+      await this.adapter.transaction(async (tx: DrizzleDatabase) => {
+        await tx.update(jobs).set(updateData).where(eq(jobs.id, jobId))
+      })
+    }
+  }
+
   /**
    * Delete job
    */

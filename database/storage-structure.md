@@ -26,17 +26,19 @@
 
 ## 現行キー命名規則（実装済み StorageKeys）
 
-| 種別                 | 生成関数                                       | 形式例                            |
-| -------------------- | ---------------------------------------------- | --------------------------------- |
-| 小説本文             | `StorageKeys.novel(novelId)`                   | `9174a2d4-... .json`              |
-| チャンク本文         | `StorageKeys.chunk(jobId, index)`              | `{jobId}/chunk_0.txt`             |
-| チャンク分析         | `StorageKeys.chunkAnalysis(jobId, index)`      | `{jobId}/chunk_0.json`            |
-| 統合分析             | `StorageKeys.integratedAnalysis(jobId)`        | `{jobId}/integrated.json`         |
-| 物語構造(エピソード) | `StorageKeys.narrativeAnalysis(jobId)`         | `{jobId}/narrative.json`          |
-| エピソード本文       | `StorageKeys.episodeText(jobId, ep)`           | `{jobId}/episode_{ep}.txt`        |
-| エピソードレイアウト | `StorageKeys.episodeLayout(jobId, ep)`         | `{jobId}/episode_1.json`          |
-| **エピソード進捗**   | `StorageKeys.episodeLayoutProgress(jobId, ep)` | `{jobId}/episode_1.progress.json` |
-| ページ画像           | `StorageKeys.pageRender(jobId, ep, page)`      | `{jobId}/episode_1/page_1.png`    |
+| 種別                   | 生成関数                                       | 形式例                                 |
+| ---------------------- | ---------------------------------------------- | -------------------------------------- |
+| 小説本文               | `StorageKeys.novel(novelId)`                   | `9174a2d4-... .json`                   |
+| チャンク本文           | `StorageKeys.chunk(jobId, index)`              | `{jobId}/chunk_0.txt`                  |
+| チャンク分析           | `StorageKeys.chunkAnalysis(jobId, index)`      | `{jobId}/chunk_0.json`                 |
+| 統合分析               | `StorageKeys.integratedAnalysis(jobId)`        | `{jobId}/integrated.json`              |
+| 物語構造(エピソード)   | `StorageKeys.narrativeAnalysis(jobId)`         | `{jobId}/narrative.json`               |
+| キャラクターメモリ全文 | `JsonStorageKeys.characterMemoryFull(jobId)`   | `{jobId}/character_memory.full.json`   |
+| キャラクターメモリ要約 | `JsonStorageKeys.characterMemoryPrompt(jobId)` | `{jobId}/character_memory.prompt.json` |
+| エピソード本文         | `StorageKeys.episodeText(jobId, ep)`           | `{jobId}/episode_{ep}.txt`             |
+| エピソードレイアウト   | `StorageKeys.episodeLayout(jobId, ep)`         | `{jobId}/episode_1.json`               |
+| **エピソード進捗**     | `StorageKeys.episodeLayoutProgress(jobId, ep)` | `{jobId}/episode_1.progress.json`      |
+| ページ画像             | `StorageKeys.pageRender(jobId, ep, page)`      | `{jobId}/episode_1/page_1.png`         |
 
 以下は設計済み（計画中）のキーで、コード実装は未着手です。
 
