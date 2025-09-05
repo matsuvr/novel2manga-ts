@@ -1,6 +1,4 @@
-import type { StoragePaths } from '@/character/persistence'
 import {
-  getDefaultStoragePaths,
   loadCharacterMemory,
   loadPromptMemory,
   saveCharacterMemory,
@@ -47,8 +45,7 @@ export class TextAnalysisStep implements PipelineStep {
       }
 
       // Initialize character memory
-      const storagePaths = getDefaultStoragePaths()
-      const { memoryIndex, aliasIndex } = await loadCharacterMemory(storagePaths)
+      const { memoryIndex, aliasIndex } = await loadCharacterMemory(jobId)
       let nextIdCounter = 1
 
       // Find the highest existing character ID
@@ -63,7 +60,7 @@ export class TextAnalysisStep implements PipelineStep {
       await this.analyzeConcurrentlyV2(
         chunks,
         { jobId, logger, ports },
-        { memoryIndex, aliasIndex, nextIdCounter, storagePaths },
+        { memoryIndex, aliasIndex, nextIdCounter },
       )
 
       return { success: true, data: { completed: true } }
@@ -81,11 +78,10 @@ export class TextAnalysisStep implements PipelineStep {
       memoryIndex: CharacterMemoryIndex
       aliasIndex: AliasIndex
       nextIdCounter: number
-      storagePaths: StoragePaths
     },
   ): Promise<void> {
     const { jobId, logger, ports } = context
-    const { memoryIndex, aliasIndex, storagePaths } = memoryContext
+    const { memoryIndex, aliasIndex } = memoryContext
     const jobDb = db.jobs()
 
     // Process chunks sequentially to maintain character continuity
@@ -95,7 +91,7 @@ export class TextAnalysisStep implements PipelineStep {
       const chunkText = chunks[i]
 
       // Load current prompt memory
-      const promptMemory = await loadPromptMemory(storagePaths)
+      const promptMemory = await loadPromptMemory(jobId)
 
       // Get context chunks
       const prevText = i > 0 ? chunks[i - 1] : ''
@@ -207,8 +203,8 @@ export class TextAnalysisStep implements PipelineStep {
       result.dialogues = rewrittenDialogues
 
       // Save updated character memory
-      await saveCharacterMemory(memoryIndex, storagePaths)
-      await savePromptMemory(memoryIndex, storagePaths, {
+      await saveCharacterMemory(jobId, memoryIndex)
+      await savePromptMemory(jobId, memoryIndex, {
         currentChunk: i,
       })
 

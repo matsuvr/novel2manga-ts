@@ -680,6 +680,14 @@ export const JsonStorageKeys = {
     validateId(jobId, 'jobId')
     return `${jobId}/full_pages.json`
   },
+  characterMemoryFull: (jobId: string) => {
+    validateId(jobId, 'jobId')
+    return `${jobId}/character_memory.full.json`
+  },
+  characterMemoryPrompt: (jobId: string) => {
+    validateId(jobId, 'jobId')
+    return `${jobId}/character_memory.prompt.json`
+  },
   // episodeBundling removed - replaced with episode break estimation
 } as const
 
