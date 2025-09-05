@@ -57,6 +57,7 @@ export async function analyzeChunkWithFallback<T extends z.ZodTypeAny>(
     userPrompt: prompt,
     schema,
     schemaName: 'ChunkAnalysis',
+    telemetry: { jobId: _options?.jobId, chunkIndex: _options?.chunkIndex, stepName: 'analyze' },
   })
 
   // 戻り値を元の形式に合わせる

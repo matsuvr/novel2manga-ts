@@ -58,6 +58,13 @@
 - [x] **進捗URLの永続化**: novelId 発行後は `/novel/{novelId}/progress` に遷移し、戻る/再訪でも続きから再開
 - [x] **SSEエラー耐性**: フロント由来のSSE切断時は警告ログのみ・処理は継続（自動再接続）
 
+### Token Usage Tracking (2025-09-05)
+
+- [x] LLMトークン使用量のDB記録（token_usage）
+- [x] API: GET /api/jobs/[jobId]/token-usage で取得
+- [x] 結果ページにモデル別「入力/出力トークン」一覧表示
+- [x] 進捗画面に累積トークンの現在値を表示（ポーリング間隔は app.config.ts で一元化）
+
 ## Technical Architecture Completed ✅
 
 ### Infrastructure Integration
@@ -171,7 +178,7 @@
 
 - [ ] **垂直テキスト最適化**: キャッシュチューニングと同時実行制御
 - [ ] **カバレッジ評価チューニング**: 品質評価指標の精度向上
-- [ ] **バンドリングロジック拡張**: より柔軟なエピソード統合条件
+- [x] **バンドリングロジック拡張**: ページ割り後の実ページ数に基づくエピソード統合（最小20p、最終話は直前に統合）。設定は `app.config.ts > episodeBundling` に集約
 
 ### Script Conversion Normalization
 
