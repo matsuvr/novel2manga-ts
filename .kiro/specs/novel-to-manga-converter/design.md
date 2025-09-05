@@ -632,6 +632,12 @@ console.log(result.metadata?.provider)
 - これにより、後続処理（スクリプト変換・ページ割り振り）や再処理時の再抽出を避け、トレーサビリティが向上。
   Note: The agent implementation previously under `src/agent` has been consolidated into `src/agents`. All imports should target `@/agents/*`. Error handling is unified via `src/agents/errors.ts`.
 
+## 追加: キャラクターメモリのリポジトリ永続化（2025-09-xx）
+
+- キャラクターメモリを `JsonStorageKeys.characterMemoryFull` / `JsonStorageKeys.characterMemoryPrompt` 経由でストレージ保存。
+- `jobs` テーブルに `character_memory_path` と `prompt_memory_path` を追加し、保存したキーを記録。
+- これによりデータディレクトリ依存を排し、全処理がリポジトリ層を介して一貫化。
+
 ## エラーハンドリングアーキテクチャ（2025-08-27 更新）
 
 ### 統一エラーパターン管理

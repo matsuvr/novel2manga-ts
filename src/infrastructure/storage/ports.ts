@@ -1,6 +1,7 @@
 import { getLogger } from '@/infrastructure/logging/logger'
 import { executeStorageWithTracking } from '@/services/application/transaction-manager'
-import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { db } from '@/services/database/index'
+import { JsonStorageKeys, StorageFactory, StorageKeys } from '@/utils/storage'
 
 export interface ChunkStoragePort {
   getChunk(jobId: string, index: number): Promise<{ text: string } | null>
@@ -28,6 +29,13 @@ export interface LayoutStoragePort {
 export interface EpisodeTextStoragePort {
   putEpisodeText(jobId: string, episodeNumber: number, text: string): Promise<string>
   getEpisodeText(jobId: string, episodeNumber: number): Promise<string | null>
+}
+
+export interface CharacterMemoryStoragePort {
+  putFull(jobId: string, json: string): Promise<string>
+  getFull(jobId: string): Promise<string | null>
+  putPrompt(jobId: string, json: string): Promise<string>
+  getPrompt(jobId: string): Promise<string | null>
 }
 
 export interface RenderStoragePort {
@@ -68,6 +76,7 @@ export interface StoragePorts {
   episodeText: EpisodeTextStoragePort
   render: RenderStoragePort
   output: OutputStoragePort
+  characterMemory: CharacterMemoryStoragePort
 }
 
 export function getStoragePorts(): StoragePorts {
@@ -380,5 +389,61 @@ export function getStoragePorts(): StoragePorts {
         await storage.delete(path)
       },
     },
+    characterMemory: {
+      async putFull(jobId, json) {
+        return save('full', jobId, json)
+      },
+      async getFull(jobId) {
+        return load('full', jobId)
+      },
+      async putPrompt(jobId, json) {
+        return save('prompt', jobId, json)
+      },
+      async getPrompt(jobId) {
+        return load('prompt', jobId)
+      },
+    },
   }
+}
+
+async function save(
+  kind: 'full' | 'prompt',
+  jobId: string,
+  json: string,
+): Promise<string> {
+  const storage = await StorageFactory.getAnalysisStorage()
+  const key =
+    kind === 'full'
+      ? JsonStorageKeys.characterMemoryFull(jobId)
+      : JsonStorageKeys.characterMemoryPrompt(jobId)
+  const job = await db.jobs().getJob(jobId)
+  if (!job?.novelId) {
+    throw new Error(`Novel ID not found for job ${jobId}`)
+  }
+
+  await executeStorageWithTracking({
+    storage,
+    key,
+    value: json,
+    tracking: {
+      filePath: key,
+      fileCategory: 'analysis',
+      fileType: 'json',
+      novelId: job.novelId,
+      jobId,
+      mimeType: 'application/json; charset=utf-8',
+    },
+  })
+
+  return key
+}
+
+async function load(kind: 'full' | 'prompt', jobId: string): Promise<string | null> {
+  const storage = await StorageFactory.getAnalysisStorage()
+  const key =
+    kind === 'full'
+      ? JsonStorageKeys.characterMemoryFull(jobId)
+      : JsonStorageKeys.characterMemoryPrompt(jobId)
+  const obj = await storage.get(key)
+  return obj?.text ?? null
 }
