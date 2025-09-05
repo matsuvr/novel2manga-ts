@@ -276,6 +276,12 @@ vi.mock('@/infrastructure/storage/ports', () => ({
       getExport: vi.fn().mockResolvedValue({ text: 'export-data' }),
       deleteExport: vi.fn().mockResolvedValue(undefined),
     },
+    characterMemory: {
+      putFull: vi.fn().mockResolvedValue('test-char-key'),
+      getFull: vi.fn().mockResolvedValue('[]'),
+      putPrompt: vi.fn().mockResolvedValue('test-charp-key'),
+      getPrompt: vi.fn().mockResolvedValue('[]'),
+    },
   })),
 }))
 
@@ -634,6 +640,12 @@ describe('/api/layout/generate', () => {
           getExport: vi.fn().mockResolvedValue({ text: 'export-data' }),
           deleteExport: vi.fn().mockResolvedValue(undefined),
         },
+        characterMemory: {
+          putFull: vi.fn().mockResolvedValue('test-char-key'),
+          getFull: vi.fn().mockResolvedValue('[]'),
+          putPrompt: vi.fn().mockResolvedValue('test-charp-key'),
+          getPrompt: vi.fn().mockResolvedValue('[]'),
+        },
       } as any)
 
       const requestBody = {
@@ -696,6 +708,12 @@ describe('/api/layout/generate', () => {
           putExport: vi.fn().mockResolvedValue('test-export-key'),
           getExport: vi.fn().mockResolvedValue({ text: 'export-data' }),
           deleteExport: vi.fn().mockResolvedValue(undefined),
+        },
+        characterMemory: {
+          putFull: vi.fn().mockResolvedValue('test-char-key'),
+          getFull: vi.fn().mockResolvedValue('[]'),
+          putPrompt: vi.fn().mockResolvedValue('test-charp-key'),
+          getPrompt: vi.fn().mockResolvedValue('[]'),
         },
       } as any)
     })
