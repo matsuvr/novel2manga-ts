@@ -8,7 +8,7 @@ import { defaultBaseUrl, type OpenAICompatProvider } from './base-url'
 import { CerebrasClient, type CerebrasClientConfig } from './cerebras'
 import { OpenAICompatibleClient } from './openai-compatible'
 import type { LlmClient, LlmProvider, OpenAICompatibleConfig } from './types'
-import { VertexAIClient, type VertexAIConfig } from './vertexai'
+import { VertexAIClient, type VertexAIClientConfig } from './vertexai'
 
 export type ProviderConfig =
   | ({ provider: 'openai' | 'groq' | 'grok' | 'openrouter' } & Omit<
@@ -16,7 +16,7 @@ export type ProviderConfig =
       'provider'
     >)
   | ({ provider: 'cerebras' } & CerebrasClientConfig)
-  | ({ provider: 'vertexai' | 'gemini' } & VertexAIConfig)
+  | VertexAIClientConfig
   | { provider: 'fake' }
 
 export function createLlmClient(cfg: ProviderConfig): LlmClient {
@@ -73,13 +73,14 @@ export function createClientForProvider(provider: LlmProvider): LlmClient {
     if (!vertexConfig) {
       throw new Error(`Missing Vertex AI configuration for provider: ${provider}`)
     }
-    const c: VertexAIConfig = {
+    const c: VertexAIClientConfig = {
+      provider,
       model: cfg.model,
-      project: vertexConfig.project,
-      location: vertexConfig.location,
+      project: vertexConfig.project ? _requireConfigured(vertexConfig.project, 'vertexai.project') : undefined,
+      location: vertexConfig.location ? _requireConfigured(vertexConfig.location, 'vertexai.location') : undefined,
       serviceAccountPath: vertexConfig.serviceAccountPath,
     }
-    return createLlmClient({ provider: provider, ...c })
+    return createLlmClient(c)
   }
 
   // OpenAI-compatible providers only
