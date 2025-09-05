@@ -13,6 +13,7 @@ import {
   setupAgentMocks,
   TEST_CHUNK_ANALYSIS,
   TEST_EPISODE_BOUNDARIES,
+  TEST_EPISODE_CONFIG,
 } from './__helpers/test-agents'
 import type { TestDatabase } from './__helpers/test-database'
 import { cleanupTestDatabase, createTestDatabase, TestDataFactory } from './__helpers/test-database'
@@ -33,12 +34,7 @@ vi.mock('@/config', () => ({
     maxTokens: 1000,
   })),
   getLLMDefaultProvider: vi.fn(() => 'openai'),
-  getEpisodeConfig: vi.fn(() => ({
-    targetCharsPerEpisode: 1000,
-    minCharsPerEpisode: 500,
-    maxCharsPerEpisode: 2000,
-    charsPerPage: 300,
-  })),
+  getEpisodeConfig: vi.fn(() => TEST_EPISODE_CONFIG),
   isDevelopment: vi.fn(() => true),
 }))
 

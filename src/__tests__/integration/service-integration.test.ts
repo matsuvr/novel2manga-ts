@@ -175,11 +175,7 @@ vi.mock('@/config', () => ({
     systemPrompt: 'テスト用レイアウト生成プロンプト',
   })),
   getLLMDefaultProvider: vi.fn(() => 'openai'),
-  getEpisodeConfig: vi.fn(() => ({
-    targetCharsPerEpisode: 1000,
-    minCharsPerEpisode: 500,
-    maxCharsPerEpisode: 2000,
-  })),
+  getEpisodeConfig: vi.fn(() => TEST_EPISODE_CONFIG),
   getPanelAssignmentConfig: vi.fn(() => ({
     provider: 'openai',
     maxTokens: 1000,
@@ -197,6 +193,7 @@ import {
   setupAgentMocks,
   TEST_CHUNK_ANALYSIS,
   TEST_EPISODE_BOUNDARIES,
+  TEST_EPISODE_CONFIG,
 } from './__helpers/test-agents'
 import type { TestDatabase } from './__helpers/test-database'
 import { cleanupTestDatabase, createTestDatabase, TestDataFactory } from './__helpers/test-database'
@@ -562,12 +559,7 @@ describe('Service Integration Tests', () => {
         maxTokens: 1000,
       })),
       getLLMDefaultProvider: vi.fn(() => 'openai'),
-      getEpisodeConfig: vi.fn(() => ({
-        targetCharsPerEpisode: 1000,
-        minCharsPerEpisode: 500,
-        maxCharsPerEpisode: 2000,
-        charsPerPage: 300,
-      })),
+      getEpisodeConfig: vi.fn(() => TEST_EPISODE_CONFIG),
       getDatabaseConfig: vi.fn(() => ({ sqlite: { path: ':memory:' } })),
       getLayoutGenerationConfig: vi.fn(() => ({
         provider: 'openai',

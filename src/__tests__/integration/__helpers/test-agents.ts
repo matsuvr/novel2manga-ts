@@ -87,6 +87,16 @@ export const TEST_EPISODE_BOUNDARIES = [
   },
 ]
 
+export const TEST_EPISODE_CONFIG = {
+  targetCharsPerEpisode: 1000,
+  minCharsPerEpisode: 500,
+  maxCharsPerEpisode: 2000,
+  smallPanelThreshold: 20,
+  minPanelsPerEpisode: 1,
+  maxPanelsPerEpisode: 1000,
+  charsPerPage: 300,
+}
+
 /**
  * チャンク分析用のFakeLlmClientを作成
  */
@@ -407,12 +417,7 @@ export function setupAgentMocks() {
       model: 'fake-model',
     })),
     getLLMFallbackChain: vi.fn(() => ['fake']),
-    getEpisodeConfig: vi.fn(() => ({
-      targetCharsPerEpisode: 1000,
-      minCharsPerEpisode: 500,
-      maxCharsPerEpisode: 2000,
-      charsPerPage: 300,
-    })),
+    getEpisodeConfig: vi.fn(() => TEST_EPISODE_CONFIG),
     getDatabaseConfig: vi.fn(() => ({ sqlite: { path: ':memory:' } })),
     getLayoutGenerationConfig: vi.fn(() => ({
       provider: 'fake',
