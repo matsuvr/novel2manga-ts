@@ -169,8 +169,7 @@ export async function convertChunkToMangaScript(
     }
   }
 
-  const coverageThreshold = coverageEnabled ? sc.coverageThreshold : 0
-  const enableCoverageRetry = coverageEnabled && sc.enableCoverageRetry
+  const enableCoverageRetry = coverageEnabled ? sc.enableCoverageRetry : false
 
   while (attempt <= maxRetries) {
     let prompt = basePrompt
