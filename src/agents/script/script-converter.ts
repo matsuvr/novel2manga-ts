@@ -7,6 +7,7 @@ import { getAppConfigWithOverrides } from '@/config/app.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { type NewMangaScript, NewMangaScriptSchema } from '@/types/script'
 import { sanitizeScript, validateImportanceFields } from '@/utils/script-validation'
+import { enforceDialogueBubbleLimit } from '@/utils/script-postprocess'
 
 export interface ScriptConversionInput {
   chunkText: string
@@ -215,7 +216,8 @@ export async function convertChunkToMangaScript(
         const sanitizedResult = sanitizeScript(result as NewMangaScript)
         const validatedResult = NewMangaScriptSchema.safeParse(sanitizedResult)
         if (validatedResult.success) {
-          const currentResult = validatedResult.data
+          // 文字数上限・分割ポリシー（Script Conversion直後に適用）
+          const currentResult = enforceDialogueBubbleLimit(validatedResult.data)
 
           // Log importance validation warnings if any
           const importanceValidation = validateImportanceFields(currentResult)

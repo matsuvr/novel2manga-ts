@@ -1,51 +1,33 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { db } from '@/services/database/index'
 
 interface Params {
   novelId: string
 }
 
+/**
+ * @deprecated このページは直接使用されていません。
+ * 実際の結果表示は /novel/[novelId]/results/[jobId]/page.tsx を使用しています。
+ * このページは後方互換性のため、最新のジョブへのリダイレクトのみ行います。
+ *
+ * 使用状況:
+ * - HomeClient.tsx → /novel/[novelId]/results/[jobId] を直接使用
+ * - ProgressPageClient.tsx → /novel/[novelId]/results/[jobId] を直接使用
+ *
+ * TODO: 2025年10月頃にこのファイルを完全削除予定
+ */
 export default async function NovelResultsPage({ params }: { params: Promise<Params> }) {
   const { novelId } = await params
+
   // 最新完了ジョブを取得（存在しなければ404）
   const jobs = await db.jobs().getJobsByNovelId(novelId)
   const finished = jobs.filter((j) => j.status === 'completed' || j.status === 'complete')
   const latest = finished.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || '')).pop()
-  if (!latest) return notFound()
 
-  const episodes = await db.episodes().getEpisodesByJobId(latest.id)
+  if (!latest) {
+    return notFound()
+  }
 
-  return (
-    <main className="max-w-6xl mx-auto p-6 space-y-6">
-      <h1 className="text-2xl font-bold">
-        解析結果（小説ID: {novelId} / Job: {latest.id}）
-      </h1>
-      <div className="apple-card p-4 flex items-center justify-between">
-        <div>
-          <div className="font-semibold">エクスポート</div>
-          <div className="text-sm text-gray-600">全エピソードのJSONとPNGをZIPでダウンロード</div>
-        </div>
-        <a className="btn-secondary" href={`/api/export/zip/${latest.id}`}>
-          画像ZIPをダウンロード
-        </a>
-      </div>
-      <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {episodes.map((e) => (
-          <li key={e.id} className="apple-card p-4">
-            <div className="font-semibold">Episode {e.episodeNumber}</div>
-            <div className="text-sm text-gray-600">{e.title}</div>
-            <div className="text-sm text-gray-600 mt-1">📄 レイアウト生成済み</div>
-            <div className="mt-2 flex gap-2">
-              <a
-                href={`/novel/${novelId}/results/${latest.id}/episode/${e.episodeNumber}`}
-                className="btn-secondary text-sm"
-              >
-                プレビュー
-              </a>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </main>
-  )
+  // ジョブID付きのページへリダイレクト
+  redirect(`/novel/${novelId}/results/${latest.id}`)
 }

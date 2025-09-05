@@ -525,12 +525,25 @@ export class CanvasRenderer {
       this.ctx.fill()
       this.ctx.stroke()
     } else if (type === 'thought') {
-      const bumps = 8
-      const r = Math.max(6, Math.min(width, height) * 0.08)
+      // より“グネグネ”した雲形に強化（楕円外周の中点を外側に膨らませる）
+      const cfg = this.appConfig.rendering.canvas.bubble.thoughtShape
+      const bumps = Math.max(6, cfg.bumps)
       const cx = x + width / 2
       const cy = y + height / 2
       const rx = width / 2
       const ry = height / 2
+
+      // 基本ふくらみ量（短い方の半径に対する比率を使用）
+      const baseBulge = Math.max(cfg.minRadiusPx, Math.min(rx, ry) * cfg.amplitudeRatio)
+
+      // 疑似乱数はテスト安定性のために決定論的（x,y,w,h依存）
+      const prngCfg = this.appConfig.rendering.canvas.bubble.thoughtShape.prng
+      const seedConst = (cx + cy + rx + ry) * prngCfg.seedScale
+      const prand = (i: number): number => {
+        const s = Math.sin((i + 1) * prngCfg.sinScale * seedConst) * prngCfg.multiplier
+        return s - Math.floor(s)
+      }
+
       this.ctx.beginPath()
       let anglePrev = 0
       const pxStart = cx + Math.cos(anglePrev) * rx
@@ -540,15 +553,40 @@ export class CanvasRenderer {
         const angle = (k / bumps) * Math.PI * 2
         const px = cx + Math.cos(angle) * rx
         const py = cy + Math.sin(angle) * ry
+        // 中点方向に、こぶのふくらみ（ばらつき付き）を付与
         const midAngle = (anglePrev + angle) / 2
-        const cx1 = cx + Math.cos(midAngle) * (rx + r)
-        const cy1 = cy + Math.sin(midAngle) * (ry + r)
-        this.ctx.quadraticCurveTo(cx1, cy1, px, py)
+        const jitter = (prand(k) - 0.5) * 2 // [-1, 1]
+        const bulge = baseBulge * (1 + cfg.randomness * jitter)
+        const cpx = cx + Math.cos(midAngle) * (rx + bulge)
+        const cpy = cy + Math.sin(midAngle) * (ry + bulge)
+        this.ctx.quadraticCurveTo(cpx, cpy, px, py)
         anglePrev = angle
       }
       this.ctx.closePath()
       this.ctx.fill()
       this.ctx.stroke()
+
+      // 尾泡（小さな丸を2〜3個）
+      const tailCfg = this.appConfig.rendering.canvas.bubble.thoughtTail
+      if (tailCfg?.enabled) {
+        const shortR = Math.min(rx, ry)
+        const baseRadius = Math.max(2, shortR * tailCfg.startRadiusRatio)
+        const gap = shortR * tailCfg.gapRatio
+        const angle = tailCfg.angle
+        // 尾泡開始位置: 吹き出しの外周から少し外側
+        let tx = cx + Math.cos(angle) * (Math.max(rx, ry) * 0.2 + rx)
+        let ty = cy + Math.sin(angle) * (Math.max(rx, ry) * 0.2 + ry)
+        for (let i = 0; i < Math.max(1, tailCfg.count); i++) {
+          const r = baseRadius * Math.max(0.1, tailCfg.decay) ** i
+          this.ctx.beginPath()
+          this.ctx.arc(tx, ty, r, 0, Math.PI * 2)
+          this.ctx.closePath()
+          this.ctx.fill()
+          this.ctx.stroke()
+          tx += Math.cos(angle) * gap
+          ty += Math.sin(angle) * gap
+        }
+      }
     } else {
       // 楕円の描画: テキスト領域を外接する楕円
       this.ctx.beginPath()

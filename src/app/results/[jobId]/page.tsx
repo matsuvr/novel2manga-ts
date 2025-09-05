@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
 import { auth } from '@/auth'
 import ResultsDisplay from '@/components/ResultsDisplay'
+import { isRenderCompletelyDone } from '@/utils/completion'
 import { db } from '@/services/database/index'
 
 interface Params {
@@ -16,6 +17,9 @@ export default async function JobResultsPage({ params }: { params: Promise<Param
   }
   const job = await db.jobs().getJob(jobId)
   if (!job) return notFound()
+  if (!isRenderCompletelyDone(job as unknown as Parameters<typeof isRenderCompletelyDone>[0])) {
+    return notFound()
+  }
   const episodes = await db.episodes().getEpisodesByJobId(jobId)
 
   // Convert string dates to Date objects and handle nulls to match component expectations

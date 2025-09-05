@@ -47,6 +47,22 @@ export const appConfig = {
     minTrailingSegmentSize: 320,
   },
 
+  // Script constraints (post Script Conversion normalization)
+  scriptConstraints: {
+    dialogue: {
+      // 一つの吹き出しに入る文字数の上限（マジックナンバー禁止のため設定化）
+      maxCharsPerBubble: 50,
+      // 分割方針: 吹き出し上限超過時はパネルを分割して以降のセリフを新規パネルへ
+      splitPolicy: 'split-panel' as const,
+      // 分割で増えた2コマ目以降の絵の内容
+      continuationPanelCutText: '前のコマを引き継ぐ',
+      // 適用タイミング: Script Conversion直後（できるだけ早い段階）
+      applyStage: 'post-script-conversion-early' as const,
+      // 対象の台詞種別
+      applyToTypes: ['speech', 'thought', 'narration'] as const,
+    },
+  },
+
   // Episode bundling configuration
   episodeBundling: {
     // Minimum page count for episode bundling
@@ -152,6 +168,7 @@ export const appConfig = {
     scriptConversion: {
       systemPrompt: `**あなたはプロのマンガ脚本家兼コンテ作家です。**
 以下の小説テキスト（原文）を、**1コマ1アクション**原則・絵指示が明確・セリフ/ナレーションが簡潔に読める**マンガ台本**に変換してください。
+書かれている言語が現代口語の日本語以外の場合は、**現代日本語口語訳**で台本を作成してください。
 最終出力は**機械可読JSONのみ**で提示します（説明・Markdown・コードブロック禁止）。
 
 ---
@@ -175,6 +192,7 @@ export const appConfig = {
 * 表記規約
 
   * キャラ名は初出でフル、その後は短縮可。
+  * 前後のチャンクの出力を踏まえ、文体、キャラクター毎の口調を統一。
   * セリフ：\`キャラ名：「…」\`、心の声：\`キャラ名（心の声）：「…」\`
   * ナレーション：\`ナレーション：「…」\`
   * カット指示：\`[カット] …\`（**一言で絵が決まる**表現）
@@ -504,6 +522,31 @@ JSONのみ出力。説明文禁止。`,
         strokeStyle: '#000000', // 吹き出し枠線色
         normalLineWidth: 2, // 通常の線幅
         shoutLineWidth: 3, // 叫び系の線幅
+        // thought（心の声）の雲形パラメータ（マジックナンバー排除のため設定化）
+        thoughtShape: {
+          bumps: 18, // こぶの数（多いほど細かくグネグネ）
+          amplitudeRatio: 0.12, // ふくらみの基本比率（短径基準）
+          randomness: 0.3, // こぶ毎の揺らぎ強度（0..1）
+          minRadiusPx: 6, // ふくらみの最小値（ピクセル）
+          // 疑似乱数（ノイズ）生成に用いる係数（GLSL系ハッシュに着想）
+          prng: {
+            seedScale: 0.01337, // シード拡散のためのスケール
+            sinScale: 12.9898, // サイン入力のデコリレーション用スケール
+            multiplier: 43758.5453, // 小数部を広げる乗数
+          },
+        },
+        // thought（心の声）尾泡パラメータ
+        // 既定: 有効（2〜3個の小円が吹き出しからキャラ方向へ）
+        thoughtTail: {
+          enabled: true,
+          count: 3,
+          startRadiusRatio: 0.12, // 最大尾泡の半径（短径比）
+          decay: 0.65, // 尾泡がだんだん小さくなる比率
+          gapRatio: 0.28, // 円間距離（短径比）
+          // デフォルト方向: 左下（一般的な配置で自然になりやすい）
+          // 右下にしたい場合は -Math.PI * 0.75 などに調整
+          angle: Math.PI * 0.75,
+        },
       },
       // 話者ラベル描画設定（オプション）
       speakerLabel: {
