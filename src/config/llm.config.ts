@@ -20,8 +20,8 @@ export interface ProviderConfig {
   preferCerebras?: boolean
   // Vertex AI specific configuration
   vertexai?: {
-    project: string
-    location: string
+    project?: string
+    location?: string
     serviceAccountPath?: string
   }
 }
@@ -95,8 +95,8 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
     //   単に本モジュールを import しただけで失敗してしまうため禁止。
     // - 値はプレースホルダで初期化し、実使用時に上書き・検証する。
     vertexai: {
-      project: '',
-      location: '',
+      project: undefined,
+      location: undefined,
       serviceAccountPath: undefined,
     },
   },
@@ -112,8 +112,8 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
     maxTokens: 16000,
     timeout: 30_000,
     vertexai: {
-      project: '',
-      location: '',
+      project: undefined,
+      location: undefined,
       serviceAccountPath: undefined,
     },
   },
@@ -238,13 +238,16 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
       throw new Error(`Missing required environment for Vertex AI: ${missing}`)
     }
 
+    const ensuredProject = project
+    const ensuredLocation = location
+
     return {
       ...cfg,
       apiKey: dynamicApiKey,
       model: modelOverride && modelOverride.trim().length > 0 ? modelOverride : cfg.model,
       vertexai: {
-        project,
-        location,
+        project: ensuredProject,
+        location: ensuredLocation,
         serviceAccountPath,
       },
     }

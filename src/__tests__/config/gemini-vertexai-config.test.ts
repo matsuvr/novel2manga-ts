@@ -6,16 +6,19 @@ const ENV_LOCATION = 'VERTEX_AI_LOCATION'
 const ENV_KEY_PATH = 'GOOGLE_APPLICATION_CREDENTIALS'
 
 describe('getLLMProviderConfig gemini', () => {
-  const original = {
+  const original: Record<string, string | undefined> = {
     project: process.env[ENV_PROJECT],
     location: process.env[ENV_LOCATION],
     key: process.env[ENV_KEY_PATH],
   }
 
   afterEach(() => {
-    process.env[ENV_PROJECT] = original.project
-    process.env[ENV_LOCATION] = original.location
-    process.env[ENV_KEY_PATH] = original.key
+    if (original.project) process.env[ENV_PROJECT] = original.project
+    else delete process.env[ENV_PROJECT]
+    if (original.location) process.env[ENV_LOCATION] = original.location
+    else delete process.env[ENV_LOCATION]
+    if (original.key) process.env[ENV_KEY_PATH] = original.key
+    else delete process.env[ENV_KEY_PATH]
   })
 
   it('throws when required Vertex AI env vars are missing', () => {

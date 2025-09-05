@@ -37,10 +37,14 @@ export class GeminiClient implements LlmClient {
         vertexai: true,
         project: config.vertexai.project,
         location: config.vertexai.location,
+        ...(config.vertexai.serviceAccountPath
+          ? {
+              googleAuthOptions: {
+                keyFile: config.vertexai.serviceAccountPath,
+              },
+            }
+          : {}),
       })
-      if (config.vertexai.serviceAccountPath) {
-        process.env.GOOGLE_APPLICATION_CREDENTIALS = config.vertexai.serviceAccountPath
-      }
     } else {
       this.client = new GoogleGenAI({ apiKey: config.apiKey })
     }
