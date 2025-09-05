@@ -874,8 +874,8 @@ describe('EpisodeBreakEstimationStep', () => {
       expect(result.data.episodeBreaks.episodes).toHaveLength(1)
 
       const episode = result.data.episodeBreaks.episodes[0]
-      expect(episode?.title).toBe('Second Title') // Should preserve the receiving episode's title
-      expect(episode?.description).toBe('Second description')
+      expect(episode?.title).toBe('First Title') // Should preserve the first episode's title
+      expect(episode?.description).toBe('First description')
       expect(episode?.startPanelIndex).toBe(1)
       expect(episode?.endPanelIndex).toBe(50)
     })

@@ -1,6 +1,8 @@
 import { notFound, redirect } from 'next/navigation'
 import { db } from '@/services/database/index'
 import { isRenderCompletelyDone } from '@/utils/completion'
+import { StorageFactory, JsonStorageKeys } from '@/utils/storage'
+import { EpisodeBreakSchema, type EpisodeBreakPlan } from '@/types/script'
 
 interface Params {
   novelId: string
@@ -34,7 +36,42 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
     return notFound()
   }
 
-  const episodes = await db.episodes().getEpisodesByJobId(job.id)
+  const layoutStorage = await StorageFactory.getLayoutStorage()
+  const fullPagesKey = JsonStorageKeys.fullPages(job.id)
+  const fullPages = await layoutStorage.get(fullPagesKey)
+  if (!fullPages) {
+    return (
+      <main className="max-w-3xl mx-auto p-6 space-y-4">
+        <h1 className="text-2xl font-bold">処理結果の表示に失敗しました</h1>
+        <div className="apple-card p-4 space-y-2">
+          <div className="text-sm text-gray-600">Job: {job.id}</div>
+          <div className="text-sm text-red-600">
+            エラー: 結果ファイル (full_pages.json) が見つかりませんでした。Storage Key: {JsonStorageKeys.fullPages(job.id)}
+          </div>
+
+        </div>
+      </main>
+    )
+  }
+
+  let parsedFull: EpisodeBreakPlan
+  try {
+    parsedFull = EpisodeBreakSchema.parse(JSON.parse(fullPages.text))
+  } catch (e) {
+    return (
+      <main className="max-w-3xl mx-auto p-6 space-y-4">
+        <h1 className="text-2xl font-bold">結果データの解析に失敗しました</h1>
+        <div className="apple-card p-4 space-y-2">
+          <div className="text-sm text-gray-600">Job: {job.id}</div>
+          <div className="text-sm text-red-600">
+            エラー: {e instanceof Error ? e.message : String(e)} (Storage Key: {JsonStorageKeys.fullPages(job.id)})
+
+          </div>
+        </div>
+      </main>
+    )
+  }
+  const episodes = parsedFull.episodes
 
   // レイアウトステータスを取得してページ数情報を含める（責務をLayoutDatabaseServiceへ委譲）
   const layoutStatuses = await db.layout().getLayoutStatusByJobId(job.id)
@@ -130,7 +167,7 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
           const pageCount = layoutStatus?.totalPages
 
           return (
-            <li key={e.id} className="apple-card p-4">
+            <li key={`episode-${e.episodeNumber}`} className="apple-card p-4">
               <div className="font-semibold">Episode {e.episodeNumber}</div>
               <div className="text-sm text-gray-600">{e.title}</div>
               <div className="text-sm text-gray-600 mt-1">

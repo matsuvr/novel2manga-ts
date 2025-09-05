@@ -495,8 +495,8 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
           bundledEpisodes[nextIndex] = {
             ...nextEpisode,
             startPanelIndex: currentEpisode.startPanelIndex,
-            title: nextEpisode.title || currentEpisode.title,
-            description: nextEpisode.description || currentEpisode.description,
+            title: currentEpisode.title || nextEpisode.title,
+            description: currentEpisode.description || nextEpisode.description,
           }
 
           toRemove.add(i)
