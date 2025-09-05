@@ -72,24 +72,12 @@ interface LogEntry {
   data?: unknown
 }
 
-// CONFIGURATION: Progress weight for the current in-flight episode during layout
-// This value (0.5) represents the partial completion credit given to an episode
-// that is currently being processed. It helps provide more accurate progress
-// feedback by giving 50% credit for the episode being worked on, preventing
-// the progress bar from appearing stalled during long episode processing.
-// Range: 0.0 (no credit) to 1.0 (full credit for in-progress episodes)
-const DEFAULT_CURRENT_EPISODE_PROGRESS_WEIGHT = 0.5 as const
-
-// CONFIGURATION: Maximum number of log entries to keep in memory
-// Keeps the last 50 log entries to prevent memory bloat while maintaining
-// sufficient history for debugging and user feedback
-const MAX_LOG_ENTRIES = 50 as const
-
-// 旧ポーリング間隔（SSE移行により未使用）
-
-// CONFIGURATION: UI layout constants
-const MAX_VISIBLE_LOG_HEIGHT = 60 as const // vh units for log container height
-const DEFAULT_EPISODE_NUMBER = 1 as const // Fallback episode number when parsing fails
+// UI 関連設定は app.config.ts に一元化
+const DEFAULT_CURRENT_EPISODE_PROGRESS_WEIGHT =
+  appConfig.ui.progress.currentEpisodeProgressWeight ?? 0.5
+const MAX_LOG_ENTRIES = appConfig.ui.logs.maxEntries
+const MAX_VISIBLE_LOG_HEIGHT = appConfig.ui.logs.maxVisibleLogHeightVh
+const DEFAULT_EPISODE_NUMBER = appConfig.ui.progress.defaultEpisodeNumber
 
 const INITIAL_STEPS: ProcessStep[] = [
   {
@@ -251,9 +239,7 @@ function ProcessingProgress({
     if (!jobId) return
     let timer: NodeJS.Timeout | null = null
     let cancelled = false
-    const intervalMs =
-      (appConfig as { ui?: { progress?: { tokenUsagePollIntervalMs?: number } } }).ui?.progress
-        ?.tokenUsagePollIntervalMs ?? 2000
+    const intervalMs = appConfig.ui.progress.tokenUsagePollIntervalMs
     const fetchUsage = async () => {
       try {
         const res = await fetch(`/api/jobs/${jobId}/token-usage`)
@@ -268,8 +254,12 @@ function ProcessingProgress({
           setTokenPromptSum(p)
           setTokenCompletionSum(c)
         }
-      } catch {
-        // ignore transient errors
+      } catch (e) {
+        // 一時的なエラーはUIを止めないが、開発時は警告として出す
+        if (process.env.NODE_ENV !== 'production') {
+          // eslint-disable-next-line no-console
+          console.warn('Failed to fetch token usage:', e)
+        }
       }
     }
     fetchUsage()

@@ -4,6 +4,7 @@ import { getLogger } from '@/infrastructure/logging/logger'
 import { defaultBaseUrl } from './base-url'
 import type { GenerateStructuredParams, LlmClient, OpenAICompatibleConfig } from './types'
 import { extractFirstJsonChunk, sanitizeLlmJsonResponse } from './utils'
+import { db } from '@/services/database'
 
 type ChatMessage = { role: 'system' | 'user'; content: string }
 
@@ -131,7 +132,6 @@ export class OpenAICompatibleClient implements LlmClient {
       if (telemetry?.jobId && telemetry?.agentName) {
         const usage = extractUsageFromResponse(data, this.useChatCompletions)
         if (usage) {
-          const { db } = await import('@/services/database')
           await db.tokenUsage().record({
             jobId: telemetry.jobId,
             agentName: telemetry.agentName,
@@ -436,38 +436,35 @@ function extractUsageFromResponse(
   _useChat: boolean,
 ): { promptTokens: number; completionTokens: number; totalTokens: number } | null {
   if (!data || typeof data !== 'object') return null
-  const d = data as Record<string, unknown>
-  const usage = d.usage as Record<string, unknown> | undefined
-  if (usage && typeof usage === 'object') {
-    // Chat Completions style
-    const pt = Number((usage as { prompt_tokens?: unknown }).prompt_tokens)
-    const ct = Number((usage as { completion_tokens?: unknown }).completion_tokens)
-    const tt = Number((usage as { total_tokens?: unknown }).total_tokens)
-    if (Number.isFinite(pt) || Number.isFinite(ct) || Number.isFinite(tt)) {
-      return {
-        promptTokens: Number.isFinite(pt) ? pt : 0,
-        completionTokens: Number.isFinite(ct) ? ct : 0,
-        totalTokens: Number.isFinite(tt)
-          ? tt
-          : (Number.isFinite(pt) ? pt : 0) + (Number.isFinite(ct) ? ct : 0),
-      }
-    }
-    // Responses API style
-    const it = Number((usage as { input_tokens?: unknown }).input_tokens)
-    const ot = Number((usage as { output_tokens?: unknown }).output_tokens)
-    const t2 = Number((usage as { total_tokens?: unknown }).total_tokens)
-    if (Number.isFinite(it) || Number.isFinite(ot) || Number.isFinite(t2)) {
-      return {
-        promptTokens: Number.isFinite(it) ? it : 0,
-        completionTokens: Number.isFinite(ot) ? ot : 0,
-        totalTokens: Number.isFinite(t2)
-          ? t2
-          : (Number.isFinite(it) ? it : 0) + (Number.isFinite(ot) ? ot : 0),
-      }
-    }
+  const usage = (data as Record<string, unknown>).usage as Record<string, unknown> | undefined
+  if (!usage || typeof usage !== 'object') return null
+
+  const getFinite = (key: string): number | null => {
+    const v = Number((usage as Record<string, unknown>)[key])
+    return Number.isFinite(v) ? v : null
   }
-  // No recognizable usage block
-  return null
+
+  const pickStyle = (
+    promptKey: string,
+    completionKey: string,
+  ): { promptTokens: number; completionTokens: number; totalTokens: number } | null => {
+    const pt = getFinite(promptKey)
+    const ct = getFinite(completionKey)
+    const tt = getFinite('total_tokens')
+    if (pt !== null || ct !== null || tt !== null) {
+      const promptTokens = pt ?? 0
+      const completionTokens = ct ?? 0
+      const totalTokens = tt ?? promptTokens + completionTokens
+      return { promptTokens, completionTokens, totalTokens }
+    }
+    return null
+  }
+
+  return (
+    pickStyle('prompt_tokens', 'completion_tokens') ||
+    pickStyle('input_tokens', 'output_tokens') ||
+    null
+  )
 }
 
 // Exported for unit-testing
