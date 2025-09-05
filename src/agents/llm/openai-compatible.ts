@@ -30,6 +30,7 @@ export class OpenAICompatibleClient implements LlmClient {
     userPrompt,
     spec,
     options,
+    telemetry,
   }: GenerateStructuredParams<T>): Promise<T> {
     // 設定必須: maxTokens は外部構成(llm.config.ts)から供給。未設定なら即エラー。
     if (!options || typeof options.maxTokens !== 'number') {
@@ -125,6 +126,32 @@ export class OpenAICompatibleClient implements LlmClient {
     }
 
     const jsonText = extractFirstJsonChunk(content)
+    // Try to persist token usage when telemetry is provided
+    try {
+      if (telemetry?.jobId && telemetry?.agentName) {
+        const usage = extractUsageFromResponse(data, this.useChatCompletions)
+        if (usage) {
+          const { db } = await import('@/services/database')
+          await db.tokenUsage().record({
+            jobId: telemetry.jobId,
+            agentName: telemetry.agentName,
+            stepName: telemetry.stepName,
+            chunkIndex: telemetry.chunkIndex,
+            episodeNumber: telemetry.episodeNumber,
+            provider: this.provider,
+            model: this.model,
+            promptTokens: usage.promptTokens,
+            completionTokens: usage.completionTokens,
+            totalTokens: usage.totalTokens,
+          })
+        }
+      }
+    } catch (e) {
+      // Do not block main flow on telemetry failure; just log
+      logger.warn('Failed to record token usage', {
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
     logger.debug('Extracted JSON text (preview)', { preview: truncate(jsonText, 200) })
 
     let parsed: unknown
@@ -399,6 +426,48 @@ async function safeReadText(res: Response): Promise<string> {
 
 function truncate(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n)}…` : s
+}
+
+/**
+ * Extract token usage from provider response for telemetry.
+ */
+function extractUsageFromResponse(
+  data: unknown,
+  _useChat: boolean,
+): { promptTokens: number; completionTokens: number; totalTokens: number } | null {
+  if (!data || typeof data !== 'object') return null
+  const d = data as Record<string, unknown>
+  const usage = d.usage as Record<string, unknown> | undefined
+  if (usage && typeof usage === 'object') {
+    // Chat Completions style
+    const pt = Number((usage as { prompt_tokens?: unknown }).prompt_tokens)
+    const ct = Number((usage as { completion_tokens?: unknown }).completion_tokens)
+    const tt = Number((usage as { total_tokens?: unknown }).total_tokens)
+    if (Number.isFinite(pt) || Number.isFinite(ct) || Number.isFinite(tt)) {
+      return {
+        promptTokens: Number.isFinite(pt) ? pt : 0,
+        completionTokens: Number.isFinite(ct) ? ct : 0,
+        totalTokens: Number.isFinite(tt)
+          ? tt
+          : (Number.isFinite(pt) ? pt : 0) + (Number.isFinite(ct) ? ct : 0),
+      }
+    }
+    // Responses API style
+    const it = Number((usage as { input_tokens?: unknown }).input_tokens)
+    const ot = Number((usage as { output_tokens?: unknown }).output_tokens)
+    const t2 = Number((usage as { total_tokens?: unknown }).total_tokens)
+    if (Number.isFinite(it) || Number.isFinite(ot) || Number.isFinite(t2)) {
+      return {
+        promptTokens: Number.isFinite(it) ? it : 0,
+        completionTokens: Number.isFinite(ot) ? ot : 0,
+        totalTokens: Number.isFinite(t2)
+          ? t2
+          : (Number.isFinite(it) ? it : 0) + (Number.isFinite(ot) ? ot : 0),
+      }
+    }
+  }
+  // No recognizable usage block
+  return null
 }
 
 // Exported for unit-testing

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { groupByProviderModel } from '@/utils/token-usage'
 import type { Episode } from '@/types/database-models'
 
 interface TokenUsage {
@@ -89,6 +90,17 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
       return acc
     },
     {} as Record<string, { tokens: number; cost: number; count: number }>,
+  )
+
+  // モデル別（プロバイダー+モデル名）集計
+  const modelStats = groupByProviderModel(
+    tokenUsage.map((u) => ({
+      provider: u.provider,
+      model: u.model,
+      promptTokens: u.promptTokens,
+      completionTokens: u.completionTokens,
+      totalTokens: u.totalTokens,
+    })),
   )
 
   const handleExport = async () => {
@@ -222,6 +234,22 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
                     <span>{stats.tokens.toLocaleString()} tokens</span>
                     <span>${stats.cost.toFixed(4)}</span>
                     <span>({stats.count} calls)</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* モデル別詳細（実際に利用したモデル名と入出力） */}
+          <div className="mt-6">
+            <h4 className="font-medium mb-2">モデル別（実行履歴）</h4>
+            <div className="space-y-1">
+              {Object.entries(modelStats).map(([modelKey, stats]) => (
+                <div key={modelKey} className="flex justify-between items-center text-sm">
+                  <span className="">{modelKey}</span>
+                  <div className="flex gap-4">
+                    <span>入力 {stats.prompt.toLocaleString()}t</span>
+                    <span>出力 {stats.completion.toLocaleString()}t</span>
                   </div>
                 </div>
               ))}

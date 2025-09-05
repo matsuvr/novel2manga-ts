@@ -22,11 +22,20 @@ export interface StructuredGenOptions {
   seed?: number
 }
 
+export interface LlmTelemetryContext {
+  jobId?: string
+  agentName?: string
+  stepName?: string
+  chunkIndex?: number
+  episodeNumber?: number
+}
+
 export interface GenerateStructuredParams<T> {
   systemPrompt?: string
   userPrompt: string
   spec: StructuredOutputSpec<T>
   options: StructuredGenOptions
+  telemetry?: LlmTelemetryContext
 }
 
 export interface LlmClient {
