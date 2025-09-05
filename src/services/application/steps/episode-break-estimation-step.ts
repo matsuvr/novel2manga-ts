@@ -155,6 +155,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
       userPrompt: prompt,
       schema: EpisodeBreakSchema as unknown as z.ZodTypeAny,
       schemaName: 'EpisodeBreakPlan',
+      telemetry: { jobId, stepName: 'episode' },
     })
 
     if (!result || !result.episodes || result.episodes.length === 0) {

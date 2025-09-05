@@ -4,10 +4,22 @@
  */
 
 export const COVERAGE_MESSAGES = {
-  LOW_COVERAGE_WARNING: (chunkIndex: number, coveragePercent: string) =>
-    `チャンク${chunkIndex}のカバレッジが低くなっています (${coveragePercent}%)`,
-  LOW_COVERAGE_WARNING_EPISODES: (episodeNumbers: number[], coveragePercent: string) =>
-    `エピソード${episodeNumbers.length > 0 ? episodeNumbers.join(', ') : '不明'}のカバレッジが低くなっています (${coveragePercent}%)`,
+  // チャンク番号は表示しないポリシーに変更
+  // エピソード不明時のフォールバックもエピソード表現で統一
+  LOW_COVERAGE_WARNING: (_chunkIndex: number, coveragePercent: string) =>
+    `エピソード不明において原文の内容が十分に反映されていない可能性があります（${coveragePercent}%）`,
+  LOW_COVERAGE_WARNING_EPISODES: (episodeNumbers: number[], coveragePercent: string) => {
+    if (!episodeNumbers || episodeNumbers.length === 0) {
+      return `エピソード不明において原文の内容が十分に反映されていない可能性があります（${coveragePercent}%）`
+    }
+    const sorted = [...episodeNumbers].sort((a, b) => a - b)
+    if (sorted.length === 1) {
+      return `エピソード${sorted[0]}において原文の内容が十分に反映されていない可能性があります（${coveragePercent}%）`
+    }
+    const start = sorted[0]
+    const end = sorted[sorted.length - 1]
+    return `エピソード${start}～${end}において原文の内容が十分に反映されていない可能性があります（${coveragePercent}%）`
+  },
 } as const
 
 export const VALIDATION_MESSAGES = {

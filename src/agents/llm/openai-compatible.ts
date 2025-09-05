@@ -4,6 +4,7 @@ import { getLogger } from '@/infrastructure/logging/logger'
 import { defaultBaseUrl } from './base-url'
 import type { GenerateStructuredParams, LlmClient, OpenAICompatibleConfig } from './types'
 import { extractFirstJsonChunk, sanitizeLlmJsonResponse } from './utils'
+import { db } from '@/services/database'
 
 type ChatMessage = { role: 'system' | 'user'; content: string }
 
@@ -30,6 +31,7 @@ export class OpenAICompatibleClient implements LlmClient {
     userPrompt,
     spec,
     options,
+    telemetry,
   }: GenerateStructuredParams<T>): Promise<T> {
     // 設定必須: maxTokens は外部構成(llm.config.ts)から供給。未設定なら即エラー。
     if (!options || typeof options.maxTokens !== 'number') {
@@ -125,6 +127,31 @@ export class OpenAICompatibleClient implements LlmClient {
     }
 
     const jsonText = extractFirstJsonChunk(content)
+    // Try to persist token usage when telemetry is provided
+    try {
+      if (telemetry?.jobId && telemetry?.agentName) {
+        const usage = extractUsageFromResponse(data, this.useChatCompletions)
+        if (usage) {
+          await db.tokenUsage().record({
+            jobId: telemetry.jobId,
+            agentName: telemetry.agentName,
+            stepName: telemetry.stepName,
+            chunkIndex: telemetry.chunkIndex,
+            episodeNumber: telemetry.episodeNumber,
+            provider: this.provider,
+            model: this.model,
+            promptTokens: usage.promptTokens,
+            completionTokens: usage.completionTokens,
+            totalTokens: usage.totalTokens,
+          })
+        }
+      }
+    } catch (e) {
+      // Do not block main flow on telemetry failure; just log
+      logger.warn('Failed to record token usage', {
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
     logger.debug('Extracted JSON text (preview)', { preview: truncate(jsonText, 200) })
 
     let parsed: unknown
@@ -399,6 +426,45 @@ async function safeReadText(res: Response): Promise<string> {
 
 function truncate(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n)}…` : s
+}
+
+/**
+ * Extract token usage from provider response for telemetry.
+ */
+function extractUsageFromResponse(
+  data: unknown,
+  _useChat: boolean,
+): { promptTokens: number; completionTokens: number; totalTokens: number } | null {
+  if (!data || typeof data !== 'object') return null
+  const usage = (data as Record<string, unknown>).usage as Record<string, unknown> | undefined
+  if (!usage || typeof usage !== 'object') return null
+
+  const getFinite = (key: string): number | null => {
+    const v = Number((usage as Record<string, unknown>)[key])
+    return Number.isFinite(v) ? v : null
+  }
+
+  const pickStyle = (
+    promptKey: string,
+    completionKey: string,
+  ): { promptTokens: number; completionTokens: number; totalTokens: number } | null => {
+    const pt = getFinite(promptKey)
+    const ct = getFinite(completionKey)
+    const tt = getFinite('total_tokens')
+    if (pt !== null || ct !== null || tt !== null) {
+      const promptTokens = pt ?? 0
+      const completionTokens = ct ?? 0
+      const totalTokens = tt ?? promptTokens + completionTokens
+      return { promptTokens, completionTokens, totalTokens }
+    }
+    return null
+  }
+
+  return (
+    pickStyle('prompt_tokens', 'completion_tokens') ||
+    pickStyle('input_tokens', 'output_tokens') ||
+    null
+  )
 }
 
 // Exported for unit-testing

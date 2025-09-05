@@ -1,5 +1,8 @@
 think in English, output in Japanese
 
+**あなたはWSL2で動作していますが、開発はWindowsで行っています。** バイナリ依存があるテストはかならず失敗するので、テスト一括実行は私（開発者）にさせるように指示してください。
+あなたがテストを動かせるのは、Typescriptで完結しているごく小規模な単体テストだけです。
+
 # Repository Guidelines
 
 ## Project Structure & Module Organization
