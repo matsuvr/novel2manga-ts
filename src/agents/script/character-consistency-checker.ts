@@ -2,7 +2,6 @@ import { z } from 'zod'
 import { DefaultLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import { getProviderForUseCase } from '@/config/llm.config'
-import type { NewMangaScript } from '@/types/script'
 
 // Schema for consistency check result
 const CharacterConsistencyResultSchema = z.object({
@@ -91,13 +90,3 @@ export async function checkCharacterConsistency(
  * @param consistencyResult The consistency check result containing suggestions.
  * @returns The modified manga script.
  */
-export function applyConsistencySuggestions(
-  script: NewMangaScript,
-  _consistencyResult: CharacterConsistencyResult,
-): NewMangaScript {
-  // Currently, this function does not apply any changes.
-  // It returns the original script.
-  // A full implementation would require parsing the suggestions and applying them to the script object.
-  console.warn('applyConsistencySuggestions is a placeholder and does not apply any fixes.')
-  return script
-}
