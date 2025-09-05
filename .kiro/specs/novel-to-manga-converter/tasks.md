@@ -72,7 +72,7 @@
 ### Infrastructure Integration
 
 - [x] **Cloudflare統合**: Workers/Pages/D1/R2/KVを活用した分散処理
-- [x] **LLMプロバイダー**: OpenRouter/Gemini/Claude/Cerebras/VertexAIのフォールバックチェーン
+- [x] **LLMプロバイダー**: Vertex AI Gemini 2.5 Flash/Pro を中心に OpenRouter/Groq/Cerebras と連携
 - [x] **型安全性**: TypeScript strict modeによる型安全性確保
 - [x] **テスト戦略**: Unit/Integration/E2Eテストの包括的カバレッジ
 

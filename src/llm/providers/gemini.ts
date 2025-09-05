@@ -16,9 +16,14 @@ import {
 } from '../client'
 
 export interface GeminiConfig {
-  apiKey: string
+  apiKey?: string
   model?: string
   timeout?: number
+  vertexai?: {
+    project: string
+    location: string
+    serviceAccountPath?: string
+  }
 }
 
 export class GeminiClient implements LlmClient {
@@ -27,7 +32,22 @@ export class GeminiClient implements LlmClient {
 
   constructor(config: GeminiConfig) {
     this.config = config
-    this.client = new GoogleGenAI({ apiKey: config.apiKey })
+    if (config.vertexai) {
+      this.client = new GoogleGenAI({
+        vertexai: true,
+        project: config.vertexai.project,
+        location: config.vertexai.location,
+        ...(config.vertexai.serviceAccountPath
+          ? {
+              googleAuthOptions: {
+                keyFile: config.vertexai.serviceAccountPath,
+              },
+            }
+          : {}),
+      })
+    } else {
+      this.client = new GoogleGenAI({ apiKey: config.apiKey })
+    }
   }
 
   async chat(messages: LlmMessage[], options: LlmClientOptions = {}): Promise<LlmResponse> {
