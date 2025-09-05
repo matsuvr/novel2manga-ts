@@ -60,8 +60,22 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
   try {
     parsedFull = EpisodeBreakSchema.parse(JSON.parse(fullPages.text))
   } catch (e) {
-    throw new Error(`Failed to parse full_pages.json for job ${job.id}: ${(e as Error).message}`)
-
+  } catch (e) {
+    console.error(`Failed to parse full_pages.json for job ${job.id}: ${(e as Error).message}`)
+    return (
+      <main className="max-w-3xl mx-auto p-6 space-y-4">
+        <h1 className="text-2xl font-bold">処理結果の表示に失敗しました</h1>
+        <div className="apple-card p-4 space-y-2">
+          <div className="text-sm text-gray-600">Job: {job.id}</div>
+          <div className="text-sm text-red-600">
+            エラー: 結果ファイル (full_pages.json) の内容が不正です。
+          </div>
+          <div className="text-xs text-gray-500">
+            Error: {(e as Error).message}
+          </div>
+        </div>
+      </main>
+    )
   }
   const episodes = parsedFull.episodes
 
