@@ -756,6 +756,16 @@ JSONのみ出力。説明文禁止。`,
   ui: {
     progress: {
       tokenUsagePollIntervalMs: 2000,
+      // レイアウト進捗の現行エピソードに与える配点（0.0〜1.0）
+      currentEpisodeProgressWeight: 0.5,
+      // エピソード番号のパース失敗時のフォールバック
+      defaultEpisodeNumber: 1,
+    },
+    logs: {
+      // 進捗ログの最大保持件数
+      maxEntries: 50,
+      // ログ表示コンテナの最大高さ（vh単位）
+      maxVisibleLogHeightVh: 60,
     },
   },
 }

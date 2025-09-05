@@ -24,29 +24,7 @@ export class TokenUsageDatabaseService extends BaseDatabaseService {
   /** Insert one token usage record */
   async record(params: RecordTokenUsageParams): Promise<void> {
     const now = new Date().toISOString()
-    if (this.isSync()) {
-      const db = this.db as DrizzleDatabase
-      db.insert(tokenUsage)
-        .values({
-          id: crypto.randomUUID(),
-          jobId: params.jobId,
-          agentName: params.agentName,
-          provider: params.provider,
-          model: params.model,
-          promptTokens: params.promptTokens,
-          completionTokens: params.completionTokens,
-          totalTokens: params.totalTokens,
-          cost: params.cost,
-          stepName: params.stepName,
-          chunkIndex: params.chunkIndex,
-          episodeNumber: params.episodeNumber,
-          createdAt: now,
-        })
-        .run()
-      return
-    }
-    const db = this.db as DrizzleDatabase
-    await db.insert(tokenUsage).values({
+    const values: schema.NewTokenUsage = {
       id: crypto.randomUUID(),
       jobId: params.jobId,
       agentName: params.agentName,
@@ -60,7 +38,14 @@ export class TokenUsageDatabaseService extends BaseDatabaseService {
       chunkIndex: params.chunkIndex,
       episodeNumber: params.episodeNumber,
       createdAt: now,
-    })
+    }
+    if (this.isSync()) {
+      const db = this.db as DrizzleDatabase
+      db.insert(tokenUsage).values(values).run()
+      return
+    }
+    const db = this.db as DrizzleDatabase
+    await db.insert(tokenUsage).values(values)
     return
   }
 
