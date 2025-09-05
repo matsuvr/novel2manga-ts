@@ -1,8 +1,8 @@
-import type { NarrativeAnalysisInput } from '@/types/episode'
+import type { ChunkAnalysisResult } from '@/types/chunk'
 
 export interface AnalyzedChunk {
   chunkIndex: number
-  analysis: NarrativeAnalysisInput['chunks'][number]['analysis']
+  analysis: ChunkAnalysisResult
 }
 
 export interface IChunkRepository {

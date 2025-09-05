@@ -93,10 +93,6 @@ vi.mock('@/agents/chunk-analyzer', () => ({
   }),
 }))
 
-vi.mock('@/agents/narrative-arc-analyzer', () => ({
-  analyzeNarrativeArc: vi.fn().mockResolvedValue(TEST_EPISODE_BOUNDARIES),
-}))
-
 // レイアウト生成エージェントのモック
 vi.mock('@/agents/layout-generator', () => ({
   generateMangaLayout: vi.fn().mockResolvedValue({
