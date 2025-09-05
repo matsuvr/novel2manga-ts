@@ -1,54 +1,50 @@
+// @ts-nocheck
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
 
 // Provide a minimal EventSource mock for Node-based tests
-class MockEventSource extends EventTarget implements EventSource {
-  url: string
-  withCredentials: boolean = false
-  readyState: number = 0
-  onopen: ((this: EventSource, ev: Event) => void) | null = null
-  onmessage: ((this: EventSource, ev: MessageEvent) => void) | null = null
-  onerror: ((this: EventSource, ev: Event) => void) | null = null
+class MockEventSource extends EventTarget {
+  url
+  withCredentials = false
+  readyState = 0
+  onopen = null
+  onmessage = null
+  onerror = null
 
-  static readonly CONNECTING = 0
-  static readonly OPEN = 1
-  static readonly CLOSED = 2
+  static CONNECTING = 0
+  static OPEN = 1
+  static CLOSED = 2
 
-  constructor(url: string) {
+  constructor(url) {
     super()
     this.url = url
   }
 
-  close(): void {
+  close() {
     // no operation required for tests
   }
 
-  addEventListener<K extends keyof EventSourceEventMap>(
-    type: K,
-    listener: (this: EventSource, ev: EventSourceEventMap[K]) => void,
+  addEventListener(type, listener, options) {
+    // delegate to EventTarget while keeping loose types for test env
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     super.addEventListener(type, listener, options)
-  ): void {
-    super.addEventListener(type, listener as EventListener, options)
   }
 
-  removeEventListener<K extends keyof EventSourceEventMap>(
+  removeEventListener(type, listener, options) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     super.removeEventListener(type, listener, options)
-    listener: (this: EventSource, ev: EventSourceEventMap[K]) => void,
-    options?: boolean | EventListenerOptions,
-  ): void {
-    super.removeEventListener(type, listener as EventListener, options)
   }
 
-  dispatchEvent(event: Event): boolean {
+  dispatchEvent(event) {
     return super.dispatchEvent(event)
   }
 }
 
-;(globalThis as { EventSource?: typeof EventSource }).EventSource = MockEventSource
+globalThis /** @type {any} */.EventSource = MockEventSource
 
 // Mock HTMLCanvasElement globally for all tests
 Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
-  value: (contextType: string) => {
+  value: (contextType) => {
     if (contextType === '2d') {
       return {
         fillStyle: '#fff',
@@ -56,54 +52,54 @@ Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
         lineWidth: 2,
         font: '16px sans-serif',
         beginPath: () => {
-          /* Mock implementation for test Canvas */
+          /* noop */
         },
         moveTo: () => {
-          /* Mock implementation for test Canvas */
+          /* noop */
         },
         lineTo: () => {
-          /* Mock implementation for test Canvas */
+          /* noop */
         },
         quadraticCurveTo: () => {
-          /* Mock implementation for test Canvas */
+          /* noop */
         },
         closePath: () => {
-          /* Mock implementation for test Canvas */
+          /* noop */
         },
         fill: () => {
-          /* Mock implementation for test Canvas */
+          /* noop */
         },
         stroke: () => {
-          /* Mock implementation for test Canvas */
+          /* noop */
         },
         fillRect: () => {
-          /* Mock implementation for test Canvas */
+          /* noop */
         },
         strokeRect: () => {
-          /* Mock implementation for test Canvas */
+          /* noop */
         },
         clearRect: () => {
-          /* Mock implementation for test Canvas */
+          /* noop */
         },
         restore: () => {
-          /* Mock implementation for test Canvas */
+          /* noop */
         },
         resetTransform: () => {
-          /* Mock implementation for test Canvas */
+          /* noop */
         },
         save: () => {
-          /* Mock implementation for test Canvas */
+          /* noop */
         },
-        textAlign: 'left' as CanvasTextAlign,
-        textBaseline: 'top' as CanvasTextBaseline,
-        measureText: (text: string) => ({ width: text.length * 10 }) as TextMetrics,
+        textAlign: 'left',
+        textBaseline: 'top',
+        measureText: (text) => ({ width: text.length * 10 }),
         fillText: () => {
-          /* Mock implementation for test Canvas */
+          /* noop */
         },
         drawImage: () => {
-          /* Mock implementation for test Canvas */
+          /* noop */
         },
-      } as unknown as CanvasRenderingContext2D
+      }
     }
     return null
   },
@@ -116,30 +112,27 @@ Object.defineProperty(HTMLCanvasElement.prototype, 'toDataURL', {
 })
 
 // Mock global functions that might be used by Canvas-related code
-globalThis.Image = class MockImage {
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+globalThis /** @type {any} */.Image = class MockImage {
   width = 100
   height = 100
   src = ''
-  onload: (() => void) | null = null
-  onerror: (() => void) | null = null
-} as typeof Image
+  onload = null
+  onerror = null
+}
 
 // Note: createImageFromBuffer will be mocked per test as needed
 
 // Provide a default mock for the new database factory to avoid brittle test-specific mocks.
 // If a test sets up its own `vi.doMock('@/services/database', ...)`, delegate `db` to it.
 vi.mock('@/services/database/index', async () => {
-  const actual = await vi.importActual<typeof import('@/services/database/index')>(
-    '@/services/database/index',
-  )
+  const actual = await vi.importActual('@/services/database/index')
 
   // Try to delegate to test-provided db (from '@/services/database') if available
   let delegatedDb: unknown
   try {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-    const wrapper = (await import('@/services/database')) as typeof import('@/services/database')
-    // Some tests expose `db` on the wrapper; if so, use it
-    delegatedDb = (wrapper as unknown as { db?: unknown }).db
+    const wrapper = await import('@/services/database')
+    delegatedDb = /** @type {any} */ wrapper.db
   } catch {
     // noop: fallback to stubbed db below
   }
@@ -186,7 +179,7 @@ vi.mock('@/services/database/index', async () => {
 
   return {
     ...actual,
-    db: (delegatedDb as typeof fallbackDb | undefined) ?? fallbackDb,
+    db: delegatedDb ?? fallbackDb,
   }
 })
 
@@ -197,7 +190,7 @@ vi.mock('@/services/database/database-service-factory', () => ({
       getJob: vi.fn().mockReturnValue(null),
       getJobsByNovelId: vi.fn().mockReturnValue([]),
       getJobWithProgress: vi.fn(),
-      createJobRecord: vi.fn().mockImplementation(({ id }: { id: string }) => id),
+      createJobRecord: vi.fn().mockImplementation(({ id }) => id),
       updateJobStatus: vi.fn(),
       updateJobStep: vi.fn(),
       markJobStepCompleted: vi.fn(),

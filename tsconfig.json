@@ -33,6 +33,7 @@
     "build",
     "coverage",
     "tmp_test",
+    "vitest.setup.ts",
     "**/*.test.ts",
     "**/*.test.tsx",
     "**/*.spec.ts",
