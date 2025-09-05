@@ -24,8 +24,7 @@ describe('vertical-text-client (batch)', () => {
         ],
       }),
     })
-    // @ts-expect-error vi inject
-    global.fetch = mockFetch
+    globalThis.fetch = mockFetch as unknown as typeof fetch
 
     const results = await renderVerticalTextBatch({
       defaults: { fontSize: 20, lineHeight: 1.6, letterSpacing: 0.1, padding: 10 },
@@ -52,16 +51,16 @@ describe('vertical-text-client (batch)', () => {
   })
 
   it('throws on non-200', async () => {
-    // @ts-expect-error vi
-    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 })
+    const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 500 })
+    globalThis.fetch = mockFetch as unknown as typeof fetch
     await expect(
       renderVerticalTextBatch({ defaults: { fontSize: 20 }, items: [{ text: 'x' }] }),
-    ).rejects.toThrow('vertical-text API failed: 500')
+    ).rejects.toThrow(/vertical-text API failed: .*HTTP 500/)
   })
 
   it('validates items length (<=50)', async () => {
-    // @ts-expect-error vi
-    global.fetch = vi.fn()
+    const mockFetch = vi.fn()
+    globalThis.fetch = mockFetch as unknown as typeof fetch
     const items = Array.from({ length: 51 }, (_, i) => ({ text: `t${i}` }))
     await expect(renderVerticalTextBatch({ defaults: { fontSize: 20 }, items })).rejects.toThrow(
       'items length must be <= 50',
