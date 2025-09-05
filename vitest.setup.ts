@@ -101,7 +101,7 @@ vi.mock('@/services/database/index', async () => {
 
   const fallbackDb = {
     jobs: () => ({
-      getJob: vi.fn(),
+      getJob: vi.fn().mockResolvedValue({ id: 'job1', novelId: 'novel1' }),
       getJobsByNovelId: vi.fn().mockReturnValue([]),
       getJobWithProgress: vi.fn(),
       updateJobStatus: vi.fn(),
