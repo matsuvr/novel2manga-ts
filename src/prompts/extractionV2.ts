@@ -4,12 +4,12 @@
  */
 
 import type {
-  CharacterMemoryPromptJson,
   CharacterCandidateV2,
   CharacterEventV2,
-  SceneV2,
+  CharacterMemoryPromptJson,
   DialogueV2,
   HighlightV2,
+  SceneV2,
   SituationV2,
   TempCharacterId,
 } from '@/types/extractionV2'

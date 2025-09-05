@@ -6,8 +6,12 @@ import {
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { type NewMangaScript, NewMangaScriptSchema } from '@/types/script'
-import { sanitizeScript, validateImportanceFields } from '@/utils/script-validation'
 import { enforceDialogueBubbleLimit } from '@/utils/script-postprocess'
+import { sanitizeScript, validateImportanceFields } from '@/utils/script-validation'
+import {
+  applyConsistencySuggestions,
+  checkCharacterConsistency,
+} from './character-consistency-checker'
 
 export interface ScriptConversionInput {
   chunkText: string
@@ -222,7 +226,7 @@ export async function convertChunkToMangaScript(
         const validatedResult = NewMangaScriptSchema.safeParse(sanitizedResult)
         if (validatedResult.success) {
           // 文字数上限・分割ポリシー（Script Conversion直後に適用）
-          const currentResult = enforceDialogueBubbleLimit(validatedResult.data)
+          let currentResult = enforceDialogueBubbleLimit(validatedResult.data)
 
           // Log importance validation warnings if any
           const importanceValidation = validateImportanceFields(currentResult)
@@ -232,6 +236,52 @@ export async function convertChunkToMangaScript(
               .warn('Importance validation issues found (but corrected)', {
                 issues: importanceValidation.issues,
               })
+          }
+
+          // Check character consistency if character list is provided
+          if (input.charactersList && input.charactersList.length > 0) {
+            const consistencyResult = await checkCharacterConsistency(
+              input.charactersList,
+              JSON.stringify(currentResult),
+              input.chunkIndex,
+              options,
+            )
+
+            if (consistencyResult && !consistencyResult.isConsistent) {
+              getLogger()
+                .withContext({ service: 'script-converter', jobId: options?.jobId })
+                .warn('Character consistency issues detected', {
+                  score: consistencyResult.score,
+                  issues: consistencyResult.issues,
+                  chunkIndex: input.chunkIndex,
+                })
+
+              // If consistency score is too low, consider retrying with additional guidance
+              if (consistencyResult.score < 0.5 && attempt < maxRetries) {
+                // Add consistency issues to the prompt for next attempt
+                const issueDescriptions = consistencyResult.issues
+                  .map((issue) => `- ${issue.description}: ${issue.suggestion}`)
+                  .join('\n')
+
+                prompt = `${basePrompt}\n\n【重要】以下のキャラクター一貫性の問題を修正してください：\n${issueDescriptions}`
+
+                attempt++
+                continue
+              }
+
+              // Apply automatic fixes for minor issues
+              if (consistencyResult.score >= 0.5) {
+                const fixedResult = applyConsistencySuggestions(currentResult, consistencyResult)
+                currentResult = fixedResult as NewMangaScript
+
+                getLogger()
+                  .withContext({ service: 'script-converter', jobId: options?.jobId })
+                  .info('Applied character consistency fixes', {
+                    fixesApplied: consistencyResult.issues.length,
+                    chunkIndex: input.chunkIndex,
+                  })
+              }
+            }
           }
 
           // カバレッジ評価

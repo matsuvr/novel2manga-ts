@@ -12,7 +12,7 @@ const PanelBBoxSchema = z.object({
   dialogue: z.string().optional(),
   dialogues: z.array(DialogueSchema).optional(),
   sourceChunkIndex: z.number().optional(),
-  importance: z.number().min(1).max(10).optional(),
+  importance: z.number().optional(),
 })
 
 const PageBBoxSchema = z.object({

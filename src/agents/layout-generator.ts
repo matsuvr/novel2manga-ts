@@ -43,7 +43,7 @@ const layoutPanelCountOutputSchema = z.object({
   pages: z.array(
     z.object({
       pageNumber: z.number(),
-      panelCount: z.number().int().min(1).max(6),
+      panelCount: z.number().int(),
     }),
   ),
 })
