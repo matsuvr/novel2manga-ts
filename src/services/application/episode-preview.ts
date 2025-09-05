@@ -132,6 +132,10 @@ export async function loadEpisodePreview(
       } catch {
         base64 = Buffer.from(file.text, 'utf-8').toString('base64')
       }
+      // 追加フォールバック: 何らかの理由で空になった場合、UTF-8として再エンコード
+      if (!base64 && typeof file.text === 'string' && file.text.length > 0) {
+        base64 = Buffer.from(file.text, 'utf-8').toString('base64')
+      }
     }
     images.push({
       page: p,
