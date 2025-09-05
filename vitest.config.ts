@@ -1,6 +1,9 @@
 import path from 'node:path'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
+import { getAppConfigWithOverrides } from './src/config/app.config'
+
+const appConfig = getAppConfigWithOverrides()
 
 export default defineConfig({
   plugins: [react()],
@@ -19,6 +22,16 @@ export default defineConfig({
       '**/.{idea,git,cache,output,temp}/**',
       '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*',
     ],
+    coverage: {
+      enabled: appConfig.features.enableCoverageCheck,
+      reporter: ['text', 'json', 'html'],
+      thresholds: {
+        lines: 80,
+        functions: 80,
+        branches: 80,
+        statements: 80,
+      },
+    },
   },
   resolve: {
     alias: {
