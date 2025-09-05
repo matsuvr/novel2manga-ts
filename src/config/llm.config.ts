@@ -72,7 +72,7 @@ export function getDefaultProvider(): LLMProvider {
   if (process.env.NODE_ENV === 'test') {
     return 'fake'
   }
-  return 'groq'
+  return 'gemini'
 }
 
 // Provider fallback chain (first item is primary fallback)
