@@ -219,6 +219,11 @@ const result = await agent.run({
 – 分割により増えた2コマ目以降の`cut`は「前のコマを引き継ぐ」を使用し、`camera`や`importance`は元パネルを継承。
 – 対象は `speech`/`thought`/`narration`（設定 `applyToTypes` で制御）。
 
+### エピソード長制約（2025-09-05 追加）
+
+– 1エピソードの最大コマ数は `app.config.ts > processing.episode.maxPanelsPerEpisode` で設定（デフォルト1000）。
+– 小規模スクリプト閾値や最小コマ数も同セクションに集約し、エピソード分割とバリデーションで参照。
+
 ## データベースアクセス層の抽象化（2025-09-04 追加）
 
 - 目的: better-sqlite3（同期）と Cloudflare D1（非同期）の差異をアダプタ層で吸収し、業務ロジックから同期/非同期分岐を排除。

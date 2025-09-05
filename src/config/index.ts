@@ -191,6 +191,9 @@ export function getEpisodeConfig() {
     targetCharsPerEpisode: config.processing.episode.targetCharsPerEpisode,
     minCharsPerEpisode: config.processing.episode.minCharsPerEpisode,
     maxCharsPerEpisode: config.processing.episode.maxCharsPerEpisode,
+    smallPanelThreshold: config.processing.episode.smallPanelThreshold,
+    minPanelsPerEpisode: config.processing.episode.minPanelsPerEpisode,
+    maxPanelsPerEpisode: config.processing.episode.maxPanelsPerEpisode,
   }
 }
 

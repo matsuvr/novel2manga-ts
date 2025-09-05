@@ -169,7 +169,6 @@
 - [x] **キャラクター一貫性チェックの簡素化**: 旧LLM評価ロジックを削除し、チャンク毎のキャラクターメモリ保存に一本化
 - [x] **フラグメント処理の削除**: 未使用のフラグメント分割ロジックと関連コンバーターを廃止し、コンテクストを軽量化
 
-
 ### Configuration Management
 
 - [x] **設定ファイルの整理**: codex_auth.jsonを.gitignoreに追加し、セキュリティを向上
@@ -202,7 +201,8 @@
 - [x] スクリプト→エピソード変換での情報欠落解消
   - [x] 話者抽出をページ分割計算側へ移動（全角/半角コロン対応、外側カギ括弧除去）
   - [x] narration を「ナレーション」話者の1セリフとして統合
-  - [x] cut/camera を panel.content に統合して保存
+- [x] cut/camera を panel.content に統合して保存
+- [x] 1エピソード最大コマ数を app.config.ts から設定可能に（デフォルト1000）
   - [x] ユニットテスト追加（dialogue-utils / importance-based）
 
 ## Legacy Tasks Archive 📁
