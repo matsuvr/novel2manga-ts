@@ -63,17 +63,6 @@ vi.mock('@/agents/chunk-analyzer', () => ({
   }),
 }))
 
-// Narrative arc analyzer mock
-vi.mock('@/agents/narrative-arc-analyzer', () => ({
-  analyzeNarrativeArcWithFallback: vi.fn().mockResolvedValue({
-    result: {
-      boundaries: [],
-    },
-    usedProvider: 'test-provider',
-    fallbackFrom: [],
-  }),
-}))
-
 // Script converter mock
 vi.mock('@/agents/script/script-converter', () => ({
   convertEpisodeTextToScript: vi.fn().mockResolvedValue({
@@ -143,7 +132,6 @@ vi.mock('@/config', () => ({
         targetCharsPerEpisode: 10000,
         minCharsPerEpisode: 5000,
         maxCharsPerEpisode: 20000,
-        maxChunksPerEpisode: 10,
       },
     },
     features: {
@@ -191,7 +179,6 @@ vi.mock('@/config', () => ({
     targetCharsPerEpisode: 1000,
     minCharsPerEpisode: 500,
     maxCharsPerEpisode: 2000,
-    maxChunksPerEpisode: 20,
   })),
   getPanelAssignmentConfig: vi.fn(() => ({
     provider: 'openai',
@@ -510,8 +497,6 @@ describe('Service Integration Tests', () => {
       getDatabase: vi.fn(() => testDb.db),
     }))
 
-    // Remove redundant prepareNarrativeAnalysisInput mock - let it use actual storage
-
     // エージェントモックのセットアップ
     setupAgentMocks()
     // chunk-analyzer を安定化させる（常に結果を返す）
@@ -530,8 +515,6 @@ describe('Service Integration Tests', () => {
 
     // NOTE: repositories/index の上書きは副作用が大きいため行わない（factory 側で十分）
 
-    // Remove duplicate prepareNarrativeAnalysisInput mock - storage consistency is handled above
-
     // setupAgentMocks内の '@/config' モックでは scriptConversion 設定が未定義のため、上書きする
     vi.doMock('@/config', () => ({
       getAppConfigWithOverrides: vi.fn(() => ({
@@ -546,7 +529,6 @@ describe('Service Integration Tests', () => {
             targetCharsPerEpisode: 10000,
             minCharsPerEpisode: 5000,
             maxCharsPerEpisode: 20000,
-            maxChunksPerEpisode: 10,
           },
         },
         features: {
@@ -600,12 +582,6 @@ describe('Service Integration Tests', () => {
           'avgLinesPerPage={{avgLinesPerPage}}; avgCharsPerLine={{avgCharsPerLine}}; episodeSummary={{episodeSummary}}; chunkSnippets={{chunkSnippets}}',
       })),
       isDevelopment: vi.fn(() => true),
-    }))
-
-    // ナラティブアーク解析はこの統合テストではフォールバック（境界なし）経路を検証するため、
-    // setupAgentMocks が設定する境界ありモックを明示的に上書きする
-    vi.doMock('@/agents/narrative-arc-analyzer', () => ({
-      analyzeNarrativeArc: vi.fn().mockResolvedValue([]),
     }))
 
     // afterEach の resetAllMocks でトップレベルの vi.mock 実装が消えるため、
