@@ -1,5 +1,6 @@
 import { buildLayoutFromPageBreaks } from '@/agents/script/panel-assignment'
 import { estimatePageBreaksSegmented } from '@/agents/script/segmented-page-break-estimator'
+import { getAppConfigWithOverrides } from '@/config'
 import { db } from '@/services/database/index'
 import type { MangaLayout } from '@/types/panel-layout'
 import type { EpisodeBreakPlan, NewMangaScript, PageBreakV2 } from '@/types/script'
@@ -68,6 +69,25 @@ export class PageBreakStep implements PipelineStep {
         })),
       })
 
+      // Bundle short episodes based on actual page counts after page break estimation
+      const appCfg = getAppConfigWithOverrides()
+      const bundledEpisodes = bundleEpisodesByActualPageCount(
+        alignedEpisodes,
+        pageBreakPlan,
+        {
+          minPageCount: appCfg.episodeBundling.minPageCount,
+          enabled: appCfg.episodeBundling.enabled,
+        },
+        context,
+      )
+
+      logger.info('Episodes bundled based on actual page counts', {
+        jobId,
+        minPageCount: appCfg.episodeBundling.minPageCount,
+        before: alignedEpisodes.episodes.length,
+        after: bundledEpisodes.episodes.length,
+      })
+
       // Generate layouts for each episode
       const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
       const layoutStorage = await StorageFactory.getLayoutStorage()
@@ -76,7 +96,7 @@ export class PageBreakStep implements PipelineStep {
       let successfulUpserts = 0
       let failedUpserts = 0
 
-      for (const episode of alignedEpisodes.episodes) {
+      for (const episode of bundledEpisodes.episodes) {
         // Filter panels for this episode
         const episodePanels = pageBreakPlan.panels
           .map((p, idx) => ({ p, idx: idx + 1 }))
@@ -172,7 +192,7 @@ export class PageBreakStep implements PipelineStep {
         // ここでは各エピソード内で付与された page_number をそのまま集約し、
         // 昇順で安定化して保存する（再番号付けは行わない）
         pages: allPages.sort((a, b) => a.page_number - b.page_number),
-        episodes: alignedEpisodes.episodes,
+        episodes: bundledEpisodes.episodes,
       }
 
       await layoutStorage.put(
@@ -187,13 +207,13 @@ export class PageBreakStep implements PipelineStep {
       logger.info('Saved combined full_pages.json', {
         jobId,
         totalPages: allPages.length,
-        totalEpisodes: alignedEpisodes.episodes.length,
+        totalEpisodes: bundledEpisodes.episodes.length,
       })
 
       // Log upsert summary
       logger.info('Layout status upsert summary', {
         jobId,
-        totalEpisodes: alignedEpisodes.episodes.length,
+        totalEpisodes: bundledEpisodes.episodes.length,
         successfulUpserts,
         failedUpserts,
         upsertSuccessRate: successfulUpserts / (successfulUpserts + failedUpserts),
@@ -311,4 +331,162 @@ function alignEpisodesToPages(
   }
 
   return { episodes: aligned }
+}
+
+// ============ Bundling based on actual page counts (post page-break) ============
+interface BundlingConfig {
+  minPageCount: number
+  enabled: boolean
+}
+
+function buildPanelToPageMap(pageBreakPlan: _PageBreakV2): number[] {
+  // 1-based index alignment: index 0 is unused placeholder
+  const map: number[] = [0]
+  for (const p of pageBreakPlan.panels) {
+    map.push(p.pageNumber)
+  }
+  return map
+}
+
+function countDistinctPagesInRange(panelToPage: number[], start: number, end: number): number {
+  const seen = new Set<number>()
+  for (let i = start; i <= end && i < panelToPage.length; i++) {
+    const pg = panelToPage[i]
+    if (typeof pg === 'number') seen.add(pg)
+  }
+  return seen.size
+}
+
+// Keep logic parallel to EpisodeBreakEstimationStep.bundleEpisodesByPageCount but using actual pages
+// - Merge episodes with pages < minPageCount into the next episode
+// - If the last episode still has pages < minPageCount, merge it into previous
+// - Renumber sequentially
+// - Preserve the receiver episode's title/description
+// - No fallbacks; errors are surfaced
+export function bundleEpisodesByActualPageCount(
+  episodeBreaks: EpisodeBreakPlan,
+  pageBreakPlan: _PageBreakV2,
+  bundling: BundlingConfig,
+  context: StepContext,
+): EpisodeBreakPlan {
+  const { jobId, logger } = context
+  if (!bundling.enabled) {
+    logger.info('Page-based episode bundling disabled by configuration', { jobId })
+    return episodeBreaks
+  }
+
+  if (!episodeBreaks.episodes || episodeBreaks.episodes.length <= 1) {
+    logger.info('No page-based bundling needed (<=1 episode)', { jobId })
+    return episodeBreaks
+  }
+
+  const episodes = [...episodeBreaks.episodes].sort((a, b) => a.episodeNumber - b.episodeNumber)
+  const toRemove = new Set<number>()
+  const panelToPage = buildPanelToPageMap(pageBreakPlan)
+
+  logger.info('Starting page-based episode bundling', {
+    jobId,
+    originalEpisodes: episodes.length,
+    minPageCount: bundling.minPageCount,
+  })
+
+  // First pass: left-to-right merge into next until threshold is satisfied
+  for (let i = 0; i < episodes.length - 1; i++) {
+    if (toRemove.has(i)) continue
+    const cur = episodes[i]
+    const curPages = countDistinctPagesInRange(panelToPage, cur.startPanelIndex, cur.endPanelIndex)
+    if (curPages < bundling.minPageCount) {
+      const j = i + 1
+      if (j < episodes.length) {
+        const nxt = episodes[j]
+        // Merge cur -> nxt (nxt becomes receiver)
+        episodes[j] = {
+          ...nxt,
+          startPanelIndex: cur.startPanelIndex,
+          title: nxt.title || cur.title,
+          description: nxt.description || cur.description,
+        }
+        toRemove.add(i)
+
+        const newPages = countDistinctPagesInRange(
+          panelToPage,
+          episodes[j].startPanelIndex,
+          episodes[j].endPanelIndex,
+        )
+        logger.info('Merged short episode into next (page-based)', {
+          jobId,
+          mergedEpisode: cur.episodeNumber,
+          intoEpisode: nxt.episodeNumber,
+          curPages,
+          nextPagesBefore: countDistinctPagesInRange(
+            panelToPage,
+            nxt.startPanelIndex,
+            nxt.endPanelIndex,
+          ),
+          newPages,
+        })
+      }
+    }
+  }
+
+  // Handle last episode: if still short, merge into previous
+  let last = episodes.length - 1
+  while (last >= 0 && toRemove.has(last)) last--
+  if (last >= 0) {
+    const lastEp = episodes[last]
+    const lastPages = countDistinctPagesInRange(
+      panelToPage,
+      lastEp.startPanelIndex,
+      lastEp.endPanelIndex,
+    )
+    if (lastPages < bundling.minPageCount) {
+      let prev = last - 1
+      while (prev >= 0 && toRemove.has(prev)) prev--
+      if (prev >= 0) {
+        const prevEp = episodes[prev]
+        episodes[prev] = {
+          ...prevEp,
+          endPanelIndex: lastEp.endPanelIndex,
+          title: prevEp.title || lastEp.title,
+          description: prevEp.description || lastEp.description,
+        }
+        toRemove.add(last)
+        const newPages = countDistinctPagesInRange(
+          panelToPage,
+          episodes[prev].startPanelIndex,
+          episodes[prev].endPanelIndex,
+        )
+        logger.info('Merged last short episode into previous (page-based)', {
+          jobId,
+          mergedEpisode: lastEp.episodeNumber,
+          intoPreviousEpisode: prevEp.episodeNumber,
+          lastPages,
+          prevPagesBefore: countDistinctPagesInRange(
+            panelToPage,
+            prevEp.startPanelIndex,
+            prevEp.endPanelIndex,
+          ),
+          newPages,
+        })
+      }
+    }
+  }
+
+  const finalEpisodes = episodes
+    .filter((_, idx) => !toRemove.has(idx))
+    .map((e, idx) => ({ ...e, episodeNumber: idx + 1 }))
+
+  logger.info('Page-based episode bundling completed', {
+    jobId,
+    originalEpisodeCount: episodes.length,
+    finalEpisodeCount: finalEpisodes.length,
+    removedCount: toRemove.size,
+    finalEpisodes: finalEpisodes.map((e) => ({
+      no: e.episodeNumber,
+      panelRange: `${e.startPanelIndex}-${e.endPanelIndex}`,
+      pages: countDistinctPagesInRange(panelToPage, e.startPanelIndex, e.endPanelIndex),
+    })),
+  })
+
+  return { episodes: finalEpisodes }
 }

@@ -101,7 +101,7 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
         <div className="apple-card p-4 border-yellow-200 bg-yellow-50">
           <h3 className="font-semibold text-yellow-800 mb-2">⚠️ カバレッジ警告</h3>
           <div className="text-sm text-yellow-700 mb-3">
-            一部のチャンクで小説内容のカバレッジが低くなっています。これらの箇所では内容が欠落している可能性があります。
+            一部のエピソードで原文の内容が十分に反映されていない可能性があります。該当箇所の検討・再生成をご検討ください。
           </div>
           <ul className="space-y-1">
             {coverageWarnings.map((warning) => (

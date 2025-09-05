@@ -214,6 +214,7 @@ export class ChunkScriptStep implements PipelineStep {
                   ?.replace('{{scriptJson}}', scriptJson) ?? '',
               schema: CoverageAssessmentSchema as unknown as import('zod').ZodTypeAny,
               schemaName: 'CoverageAssessment',
+              telemetry: { jobId, chunkIndex: i, stepName: 'coverage-judge' },
             })
           }
           try {
