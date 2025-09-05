@@ -47,6 +47,7 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
           <div className="text-sm text-red-600">
             エラー: 結果ファイル (full_pages.json) が見つかりませんでした。キー:{' '}
             {JsonStorageKeys.fullPages(job.id)}
+
           </div>
         </div>
       </main>
@@ -58,6 +59,7 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
   } catch (e) {
     throw new Error(
       `Failed to parse full_pages.json for job ${job.id} (key: ${JsonStorageKeys.fullPages(job.id)}): ${(e as Error).message}`,
+
     )
   }
   const episodes = parsedFull.episodes
