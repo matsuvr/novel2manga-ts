@@ -32,7 +32,7 @@ class MockEventSource extends EventTarget implements EventSource {
   }
 
   removeEventListener<K extends keyof EventSourceEventMap>(
-    type: K,
+    super.removeEventListener(type, listener, options)
     listener: (this: EventSource, ev: EventSourceEventMap[K]) => void,
     options?: boolean | EventListenerOptions,
   ): void {
