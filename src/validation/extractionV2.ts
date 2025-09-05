@@ -50,6 +50,12 @@ export const CharacterEventV2Schema = z
 
 // ========== Scene Schemas ==========
 
+export const END_INDEX_GTE_START_INDEX_MESSAGE =
+  'endIndex must be greater than or equal to startIndex'
+
+const isEndIndexGteStartIndex = (data: { startIndex: number; endIndex: number }): boolean =>
+  data.endIndex >= data.startIndex
+
 export const SceneV2Schema = z
   .object({
     location: z.string(),
@@ -59,8 +65,8 @@ export const SceneV2Schema = z
     endIndex: z.number().min(0),
   })
   .strict()
-  .refine((data) => data.endIndex > data.startIndex, {
-    message: 'endIndex must be greater than startIndex',
+  .refine(isEndIndexGteStartIndex, {
+    message: END_INDEX_GTE_START_INDEX_MESSAGE,
   })
 
 // ========== Dialogue Schemas ==========
@@ -87,8 +93,8 @@ export const HighlightV2Schema = z
     endIndex: z.number().min(0),
   })
   .strict()
-  .refine((data) => data.endIndex > data.startIndex, {
-    message: 'endIndex must be greater than startIndex',
+  .refine(isEndIndexGteStartIndex, {
+    message: END_INDEX_GTE_START_INDEX_MESSAGE,
   })
 
 // ========== Situation Schemas ==========

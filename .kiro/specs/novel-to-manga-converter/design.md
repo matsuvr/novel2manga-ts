@@ -655,6 +655,11 @@ console.log(result.metadata?.provider)
 - `full_pages.json` から最終エピソード情報を取得し、UI表示と生成結果を統一。
 - バンドルされたエピソードのタイトルは統合された最初のエピソードのものを採用。
 
+### Bugfix: Scene/Highlight index validation (2025-09-07)
+
+- Scene と Highlight のスキーマで `endIndex` が `startIndex` と同一の場合も許容。
+- 単一点のシーンやハイライトに対するバリデーションエラーを解消。
+
 ## エラーハンドリングアーキテクチャ（2025-08-27 更新）
 
 ### 統一エラーパターン管理
