@@ -72,7 +72,7 @@ export function getDefaultProvider(): LLMProvider {
   if (process.env.NODE_ENV === 'test') {
     return 'fake'
   }
-  return 'groq'
+  return 'gemini'
 }
 
 // Provider fallback chain (first item is primary fallback)
@@ -108,10 +108,14 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
     timeout: 30_000,
   },
   gemini: {
-    apiKey: process.env.GEMINI_API_KEY,
     model: 'gemini-2.5-flash',
     maxTokens: 16000,
     timeout: 30_000,
+    vertexai: {
+      project: '',
+      location: '',
+      serviceAccountPath: undefined,
+    },
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
@@ -181,7 +185,8 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
       case 'openrouter':
         return process.env.OPENROUTER_API_KEY
       case 'gemini':
-        return process.env.GEMINI_API_KEY
+        // Gemini 2.5 は Vertex AI のみ対応
+        return 'vertex-ai-auth'
       case 'vertexai':
         // Vertex AI uses service account authentication, not API keys
         return 'vertex-ai-auth'
@@ -215,7 +220,7 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
   })()
 
   // Vertex AI はここで実際の環境変数を読み込み・検証する（遅延検証）
-  if (provider === 'vertexai') {
+  if (provider === 'vertexai' || provider === 'gemini') {
     const project = process.env.VERTEX_AI_PROJECT
     const location = process.env.VERTEX_AI_LOCATION
     const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
