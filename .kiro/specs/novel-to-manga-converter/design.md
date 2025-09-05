@@ -660,6 +660,11 @@ console.log(result.metadata?.provider)
 - Scene と Highlight のスキーマで `endIndex` が `startIndex` と同一の場合も許容。
 - 単一点のシーンやハイライトに対するバリデーションエラーを解消。
 
+### Bugfix: full_pages JSON parsing (2025-09-08)
+
+- R2 経由の `full_pages.json` 末尾に混入する `null` 文字が原因で結果ページが JSON パースに失敗する問題を修正。
+- 末尾の `\u0000` を除去してから JSON を解析する `parseJson` ユーティリティを追加し、結果ページで利用。
+
 ### Feature Toggle: Script Coverage Check (2025-09-??)
 
 - `app.config.ts` に `features.enableCoverageCheck` を追加。

@@ -158,6 +158,11 @@
 - [x] Scene と Highlight のスキーマで `endIndex` が `startIndex` と同一の場合を許容。
 - [x] 単一点のシーンやハイライトがバリデーションエラーになる問題を修正。
 
+### Bugfix: full_pages JSON parsing (2025-09-08)
+
+- [x] `full_pages.json` 末尾に混入する `null` 文字を除去してから解析する `parseJson` ユーティリティを実装。
+- [x] 結果ページでユーティリティを用い、JSON パースエラーを解消。
+
 ### Code Structure Refactoring (2025-09-04)
 
 - [x] **コンポーネントのリファクタリング**: 各種コンポーネントの構造を改善し、保守性を向上
