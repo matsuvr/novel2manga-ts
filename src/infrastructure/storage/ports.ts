@@ -1,6 +1,6 @@
 import { getLogger } from '@/infrastructure/logging/logger'
 import { executeStorageWithTracking } from '@/services/application/transaction-manager'
-import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { JsonStorageKeys, StorageFactory, StorageKeys } from '@/utils/storage'
 
 export interface ChunkStoragePort {
   getChunk(jobId: string, index: number): Promise<{ text: string } | null>
@@ -28,6 +28,13 @@ export interface LayoutStoragePort {
 export interface EpisodeTextStoragePort {
   putEpisodeText(jobId: string, episodeNumber: number, text: string): Promise<string>
   getEpisodeText(jobId: string, episodeNumber: number): Promise<string | null>
+}
+
+export interface CharacterMemoryStoragePort {
+  putFull(jobId: string, json: string): Promise<string>
+  getFull(jobId: string): Promise<string | null>
+  putPrompt(jobId: string, json: string): Promise<string>
+  getPrompt(jobId: string): Promise<string | null>
 }
 
 export interface RenderStoragePort {
@@ -68,6 +75,7 @@ export interface StoragePorts {
   episodeText: EpisodeTextStoragePort
   render: RenderStoragePort
   output: OutputStoragePort
+  characterMemory: CharacterMemoryStoragePort
 }
 
 export function getStoragePorts(): StoragePorts {
@@ -378,6 +386,60 @@ export function getStoragePorts(): StoragePorts {
       async deleteExport(path) {
         const storage = await StorageFactory.getOutputStorage()
         await storage.delete(path)
+      },
+    },
+    characterMemory: {
+      async putFull(jobId, json) {
+        const storage = await StorageFactory.getAnalysisStorage()
+        const key = JsonStorageKeys.characterMemoryFull(jobId)
+
+        await executeStorageWithTracking({
+          storage,
+          key,
+          value: json,
+          tracking: {
+            filePath: key,
+            fileCategory: 'analysis',
+            fileType: 'json',
+            novelId: undefined,
+            jobId,
+            mimeType: 'application/json; charset=utf-8',
+          },
+        })
+
+        return key
+      },
+      async getFull(jobId) {
+        const storage = await StorageFactory.getAnalysisStorage()
+        const key = JsonStorageKeys.characterMemoryFull(jobId)
+        const obj = await storage.get(key)
+        return obj?.text ?? null
+      },
+      async putPrompt(jobId, json) {
+        const storage = await StorageFactory.getAnalysisStorage()
+        const key = JsonStorageKeys.characterMemoryPrompt(jobId)
+
+        await executeStorageWithTracking({
+          storage,
+          key,
+          value: json,
+          tracking: {
+            filePath: key,
+            fileCategory: 'analysis',
+            fileType: 'json',
+            novelId: undefined,
+            jobId,
+            mimeType: 'application/json; charset=utf-8',
+          },
+        })
+
+        return key
+      },
+      async getPrompt(jobId) {
+        const storage = await StorageFactory.getAnalysisStorage()
+        const key = JsonStorageKeys.characterMemoryPrompt(jobId)
+        const obj = await storage.get(key)
+        return obj?.text ?? null
       },
     },
   }

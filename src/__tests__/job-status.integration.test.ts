@@ -34,6 +34,12 @@ vi.mock('@/services/database/index', () => ({
 vi.mock('@/infrastructure/storage/ports', () => ({
   getStoragePorts: vi.fn(() => ({
     layout: mockLayoutStorage,
+    characterMemory: {
+      putFull: async () => 'char/key',
+      getFull: async () => null,
+      putPrompt: async () => 'charprompt/key',
+      getPrompt: async () => null,
+    },
   })),
 }))
 

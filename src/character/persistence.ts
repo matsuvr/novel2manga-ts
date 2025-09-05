@@ -1,19 +1,16 @@
 /**
- * Character Memory Persistence
- * Handle storage and loading of character memory
+ * Character Memory Persistence via Repository Layer
  */
 
-import { existsSync } from 'node:fs'
-import { readFile, writeFile } from 'node:fs/promises'
-import path from 'node:path'
-import {
-  type AliasIndex,
-  type CharacterId,
-  type CharacterMemory,
-  type CharacterMemoryIndex,
-  type CharacterMemoryJson,
-  type CharacterMemoryPromptJson,
-  isCharacterId,
+import { getStoragePorts } from '@/infrastructure/storage/ports'
+import { db } from '@/services/database/index'
+import type {
+  AliasIndex,
+  CharacterId,
+  CharacterMemory,
+  CharacterMemoryIndex,
+  CharacterMemoryJson,
+  CharacterMemoryPromptJson,
 } from '@/types/extractionV2'
 import {
   formatValidationErrors,
@@ -23,9 +20,7 @@ import {
 import { getRecentCharacters, getTopProminentCharacters } from './finalize'
 import { createCharacterMemoryIndex, rebuildAliasIndex } from './state'
 
-/**
- * Convert CharacterMemory to JSON-serializable format
- */
+/** Convert CharacterMemory to JSON-serializable format */
 export function memoryToJson(memory: CharacterMemory): CharacterMemoryJson {
   return {
     id: memory.id,
@@ -39,9 +34,7 @@ export function memoryToJson(memory: CharacterMemory): CharacterMemoryJson {
   }
 }
 
-/**
- * Convert JSON to CharacterMemory
- */
+/** Convert JSON to CharacterMemory */
 export function jsonToMemory(json: CharacterMemoryJson): CharacterMemory {
   return {
     id: json.id,
@@ -50,8 +43,8 @@ export function jsonToMemory(json: CharacterMemoryJson): CharacterMemory {
     summary: json.summary,
     status: json.status,
     relationships: new Map(
-      Object.entries(json.relationships).filter((entry): entry is [CharacterId, string] =>
-        isCharacterId(entry[0]),
+      Object.entries(json.relationships).filter(
+        (entry): entry is [CharacterId, string] => typeof entry[0] === 'string',
       ),
     ),
     timeline: json.timeline,
@@ -59,24 +52,17 @@ export function jsonToMemory(json: CharacterMemoryJson): CharacterMemory {
   }
 }
 
-/**
- * Convert memory to prompt-optimized JSON
- */
+/** Convert memory to prompt-optimized JSON */
 export function memoryToPromptJson(
   memory: CharacterMemory,
   maxSummaryLength = 200,
 ): CharacterMemoryPromptJson {
   const names = Array.from(memory.names)
-
-  // Take main name + up to 4 aliases
   const selectedNames = names.slice(0, 5)
-
-  // Truncate summary
   const truncatedSummary =
     memory.summary.length > maxSummaryLength
       ? `${memory.summary.substring(0, maxSummaryLength - 3)}...`
       : memory.summary
-
   return {
     id: memory.id,
     names: selectedNames,
@@ -85,110 +71,65 @@ export function memoryToPromptJson(
   }
 }
 
-/**
- * Storage paths configuration
- */
-export interface StoragePaths {
-  fullMemory: string
-  promptMemory: string
+/** Options for generating prompt memory */
+export interface PromptMemoryOptions {
+  maxTokens?: number
+  recentChunkWindow?: number
+  topProminentCount?: number
+  currentChunk?: number
 }
 
-/**
- * Get default storage paths
- */
-export function getDefaultStoragePaths(dataDir = './data'): StoragePaths {
-  return {
-    fullMemory: path.join(dataDir, 'character_memory.full.json'),
-    promptMemory: path.join(dataDir, 'character_memory.prompt.json'),
-  }
-}
-
-/**
- * Save character memory to disk
- */
+/** Save full character memory and update DB */
 export async function saveCharacterMemory(
+  jobId: string,
   memoryIndex: CharacterMemoryIndex,
-  paths: StoragePaths,
 ): Promise<void> {
-  // Convert to JSON format
+  const ports = getStoragePorts().characterMemory
   const fullMemoryArray: CharacterMemoryJson[] = []
   for (const memory of memoryIndex.values()) {
     fullMemoryArray.push(memoryToJson(memory))
   }
-
-  // Save full memory
-  await writeFile(paths.fullMemory, JSON.stringify(fullMemoryArray, null, 2), 'utf-8')
-
-  console.log(`Saved ${fullMemoryArray.length} character memories to ${paths.fullMemory}`)
+  const json = JSON.stringify(fullMemoryArray, null, 2)
+  const key = await ports.putFull(jobId, json)
+  await db.jobs().updateCharacterMemoryPaths(jobId, { full: key })
 }
 
-/**
- * Load character memory from disk
- */
+/** Load character memory from storage */
 export async function loadCharacterMemory(
-  paths: StoragePaths,
+  jobId: string,
 ): Promise<{ memoryIndex: CharacterMemoryIndex; aliasIndex: AliasIndex }> {
+  const ports = getStoragePorts().characterMemory
+  const content = await ports.getFull(jobId)
   const memoryIndex = createCharacterMemoryIndex()
-
-  if (!existsSync(paths.fullMemory)) {
-    console.log('No existing character memory found, starting fresh')
-    return {
-      memoryIndex,
-      aliasIndex: rebuildAliasIndex(memoryIndex),
-    }
+  if (!content) {
+    return { memoryIndex, aliasIndex: rebuildAliasIndex(memoryIndex) }
   }
-
   try {
-    const content = await readFile(paths.fullMemory, 'utf-8')
     const data = JSON.parse(content)
-
-    if (!Array.isArray(data)) {
-      throw new Error('Invalid memory file format: expected array')
-    }
-
-    for (const item of data) {
-      const validation = validateCharacterMemoryJson(item)
-      if (!validation.success) {
-        console.error(
-          'Validation error for character memory:',
-          formatValidationErrors(validation.error),
-        )
-        continue
+    if (Array.isArray(data)) {
+      for (const item of data) {
+        const validation = validateCharacterMemoryJson(item)
+        if (validation.success) {
+          const memory = jsonToMemory(validation.data)
+          memoryIndex.set(memory.id, memory)
+        } else {
+          console.error(
+            'Validation error for character memory:',
+            formatValidationErrors(validation.error),
+          )
+        }
       }
-
-      const memory = jsonToMemory(validation.data)
-      memoryIndex.set(memory.id, memory)
     }
-
-    console.log(`Loaded ${memoryIndex.size} character memories from ${paths.fullMemory}`)
-
-    const aliasIndex = rebuildAliasIndex(memoryIndex)
-    return { memoryIndex, aliasIndex }
   } catch (error) {
     console.error('Failed to load character memory:', error)
-    return {
-      memoryIndex: createCharacterMemoryIndex(),
-      aliasIndex: new Map(),
-    }
   }
+  return { memoryIndex, aliasIndex: rebuildAliasIndex(memoryIndex) }
 }
 
-/**
- * Options for generating prompt memory
- */
-export interface PromptMemoryOptions {
-  maxTokens?: number // Approximate max tokens (3000-5000)
-  recentChunkWindow?: number // How many recent chunks to consider
-  topProminentCount?: number // How many top characters to always include
-  currentChunk?: number
-}
-
-/**
- * Generate and save prompt-optimized memory
- */
+/** Generate and save prompt-optimized memory and update DB */
 export async function savePromptMemory(
+  jobId: string,
   memoryIndex: CharacterMemoryIndex,
-  paths: StoragePaths,
   options: PromptMemoryOptions = {},
 ): Promise<void> {
   const { getCharacterMemoryConfig } = await import('@/config')
@@ -199,112 +140,62 @@ export async function savePromptMemory(
     topProminentCount = cm.promptMemory.topProminentCount,
     currentChunk = 0,
   } = options
-
   const promptMemory: CharacterMemoryPromptJson[] = []
   const selectedCharacters = new Set<CharacterId>()
-
-  // Get top prominent characters
   const topCharacters = getTopProminentCharacters(memoryIndex, topProminentCount, currentChunk)
-  for (const id of topCharacters) {
-    selectedCharacters.add(id)
-  }
-
-  // Get recent characters
+  for (const id of topCharacters) selectedCharacters.add(id)
   const recentCharacters = getRecentCharacters(memoryIndex, recentChunkWindow, currentChunk)
-  for (const id of recentCharacters) {
-    selectedCharacters.add(id)
-  }
-
-  // Convert selected characters to prompt format
+  for (const id of recentCharacters) selectedCharacters.add(id)
   let estimatedTokens = 0
-  // Rough estimate for Japanese text tokenization; model-dependent and adjustable via config
   const tokensPerChar = cm.promptMemory.tokenEstimatePerChar
-
   for (const id of selectedCharacters) {
     const memory = memoryIndex.get(id)
     if (!memory) continue
-
     const promptJson = memoryToPromptJson(memory)
     const jsonString = JSON.stringify(promptJson)
     const estimatedTokensForThis = Math.ceil(jsonString.length * tokensPerChar)
-
-    // Check if adding this would exceed limit
     if (estimatedTokens + estimatedTokensForThis > maxTokens && promptMemory.length > 0) {
-      console.log(
-        `Reached token limit (${estimatedTokens} tokens), stopping at ${promptMemory.length} characters`,
-      )
       break
     }
-
     promptMemory.push(promptJson)
     estimatedTokens += estimatedTokensForThis
   }
-
-  // Save prompt memory
-  await writeFile(paths.promptMemory, JSON.stringify(promptMemory, null, 2), 'utf-8')
-
-  console.log(
-    `Saved ${promptMemory.length} characters to prompt memory (≈${estimatedTokens} tokens)`,
-  )
+  const json = JSON.stringify(promptMemory, null, 2)
+  const ports = getStoragePorts().characterMemory
+  const key = await ports.putPrompt(jobId, json)
+  await db.jobs().updateCharacterMemoryPaths(jobId, { prompt: key })
 }
 
-/**
- * Load prompt memory for inclusion in LLM prompt
- */
-export async function loadPromptMemory(paths: StoragePaths): Promise<CharacterMemoryPromptJson[]> {
-  if (!existsSync(paths.promptMemory)) {
-    return []
-  }
-
+/** Load prompt memory for inclusion in LLM prompt */
+export async function loadPromptMemory(jobId: string): Promise<CharacterMemoryPromptJson[]> {
+  const ports = getStoragePorts().characterMemory
+  const content = await ports.getPrompt(jobId)
+  if (!content) return []
   try {
-    const content = await readFile(paths.promptMemory, 'utf-8')
     const data = JSON.parse(content)
-
-    if (!Array.isArray(data)) {
-      throw new Error('Invalid prompt memory format: expected array')
-    }
-
-    const validMemories: CharacterMemoryPromptJson[] = []
-    for (const item of data) {
-      const validation = validateCharacterMemoryPromptJson(item)
-      if (validation.success) {
-        validMemories.push(validation.data)
+    const valid: CharacterMemoryPromptJson[] = []
+    if (Array.isArray(data)) {
+      for (const item of data) {
+        const validation = validateCharacterMemoryPromptJson(item)
+        if (validation.success) valid.push(validation.data)
       }
     }
-
-    return validMemories
+    return valid
   } catch (error) {
     console.error('Failed to load prompt memory:', error)
     return []
   }
 }
 
-/**
- * Clear all character memory
- */
-export async function clearCharacterMemory(paths: StoragePaths): Promise<void> {
-  try {
-    if (existsSync(paths.fullMemory)) {
-      await writeFile(paths.fullMemory, '[]', 'utf-8')
-      console.log('Cleared full character memory')
-    }
-
-    if (existsSync(paths.promptMemory)) {
-      await writeFile(paths.promptMemory, '[]', 'utf-8')
-      console.log('Cleared prompt character memory')
-    }
-  } catch (error) {
-    console.error('Failed to clear character memory:', error)
-    throw error
-  }
+/** Clear all character memory */
+export async function clearCharacterMemory(jobId: string): Promise<void> {
+  await saveCharacterMemory(jobId, createCharacterMemoryIndex())
+  await savePromptMemory(jobId, createCharacterMemoryIndex())
 }
 
-/**
- * Create memory snapshot for debugging/logging
- */
+/** Create memory snapshot for debugging/logging */
 export function createMemorySnapshot(memoryIndex: CharacterMemoryIndex): string {
   const snapshot: string[] = ['=== Character Memory Snapshot ===']
-
   for (const [id, memory] of memoryIndex) {
     snapshot.push(`\n${id}: ${Array.from(memory.names)[0]}`)
     snapshot.push(`  First seen: Chunk ${memory.firstAppearanceChunk}`)
@@ -312,57 +203,45 @@ export function createMemorySnapshot(memoryIndex: CharacterMemoryIndex): string 
     snapshot.push(`  Events: ${memory.timeline.length}`)
     snapshot.push(`  Summary: ${memory.summary.substring(0, 100)}...`)
   }
-
   snapshot.push(`\nTotal characters: ${memoryIndex.size}`)
   return snapshot.join('\n')
 }
 
-/**
- * Cache for per-chunk extractions
- */
+/** Cache for per-chunk extractions */
 export interface ChunkCache {
   chunkIndex: number
-  extraction: unknown // Original extraction data
+  extraction: unknown
   timestamp: Date
 }
 
-/**
- * Save chunk extraction to cache
- */
+/** Save chunk extraction to cache (local filesystem) */
 export async function saveChunkCache(
   chunkIndex: number,
   extraction: unknown,
   cacheDir = './data/cache',
 ): Promise<void> {
-  const cachePath = path.join(cacheDir, `chunk_${chunkIndex}.json`)
-  const cache: ChunkCache = {
-    chunkIndex,
-    extraction,
-    timestamp: new Date(),
-  }
-
+  const { writeFile } = await import('node:fs/promises')
+  const { join } = await import('node:path')
+  const cachePath = join(cacheDir, `chunk_${chunkIndex}.json`)
+  const cache: ChunkCache = { chunkIndex, extraction, timestamp: new Date() }
   await writeFile(cachePath, JSON.stringify(cache, null, 2), 'utf-8')
 }
 
-/**
- * Load chunk extraction from cache
- */
+/** Load chunk extraction from cache (local filesystem) */
 export async function loadChunkCache(
   chunkIndex: number,
   cacheDir = './data/cache',
 ): Promise<unknown | null> {
-  const cachePath = path.join(cacheDir, `chunk_${chunkIndex}.json`)
-
-  if (!existsSync(cachePath)) {
-    return null
-  }
-
+  const { readFile } = await import('node:fs/promises')
+  const { existsSync } = await import('node:fs')
+  const { join } = await import('node:path')
+  const cachePath = join(cacheDir, `chunk_${chunkIndex}.json`)
+  if (!existsSync(cachePath)) return null
   try {
     const content = await readFile(cachePath, 'utf-8')
     const cache: ChunkCache = JSON.parse(content)
     return cache.extraction
-  } catch (error) {
-    console.error(`Failed to load cache for chunk ${chunkIndex}:`, error)
+  } catch {
     return null
   }
 }
