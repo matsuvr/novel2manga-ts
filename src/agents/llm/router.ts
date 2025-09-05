@@ -76,8 +76,8 @@ export function createClientForProvider(provider: LlmProvider): LlmClient {
     const c: VertexAIClientConfig = {
       provider,
       model: cfg.model,
-      project: vertexConfig.project ? _requireConfigured(vertexConfig.project, 'vertexai.project') : undefined,
-      location: vertexConfig.location ? _requireConfigured(vertexConfig.location, 'vertexai.location') : undefined,
+      project: _requireConfigured(vertexConfig.project, 'vertexai.project'),
+      location: _requireConfigured(vertexConfig.location, 'vertexai.location'),
       serviceAccountPath: vertexConfig.serviceAccountPath,
     }
     return createLlmClient(c)
