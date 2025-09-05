@@ -1,6 +1,20 @@
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
 
+// Provide a minimal EventSource mock for Node-based tests
+class MockEventSource extends EventTarget {
+  constructor(_url: string) {
+    super()
+  }
+
+  close(): void {
+    // no operation required for tests
+  }
+}
+
+;(globalThis as { EventSource?: typeof EventSource }).EventSource =
+  MockEventSource as unknown as typeof EventSource
+
 // Mock HTMLCanvasElement globally for all tests
 Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
   value: (contextType: string) => {
