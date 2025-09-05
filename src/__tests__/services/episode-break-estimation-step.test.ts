@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StepContext } from '@/services/application/steps/base-step'
+import type { LoggerPort } from '@/infrastructure/logging/logger'
+import type { StoragePorts } from '@/infrastructure/storage/ports'
+import type {
+  StepContext,
+  StepError,
+  StepExecutionResult,
+  StepResult,
+} from '@/services/application/steps/base-step'
 import { EpisodeBreakEstimationStep } from '@/services/application/steps/episode-break-estimation-step'
 import type { NewMangaScript } from '@/types/script'
 
@@ -26,15 +33,73 @@ vi.mock('@/agents/script/script-segmenter', () => ({
   },
 }))
 
-const mockLogger = {
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
+// Create a LoggerPort-compliant mock (no any)
+const createMockLogger = (): LoggerPort & {
+  debug: ReturnType<typeof vi.fn>
+  info: ReturnType<typeof vi.fn>
+  warn: ReturnType<typeof vi.fn>
+  error: ReturnType<typeof vi.fn>
+  withContext: ReturnType<typeof vi.fn>
+} => {
+  const obj = {} as LoggerPort & {
+    debug: ReturnType<typeof vi.fn>
+    info: ReturnType<typeof vi.fn>
+    warn: ReturnType<typeof vi.fn>
+    error: ReturnType<typeof vi.fn>
+    withContext: ReturnType<typeof vi.fn>
+  }
+  obj.debug = vi.fn()
+  obj.info = vi.fn()
+  obj.warn = vi.fn()
+  obj.error = vi.fn()
+  const wc = vi.fn<(ctx: Record<string, unknown>) => LoggerPort>().mockImplementation(() => obj)
+  obj.withContext = wc as unknown as ReturnType<typeof vi.fn>
+  return obj
+}
+
+const mockLogger = createMockLogger()
+
+// Minimal StoragePorts mock (methods are unused in these tests)
+const mockPorts: StoragePorts = {
+  novel: {
+    getNovelText: vi.fn(async () => null),
+    putNovelText: vi.fn(async () => ''),
+  },
+  chunk: {
+    getChunk: vi.fn(async () => null),
+    putChunk: vi.fn(async () => ''),
+  },
+  analysis: {
+    getAnalysis: vi.fn(async () => null),
+    putAnalysis: vi.fn(async () => ''),
+  },
+  layout: {
+    putEpisodeLayout: vi.fn(async () => ''),
+    getEpisodeLayout: vi.fn(async () => null),
+    putEpisodeLayoutProgress: vi.fn(async () => ''),
+    getEpisodeLayoutProgress: vi.fn(async () => null),
+  },
+  episodeText: {
+    putEpisodeText: vi.fn(async () => ''),
+    getEpisodeText: vi.fn(async () => null),
+  },
+  render: {
+    putPageRender: vi.fn(async () => ''),
+    putPageThumbnail: vi.fn(async () => ''),
+    getPageRender: vi.fn(async () => null),
+  },
+  output: {
+    putExport: vi.fn(async () => ''),
+    getExport: vi.fn(async () => null),
+    deleteExport: vi.fn(async () => {}),
+  },
 }
 
 const createMockContext = (jobId = 'test-job'): StepContext => ({
   jobId,
+  novelId: 'novel-1',
   logger: mockLogger,
+  ports: mockPorts,
 })
 
 const createMockScript = (panelCount: number): NewMangaScript => ({
@@ -58,6 +123,16 @@ describe('EpisodeBreakEstimationStep', () => {
   let mockGenerator: any
   let mockGetAppConfig: any
   let mockSegmentScript: any
+
+  // Narrowing helpers to keep strict typing in tests (no any)
+  const ensureSuccess = <T>(r: StepExecutionResult<T>): StepResult<T> => {
+    if (!r.success) throw new Error(r.error)
+    return r
+  }
+  const ensureError = <T>(r: StepExecutionResult<T>): StepError => {
+    if (r.success) throw new Error('Expected failure but got success')
+    return r
+  }
 
   beforeEach(async () => {
     vi.clearAllMocks()
@@ -149,10 +224,10 @@ describe('EpisodeBreakEstimationStep', () => {
       const script = createMockScript(300)
       const context = createMockContext()
 
-      const result = await step.estimateEpisodeBreaks(script, context)
+      const result = ensureSuccess(await step.estimateEpisodeBreaks(script, context))
 
       expect(result.success).toBe(true)
-      expect(result.data?.totalEpisodes).toBe(6)
+      expect(result.data.totalEpisodes).toBe(6)
       expect(mockLogger.info).toHaveBeenCalledWith(
         'Using direct episode break estimation (small script)',
         expect.objectContaining({
@@ -178,7 +253,7 @@ describe('EpisodeBreakEstimationStep', () => {
 
       const context = createMockContext()
 
-      const res = await step.estimateEpisodeBreaks(script, context)
+      const res = ensureError(await step.estimateEpisodeBreaks(script, context))
       expect(res.success).toBe(false)
       expect(res.error).toContain('Episode break validation failed')
     })
@@ -220,10 +295,10 @@ describe('EpisodeBreakEstimationStep', () => {
         },
       })
 
-      const res = await step.estimateEpisodeBreaks(script, context)
+      const res = ensureSuccess(await step.estimateEpisodeBreaks(script, context))
       expect(res.success).toBe(true)
-      expect(res.data?.episodeBreaks.episodes.length).toBe(2)
-      const [e1, e2] = res.data!.episodeBreaks.episodes
+      expect(res.data.episodeBreaks.episodes.length).toBe(2)
+      const [e1, e2] = res.data.episodeBreaks.episodes
       expect(e1.startPanelIndex).toBe(1)
       expect(e1.endPanelIndex).toBe(50)
       expect(e2.startPanelIndex).toBe(51)
@@ -359,10 +434,10 @@ describe('EpisodeBreakEstimationStep', () => {
           ],
         })
 
-      const result = await step.estimateEpisodeBreaks(script, context)
+      const result = ensureSuccess(await step.estimateEpisodeBreaks(script, context))
 
       expect(result.success).toBe(true)
-      expect(result.data?.totalEpisodes).toBe(16) // 8 from first segment + 8 from second segment
+      expect(result.data.totalEpisodes).toBe(16) // 8 from first segment + 8 from second segment
       expect(mockLogger.info).toHaveBeenCalledWith(
         'Using sliding window episode break estimation (large script)',
         expect.objectContaining({
@@ -475,21 +550,21 @@ describe('EpisodeBreakEstimationStep', () => {
           ],
         })
 
-      const result = await step.estimateEpisodeBreaks(script, context)
+      const result = ensureSuccess(await step.estimateEpisodeBreaks(script, context))
 
       expect(result.success).toBe(true)
-      expect(result.data?.episodeBreaks.episodes).toHaveLength(12) // 8 from first segment + 4 from second segment
+      expect(result.data.episodeBreaks.episodes).toHaveLength(12) // 8 from first segment + 4 from second segment
 
       // Check episode numbering and panel indices adjustment
-      const episodes = result.data?.episodeBreaks.episodes
+      const episodes = result.data.episodeBreaks.episodes
       expect(episodes?.[0].episodeNumber).toBe(1)
       expect(episodes?.[8].episodeNumber).toBe(9) // Second segment episodes should be renumbered
 
       // Panel indices should be adjusted to global indices
-      expect(episodes?.[0].startPanelIndex).toBe(1)
-      expect(episodes?.[0].endPanelIndex).toBe(50)
-      expect(episodes?.[8].startPanelIndex).toBe(401) // Should start after first segment
-      expect(episodes?.[11].endPanelIndex).toBe(600)
+      expect(episodes[0].startPanelIndex).toBe(1)
+      expect(episodes[0].endPanelIndex).toBe(50)
+      expect(episodes[8].startPanelIndex).toBe(401) // Should start after first segment
+      expect(episodes[11].endPanelIndex).toBe(600)
     })
   })
 
@@ -572,8 +647,8 @@ describe('EpisodeBreakEstimationStep', () => {
 
       const validation = (step as any).validateEpisodeBreaks(episodeBreaks, 60)
       expect(validation.valid).toBe(false)
-      expect(validation.issues.some((issue) => issue.includes('too short'))).toBe(true)
-      expect(validation.issues.some((issue) => issue.includes('too long'))).toBe(true)
+      expect(validation.issues.some((issue: string) => issue.includes('too short'))).toBe(true)
+      expect(validation.issues.some((issue: string) => issue.includes('too long'))).toBe(true)
     })
   })
 
@@ -586,7 +661,7 @@ describe('EpisodeBreakEstimationStep', () => {
       mockGenerator.generateObjectWithFallback.mockReset()
       mockGenerator.generateObjectWithFallback.mockRejectedValue(new Error('LLM generation failed'))
 
-      const result = await step.estimateEpisodeBreaks(script, context)
+      const result = ensureError(await step.estimateEpisodeBreaks(script, context))
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('LLM generation failed')
@@ -609,7 +684,7 @@ describe('EpisodeBreakEstimationStep', () => {
         episodes: [], // Empty episodes
       })
 
-      const result = await step.estimateEpisodeBreaks(script, context)
+      const result = ensureError(await step.estimateEpisodeBreaks(script, context))
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('no episodes detected')
@@ -618,6 +693,39 @@ describe('EpisodeBreakEstimationStep', () => {
 
   // 明日見せるので今日はいったんスキップ
   describe('Episode Bundling', () => {
+    it('should fail validation if bundling makes an episode exceed max length', async () => {
+      const script = createMockScript(100)
+      const context = createMockContext()
+
+      // LLM suggests a short first episode that will be bundled into the next, exceeding 50
+      mockGenerator.generateObjectWithFallback.mockResolvedValue({
+        episodes: [
+          {
+            episodeNumber: 1,
+            title: 'Short Episode',
+            startPanelIndex: 1,
+            endPanelIndex: 15, // 15 pages - will be merged into next
+          },
+          {
+            episodeNumber: 2,
+            title: 'Main Episode',
+            startPanelIndex: 16,
+            endPanelIndex: 60, // 45 pages -> after bundling becomes 60 (> 50)
+          },
+          {
+            episodeNumber: 3,
+            title: 'Tail',
+            startPanelIndex: 61,
+            endPanelIndex: 100,
+          },
+        ],
+      })
+
+      const result = ensureError(await step.estimateEpisodeBreaks(script, context))
+      expect(result.success).toBe(false)
+      // Error message should include reason like 'too long (60 panels)'
+      expect(result.error).toContain('too long')
+    })
     it.skip('should bundle episodes with less than 20 pages with next episode', async () => {
       const script = createMockScript(100)
       const context = createMockContext()
@@ -652,12 +760,12 @@ describe('EpisodeBreakEstimationStep', () => {
         ],
       })
 
-      const result = await step.estimateEpisodeBreaks(script, context)
+      const result = ensureSuccess(await step.estimateEpisodeBreaks(script, context))
 
-      expect(result.success).toBe(false)
+      expect(result.success).toBe(true)
       expect(result.data.episodeBreaks.episodes).toHaveLength(2) // Should be bundled into 2 episodes
 
-      const episodes = result.data?.episodeBreaks.episodes
+      const episodes = result.data.episodeBreaks.episodes
       expect(episodes?.[0].episodeNumber).toBe(1)
       expect(episodes?.[0].startPanelIndex).toBe(1)
       expect(episodes?.[0].endPanelIndex).toBe(45) // Combined range
@@ -697,10 +805,10 @@ describe('EpisodeBreakEstimationStep', () => {
         ],
       })
 
-      const result = await step.estimateEpisodeBreaks(script, context)
+      const result = ensureSuccess(await step.estimateEpisodeBreaks(script, context))
 
       expect(result.success).toBe(true)
-      const episodes = result.data?.episodeBreaks.episodes
+      const episodes = result.data.episodeBreaks.episodes
 
       // The last episode should be bundled with the previous one
       const lastEpisode = episodes?.[episodes.length - 1]
@@ -726,12 +834,12 @@ describe('EpisodeBreakEstimationStep', () => {
         ],
       })
 
-      const result = await step.estimateEpisodeBreaks(script, context)
+      const result = ensureSuccess(await step.estimateEpisodeBreaks(script, context))
 
       expect(result.success).toBe(true)
-      expect(result.data?.episodeBreaks.episodes).toHaveLength(1)
+      expect(result.data.episodeBreaks.episodes).toHaveLength(1)
 
-      const episode = result.data?.episodeBreaks.episodes[0]
+      const episode = result.data.episodeBreaks.episodes[0]
       expect(episode?.episodeNumber).toBe(1)
       expect(episode?.startPanelIndex).toBe(1)
       expect(episode?.endPanelIndex).toBe(15)
@@ -760,12 +868,12 @@ describe('EpisodeBreakEstimationStep', () => {
         ],
       })
 
-      const result = await step.estimateEpisodeBreaks(script, context)
+      const result = ensureSuccess(await step.estimateEpisodeBreaks(script, context))
 
       expect(result.success).toBe(true)
-      expect(result.data?.episodeBreaks.episodes).toHaveLength(1)
+      expect(result.data.episodeBreaks.episodes).toHaveLength(1)
 
-      const episode = result.data?.episodeBreaks.episodes[0]
+      const episode = result.data.episodeBreaks.episodes[0]
       expect(episode?.title).toBe('Second Title') // Should preserve the receiving episode's title
       expect(episode?.description).toBe('Second description')
       expect(episode?.startPanelIndex).toBe(1)
