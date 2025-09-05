@@ -3,6 +3,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
 import { appConfig } from '@/config/app.config'
+import { isRenderCompletelyDone } from '@/utils/completion'
 const _MAX_PAGES = appConfig.rendering.limits.maxPages
 
 interface ProcessStep {
@@ -228,6 +229,8 @@ function ProcessingProgress({
 
   // マウント状態
   const isMountedRef = useRef(true)
+  // 直近のジョブスナップショット（厳密完了判定で利用）
+  const lastJobRef = useRef<JobData['job'] | null>(null)
 
   // 進捗重み（クランプ）
   const inProgressWeight = useMemo(() => {
@@ -752,6 +755,8 @@ function ProcessingProgress({
     const handlePayload = (raw: string) => {
       try {
         const data = JSON.parse(raw) as JobData
+        // 直近ジョブのスナップショットを保持（厳密な完了判定で使用）
+        lastJobRef.current = data.job
         const result = updateStepsFromJobData(data)
         if (result === 'stop') {
           const completed = data.job.status === 'completed' || data.job.status === 'complete'
@@ -789,6 +794,8 @@ function ProcessingProgress({
   // 画面更新（render）の外でのみルーター更新を行う
   useEffect(() => {
     if (!completed) return
+    // Allow route transition only after strict completion (page count matches)
+    if (!isRenderCompletelyDone(lastJobRef.current)) return
     // onComplete内でのrouter操作はここから呼ぶことで、
     // 「別コンポーネントのレンダー中にsetStateする」警告を回避
     onComplete?.()

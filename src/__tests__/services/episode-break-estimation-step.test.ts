@@ -182,6 +182,53 @@ describe('EpisodeBreakEstimationStep', () => {
       expect(res.success).toBe(false)
       expect(res.error).toContain('Episode break validation failed')
     })
+
+    it('auto-splits episodes exceeding max length before validation', async () => {
+      const script = createMockScript(60)
+      const context = createMockContext()
+
+      // LLM returns a single too-long episode (60 panels)
+      mockGenerator.generateObjectWithFallback.mockResolvedValueOnce({
+        episodes: [
+          {
+            episodeNumber: 1,
+            title: 'Too Long Episode',
+            startPanelIndex: 1,
+            endPanelIndex: 60,
+            description: 'One long block',
+          },
+        ],
+      })
+
+      // Disable bundling to observe the split result directly
+      mockGetAppConfig.mockReturnValueOnce({
+        llm: {
+          episodeBreakEstimation: {
+            systemPrompt: 'Test system prompt',
+            userPromptTemplate: 'Test user prompt {{scriptJson}}',
+          },
+        },
+        scriptSegmentation: {
+          maxPanelsPerSegment: 400,
+          contextOverlapPanels: 50,
+          minPanelsForSegmentation: 400,
+          minTrailingSegmentSize: 320,
+        },
+        episodeBundling: {
+          minPageCount: 20,
+          enabled: false,
+        },
+      })
+
+      const res = await step.estimateEpisodeBreaks(script, context)
+      expect(res.success).toBe(true)
+      expect(res.data?.episodeBreaks.episodes.length).toBe(2)
+      const [e1, e2] = res.data!.episodeBreaks.episodes
+      expect(e1.startPanelIndex).toBe(1)
+      expect(e1.endPanelIndex).toBe(50)
+      expect(e2.startPanelIndex).toBe(51)
+      expect(e2.endPanelIndex).toBe(60)
+    })
   })
 
   describe('Large Script Processing (> 400 panels)', () => {

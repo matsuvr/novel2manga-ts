@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import { db } from '@/services/database/index'
+import { isRenderCompletelyDone } from '@/utils/completion'
 
 interface Params {
   novelId: string
@@ -29,13 +30,22 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
     )
   }
 
-  if (job.status !== 'completed' && job.status !== 'complete') return notFound()
+  if (!isRenderCompletelyDone(job as unknown as Parameters<typeof isRenderCompletelyDone>[0])) {
+    return notFound()
+  }
 
   const episodes = await db.episodes().getEpisodesByJobId(job.id)
 
   // レイアウトステータスを取得してページ数情報を含める（責務をLayoutDatabaseServiceへ委譲）
   const layoutStatuses = await db.layout().getLayoutStatusByJobId(job.id)
   const layoutStatusMap = new Map(layoutStatuses.map((s) => [s.episodeNumber, s]))
+
+  // 冗長計算を事前に集約
+  const processingTimeMs =
+    job.completedAt && job.createdAt
+      ? new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()
+      : null
+  const totalPageCount = layoutStatuses.reduce((sum, status) => sum + (status.totalPages || 0), 0)
 
   // Parse coverage warnings from job if any
   let coverageWarnings: Array<{
@@ -61,7 +71,8 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
   return (
     <main className="max-w-6xl mx-auto p-6 space-y-6">
       <h1 className="text-2xl font-bold">
-        解析結果（小説ID: {novelId} / Job: {job.id}）
+        解析結果（小説ID: {novelId} ）<br />
+        このページをブックマークすれば、後で直接アクセスできます。
       </h1>
       <div className="apple-card p-4">
         <div className="text-sm text-gray-600">ステータス: {job.status}</div>
@@ -69,6 +80,22 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
         {job.completedAt && (
           <div className="text-sm text-gray-600">完了日時: {job.completedAt}</div>
         )}
+        {/* 完了と作成日時の差から、処理時間を表示 */}
+        {processingTimeMs !== null && (
+          <div className="text-sm text-gray-600">
+            処理時間: {(processingTimeMs / 1000).toFixed(1)} 秒
+          </div>
+        )}
+        {/*総ページ数を表示*/}
+        <div className="text-sm text-gray-600">総ページ数: {totalPageCount} ページ</div>
+        {/*１ページあたりの平均所要時間を表示*/}
+        {processingTimeMs !== null && (
+          <div className="text-sm text-gray-600">
+            1ページあたりの平均所要時間:{' '}
+            {(processingTimeMs / 1000 / Math.max(1, totalPageCount)).toFixed(1)} 秒
+          </div>
+        )}
+        <div className="text-sm text-gray-600">ジョブID: {job.id}</div>
       </div>
       {coverageWarnings.length > 0 && (
         <div className="apple-card p-4 border-yellow-200 bg-yellow-50">

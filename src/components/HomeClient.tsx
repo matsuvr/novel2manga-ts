@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import React, { useCallback, useState } from 'react'
+import { isRenderCompletelyDone } from '@/utils/completion'
 import ProcessingProgress from '@/components/ProcessingProgress'
 import ResultsDisplay from '@/components/ResultsDisplay'
 import TextInputArea from '@/components/TextInputArea'
@@ -201,12 +202,11 @@ export default function HomeClient() {
     try {
       const res = await fetch(`/api/jobs/${jobId}/status`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`status ${res.status}`)
-      const data = (await res.json().catch(() => ({}))) as {
-        job?: { status?: string; renderCompleted?: boolean }
-      }
-      const status = data?.job?.status
-      const isCompleted = status === 'completed' || status === 'complete'
-      if (!isCompleted) {
+      const data = (await res.json().catch(() => ({}))) as { job?: unknown }
+      const strictlyDone = isRenderCompletelyDone(
+        (data?.job ?? null) as Parameters<typeof isRenderCompletelyDone>[0],
+      )
+      if (!strictlyDone) {
         // 成功状態でなければリダイレクトしない
         setError('処理が完了していないため、結果ページへは移動しません。')
         setIsProcessing(false)

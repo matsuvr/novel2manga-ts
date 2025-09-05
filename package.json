@@ -57,7 +57,11 @@
   "dependencies": {
     "@auth/drizzle-adapter": "^1.10.0",
     "@cerebras/cerebras_cloud_sdk": "^1.46.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
     "@google/genai": "^1.13.0",
+    "@mui/icons-material": "^7.3.2",
+    "@mui/material": "^7.3.2",
     "@tailwindcss/postcss": "^4.1.11",
     "@types/js-yaml": "^4.0.9",
     "@types/pdfkit": "^0.17.2",

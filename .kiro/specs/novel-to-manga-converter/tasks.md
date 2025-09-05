@@ -173,6 +173,13 @@
 - [ ] **カバレッジ評価チューニング**: 品質評価指標の精度向上
 - [ ] **バンドリングロジック拡張**: より柔軟なエピソード統合条件
 
+### Script Conversion Normalization
+
+- [x] 吹き出し最大50文字の設定化と適用（Script Conversion直後）。
+- [x] 上限超過セリフのパネル分割（2コマ目以降`cut: "前のコマを引き継ぐ"`）。
+- [x] 対象タイプ拡張: `speech` に加え `thought`/`narration` にも適用。
+- [x] ユニットテスト追加（`src/__tests__/script-postprocess.test.ts`）。
+
 ### Fixes: Episode normalization (2025-09-03)
 
 - [x] スクリプト→エピソード変換での情報欠落解消
