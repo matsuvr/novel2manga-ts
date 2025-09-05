@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { EpisodeBreakEstimationStep } from '@/services/application/steps/episode-break-estimation-step'
 import type { EpisodeBreakPlan } from '@/types/script'
+import { TEST_EPISODE_CONFIG } from './integration/__helpers/test-agents'
 
 // Privateメソッドに型安全にアクセスするためのテスト用インターフェース
 interface EpisodeBreakEstimationStepPrivate {
@@ -8,6 +9,7 @@ interface EpisodeBreakEstimationStepPrivate {
   validateEpisodeBreaks: (
     plan: EpisodeBreakPlan,
     totalPanels: number,
+    cfg: typeof TEST_EPISODE_CONFIG,
   ) => { valid: boolean; issues: string[] }
 }
 
@@ -35,7 +37,7 @@ describe('EpisodeBreakEstimationStep.normalizeEpisodeBreaks', () => {
     expect(normalized.episodes[1].startPanelIndex).toBe(24)
     expect(normalized.episodes[1].endPanelIndex).toBe(73) // 合計パネルで終わる
 
-    const validation = priv.validateEpisodeBreaks(normalized, totalPanels)
+    const validation = priv.validateEpisodeBreaks(normalized, totalPanels, TEST_EPISODE_CONFIG)
     expect(validation.valid).toBe(true)
     expect(validation.issues).toEqual([])
   })
