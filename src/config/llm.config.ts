@@ -241,8 +241,8 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
     const ensuredProject = project
     const ensuredLocation = location
 
-    return {
-      ...cfg,
+        project,
+        location,
       apiKey: dynamicApiKey,
       model: modelOverride && modelOverride.trim().length > 0 ? modelOverride : cfg.model,
       vertexai: {
