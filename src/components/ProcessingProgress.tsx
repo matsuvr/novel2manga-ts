@@ -227,6 +227,10 @@ function ProcessingProgress({
   // 正規化トースト表示の一回限りフラグ
   const [normalizationToastShown, setNormalizationToastShown] = useState(false)
 
+  // トークン使用量（進行中の概算: 完了済み呼び出しの集計）
+  const [tokenPromptSum, setTokenPromptSum] = useState(0)
+  const [tokenCompletionSum, setTokenCompletionSum] = useState(0)
+
   // マウント状態
   const isMountedRef = useRef(true)
   // 直近のジョブスナップショット（厳密完了判定で利用）
@@ -241,6 +245,40 @@ function ProcessingProgress({
     if (Number.isNaN(w)) return DEFAULT_CURRENT_EPISODE_PROGRESS_WEIGHT
     return Math.max(0, Math.min(1, w))
   }, [currentEpisodeProgressWeight])
+
+  // トークン使用量ポーリング（SSE連携とは独立。完了済み呼び出しの累積を表示）
+  useEffect(() => {
+    if (!jobId) return
+    let timer: NodeJS.Timeout | null = null
+    let cancelled = false
+    const intervalMs =
+      (appConfig as { ui?: { progress?: { tokenUsagePollIntervalMs?: number } } }).ui?.progress
+        ?.tokenUsagePollIntervalMs ?? 2000
+    const fetchUsage = async () => {
+      try {
+        const res = await fetch(`/api/jobs/${jobId}/token-usage`)
+        if (!res.ok) return
+        const json = (await res.json()) as {
+          tokenUsage?: Array<{ promptTokens: number; completionTokens: number }>
+        }
+        const rows = Array.isArray(json.tokenUsage) ? json.tokenUsage : []
+        if (!cancelled) {
+          const p = rows.reduce((s, r) => s + (Number(r.promptTokens) || 0), 0)
+          const c = rows.reduce((s, r) => s + (Number(r.completionTokens) || 0), 0)
+          setTokenPromptSum(p)
+          setTokenCompletionSum(c)
+        }
+      } catch {
+        // ignore transient errors
+      }
+    }
+    fetchUsage()
+    timer = setInterval(fetchUsage, intervalMs)
+    return () => {
+      cancelled = true
+      if (timer) clearInterval(timer)
+    }
+  }, [jobId])
 
   // Zod による perEpisodePages の要素検証（型安全・簡潔）
   const EpisodePageDataSchema = useMemo(
@@ -934,6 +972,16 @@ function ProcessingProgress({
             />
           </div>
         </div>
+
+        {/* 現在のトークン消費（完了済み呼び出しの累積） */}
+        {jobId && (
+          <div className="apple-card p-4">
+            <div className="text-sm text-gray-600">
+              現在 入力 {tokenPromptSum.toLocaleString()} トークン / 出力{' '}
+              {tokenCompletionSum.toLocaleString()} トークン 消費中…
+            </div>
+          </div>
+        )}
 
         <div className="space-y-4">
           {steps.map((step, index) => (

@@ -209,6 +209,11 @@ export async function convertChunkToMangaScript(
         userPrompt: prompt,
         schema: NewMangaScriptSchema as unknown as z.ZodTypeAny,
         schemaName: 'NewMangaScript',
+        telemetry: {
+          jobId: options?.jobId,
+          chunkIndex: input.chunkIndex,
+          stepName: 'script',
+        },
       })
 
       if (result && typeof result === 'object') {
