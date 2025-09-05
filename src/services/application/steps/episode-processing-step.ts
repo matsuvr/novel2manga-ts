@@ -2,12 +2,10 @@ import type { Chunk } from '@/db/schema'
 import { getChunkRepository } from '@/repositories'
 import { db } from '@/services/database/index'
 import type { EpisodeBoundary } from '@/types/episode'
-import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface EpisodeTextResult {
   episodeText: string
-  extractionMethod: 'chunk-based' | 'narrative-analysis-direct'
 }
 
 /**
@@ -17,7 +15,7 @@ export class EpisodeProcessingStep implements PipelineStep {
   readonly stepName = 'episode-processing'
 
   /**
-   * Extract episode text from chunks or narrative analysis
+   * Extract episode text from stored chunks
    */
   async extractEpisodeText(
     episodeNumber: number,
@@ -62,83 +60,35 @@ export class EpisodeProcessingStep implements PipelineStep {
         })),
       })
 
-      // Extract episode text using available method
-      let episodeText = ''
-      let extractionMethod: 'chunk-based' | 'narrative-analysis-direct'
-
       if (chunksMetadata.length === 0) {
-        const result = await this.extractFromNarrativeAnalysis(episode, episodeNumber, {
-          jobId,
-          logger,
-        })
-        if (!result.success) return result
-        episodeText = result.data.episodeText
-        extractionMethod = 'narrative-analysis-direct'
-      } else {
-        const result = await this.extractFromChunks(
-          episode,
-          episodeNumber,
-          chunksMetadata as Chunk[],
-          context,
-        )
-        if (!result.success) return result
-        episodeText = result.data.episodeText
-        extractionMethod = 'chunk-based'
+        logger.error('No chunks found for episode processing', { jobId })
+        return {
+          success: false,
+          error: `Chunk data missing for job ${jobId}`,
+        }
       }
+
+      const result = await this.extractFromChunks(
+        episode,
+        episodeNumber,
+        chunksMetadata as Chunk[],
+        context,
+      )
+      if (!result.success) return result
+      const episodeText = result.data.episodeText
 
       // Store episode text atomically with DB path update
       await this.storeEpisodeText(episodeText, episodeNumber, context)
 
       return {
         success: true,
-        data: { episodeText, extractionMethod },
+        data: { episodeText },
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       logger.error('Failed to extract episode text', { jobId, episodeNumber, error: errorMessage })
       return { success: false, error: errorMessage }
     }
-  }
-
-  private async extractFromNarrativeAnalysis(
-    episode: { startCharIndex: number; endCharIndex: number },
-    episodeNumber: number,
-    context: Pick<StepContext, 'jobId' | 'logger'>,
-  ): Promise<StepExecutionResult<{ episodeText: string }>> {
-    const { jobId, logger } = context
-
-    logger.warn('No chunks found for episode processing, using narrative analysis text', {
-      jobId,
-      episodeNumber,
-    })
-
-    // Get the full narrative analysis input text
-    const narrativeInput = await prepareNarrativeAnalysisInput({ jobId, startChunkIndex: 0 })
-    if (!narrativeInput?.chunks || narrativeInput.chunks.length === 0) {
-      return {
-        success: false,
-        error: `Cannot extract episode text: no narrative analysis input found for job ${jobId}`,
-      }
-    }
-
-    // Extract episode text based on character positions
-    const fullText = narrativeInput.chunks.map((chunk) => chunk.text).join('')
-    const episodeText = fullText.substring(episode.startCharIndex, episode.endCharIndex)
-
-    if (!episodeText || episodeText.trim().length === 0) {
-      return {
-        success: false,
-        error: `Episode text is empty after direct extraction from narrative analysis (startChar=${episode.startCharIndex}, endChar=${episode.endCharIndex})`,
-      }
-    }
-
-    logger.info('Episode text extracted from narrative analysis', {
-      jobId,
-      episodeNumber,
-      episodeTextLength: episodeText.length,
-    })
-
-    return { success: true, data: { episodeText } }
   }
 
   private async extractFromChunks(
@@ -255,7 +205,7 @@ export class EpisodeProcessingStep implements PipelineStep {
 
     // Validate episode text before script conversion
     if (!episodeText || episodeText.trim().length === 0) {
-      const errorMessage = `Episode text is empty for episode ${episodeNumber}. Expected content from narrative arc analysis but got: "${episodeText}" (startChunk=${episode.startChunk}, endChunk=${episode.endChunk}, startCharIndex=${episode.startCharIndex}, endCharIndex=${episode.endCharIndex})`
+      const errorMessage = `Episode text is empty for episode ${episodeNumber}. Received: "${episodeText}" (startChunk=${episode.startChunk}, endChunk=${episode.endChunk}, startCharIndex=${episode.startCharIndex}, endCharIndex=${episode.endCharIndex})`
       logger.error('Empty episode text detected', {
         jobId,
         episodeNumber,

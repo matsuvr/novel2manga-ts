@@ -67,16 +67,6 @@ vi.mock('@/agents/chunk-analyzer', () => ({
   })),
 }))
 
-vi.mock('@/agents/narrative-arc-analyzer', () => ({
-  analyzeNarrativeArc: vi.fn().mockResolvedValue([]),
-}))
-
-vi.mock('@/utils/episode-utils', () => ({
-  prepareNarrativeAnalysisInput: vi
-    .fn()
-    .mockResolvedValue({ chunks: [{ chunkIndex: 0, text: 'dummy', metadata: {} }] }),
-}))
-
 vi.mock('@/config', () => ({
   getTextAnalysisConfig: vi.fn(() => ({
     userPromptTemplate:

@@ -39,7 +39,7 @@ export interface AnalyzeOptions {
  * AnalyzePipeline - Main production analysis service
  *
  * 責務: 小説テキストの分析からレイアウト生成・レンダリングまでの一連の処理
- * フロー: チャンク分割 → textAnalysis → narrativeArcAnalysis → scriptConversion → pageBreakEstimation → layout → render
+ * フロー: チャンク分割 → textAnalysis → scriptConversion → pageBreakEstimation → layout → render
  *
  * 使用箇所: /api/analyze (プロダクションメインエンドポイント)
  * テスト: src/__tests__/integration/service-integration.test.ts など多数
@@ -61,9 +61,6 @@ export class AnalyzePipeline extends BasePipelineStep {
   private readonly jobStep = new JobManagementStep()
   private readonly chunkingStep = new TextChunkingStep()
   private readonly analysisStep = new TextAnalysisStepV2()
-  // 新フローでは物語弧/旧エピソード抽出を使用しない
-  // private readonly narrativeStep = new NarrativeAnalysisStep()
-  // private readonly scriptStep = new ScriptConversionStep()
   private readonly chunkScriptStep = new ChunkScriptStep()
   private readonly scriptMergeStep = new ScriptMergeStep()
   private readonly episodeBreakStep = new EpisodeBreakEstimationStep()

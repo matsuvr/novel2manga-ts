@@ -628,9 +628,9 @@ export const StorageKeys = {
     validateId(jobId, 'jobId')
     return `${jobId}/integrated.json`
   },
-  narrativeAnalysis: (jobId: string) => {
+  episodeBoundaries: (jobId: string) => {
     validateId(jobId, 'jobId')
-    return `${jobId}/narrative.json`
+    return `${jobId}/episodes.json`
   },
   episodeLayout: (jobId: string, episodeNumber: number) => {
     validateId(jobId, 'jobId')
@@ -708,7 +708,7 @@ export async function saveEpisodeBoundaries(
   // 強整合性を保証したストレージ+DB操作
   const { executeStorageDbTransaction } = await import('@/services/application/transaction-manager')
   const storage = await getAnalysisStorage()
-  const key = StorageKeys.narrativeAnalysis(jobId)
+  const key = StorageKeys.episodeBoundaries(jobId)
 
   // Get job info for novelId before the transaction
   const { JobProgressService } = await import('@/services/application/job-progress')

@@ -7,7 +7,6 @@ import type { PipelineStep, StepContext, StepExecutionResult } from './base-step
 export interface ChunkingResult {
   chunks: string[]
   totalChunks: number
-  useNarrativeAnalysisFallback: boolean
 }
 
 /**
@@ -28,7 +27,6 @@ export class TextChunkingStep implements PipelineStep {
 
     try {
       let chunks: string[] = []
-      let useNarrativeAnalysisFallback = false
 
       // Check if chunks already exist for resumed jobs
       if (existingJob?.splitCompleted) {
@@ -44,35 +42,29 @@ export class TextChunkingStep implements PipelineStep {
           })),
         })
 
-        // If no chunks found despite splitCompleted=true, don't recreate to avoid UNIQUE constraint errors
-        // Instead, rely on narrative analysis fallback for episode text extraction
         if (existingChunks.length === 0) {
-          logger.warn(
-            'No chunks found despite splitCompleted=true, using narrative analysis fallback for episode processing',
-            { jobId },
-          )
-          useNarrativeAnalysisFallback = true
-          chunks = [] // Set empty for consistency, but won't trigger chunk creation due to flag
-        } else {
-          chunks = new Array(existingChunks.length).fill('')
-          logger.info('Loaded existing chunks metadata', {
-            jobId,
-            chunkCount: existingChunks.length,
-          })
+          const errorMessage = 'Split marked complete but no chunks found'
+          logger.error(errorMessage, { jobId })
+          return { success: false, error: errorMessage }
         }
+
+        chunks = new Array(existingChunks.length).fill('')
+        logger.info('Loaded existing chunks metadata', {
+          jobId,
+          chunkCount: existingChunks.length,
+        })
 
         return {
           success: true,
           data: {
             chunks,
             totalChunks: chunks.length,
-            useNarrativeAnalysisFallback,
           },
         }
       }
 
-      // Create new chunks if not using fallback
-      if (chunks.length === 0 && !useNarrativeAnalysisFallback) {
+      // Create new chunks
+      if (chunks.length === 0) {
         // 機械的な固定長チャンク分割（オーバーラップ付き）
         // Rationale: sentence-based splitting caused instability across languages and inconsistent
         // segment sizes; sliding window chunking yields predictable boundaries and better LLM context
@@ -142,7 +134,6 @@ export class TextChunkingStep implements PipelineStep {
         data: {
           chunks,
           totalChunks: chunks.length,
-          useNarrativeAnalysisFallback,
         },
       }
     } catch (error) {
