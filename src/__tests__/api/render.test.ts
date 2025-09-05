@@ -105,6 +105,12 @@ vi.mock('@/infrastructure/storage/ports', () => ({
       putPageThumbnail: async () => 'thumb/key',
       getPageRender: async () => null,
     },
+    characterMemory: {
+      putFull: async () => 'char/key',
+      getFull: async () => null,
+      putPrompt: async () => 'charprompt/key',
+      getPrompt: async () => null,
+    },
   }),
 }))
 
