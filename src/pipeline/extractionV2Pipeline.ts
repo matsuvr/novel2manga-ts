@@ -16,6 +16,7 @@ import {
   savePromptMemory,
 } from '@/character/persistence'
 import { buildIdMapping, recordEvents, summarizeMemory } from '@/character/state'
+import { getAppConfig, getCharacterMemoryConfig } from '@/config'
 import {
   generateExtractionV2UserPrompt,
   getExtractionV2SystemPrompt,
@@ -23,12 +24,11 @@ import {
 } from '@/prompts/extractionV2'
 import type { AliasIndex, CharacterMemoryIndex, ExtractionV2 } from '@/types/extractionV2'
 import { isTempCharacterId } from '@/types/extractionV2'
-import { getAppConfig, getCharacterMemoryConfig } from '@/config'
 import {
   formatValidationErrors,
+  type ValidatedExtractionV2,
   validateExtraction,
   validateIndices,
-  type ValidatedExtractionV2,
 } from '@/validation/extractionV2'
 
 /**

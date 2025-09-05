@@ -1,8 +1,8 @@
 import { notFound, redirect } from 'next/navigation'
 import { auth } from '@/auth'
 import ResultsDisplay from '@/components/ResultsDisplay'
-import { isRenderCompletelyDone } from '@/utils/completion'
 import { db } from '@/services/database/index'
+import { isRenderCompletelyDone } from '@/utils/completion'
 
 interface Params {
   jobId: string

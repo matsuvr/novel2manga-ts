@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { enforceDialogueBubbleLimit } from '@/utils/script-postprocess'
 import type { NewMangaScript } from '@/types/script'
+import { enforceDialogueBubbleLimit } from '@/utils/script-postprocess'
 
 describe('script postprocess: enforceDialogueBubbleLimit', () => {
   it('splits a long speech (>50 chars) into multiple panels and sets continuation cut text', () => {

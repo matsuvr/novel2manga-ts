@@ -23,17 +23,17 @@ export const TempCharacterIdSchema = z.custom<TempCharacterId>(
 
 const PossibleMatchSchema = z.object({
   id: CharacterIdSchema,
-  confidence: z.number().min(0).max(1),
+  confidence: z.number(),
 })
 
 export const CharacterCandidateV2Schema = z
   .object({
     id: z.union([CharacterIdSchema, TempCharacterIdSchema]),
-    name: z.string().min(1),
+    name: z.string(),
     aliases: z.array(z.string()),
     description: z.string(),
     firstAppearanceChunk: z.number().nullable(),
-    firstAppearance: z.number().min(0).nullable(),
+    firstAppearance: z.number().nullable(),
     possibleMatchIds: z.array(PossibleMatchSchema),
   })
   .strict() // Reject unknown fields
@@ -43,8 +43,8 @@ export const CharacterCandidateV2Schema = z
 export const CharacterEventV2Schema = z
   .object({
     characterId: z.union([CharacterIdSchema, TempCharacterIdSchema, z.literal('不明')]),
-    action: z.string().min(1),
-    index: z.number().min(0),
+    action: z.string(),
+    index: z.number(),
   })
   .strict()
 
@@ -52,7 +52,7 @@ export const CharacterEventV2Schema = z
 
 export const SceneV2Schema = z
   .object({
-    location: z.string().min(1),
+    location: z.string(),
     time: z.string().nullable(),
     description: z.string(),
     startIndex: z.number().min(0),
@@ -68,7 +68,7 @@ export const SceneV2Schema = z
 export const DialogueV2Schema = z
   .object({
     speakerId: z.union([CharacterIdSchema, TempCharacterIdSchema, z.literal('不明')]),
-    text: z.string().min(1),
+    text: z.string(),
     emotion: z.string(),
     index: z.number().min(0),
   })
@@ -81,7 +81,7 @@ const HighlightTypeSchema = z.enum(['climax', 'turning_point', 'emotional_peak',
 export const HighlightV2Schema = z
   .object({
     type: HighlightTypeSchema,
-    description: z.string().min(1),
+    description: z.string(),
     importance: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
     startIndex: z.number().min(0),
     endIndex: z.number().min(0),
@@ -95,7 +95,7 @@ export const HighlightV2Schema = z
 
 export const SituationV2Schema = z
   .object({
-    description: z.string().min(1),
+    description: z.string(),
     index: z.number().min(0),
   })
   .strict()

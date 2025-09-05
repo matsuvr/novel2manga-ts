@@ -15,14 +15,14 @@ import {
   type StepExecutionResult,
   TextChunkingStep,
 } from './steps'
-// Use V2 text analysis (ExtractionV2) for schema compatibility with prompts
-import {
-  TextAnalysisStep as TextAnalysisStepV2,
-  type AnalysisResult,
-} from './steps/text-analysis-step-v2'
 import { ChunkScriptStep } from './steps/chunk-script-step'
 import { EpisodeBreakEstimationStep } from './steps/episode-break-estimation-step'
 import { ScriptMergeStep } from './steps/script-merge-step'
+// Use V2 text analysis (ExtractionV2) for schema compatibility with prompts
+import {
+  type AnalysisResult,
+  TextAnalysisStep as TextAnalysisStepV2,
+} from './steps/text-analysis-step-v2'
 
 export interface AnalyzeOptions {
   isDemo?: boolean
