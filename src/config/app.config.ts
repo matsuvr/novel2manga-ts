@@ -6,18 +6,6 @@ export const appConfig = {
     maxChunkSize: 4000, // 最大チャンクサイズ
     minChunkSize: 100, // 最小チャンクサイズ - 意味のある最小サイズに修正
     maxOverlapRatio: 0.5, // チャンクサイズに対する最大オーバーラップ比率
-
-    // スクリプト変換用のエピソードフラグメント分割設定
-    scriptConversion: {
-      // フラグメント方式は廃止。分散設定を避けるため、全て無効値に統一。
-      fragmentSize: 0,
-      overlapSize: 0,
-      maxFragmentSize: 0,
-      minFragmentSize: 0,
-      minSceneLength: 200, // 保持（将来の検証用）
-      contextSize: 0,
-      fragmentConversionThreshold: 0,
-    },
   },
   // Script coverage scoring constants
   scriptCoverage: {
