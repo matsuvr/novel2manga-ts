@@ -34,6 +34,8 @@ describe('/api/share', () => {
   let testJobId: string
   let testNovelId: string
   let mockDbService: any
+  // テスト安定化用の固定現在時刻
+  let fixedNow: Date
 
   // ヘルパー関数: リクエストを作成してレスポンスを取得
   const makeShareRequest = async (requestBody: Record<string, unknown>) => {
@@ -70,14 +72,19 @@ describe('/api/share', () => {
   // ヘルパー関数: 有効期限の検証
   const expectExpiryTime = (expiresAt: string, expectedHours: number) => {
     const expiry = new Date(expiresAt)
-    const now = new Date()
-    const expectedExpiry = new Date(now.getTime() + expectedHours * 60 * 60 * 1000)
+    // 固定した基準時刻を用いて期待有効期限を計算
+    const expectedExpiry = new Date(fixedNow.getTime() + expectedHours * 60 * 60 * 1000)
     const timeDiff = Math.abs(expiry.getTime() - expectedExpiry.getTime())
-    expect(timeDiff).toBeLessThan(1000) // 1秒以内の誤差は許容
+    // fake timers により処理遅延の影響を排除し 1秒以内に安定させる
+    expect(timeDiff).toBeLessThan(1000)
   }
 
   beforeEach(async () => {
     vi.clearAllMocks()
+    // 固定時刻を設定 (任意の決め打ちUTC日時)
+    fixedNow = new Date('2025-01-01T00:00:00.000Z')
+    vi.useFakeTimers()
+    vi.setSystemTime(fixedNow)
 
     testJobId = 'test-share-job'
     testNovelId = 'test-novel-id'
@@ -97,6 +104,7 @@ describe('/api/share', () => {
   })
 
   afterEach(async () => {
+    vi.useRealTimers()
     // テストデータのクリーンアップは統合テストで実施
   })
 
