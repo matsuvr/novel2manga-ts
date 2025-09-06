@@ -1,6 +1,4 @@
 import type { NextRequest } from 'next/server'
-export const runtime = 'nodejs'
-
 import { getLogger } from '@/infrastructure/logging/logger'
 import { db } from '@/services/database/index'
 import { createErrorResponse, createSuccessResponse, ValidationError } from '@/utils/api-error'

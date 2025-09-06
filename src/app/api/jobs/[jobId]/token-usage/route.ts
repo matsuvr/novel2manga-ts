@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/services/database'
-
-export const runtime = 'nodejs'
-
 export async function GET(
   _request: Request,
   ctx: { params: { jobId: string } | Promise<{ jobId: string }> },
