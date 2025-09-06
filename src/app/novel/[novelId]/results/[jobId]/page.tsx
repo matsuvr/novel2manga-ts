@@ -5,9 +5,6 @@ import { StorageFactory, JsonStorageKeys } from '@/utils/storage'
 import { EpisodeBreakSchema, type EpisodeBreakPlan } from '@/types/script'
 import { parseJsonWithSchema } from '@/utils/json'
 
-// Node.js ランタイムを明示（Edge での fs/better-sqlite3 解決エラーを防止）
-export const runtime = 'nodejs'
-
 interface Params {
   novelId: string
   jobId: string
