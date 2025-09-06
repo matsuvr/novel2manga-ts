@@ -4,7 +4,7 @@
 
 - **フレームワーク**: Next.js + OpenNext。
 - **認証基盤**: Auth.js v5 を採用し、D1 Adapter を利用してユーザーデータを D1 に保存。
-- **ランタイム**: getCloudflareContext() により Cloudflare 環境変数へアクセスし、Edge Runtime を使用しない。
+- **ランタイム**: OpenNext 経由で Cloudflare 環境変数へアクセスし、Edge Runtime を使用しない。
 - **エンドポイント**: `/portal/api/auth/[...nextauth]` に NextAuth をマウントし、`basePath` を `/portal/api/auth` に設定。
 
 ## データモデル
@@ -30,13 +30,13 @@ Auth.js の `users` と分離したプロフィール拡張用テーブル。
 
 ## 認証フロー
 
-1. `getCloudflareContext()` から `env` を取得し、`up(env.DB)` を実行して D1 テーブルを初期化。
+1. Cloudflare 環境バインディングから `DB` を取得し、Auth.js D1 Adapter を初期化する。
 2. Google Provider を設定した NextAuth を `/portal/api/auth` にデプロイ。
 3. セッションは JWT 戦略を使用し、保護ルートの判定に `auth()` を利用。
 
 ## 非同期ジョブ実行
 
-- `/portal-api/jobs` エンドポイントでジョブを作成し、`env.CONVERT_QUEUE` へメッセージを送信。
+- `/portal-api/jobs` エンドポイントでジョブを作成し、`env.JOBS_QUEUE` へメッセージを送信。
 - `workers/convert-consumer` が Queue メッセージを購読し、外部 API 呼び出し・R2 への成果物保存・メール通知までを担当。
 - ジョブの進捗は D1 の `app_jobs` を更新して管理。
 
@@ -48,7 +48,7 @@ Auth.js の `users` と分離したプロフィール拡張用テーブル。
 ## 退会処理
 
 1. ユーザーが `/portal/settings` から退会要求。
-2. `DELETE /portal-api/me` が `user_delete` Queue へメッセージ送信。
+2. `DELETE /portal-api/me` が `novel2manga-user-delete` Queue へメッセージ送信。
 3. 専用 Worker がジョブキャンセル、R2 及び D1 のデータ削除、Auth.js テーブルからのレコード削除を実施。
 
 ## メール通知
@@ -58,5 +58,5 @@ Auth.js の `users` と分離したプロフィール拡張用テーブル。
 
 ## 設定とバインディング
 
-- `wrangler.toml` に D1 (`DB`)、R2 (`R2`)、Queue (`CONVERT_QUEUE`) をバインド。
-- `drizzle.config.ts` で D1 用ドライバを設定し、`drizzle/migrations` にマイグレーションを出力。
+- `wrangler.toml` では D1 (`DB`)、成果物保存用 R2 バケット（例: `OUTPUTS_STORAGE`）、ジョブ実行 Queue (`JOBS_QUEUE`)、退会処理 Queue (`USER_DELETE_QUEUE`) を設定する。
+- `drizzle.config.ts` は D1 用ドライバを指定し、マイグレーションを `drizzle/migrations` に出力する。
