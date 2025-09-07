@@ -52,6 +52,16 @@ export class PanelLayoutCoordinator {
     })
   }
 
+  /** 説明テキストの占有領域を登録 */
+  registerContentArea(bounds: { x: number; y: number; width: number; height: number }): void {
+    this.occupiedAreas.push({ ...bounds, type: 'content' })
+  }
+
+  /** 現在登録されている占有領域を取得（テストや配置計算用） */
+  getOccupiedAreas(): ReadonlyArray<ElementBounds> {
+    return this.occupiedAreas
+  }
+
   /** 説明テキストの最適な配置を計算 */
   calculateContentTextPlacement(
     content: string,
