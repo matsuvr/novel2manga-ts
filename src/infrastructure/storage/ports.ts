@@ -406,11 +406,7 @@ export function getStoragePorts(): StoragePorts {
   }
 }
 
-async function save(
-  kind: 'full' | 'prompt',
-  jobId: string,
-  json: string,
-): Promise<string> {
+async function save(kind: 'full' | 'prompt', jobId: string, json: string): Promise<string> {
   const storage = await StorageFactory.getAnalysisStorage()
   const key =
     kind === 'full'
