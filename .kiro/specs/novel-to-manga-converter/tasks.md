@@ -171,6 +171,10 @@
 - [x] `full_pages.json` 末尾に混入する `null` 文字を除去してから解析する `parseJson` ユーティリティを実装。
 - [x] 結果ページでユーティリティを用い、JSON パースエラーを解消。
 
+### Bugfix: authentication env build failure (2025-09-09)
+
+- [x] `RootLayout` が必須認証環境変数の欠如を検知し、構成エラーを表示することで CI ビルド失敗を防止。
+
 ### Runtime Configuration Cleanup (2025-09-09)
 
 - [x] API ルートから冗長な `export const runtime = 'nodejs'` 宣言を削除し、OpenNext の既定 Node.js ランタイムに統一。

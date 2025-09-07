@@ -44,8 +44,8 @@ export function jsonToMemory(json: CharacterMemoryJson): CharacterMemory {
     summary: json.summary,
     status: json.status,
     relationships: new Map(
-      Object.entries(json.relationships).filter(
-        (entry): entry is [CharacterId, string] => isCharacterId(entry[0]),
+      Object.entries(json.relationships).filter((entry): entry is [CharacterId, string] =>
+        isCharacterId(entry[0]),
       ),
     ),
     timeline: json.timeline,
