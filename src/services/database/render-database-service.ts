@@ -126,37 +126,119 @@ export class RenderDatabaseService extends BaseDatabaseService {
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
       drizzleDb.transaction((tx) => {
-        void this.upsertRenderStatusTx(tx, jobId, episodeNumber, pageNumber, status, now)
+        this.upsertRenderStatusTxSync(tx, jobId, episodeNumber, pageNumber, status, now)
       })
     } else {
       await this.adapter.transaction(async (tx: DrizzleDatabase) => {
-        await this.upsertRenderStatusTx(tx, jobId, episodeNumber, pageNumber, status, now)
+        await this.upsertRenderStatusTxAsync(tx, jobId, episodeNumber, pageNumber, status, now)
       })
     }
   }
 
-  private completeJobIfNeeded(
+  private buildJobSelect(tx: DrizzleDatabase, jobId: string) {
+    return tx
+      .select({ renderedPages: jobs.renderedPages, totalPages: jobs.totalPages })
+      .from(jobs)
+      .where(eq(jobs.id, jobId))
+      .limit(1)
+  }
+
+  private completeJobIfNeededSync(
     tx: DrizzleDatabase,
     jobId: string,
     newRenderedPages: number,
     totalPages: number,
     now: string,
-  ): Promise<void> | void {
+  ): void {
     if (totalPages > 0 && newRenderedPages >= totalPages) {
-      const query = tx
-        .update(jobs)
-        .set({ renderCompleted: true, updatedAt: now })
-        .where(eq(jobs.id, jobId))
-      if (this.isSync()) {
-        query.run()
-      } else {
-        return query
-      }
+      tx.update(jobs).set({ renderCompleted: true, updatedAt: now }).where(eq(jobs.id, jobId)).run()
     }
-    return undefined
   }
 
-  private async upsertRenderStatusTx(
+  private async completeJobIfNeededAsync(
+    tx: DrizzleDatabase,
+    jobId: string,
+    newRenderedPages: number,
+    totalPages: number,
+    now: string,
+  ): Promise<void> {
+    if (totalPages > 0 && newRenderedPages >= totalPages) {
+      await tx.update(jobs).set({ renderCompleted: true, updatedAt: now }).where(eq(jobs.id, jobId))
+    }
+  }
+
+  private upsertRenderStatusTxSync(
+    tx: DrizzleDatabase,
+    jobId: string,
+    episodeNumber: number,
+    pageNumber: number,
+    status: Partial<
+      Pick<
+        RenderStatus,
+        'isRendered' | 'imagePath' | 'thumbnailPath' | 'width' | 'height' | 'fileSize'
+      >
+    >,
+    now: string,
+  ): void {
+    const existingRows = this.buildRenderStatusSelect(tx, jobId, episodeNumber, pageNumber)
+      .limit(1)
+      .all() as RenderStatus[]
+
+    const existing = existingRows[0]
+    const wasRendered = existing?.isRendered ?? false
+
+    if (existing) {
+      tx.update(renderStatus)
+        .set({
+          isRendered: status.isRendered ?? existing.isRendered,
+          imagePath: status.imagePath ?? existing.imagePath,
+          thumbnailPath: status.thumbnailPath ?? existing.thumbnailPath,
+          width: status.width ?? existing.width,
+          height: status.height ?? existing.height,
+          fileSize: status.fileSize ?? existing.fileSize,
+          renderedAt: now,
+        })
+        .where(eq(renderStatus.id, existing.id))
+        .run()
+    } else {
+      tx.insert(renderStatus)
+        .values({
+          id: crypto.randomUUID(),
+          jobId,
+          episodeNumber,
+          pageNumber,
+          isRendered: status.isRendered ?? false,
+          imagePath: status.imagePath,
+          thumbnailPath: status.thumbnailPath,
+          width: status.width,
+          height: status.height,
+          fileSize: status.fileSize,
+          renderedAt: now,
+        })
+        .run()
+    }
+
+    const isRenderedNow = status.isRendered ?? wasRendered
+    if (isRenderedNow && !wasRendered) {
+      const jobRows = this.buildJobSelect(tx, jobId).all() as Array<{
+        renderedPages: number | null
+        totalPages: number | null
+      }>
+
+      const jobRow = jobRows[0]
+      const currentRenderedPages = jobRow?.renderedPages ?? 0
+      const newRenderedPages = currentRenderedPages + 1
+
+      tx.update(jobs)
+        .set({ renderedPages: newRenderedPages, updatedAt: now })
+        .where(eq(jobs.id, jobId))
+        .run()
+
+      this.completeJobIfNeededSync(tx, jobId, newRenderedPages, jobRow?.totalPages ?? 0, now)
+    }
+  }
+
+  private async upsertRenderStatusTxAsync(
     tx: DrizzleDatabase,
     jobId: string,
     episodeNumber: number,
@@ -169,36 +251,18 @@ export class RenderDatabaseService extends BaseDatabaseService {
     >,
     now: string,
   ): Promise<void> {
-    const existingRows = this.isSync()
-      ? (tx
-          .select()
-          .from(renderStatus)
-          .where(
-            and(
-              eq(renderStatus.jobId, jobId),
-              eq(renderStatus.episodeNumber, episodeNumber),
-              eq(renderStatus.pageNumber, pageNumber),
-            ),
-          )
-          .limit(1)
-          .all() as RenderStatus[])
-      : ((await tx
-          .select()
-          .from(renderStatus)
-          .where(
-            and(
-              eq(renderStatus.jobId, jobId),
-              eq(renderStatus.episodeNumber, episodeNumber),
-              eq(renderStatus.pageNumber, pageNumber),
-            ),
-          )
-          .limit(1)) as RenderStatus[])
+    const existingRows = (await this.buildRenderStatusSelect(
+      tx,
+      jobId,
+      episodeNumber,
+      pageNumber,
+    ).limit(1)) as RenderStatus[]
 
     const existing = existingRows[0]
     const wasRendered = existing?.isRendered ?? false
 
     if (existing) {
-      const query = tx
+      await tx
         .update(renderStatus)
         .set({
           isRendered: status.isRendered ?? existing.isRendered,
@@ -210,13 +274,8 @@ export class RenderDatabaseService extends BaseDatabaseService {
           renderedAt: now,
         })
         .where(eq(renderStatus.id, existing.id))
-      if (this.isSync()) {
-        query.run()
-      } else {
-        await query
-      }
     } else {
-      const query = tx.insert(renderStatus).values({
+      await tx.insert(renderStatus).values({
         id: crypto.randomUUID(),
         jobId,
         episodeNumber,
@@ -229,49 +288,25 @@ export class RenderDatabaseService extends BaseDatabaseService {
         fileSize: status.fileSize,
         renderedAt: now,
       })
-      if (this.isSync()) {
-        query.run()
-      } else {
-        await query
-      }
     }
 
     const isRenderedNow = status.isRendered ?? wasRendered
     if (isRenderedNow && !wasRendered) {
-      const jobRows = this.isSync()
-        ? (tx
-            .select({ renderedPages: jobs.renderedPages, totalPages: jobs.totalPages })
-            .from(jobs)
-            .where(eq(jobs.id, jobId))
-            .limit(1)
-            .all() as Array<{ renderedPages: number | null; totalPages: number | null }>)
-        : ((await tx
-            .select({ renderedPages: jobs.renderedPages, totalPages: jobs.totalPages })
-            .from(jobs)
-            .where(eq(jobs.id, jobId))
-            .limit(1)) as Array<{ renderedPages: number | null; totalPages: number | null }>)
+      const jobRows = (await this.buildJobSelect(tx, jobId)) as Array<{
+        renderedPages: number | null
+        totalPages: number | null
+      }>
 
       const jobRow = jobRows[0]
       const currentRenderedPages = jobRow?.renderedPages ?? 0
       const newRenderedPages = currentRenderedPages + 1
 
-      const updateQuery = tx
+      await tx
         .update(jobs)
         .set({ renderedPages: newRenderedPages, updatedAt: now })
         .where(eq(jobs.id, jobId))
-      if (this.isSync()) {
-        updateQuery.run()
-      } else {
-        await updateQuery
-      }
 
-      await this.completeJobIfNeeded(
-        tx,
-        jobId,
-        newRenderedPages,
-        jobRow?.totalPages ?? 0,
-        now,
-      )
+      await this.completeJobIfNeededAsync(tx, jobId, newRenderedPages, jobRow?.totalPages ?? 0, now)
     }
   }
 

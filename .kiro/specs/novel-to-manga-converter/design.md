@@ -812,3 +812,4 @@ LLM構造化ジェネレーターにおけるエラー処理は、共通のエ�
 ## Render status transaction refactor (2025-09-11)
 
 - `RenderDatabaseService.upsertRenderStatus` の同期・非同期パスで重複していたジョブ完了更新処理を `upsertRenderStatusTx` と `completeJobIfNeeded` に集約し、DRYと保守性を向上。
+- 2025-09-12: 同期トランザクション内での非同期処理を排除し、`upsertRenderStatusTxSync`/`Async` と `completeJobIfNeededSync`/`Async` に分離して原子性を保証。
