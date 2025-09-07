@@ -15,7 +15,7 @@ export class ImageService extends Context.Tag('ImageService')<
   }
 >() {}
 
-export const ImageServiceLive = Layer.succeed(
+export const ImageServiceLive = Layer.effect(
   ImageService,
   Effect.gen(function* (_) {
     const trimImage = (buffer: Buffer) =>
