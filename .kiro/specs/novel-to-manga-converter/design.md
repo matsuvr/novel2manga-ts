@@ -689,6 +689,7 @@ console.log(result.metadata?.provider)
 ### Bugfix: speech bubble scaling accuracy (2025-09-09)
 
 - 吹き出しのスケーリング計算を幾何学的特性とパディングを考慮する形に修正し、複数・単一吹き出しともに最大配置領域を正確に尊重。
+- 重複していた吹き出し描画処理と話者ラベル位置の二重クランプを削除し、パフォーマンスと可読性を向上。
 
 ### Feature Toggle: Script Coverage Check (2025-09-??)
 

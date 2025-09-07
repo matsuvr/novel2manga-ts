@@ -396,57 +396,6 @@ export class CanvasRenderer {
               imageHeight: drawH,
               bounds: panelBounds,
             })
-
-            // 画像（縦書きセリフ）
-            const imgX = bx + (bubbleW - drawW) / 2
-            const imgY = by + (bubbleH - drawH) / 2
-            this.ctx.drawImage(
-              asset.image as unknown as CanvasImageSource,
-              imgX,
-              imgY,
-              drawW,
-              drawH,
-            )
-
-            // 占有領域登録
-            this.layoutCoordinator.registerDialogueArea(dialogue, {
-              x: bx,
-              y: by,
-              width: bubbleW,
-              height: bubbleH,
-            })
-
-            // 話者ラベル
-            const speakerLabelCfg = this.appConfig.rendering.canvas.speakerLabel
-            const dialogueType = dialogue.type
-            // ナレーションでは話者ラベルを表示しない
-            const shouldShowLabel =
-              speakerLabelCfg?.enabled === true &&
-              dialogueType !== 'narration' &&
-              typeof dialogue.speaker === 'string' &&
-              dialogue.speaker.trim() !== ''
-            if (shouldShowLabel) {
-              const baseFontSize = this.config.fontSize || 16
-              const fontSize = Math.max(10, baseFontSize * (speakerLabelCfg.fontSize || 0.7))
-              const paddingLabel = speakerLabelCfg.padding ?? 4
-              const bg = speakerLabelCfg.backgroundColor ?? '#ffffff'
-              const border = speakerLabelCfg.borderColor ?? '#333333'
-              const textColor = speakerLabelCfg.textColor ?? '#333333'
-              const offsetXRatio = speakerLabelCfg.offsetX ?? 0.3
-              const offsetYRatio = speakerLabelCfg.offsetY ?? 0.7
-              const borderRadius = speakerLabelCfg.borderRadius ?? 3
-              this.drawSpeakerLabel(dialogue.speaker, bx + bubbleW, by, {
-                fontSize,
-                padding: paddingLabel,
-                backgroundColor: bg,
-                borderColor: border,
-                textColor,
-                offsetXRatio,
-                offsetYRatio,
-                borderRadius,
-                clampBounds: panelBounds,
-              })
-            }
           }
         }
       } finally {
@@ -875,15 +824,6 @@ export class CanvasRenderer {
       const maxY = clampBounds.y + clampBounds.height - labelHeight
       labelX = Math.max(Math.min(labelX, maxX), clampBounds.x)
       labelY = Math.max(Math.min(labelY, maxY), clampBounds.y)
-    }
-    // パネル内に収まるように位置をクランプ
-    if (options.clampBounds) {
-      const bxMin = options.clampBounds.x
-      const byMin = options.clampBounds.y
-      const bxMax = options.clampBounds.x + options.clampBounds.width - labelWidth
-      const byMax = options.clampBounds.y + options.clampBounds.height - labelHeight
-      labelX = Math.min(Math.max(labelX, bxMin), bxMax)
-      labelY = Math.min(Math.max(labelY, byMin), byMax)
     }
 
     // 背景（角丸）
