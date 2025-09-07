@@ -16,17 +16,15 @@ describe('RootLayout authentication env', () => {
       render(node)
 
       expect(
-        screen.getByText(
-          /Authentication is not configured\. Missing environment variables:/,
-        ),
+        screen.getByText(/Authentication is not configured\. Missing environment variables:/),
       ).toBeInTheDocument()
 
       const { auth } = await import('@/auth')
       expect(vi.mocked(auth)).not.toHaveBeenCalled()
     } finally {
       if (AUTH_GOOGLE_ID) process.env.AUTH_GOOGLE_ID = AUTH_GOOGLE_ID
-      if (AUTH_GOOGLE_SECRET)
-        process.env.AUTH_GOOGLE_SECRET = AUTH_GOOGLE_SECRET
+      if (AUTH_GOOGLE_SECRET) process.env.AUTH_GOOGLE_SECRET = AUTH_GOOGLE_SECRET
       if (AUTH_SECRET) process.env.AUTH_SECRET = AUTH_SECRET
     }
+  })
 })
