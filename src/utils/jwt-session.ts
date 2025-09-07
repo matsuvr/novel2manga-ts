@@ -28,20 +28,18 @@ export const AuthSecretLive = Layer.sync(AuthSecret, () => {
 
 export async function verifySessionToken(
   token: string,
-  secret: string | undefined,
-  salt: string = jwtConfig.salt,
+  secret: string = String(process.env.AUTH_SECRET),
+  salt: string | undefined = process.env.JWT_SALT ? jwtConfig.salt : undefined,
+
 ): Promise<SessionTokenPayload | null> {
   if (!secret) {
     console.error('AUTH_SECRET environment variable not provided. Cannot verify session token.')
     return null
   }
   try {
-    // In next-auth v5, decode function parameters
-    const params: JWTDecodeParams = {
-      token,
-      secret,
-      salt,
-    }
+    const params: JWTDecodeParams = { token, secret, salt }
+
+
     const decoded = await decode(params)
     return decoded as SessionTokenPayload | null
   } catch (error) {
