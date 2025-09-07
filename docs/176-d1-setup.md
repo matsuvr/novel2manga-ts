@@ -14,12 +14,7 @@ wrangler d1 create novel2manga
 
 - 実行結果に表示される `database_id` を控え、`wrangler.toml` の `[[d1_databases]]` セクションを更新する
 
-## 2. 接続情報を環境変数に設定
-
-- ローカル開発: `.env.local` に `DATABASE_ID` を追加
-- 本番: Cloudflare ダッシュボードの環境変数に同様の値を設定
-
-## 3. Drizzle でマイグレーションを生成
+## 2. Drizzle でマイグレーションを生成
 
 ```sh
 npm run db:generate
@@ -28,7 +23,7 @@ npm run db:generate
 - 生成された SQL は `drizzle/` フォルダに出力される
 - 必ずコミットに含める
 
-## 4. D1 へマイグレーションを適用
+## 3. D1 へマイグレーションを適用
 
 ローカル（Miniflare）で検証:
 
@@ -42,15 +37,15 @@ wrangler d1 migrations apply novel2manga --local
 wrangler d1 migrations apply novel2manga --remote
 ```
 
-## 5. 接続確認テスト
+このテストは `better-sqlite3` に依存するため、WSL2 では失敗する可能性があります。WSL2 環境では TypeScript のみで完結する小規模なテストだけを実行し、このテストを含むバイナリ依存テストの一括実行は他の開発者に依頼してください。
+
+このテストは `better-sqlite3` に依存するため、WSL2では失敗する可能性があります。WSL2環境ではTypeScriptのみで完結するテストの実行に留め、このテストを含むバイナリ依存のテストはCI等のネイティブ実行が可能な環境で行ってください。
 
 ```sh
 npm run test:unit src/__tests__/db/d1-connection.test.ts
 ```
 
-- 失敗した場合はログを確認し、修正後に再実行する
-
-## 6. 型定義の更新
+## 5. 型定義の更新
 
 ```sh
 npm run cf-typegen
