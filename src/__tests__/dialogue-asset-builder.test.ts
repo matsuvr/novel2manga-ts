@@ -45,6 +45,6 @@ describe('dialogue-asset-builder', () => {
     const assets = buildTestPlaceholderAssets(map, { fontSize: 16, padding: 4 })
     const a0 = assets['101:0']
     expect(a0.width).toBe(16 + 4 * 2)
-    expect(a0.height).toBeGreaterThan(0)
+    expect(a0.height).toBe(72)
   })
 })

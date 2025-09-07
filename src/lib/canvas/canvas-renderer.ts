@@ -8,9 +8,13 @@ import { type SfxPlacement, SfxPlacer } from './sfx-placer'
 // Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
 const isServer = typeof window === 'undefined'
 let createCanvas: ((width: number, height: number) => unknown) | undefined
-// node-canvas の Image は width/height を持つが DOM の HTMLImageElement とは別物なので緩めのコンストラクタ型にする
-// 最低限 src/width/height を扱えるようにオーバーライド
-let NodeCanvasImageCtor: (new () => { src: string | Buffer }) | undefined
+// node-canvas の Image は DOM の HTMLImageElement とは別物なので専用型を定義
+interface NodeCanvasImage {
+  src: string | Buffer
+  width: number
+  height: number
+}
+let NodeCanvasImageCtor: (new () => NodeCanvasImage) | undefined
 
 /** パネル全幅に対する水平スロット領域の割合。0.9はパネル幅の90%をスロット領域として確保するための値。 */
 const HORIZONTAL_SLOT_COVERAGE = 0.9
@@ -189,10 +193,9 @@ export class CanvasRenderer {
     }
     const img = new NodeCanvasImageCtor()
     img.src = buffer
-    // node-canvas の Image は読み込み後に寸法が同期的に得られる
-    const anyImg = img as unknown as { width?: number; height?: number }
-    const width = typeof anyImg.width === 'number' ? anyImg.width : 0
-    const height = typeof anyImg.height === 'number' ? anyImg.height : 0
+    // node-canvas の Image は読み込み後に width/height が同期的に得られる
+    const width = img.width
+    const height = img.height
     return {
       image: img as unknown as CanvasImageSource,
       width,
