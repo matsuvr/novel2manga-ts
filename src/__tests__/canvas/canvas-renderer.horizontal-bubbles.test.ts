@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Panel } from '@/types/panel-layout'
 
 const mockCtx = (() => {
-  const calls: Record<string, any[]> = {}
+  const calls: Record<string, unknown[]> = {}
   const fn = (name: string) =>
-    vi.fn((...args: any[]) => {
+    vi.fn((...args: unknown[]) => {
       ;(calls[name] ||= []).push(args)
     })
-  const ctx: any = {
+  const ctx = {
     beginPath: fn('beginPath'),
     fillRect: fn('fillRect'),
     moveTo: fn('moveTo'),
@@ -30,7 +30,7 @@ const mockCtx = (() => {
     set lineWidth(_: number) {},
     set font(_: string) {},
     translate: fn('translate'),
-  }
+  } as unknown as CanvasRenderingContext2D
   return { ctx, calls }
 })()
 
@@ -51,13 +51,11 @@ describe('CanvasRenderer bubble layout', () => {
 
   it('places multiple dialogues horizontally', async () => {
     vi.resetModules()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (globalThis as any).window
-    const mod = await import('@/lib/canvas/canvas-renderer')
-    const { CanvasRenderer } = mod as any
+    delete (globalThis as Record<string, unknown>).window
+    const { CanvasRenderer } = await import('@/lib/canvas/canvas-renderer')
     const renderer = await CanvasRenderer.create({ width: 800, height: 600 })
 
-    const registerSpy = vi.spyOn((renderer as any).layoutCoordinator, 'registerDialogueArea')
+    const registerSpy = vi.spyOn(renderer.getLayoutCoordinator(), 'registerDialogueArea')
 
     const panel: Panel = {
       id: 'p1',
@@ -71,8 +69,8 @@ describe('CanvasRenderer bubble layout', () => {
     }
 
     renderer.setDialogueAssets({
-      'p1:0': { image: { __img: true } as any, width: 80, height: 100 },
-      'p1:1': { image: { __img: true } as any, width: 80, height: 100 },
+      'p1:0': { image: { __img: true } as unknown, width: 80, height: 100 },
+      'p1:1': { image: { __img: true } as unknown, width: 80, height: 100 },
     })
 
     renderer.drawPanel(panel)
