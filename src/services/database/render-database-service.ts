@@ -125,148 +125,198 @@ export class RenderDatabaseService extends BaseDatabaseService {
 
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
-
       drizzleDb.transaction((tx) => {
-        const existing = tx
-          .select()
-          .from(renderStatus)
-          .where(
-            and(
-              eq(renderStatus.jobId, jobId),
-              eq(renderStatus.episodeNumber, episodeNumber),
-              eq(renderStatus.pageNumber, pageNumber),
-            ),
-          )
-          .limit(1)
-          .all() as RenderStatus[]
-
-        const wasRendered = existing[0]?.isRendered ?? false
-
-        if (existing[0]) {
-          tx.update(renderStatus)
-            .set({
-              isRendered: status.isRendered ?? existing[0].isRendered,
-              imagePath: status.imagePath ?? existing[0].imagePath,
-              thumbnailPath: status.thumbnailPath ?? existing[0].thumbnailPath,
-              width: status.width ?? existing[0].width,
-              height: status.height ?? existing[0].height,
-              fileSize: status.fileSize ?? existing[0].fileSize,
-              renderedAt: now,
-            })
-            .where(eq(renderStatus.id, existing[0].id))
-            .run()
-        } else {
-          tx.insert(renderStatus)
-            .values({
-              id: crypto.randomUUID(),
-              jobId,
-              episodeNumber,
-              pageNumber,
-              isRendered: status.isRendered ?? false,
-              imagePath: status.imagePath,
-              thumbnailPath: status.thumbnailPath,
-              width: status.width,
-              height: status.height,
-              fileSize: status.fileSize,
-              renderedAt: now,
-            })
-            .run()
-        }
-
-        const isRenderedNow = status.isRendered ?? wasRendered
-        if (isRenderedNow && !wasRendered) {
-          const jobRow = tx
-            .select({ renderedPages: jobs.renderedPages, totalPages: jobs.totalPages })
-            .from(jobs)
-            .where(eq(jobs.id, jobId))
-            .limit(1)
-            .all()[0]
-
-          const currentRenderedPages = jobRow?.renderedPages ?? 0
-          const newRenderedPages = currentRenderedPages + 1
-          tx.update(jobs)
-            .set({ renderedPages: newRenderedPages, updatedAt: now })
-            .where(eq(jobs.id, jobId))
-            .run()
-
-          const totalPages = jobRow?.totalPages ?? 0
-          if (totalPages > 0 && newRenderedPages >= totalPages) {
-            tx.update(jobs)
-              .set({ renderCompleted: true, updatedAt: now })
-              .where(eq(jobs.id, jobId))
-              .run()
-          }
-        }
+        this.upsertRenderStatusTxSync(tx, jobId, episodeNumber, pageNumber, status, now)
       })
     } else {
       await this.adapter.transaction(async (tx: DrizzleDatabase) => {
-        const existing = await tx
-          .select()
-          .from(renderStatus)
-          .where(
-            and(
-              eq(renderStatus.jobId, jobId),
-              eq(renderStatus.episodeNumber, episodeNumber),
-              eq(renderStatus.pageNumber, pageNumber),
-            ),
-          )
-          .limit(1)
-
-        const wasRendered = existing[0]?.isRendered ?? false
-
-        if (existing[0]) {
-          await tx
-            .update(renderStatus)
-            .set({
-              isRendered: status.isRendered ?? existing[0].isRendered,
-              imagePath: status.imagePath ?? existing[0].imagePath,
-              thumbnailPath: status.thumbnailPath ?? existing[0].thumbnailPath,
-              width: status.width ?? existing[0].width,
-              height: status.height ?? existing[0].height,
-              fileSize: status.fileSize ?? existing[0].fileSize,
-              renderedAt: now,
-            })
-            .where(eq(renderStatus.id, existing[0].id))
-        } else {
-          await tx.insert(renderStatus).values({
-            id: crypto.randomUUID(),
-            jobId,
-            episodeNumber,
-            pageNumber,
-            isRendered: status.isRendered ?? false,
-            imagePath: status.imagePath,
-            thumbnailPath: status.thumbnailPath,
-            width: status.width,
-            height: status.height,
-            fileSize: status.fileSize,
-            renderedAt: now,
-          })
-        }
-
-        const isRenderedNow = status.isRendered ?? wasRendered
-        if (isRenderedNow && !wasRendered) {
-          const jobRow = await tx
-            .select({ renderedPages: jobs.renderedPages, totalPages: jobs.totalPages })
-            .from(jobs)
-            .where(eq(jobs.id, jobId))
-            .limit(1)
-
-          const currentRenderedPages = jobRow[0]?.renderedPages ?? 0
-          const newRenderedPages = currentRenderedPages + 1
-          await tx
-            .update(jobs)
-            .set({ renderedPages: newRenderedPages, updatedAt: now })
-            .where(eq(jobs.id, jobId))
-
-          const totalPages = jobRow[0]?.totalPages ?? 0
-          if (totalPages > 0 && newRenderedPages >= totalPages) {
-            await tx
-              .update(jobs)
-              .set({ renderCompleted: true, updatedAt: now })
-              .where(eq(jobs.id, jobId))
-          }
-        }
+        await this.upsertRenderStatusTxAsync(tx, jobId, episodeNumber, pageNumber, status, now)
       })
+    }
+  }
+
+  private buildJobSelect(tx: DrizzleDatabase, jobId: string) {
+    return tx
+      .select({ renderedPages: jobs.renderedPages, totalPages: jobs.totalPages })
+      .from(jobs)
+      .where(eq(jobs.id, jobId))
+      .limit(1)
+  }
+
+  private createRenderStatusUpdate(
+    status: Partial<
+      Pick<
+        RenderStatus,
+        'isRendered' | 'imagePath' | 'thumbnailPath' | 'width' | 'height' | 'fileSize'
+      >
+    >,
+    existing: RenderStatus,
+    now: string,
+  ): Partial<typeof renderStatus.$inferInsert> {
+    return {
+      isRendered: status.isRendered ?? existing.isRendered,
+      imagePath: status.imagePath ?? existing.imagePath,
+      thumbnailPath: status.thumbnailPath ?? existing.thumbnailPath,
+      width: status.width ?? existing.width,
+      height: status.height ?? existing.height,
+      fileSize: status.fileSize ?? existing.fileSize,
+      renderedAt: now,
+    }
+  }
+
+  private createRenderStatusInsert(
+    jobId: string,
+    episodeNumber: number,
+    pageNumber: number,
+    status: Partial<
+      Pick<
+        RenderStatus,
+        'isRendered' | 'imagePath' | 'thumbnailPath' | 'width' | 'height' | 'fileSize'
+      >
+    >,
+    now: string,
+  ): typeof renderStatus.$inferInsert {
+    return {
+      id: crypto.randomUUID(),
+      jobId,
+      episodeNumber,
+      pageNumber,
+      isRendered: status.isRendered ?? false,
+      imagePath: status.imagePath,
+      thumbnailPath: status.thumbnailPath,
+      width: status.width,
+      height: status.height,
+      fileSize: status.fileSize,
+      renderedAt: now,
+    }
+  }
+
+  private completeJobIfNeededSync(
+    tx: DrizzleDatabase,
+    jobId: string,
+    newRenderedPages: number,
+    totalPages: number,
+    now: string,
+  ): void {
+    if (totalPages > 0 && newRenderedPages >= totalPages) {
+      tx.update(jobs).set({ renderCompleted: true, updatedAt: now }).where(eq(jobs.id, jobId)).run()
+    }
+  }
+
+  private async completeJobIfNeededAsync(
+    tx: DrizzleDatabase,
+    jobId: string,
+    newRenderedPages: number,
+    totalPages: number,
+    now: string,
+  ): Promise<void> {
+    if (totalPages > 0 && newRenderedPages >= totalPages) {
+      await tx.update(jobs).set({ renderCompleted: true, updatedAt: now }).where(eq(jobs.id, jobId))
+    }
+  }
+
+  private upsertRenderStatusTxSync(
+    tx: DrizzleDatabase,
+    jobId: string,
+    episodeNumber: number,
+    pageNumber: number,
+    status: Partial<
+      Pick<
+        RenderStatus,
+        'isRendered' | 'imagePath' | 'thumbnailPath' | 'width' | 'height' | 'fileSize'
+      >
+    >,
+    now: string,
+  ): void {
+    const existingRows = this.buildRenderStatusSelect(tx, jobId, episodeNumber, pageNumber)
+      .limit(1)
+      .all() as RenderStatus[]
+
+    const existing = existingRows[0]
+    const wasRendered = existing?.isRendered ?? false
+
+    if (existing) {
+      tx.update(renderStatus)
+        .set(this.createRenderStatusUpdate(status, existing, now))
+        .where(eq(renderStatus.id, existing.id))
+        .run()
+    } else {
+      tx.insert(renderStatus)
+        .values(this.createRenderStatusInsert(jobId, episodeNumber, pageNumber, status, now))
+        .run()
+    }
+
+    const isRenderedNow = status.isRendered ?? wasRendered
+    if (isRenderedNow && !wasRendered) {
+      const jobRows = this.buildJobSelect(tx, jobId).all() as Array<{
+        renderedPages: number | null
+        totalPages: number | null
+      }>
+
+      const jobRow = jobRows[0]
+      const currentRenderedPages = jobRow?.renderedPages ?? 0
+      const newRenderedPages = currentRenderedPages + 1
+
+      tx.update(jobs)
+        .set({ renderedPages: newRenderedPages, updatedAt: now })
+        .where(eq(jobs.id, jobId))
+        .run()
+
+      this.completeJobIfNeededSync(tx, jobId, newRenderedPages, jobRow?.totalPages ?? 0, now)
+    }
+  }
+
+  private async upsertRenderStatusTxAsync(
+    tx: DrizzleDatabase,
+    jobId: string,
+    episodeNumber: number,
+    pageNumber: number,
+    status: Partial<
+      Pick<
+        RenderStatus,
+        'isRendered' | 'imagePath' | 'thumbnailPath' | 'width' | 'height' | 'fileSize'
+      >
+    >,
+    now: string,
+  ): Promise<void> {
+    const existingRows = (await this.buildRenderStatusSelect(
+      tx,
+      jobId,
+      episodeNumber,
+      pageNumber,
+    ).limit(1)) as RenderStatus[]
+
+    const existing = existingRows[0]
+    const wasRendered = existing?.isRendered ?? false
+
+    if (existing) {
+      await tx
+        .update(renderStatus)
+        .set(this.createRenderStatusUpdate(status, existing, now))
+        .where(eq(renderStatus.id, existing.id))
+    } else {
+      await tx
+        .insert(renderStatus)
+        .values(this.createRenderStatusInsert(jobId, episodeNumber, pageNumber, status, now))
+    }
+
+    const isRenderedNow = status.isRendered ?? wasRendered
+    if (isRenderedNow && !wasRendered) {
+      const jobRows = (await this.buildJobSelect(tx, jobId)) as Array<{
+        renderedPages: number | null
+        totalPages: number | null
+      }>
+
+      const jobRow = jobRows[0]
+      const currentRenderedPages = jobRow?.renderedPages ?? 0
+      const newRenderedPages = currentRenderedPages + 1
+
+      await tx
+        .update(jobs)
+        .set({ renderedPages: newRenderedPages, updatedAt: now })
+        .where(eq(jobs.id, jobId))
+
+      await this.completeJobIfNeededAsync(tx, jobId, newRenderedPages, jobRow?.totalPages ?? 0, now)
     }
   }
 
