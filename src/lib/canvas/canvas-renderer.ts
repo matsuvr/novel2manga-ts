@@ -342,6 +342,9 @@ export class CanvasRenderer {
               imageWidth: drawW,
               imageHeight: drawH,
               bounds: slotBounds,
+              // 水平配置の場合、ラベル（セリフ）のX方向のオフセット比率は常に1（右端）に設定します。
+              // これは、バブルが横に並ぶため、ラベルをバブルの右側に寄せて配置するためです。
+              // 縦配置や他の配置ではこの値が異なる場合があります（例: 0.5で中央寄せなど）。
               labelOffsetXRatio: 1,
             })
           }
