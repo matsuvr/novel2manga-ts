@@ -281,6 +281,7 @@ const result = await agent.run({
 - エンドポイント: `POST /render/batch`
   - `defaults` にページ共通の `fontSize/lineHeight/letterSpacing/padding` を設定。
   - `items` に各ダイアログの `{ text, font?, maxCharsPerLine }` を順序保持で投入。
+  - 通常のセリフでは `font` を省略し、APIのデフォルトであるアンチック体を利用。
 - 目的: ネットワーク往復回数を削減し、1ページ内のセリフ描画を効率化。
 - エラー時はフォールバックせず即停止し、詳細ログを残す。
 
