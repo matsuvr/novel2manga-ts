@@ -1,4 +1,5 @@
 import { appConfig } from '@/config/app.config'
+import { dialogueAssetsConfig } from '@/config/dialogue-assets.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { renderVerticalTextBatch } from '@/services/vertical-text-client'
 import type {
@@ -10,8 +11,13 @@ import type {
   Page,
   Panel,
 } from '@/types/panel-layout'
-import { getFontForDialogue, type VerticalTextRenderRequest } from '@/types/vertical-text'
-import { CanvasRenderer, type NodeCanvas } from './canvas-renderer'
+import { getFontForDialogue } from '@/types/vertical-text'
+import { CanvasRenderer, type DialogueAsset, type NodeCanvas } from './canvas-renderer'
+import {
+  buildAssetsFromImages,
+  buildTestPlaceholderAssets,
+  collectDialogueRequests,
+} from './dialogue-asset-builder'
 import { PanelLayoutEngine } from './panel-layout-engine'
 import { SpeechBubblePlacer } from './speech-bubble-placer'
 
@@ -304,144 +310,117 @@ export class MangaPageRenderer {
     })
 
     const page = layout.pages[0]
-    const assets: Record<string, { image: unknown; width: number; height: number }> = {}
+    const assets: Record<string, DialogueAsset> = {}
 
     const isTest = process.env.NODE_ENV === 'test'
     let totalDialogues = 0
     let processedDialogues = 0
 
-    // Count total dialogues for progress tracking
-    for (const panel of page.panels) {
-      totalDialogues += (panel.dialogues || []).length
-    }
+    // 純粋関数で dialogue 収集
+    const {
+      items,
+      map,
+      totalDialogues: counted,
+    } = collectDialogueRequests(
+      page,
+      (r) => this.computeMaxCharsPerLine(r),
+      (t) => this.extractDialogueText(t),
+      (d) =>
+        getFontForDialogue({
+          text: d.text,
+          speaker: d.speaker ?? '',
+          type: d.type,
+          emotion: d.emotion,
+        }) ?? 'gothic',
+    )
+    totalDialogues = counted
 
     logger.info('Processing dialogues', { totalDialogues, isTest })
 
     if (isTest) {
-      // 既存挙動: テスト時はネットワークを使わず擬似サイズで資産化
-      for (const panel of page.panels) {
-        const dialogues = panel.dialogues || []
-        const panelHeightRatio = panel.size.height
-        const maxCharsForPanel = this.computeMaxCharsPerLine(panelHeightRatio)
-        for (let i = 0; i < dialogues.length; i++) {
-          const d = dialogues[i]
-          const cleanedText = this.extractDialogueText(d.text)
-          const w = feature.defaults.fontSize + feature.defaults.padding * 2
-          const h = Math.max(40, Math.ceil(cleanedText.length * (feature.defaults.fontSize * 0.9)))
-          const key = `${panel.id}:${i}`
-          assets[key] = { image: { __test_placeholder: true }, width: w, height: h }
-          processedDialogues++
-          logger.debug('Created test placeholder', {
-            panelId: panel.id,
-            dialogueIndex: i,
-            text: cleanedText,
-            maxCharsForPanel,
-          })
-        }
-      }
-    } else {
-      // 本番/開発: ページ単位でbatch APIをコール
-      type MapEntry = { key: string; panelId: string | number; dialogueIndex: number; text: string }
-      const items: VerticalTextRenderRequest[] = []
-      const map: MapEntry[] = []
-      for (const panel of page.panels) {
-        const panelHeightRatio = panel.size.height
-        const maxCharsForPanel = this.computeMaxCharsPerLine(panelHeightRatio)
-        const dialogues = panel.dialogues || []
-        for (let i = 0; i < dialogues.length; i++) {
-          const d = dialogues[i]
-          const cleanedText = this.extractDialogueText(d.text)
-          const selectedFont = getFontForDialogue(d)
-          items.push({
-            text: cleanedText,
-            font: selectedFont,
-            maxCharsPerLine: maxCharsForPanel,
-          })
-          map.push({
-            key: `${panel.id}:${i}`,
-            panelId: panel.id,
-            dialogueIndex: i,
-            text: cleanedText,
-          })
-        }
-      }
-
-      if (items.length > 0) {
-        logger.debug('Calling vertical text batch API', {
-          count: items.length,
-          defaults: {
-            fontSize: feature.defaults.fontSize,
-            lineHeight: feature.defaults.lineHeight,
-            letterSpacing: feature.defaults.letterSpacing,
-            padding: feature.defaults.padding,
-          },
-        })
-
-        // API 仕様上、items は最大 50 件の制限があるため分割して実行
-        const BATCH_LIMIT = 50 as const
-        const defaults = {
+      const testAssets = buildTestPlaceholderAssets(map, {
+        fontSize: feature.defaults.fontSize,
+        padding: feature.defaults.padding,
+      })
+      Object.assign(assets, testAssets)
+      processedDialogues = totalDialogues
+    } else if (items.length > 0) {
+      logger.debug('Calling vertical text batch API', {
+        count: items.length,
+        defaults: {
           fontSize: feature.defaults.fontSize,
           lineHeight: feature.defaults.lineHeight,
           letterSpacing: feature.defaults.letterSpacing,
           padding: feature.defaults.padding,
-        }
+        },
+      })
 
-        const allResults: Array<{ meta: { width: number; height: number }; pngBuffer: Buffer }> = []
-        let offset = 0
-        while (offset < items.length) {
-          const slice = items.slice(offset, offset + BATCH_LIMIT)
-          const apiStartTime = Date.now()
-          const res = await renderVerticalTextBatch({ defaults, items: slice })
-          const apiDuration = Date.now() - apiStartTime
-          logger.debug('Vertical text batch API completed (chunk)', {
-            duration: apiDuration,
-            chunkStart: offset,
-            chunkSize: slice.length,
-            results: res.length,
-          })
-          if (res.length !== slice.length) {
-            throw new Error(
-              `vertical-text batch size mismatch: requested ${slice.length}, got ${res.length} (offset ${offset})`,
-            )
-          }
-          allResults.push(...res)
-          offset += BATCH_LIMIT
-        }
+      const defaults = {
+        fontSize: feature.defaults.fontSize,
+        lineHeight: feature.defaults.lineHeight,
+        letterSpacing: feature.defaults.letterSpacing,
+        padding: feature.defaults.padding,
+      }
 
-        if (allResults.length !== items.length) {
+      const allResults: Array<{ meta: { width: number; height: number }; pngBuffer: Buffer }> = []
+      let offset = 0
+      const limit = dialogueAssetsConfig.batch.limit
+      while (offset < items.length) {
+        const slice = items.slice(offset, offset + limit)
+        const apiStartTime = Date.now()
+        const res = await renderVerticalTextBatch({ defaults, items: slice })
+        const apiDuration = Date.now() - apiStartTime
+        logger.debug('Vertical text batch API completed (chunk)', {
+          duration: apiDuration,
+          chunkStart: offset,
+          chunkSize: slice.length,
+          results: res.length,
+        })
+        if (res.length !== slice.length) {
           throw new Error(
-            `vertical-text batch size mismatch: requested ${items.length}, got ${allResults.length}`,
+            `vertical-text batch size mismatch: requested ${slice.length}, got ${res.length} (offset ${offset})`,
           )
         }
-
-        for (let idx = 0; idx < allResults.length; idx++) {
-          const { meta, pngBuffer } = allResults[idx]
-          const { key, panelId, dialogueIndex } = map[idx]
-
-          if (typeof CanvasRenderer.createImageFromBuffer !== 'function') {
-            const error = 'Canvas image creation not available'
-            logger.error(error, {
-              panelId,
-              dialogueIndex,
-              createImageFromBufferType: typeof CanvasRenderer.createImageFromBuffer,
-            })
-            throw new Error(error)
-          }
-
-          const created = CanvasRenderer.createImageFromBuffer(pngBuffer)
-          const w = Math.max(1, created.width || meta.width)
-          const h = Math.max(1, created.height || meta.height)
-          assets[key] = { image: created.image, width: w, height: h }
-          processedDialogues++
-
-          logger.debug('Dialogue asset created (batch)', {
-            key,
-            width: w,
-            height: h,
-            progress: `${processedDialogues}/${totalDialogues}`,
-          })
-        }
+        allResults.push(...res)
+        offset += limit
       }
+
+      if (allResults.length !== items.length) {
+        throw new Error(
+          `vertical-text batch size mismatch: requested ${items.length}, got ${allResults.length}`,
+        )
+      }
+
+      // 画像オブジェクト化（副作用）
+      const images: Array<{
+        key: string
+        image: CanvasImageSource
+        meta: { width: number; height: number }
+      }> = allResults.map((res, idx) => {
+        const { key, panelId, dialogueIndex } = map[idx]
+        if (typeof CanvasRenderer.createImageFromBuffer !== 'function') {
+          const error = 'Canvas image creation not available'
+          logger.error(error, {
+            panelId,
+            dialogueIndex,
+            createImageFromBufferType: typeof CanvasRenderer.createImageFromBuffer,
+          })
+          throw new Error(error)
+        }
+        const created = CanvasRenderer.createImageFromBuffer(res.pngBuffer)
+        return {
+          key,
+          image: created.image,
+          meta: {
+            width: created.width || res.meta.width,
+            height: created.height || res.meta.height,
+          },
+        }
+      })
+
+      const built = buildAssetsFromImages(map, images)
+      Object.assign(assets, built)
+      processedDialogues = totalDialogues
     }
 
     logger.info('Dialogue assets preparation completed', {

@@ -1,5 +1,10 @@
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import type { AppCanvasConfig } from '@/types/canvas-config'
+import type { Dialogue, MangaLayout, Panel } from '@/types/panel-layout'
+import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
+import { PanelLayoutCoordinator } from './panel-layout-coordinator'
+import { toSizeLike } from '@/utils/type-guards'
+
 import type { MangaLayout, Panel, Dialogue } from '@/types/panel-layout'
 import { PanelLayoutCoordinator } from './panel-layout-coordinator'
 import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
@@ -8,12 +13,13 @@ import { type SfxPlacement, SfxPlacer } from './sfx-placer'
 // Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
 const isServer = typeof window === 'undefined'
 let createCanvas: ((width: number, height: number) => unknown) | undefined
-type NodeCanvasImageLike = CanvasImageSource & {
-  src: Buffer | string
+// node-canvas の Image は DOM の HTMLImageElement とは別物なので専用型を定義
+interface NodeCanvasImage {
+  src: string | Buffer
   width: number
   height: number
 }
-let NodeCanvasImageCtor: (new () => NodeCanvasImageLike) | undefined
+let NodeCanvasImageCtor: (new () => NodeCanvasImage) | undefined
 
 /** パネル全幅に対する水平スロット領域の割合。0.9はパネル幅の90%をスロット領域として確保するための値。 */
 const HORIZONTAL_SLOT_COVERAGE = 0.9
@@ -192,10 +198,14 @@ export class CanvasRenderer {
     }
     const img = new NodeCanvasImageCtor()
     img.src = buffer
+    // node-canvas の Image は読み込み後に width/height が同期的に得られる
+    const width = img.width
+    const height = img.height
+
     return {
-      image: img,
-      width: img.width,
-      height: img.height,
+      image: img as unknown as CanvasImageSource,
+      width,
+      height,
     }
   }
 

@@ -32,3 +32,6 @@ biome-report.json
 .env*
 .DS_Store
 Thumbs.db
+
+# cloudflare
+cloudflare-env.d.ts

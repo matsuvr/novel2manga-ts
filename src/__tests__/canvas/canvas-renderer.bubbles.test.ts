@@ -17,6 +17,7 @@ const mockCtx = (() => {
     rect: fn('rect'),
     strokeRect: fn('strokeRect'),
     ellipse: fn('ellipse'),
+    arc: fn('arc'),
     quadraticCurveTo: fn('quadraticCurveTo'),
     closePath: fn('closePath'),
     fill: fn('fill'),
