@@ -38,7 +38,6 @@
 | **エピソード進捗**   | `StorageKeys.episodeLayoutProgress(jobId, ep)` | `{jobId}/episode_1.progress.json` |
 | ページ画像           | `StorageKeys.pageRender(jobId, ep, page)`      | `{jobId}/episode_1/page_1.png`    |
 
-
 以下は設計済み（計画中）のキーで、コード実装は未着手です。
 
 | 種別（計画中）     | 生成関数                                       | 形式例                                          |
