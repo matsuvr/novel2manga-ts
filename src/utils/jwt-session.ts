@@ -1,6 +1,6 @@
-import { decode } from 'next-auth/jwt'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { Context, Layer } from 'effect'
+import { decode } from 'next-auth/jwt'
 
 export interface SessionTokenPayload {
   sub?: string

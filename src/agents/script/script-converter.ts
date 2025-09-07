@@ -6,8 +6,8 @@ import {
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { type NewMangaScript, NewMangaScriptSchema } from '@/types/script'
-import { enforceDialogueBubbleLimit } from '@/utils/script-postprocess'
 import { isTestEnv } from '@/utils/env'
+import { enforceDialogueBubbleLimit } from '@/utils/script-postprocess'
 import { sanitizeScript, validateImportanceFields } from '@/utils/script-validation'
 
 export interface ScriptConversionInput {
