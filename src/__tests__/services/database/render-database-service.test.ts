@@ -44,7 +44,7 @@ function makeFakeDb(initialJob: { renderedPages?: number; totalPages?: number } 
 describe('RenderDatabaseService', () => {
   it('increments rendered pages without completing job', async () => {
     const { db, adapter, state } = makeFakeDb({ renderedPages: 0, totalPages: 2 })
-    const service = new RenderDatabaseService(db, adapter)
+  it('increments rendered pages and sets renderCompleted on final page without changing job status', async () => {
 
     await service.upsertRenderStatus('j1', 1, 1, {
       isRendered: true,
