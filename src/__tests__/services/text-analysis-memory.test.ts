@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/character/persistence', () => ({
   loadCharacterMemory: vi.fn().mockResolvedValue({ memoryIndex: new Map(), aliasIndex: new Map() }),

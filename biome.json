@@ -123,6 +123,15 @@
       "formatter": { "enabled": false }
     },
     {
+      "includes": ["cloudflare-env.d.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": { "noExplicitAny": "off" }
+        }
+      },
+      "formatter": { "enabled": false }
+    },
+    {
       "includes": ["**/*.jsonc", "**/tsconfig*.json"],
       "linter": { "enabled": false },
       "formatter": { "enabled": false }

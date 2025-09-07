@@ -5,6 +5,10 @@
 このドキュメントは、LLMエージェントの実装を簡素化し、プロバイダー非依存で、決定論的テストが可能で、厳密な型安全性を提供する新しいアーキテクチャについて説明します。
 本システムは OpenNext の Node.js ランタイムを前提とし、API ルートから冗長な `export const runtime` 宣言を排除しています。
 
+## Deployment Baseline
+
+OpenNext と `wrangler` により Cloudflare Workers へのビルド・デプロイ基盤を構築しました。`wrangler.toml` では `nodejs_compat` と `global_fetch_strictly_public` を有効化し、`/hello` ページで Hello World を確認できます。
+
 ## アーキテクチャの利点
 
 ### 1. エージェントの簡素化
@@ -262,6 +266,14 @@ const result = await agent.run({
   - `height <= 0.3`: 8 文字/行
   - それ以外: `appConfig.rendering.verticalText.defaults.maxCharsPerLine` を使用（既定は 14）
 - 改行処理はレンダリングAPI側で行うため、当該値のみ指定し、フォールバックは実装しない。
+
+### 複数吹き出しの水平配置（2025-09-04 追加）
+
+- 同一コマに複数の吹き出しがある場合、縦積みではなく横並びに配置し文字の視認性を確保する。
+- 吹き出し領域を最優先で確保し、説明テキストや描き文字は残余スペースに収める。
+- 各吹き出し幅はスロット幅内に収まるようスケールを調整し、重なりを防止する。
+- 話者ラベルはスロット境界内でクランプし、吹き出し同士の干渉を避ける。
+- レイアウトに使用する比率や余白値を定数化し、調整を容易にする。
 
 ### バッチレンダリング（2025-09-03 追加）
 
@@ -674,6 +686,11 @@ console.log(result.metadata?.provider)
 - R2 経由の `full_pages.json` 末尾に混入する `null` 文字が原因で結果ページが JSON パースに失敗する問題を修正。
 - 末尾の `\u0000` を除去してから JSON を解析する `parseJson` ユーティリティを追加し、結果ページで利用。
 
+### Bugfix: speech bubble scaling accuracy (2025-09-09)
+
+- 吹き出しのスケーリング計算を幾何学的特性とパディングを考慮する形に修正し、複数・単一吹き出しともに最大配置領域を正確に尊重。
+- 重複していた吹き出し描画処理と話者ラベル位置の二重クランプを削除し、パフォーマンスと可読性を向上。
+
 ### Feature Toggle: Script Coverage Check (2025-09-??)
 
 - `app.config.ts` に `features.enableCoverageCheck` を追加。
@@ -776,3 +793,4 @@ LLM構造化ジェネレーターにおけるエラー処理は、共通のエ�
 ## 認証基盤
 
 - Google OAuth + Auth.js + D1 Adapter を採用予定。詳細は docs/google-auth-design.md を参照。
+- 必須環境変数未設定時は `RootLayout` が即時に構成エラーを表示し、ビルド失敗を防止する（2025-09-09）。

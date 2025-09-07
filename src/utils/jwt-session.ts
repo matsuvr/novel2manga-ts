@@ -2,6 +2,7 @@ import { decode } from 'next-auth/jwt'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { Context, Layer } from 'effect'
 
+
 export interface SessionTokenPayload {
   sub?: string
   email?: string
@@ -18,6 +19,7 @@ export const AuthSecret = Context.Tag<string>('AuthSecret')
 
 export const AuthSecretLive = Layer.sync(AuthSecret, () => {
   const secret = getCloudflareContext().env.AUTH_SECRET
+
   if (!secret) {
     throw new Error('AUTH_SECRET environment variable not provided.')
   }
@@ -36,6 +38,7 @@ export async function verifySessionToken(
   }
   try {
     return await decode({ token, secret })
+
   } catch (error) {
     console.error('Failed to decode or verify session token:', error)
     return null
