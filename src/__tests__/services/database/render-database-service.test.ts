@@ -1,44 +1,64 @@
 import { describe, expect, it } from 'vitest'
+import { jobs, renderStatus } from '@/db/schema'
 import { RenderDatabaseService } from '@/services/database/render-database-service'
 
 function makeFakeDb(initialJob: { renderedPages?: number; totalPages?: number } = {}) {
   const state = {
     renderRows: [] as unknown[],
-    job: { renderedPages: initialJob.renderedPages ?? 0, totalPages: initialJob.totalPages ?? 0 },
+    job: {
+      renderedPages: initialJob.renderedPages ?? 0,
+      totalPages: initialJob.totalPages ?? 0,
+      status: 'processing' as string,
+      renderCompleted: false,
+    },
   }
+
   const tx = {
     select: () => ({
-      from: () => ({
-        where: () => ({ limit: () => ({ all: () => state.renderRows }) }),
+      from: (table?: unknown) => ({
+        where: () => ({
+          limit: () => (table === jobs ? [state.job] : []),
+        }),
       }),
     }),
-    insert: () => ({ values: (v: unknown) => ({ run: () => void state.renderRows.push(v) }) }),
-    update: () => ({ set: () => ({ where: () => ({ run: () => void 0 }) }) }),
-  }
-  const db = {
-    transaction: <T>(cb: (txObj: typeof tx) => T): T => cb(tx),
-    select: () => ({
-      from: () => ({
-        where: () => ({ limit: () => ({ all: () => [state.job] }) }),
+    insert: () => ({ values: (v: unknown) => state.renderRows.push(v) }),
+    update: (table?: unknown) => ({
+      set: (vals: Record<string, unknown>) => ({
+        where: () => {
+          if (table === jobs) Object.assign(state.job, vals)
+        },
       }),
     }),
   }
+
+  const db = {} as unknown as Parameters<typeof RenderDatabaseService>[0]
   const adapter = {
-    isSync: () => true,
-    transaction: <T>(cb: () => T) => cb(),
-    executeAsync: async <T>(cb: () => T) => cb(),
-  }
-  return {
-    db: db as unknown as Parameters<typeof RenderDatabaseService>[0],
-    adapter: adapter as unknown as Parameters<typeof RenderDatabaseService>[1],
-    state,
-  }
+    isSync: () => false,
+    transaction: async <T>(cb: (txObj: typeof tx) => T) => cb(tx),
+  } as unknown as Parameters<typeof RenderDatabaseService>[1]
+
+  return { db, adapter, state }
 }
 
 describe('RenderDatabaseService', () => {
-  it('upsertRenderStatus can insert a new row', () => {
-    const { db, adapter } = makeFakeDb({ renderedPages: 0, totalPages: 10 })
+  it('increments rendered pages without completing job', async () => {
+    const { db, adapter, state } = makeFakeDb({ renderedPages: 0, totalPages: 2 })
     const service = new RenderDatabaseService(db, adapter)
-    service.upsertRenderStatus('j1', 1, 1, { isRendered: true, imagePath: '/img' })
+
+    await service.upsertRenderStatus('j1', 1, 1, {
+      isRendered: true,
+      imagePath: '/img1',
+    })
+    expect(state.job.renderedPages).toBe(1)
+    expect(state.job.status).toBe('processing')
+
+    await service.upsertRenderStatus('j1', 1, 2, {
+      isRendered: true,
+      imagePath: '/img2',
+    })
+
+    expect(state.job.renderedPages).toBe(2)
+    expect(state.job.status).toBe('processing')
+    expect(state.job.renderCompleted).toBe(true)
   })
 })
