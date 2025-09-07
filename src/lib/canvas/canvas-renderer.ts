@@ -17,14 +17,23 @@ type NodeCanvasImageLike = CanvasImageSource & {
 }
 let NodeCanvasImageCtor: (new () => NodeCanvasImageLike) | undefined
 
+/** パネル全幅に対する水平スロット領域の割合。0.9はパネル幅の90%をスロット領域として確保するための値。 */
 const HORIZONTAL_SLOT_COVERAGE = 0.9
+/** バブルの上端オフセット比率。0.2はバブルをパネル上端から20%下げて配置するための値。 */
 const BUBBLE_TOP_OFFSET_RATIO = 0.2
+/** バブルエリアの最大高さ比率。0.7はパネル高さの70%までバブルを配置可能とするための値。 */
 const MAX_BUBBLE_AREA_HEIGHT_RATIO = 0.7
+/** パネル外周のマージン比率。0.05はパネル幅・高さの5%をマージンとして確保するための値。 */
 const PANEL_MARGIN_RATIO = 0.05
+/** 1つのバブルの最大幅比率。0.45はパネル幅の45%を1バブルの最大幅とするための値。 */
 const SINGLE_BUBBLE_MAX_WIDTH_RATIO = 0.45
+/** バブル内側のパディング（px単位）。10pxはテキストとバブル枠の間隔を確保するための値。 */
 const BUBBLE_PADDING = 10
+/** 1つのバブルの最小高さ（px単位）。60pxは短いセリフでもバブルが潰れないようにするための値。 */
 const SINGLE_BUBBLE_MIN_HEIGHT = 60
+/** バブルの最小高さ（px単位）。30pxは複数バブル時の最小高さを保証するための値。 */
 const MIN_BUBBLE_HEIGHT = 30
+/** バブル配置時に利用可能な垂直方向の最小マージン（px単位）。2pxはバブル同士が重ならないようにするための値。 */
 const AVAILABLE_VERTICAL_MARGIN = 2
 
 // node-canvas用の型定義
