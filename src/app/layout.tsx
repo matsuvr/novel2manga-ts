@@ -1,9 +1,9 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { auth } from '@/auth'
+import { getMissingAuthEnv } from '@/utils/auth-env'
+import { authConfig } from '@/config/auth.config'
 import Providers from './providers'
-
-const AUTH_TIMEOUT_MS = 500
 
 export const metadata: Metadata = {
   title: 'Novel to Manga Converter',
@@ -11,6 +11,19 @@ export const metadata: Metadata = {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const missing = getMissingAuthEnv()
+  if (missing.length > 0) {
+    const message = `Authentication is not configured. Missing environment variables: ${missing.join(', ')}`
+    console.error(message)
+    return (
+      <html lang="ja">
+        <body className="antialiased">
+          <div>{message}</div>
+        </body>
+      </html>
+    )
+  }
+
   // Start auth but do not swallow its errors — we only want to fallback on *timeout*.
   // If auth later fails with a fatal initialization error (missing env, migration failure),
   // we must not hide it; detect and escalate.
@@ -18,7 +31,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   const timeoutMarker = Symbol('timeout') as unknown as { timeout: true }
   const timeoutPromise = new Promise<typeof timeoutMarker>((resolve) =>
-    setTimeout(() => resolve(timeoutMarker), AUTH_TIMEOUT_MS),
+    setTimeout(() => resolve(timeoutMarker), authConfig.timeoutMs),
   )
 
   const raceResult = await Promise.race([authPromise.then((s) => ({ session: s })), timeoutPromise])

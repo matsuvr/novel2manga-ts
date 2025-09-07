@@ -769,3 +769,4 @@ LLM構造化ジェネレーターにおけるエラー処理は、共通のエ�
 ## 認証基盤
 
 - Google OAuth + Auth.js + D1 Adapter を採用予定。詳細は docs/google-auth-design.md を参照。
+- 必須環境変数未設定時は `RootLayout` が即時に構成エラーを表示し、ビルド失敗を防止する（2025-09-09）。
