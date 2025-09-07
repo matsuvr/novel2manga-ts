@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Panel } from '@/types/panel-layout'
 import type { CanvasRenderer as CanvasRendererType } from '@/lib/canvas/canvas-renderer'
+import type { Panel } from '@/types/panel-layout'
 
 const mockCtx = (() => {
   const calls: Record<string, unknown[]> = {}

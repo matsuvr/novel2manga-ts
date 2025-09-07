@@ -5,6 +5,7 @@ import type { JobWithProgress } from '@/services/database/index'
 import { db as dbFactory } from '@/services/database/index'
 import type { EpisodeData, MangaLayout } from '@/types/panel-layout'
 import { StorageKeys } from '@/utils/storage'
+import { isTestEnv } from '@/utils/env'
 
 // CONCURRENCY: In-memory lock to prevent race conditions in layout generation
 // This map tracks active layout generation processes to prevent multiple
@@ -371,9 +372,7 @@ async function generateEpisodeLayoutInternal(
     logger,
   )
   // テスト環境では、episodeが存在しない場合に最低限のダミーを生成して先へ進める
-  const _envNode = (globalThis as unknown as { process?: { env?: Record<string, string> } })
-    ?.process?.env?.NODE_ENV
-  if (!episode && _envNode === 'test') {
+  if (!episode && isTestEnv()) {
     try {
       const jobRow = await jobRepo.getJobWithProgress(jobId)
       const fallbackEpisode = {

@@ -127,12 +127,16 @@ export class TransactionManager {
         drizzleDb = db
 
         // better-sqlite3 は async コールバック非対応のため、$client があり exec が使える場合は手動境界
-        const anyDb = db as unknown as { $client?: { exec?: (sql: string) => void } }
-        const canManualTx = !!anyDb.$client?.exec
+        interface ExecCapable {
+          $client?: { exec?: (sql: string) => void }
+        }
+        const canManualTx = typeof (db as Partial<ExecCapable>).$client?.exec === 'function'
 
         if (canManualTx) {
           // 手動トランザクション境界
-          const exec = anyDb.$client?.exec ? anyDb.$client.exec.bind(anyDb.$client) : undefined
+          const exec = (db as Partial<ExecCapable>).$client?.exec?.bind(
+            (db as Partial<ExecCapable>).$client,
+          )
           if (!exec) {
             throw new Error('Database client does not support manual transactions')
           }

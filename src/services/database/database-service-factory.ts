@@ -224,10 +224,14 @@ export function getDatabaseServiceFactory(): DatabaseServiceFactory {
  */
 export function cleanup(): void {
   if (globalFactory) {
-    // Close the database connection if it has a close method
-    const db = globalFactory.getRawDatabase()
-    if (db && typeof (db as unknown as { close?: () => void }).close === 'function') {
-      ;(db as unknown as { close: () => void }).close()
+    const raw = globalFactory.getRawDatabase() as unknown
+    if (
+      raw &&
+      typeof raw === 'object' &&
+      'close' in raw &&
+      typeof (raw as { close: unknown }).close === 'function'
+    ) {
+      ;(raw as { close: () => void }).close()
     }
     globalFactory = null
   }

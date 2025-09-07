@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { parseJson, parseJsonWithSchema } from '@/utils/json'
 import { z } from 'zod'
+import { parseJson, parseJsonWithSchema } from '@/utils/json'
 
 describe('parseJson', () => {
   it('removes trailing null characters before parsing', () => {
