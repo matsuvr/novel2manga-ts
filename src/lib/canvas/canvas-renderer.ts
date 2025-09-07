@@ -2,9 +2,7 @@ import { getAppConfigWithOverrides } from '@/config/app.config'
 import type { AppCanvasConfig } from '@/types/canvas-config'
 import type { MangaLayout, Panel, Dialogue } from '@/types/panel-layout'
 import { PanelLayoutCoordinator } from './panel-layout-coordinator'
-import type { MangaLayout, Panel } from '@/types/panel-layout'
 import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
-import { PanelLayoutCoordinator } from './panel-layout-coordinator'
 import { type SfxPlacement, SfxPlacer } from './sfx-placer'
 
 // Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
@@ -317,8 +315,10 @@ export class CanvasRenderer {
             const asset = this.dialogueAssets?.[key]
             if (!asset) throw new Error(`Dialogue asset missing for ${key}`)
 
-            const widthScale = (slotWidth / Math.sqrt(2) - BUBBLE_PADDING * 2) / asset.width
-            const heightScale = maxAreaHeight / asset.height
+            const targetDrawWidth = slotWidth / Math.sqrt(2) - BUBBLE_PADDING * 2
+            const widthScale = targetDrawWidth > 0 ? targetDrawWidth / asset.width : 0
+            const targetDrawHeight = maxAreaHeight / Math.sqrt(2) - BUBBLE_PADDING * 2
+            const heightScale = targetDrawHeight > 0 ? targetDrawHeight / asset.height : 0
             const scale = Math.min(widthScale, heightScale, 1)
             if (scale <= 0) continue
 
@@ -371,8 +371,10 @@ export class CanvasRenderer {
             Math.min(perBubbleMaxHeight, availableVertical - AVAILABLE_VERTICAL_MARGIN),
           )
           if (bubbleH > maxThisBubbleHeight) {
-            const shrinkFactor = maxThisBubbleHeight / bubbleH
-            scale = Math.min(scale, scale * shrinkFactor)
+            const targetDrawH = maxThisBubbleHeight / Math.sqrt(2) - BUBBLE_PADDING * 2
+            const newScale = targetDrawH > 0 ? targetDrawH / asset.height : 0
+            scale = Math.min(scale, newScale)
+
             drawW = asset.width * scale
             drawH = asset.height * scale
             bubbleW = (drawW + BUBBLE_PADDING * 2) * Math.sqrt(2)
@@ -393,49 +395,58 @@ export class CanvasRenderer {
               imageWidth: drawW,
               imageHeight: drawH,
               bounds: panelBounds,
-          // 画像（縦書きセリフ）
-          const imgX = bx + (bubbleW - drawW) / 2
-          const imgY = by + (bubbleH - drawH) / 2
-          this.ctx.drawImage(asset.image as unknown as CanvasImageSource, imgX, imgY, drawW, drawH)
-
-          // 占有領域登録
-          this.layoutCoordinator.registerDialogueArea(dialogue, {
-            x: bx,
-            y: by,
-            width: bubbleW,
-            height: bubbleH,
-          })
-
-          // 話者ラベル
-          const speakerLabelCfg = this.appConfig.rendering.canvas.speakerLabel
-          const dialogueType = dialogue.type
-          // ナレーションでは話者ラベルを表示しない
-          const shouldShowLabel =
-            speakerLabelCfg?.enabled === true &&
-            dialogueType !== 'narration' &&
-            typeof dialogue.speaker === 'string' &&
-            dialogue.speaker.trim() !== ''
-          if (shouldShowLabel) {
-            const baseFontSize = this.config.fontSize || 16
-            const fontSize = Math.max(10, baseFontSize * (speakerLabelCfg.fontSize || 0.7))
-            const paddingLabel = speakerLabelCfg.padding ?? 4
-            const bg = speakerLabelCfg.backgroundColor ?? '#ffffff'
-            const border = speakerLabelCfg.borderColor ?? '#333333'
-            const textColor = speakerLabelCfg.textColor ?? '#333333'
-            const offsetXRatio = speakerLabelCfg.offsetX ?? 0.3
-            const offsetYRatio = speakerLabelCfg.offsetY ?? 0.7
-            const borderRadius = speakerLabelCfg.borderRadius ?? 3
-            this.drawSpeakerLabel(dialogue.speaker, bx + bubbleW, by, {
-              fontSize,
-              padding: paddingLabel,
-              backgroundColor: bg,
-              borderColor: border,
-              textColor,
-              offsetXRatio,
-              offsetYRatio,
-              borderRadius,
-              clampBounds: panelBounds,
             })
+
+            // 画像（縦書きセリフ）
+            const imgX = bx + (bubbleW - drawW) / 2
+            const imgY = by + (bubbleH - drawH) / 2
+            this.ctx.drawImage(
+              asset.image as unknown as CanvasImageSource,
+              imgX,
+              imgY,
+              drawW,
+              drawH,
+            )
+
+            // 占有領域登録
+            this.layoutCoordinator.registerDialogueArea(dialogue, {
+              x: bx,
+              y: by,
+              width: bubbleW,
+              height: bubbleH,
+            })
+
+            // 話者ラベル
+            const speakerLabelCfg = this.appConfig.rendering.canvas.speakerLabel
+            const dialogueType = dialogue.type
+            // ナレーションでは話者ラベルを表示しない
+            const shouldShowLabel =
+              speakerLabelCfg?.enabled === true &&
+              dialogueType !== 'narration' &&
+              typeof dialogue.speaker === 'string' &&
+              dialogue.speaker.trim() !== ''
+            if (shouldShowLabel) {
+              const baseFontSize = this.config.fontSize || 16
+              const fontSize = Math.max(10, baseFontSize * (speakerLabelCfg.fontSize || 0.7))
+              const paddingLabel = speakerLabelCfg.padding ?? 4
+              const bg = speakerLabelCfg.backgroundColor ?? '#ffffff'
+              const border = speakerLabelCfg.borderColor ?? '#333333'
+              const textColor = speakerLabelCfg.textColor ?? '#333333'
+              const offsetXRatio = speakerLabelCfg.offsetX ?? 0.3
+              const offsetYRatio = speakerLabelCfg.offsetY ?? 0.7
+              const borderRadius = speakerLabelCfg.borderRadius ?? 3
+              this.drawSpeakerLabel(dialogue.speaker, bx + bubbleW, by, {
+                fontSize,
+                padding: paddingLabel,
+                backgroundColor: bg,
+                borderColor: border,
+                textColor,
+                offsetXRatio,
+                offsetYRatio,
+                borderRadius,
+                clampBounds: panelBounds,
+              })
+            }
           }
         }
       } finally {
@@ -864,6 +875,7 @@ export class CanvasRenderer {
       const maxY = clampBounds.y + clampBounds.height - labelHeight
       labelX = Math.max(Math.min(labelX, maxX), clampBounds.x)
       labelY = Math.max(Math.min(labelY, maxY), clampBounds.y)
+    }
     // パネル内に収まるように位置をクランプ
     if (options.clampBounds) {
       const bxMin = options.clampBounds.x

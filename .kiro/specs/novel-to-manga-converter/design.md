@@ -686,6 +686,10 @@ console.log(result.metadata?.provider)
 - R2 経由の `full_pages.json` 末尾に混入する `null` 文字が原因で結果ページが JSON パースに失敗する問題を修正。
 - 末尾の `\u0000` を除去してから JSON を解析する `parseJson` ユーティリティを追加し、結果ページで利用。
 
+### Bugfix: speech bubble scaling accuracy (2025-09-09)
+
+- 吹き出しのスケーリング計算を幾何学的特性とパディングを考慮する形に修正し、複数・単一吹き出しともに最大配置領域を正確に尊重。
+
 ### Feature Toggle: Script Coverage Check (2025-09-??)
 
 - `app.config.ts` に `features.enableCoverageCheck` を追加。
