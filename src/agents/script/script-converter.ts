@@ -7,6 +7,7 @@ import { getAppConfigWithOverrides } from '@/config/app.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { type NewMangaScript, NewMangaScriptSchema } from '@/types/script'
 import { enforceDialogueBubbleLimit } from '@/utils/script-postprocess'
+import { isTestEnv } from '@/utils/env'
 import { sanitizeScript, validateImportanceFields } from '@/utils/script-validation'
 
 export interface ScriptConversionInput {
@@ -39,13 +40,7 @@ export async function convertChunkToMangaScript(
   // Add validation for minimum text length to ensure meaningful content
   // Allow shorter text in test environments to not break existing tests
   const trimmedText = input.chunkText.trim()
-  const isTestEnv =
-    typeof globalThis !== 'undefined' &&
-    typeof (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } })
-      .process === 'object' &&
-    (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process
-      ?.env?.NODE_ENV === 'test'
-  const minLength = isTestEnv ? 5 : 50
+  const minLength = isTestEnv() ? 5 : 50
   if (trimmedText.length < minLength) {
     throw new Error(
       `Chunk text is too short. Please provide at least ${minLength} characters of story content, not just a title.`,
@@ -53,7 +48,7 @@ export async function convertChunkToMangaScript(
   }
 
   // Demo mode: return fixed script structure for testing
-  if (options?.isDemo || isTestEnv) {
+  if (options?.isDemo || isTestEnv()) {
     const panels = [
       {
         no: 1,
