@@ -62,6 +62,13 @@ src/
         └── health-check.ts    # APIヘルスチェックのビジネスロジック（DB/Storageを軽量 probe）
 ```
 
+## 認証
+
+- Auth.js v5 を採用し、Google OAuth を `/portal/api/auth` 配下に設置
+- `/portal/api/auth/login`, `/callback/:provider`, `/logout`, `/session` を提供
+- セッションは JWT 方式でクッキーに保存し、`next-auth/jwt` を利用して検証
+- D1 はユーザー情報の永続化に利用し、セッション情報は保存しない
+
 ## 出力ストレージ設計
 
 - 変換結果は Cloudflare R2 に保存し、ユーザー単位のパス `results/{userId}/{jobId}.{format}` を採用
