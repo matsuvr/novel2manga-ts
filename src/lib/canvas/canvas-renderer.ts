@@ -415,7 +415,19 @@ export class CanvasRenderer {
       this.ctx.rect(x, y, width, height)
       this.ctx.clip()
       try {
-        const sfxPlacements = this.sfxPlacer.placeSfx(panel.sfx, panel, panelBounds)
+        const sfxPlacements = this.sfxPlacer.placeSfx(
+          panel.sfx,
+          panel,
+          panelBounds,
+          this.layoutCoordinator
+            .getOccupiedAreas()
+            .map(({ x: ox, y: oy, width: ow, height: oh }) => ({
+              x: ox,
+              y: oy,
+              width: ow,
+              height: oh,
+            })),
+        )
         for (const placement of sfxPlacements) {
           this.drawSfxWithPlacement(placement)
           const estBounds = {
@@ -475,6 +487,13 @@ export class CanvasRenderer {
             cy += placement.fontSize * contentCfg.lineHeight
           }
           this.ctx.restore()
+
+          this.layoutCoordinator.registerContentArea({
+            x: placement.x,
+            y: placement.y,
+            width: placement.width,
+            height: placement.height,
+          })
         }
       }
     }

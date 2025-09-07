@@ -479,9 +479,10 @@ export const appConfig = {
       contentText: {
         enabled: true,
         fontSize: {
-          min: 10,
-          max: 14,
-          default: 12,
+          // 説明テキストは従来比で縦横2倍のスケールを確保する
+          min: 20,
+          max: 28,
+          default: 24,
         },
         padding: 8,
         lineHeight: 1.4,
@@ -497,8 +498,9 @@ export const appConfig = {
           preferredAreas: ['left', 'top', 'bottom'],
           minAreaSize: 80,
         },
-        maxWidthRatio: 0.4,
-        maxHeightRatio: 0.3,
+        // 占有領域も縦横2倍確保（但しパネル面積の80%/60%を上限とする）
+        maxWidthRatio: 0.8,
+        maxHeightRatio: 0.6,
       },
     },
   },
