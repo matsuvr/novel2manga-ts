@@ -3,7 +3,7 @@ import { Schema } from '@effect/schema'
 export const VerticalTextRequestSchema = Schema.Struct({
   text: Schema.String.pipe(Schema.nonEmpty()),
   font: Schema.optional(
-    Schema.Literal('gothic', 'mincho').pipe(Schema.annotations({ default: 'antique' })),
+    Schema.Literal('antique', 'gothic', 'mincho').pipe(Schema.annotations({ default: 'antique' }))
   ),
   fontSize: Schema.Number.pipe(Schema.between(8, 100), Schema.annotations({ default: 20 })),
   lineHeight: Schema.Number.pipe(Schema.between(1, 3), Schema.annotations({ default: 1.6 })),
