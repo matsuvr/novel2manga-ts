@@ -185,6 +185,7 @@ export class CanvasRenderer {
     bubbleH: number,
     drawW: number,
     drawH: number,
+    bounds: { x: number; y: number; width: number; height: number },
   ): void {
     // 吹き出し背景
     this.ctx.save()
@@ -238,6 +239,7 @@ export class CanvasRenderer {
         offsetXRatio,
         offsetYRatio,
         borderRadius,
+        clampBounds: bounds,
       })
     }
   }
@@ -293,7 +295,17 @@ export class CanvasRenderer {
             const bx = x + width * 0.05 + slotWidth * i + (slotWidth - bubbleW) / 2
             const by = bubbleY
 
-            this.drawDialogueBubble(dialogue, asset, bx, by, bubbleW, bubbleH, drawW, drawH)
+            this.drawDialogueBubble(
+              dialogue,
+              asset,
+              bx,
+              by,
+              bubbleW,
+              bubbleH,
+              drawW,
+              drawH,
+              panelBounds,
+            )
           }
         } else {
           let bubbleY = y + height * 0.2
@@ -336,7 +348,17 @@ export class CanvasRenderer {
             const bx = x + width - bubbleW - width * 0.05
             const by = bubbleY
 
-            this.drawDialogueBubble(dialogue, asset, bx, by, bubbleW, bubbleH, drawW, drawH)
+            this.drawDialogueBubble(
+              dialogue,
+              asset,
+              bx,
+              by,
+              bubbleW,
+              bubbleH,
+              drawW,
+              drawH,
+              panelBounds,
+            )
 
             bubbleY += bubbleH + 10
           }
@@ -642,6 +664,7 @@ export class CanvasRenderer {
       offsetXRatio?: number
       offsetYRatio?: number
       borderRadius?: number
+      clampBounds?: { x: number; y: number; width: number; height: number }
     } = {},
   ): void {
     const {
@@ -653,6 +676,7 @@ export class CanvasRenderer {
       offsetXRatio = 0.3,
       offsetYRatio = 0.7,
       borderRadius = 3,
+      clampBounds,
     } = options
 
     if (!speaker || speaker.trim() === '') return
@@ -675,8 +699,19 @@ export class CanvasRenderer {
     const labelHeight = (lines.length > 0 ? lines.length : 1) * lineHeight + padding * 2
 
     // 位置: 吹き出し右上の少し外側
-    const labelX = xRightEdge - labelWidth * offsetXRatio
-    const labelY = yTopEdge - labelHeight * offsetYRatio
+    let labelX = xRightEdge - labelWidth * offsetXRatio
+    let labelY = yTopEdge - labelHeight * offsetYRatio
+
+    if (clampBounds) {
+      labelX = Math.min(
+        Math.max(labelX, clampBounds.x),
+        clampBounds.x + clampBounds.width - labelWidth,
+      )
+      labelY = Math.min(
+        Math.max(labelY, clampBounds.y),
+        clampBounds.y + clampBounds.height - labelHeight,
+      )
+    }
 
     // 背景（角丸）
     this.drawRoundedRect(labelX, labelY, labelWidth, labelHeight, borderRadius)
