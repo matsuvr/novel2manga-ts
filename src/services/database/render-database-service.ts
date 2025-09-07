@@ -192,13 +192,7 @@ export class RenderDatabaseService extends BaseDatabaseService {
           const totalPages = jobRow?.totalPages ?? 0
           if (totalPages > 0 && newRenderedPages >= totalPages) {
             tx.update(jobs)
-              .set({
-                renderCompleted: true,
-                currentStep: 'complete',
-                status: 'completed',
-                completedAt: now,
-                updatedAt: now,
-              })
+              .set({ renderCompleted: true, updatedAt: now })
               .where(eq(jobs.id, jobId))
               .run()
           }
@@ -268,13 +262,7 @@ export class RenderDatabaseService extends BaseDatabaseService {
           if (totalPages > 0 && newRenderedPages >= totalPages) {
             await tx
               .update(jobs)
-              .set({
-                renderCompleted: true,
-                currentStep: 'complete',
-                status: 'completed',
-                completedAt: now,
-                updatedAt: now,
-              })
+              .set({ renderCompleted: true, updatedAt: now })
               .where(eq(jobs.id, jobId))
           }
         }
