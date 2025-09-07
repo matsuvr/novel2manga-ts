@@ -4,6 +4,10 @@ import type { Dialogue, MangaLayout, Panel } from '@/types/panel-layout'
 import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
 import { PanelLayoutCoordinator } from './panel-layout-coordinator'
 import { toSizeLike } from '@/utils/type-guards'
+
+import type { MangaLayout, Panel, Dialogue } from '@/types/panel-layout'
+import { PanelLayoutCoordinator } from './panel-layout-coordinator'
+import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
 import { type SfxPlacement, SfxPlacer } from './sfx-placer'
 
 // Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
@@ -321,8 +325,10 @@ export class CanvasRenderer {
             const asset = this.dialogueAssets?.[key]
             if (!asset) throw new Error(`Dialogue asset missing for ${key}`)
 
-            const widthScale = (slotWidth / Math.sqrt(2) - BUBBLE_PADDING * 2) / asset.width
-            const heightScale = maxAreaHeight / asset.height
+            const targetDrawWidth = slotWidth / Math.sqrt(2) - BUBBLE_PADDING * 2
+            const widthScale = targetDrawWidth > 0 ? targetDrawWidth / asset.width : 0
+            const targetDrawHeight = maxAreaHeight / Math.sqrt(2) - BUBBLE_PADDING * 2
+            const heightScale = targetDrawHeight > 0 ? targetDrawHeight / asset.height : 0
             const scale = Math.min(widthScale, heightScale, 1)
             if (scale <= 0) continue
 
@@ -375,8 +381,10 @@ export class CanvasRenderer {
             Math.min(perBubbleMaxHeight, availableVertical - AVAILABLE_VERTICAL_MARGIN),
           )
           if (bubbleH > maxThisBubbleHeight) {
-            const shrinkFactor = maxThisBubbleHeight / bubbleH
-            scale = Math.min(scale, scale * shrinkFactor)
+            const targetDrawH = maxThisBubbleHeight / Math.sqrt(2) - BUBBLE_PADDING * 2
+            const newScale = targetDrawH > 0 ? targetDrawH / asset.height : 0
+            scale = Math.min(scale, newScale)
+
             drawW = asset.width * scale
             drawH = asset.height * scale
             bubbleW = (drawW + BUBBLE_PADDING * 2) * Math.sqrt(2)
