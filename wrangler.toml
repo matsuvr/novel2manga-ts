@@ -1,7 +1,7 @@
 main = ".open-next/worker.js"
 name = "novel2manga-mastra"
 compatibility_date = "2025-03-25"
-compatibility_flags = ["nodejs_compat"]
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
 [assets]
 directory = ".open-next/assets"
@@ -10,6 +10,7 @@ binding = "ASSETS"
 # 環境変数の設定（開発時はローカルの.envから読み込み）
 # 本番環境ではCloudflareダッシュボードで設定
 # [vars]
+# AUTH_SECRET = "your-auth-secret"
 # OPENAI_API_KEY = "your-api-key"
 
 # AI bindingの設定（必要に応じて）

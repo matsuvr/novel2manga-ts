@@ -1,19 +1,44 @@
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import type { AppCanvasConfig } from '@/types/canvas-config'
-import type { MangaLayout, Panel } from '@/types/panel-layout'
+import type { Dialogue, MangaLayout, Panel } from '@/types/panel-layout'
 import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
 import { PanelLayoutCoordinator } from './panel-layout-coordinator'
+import { toSizeLike } from '@/utils/type-guards'
+
+import type { MangaLayout, Panel, Dialogue } from '@/types/panel-layout'
+import { PanelLayoutCoordinator } from './panel-layout-coordinator'
+import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
 import { type SfxPlacement, SfxPlacer } from './sfx-placer'
 
 // Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
 const isServer = typeof window === 'undefined'
 let createCanvas: ((width: number, height: number) => unknown) | undefined
-type NodeCanvasImageLike = {
-  src: Buffer | string
+// node-canvas の Image は DOM の HTMLImageElement とは別物なので専用型を定義
+interface NodeCanvasImage {
+  src: string | Buffer
   width: number
   height: number
 }
-let NodeCanvasImageCtor: (new () => NodeCanvasImageLike) | undefined
+let NodeCanvasImageCtor: (new () => NodeCanvasImage) | undefined
+
+/** パネル全幅に対する水平スロット領域の割合。0.9はパネル幅の90%をスロット領域として確保するための値。 */
+const HORIZONTAL_SLOT_COVERAGE = 0.9
+/** バブルの上端オフセット比率。0.2はバブルをパネル上端から20%下げて配置するための値。 */
+const BUBBLE_TOP_OFFSET_RATIO = 0.2
+/** バブルエリアの最大高さ比率。0.7はパネル高さの70%までバブルを配置可能とするための値。 */
+const MAX_BUBBLE_AREA_HEIGHT_RATIO = 0.7
+/** パネル外周のマージン比率。0.05はパネル幅・高さの5%をマージンとして確保するための値。 */
+const PANEL_MARGIN_RATIO = 0.05
+/** 1つのバブルの最大幅比率。0.45はパネル幅の45%を1バブルの最大幅とするための値。 */
+const SINGLE_BUBBLE_MAX_WIDTH_RATIO = 0.45
+/** バブル内側のパディング（px単位）。10pxはテキストとバブル枠の間隔を確保するための値。 */
+const BUBBLE_PADDING = 10
+/** 1つのバブルの最小高さ（px単位）。60pxは短いセリフでもバブルが潰れないようにするための値。 */
+const SINGLE_BUBBLE_MIN_HEIGHT = 60
+/** バブルの最小高さ（px単位）。30pxは複数バブル時の最小高さを保証するための値。 */
+const MIN_BUBBLE_HEIGHT = 30
+/** バブル配置時に利用可能な垂直方向の最小マージン（px単位）。2pxはバブル同士が重ならないようにするための値。 */
+const AVAILABLE_VERTICAL_MARGIN = 2
 
 // node-canvas用の型定義
 interface NodeCanvasImpl {
@@ -58,6 +83,26 @@ async function initializeCanvas(): Promise<void> {
   return canvasInitPromise
 }
 
+export interface DialogueAsset {
+  image: CanvasImageSource
+  width: number
+  height: number
+}
+
+interface DrawBubbleParams {
+  dialogue: Dialogue
+  asset: DialogueAsset
+  x: number
+  y: number
+  bubbleWidth: number
+  bubbleHeight: number
+  imageWidth: number
+  imageHeight: number
+  bounds: { x: number; y: number; width: number; height: number }
+  labelOffsetXRatio?: number
+  labelOffsetYRatio?: number
+}
+
 export interface CanvasConfig {
   width: number
   height: number
@@ -76,7 +121,7 @@ export class CanvasRenderer {
   private ctx: CanvasRenderingContext2D
   private config: CanvasConfig
   private appConfig: ReturnType<typeof getAppConfigWithOverrides>
-  private dialogueAssets?: Record<string, { image: unknown; width: number; height: number }>
+  private dialogueAssets?: Record<string, DialogueAsset>
   private sfxPlacer: SfxPlacer
   private layoutCoordinator: PanelLayoutCoordinator
 
@@ -142,33 +187,105 @@ export class CanvasRenderer {
    * Provide pre-rendered vertical text images for dialogues.
    * Key convention: `${panelId}:${dialogueIndex}`
    */
-  setDialogueAssets(
-    assets: Record<string, { image: unknown; width: number; height: number }>,
-  ): void {
+  setDialogueAssets(assets: Record<string, DialogueAsset>): void {
     this.dialogueAssets = assets
   }
 
   /** Create an Image from a PNG buffer (server only). */
-  static createImageFromBuffer(buffer: Buffer): {
-    image: unknown
-    width: number
-    height: number
-  } {
+  static createImageFromBuffer(buffer: Buffer): DialogueAsset {
     if (!isServer || !NodeCanvasImageCtor) {
       throw new Error('createImageFromBuffer is only available on server with node-canvas')
     }
     const img = new NodeCanvasImageCtor()
-    // node-canvas Image type is not in DOM libs; assign via shim cast.
     img.src = buffer
+    // node-canvas の Image は読み込み後に width/height が同期的に得られる
+    const width = img.width
+    const height = img.height
+
     return {
-      image: img as unknown,
-      width: (img as NodeCanvasImageLike).width,
-      height: (img as NodeCanvasImageLike).height,
+      image: img as unknown as CanvasImageSource,
+      width,
+      height,
     }
   }
 
   drawFrame(x: number, y: number, width: number, height: number): void {
     this.ctx.strokeRect(x, y, width, height)
+  }
+
+  /** Testing helper: expose layout coordinator */
+  getLayoutCoordinator(): PanelLayoutCoordinator {
+    return this.layoutCoordinator
+  }
+
+  private drawDialogueBubble({
+    dialogue,
+    asset,
+    x: bx,
+    y: by,
+    bubbleWidth: bubbleW,
+    bubbleHeight: bubbleH,
+    imageWidth: drawW,
+    imageHeight: drawH,
+    bounds,
+    labelOffsetXRatio,
+    labelOffsetYRatio,
+  }: DrawBubbleParams): void {
+    // 吹き出し背景
+    this.ctx.save()
+    this.ctx.strokeStyle = this.appConfig.rendering.canvas.bubble.strokeStyle
+    this.ctx.fillStyle = this.appConfig.rendering.canvas.bubble.fillStyle
+    this.ctx.lineWidth =
+      dialogue.emotion === 'shout'
+        ? this.appConfig.rendering.canvas.bubble.shoutLineWidth
+        : this.appConfig.rendering.canvas.bubble.normalLineWidth
+    const shapeType = dialogue.type || 'speech'
+    this.drawBubbleShape(shapeType, bx, by, bubbleW, bubbleH)
+    this.ctx.restore()
+
+    // 画像（縦書きセリフ）
+    const imgX = bx + (bubbleW - drawW) / 2
+    const imgY = by + (bubbleH - drawH) / 2
+    this.ctx.drawImage(asset.image, imgX, imgY, drawW, drawH)
+
+    // 占有領域登録
+    this.layoutCoordinator.registerDialogueArea(dialogue, {
+      x: bx,
+      y: by,
+      width: bubbleW,
+      height: bubbleH,
+    })
+
+    // 話者ラベル
+    const speakerLabelCfg = this.appConfig.rendering.canvas.speakerLabel
+    const dialogueType = dialogue.type
+    const shouldShowLabel =
+      speakerLabelCfg?.enabled === true &&
+      dialogueType !== 'narration' &&
+      typeof dialogue.speaker === 'string' &&
+      dialogue.speaker.trim() !== ''
+    if (shouldShowLabel) {
+      const baseFontSize = this.config.fontSize || 16
+      const fontSize = Math.max(10, baseFontSize * (speakerLabelCfg.fontSize || 0.7))
+      const paddingLabel = speakerLabelCfg.padding ?? 4
+      const bg = speakerLabelCfg.backgroundColor ?? '#ffffff'
+      const border = speakerLabelCfg.borderColor ?? '#333333'
+      const textColor = speakerLabelCfg.textColor ?? '#333333'
+      const offsetXRatio = labelOffsetXRatio ?? speakerLabelCfg.offsetX ?? 0.3
+      const offsetYRatio = labelOffsetYRatio ?? speakerLabelCfg.offsetY ?? 0.7
+      const borderRadius = speakerLabelCfg.borderRadius ?? 3
+      this.drawSpeakerLabel(dialogue.speaker, bx + bubbleW, by, {
+        fontSize,
+        padding: paddingLabel,
+        backgroundColor: bg,
+        borderColor: border,
+        textColor,
+        offsetXRatio,
+        offsetYRatio,
+        borderRadius,
+        clampBounds: bounds,
+      })
+    }
   }
 
   drawPanel(panel: Panel): void {
@@ -197,104 +314,99 @@ export class CanvasRenderer {
         // フレームは既に drawFrame 済みであるため視覚上の影響は小さい
       }
       try {
-        let bubbleY = y + height * 0.2
-        const maxAreaWidth = width * 0.45
-        const maxAreaHeightTotal = height * 0.7
-        const perBubbleMaxHeight = Math.max(60, maxAreaHeightTotal / panel.dialogues.length)
+        if (panel.dialogues.length > 1) {
+          const slotWidth = (width * HORIZONTAL_SLOT_COVERAGE) / panel.dialogues.length
+          const bubbleY = y + height * BUBBLE_TOP_OFFSET_RATIO
+          const maxAreaHeight = height * MAX_BUBBLE_AREA_HEIGHT_RATIO
 
-        for (let i = 0; i < panel.dialogues.length; i++) {
-          const dialogue = panel.dialogues[i]
-          const key = `${panel.id}:${i}`
+          for (let i = 0; i < panel.dialogues.length; i++) {
+            const dialogue = panel.dialogues[i]
+            const key = `${panel.id}:${i}`
+            const asset = this.dialogueAssets?.[key]
+            if (!asset) throw new Error(`Dialogue asset missing for ${key}`)
+
+            const targetDrawWidth = slotWidth / Math.sqrt(2) - BUBBLE_PADDING * 2
+            const widthScale = targetDrawWidth > 0 ? targetDrawWidth / asset.width : 0
+            const targetDrawHeight = maxAreaHeight / Math.sqrt(2) - BUBBLE_PADDING * 2
+            const heightScale = targetDrawHeight > 0 ? targetDrawHeight / asset.height : 0
+            const scale = Math.min(widthScale, heightScale, 1)
+            if (scale <= 0) continue
+
+            const drawW = asset.width * scale
+            const drawH = asset.height * scale
+            const bubbleW = (drawW + BUBBLE_PADDING * 2) * Math.sqrt(2)
+            const bubbleH = (drawH + BUBBLE_PADDING * 2) * Math.sqrt(2)
+
+            const slotX = x + width * PANEL_MARGIN_RATIO + slotWidth * i
+            const bx = slotX + (slotWidth - bubbleW) / 2
+            const by = bubbleY
+            const slotBounds = { x: slotX, y, width: slotWidth, height }
+
+            this.drawDialogueBubble({
+              dialogue,
+              asset,
+              x: bx,
+              y: by,
+              bubbleWidth: bubbleW,
+              bubbleHeight: bubbleH,
+              imageWidth: drawW,
+              imageHeight: drawH,
+              bounds: slotBounds,
+              // 水平配置の場合、ラベル（セリフ）のX方向のオフセット比率は常に1（右端）に設定します。
+              // これは、バブルが横に並ぶため、ラベルをバブルの右側に寄せて配置するためです。
+              // 縦配置や他の配置ではこの値が異なる場合があります（例: 0.5で中央寄せなど）。
+              labelOffsetXRatio: 1,
+            })
+          }
+        } else if (panel.dialogues.length === 1) {
+          const dialogue = panel.dialogues[0]
+          const key = `${panel.id}:0`
           const asset = this.dialogueAssets?.[key]
-          if (!asset) throw new Error(`Vertical dialogue asset missing for ${key}`)
+          if (!asset) throw new Error(`Dialogue asset missing for ${key}`)
+
+          const bubbleY = y + height * BUBBLE_TOP_OFFSET_RATIO
+          const maxAreaWidth = width * SINGLE_BUBBLE_MAX_WIDTH_RATIO
+          const maxAreaHeightTotal = height * MAX_BUBBLE_AREA_HEIGHT_RATIO
+          const perBubbleMaxHeight = Math.max(SINGLE_BUBBLE_MIN_HEIGHT, maxAreaHeightTotal)
 
           let scale = Math.min(maxAreaWidth / asset.width, perBubbleMaxHeight / asset.height, 1)
           let drawW = asset.width * scale
           let drawH = asset.height * scale
-          const padding = 10
-          const textRectW = drawW + padding * 2
-          const textRectH = drawH + padding * 2
-          let bubbleW = textRectW * Math.sqrt(2)
-          let bubbleH = textRectH * Math.sqrt(2)
+          let bubbleW = (drawW + BUBBLE_PADDING * 2) * Math.sqrt(2)
+          let bubbleH = (drawH + BUBBLE_PADDING * 2) * Math.sqrt(2)
 
           const availableVertical = y + height - bubbleY
           const maxThisBubbleHeight = Math.max(
-            30,
-            Math.min(perBubbleMaxHeight, availableVertical - 2),
+            MIN_BUBBLE_HEIGHT,
+            Math.min(perBubbleMaxHeight, availableVertical - AVAILABLE_VERTICAL_MARGIN),
           )
           if (bubbleH > maxThisBubbleHeight) {
-            const shrinkFactor = maxThisBubbleHeight / bubbleH
-            scale = Math.min(scale, scale * shrinkFactor)
+            const targetDrawH = maxThisBubbleHeight / Math.sqrt(2) - BUBBLE_PADDING * 2
+            const newScale = targetDrawH > 0 ? targetDrawH / asset.height : 0
+            scale = Math.min(scale, newScale)
+
             drawW = asset.width * scale
             drawH = asset.height * scale
-            const textRectW2 = drawW + padding * 2
-            const textRectH2 = drawH + padding * 2
-            bubbleW = textRectW2 * Math.sqrt(2)
-            bubbleH = textRectH2 * Math.sqrt(2)
+            bubbleW = (drawW + BUBBLE_PADDING * 2) * Math.sqrt(2)
+            bubbleH = (drawH + BUBBLE_PADDING * 2) * Math.sqrt(2)
           }
-          if (bubbleH <= 0 || bubbleY + bubbleH > y + height) break
 
-          const bx = x + width - bubbleW - width * 0.05
-          const by = bubbleY
+          if (bubbleH > 0 && bubbleY + bubbleH <= y + height) {
+            const bx = x + width - bubbleW - width * PANEL_MARGIN_RATIO
+            const by = bubbleY
 
-          // 吹き出し背景
-          this.ctx.save()
-          this.ctx.strokeStyle = this.appConfig.rendering.canvas.bubble.strokeStyle
-          this.ctx.fillStyle = this.appConfig.rendering.canvas.bubble.fillStyle
-          this.ctx.lineWidth =
-            dialogue.emotion === 'shout'
-              ? this.appConfig.rendering.canvas.bubble.shoutLineWidth
-              : this.appConfig.rendering.canvas.bubble.normalLineWidth
-          const shapeType = dialogue.type || 'speech'
-          this.drawBubbleShape(shapeType, bx, by, bubbleW, bubbleH)
-          this.ctx.restore()
-
-          // 画像（縦書きセリフ）
-          const imgX = bx + (bubbleW - drawW) / 2
-          const imgY = by + (bubbleH - drawH) / 2
-          this.ctx.drawImage(asset.image as unknown as CanvasImageSource, imgX, imgY, drawW, drawH)
-
-          // 占有領域登録
-          this.layoutCoordinator.registerDialogueArea(dialogue, {
-            x: bx,
-            y: by,
-            width: bubbleW,
-            height: bubbleH,
-          })
-
-          // 話者ラベル
-          const speakerLabelCfg = this.appConfig.rendering.canvas.speakerLabel
-          const dialogueType = dialogue.type
-          // ナレーションでは話者ラベルを表示しない
-          const shouldShowLabel =
-            speakerLabelCfg?.enabled === true &&
-            dialogueType !== 'narration' &&
-            typeof dialogue.speaker === 'string' &&
-            dialogue.speaker.trim() !== ''
-          if (shouldShowLabel) {
-            const baseFontSize = this.config.fontSize || 16
-            const fontSize = Math.max(10, baseFontSize * (speakerLabelCfg.fontSize || 0.7))
-            const paddingLabel = speakerLabelCfg.padding ?? 4
-            const bg = speakerLabelCfg.backgroundColor ?? '#ffffff'
-            const border = speakerLabelCfg.borderColor ?? '#333333'
-            const textColor = speakerLabelCfg.textColor ?? '#333333'
-            const offsetXRatio = speakerLabelCfg.offsetX ?? 0.3
-            const offsetYRatio = speakerLabelCfg.offsetY ?? 0.7
-            const borderRadius = speakerLabelCfg.borderRadius ?? 3
-            this.drawSpeakerLabel(dialogue.speaker, bx + bubbleW, by, {
-              fontSize,
-              padding: paddingLabel,
-              backgroundColor: bg,
-              borderColor: border,
-              textColor,
-              offsetXRatio,
-              offsetYRatio,
-              borderRadius,
-              clampBounds: panelBounds,
+            this.drawDialogueBubble({
+              dialogue,
+              asset,
+              x: bx,
+              y: by,
+              bubbleWidth: bubbleW,
+              bubbleHeight: bubbleH,
+              imageWidth: drawW,
+              imageHeight: drawH,
+              bounds: panelBounds,
             })
           }
-
-          bubbleY += bubbleH + 10
         }
       } finally {
         this.ctx.restore()
@@ -435,7 +547,7 @@ export class CanvasRenderer {
   private hasRect(ctx: CanvasRenderingContext2D): ctx is CanvasRenderingContext2D & {
     rect: (x: number, y: number, w: number, h: number) => void
   } {
-    return typeof (ctx as unknown as { rect?: unknown }).rect === 'function'
+    return typeof (ctx as { rect?: unknown }).rect === 'function'
   }
 
   private wrapText(text: string, maxWidth: number): string[] {
@@ -647,6 +759,7 @@ export class CanvasRenderer {
       offsetXRatio = 0.3,
       offsetYRatio = 0.7,
       borderRadius = 3,
+      clampBounds,
     } = options
 
     if (!speaker || speaker.trim() === '') return
@@ -716,14 +829,11 @@ export class CanvasRenderer {
     let labelX = xRightEdge - labelWidth * offsetXRatio
     let labelY = yTopEdge - labelHeight * offsetYRatio
 
-    // パネル内に収まるように位置をクランプ
-    if (options.clampBounds) {
-      const bxMin = options.clampBounds.x
-      const byMin = options.clampBounds.y
-      const bxMax = options.clampBounds.x + options.clampBounds.width - labelWidth
-      const byMax = options.clampBounds.y + options.clampBounds.height - labelHeight
-      labelX = Math.min(Math.max(labelX, bxMin), bxMax)
-      labelY = Math.min(Math.max(labelY, byMin), byMax)
+    if (clampBounds) {
+      const maxX = clampBounds.x + clampBounds.width - labelWidth
+      const maxY = clampBounds.y + clampBounds.height - labelHeight
+      labelX = Math.max(Math.min(labelX, maxX), clampBounds.x)
+      labelY = Math.max(Math.min(labelY, maxY), clampBounds.y)
     }
 
     // 背景（角丸）
