@@ -183,6 +183,13 @@
 
 - [x] API ルートから冗長な `export const runtime = 'nodejs'` 宣言を削除し、OpenNext の既定 Node.js ランタイムに統一。
 
+### Bugfix: rendering progress desync (2025-09-10)
+
+- [x] `upsertRenderStatus` が `jobs.status` を `completed` に設定していたため、レンダリング途中で完了扱いになる問題を修正。
+- [x] `markJobStepCompleted('render')` からステータス更新を除去し、完了判定をパイプライン終端に限定。
+- [x] レンダリング進捗のDB更新を `await` することでレースコンディションを排除。
+- [x] 進捗UIとバックエンドの状態が一致し、完了時に結果ページへ確実に遷移するようになった。
+
 ### Code Structure Refactoring (2025-09-04)
 
 - [x] **コンポーネントのリファクタリング**: 各種コンポーネントの構造を改善し、保守性を向上
