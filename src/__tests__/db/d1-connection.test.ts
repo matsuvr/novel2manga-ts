@@ -1,6 +1,6 @@
 /**
  * NOTE: このテストは better-sqlite3 を利用するため、WSL2 などの環境では失敗する可能性があります。
- * WSL2 では TypeScript のみで完結する小規模な単体テストのみ実行し、このようなバイナリ依存テストの一括実行は開発者に依頼してください。
+ * バイナリ依存テストの実行は開発者に依頼してください。
  */
 import { D1Database, D1DatabaseAPI } from '@miniflare/d1'
 import Database from 'better-sqlite3'
@@ -15,7 +15,8 @@ const testTable = sqliteTable('test_table', {
 const runD1: boolean = process.env.RUN_D1 === '1'
 
 // Miniflare の D1Database は Cloudflare 型との差異があるためテスト用にキャスト
-;(runD1 ? describe : describe.skip)('createD1Client', () => {
+const testRunner = runD1 ? describe : describe.skip
+testRunner('createD1Client', () => {
   it('executes basic queries', async () => {
     const sqlite = new Database(':memory:')
     const d1 = new D1Database(new D1DatabaseAPI(sqlite))

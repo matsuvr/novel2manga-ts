@@ -8,6 +8,13 @@ export interface D1DatabaseLike extends Omit<CloudflareD1, 'withSession'> {
   withSession?: CloudflareD1['withSession']
 }
 
+function toCloudflareD1(db: D1DatabaseLike): CloudflareD1 {
+  if (typeof db.withSession !== 'function') {
+    throw new Error('D1DatabaseLike requires withSession')
+  }
+  return db as CloudflareD1
+}
+
 // オーバーロード: スキーマ省略時はプロジェクト標準schema型、指定時はその型を返す
 export function createD1Client(db: D1DatabaseLike): DrizzleD1Database<typeof defaultSchema>
 export function createD1Client<TSchema extends Record<string, unknown>>(
@@ -18,12 +25,9 @@ export function createD1Client<TSchema extends Record<string, unknown> | undefin
   db: D1DatabaseLike,
   schema?: TSchema,
 ) {
+  const cfDb = toCloudflareD1(db)
   if (schema) {
-    return drizzle(db as CloudflareD1, { schema }) as unknown as DrizzleD1Database<
-      Exclude<TSchema, undefined>
-    >
+    return drizzle(cfDb, { schema }) as unknown as DrizzleD1Database<Exclude<TSchema, undefined>>
   }
-  return drizzle(db as CloudflareD1, { schema: defaultSchema }) as DrizzleD1Database<
-    typeof defaultSchema
-  >
+  return drizzle(cfDb, { schema: defaultSchema }) as DrizzleD1Database<typeof defaultSchema>
 }

@@ -16,16 +16,13 @@ export function extractBearerToken(header: string | null): string | null {
 export async function verifySessionToken(
   token: string,
   secret: string = String(process.env.AUTH_SECRET),
-  salt: string = jwtConfig.salt,
+  salt: string | undefined = process.env.JWT_SALT ? jwtConfig.salt : undefined,
 ): Promise<SessionTokenPayload | null> {
   try {
-    // In next-auth v5, decode function parameters
-    const params: JWTDecodeParams = {
-      token,
-      secret,
-      salt,
-    }
-    const decoded = await decode(params)
+    const params = salt
+      ? { token, secret, salt }
+      : ({ token, secret } as unknown as JWTDecodeParams)
+    const decoded = await decode(params as JWTDecodeParams)
     return decoded as SessionTokenPayload | null
   } catch {
     return null
