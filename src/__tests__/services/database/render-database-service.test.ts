@@ -24,8 +24,9 @@ function makeFakeDb(initialJob: { renderedPages?: number; totalPages?: number } 
     insert: () => ({ values: (v: unknown) => state.renderRows.push(v) }),
     update: (table?: unknown) => ({
       set: (vals: Record<string, unknown>) => ({
-        where: () => {
+        where: function () {
           if (table === jobs) Object.assign(state.job, vals)
+          return this;
         },
       }),
     }),
