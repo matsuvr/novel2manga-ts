@@ -37,7 +37,7 @@ wrangler d1 migrations apply novel2manga --local
 wrangler d1 migrations apply novel2manga --remote
 ```
 
-## 4. 接続確認テスト
+このテストは `better-sqlite3` に依存するため、WSL2 では失敗する可能性があります。WSL2 環境では TypeScript のみで完結する小規模なテストだけを実行し、このテストを含むバイナリ依存テストの一括実行は他の開発者に依頼してください。
 
 このテストは `better-sqlite3` に依存するため、WSL2では失敗する可能性があります。WSL2環境ではTypeScriptのみで完結するテストの実行に留め、このテストを含むバイナリ依存のテストはCI等のネイティブ実行が可能な環境で行ってください。
 
