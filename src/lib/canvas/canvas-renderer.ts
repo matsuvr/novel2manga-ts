@@ -425,7 +425,14 @@ export class CanvasRenderer {
               x: ox,
               y: oy,
               width: ow,
-              height: oh,
+          this.layoutCoordinator
+            .getOccupiedAreas()
+            .map(({ x, y, width, height }) => ({
+              x,
+              y,
+              width,
+              height,
+            })),
             })),
         )
         for (const placement of sfxPlacements) {
