@@ -28,7 +28,7 @@ export function collectDialogueRequests(
     text: string
     speaker?: string
     emotion?: string
-    type?: string
+    type?: 'speech' | 'thought' | 'narration' | undefined
   }) => 'gothic' | 'mincho' | undefined,
 ): CollectDialogueResult {
   const items: VerticalTextRenderRequest[] = []
@@ -79,9 +79,15 @@ export function buildTestPlaceholderAssets(
       dialogueAssetsConfig.testPlaceholder.minHeight,
       Math.ceil(entry.text.length * (defaults.fontSize * 0.9)),
     )
-    // 最低限 width/height を持つプレーンオブジェクトを CanvasImageSource として扱う
-    const img = { __test_placeholder: true, width: w, height: h } as unknown as CanvasImageSource
-    assets[entry.key] = { image: img, width: w, height: h }
+    // ImageData 互換オブジェクトで CanvasImageSource をモック
+    const img = {
+      data: new Uint8ClampedArray(w * h * 4),
+      width: w,
+      height: h,
+      colorSpace: 'srgb' as PredefinedColorSpace,
+    } as ImageData
+    // テスト専用のプレースホルダーであり drawImage は呼ばれない前提
+    assets[entry.key] = { image: img as unknown as CanvasImageSource, width: w, height: h }
   }
   return assets
 }

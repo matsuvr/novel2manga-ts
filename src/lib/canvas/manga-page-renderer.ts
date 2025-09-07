@@ -329,7 +329,7 @@ export class MangaPageRenderer {
         getFontForDialogue({
           text: d.text,
           speaker: d.speaker ?? '',
-          type: (d as { type?: 'speech' | 'thought' | 'narration' }).type,
+          type: d.type,
           emotion: d.emotion,
         }) ?? 'gothic',
     )
