@@ -415,26 +415,13 @@ export class CanvasRenderer {
       this.ctx.rect(x, y, width, height)
       this.ctx.clip()
       try {
-        const sfxPlacements = this.sfxPlacer.placeSfx(
-          panel.sfx,
-          panel,
-          panelBounds,
-          this.layoutCoordinator
-            .getOccupiedAreas()
-            .map(({ x: ox, y: oy, width: ow, height: oh }) => ({
-              x: ox,
-              y: oy,
-              width: ow,
-          this.layoutCoordinator
-            .getOccupiedAreas()
-            .map(({ x, y, width, height }) => ({
-              x,
-              y,
-              width,
-              height,
-            })),
-            })),
-        )
+        const preOccupied = this.layoutCoordinator.getOccupiedAreas().map((area) => ({
+          x: area.x,
+          y: area.y,
+          width: area.width,
+          height: area.height,
+        }))
+        const sfxPlacements = this.sfxPlacer.placeSfx(panel.sfx, panel, panelBounds, preOccupied)
         for (const placement of sfxPlacements) {
           this.drawSfxWithPlacement(placement)
           const estBounds = {
