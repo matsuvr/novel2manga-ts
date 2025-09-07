@@ -3,11 +3,6 @@ import type { AppCanvasConfig } from '@/types/canvas-config'
 import type { Dialogue, MangaLayout, Panel } from '@/types/panel-layout'
 import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
 import { PanelLayoutCoordinator } from './panel-layout-coordinator'
-import { toSizeLike } from '@/utils/type-guards'
-
-import type { MangaLayout, Panel, Dialogue } from '@/types/panel-layout'
-import { PanelLayoutCoordinator } from './panel-layout-coordinator'
-import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
 import { type SfxPlacement, SfxPlacer } from './sfx-placer'
 
 // Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
