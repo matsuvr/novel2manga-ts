@@ -12,6 +12,43 @@ import {
 
 const EnvSchema = z.object({ url: z.string().url(), token: z.string().min(1) })
 
+// Type-safe helpers for extracting error details without using `any`
+type NetErrorCause = {
+  code?: string
+  address?: string
+  port?: number
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null
+}
+
+function extractNetErrorInfo(e: unknown): {
+  code?: string
+  address?: string
+  port?: number
+  name?: string
+  message?: string
+} {
+  const info: { code?: string; address?: string; port?: number; name?: string; message?: string } =
+    {}
+  if (e instanceof Error) {
+    info.name = e.name
+    info.message = e.message
+    const withCause = e as { cause?: unknown } // safe structural cast
+    if (isRecord(withCause.cause)) {
+      const c = withCause.cause as NetErrorCause
+      if (typeof c.code === 'string') info.code = c.code
+      if (typeof c.address === 'string') info.address = c.address
+      if (typeof c.port === 'number') info.port = c.port
+    }
+    // Some environments may set code on the top-level error
+    const maybeCode = (e as unknown as { code?: unknown }).code
+    if (typeof maybeCode === 'string') info.code = info.code || maybeCode
+  }
+  return info
+}
+
 function readEnv() {
   const triedUrlKeys = [
     'VERTICAL_TEXT_API_URL',
@@ -81,17 +118,30 @@ export async function renderVerticalText(
     Math.min(60000, Number(process.env.VERTICAL_TEXT_API_TIMEOUT_MS) || 30000),
   )
   try {
-    const res = await fetch(`${url.replace(/\/$/, '')}/render`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(toSnakeCasePayload(validated)),
-      signal: signal ?? controller.signal,
-    })
+    const endpoint = `${url.replace(/\/$/, '')}/render`
+    let res: Response
+    try {
+      res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(toSnakeCasePayload(validated)),
+        signal: signal ?? controller.signal,
+      })
+    } catch (e) {
+      const info = extractNetErrorInfo(e)
+      const isTimeout = info.code === 'AbortError' || info.name === 'AbortError'
+      const addr = info.address ? ` ${info.address}` : ''
+      const port = typeof info.port === 'number' ? `:${info.port}` : ''
+      const suffix = isTimeout ? ' (timeout)' : ''
+      throw new Error(
+        `vertical-text API request failed: POST ${endpoint}${addr}${port} → ${info.code || info.name || info.message || 'unknown error'}${suffix}`,
+      )
+    }
     if (!res.ok) {
-      throw new Error(`vertical-text API failed: ${res.status}`)
+      throw new Error(`vertical-text API failed: POST ${endpoint} → HTTP ${res.status}`)
     }
     const json = await res.json()
     const meta = VerticalTextRenderResponseSchema.parse(json)
@@ -149,18 +199,31 @@ export async function renderVerticalTextBatch(
       items: validated.items.map((it) => toSnakeCasePayload(it)),
     }
 
-    const res = await fetch(`${url.replace(/\/$/, '')}/render/batch`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-      signal: signal ?? controller.signal,
-    })
+    const endpoint = `${url.replace(/\/$/, '')}/render/batch`
+    let res: Response
+    try {
+      res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: signal ?? controller.signal,
+      })
+    } catch (e) {
+      const info = extractNetErrorInfo(e)
+      const isTimeout = info.code === 'AbortError' || info.name === 'AbortError'
+      const addr = info.address ? ` ${info.address}` : ''
+      const port = typeof info.port === 'number' ? `:${info.port}` : ''
+      const suffix = isTimeout ? ' (timeout)' : ''
+      throw new Error(
+        `vertical-text API request failed: POST ${endpoint}${addr}${port} → ${info.code || info.name || info.message || 'unknown error'}${suffix}`,
+      )
+    }
 
     if (!res.ok) {
-      throw new Error(`vertical-text API failed: ${res.status}`)
+      throw new Error(`vertical-text API failed: POST ${endpoint} → HTTP ${res.status}`)
     }
 
     const json = (await res.json()) as unknown

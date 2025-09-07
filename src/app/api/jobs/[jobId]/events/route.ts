@@ -3,9 +3,6 @@ import { getJobDetails } from '@/services/application/job-details'
 // Cloudflare Workers + OpenNext でのSSE実装
 // 参考: Cloudflare Workers は Response streaming をサポート
 // https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs (Response streaming supported)
-
-export const runtime = 'nodejs'
-
 export async function GET(
   request: Request,
   ctx: { params: { jobId: string } | Promise<{ jobId: string }> },
@@ -41,8 +38,9 @@ export async function GET(
         }
         request.signal.addEventListener('abort', onAbort)
 
-        // helper: send one SSE message
+        // helper: send one SSE message (abort/close セーフ)
         const send = (event: string | null, data: unknown) => {
+          if (stopped || request.signal.aborted) return
           const payload = typeof data === 'string' ? data : JSON.stringify(data)
           const lines: string[] = []
           if (event) lines.push(`event: ${event}`)
@@ -51,7 +49,17 @@ export async function GET(
             lines.push(`data: ${ln}`)
           }
           lines.push('\n')
-          controller.enqueue(encoder.encode(lines.join('\n')))
+          try {
+            controller.enqueue(encoder.encode(lines.join('\n')))
+          } catch {
+            // Controller already closed/invalid → mark stopped and ensure closed
+            stopped = true
+            try {
+              controller.close()
+            } catch {
+              // noop
+            }
+          }
         }
 
         try {
@@ -90,7 +98,9 @@ export async function GET(
               }
             } catch (e) {
               console.error('SSE loop error', jobId, e)
-              send('error', { error: '状態更新に失敗しました' })
+              if (!stopped && !request.signal.aborted) {
+                send('error', { error: '状態更新に失敗しました' })
+              }
               break
             }
 

@@ -16,6 +16,7 @@
 - [x] **ページ分割推定**: エピソード内での適切なページ分割の自動計算
 - [x] **フォールバック処理**: 短いコンテンツの単一エピソード統合
 - [x] **端数吸収**: 末尾の短いエピソードの直前エピソードへの統合
+- [x] **テスト設定整備**: エピソード関連閾値をテストモックに追加し、バリデーションの一貫性を確保
 
 ### Layout Generation System
 
@@ -44,6 +45,7 @@
 - [x] **レンダーステータス追跡**: レンダリング状況の詳細追跡
 - [x] **ユーザー紐付け**: Auth.js スキーマを追加し、novels・jobs に userId 外部キーを設定
 - [x] **変換結果のR2保存**: ユーザー単位のパス設計とメタ情報のD1記録
+- [x] **キャラクターメモリ永続化**: リポジトリ経由で保存し、ファイルパスをDBに記録
 
 ### User Interface & API
 
@@ -56,13 +58,22 @@
 - [x] **エラー表示**: 処理エラーの詳細情報表示とバリデーション結果
 - [x] **Google OAuth 認証**: Auth.js v5 + D1 セッション管理でログイン/ログアウト
 - [x] **サインアップ同意チェック**: 利用規約に同意しないと登録を進められない
+- [x] **進捗URLの永続化**: novelId 発行後は `/novel/{novelId}/progress` に遷移し、戻る/再訪でも続きから再開
+- [x] **SSEエラー耐性**: フロント由来のSSE切断時は警告ログのみ・処理は継続（自動再接続）
+
+### Token Usage Tracking (2025-09-05)
+
+- [x] LLMトークン使用量のDB記録（token_usage）
+- [x] API: GET /api/jobs/[jobId]/token-usage で取得
+- [x] 結果ページにモデル別「入力/出力トークン」一覧表示
+- [x] 進捗画面に累積トークンの現在値を表示（ポーリング間隔は app.config.ts で一元化）
 
 ## Technical Architecture Completed ✅
 
 ### Infrastructure Integration
 
 - [x] **Cloudflare統合**: Workers/Pages/D1/R2/KVを活用した分散処理
-- [x] **LLMプロバイダー**: OpenRouter/Gemini/Claude/Cerebras/VertexAIのフォールバックチェーン
+- [x] **LLMプロバイダー**: Vertex AI Gemini 2.5 Flash/Pro を中心に OpenRouter/Groq/Cerebras と連携
 - [x] **型安全性**: TypeScript strict modeによる型安全性確保
 - [x] **テスト戦略**: Unit/Integration/E2Eテストの包括的カバレッジ
 
@@ -138,6 +149,25 @@
 - [x] `SFX:`/`sfx:` プレフィックスが残存するケースを修正（先頭空白/不可視文字、全角`：`、全角`ＳＦＸ`に対応）。
 - [x] ユニットテスト追加（半角/全角/不可視/BOM 前置の各パターン）。
 
+### Bugfix: Bundled episode display (2025-09-06)
+
+- [x] 結果ページでバンドル後のエピソード数とタイトルが不一致となる問題を修正。
+- [x] `full_pages.json` から最終エピソード情報を読み込み、UI表示を更新。
+
+### Bugfix: Scene/Highlight index validation (2025-09-07)
+
+- [x] Scene と Highlight のスキーマで `endIndex` が `startIndex` と同一の場合を許容。
+- [x] 単一点のシーンやハイライトがバリデーションエラーになる問題を修正。
+
+### Bugfix: full_pages JSON parsing (2025-09-08)
+
+- [x] `full_pages.json` 末尾に混入する `null` 文字を除去してから解析する `parseJson` ユーティリティを実装。
+- [x] 結果ページでユーティリティを用い、JSON パースエラーを解消。
+
+### Runtime Configuration Cleanup (2025-09-09)
+
+- [x] API ルートから冗長な `export const runtime = 'nodejs'` 宣言を削除し、OpenNext の既定 Node.js ランタイムに統一。
+
 ### Code Structure Refactoring (2025-09-04)
 
 - [x] **コンポーネントのリファクタリング**: 各種コンポーネントの構造を改善し、保守性を向上
@@ -151,6 +181,9 @@
 - [x] **フォント処理コードの削除**: 未使用のフォント処理コードを削除し、layout.tsxのProvidersインポートを修正
 - [x] **認証タイムアウト処理の改善**: 認証タイムアウトの安全な処理と、初期化エラーの適切な表示を実装
 - [x] **パッケージ管理の改善**: package.jsonのlintコマンドを修正し、インポート順序を整理
+- [x] **ナラティブアーク分析の削除**: 未使用のナラティブアーク関連実装を除去し、チャンク分析結果のみでパイプラインを構成
+- [x] **キャラクター一貫性チェックの簡素化**: 旧LLM評価ロジックを削除し、チャンク毎のキャラクターメモリ保存に一本化
+- [x] **フラグメント処理の削除**: 未使用のフラグメント分割ロジックと関連コンバーターを廃止し、コンテクストを軽量化
 
 ### Configuration Management
 
@@ -169,18 +202,35 @@
 ### Performance & Operations
 
 - [ ] **垂直テキスト最適化**: キャッシュチューニングと同時実行制御
-- [ ] **カバレッジ評価チューニング**: 品質評価指標の精度向上
-- [ ] **バンドリングロジック拡張**: より柔軟なエピソード統合条件
+- [ ] **カバレッジ評価チューニング**: 品質評価指標の精度向上（`features.enableCoverageCheck` はデフォルト無効）
+- [x] **バンドリングロジック拡張**: ページ割り後の実ページ数に基づくエピソード統合（最小20p、最終話は直前に統合）。設定は `app.config.ts > episodeBundling` に集約
+
+### Script Conversion Normalization
+
+- [x] 吹き出し最大50文字の設定化と適用（Script Conversion直後）。
+- [x] 上限超過セリフのパネル分割（2コマ目以降`cut: "前のコマを引き継ぐ"`）。
+- [x] 対象タイプ拡張: `speech` に加え `thought`/`narration` にも適用。
+- [x] ユニットテスト追加（`src/__tests__/script-postprocess.test.ts`）。
 
 ### Fixes: Episode normalization (2025-09-03)
 
 - [x] スクリプト→エピソード変換での情報欠落解消
   - [x] 話者抽出をページ分割計算側へ移動（全角/半角コロン対応、外側カギ括弧除去）
   - [x] narration を「ナレーション」話者の1セリフとして統合
-  - [x] cut/camera を panel.content に統合して保存
+- [x] cut/camera を panel.content に統合して保存
+- [x] 1エピソード最大コマ数を app.config.ts から設定可能に（デフォルト1000）
   - [x] ユニットテスト追加（dialogue-utils / importance-based）
 
 ## Legacy Tasks Archive 📁
+
+### Database Access Refactoring (Phase 1, 2025-09-04)
+
+- [x] アダプタ層の導入（`DatabaseAdapter` 抽象 + `SqliteAdapter`/`D1Adapter` 実装）
+- [x] 接続管理の統一（`createDatabaseConnection` と `detectAdapter`）
+- [x] ユニットテスト追加（同期/非同期動作、エラー挙動、検出ロジック）
+- [ ] ドメイン別サービスの完全移行（Novel/Job/Episode/Chunk/Output/Render）
+- [ ] 参照更新と God Object (`src/services/database.ts`) の削除
+- [ ] Cloudflare D1 バインディング導入時の統合テスト
 
 ### Completed Major Refactors
 
@@ -226,3 +276,7 @@
 - ✅ スケーラビリティ: Cloudflareインフラ統合
 - ✅ 設定管理: Codex認証と設定ファイルのセキュリティ強化完了
 - ⚠️ モニタリング: 詳細メトリクス収集の拡張予定
+
+## 認証統合タスク
+
+- Google 認証導入の詳細タスクは docs/google-auth-tasks.md を参照。

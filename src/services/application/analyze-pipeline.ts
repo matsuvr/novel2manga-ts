@@ -1,11 +1,10 @@
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
-import { getJobRepository, getNovelRepository } from '@/repositories'
-import { getDatabaseService } from '@/services/db-factory'
+// repositories shim no longer used
+import { db } from '@/services/database/index'
 
 // Import pipeline steps
 import {
-  type AnalysisResult,
   BasePipelineStep,
   CompletionStep,
   JobManagementStep,
@@ -14,12 +13,16 @@ import {
   RenderingStep,
   type StepContext,
   type StepExecutionResult,
-  TextAnalysisStep,
   TextChunkingStep,
 } from './steps'
 import { ChunkScriptStep } from './steps/chunk-script-step'
 import { EpisodeBreakEstimationStep } from './steps/episode-break-estimation-step'
 import { ScriptMergeStep } from './steps/script-merge-step'
+// Use V2 text analysis (ExtractionV2) for schema compatibility with prompts
+import {
+  type AnalysisResult,
+  TextAnalysisStep as TextAnalysisStepV2,
+} from './steps/text-analysis-step-v2'
 
 export interface AnalyzeOptions {
   isDemo?: boolean
@@ -36,7 +39,7 @@ export interface AnalyzeOptions {
  * AnalyzePipeline - Main production analysis service
  *
  * 責務: 小説テキストの分析からレイアウト生成・レンダリングまでの一連の処理
- * フロー: チャンク分割 → textAnalysis → narrativeArcAnalysis → scriptConversion → pageBreakEstimation → layout → render
+ * フロー: チャンク分割 → textAnalysis → scriptConversion → pageBreakEstimation → layout → render
  *
  * 使用箇所: /api/analyze (プロダクションメインエンドポイント)
  * テスト: src/__tests__/integration/service-integration.test.ts など多数
@@ -57,10 +60,7 @@ export class AnalyzePipeline extends BasePipelineStep {
   private readonly novelStep = new NovelManagementStep()
   private readonly jobStep = new JobManagementStep()
   private readonly chunkingStep = new TextChunkingStep()
-  private readonly analysisStep = new TextAnalysisStep()
-  // 新フローでは物語弧/旧エピソード抽出を使用しない
-  // private readonly narrativeStep = new NarrativeAnalysisStep()
-  // private readonly scriptStep = new ScriptConversionStep()
+  private readonly analysisStep = new TextAnalysisStepV2()
   private readonly chunkScriptStep = new ChunkScriptStep()
   private readonly scriptMergeStep = new ScriptMergeStep()
   private readonly episodeBreakStep = new EpisodeBreakEstimationStep()
@@ -225,8 +225,7 @@ export class AnalyzePipeline extends BasePipelineStep {
 
     // エピソード境界をDBへ永続化（最小フィールドでのアップサート）
     try {
-      const jobRepo = getJobRepository()
-      const job = await jobRepo.getJob(jobId)
+      const job = await db.jobs().getJob(jobId)
       if (!job) throw new Error(`Job not found for episode persistence: ${jobId}`)
 
       // パネル→チャンクマッピングを作成
@@ -265,8 +264,7 @@ export class AnalyzePipeline extends BasePipelineStep {
 
       await episodeWriter.bulkUpsert(episodesForDb)
       try {
-        const db = getDatabaseService()
-        const persisted = await db.getEpisodesByJobId(jobId)
+        const persisted = await db.episodes().getEpisodesByJobId(jobId)
         logger.info('Episode persistence summary', {
           jobId,
           requested: episodesForDb.length,
@@ -345,8 +343,8 @@ export class AnalyzePipeline extends BasePipelineStep {
         jobId,
         expectedEpisodes: episodeNumbers.length,
       })
-      const db = getDatabaseService()
-      const epCount = await db.recomputeJobProcessedEpisodes(jobId)
+      const episodes = await db.episodes().getEpisodesByJobId(jobId)
+      const epCount = episodes.length
       if (epCount === 0) {
         // Collect detailed diagnostic information for troubleshooting
         const diagInfo = {
@@ -358,12 +356,8 @@ export class AnalyzePipeline extends BasePipelineStep {
 
         try {
           // Get episodes count
-          const episodes = await db.getEpisodesByJobId(jobId)
           diagInfo.episodesCount = episodes.length
-
-          // Get layout_status count (use public method since db.db is private)
-          // For now, use the same logic as recomputeJobProcessedEpisodes to get count
-          diagInfo.layoutStatusCount = epCount // We already computed this above
+          diagInfo.layoutStatusCount = epCount
 
           // Check storage layout files
           const { StorageFactory, StorageKeys } = await import('@/utils/storage')
@@ -425,17 +419,14 @@ export class AnalyzePipeline extends BasePipelineStep {
     const logger = getLogger().withContext({ service: 'analyze-pipeline' })
     logger.info('AnalyzePipeline.resumeJob: start', { jobId })
 
-    const jobRepo = getJobRepository()
-    const novelRepo = getNovelRepository()
-
     // ジョブの現在の状態を取得
-    const job = await jobRepo.getJob(jobId)
+    const job = await db.jobs().getJob(jobId)
     if (!job) {
       throw new Error(`Job not found: ${jobId}`)
     }
 
     // 小説データを取得
-    const novel = await novelRepo.get(job.novelId)
+    const novel = await db.novels().getNovel(job.novelId)
     if (!novel) {
       throw new Error(`Novel not found: ${job.novelId}`)
     }
@@ -475,7 +466,7 @@ export class AnalyzePipeline extends BasePipelineStep {
         layoutCompleted: job.layoutCompleted,
         renderCompleted: job.renderCompleted,
       })
-      await jobRepo.updateStatus(
+      db.jobs().updateJobStatus(
         jobId,
         'processing',
         'Status reset - incomplete steps detected during resume',
@@ -524,7 +515,7 @@ export class AnalyzePipeline extends BasePipelineStep {
     } else {
       resumePoint = 'completed'
       logger.info('All steps completed, marking as completed', { jobId })
-      await jobRepo.updateStatus(jobId, 'completed')
+      db.jobs().updateJobStatus(jobId, 'completed')
       return { resumePoint }
     }
 

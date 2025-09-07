@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { auth } from '@/auth'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 
 function _formatBytes(bytes: number | null): string {
   if (!bytes) return '-'
@@ -21,8 +21,7 @@ export default async function ResultsPage() {
   if (!userId) {
     redirect('/api/auth/signin?callbackUrl=/results')
   }
-  const db = getDatabaseService()
-  const jobs = await db.listJobsByUser(userId)
+  const jobs = await db.jobs().getJobsByUser(userId)
   return (
     <main className="max-w-3xl mx-auto p-6 space-y-4">
       <h1 className="text-2xl font-bold">変換結果一覧</h1>

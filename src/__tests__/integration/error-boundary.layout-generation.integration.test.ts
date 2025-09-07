@@ -28,16 +28,18 @@ describe('Layout Generation Error Boundary (episodes fetch failure)', () => {
   it('logs error with context and rethrows when fetching episodes fails', async () => {
     const spyLogger = new SpyLogger()
 
-    // Mock DB factory so that getEpisodesByJobId throws
-    vi.mock('@/services/db-factory', () => ({
-      getDatabaseService: () => ({
-        // Called via adaptEpisodePort -> EpisodeRepository.getByJobId
-        getEpisodesByJobId: async (_jobId: string) => {
-          throw new Error('db error: getEpisodesByJobId failed')
-        },
-        // Called via adaptJobPort in resolveEpisodeData (allowed to be null)
-        getJobWithProgress: async (_jobId: string) => null,
-      }),
+    // Mock new unified DB so that getEpisodesByJobId throws
+    vi.mock('@/services/database/index', () => ({
+      db: {
+        episodes: () => ({
+          getEpisodesByJobId: async (_jobId: string) => {
+            throw new Error('db error: getEpisodesByJobId failed')
+          },
+        }),
+        jobs: () => ({
+          getJobWithProgress: async (_jobId: string) => null,
+        }),
+      },
     }))
 
     // Import after mocks are set

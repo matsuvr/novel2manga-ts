@@ -282,52 +282,44 @@ const createMockStoragePorts = (simulateFailures = false): StoragePorts => ({
   },
 })
 
-// Mock database dependencies
-vi.mock('@/services/db-factory', () => ({
-  getDatabaseService: vi.fn(() => ({
-    upsertLayoutStatus: vi.fn().mockResolvedValue(undefined),
-    recomputeJobTotalPages: vi.fn().mockResolvedValue(undefined),
-  })),
-}))
-
-vi.mock('@/repositories/adapters', () => ({
-  adaptAll: vi.fn(() => ({
-    episode: {},
-    job: {},
-  })),
-}))
-
-vi.mock('@/repositories/episode-repository', () => ({
-  EpisodeRepository: vi.fn().mockImplementation(() => ({
-    getByJobId: vi.fn().mockResolvedValue([
-      {
-        id: 'test-episode',
-        jobId: 'test-job',
-        episodeNumber: 1,
-        title: 'Test Episode',
-        summary: 'Test summary',
-        startChunk: 0,
-        endChunk: 0,
-        startCharIndex: 0,
-        endCharIndex: 100,
-        confidence: 0.9,
-        createdAt: new Date().toISOString(),
-      },
-    ]),
-  })),
-}))
-
-vi.mock('@/repositories/job-repository', () => ({
-  JobRepository: vi.fn().mockImplementation(() => ({
-    getJobWithProgress: vi.fn().mockResolvedValue({
-      id: 'test-job',
-      novelId: 'test-novel',
-      jobName: 'Test Job',
-      status: 'processing',
+// Mock database factory in new architecture
+vi.mock('@/services/database/index', () => ({
+  db: {
+    layout: () => ({
+      upsertLayoutStatus: vi.fn(),
     }),
-    updateStep: vi.fn(),
-    markStepCompleted: vi.fn(),
-  })),
+    jobs: () => ({
+      updateJobTotalPages: vi.fn(),
+      updateJobStep: vi.fn(),
+      markJobStepCompleted: vi.fn(),
+      getJobWithProgress: vi.fn().mockReturnValue({
+        id: 'test-job',
+        novelId: 'test-novel',
+        status: 'processing',
+        currentStep: 'layout',
+        progress: { currentStep: 'layout', processedChunks: 0, totalChunks: 0, episodes: [] },
+      }),
+    }),
+    episodes: () => ({
+      getEpisodesByJobId: vi.fn().mockReturnValue([
+        {
+          id: 'test-episode',
+          jobId: 'test-job',
+          novelId: 'test-novel',
+          episodeNumber: 1,
+          title: 'Test Episode',
+          summary: 'Test summary',
+          startChunk: 0,
+          endChunk: 0,
+          startCharIndex: 0,
+          endCharIndex: 100,
+          confidence: 0.9,
+          createdAt: new Date().toISOString(),
+          episodeTextPath: null,
+        },
+      ]),
+    }),
+  },
 }))
 
 // Mock PageSplitAgent to simulate infinite loop scenarios

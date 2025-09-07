@@ -5,9 +5,11 @@ import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 import type { PageBreakV2 } from '@/types/script'
 import { normalizeAndValidateLayout } from '@/utils/layout-normalizer'
+import { type LoosePanel, normalizePlanPanels } from '@/utils/page-normalizer'
+import { validatePageBreakV2 } from '@/utils/pagebreak-validator'
 // YAML依存を排除: 直接JSONのMangaLayoutを構築して使用する
 
 export interface BatchOptions {
@@ -48,7 +50,8 @@ export async function renderBatchFromJson(
   logger: LoggerPort = getLogger().withContext({ jobId, episodeNumber, service: 'render' }),
 ): Promise<BatchRenderResult> {
   const startTime = Date.now()
-  const dbService = getDatabaseService()
+  const jobDb = db.jobs()
+  const renderDb = db.render()
 
   // layoutはJSONとして渡される前提
   const parsedLayout = mangaLayoutJson as Parameters<typeof normalizeAndValidateLayout>[0]
@@ -89,7 +92,7 @@ export async function renderBatchFromJson(
 
     try {
       // 現在処理中のページを更新
-      await dbService.updateProcessingPosition(jobId, { episode: episodeNumber, page: pageNumber })
+      jobDb.updateProcessingPosition(jobId, { episode: episodeNumber, page: pageNumber })
 
       // 事前検証: パネルの存在とサイズ
       const panels = targetPage.panels || []
@@ -124,7 +127,7 @@ export async function renderBatchFromJson(
         thumbnailBuffer,
       )
 
-      await dbService.updateRenderStatus(jobId, episodeNumber, pageNumber, {
+      renderDb.upsertRenderStatus(jobId, episodeNumber, pageNumber, {
         isRendered: true,
         imagePath: renderKey,
         thumbnailPath: thumbnailKey,
@@ -219,7 +222,40 @@ export async function renderFromPageBreakPlan(
   let skippedCount = 0
   let failedCount = 0
 
-  const panels = Array.isArray(pageBreakPlan?.panels) ? pageBreakPlan.panels : []
+  // Validate PageBreakV2 and normalize page numbers to contiguous safe range to avoid pathological plans
+  const MAX_PAGES: number = appConfig.rendering.limits.maxPages
+  const validation = validatePageBreakV2(pageBreakPlan, { maxPages: MAX_PAGES })
+  if (!validation.valid) {
+    throw new Error(
+      `Invalid PageBreakV2: ${validation.issues.slice(0, 5).join('; ')}${
+        validation.issues.length > 5 ? ' ...' : ''
+      }`,
+    )
+  }
+  const panelsRaw: LoosePanel[] = Array.isArray(pageBreakPlan?.panels)
+    ? (pageBreakPlan.panels as LoosePanel[])
+    : []
+  const { normalized: normalizedPanels, report } = normalizePlanPanels(panelsRaw, {
+    maxPages: MAX_PAGES,
+  })
+  const panels: PageBreakV2['panels'] = normalizedPanels.map((p) => ({
+    pageNumber: p.pageNumber,
+    panelIndex: p.panelIndex ?? 1,
+    content: p.content ?? '',
+    dialogue: p.dialogue ?? [],
+    sfx: p.sfx ?? [],
+  })) as PageBreakV2['panels']
+  if (validation.needsNormalization || report.wasNormalized) {
+    getLogger()
+      .withContext({ service: 'render' })
+      .warn('PageBreakV2 page numbers normalized (safety cap applied)', {
+        jobId,
+        episodeNumber,
+        uniquePages: report.uniqueCount,
+        limitedTo: report.limitedTo,
+        maxCap: MAX_PAGES,
+      })
+  }
   if (panels.length === 0) {
     logger.error('PageBreakPlan has no panels; aborting renderFromPageBreakPlan', {
       jobId,
@@ -259,9 +295,9 @@ export async function renderFromPageBreakPlan(
       if (!pageMap.has(panel.pageNumber)) {
         pageMap.set(panel.pageNumber, [])
       }
-      const panels = pageMap.get(panel.pageNumber)
-      if (panels) {
-        panels.push(panel)
+      const list = pageMap.get(panel.pageNumber)
+      if (list) {
+        list.push(panel)
       }
     }
 
@@ -269,8 +305,8 @@ export async function renderFromPageBreakPlan(
       const page = { pageNumber, panels, panelCount: panels.length }
       try {
         // 現在処理中のページを更新
-        const dbService = getDatabaseService()
-        await dbService.updateProcessingPosition(jobId, {
+        const jobDb2 = db.jobs()
+        jobDb2.updateProcessingPosition(jobId, {
           episode: episodeNumber,
           page: pageNumber,
         })
@@ -362,7 +398,8 @@ export async function renderFromPageBreakPlan(
         )
 
         // Update render status in database
-        await dbService.updateRenderStatus(jobId, episodeNumber, page.pageNumber, {
+        const renderDb2 = db.render()
+        renderDb2.upsertRenderStatus(jobId, episodeNumber, page.pageNumber, {
           isRendered: true,
           imagePath: renderKey,
           thumbnailPath: thumbnailKey,

@@ -3,7 +3,7 @@ import path from 'node:path'
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GET } from '@/app/api/job/[id]/route'
-import { DatabaseService } from '@/services/database'
+import { DatabaseService, db } from '@/services/database'
 
 // ストレージとデータベースのモック
 vi.mock('@/utils/storage', () => ({
@@ -12,6 +12,11 @@ vi.mock('@/utils/storage', () => ({
   },
 }))
 
+// モック用のヘルパー関数を定義（vi.mock より前に宣言）
+let mockJobsService: any
+let mockChunksService: any
+let mockRenderService: any
+
 vi.mock('@/services/database', () => ({
   DatabaseService: vi.fn().mockImplementation(() => ({
     createNovel: vi.fn(),
@@ -19,6 +24,11 @@ vi.mock('@/services/database', () => ({
     createChunk: vi.fn(),
     getJob: vi.fn(),
   })),
+  db: {
+    jobs: () => mockJobsService,
+    chunks: () => mockChunksService,
+    render: () => mockRenderService,
+  },
 }))
 
 // 開発環境をモック
@@ -50,7 +60,10 @@ describe('/api/job/[id]', () => {
     testDir = path.join(process.cwd(), '.test-storage')
     await fs.mkdir(testDir, { recursive: true })
 
-    // モックサービスの設定
+    // モックサービスの設定（同期API想定 -> returnValue）
+    mockJobsService = { getJob: vi.fn(), createJobRecord: vi.fn() }
+    mockChunksService = { getChunksByJobId: vi.fn() }
+    mockRenderService = { getAllRenderStatusByJob: vi.fn() }
     mockDbService = {
       createNovel: vi.fn().mockResolvedValue(testNovelId),
       createJob: vi.fn(),
@@ -70,6 +83,29 @@ describe('/api/job/[id]', () => {
     }
 
     vi.mocked(DatabaseService).mockReturnValue(mockDbService)
+
+    // db関数用のモック設定（同期API想定 -> returnValue）
+    ;(db as any).jobs = () => mockJobsService
+    ;(db as any).chunks = () => mockChunksService
+    ;(db as any).render = () => mockRenderService
+
+    mockJobsService.getJob.mockImplementation((id: string) => {
+      if (id === testJobId) {
+        return {
+          id: testJobId,
+          novelId: testNovelId,
+          status: 'completed',
+          currentStep: 'complete',
+        }
+      }
+      return null
+    })
+    mockRenderService.getAllRenderStatusByJob.mockReturnValue([])
+
+    mockChunksService.getChunksByJobId.mockReturnValue([
+      { id: 'chunk-1', jobId: testJobId, chunkIndex: 0, contentPath: 'chunk_0.txt' },
+      { id: 'chunk-2', jobId: testJobId, chunkIndex: 1, contentPath: 'chunk_1.txt' },
+    ])
   })
 
   afterEach(async () => {

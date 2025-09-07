@@ -8,6 +8,7 @@ export default [
       '**/*.spec.ts',
       '**/*.spec.tsx',
       '**/__tests__/**/*',
+      'vitest.setup.ts',
       'vitest.config.ts',
       'workers/**/*',
       'tmp_test/**/*',

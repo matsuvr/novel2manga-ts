@@ -1,10 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { getLogger } from '@/infrastructure/logging/logger'
-import { adaptAll } from '@/repositories/adapters'
-import { EpisodeRepository } from '@/repositories/episode-repository'
-import { JobRepository } from '@/repositories/job-repository'
 import { renderBatchFromYaml } from '@/services/application/render'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 import { createErrorResponse, createSuccessResponse, ValidationError } from '@/utils/api-error'
 import { validateJobId } from '@/utils/validators'
 
@@ -47,20 +44,12 @@ export async function POST(request: NextRequest) {
     > &
       Partial<BatchRenderRequest>
 
-    // データベースサービスの初期化
-    const dbService = getDatabaseService()
-    const { episode: episodePort, job: jobPort } = adaptAll(dbService)
-    const episodeRepo = new EpisodeRepository(episodePort)
-    const jobRepo = new JobRepository(jobPort)
-
-    // ジョブの存在確認（メソッドがある場合のみチェック）
-    const job = await jobRepo.getJob(validatedBody.jobId)
+    // ジョブ/エピソードの存在確認
+    const job = await db.jobs().getJob(validatedBody.jobId)
     if (!job) {
       return createErrorResponse(new ValidationError('指定されたジョブが見つかりません'))
     }
-
-    // エピソードの存在確認（メソッドがある場合のみチェック）
-    const episodes = await episodeRepo.getByJobId(validatedBody.jobId)
+    const episodes = await db.episodes().getEpisodesByJobId(validatedBody.jobId)
     const targetEpisode = episodes.find((e) => e.episodeNumber === validatedBody.episodeNumber)
     if (!targetEpisode) {
       return createErrorResponse(

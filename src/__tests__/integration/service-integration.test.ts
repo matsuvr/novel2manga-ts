@@ -63,17 +63,6 @@ vi.mock('@/agents/chunk-analyzer', () => ({
   }),
 }))
 
-// Narrative arc analyzer mock
-vi.mock('@/agents/narrative-arc-analyzer', () => ({
-  analyzeNarrativeArcWithFallback: vi.fn().mockResolvedValue({
-    result: {
-      boundaries: [],
-    },
-    usedProvider: 'test-provider',
-    fallbackFrom: [],
-  }),
-}))
-
 // Script converter mock
 vi.mock('@/agents/script/script-converter', () => ({
   convertEpisodeTextToScript: vi.fn().mockResolvedValue({
@@ -143,7 +132,6 @@ vi.mock('@/config', () => ({
         targetCharsPerEpisode: 10000,
         minCharsPerEpisode: 5000,
         maxCharsPerEpisode: 20000,
-        maxChunksPerEpisode: 10,
       },
     },
     features: {
@@ -187,12 +175,7 @@ vi.mock('@/config', () => ({
     systemPrompt: 'テスト用レイアウト生成プロンプト',
   })),
   getLLMDefaultProvider: vi.fn(() => 'openai'),
-  getEpisodeConfig: vi.fn(() => ({
-    targetCharsPerEpisode: 1000,
-    minCharsPerEpisode: 500,
-    maxCharsPerEpisode: 2000,
-    maxChunksPerEpisode: 20,
-  })),
+  getEpisodeConfig: vi.fn(() => TEST_EPISODE_CONFIG),
   getPanelAssignmentConfig: vi.fn(() => ({
     provider: 'openai',
     maxTokens: 1000,
@@ -203,16 +186,28 @@ vi.mock('@/config', () => ({
 }))
 
 import crypto from 'node:crypto'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, describe as baseDescribe, beforeEach, describe, expect, it, vi } from 'vitest'
 // AnalyzePipeline は下のモック適用後に動的import
 import {
   resetAgentMocks,
   setupAgentMocks,
   TEST_CHUNK_ANALYSIS,
   TEST_EPISODE_BOUNDARIES,
+  TEST_EPISODE_CONFIG,
 } from './__helpers/test-agents'
 import type { TestDatabase } from './__helpers/test-database'
 import { cleanupTestDatabase, createTestDatabase, TestDataFactory } from './__helpers/test-database'
+
+// 環境に better-sqlite3 が無い場合はこのスイートをスキップ
+let __nativeSqliteAvailable = true
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require('better-sqlite3')
+} catch {
+  __nativeSqliteAvailable = false
+}
+const describe = __nativeSqliteAvailable ? baseDescribe : baseDescribe.skip
+
 import { TestStorageDataFactory, TestStorageFactory } from './__helpers/test-storage'
 
 // StorageFactoryのモック
@@ -446,6 +441,46 @@ describe('Service Integration Tests', () => {
     // DatabaseServiceのモック
     vi.doMock('@/services/database', () => ({
       DatabaseService: vi.fn(() => testDb.service),
+      // dbファクトリーを追加
+      db: {
+        novels: () => ({
+          getNovel: vi.fn((id: string) => testDb.service.getNovel(id)),
+          ensureNovel: vi.fn((id: string, payload: any) => testDb.service.ensureNovel(id, payload)),
+          createNovel: vi.fn((payload: any) => testDb.service.createNovel(payload)),
+        }),
+        jobs: () => ({
+          createJobRecord: vi.fn((payload: any) => testDb.service.createJob(payload)),
+          updateJobStatus: vi.fn((id: string, status: any, error?: string) =>
+            testDb.service.updateJobStatus(id, status, error),
+          ),
+          updateJobStep: vi.fn((id: string, step: any) =>
+            (testDb.service as any).updateJobStep?.(id, step),
+          ),
+          markJobStepCompleted: vi.fn((id: string, step: any) =>
+            (testDb.service as any).markJobStepCompleted?.(id, step),
+          ),
+          updateJobTotalPages: vi.fn((id: string, totalPages: number) =>
+            (testDb.service as any).updateJobTotalPages?.(id, totalPages),
+          ),
+          getJobWithProgress: vi.fn((id: string) => testDb.service.getJobWithProgress(id)),
+          getJob: vi.fn((id: string) => testDb.service.getJob(id)),
+        }),
+        episodes: () => ({
+          getEpisodesByJobId: vi.fn((jobId: string) => testDb.service.getEpisodesByJobId(jobId)),
+          // AnalyzePipeline -> EpisodeWriteService.bulkUpsert で呼ばれる
+          createEpisodes: vi.fn((episodes: any[]) => testDb.service.createEpisodes(episodes)),
+        }),
+        chunks: () => ({
+          createChunk: vi.fn((payload: any) => testDb.service.createChunk(payload)),
+        }),
+        render: () => ({
+          getAllRenderStatusByJob: vi.fn(() => []),
+        }),
+      },
+      getDatabaseServiceFactory: vi.fn(),
+      initializeDatabaseServiceFactory: vi.fn(),
+      isFactoryInitialized: vi.fn(() => true),
+      cleanup: vi.fn(),
     }))
 
     // db-factoryのモック（アプリ側が取得するDBサービスをテストDBに固定）
@@ -458,8 +493,6 @@ describe('Service Integration Tests', () => {
     vi.doMock('@/db', () => ({
       getDatabase: vi.fn(() => testDb.db),
     }))
-
-    // Remove redundant prepareNarrativeAnalysisInput mock - let it use actual storage
 
     // エージェントモックのセットアップ
     setupAgentMocks()
@@ -479,8 +512,6 @@ describe('Service Integration Tests', () => {
 
     // NOTE: repositories/index の上書きは副作用が大きいため行わない（factory 側で十分）
 
-    // Remove duplicate prepareNarrativeAnalysisInput mock - storage consistency is handled above
-
     // setupAgentMocks内の '@/config' モックでは scriptConversion 設定が未定義のため、上書きする
     vi.doMock('@/config', () => ({
       getAppConfigWithOverrides: vi.fn(() => ({
@@ -495,7 +526,6 @@ describe('Service Integration Tests', () => {
             targetCharsPerEpisode: 10000,
             minCharsPerEpisode: 5000,
             maxCharsPerEpisode: 20000,
-            maxChunksPerEpisode: 10,
           },
         },
         features: {
@@ -529,12 +559,7 @@ describe('Service Integration Tests', () => {
         maxTokens: 1000,
       })),
       getLLMDefaultProvider: vi.fn(() => 'openai'),
-      getEpisodeConfig: vi.fn(() => ({
-        targetCharsPerEpisode: 1000,
-        minCharsPerEpisode: 500,
-        maxCharsPerEpisode: 2000,
-        charsPerPage: 300,
-      })),
+      getEpisodeConfig: vi.fn(() => TEST_EPISODE_CONFIG),
       getDatabaseConfig: vi.fn(() => ({ sqlite: { path: ':memory:' } })),
       getLayoutGenerationConfig: vi.fn(() => ({
         provider: 'openai',
@@ -549,12 +574,6 @@ describe('Service Integration Tests', () => {
           'avgLinesPerPage={{avgLinesPerPage}}; avgCharsPerLine={{avgCharsPerLine}}; episodeSummary={{episodeSummary}}; chunkSnippets={{chunkSnippets}}',
       })),
       isDevelopment: vi.fn(() => true),
-    }))
-
-    // ナラティブアーク解析はこの統合テストではフォールバック（境界なし）経路を検証するため、
-    // setupAgentMocks が設定する境界ありモックを明示的に上書きする
-    vi.doMock('@/agents/narrative-arc-analyzer', () => ({
-      analyzeNarrativeArc: vi.fn().mockResolvedValue([]),
     }))
 
     // afterEach の resetAllMocks でトップレベルの vi.mock 実装が消えるため、
@@ -777,7 +796,7 @@ describe('Service Integration Tests', () => {
         pipeline.runWithNovelId('nonexistent-novel-id', {
           userEmail: 'test@example.com',
         }),
-      ).rejects.toThrow('小説ID がデータベースに見つかりません')
+      ).rejects.toThrow('小説のテキストがストレージに見つかりません')
     })
 
     it('ストレージにテキストが存在しない場合は適切なエラーが発生する', async () => {

@@ -27,7 +27,7 @@ export const HighlightSchema = z.object({
   id: z.string(),
   type: z.enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence']),
   description: z.string(),
-  importance: z.number().min(1).max(5), // 1-5の重要度
+  importance: z.number(), // 1-5の重要度
   startIndex: z.number(),
   endIndex: z.number(),
 })

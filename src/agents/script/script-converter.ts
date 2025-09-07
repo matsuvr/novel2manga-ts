@@ -6,6 +6,7 @@ import {
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { type NewMangaScript, NewMangaScriptSchema } from '@/types/script'
+import { enforceDialogueBubbleLimit } from '@/utils/script-postprocess'
 import { sanitizeScript, validateImportanceFields } from '@/utils/script-validation'
 
 export interface ScriptConversionInput {
@@ -115,6 +116,7 @@ export async function convertChunkToMangaScript(
   }
   const appCfg = getAppConfigWithOverrides()
   const sc = appCfg.llm.scriptConversion
+  const coverageEnabled = appCfg.features.enableCoverageCheck
   if (!sc) {
     throw new Error(
       'Script conversion configuration is missing in app.config.ts. Please configure llm.scriptConversion.',
@@ -153,26 +155,34 @@ export async function convertChunkToMangaScript(
   let bestResult: NewMangaScript | null = null
   let coverageRetryUsed = false
 
-  // カバレッジ設定の必須チェック
-  if (typeof sc.coverageThreshold !== 'number') {
-    throw new Error(
-      'Script conversion coverageThreshold must be a number in app.config.ts. Please configure llm.scriptConversion.coverageThreshold.',
-    )
-  }
-  if (typeof sc.enableCoverageRetry !== 'boolean') {
-    throw new Error(
-      'Script conversion enableCoverageRetry must be a boolean in app.config.ts. Please configure llm.scriptConversion.enableCoverageRetry.',
-    )
+  // カバレッジ設定の必須チェック（フラグが有効な場合のみ）
+  if (coverageEnabled) {
+    if (typeof sc.coverageThreshold !== 'number') {
+      throw new Error(
+        'Script conversion coverageThreshold must be a number in app.config.ts. Please configure llm.scriptConversion.coverageThreshold.',
+      )
+    }
+    if (typeof sc.enableCoverageRetry !== 'boolean') {
+      throw new Error(
+        'Script conversion enableCoverageRetry must be a boolean in app.config.ts. Please configure llm.scriptConversion.enableCoverageRetry.',
+      )
+    }
   }
 
-  const coverageThreshold = sc.coverageThreshold
-  const enableCoverageRetry = sc.enableCoverageRetry
+  const coverageThreshold = coverageEnabled ? sc.coverageThreshold : 0
+  const enableCoverageRetry = coverageEnabled ? sc.enableCoverageRetry : false
 
   while (attempt <= maxRetries) {
     let prompt = basePrompt
 
     // カバレッジリトライの場合は追加指示を含める
-    if (attempt === 1 && !coverageRetryUsed && bestResult && enableCoverageRetry) {
+    if (
+      coverageEnabled &&
+      attempt === 1 &&
+      !coverageRetryUsed &&
+      bestResult &&
+      enableCoverageRetry
+    ) {
       const coverage = assessScriptCoverage(bestResult, input.chunkText)
       if (coverage.coverageRatio < coverageThreshold) {
         coverageRetryUsed = true
@@ -208,6 +218,11 @@ export async function convertChunkToMangaScript(
         userPrompt: prompt,
         schema: NewMangaScriptSchema as unknown as z.ZodTypeAny,
         schemaName: 'NewMangaScript',
+        telemetry: {
+          jobId: options?.jobId,
+          chunkIndex: input.chunkIndex,
+          stepName: 'script',
+        },
       })
 
       if (result && typeof result === 'object') {
@@ -215,7 +230,8 @@ export async function convertChunkToMangaScript(
         const sanitizedResult = sanitizeScript(result as NewMangaScript)
         const validatedResult = NewMangaScriptSchema.safeParse(sanitizedResult)
         if (validatedResult.success) {
-          const currentResult = validatedResult.data
+          // 文字数上限・分割ポリシー（Script Conversion直後に適用）
+          const currentResult = enforceDialogueBubbleLimit(validatedResult.data)
 
           // Log importance validation warnings if any
           const importanceValidation = validateImportanceFields(currentResult)
@@ -225,6 +241,17 @@ export async function convertChunkToMangaScript(
               .warn('Importance validation issues found (but corrected)', {
                 issues: importanceValidation.issues,
               })
+          }
+
+          if (!coverageEnabled) {
+            bestResult = currentResult
+            getLogger()
+              .withContext({ service: 'script-converter', jobId: options?.jobId })
+              .info('Script generation successful', {
+                panelCount: currentResult.panels.length,
+                attempt: attempt + 1,
+              })
+            break
           }
 
           // カバレッジ評価

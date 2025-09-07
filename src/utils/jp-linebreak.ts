@@ -69,3 +69,60 @@ export function insertZwspByBudoux(text: string): string {
   if (t.length === 0) return ''
   return getParser().parse(t).join('\u200b')
 }
+
+/**
+ * BudouXで日本語を句単位に分割し、1文字（グラフェム）ごとに行を作る。
+ * - 句→グラフェムの順に安全に分割することで、サロゲートペアや結合文字の切断を避ける
+ * - Intl.Segmenter が使えない環境では Array.from にフォールバック（サロゲートは安全、ZWJシーケンスは一部分割されうる）
+ */
+type GraphemeSegmenter = { segment: (input: string) => Iterable<unknown> }
+type GraphemeSegmentRecord = { segment: string }
+
+function isGraphemeSegmenter(v: unknown): v is GraphemeSegmenter {
+  return !!v && typeof (v as { segment?: unknown }).segment === 'function'
+}
+
+function isSegmentRecord(v: unknown): v is GraphemeSegmentRecord {
+  return (
+    typeof v === 'object' && v !== null && typeof (v as { segment?: unknown }).segment === 'string'
+  )
+}
+
+export function breakIntoCharsByBudoux(text: string): string[] {
+  const t = (text ?? '').toString()
+  if (t.length === 0) return []
+
+  const phrases = getParser().parse(t)
+
+  // 可能ならグラフェム単位のセグメンターを用いる（型参照は避ける）
+  let seg: unknown = null
+  try {
+    const SegCtor = (
+      globalThis as unknown as {
+        Intl?: { Segmenter?: new (locale: string, options: { granularity: string }) => unknown }
+      }
+    ).Intl?.Segmenter
+    seg = SegCtor ? new SegCtor('ja', { granularity: 'grapheme' }) : null
+  } catch {
+    seg = null
+  }
+
+  const chars: string[] = []
+  for (const phrase of phrases) {
+    if (isGraphemeSegmenter(seg)) {
+      // グラフェム単位での安全な分割
+      for (const s of seg.segment(phrase)) {
+        if (isSegmentRecord(s)) {
+          chars.push(s.segment)
+        }
+      }
+    } else {
+      // サロゲートペアに安全なコードポイント単位
+      for (const cp of Array.from(phrase)) {
+        chars.push(cp)
+      }
+    }
+  }
+
+  return chars
+}

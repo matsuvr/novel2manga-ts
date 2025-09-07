@@ -3,6 +3,7 @@
 ## 概要
 
 このドキュメントは、LLMエージェントの実装を簡素化し、プロバイダー非依存で、決定論的テストが可能で、厳密な型安全性を提供する新しいアーキテクチャについて説明します。
+本システムは OpenNext の Node.js ランタイムを前提とし、API ルートから冗長な `export const runtime` 宣言を排除しています。
 
 ## アーキテクチャの利点
 
@@ -17,6 +18,7 @@
 - サービスはインターフェースに依存し、具体的なLLMに依存しない
 - DI/設定によるプロバイダー切り替え
 - フォールバック機能（LLMサーバーエラー時のみ）
+- 現在の既定プロバイダーは Vertex AI Gemini 2.5 Flash。スクリプト変換とエピソード検出では Gemini 2.5 Pro を使用
 
 ### 3. 決定論的テスト
 
@@ -121,6 +123,20 @@ const result = await agent.run({
 - パイプラインではエピソード境界推定の期間に `currentStep=episode` を明示し、完了時に `episodeCompleted` を更新。
   これにより「エピソード構成がスキップに見える」問題を解消。
 
+### トークン使用量の記録と表示（2025-09 追加）
+
+- すべてのLLM呼び出しで、入出力トークンを `token_usage` テーブルに記録（`jobId`/`agentName`/`provider`/`model`/`promptTokens`/`completionTokens`）。
+- 結果ページでは、モデル別に「<provider> <model> 入力Xトークン・出力Yトークン」を一覧表示。
+- 進捗画面では、完了済み呼び出しの累積として「現在 入力X/出力Y トークン消費中…」を定期更新（間隔は `app.config.ts` にて一元管理）。
+
+### 進捗ページの永続URL（復帰性の担保）
+
+- novelId 発行後は、進捗表示を `/novel/{novelId}/progress` のユニークURLで提供する。
+- ユーザーがブラウザの戻る/再読み込みを行っても、同URLに戻ればフロントエンドが `/api/resume` を呼び出し、
+  対応する最新ジョブの `jobId` を取得・再開し、SSEを再接続する。
+- SSEの一時的切断は `onerror` で警告ログのみを記録し、`EventSource` の自動再接続に任せて処理を継続する。
+  これにより、フロントエンド由来の一時的エラーで全処理が停止することを防止する。
+
 ### ログ設計（開発体験の改善）
 
 - コンソール出力は環境変数 `LOG_CONSOLE_LEVEL` で最小レベルを制御（`debug|info|warn|error`）。
@@ -193,11 +209,46 @@ const result = await agent.run({
 
 - チャンク分割後: 末尾チャンクが `minChunkSize` 未満なら直前チャンクへ連結。オーバーラップ重複を避けるため、原文から再スライスして結合。
 - エピソード束ね後: 末尾エピソードが最小目安（20p）未満なら直前エピソードに吸収。
+- 実ページ数基準の最終統合（2025-09-05 追加）: ページ割り確定後（PageBreakStep）、各エピソードの実ページ数を計測し、`app.config.ts > episodeBundling.minPageCount` 未満は次話へ順次統合（連鎖統合可）。最終話が閾値未満の場合は直前話に統合する。
 - 目的: 機械的な閾値エラーで停止せず、自然な分割単位に収束させる。
 
 ## 設定
 
 ### 吹き出し文字組（2025-09-02 追加）
+
+– 1吹き出しの最大文字数を50に統一（`app.config.ts > scriptConstraints.dialogue.maxCharsPerBubble`）。
+– Script Conversionの直後に自動ポストプロセスを適用し、上限超過の発話はパネル分割で処理。
+– 分割により増えた2コマ目以降の`cut`は「前のコマを引き継ぐ」を使用し、`camera`や`importance`は元パネルを継承。
+– 対象は `speech`/`thought`/`narration`（設定 `applyToTypes` で制御）。
+
+### エピソード長制約（2025-09-05 追加）
+
+– 1エピソードの最大コマ数は `app.config.ts > processing.episode.maxPanelsPerEpisode` で設定（デフォルト1000）。
+
+- 以前は50に固定していたが、長編入力でエピソードが過剰に細分化され文脈が失われていたため大幅に引き上げた。
+- 1000はおおよそ200ページ相当であり、LLM処理とメモリ消費の範囲内で最大規模をカバーする上限として設定。
+- 実際の配信単位はエピソード束ね処理で `episodeBundling.minPageCount` 未満のものを統合するため、リソース使用は制御される。
+  – 小規模スクリプト閾値や最小コマ数も同セクションに集約し、エピソード分割とバリデーションで参照。
+  – テスト環境では `getEpisodeConfig` モックにこれらの閾値を明示し、欠落による NaN バリデーションエラーを防止。
+
+## データベースアクセス層の抽象化（2025-09-04 追加）
+
+- 目的: better-sqlite3（同期）と Cloudflare D1（非同期）の差異をアダプタ層で吸収し、業務ロジックから同期/非同期分岐を排除。
+- 主要コンポーネント:
+  - `src/infrastructure/database/adapters/base-adapter.ts`: `DatabaseAdapter` 抽象クラス（`transaction`/`runSync`/`isSync`）。
+  - `src/infrastructure/database/adapters/sqlite-adapter.ts`: Drizzle + better-sqlite3 用の同期アダプタ。同期 `transaction` を提供。非同期コールバックは明示エラーで拒否。
+  - `src/infrastructure/database/adapters/d1-adapter.ts`: Cloudflare D1 用の非同期アダプタ。`transaction` はコールバックを await。原子性は D1 の `batch()` 利用を前提とし、隠蔽フォールバックは実装しない。
+  - `src/infrastructure/database/connection.ts`: 接続生成とアダプタ自動判定（D1-like なら D1Adapter、それ以外は SqliteAdapter）。
+
+- 設計上の制約:
+  - フォールバック禁止: 非同期トランザクションを擬似的に同期化しない。better-sqlite3 のトランザクション内で `async` を投げると明示的に失敗させる。
+  - 型安全: `any` 不使用。D1 は `@cloudflare/workers-types` の `D1Database` を参照。
+  - テスト: アダプタはユニットテストで契約を検証（同期/非同期、エラー動作）。
+
+### 実装インパクト（Phase 1）
+
+- God Object（`src/services/database.ts`）の段階的移行前提で、まず同期/非同期境界をアダプタで確立。
+- 既存の Drizzle（better-sqlite3）パスは動作維持。Workers/D1 導入時は `createDatabaseConnection({ d1 })` で切替可能。
 
 - 縦書きレンダリングAPIへ渡す `maxCharsPerLine` はコマの相対縦幅に応じて動的決定。
   - `height <= 0.2`: 6 文字/行
@@ -598,6 +649,35 @@ console.log(result.metadata?.provider)
 - これにより、後続処理（スクリプト変換・ページ割り振り）や再処理時の再抽出を避け、トレーサビリティが向上。
   Note: The agent implementation previously under `src/agent` has been consolidated into `src/agents`. All imports should target `@/agents/*`. Error handling is unified via `src/agents/errors.ts`.
 
+## 追加: キャラクターメモリのリポジトリ永続化（2025-09-xx）
+
+- キャラクターメモリを `JsonStorageKeys.characterMemoryFull` / `JsonStorageKeys.characterMemoryPrompt` 経由でストレージ保存。
+- `jobs` テーブルに `character_memory_path` と `prompt_memory_path` を追加し、保存したキーを記録。
+- これによりデータディレクトリ依存を排し、全処理がリポジトリ層を介して一貫化。
+- スクリプト変換後のLLMによるキャラクター一貫性チェックを廃止し、チャンク毎のメモリ永続化に一本化。
+
+### Bugfix: Bundled episode display (2025-09-06)
+
+- 結果ページでバンドル後のエピソード数とタイトルが一致しない問題を修正。
+- `full_pages.json` から最終エピソード情報を取得し、UI表示と生成結果を統一。
+- バンドルされたエピソードのタイトルは統合された最初のエピソードのものを採用。
+
+### Bugfix: Scene/Highlight index validation (2025-09-07)
+
+- Scene と Highlight のスキーマで `endIndex` が `startIndex` と同一の場合も許容。
+- 単一点のシーンやハイライトに対するバリデーションエラーを解消。
+
+### Bugfix: full_pages JSON parsing (2025-09-08)
+
+- R2 経由の `full_pages.json` 末尾に混入する `null` 文字が原因で結果ページが JSON パースに失敗する問題を修正。
+- 末尾の `\u0000` を除去してから JSON を解析する `parseJson` ユーティリティを追加し、結果ページで利用。
+
+### Feature Toggle: Script Coverage Check (2025-09-??)
+
+- `app.config.ts` に `features.enableCoverageCheck` を追加。
+- 既定は `false` とし、`true` の場合のみスクリプト変換でカバレッジ評価とリトライを実行。
+- 一時的に機能を無効化しつつ、必要に応じて再有効化できるようにする。
+
 ## エラーハンドリングアーキテクチャ（2025-08-27 更新）
 
 ### 統一エラーパターン管理
@@ -669,6 +749,12 @@ LLM構造化ジェネレーターにおけるエラー処理は、共通のエ�
 - サインアップ画面で利用規約への同意チェックを導入。
 - チェックが入るまで送信ボタンは無効化され、同意しない限り登録を進められない。
 
+## 追加: ナラティブアーク分析の完全削除（2025-09-XX）
+
+- 旧来のナラティブアーク分析ステップをパイプラインから廃止し、不要なトークン消費を解消。
+- エピソード境界は統合スクリプトから直接推定し、`narrativeAnalysis` 系設定・キーを全て削除。
+- これにより前半処理のLLM呼び出しが単純化され、チャンク分析結果のみで後続処理を実施する。
+
 ## スクリプト→エピソード正規化（2025-09-03 追加）
 
 - 話者抽出の移動: レンダラー依存を避けるため、スクリプトの `dialogue`/`narration` 文字列からの話者抽出・引用符除去を「エピソード生成（ページ分割）段階」で実施するよう変更。
@@ -679,3 +765,12 @@ LLM構造化ジェネレーターにおけるエラー処理は、共通のエ�
 - 実装:
   - 共有ユーティリティ `src/agents/script/dialogue-utils.ts` を追加し、`importance-based-page-break.ts` と `segmented-page-break-estimator.ts`（デモ経路）から利用。
   - 既存のレンダラー内の話者抽出ロジックは互換のため残置するが、主たる抽出は前段で完了するため依存しない。
+
+## フラグメント処理の削除（2025-09-05）
+
+- 未使用となっていたエピソードフラグメント分割とフラグメント方式のスクリプト変換を完全に廃止。
+- チャンク単位処理に一本化することで、設定とコードのコンテクストを軽量化。
+
+## 認証基盤
+
+- Google OAuth + Auth.js + D1 Adapter を採用予定。詳細は docs/google-auth-design.md を参照。

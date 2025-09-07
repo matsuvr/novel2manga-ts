@@ -1,7 +1,9 @@
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import type { Job } from '@/db'
-import { getDatabaseService } from '@/services/db-factory'
+// テストのモックが `@/services/database` を対象にしているため
+// import パスをバレルに統一してモックが正しく適用されるようにする
+import { db } from '@/services/database'
 import { ApiError } from '@/utils/api-error'
 import { StorageFactory } from '@/utils/storage'
 
@@ -13,13 +15,12 @@ export type ChunkRecord = {
 
 export async function getJobDetails(jobId: string): Promise<{ job: Job; chunks: ChunkRecord[] }> {
   // DatabaseService を直接利用することで、テストでの DatabaseService モックが有効に働く
-  const dbSvc = getDatabaseService()
-  const job = (await dbSvc.getJob(jobId)) as Job | null
+  const job = await db.jobs().getJob(jobId)
   if (!job) throw new ApiError('ジョブが見つかりません', 404, 'NOT_FOUND')
 
   // 軽量なDB集計でエピソード別のレンダリング進捗を取得（UIへ即時反映させる）
   // ストレージ走査は行わないため低負荷
-  const perEpisode = await getPerEpisodeProgressSafe(dbSvc, jobId)
+  const perEpisode = await computePerEpisodeProgress(jobId)
   // 合計値（totalPages/renderedPages）の再算出（未設定時や遅延時の補助）
   const totals = Object.entries(perEpisode).reduce(
     (acc, [, v]) => {
@@ -69,25 +70,63 @@ export async function getJobDetails(jobId: string): Promise<{ job: Job; chunks: 
 
 // 型安全なナローイング: モック環境で getPerEpisodeRenderProgress が未定義でも動作させる
 type PerEpisodeProgress = Record<number, { planned: number; rendered: number; total?: number }>
-interface WithPerEpisodeProgress {
-  getPerEpisodeRenderProgress(jobId: string): Promise<PerEpisodeProgress>
+
+function hasMethod<T extends object, K extends string>(
+  obj: T,
+  name: K,
+): obj is T & Record<K, (...args: unknown[]) => unknown> {
+  return !!obj && typeof (obj as Record<string, unknown>)[name] === 'function'
 }
 
-function hasPerEpisodeProgress(x: unknown): x is WithPerEpisodeProgress {
-  return (
-    typeof (x as { getPerEpisodeRenderProgress?: unknown })?.getPerEpisodeRenderProgress ===
-    'function'
-  )
-}
+async function computePerEpisodeProgress(jobId: string): Promise<PerEpisodeProgress> {
+  const renderSvc = db.render() as unknown
 
-async function getPerEpisodeProgressSafe(
-  dbSvc: unknown,
-  jobId: string,
-): Promise<PerEpisodeProgress> {
-  if (hasPerEpisodeProgress(dbSvc)) {
-    return await dbSvc.getPerEpisodeRenderProgress(jobId)
+  // 1) Prefer specialized aggregated API when available
+  if (
+    renderSvc &&
+    typeof renderSvc === 'object' &&
+    hasMethod(renderSvc as Record<string, unknown>, 'getPerEpisodeRenderProgress')
+  ) {
+    // 注意: メソッド参照を切り出すと this が失われるため、直接呼び出して this バインドを保持する
+    const result = await (
+      renderSvc as { getPerEpisodeRenderProgress: (id: string) => unknown }
+    ).getPerEpisodeRenderProgress(jobId)
+    // 型安全のため最小限のバリデーション
+    if (result && typeof result === 'object') {
+      return result as PerEpisodeProgress
+    }
   }
-  // モックがメソッド未実装の場合は安全なデフォルトを返す
+
+  // 2) Fallback: derive from list of render status rows when provided by mocks
+  if (
+    renderSvc &&
+    typeof renderSvc === 'object' &&
+    hasMethod(renderSvc as Record<string, unknown>, 'getAllRenderStatusByJob')
+  ) {
+    const rows = (await (
+      renderSvc as { getAllRenderStatusByJob: (id: string) => unknown }
+    ).getAllRenderStatusByJob(jobId)) as
+      | Array<{ episodeNumber: number; isRendered?: boolean }>
+      | undefined
+
+    const agg: PerEpisodeProgress = {}
+    if (Array.isArray(rows)) {
+      for (const r of rows) {
+        const ep = Number(r.episodeNumber)
+        if (!Number.isFinite(ep)) continue
+        let bucket = agg[ep]
+        if (!bucket) {
+          bucket = { planned: 0, rendered: 0 }
+          agg[ep] = bucket
+        }
+        bucket.planned += 1
+        if (r.isRendered) bucket.rendered += 1
+      }
+    }
+    return agg
+  }
+
+  // 3) Nothing available → empty aggregation
   return {}
 }
 

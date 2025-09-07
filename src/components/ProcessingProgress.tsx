@@ -2,6 +2,10 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
+import { appConfig } from '@/config/app.config'
+import { isRenderCompletelyDone } from '@/utils/completion'
+
+const _MAX_PAGES = appConfig.rendering.limits.maxPages
 
 interface ProcessStep {
   id: string
@@ -69,24 +73,12 @@ interface LogEntry {
   data?: unknown
 }
 
-// CONFIGURATION: Progress weight for the current in-flight episode during layout
-// This value (0.5) represents the partial completion credit given to an episode
-// that is currently being processed. It helps provide more accurate progress
-// feedback by giving 50% credit for the episode being worked on, preventing
-// the progress bar from appearing stalled during long episode processing.
-// Range: 0.0 (no credit) to 1.0 (full credit for in-progress episodes)
-const DEFAULT_CURRENT_EPISODE_PROGRESS_WEIGHT = 0.5 as const
-
-// CONFIGURATION: Maximum number of log entries to keep in memory
-// Keeps the last 50 log entries to prevent memory bloat while maintaining
-// sufficient history for debugging and user feedback
-const MAX_LOG_ENTRIES = 50 as const
-
-// 旧ポーリング間隔（SSE移行により未使用）
-
-// CONFIGURATION: UI layout constants
-const MAX_VISIBLE_LOG_HEIGHT = 60 as const // vh units for log container height
-const DEFAULT_EPISODE_NUMBER = 1 as const // Fallback episode number when parsing fails
+// UI 関連設定は app.config.ts に一元化
+const DEFAULT_CURRENT_EPISODE_PROGRESS_WEIGHT =
+  appConfig.ui.progress.currentEpisodeProgressWeight ?? 0.5
+const MAX_LOG_ENTRIES = appConfig.ui.logs.maxEntries
+const MAX_VISIBLE_LOG_HEIGHT = appConfig.ui.logs.maxVisibleLogHeightVh
+const DEFAULT_EPISODE_NUMBER = appConfig.ui.progress.defaultEpisodeNumber
 
 const INITIAL_STEPS: ProcessStep[] = [
   {
@@ -219,9 +211,19 @@ function ProcessingProgress({
     totalPages: 0,
     renderedPages: 0,
   })
+  // 完了検知を描画外（エフェクト）で実施するためのフラグ
+  const [completed, setCompleted] = useState(false)
+  // 正規化トースト表示の一回限りフラグ
+  const [normalizationToastShown, setNormalizationToastShown] = useState(false)
+
+  // トークン使用量（進行中の概算: 完了済み呼び出しの集計）
+  const [tokenPromptSum, setTokenPromptSum] = useState(0)
+  const [tokenCompletionSum, setTokenCompletionSum] = useState(0)
 
   // マウント状態
   const isMountedRef = useRef(true)
+  // 直近のジョブスナップショット（厳密完了判定で利用）
+  const lastJobRef = useRef<JobData['job'] | null>(null)
 
   // 進捗重み（クランプ）
   const inProgressWeight = useMemo(() => {
@@ -232,6 +234,42 @@ function ProcessingProgress({
     if (Number.isNaN(w)) return DEFAULT_CURRENT_EPISODE_PROGRESS_WEIGHT
     return Math.max(0, Math.min(1, w))
   }, [currentEpisodeProgressWeight])
+
+  // トークン使用量ポーリング（SSE連携とは独立。完了済み呼び出しの累積を表示）
+  useEffect(() => {
+    if (!jobId) return
+    let timer: NodeJS.Timeout | null = null
+    let cancelled = false
+    const intervalMs = appConfig.ui.progress.tokenUsagePollIntervalMs
+    const fetchUsage = async () => {
+      try {
+        const res = await fetch(`/api/jobs/${jobId}/token-usage`)
+        if (!res.ok) return
+        const json = (await res.json()) as {
+          tokenUsage?: Array<{ promptTokens: number; completionTokens: number }>
+        }
+        const rows = Array.isArray(json.tokenUsage) ? json.tokenUsage : []
+        if (!cancelled) {
+          const p = rows.reduce((s, r) => s + (Number(r.promptTokens) || 0), 0)
+          const c = rows.reduce((s, r) => s + (Number(r.completionTokens) || 0), 0)
+          setTokenPromptSum(p)
+          setTokenCompletionSum(c)
+        }
+      } catch (e) {
+        // 一時的なエラーはUIを止めないが、開発時は警告として出す
+        if (process.env.NODE_ENV !== 'production') {
+          // eslint-disable-next-line no-console
+          console.warn('Failed to fetch token usage:', e)
+        }
+      }
+    }
+    fetchUsage()
+    timer = setInterval(fetchUsage, intervalMs)
+    return () => {
+      cancelled = true
+      if (timer) clearInterval(timer)
+    }
+  }, [jobId])
 
   // Zod による perEpisodePages の要素検証（型安全・簡潔）
   const EpisodePageDataSchema = useMemo(
@@ -355,6 +393,21 @@ function ProcessingProgress({
         totalPages: Number(data.job.totalPages || 0),
         renderedPages: Number(data.job.renderedPages || 0),
       })
+      // 正規化適用（推定）通知: totalPages が上限に達した場合に一度だけトースト
+      const MAX_PAGES = appConfig.rendering.limits.maxPages
+      if (
+        !normalizationToastShown &&
+        typeof data.job.totalPages === 'number' &&
+        data.job.totalPages >= MAX_PAGES &&
+        (data.job.currentStep === 'render' ||
+          String(data.job.currentStep || '').startsWith('render'))
+      ) {
+        addLog(
+          'warning',
+          `安全装置: ページ番号の正規化を適用しました（上限 ${MAX_PAGES} ページにキャップ）`,
+        )
+        setNormalizationToastShown(true)
+      }
       // 詳細メッセージ
       addLog('info', describeStep(data.job.currentStep))
       if (data.job.lastError) {
@@ -452,7 +505,7 @@ function ProcessingProgress({
             completedCount++
           })
           addLog('info', '全ての処理が完了しました')
-          if (onComplete) onComplete()
+          setCompleted(true)
           return updatedSteps
         } else if (data.job.status === 'failed') {
           const failedStepMap: Record<string, number> = {
@@ -705,11 +758,11 @@ function ProcessingProgress({
     [
       lastJobData,
       addLog,
-      onComplete,
       describeStep,
       isDemoMode,
       inProgressWeight,
       EpisodePageDataSchema.safeParse,
+      normalizationToastShown,
     ],
   )
 
@@ -731,12 +784,14 @@ function ProcessingProgress({
     const handlePayload = (raw: string) => {
       try {
         const data = JSON.parse(raw) as JobData
+        // 直近ジョブのスナップショットを保持（厳密な完了判定で使用）
+        lastJobRef.current = data.job
         const result = updateStepsFromJobData(data)
         if (result === 'stop') {
           const completed = data.job.status === 'completed' || data.job.status === 'complete'
           if (completed || data.job.renderCompleted === true) {
             addLog('info', '処理が完了しました。上部のエクスポートからダウンロードできます。')
-            if (onComplete) onComplete()
+            setCompleted(true)
           } else if (data.job.status === 'failed') {
             const errorStep = data.job.lastErrorStep || data.job.currentStep || '不明'
             const errorMessage = data.job.lastError || 'エラーの詳細が不明です'
@@ -763,7 +818,17 @@ function ProcessingProgress({
       isMountedRef.current = false
       es.close()
     }
-  }, [jobId, addLog, updateStepsFromJobData, onComplete])
+  }, [jobId, addLog, updateStepsFromJobData])
+
+  // 画面更新（render）の外でのみルーター更新を行う
+  useEffect(() => {
+    if (!completed) return
+    // Allow route transition only after strict completion (page count matches)
+    if (!isRenderCompletelyDone(lastJobRef.current)) return
+    // onComplete内でのrouter操作はここから呼ぶことで、
+    // 「別コンポーネントのレンダー中にsetStateする」警告を回避
+    onComplete?.()
+  }, [completed, onComplete])
 
   // jobIdが未確定でも進捗カードを表示（初期段階からUX向上）
   useEffect(() => {
@@ -831,6 +896,14 @@ function ProcessingProgress({
 
   return (
     <div className="space-y-6">
+      {normalizationToastShown && (
+        <div className="fixed top-20 right-6 z-40">
+          <div className="px-4 py-2 rounded-xl shadow bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm">
+            安全装置: ページ番号の正規化を適用しました（上限 {appConfig.rendering.limits.maxPages}{' '}
+            ページ）
+          </div>
+        </div>
+      )}
       {hasFailedStep && failedStep && (
         <div className="apple-card p-4 bg-red-50 border-red-200 border-2">
           <div className="flex items-start space-x-3">
@@ -890,6 +963,16 @@ function ProcessingProgress({
             />
           </div>
         </div>
+
+        {/* 現在のトークン消費（完了済み呼び出しの累積） */}
+        {jobId && (
+          <div className="apple-card p-4">
+            <div className="text-sm text-gray-600">
+              現在 入力 {tokenPromptSum.toLocaleString()} トークン / 出力{' '}
+              {tokenCompletionSum.toLocaleString()} トークン 消費中…
+            </div>
+          </div>
+        )}
 
         <div className="space-y-4">
           {steps.map((step, index) => (
