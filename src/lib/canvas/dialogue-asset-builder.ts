@@ -43,12 +43,15 @@ export function collectDialogueRequests(
     for (let i = 0; i < dialogues.length; i++) {
       const d = dialogues[i]
       const cleanedText = extractDialogueText(d.text)
-      const selectedFont = getFontForDialogue(d) ?? 'gothic'
-      items.push({
+      const selectedFont = getFontForDialogue(d)
+      const item: VerticalTextRenderRequest = {
         text: cleanedText,
-        font: selectedFont,
         maxCharsPerLine: maxCharsForPanel,
-      })
+      }
+      if (selectedFont) {
+        item.font = selectedFont
+      }
+      items.push(item)
       map.push({
         key: `${panel.id}:${i}`,
         panelId: panel.id,
