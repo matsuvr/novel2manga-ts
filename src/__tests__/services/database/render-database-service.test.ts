@@ -105,7 +105,6 @@ function makeFakeDb(initialJob: { renderedPages?: number; totalPages?: number })
 }
 
 describe('RenderDatabaseService', () => {
-
   it('increments rendered pages without completing job', async () => {
     const { db, adapter, state } = makeFakeDb({ renderedPages: 0, totalPages: 2 })
     const service = new RenderDatabaseService(db as any, adapter as any)
@@ -120,7 +119,7 @@ describe('RenderDatabaseService', () => {
   })
 
   it('increments rendered pages and sets renderCompleted on final page without changing job status', async () => {
-    const { db, adapter, state } = makeFakeDb({ renderedPages: 0, totalPages: 2 })
+    const { db, adapter, state, setQuery } = makeFakeDb({ renderedPages: 0, totalPages: 2 })
     const service = new RenderDatabaseService(db as any, adapter as any)
 
     setQuery('j1', 1, 1)

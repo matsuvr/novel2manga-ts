@@ -143,6 +143,54 @@ export class RenderDatabaseService extends BaseDatabaseService {
       .limit(1)
   }
 
+  private createRenderStatusUpdate(
+    status: Partial<
+      Pick<
+        RenderStatus,
+        'isRendered' | 'imagePath' | 'thumbnailPath' | 'width' | 'height' | 'fileSize'
+      >
+    >,
+    existing: RenderStatus,
+    now: string,
+  ): Partial<typeof renderStatus.$inferInsert> {
+    return {
+      isRendered: status.isRendered ?? existing.isRendered,
+      imagePath: status.imagePath ?? existing.imagePath,
+      thumbnailPath: status.thumbnailPath ?? existing.thumbnailPath,
+      width: status.width ?? existing.width,
+      height: status.height ?? existing.height,
+      fileSize: status.fileSize ?? existing.fileSize,
+      renderedAt: now,
+    }
+  }
+
+  private createRenderStatusInsert(
+    jobId: string,
+    episodeNumber: number,
+    pageNumber: number,
+    status: Partial<
+      Pick<
+        RenderStatus,
+        'isRendered' | 'imagePath' | 'thumbnailPath' | 'width' | 'height' | 'fileSize'
+      >
+    >,
+    now: string,
+  ): typeof renderStatus.$inferInsert {
+    return {
+      id: crypto.randomUUID(),
+      jobId,
+      episodeNumber,
+      pageNumber,
+      isRendered: status.isRendered ?? false,
+      imagePath: status.imagePath,
+      thumbnailPath: status.thumbnailPath,
+      width: status.width,
+      height: status.height,
+      fileSize: status.fileSize,
+      renderedAt: now,
+    }
+  }
+
   private completeJobIfNeededSync(
     tx: DrizzleDatabase,
     jobId: string,
@@ -189,32 +237,12 @@ export class RenderDatabaseService extends BaseDatabaseService {
 
     if (existing) {
       tx.update(renderStatus)
-        .set({
-          isRendered: status.isRendered ?? existing.isRendered,
-          imagePath: status.imagePath ?? existing.imagePath,
-          thumbnailPath: status.thumbnailPath ?? existing.thumbnailPath,
-          width: status.width ?? existing.width,
-          height: status.height ?? existing.height,
-          fileSize: status.fileSize ?? existing.fileSize,
-          renderedAt: now,
-        })
+        .set(this.createRenderStatusUpdate(status, existing, now))
         .where(eq(renderStatus.id, existing.id))
         .run()
     } else {
       tx.insert(renderStatus)
-        .values({
-          id: crypto.randomUUID(),
-          jobId,
-          episodeNumber,
-          pageNumber,
-          isRendered: status.isRendered ?? false,
-          imagePath: status.imagePath,
-          thumbnailPath: status.thumbnailPath,
-          width: status.width,
-          height: status.height,
-          fileSize: status.fileSize,
-          renderedAt: now,
-        })
+        .values(this.createRenderStatusInsert(jobId, episodeNumber, pageNumber, status, now))
         .run()
     }
 
@@ -264,30 +292,12 @@ export class RenderDatabaseService extends BaseDatabaseService {
     if (existing) {
       await tx
         .update(renderStatus)
-        .set({
-          isRendered: status.isRendered ?? existing.isRendered,
-          imagePath: status.imagePath ?? existing.imagePath,
-          thumbnailPath: status.thumbnailPath ?? existing.thumbnailPath,
-          width: status.width ?? existing.width,
-          height: status.height ?? existing.height,
-          fileSize: status.fileSize ?? existing.fileSize,
-          renderedAt: now,
-        })
+        .set(this.createRenderStatusUpdate(status, existing, now))
         .where(eq(renderStatus.id, existing.id))
     } else {
-      await tx.insert(renderStatus).values({
-        id: crypto.randomUUID(),
-        jobId,
-        episodeNumber,
-        pageNumber,
-        isRendered: status.isRendered ?? false,
-        imagePath: status.imagePath,
-        thumbnailPath: status.thumbnailPath,
-        width: status.width,
-        height: status.height,
-        fileSize: status.fileSize,
-        renderedAt: now,
-      })
+      await tx
+        .insert(renderStatus)
+        .values(this.createRenderStatusInsert(jobId, episodeNumber, pageNumber, status, now))
     }
 
     const isRenderedNow = status.isRendered ?? wasRendered
