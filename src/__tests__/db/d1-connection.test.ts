@@ -1,7 +1,7 @@
 /**
  * NOTE: このテストは better-sqlite3 を利用するため、WSL2 などの環境では失敗する可能性があります。
  * WSL2 では TypeScript のみで完結する小規模な単体テストのみ実行し、このようなバイナリ依存テストの一括実行は開発者に依頼してください。
- */
+ * WSL2 では TypeScript のみで完結する小規模な単体テストのみ実行し、このようなバイナリ依存テストの一括実行は他の開発者に依頼してください。
 import { D1Database, D1DatabaseAPI } from '@miniflare/d1'
 import Database from 'better-sqlite3'
 import { integer, sqliteTable } from 'drizzle-orm/sqlite-core'
