@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { auth } from '@/auth'
-import { getMissingAuthEnv } from '@/utils/auth-env'
 import { authConfig } from '@/config/auth.config'
+import { getMissingAuthEnv } from '@/utils/auth-env'
 import Providers from './providers'
 
 export const metadata: Metadata = {

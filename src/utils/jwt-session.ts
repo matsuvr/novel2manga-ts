@@ -1,4 +1,5 @@
-import { decode } from 'next-auth/jwt'
+import { decode, type JWTDecodeParams } from 'next-auth/jwt'
+import { jwtConfig } from '@/config/jwt.config'
 
 export interface SessionTokenPayload {
   sub?: string
@@ -15,9 +16,17 @@ export function extractBearerToken(header: string | null): string | null {
 export async function verifySessionToken(
   token: string,
   secret: string = String(process.env.AUTH_SECRET),
+  salt: string = jwtConfig.salt,
 ): Promise<SessionTokenPayload | null> {
   try {
-    return await decode({ token, secret })
+    // In next-auth v5, decode function parameters
+    const params: JWTDecodeParams = {
+      token,
+      secret,
+      salt,
+    }
+    const decoded = await decode(params)
+    return decoded as SessionTokenPayload | null
   } catch {
     return null
   }
