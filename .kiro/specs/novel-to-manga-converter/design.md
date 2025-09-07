@@ -5,6 +5,10 @@
 このドキュメントは、LLMエージェントの実装を簡素化し、プロバイダー非依存で、決定論的テストが可能で、厳密な型安全性を提供する新しいアーキテクチャについて説明します。
 本システムは OpenNext の Node.js ランタイムを前提とし、API ルートから冗長な `export const runtime` 宣言を排除しています。
 
+## Deployment Baseline
+
+OpenNext と `wrangler` により Cloudflare Workers へのビルド・デプロイ基盤を構築しました。`wrangler.toml` では `nodejs_compat` と `global_fetch_strictly_public` を有効化し、`/hello` ページで Hello World を確認できます。
+
 ## アーキテクチャの利点
 
 ### 1. エージェントの簡素化

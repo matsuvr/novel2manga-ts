@@ -118,9 +118,13 @@
 ### Script Conversion Quality Enhancement (2025-09-01)
 
 - [x] **カバレッジ評価システム**: スクリプト品質の定量評価機能実装
-- [x] **自動リトライメカニズム**: 品質閾値未達時の自動再試行（最大3回）
-- [x] **SFX統合**: 効果音データのスクリプト変換・レンダリング統合
-- [x] **設定バリデーション**: スクリプト変換設定の必須項目チェック強化
+
+### Cloudflare Build Baseline (2025-03-25)
+
+- [x] OpenNext + wrangler で Cloudflare Workers 向けビルド基盤を整備
+- [x] `/hello` ページで Hello World を表示
+- [x] GitHub Actions にデプロイワークフローを追加
+- [x] docs/cloudflare-deployment.md にデプロイ手順と検証方法を記載
 
 ### Episode Bundle System (2025-08-31)
 
