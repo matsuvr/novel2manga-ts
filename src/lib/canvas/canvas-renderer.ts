@@ -1,6 +1,6 @@
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import type { AppCanvasConfig } from '@/types/canvas-config'
-import type { MangaLayout, Panel } from '@/types/panel-layout'
+import type { MangaLayout, Panel, Dialogue } from '@/types/panel-layout'
 import { PanelLayoutCoordinator } from './panel-layout-coordinator'
 import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
 import { type SfxPlacement, SfxPlacer } from './sfx-placer'
@@ -171,6 +171,77 @@ export class CanvasRenderer {
     this.ctx.strokeRect(x, y, width, height)
   }
 
+  /** Testing helper: expose layout coordinator */
+  getLayoutCoordinator(): PanelLayoutCoordinator {
+    return this.layoutCoordinator
+  }
+
+  private drawDialogueBubble(
+    dialogue: Dialogue,
+    asset: { image: unknown; width: number; height: number },
+    bx: number,
+    by: number,
+    bubbleW: number,
+    bubbleH: number,
+    drawW: number,
+    drawH: number,
+  ): void {
+    // 吹き出し背景
+    this.ctx.save()
+    this.ctx.strokeStyle = this.appConfig.rendering.canvas.bubble.strokeStyle
+    this.ctx.fillStyle = this.appConfig.rendering.canvas.bubble.fillStyle
+    this.ctx.lineWidth =
+      dialogue.emotion === 'shout'
+        ? this.appConfig.rendering.canvas.bubble.shoutLineWidth
+        : this.appConfig.rendering.canvas.bubble.normalLineWidth
+    const shapeType = dialogue.type || 'speech'
+    this.drawBubbleShape(shapeType, bx, by, bubbleW, bubbleH)
+    this.ctx.restore()
+
+    // 画像（縦書きセリフ）
+    const imgX = bx + (bubbleW - drawW) / 2
+    const imgY = by + (bubbleH - drawH) / 2
+    this.ctx.drawImage(asset.image as unknown as CanvasImageSource, imgX, imgY, drawW, drawH)
+
+    // 占有領域登録
+    this.layoutCoordinator.registerDialogueArea(dialogue, {
+      x: bx,
+      y: by,
+      width: bubbleW,
+      height: bubbleH,
+    })
+
+    // 話者ラベル
+    const speakerLabelCfg = this.appConfig.rendering.canvas.speakerLabel
+    const dialogueType = dialogue.type
+    const shouldShowLabel =
+      speakerLabelCfg?.enabled === true &&
+      dialogueType !== 'narration' &&
+      typeof dialogue.speaker === 'string' &&
+      dialogue.speaker.trim() !== ''
+    if (shouldShowLabel) {
+      const baseFontSize = this.config.fontSize || 16
+      const fontSize = Math.max(10, baseFontSize * (speakerLabelCfg.fontSize || 0.7))
+      const paddingLabel = speakerLabelCfg.padding ?? 4
+      const bg = speakerLabelCfg.backgroundColor ?? '#ffffff'
+      const border = speakerLabelCfg.borderColor ?? '#333333'
+      const textColor = speakerLabelCfg.textColor ?? '#333333'
+      const offsetXRatio = speakerLabelCfg.offsetX ?? 0.3
+      const offsetYRatio = speakerLabelCfg.offsetY ?? 0.7
+      const borderRadius = speakerLabelCfg.borderRadius ?? 3
+      this.drawSpeakerLabel(dialogue.speaker, bx + bubbleW, by, {
+        fontSize,
+        padding: paddingLabel,
+        backgroundColor: bg,
+        borderColor: border,
+        textColor,
+        offsetXRatio,
+        offsetYRatio,
+        borderRadius,
+      })
+    }
+  }
+
   drawPanel(panel: Panel): void {
     // レイアウトコーディネーターをリセット
     this.layoutCoordinator.reset()
@@ -206,88 +277,23 @@ export class CanvasRenderer {
             const dialogue = panel.dialogues[i]
             const key = `${panel.id}:${i}`
             const asset = this.dialogueAssets?.[key]
-            if (!asset) throw new Error(`Vertical dialogue asset missing for ${key}`)
+            if (!asset) throw new Error(`Dialogue asset missing for ${key}`)
 
-            let scale = Math.min((slotWidth * 0.9) / asset.width, maxAreaHeight / asset.height, 1)
-            let drawW = asset.width * scale
-            let drawH = asset.height * scale
             const padding = 10
-            const textRectW = drawW + padding * 2
-            const textRectH = drawH + padding * 2
-            let bubbleW = textRectW * Math.sqrt(2)
-            let bubbleH = textRectH * Math.sqrt(2)
+            const widthScale = (slotWidth / Math.sqrt(2) - padding * 2) / asset.width
+            const heightScale = maxAreaHeight / asset.height
+            const scale = Math.min(widthScale, heightScale, 1)
+            if (scale <= 0) continue
 
-            if (bubbleH > maxAreaHeight) {
-              const shrinkFactor = maxAreaHeight / bubbleH
-              scale = Math.min(scale, scale * shrinkFactor)
-              drawW = asset.width * scale
-              drawH = asset.height * scale
-              const textRectW2 = drawW + padding * 2
-              const textRectH2 = drawH + padding * 2
-              bubbleW = textRectW2 * Math.sqrt(2)
-              bubbleH = textRectH2 * Math.sqrt(2)
-            }
-            if (bubbleH <= 0) continue
+            const drawW = asset.width * scale
+            const drawH = asset.height * scale
+            const bubbleW = (drawW + padding * 2) * Math.sqrt(2)
+            const bubbleH = (drawH + padding * 2) * Math.sqrt(2)
 
             const bx = x + width * 0.05 + slotWidth * i + (slotWidth - bubbleW) / 2
             const by = bubbleY
 
-            this.ctx.save()
-            this.ctx.strokeStyle = this.appConfig.rendering.canvas.bubble.strokeStyle
-            this.ctx.fillStyle = this.appConfig.rendering.canvas.bubble.fillStyle
-            this.ctx.lineWidth =
-              dialogue.emotion === 'shout'
-                ? this.appConfig.rendering.canvas.bubble.shoutLineWidth
-                : this.appConfig.rendering.canvas.bubble.normalLineWidth
-            const shapeType = dialogue.type || 'speech'
-            this.drawBubbleShape(shapeType, bx, by, bubbleW, bubbleH)
-            this.ctx.restore()
-
-            const imgX = bx + (bubbleW - drawW) / 2
-            const imgY = by + (bubbleH - drawH) / 2
-            this.ctx.drawImage(
-              asset.image as unknown as CanvasImageSource,
-              imgX,
-              imgY,
-              drawW,
-              drawH,
-            )
-
-            this.layoutCoordinator.registerDialogueArea(dialogue, {
-              x: bx,
-              y: by,
-              width: bubbleW,
-              height: bubbleH,
-            })
-
-            const speakerLabelCfg = this.appConfig.rendering.canvas.speakerLabel
-            const dialogueType = dialogue.type
-            const shouldShowLabel =
-              speakerLabelCfg?.enabled === true &&
-              dialogueType !== 'narration' &&
-              typeof dialogue.speaker === 'string' &&
-              dialogue.speaker.trim() !== ''
-            if (shouldShowLabel) {
-              const baseFontSize = this.config.fontSize || 16
-              const fontSize = Math.max(10, baseFontSize * (speakerLabelCfg.fontSize || 0.7))
-              const paddingLabel = speakerLabelCfg.padding ?? 4
-              const bg = speakerLabelCfg.backgroundColor ?? '#ffffff'
-              const border = speakerLabelCfg.borderColor ?? '#333333'
-              const textColor = speakerLabelCfg.textColor ?? '#333333'
-              const offsetXRatio = speakerLabelCfg.offsetX ?? 0.3
-              const offsetYRatio = speakerLabelCfg.offsetY ?? 0.7
-              const borderRadius = speakerLabelCfg.borderRadius ?? 3
-              this.drawSpeakerLabel(dialogue.speaker, bx + bubbleW, by, {
-                fontSize,
-                padding: paddingLabel,
-                backgroundColor: bg,
-                borderColor: border,
-                textColor,
-                offsetXRatio,
-                offsetYRatio,
-                borderRadius,
-              })
-            }
+            this.drawDialogueBubble(dialogue, asset, bx, by, bubbleW, bubbleH, drawW, drawH)
           }
         } else {
           let bubbleY = y + height * 0.2
@@ -299,7 +305,7 @@ export class CanvasRenderer {
             const dialogue = panel.dialogues[i]
             const key = `${panel.id}:${i}`
             const asset = this.dialogueAssets?.[key]
-            if (!asset) throw new Error(`Vertical dialogue asset missing for ${key}`)
+            if (!asset) throw new Error(`Dialogue asset missing for ${key}`)
 
             let scale = Math.min(maxAreaWidth / asset.width, perBubbleMaxHeight / asset.height, 1)
             let drawW = asset.width * scale
@@ -330,62 +336,7 @@ export class CanvasRenderer {
             const bx = x + width - bubbleW - width * 0.05
             const by = bubbleY
 
-            this.ctx.save()
-            this.ctx.strokeStyle = this.appConfig.rendering.canvas.bubble.strokeStyle
-            this.ctx.fillStyle = this.appConfig.rendering.canvas.bubble.fillStyle
-            this.ctx.lineWidth =
-              dialogue.emotion === 'shout'
-                ? this.appConfig.rendering.canvas.bubble.shoutLineWidth
-                : this.appConfig.rendering.canvas.bubble.normalLineWidth
-            const shapeType = dialogue.type || 'speech'
-            this.drawBubbleShape(shapeType, bx, by, bubbleW, bubbleH)
-            this.ctx.restore()
-
-            const imgX = bx + (bubbleW - drawW) / 2
-            const imgY = by + (bubbleH - drawH) / 2
-            this.ctx.drawImage(
-              asset.image as unknown as CanvasImageSource,
-              imgX,
-              imgY,
-              drawW,
-              drawH,
-            )
-
-            this.layoutCoordinator.registerDialogueArea(dialogue, {
-              x: bx,
-              y: by,
-              width: bubbleW,
-              height: bubbleH,
-            })
-
-            const speakerLabelCfg = this.appConfig.rendering.canvas.speakerLabel
-            const dialogueType = dialogue.type
-            const shouldShowLabel =
-              speakerLabelCfg?.enabled === true &&
-              dialogueType !== 'narration' &&
-              typeof dialogue.speaker === 'string' &&
-              dialogue.speaker.trim() !== ''
-            if (shouldShowLabel) {
-              const baseFontSize = this.config.fontSize || 16
-              const fontSize = Math.max(10, baseFontSize * (speakerLabelCfg.fontSize || 0.7))
-              const paddingLabel = speakerLabelCfg.padding ?? 4
-              const bg = speakerLabelCfg.backgroundColor ?? '#ffffff'
-              const border = speakerLabelCfg.borderColor ?? '#333333'
-              const textColor = speakerLabelCfg.textColor ?? '#333333'
-              const offsetXRatio = speakerLabelCfg.offsetX ?? 0.3
-              const offsetYRatio = speakerLabelCfg.offsetY ?? 0.7
-              const borderRadius = speakerLabelCfg.borderRadius ?? 3
-              this.drawSpeakerLabel(dialogue.speaker, bx + bubbleW, by, {
-                fontSize,
-                padding: paddingLabel,
-                backgroundColor: bg,
-                borderColor: border,
-                textColor,
-                offsetXRatio,
-                offsetYRatio,
-                borderRadius,
-              })
-            }
+            this.drawDialogueBubble(dialogue, asset, bx, by, bubbleW, bubbleH, drawW, drawH)
 
             bubbleY += bubbleH + 10
           }
