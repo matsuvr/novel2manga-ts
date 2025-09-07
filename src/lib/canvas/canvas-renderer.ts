@@ -703,7 +703,6 @@ export class CanvasRenderer {
       offsetYRatio?: number
       borderRadius?: number
       clampBounds?: { x: number; y: number; width: number; height: number }
-      clampBounds?: { x: number; y: number; width: number; height: number }
     } = {},
   ): void {
     const {

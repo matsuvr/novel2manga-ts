@@ -63,6 +63,12 @@ Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
         quadraticCurveTo: () => {
           /* noop */
         },
+        ellipse: () => {
+          /* noop */
+        },
+        arc: () => {
+          /* noop */
+        },
         closePath: () => {
           /* noop */
         },
@@ -70,6 +76,9 @@ Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
           /* noop */
         },
         stroke: () => {
+          /* noop */
+        },
+        strokeText: () => {
           /* noop */
         },
         fillRect: () => {

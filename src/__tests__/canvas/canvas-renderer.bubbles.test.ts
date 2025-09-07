@@ -22,6 +22,7 @@ const mockCtx = (() => {
     fill: fn('fill'),
     stroke: fn('stroke'),
     drawImage: fn('drawImage'),
+    arc: fn('arc'), // 尾泡用
     // state
     save: fn('save'),
     restore: fn('restore'),
@@ -96,5 +97,7 @@ describe('CanvasRenderer bubbles - shapes and labels', () => {
     // Speaker label should not render for narration: ensure no label text drawn
     const fillTextArgs: any[] = (mockCtx.ctx as any).fillText.mock.calls.flat()
     expect(fillTextArgs).not.toContain('ナレーション')
+    // thought bubble tail circles => arc が少なくとも1回
+    expect(mockCtx.ctx.arc).toHaveBeenCalled()
   })
 })
