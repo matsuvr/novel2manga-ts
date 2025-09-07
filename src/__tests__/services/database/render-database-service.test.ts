@@ -17,18 +17,20 @@ type RenderRow = {
 }
 
 function makeFakeDb(initialJob: { renderedPages?: number; totalPages?: number }) {
+  // In-memory mutable state representing rows
   const state = {
     renderRows: [] as RenderRow[],
     job: {
       id: 'j1',
       renderedPages: initialJob.renderedPages ?? 0,
       totalPages: initialJob.totalPages ?? 0,
-      status: 'processing',
+      status: 'processing' as string,
       renderCompleted: false,
       updatedAt: '',
     },
   }
 
+  // Query cursor (simple emulation of where conditions used in service)
   const current = { jobId: '', episodeNumber: 0, pageNumber: 0 }
 
   const setQuery = (jobId: string, episodeNumber: number, pageNumber: number) => {
@@ -37,7 +39,33 @@ function makeFakeDb(initialJob: { renderedPages?: number; totalPages?: number })
     current.pageNumber = pageNumber
   }
 
-  const tx = {
+  // Minimal Drizzle-like chain builders used in service
+  type Tx = {
+    select: () => {
+      from: (table: unknown) => {
+        where: (_condition: unknown) => {
+          limit: (n?: number) => {
+            all: () => unknown[]
+          }
+          groupBy?: (..._cols: unknown[]) => unknown
+          orderBy?: (..._cols: unknown[]) => unknown
+        }
+        orderBy?: (..._cols: unknown[]) => unknown
+        groupBy?: (..._cols: unknown[]) => unknown
+      }
+    }
+    insert: (table: unknown) => {
+      values: (v: RenderRow) => { run: () => void }
+    }
+    update: (table: unknown) => {
+      set: (vals: Record<string, unknown>) => {
+        where: (condition: unknown) => { run: () => void }
+      }
+    }
+    delete?: (table: unknown) => { where: (_c: unknown) => { run: () => void } }
+  }
+
+  const tx: Tx = {
     select: () => ({
       from: (table: unknown) => ({
         where: (_condition: unknown) => ({
@@ -63,13 +91,10 @@ function makeFakeDb(initialJob: { renderedPages?: number; totalPages?: number })
         }),
       }),
     }),
-
-    insert: () => ({ values: (v: unknown) => ({ run: () => state.renderRows.push(v) }) }),
-    update: (table?: unknown) => ({
-      set: (vals: Record<string, unknown>) => ({
-        where: function () {
-          if (table === jobs) Object.assign(state.job, vals)
-          return this
+    insert: () => ({
+      values: (v: RenderRow) => ({
+        run: () => {
+          state.renderRows.push(v)
         },
       }),
     }),
@@ -91,15 +116,17 @@ function makeFakeDb(initialJob: { renderedPages?: number; totalPages?: number })
     }),
   }
 
+  // Fake database exposing transaction similar to BetterSQLite3Database
   const db = {
-    transaction: <T>(fn: (txObj: typeof tx) => T): T => fn(tx),
-  } as unknown as Parameters<typeof RenderDatabaseService>[0]
+    transaction: <T>(fn: (txObj: Tx) => T): T => fn(tx),
+  } as unknown as { transaction: <T>(fn: (txObj: Tx) => T) => T }
 
+  // Adapter fulfilling DatabaseAdapter contract surface used by service
   const adapter = {
-    transaction: async <T>(fn: (txObj: typeof tx) => T) => fn(tx),
+    transaction: async <T>(fn: (txObj: Tx) => T) => fn(tx),
     runSync: <T>(fn: () => T) => fn(),
     isSync: () => true,
-  } as unknown as Parameters<typeof RenderDatabaseService>[1]
+  }
 
   return { db, adapter, state, setQuery }
 }
