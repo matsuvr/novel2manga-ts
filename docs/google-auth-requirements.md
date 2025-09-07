@@ -7,7 +7,7 @@
 ## 機能要件
 
 - **認証方式**: Google OAuth を利用し、Auth.js の D1 Adapter を用いてユーザー管理を行う。
-- **エンドポイント構成**: Auth.js の `basePath` を `/portal/api/auth` とし、既存の `/api` ルートと衝突しないようにする。
+- **エンドポイント構成**: `/portal/api/auth` 配下に `login`・`callback/:provider`・`logout`・`session` を配置し、既存の `/api` ルートと衝突しないようにする。
 - **データベース**: Auth.js 標準の `users`, `accounts`, `sessions`, `verification_tokens` テーブルは D1 Adapter に任せる。アプリ固有のデータは `app_` プレフィックス付きテーブルで管理し、Drizzle ORM でスキーマを定義する。
 - **ジョブ管理**: 変換ジョブ (`app_jobs`) と成果物 (`app_artifacts`) を D1 に保存し、Cloudflare Queues を使って非同期処理を実行する。
 - **成果物配布**: 生成されたファイルは R2 に保存し、プリサインド URL を発行して配布する。

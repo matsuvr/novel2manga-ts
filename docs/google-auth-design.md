@@ -5,7 +5,7 @@
 - **フレームワーク**: Next.js + OpenNext。
 - **認証基盤**: Auth.js v5 を採用し、D1 Adapter を利用してユーザーデータを D1 に保存。
 - **ランタイム**: OpenNext 経由で Cloudflare 環境変数へアクセスし、Edge Runtime を使用しない。
-- **エンドポイント**: `/portal/api/auth/[...nextauth]` に NextAuth をマウントし、`basePath` を `/portal/api/auth` に設定。
+- **エンドポイント**: `/portal/api/auth` 配下に `login`・`callback/:provider`・`logout`・`session` を実装。
 
 ## データモデル
 
@@ -31,8 +31,8 @@ Auth.js の `users` と分離したプロフィール拡張用テーブル。
 ## 認証フロー
 
 1. Cloudflare 環境バインディングから `DB` を取得し、Auth.js D1 Adapter を初期化する。
-2. Google Provider を設定した NextAuth を `/portal/api/auth` にデプロイ。
-3. セッションは JWT 戦略を使用し、保護ルートの判定に `auth()` を利用。
+2. Google Provider を設定した Auth.js を `/portal/api/auth` にデプロイ。
+3. セッションは JWT 戦略を使用し、保護ルートの判定に `auth()` と `next-auth/jwt` を利用。
 
 ## 非同期ジョブ実行
 

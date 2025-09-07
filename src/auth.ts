@@ -58,11 +58,8 @@ function createAuthModule(): Handlers {
   // DB初期化は必要時にのみ実行し、初回描画の遅延を避ける
   const configured = NextAuth({
     adapter: DrizzleAdapter(getDatabase()),
-    // DBアクセスを抑制するため、セッションはJWT方式へ切替
-    // BREAKING CHANGE: セッション管理をDBストアからJWTへ変更しました。
-    // - セッションはステートレス（DB未保存）
-    // - ログアウトしても既発行JWTは即時失効しません（失効戦略は別途設計が必要）
-    // - セッション永続性/失効動作に影響があります
+    basePath: '/portal/api/auth',
+    // セッションはJWT方式を採用し、D1への永続化を回避する
     session: { strategy: 'jwt' },
     providers: [
       Google({ clientId: String(AUTH_GOOGLE_ID), clientSecret: String(AUTH_GOOGLE_SECRET) }),
