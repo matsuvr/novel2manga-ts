@@ -43,8 +43,8 @@ function extractNetErrorInfo(e: unknown): {
       if (typeof c.port === 'number') info.port = c.port
     }
     // Some environments may set code on the top-level error
-    if (isRecord(e) && typeof (e as Record<string, unknown>).code === 'string') {
-      info.code = info.code || (e as Record<string, string>).code
+    if (isRecord(e) && typeof e.code === 'string') {
+      info.code = info.code || e.code
     }
   }
   return info
