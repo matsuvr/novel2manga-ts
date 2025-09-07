@@ -3,6 +3,7 @@ import type { AppCanvasConfig } from '@/types/canvas-config'
 import type { Dialogue, MangaLayout, Panel } from '@/types/panel-layout'
 import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
 import { PanelLayoutCoordinator } from './panel-layout-coordinator'
+import { toSizeLike } from '@/utils/type-guards'
 import { type SfxPlacement, SfxPlacer } from './sfx-placer'
 
 // Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
@@ -196,6 +197,7 @@ export class CanvasRenderer {
     // node-canvas の Image は読み込み後に width/height が同期的に得られる
     const width = img.width
     const height = img.height
+
     return {
       image: img as unknown as CanvasImageSource,
       width,
