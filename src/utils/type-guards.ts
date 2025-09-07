@@ -49,6 +49,7 @@ export function toSizeLike(value: unknown): SizeLike {
     height: asOptionalNumber(value, 'height'),
   }
 }
+
 import type { MangaLayout } from '@/types/panel-layout'
 import { MangaLayoutSchema } from '@/types/panel-layout.zod'
 

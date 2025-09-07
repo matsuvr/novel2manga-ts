@@ -4,8 +4,8 @@ import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/por
 import type { JobWithProgress } from '@/services/database/index'
 import { db as dbFactory } from '@/services/database/index'
 import type { EpisodeData, MangaLayout } from '@/types/panel-layout'
-import { StorageKeys } from '@/utils/storage'
 import { isTestEnv } from '@/utils/env'
+import { StorageKeys } from '@/utils/storage'
 
 // CONCURRENCY: In-memory lock to prevent race conditions in layout generation
 // This map tracks active layout generation processes to prevent multiple
