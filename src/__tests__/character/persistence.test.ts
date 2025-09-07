@@ -1,28 +1,22 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  loadCharacterMemory,
-  loadPromptMemory,
-  saveCharacterMemory,
-} from '@/character/persistence'
+import { loadCharacterMemory, loadPromptMemory, saveCharacterMemory } from '@/character/persistence'
 import { createCharacterMemoryIndex } from '@/character/state'
 import type { CharacterId } from '@/types/extractionV2'
 
 const putFullMock = vi.fn().mockResolvedValue('test/key')
-const getFullMock = vi
-  .fn()
-  .mockResolvedValue(
-    JSON.stringify([
-      {
-        id: 'char_1',
-        names: ['太郎'],
-        firstAppearanceChunk: 0,
-        summary: 'summary',
-        relationships: {},
-        timeline: [],
-        lastSeenChunk: 0,
-      },
-    ]),
-  )
+const getFullMock = vi.fn().mockResolvedValue(
+  JSON.stringify([
+    {
+      id: 'char_1',
+      names: ['太郎'],
+      firstAppearanceChunk: 0,
+      summary: 'summary',
+      relationships: {},
+      timeline: [],
+      lastSeenChunk: 0,
+    },
+  ]),
+)
 const putPromptMock = vi.fn()
 const getPromptMock = vi.fn().mockResolvedValue('[]')
 
