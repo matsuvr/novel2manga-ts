@@ -384,7 +384,7 @@ export class CanvasRenderer {
                 offsetXRatio,
                 offsetYRatio,
                 borderRadius,
-              clampBounds: panelBounds,
+                clampBounds: panelBounds,
               })
             }
 
