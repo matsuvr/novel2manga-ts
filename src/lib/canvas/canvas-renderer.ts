@@ -3,6 +3,7 @@ import type { AppCanvasConfig } from '@/types/canvas-config'
 import type { Dialogue, MangaLayout, Panel } from '@/types/panel-layout'
 import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
 import { PanelLayoutCoordinator } from './panel-layout-coordinator'
+import { toSizeLike } from '@/utils/type-guards'
 import { type SfxPlacement, SfxPlacer } from './sfx-placer'
 
 // Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
@@ -190,9 +191,7 @@ export class CanvasRenderer {
     const img = new NodeCanvasImageCtor()
     img.src = buffer
     // node-canvas の Image は読み込み後に寸法が同期的に得られる
-    const anyImg = img as unknown as { width?: number; height?: number }
-    const width = typeof anyImg.width === 'number' ? anyImg.width : 0
-    const height = typeof anyImg.height === 'number' ? anyImg.height : 0
+    const { width = 0, height = 0 } = toSizeLike(img)
     return {
       image: img as unknown as CanvasImageSource,
       width,

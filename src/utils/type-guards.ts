@@ -1,3 +1,54 @@
+// Reusable runtime type guard helpers (no `any`).
+// Keep minimal and tree-shake friendly.
+
+export type UnknownRecord = Record<string, unknown>
+
+export function isObject(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null
+}
+
+const hop = Object.prototype.hasOwnProperty
+export function hasProp<T extends string>(
+  obj: unknown,
+  prop: T,
+): obj is UnknownRecord & Record<T, unknown> {
+  return isObject(obj) && hop.call(obj, prop)
+}
+
+export function getProp<T>(obj: unknown, prop: string): T | undefined {
+  if (isObject(obj) && prop in obj) return obj[prop] as T
+  return undefined
+}
+
+export function isNumber(v: unknown): v is number {
+  return typeof v === 'number'
+}
+
+export function isString(v: unknown): v is string {
+  return typeof v === 'string'
+}
+
+export function asOptionalNumber(obj: unknown, prop: string): number | undefined {
+  const v = getProp<unknown>(obj, prop)
+  return isNumber(v) ? v : undefined
+}
+
+export function asOptionalString(obj: unknown, prop: string): string | undefined {
+  const v = getProp<unknown>(obj, prop)
+  return isString(v) ? v : undefined
+}
+
+// Narrow image-like object
+export interface SizeLike {
+  width?: number
+  height?: number
+}
+export function toSizeLike(value: unknown): SizeLike {
+  return {
+    width: asOptionalNumber(value, 'width'),
+    height: asOptionalNumber(value, 'height'),
+  }
+}
 import type { MangaLayout } from '@/types/panel-layout'
 import { MangaLayoutSchema } from '@/types/panel-layout.zod'
 
