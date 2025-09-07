@@ -1,6 +1,7 @@
 import { decode, type JWTDecodeParams } from 'next-auth/jwt'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { Context, Layer } from 'effect'
+// cloudflare-env.d.ts declares a global interface CloudflareEnv; we just reference its name.
 import { jwtConfig } from '@/config/jwt.config'
 
 export interface SessionTokenPayload {
@@ -15,10 +16,10 @@ export function extractBearerToken(header: string | null): string | null {
   return match ? match[1] : null
 }
 
-export const AuthSecret = Context.Tag<string>('AuthSecret')
+export const AuthSecret = Context.GenericTag<string>('AuthSecret')
 
 export const AuthSecretLive = Layer.sync(AuthSecret, () => {
-  const secret = getCloudflareContext().env.AUTH_SECRET
+  const { AUTH_SECRET: secret } = getCloudflareContext().env as CloudflareEnv
   if (!secret) {
     throw new Error('AUTH_SECRET environment variable not provided.')
   }
