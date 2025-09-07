@@ -8,6 +8,10 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      VERTEX_AI_PROJECT: dummy-project
+      VERTEX_AI_LOCATION: us-central1
+      GOOGLE_APPLICATION_CREDENTIALS: /tmp/dummy-google-creds.json
 
     steps:
       - uses: actions/checkout@v4
