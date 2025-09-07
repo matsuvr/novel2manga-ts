@@ -37,10 +37,10 @@ export async function verifySessionToken(
     return null
   }
   try {
-    const params = salt
-      ? { token, secret, salt }
-      : ({ token, secret } as unknown as JWTDecodeParams)
-    const decoded = await decode(params as JWTDecodeParams)
+    const params: JWTDecodeParams = { token, secret, salt }
+
+
+    const decoded = await decode(params)
     return decoded as SessionTokenPayload | null
   } catch (error) {
     console.error('Failed to decode or verify session token:', error)
