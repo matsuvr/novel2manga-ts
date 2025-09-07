@@ -331,7 +331,7 @@ export class MangaPageRenderer {
           speaker: d.speaker ?? '',
           type: d.type,
           emotion: d.emotion,
-        }) ?? 'gothic',
+        }),
     )
     totalDialogues = counted
 

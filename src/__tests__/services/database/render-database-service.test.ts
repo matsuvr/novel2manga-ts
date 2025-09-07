@@ -63,10 +63,13 @@ function makeFakeDb(initialJob: { renderedPages?: number; totalPages?: number })
         }),
       }),
     }),
-    insert: (table: unknown) => ({
-      values: (v: RenderRow) => ({
-        run: () => {
-          if (table === renderStatus) state.renderRows.push(v)
+
+    insert: () => ({ values: (v: unknown) => ({ run: () => state.renderRows.push(v) }) }),
+    update: (table?: unknown) => ({
+      set: (vals: Record<string, unknown>) => ({
+        where: function () {
+          if (table === jobs) Object.assign(state.job, vals)
+          return this
         },
       }),
     }),
@@ -102,9 +105,23 @@ function makeFakeDb(initialJob: { renderedPages?: number; totalPages?: number })
 }
 
 describe('RenderDatabaseService', () => {
-  it('increments rendered pages and marks completion only at final page', async () => {
-    const { db, adapter, state, setQuery } = makeFakeDb({ renderedPages: 0, totalPages: 2 })
-    const service = new RenderDatabaseService(db, adapter)
+
+  it('increments rendered pages without completing job', async () => {
+    const { db, adapter, state } = makeFakeDb({ renderedPages: 0, totalPages: 2 })
+    const service = new RenderDatabaseService(db as any, adapter as any)
+
+    await service.upsertRenderStatus('j1', 1, 1, {
+      isRendered: true,
+      imagePath: '/img1',
+    })
+    expect(state.job.renderedPages).toBe(1)
+    expect(state.job.status).toBe('processing')
+    expect(state.job.renderCompleted).toBe(false)
+  })
+
+  it('increments rendered pages and sets renderCompleted on final page without changing job status', async () => {
+    const { db, adapter, state } = makeFakeDb({ renderedPages: 0, totalPages: 2 })
+    const service = new RenderDatabaseService(db as any, adapter as any)
 
     setQuery('j1', 1, 1)
     await service.upsertRenderStatus('j1', 1, 1, {
