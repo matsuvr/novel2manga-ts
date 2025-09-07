@@ -11,7 +11,7 @@ think in English, output in Japanese
 
 # **OpenNextを前提とした実装**
 
-結論（2025-09-07時点）
+公式ドキュメントを参照しながら進めること https://opennext.js.org/cloudflare
 
 OpenNext＋Cloudflare では Next.js の「Node.js ランタイム」が推奨かつ前提です。export const runtime = "edge" は外します。（OpenNext Cloudflare公式の「Get Started」に明記。将来Edge対応予定だがまだ未サポート）
 OpenNext
