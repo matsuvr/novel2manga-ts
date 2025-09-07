@@ -1,19 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDatabaseService } from '@/services/db-factory'
-import { JobNarrativeProcessor } from '@/services/job-narrative-processor'
+import { db } from '@/services/database/index'
 import { getNotificationService } from '@/services/notifications'
 import { __resetJobQueueForTest, getJobQueue } from '@/services/queue'
 
-vi.mock('@/services/job-narrative-processor', () => ({
-  JobNarrativeProcessor: vi.fn().mockImplementation(() => ({
-    processJob: vi.fn().mockResolvedValue(undefined),
-  })),
-}))
-
-vi.mock('@/services/db-factory', () => ({
-  getDatabaseService: vi.fn().mockReturnValue({
-    updateJobError: vi.fn().mockResolvedValue(undefined),
-  }),
+vi.mock('@/services/database/index', () => ({
+  db: {
+    jobs: () => ({
+      updateJobError: vi.fn().mockResolvedValue(undefined),
+    }),
+  },
 }))
 
 vi.mock('@/services/notifications', () => ({

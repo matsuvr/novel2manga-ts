@@ -97,11 +97,6 @@ vi.mock('@/config', () => ({
 }))
 
 // バックグラウンド処理の副作用を避けるためにプロセッサをモック
-vi.mock('@/services/job-narrative-processor', () => ({
-  JobNarrativeProcessor: vi.fn().mockImplementation(() => ({
-    processJob: vi.fn().mockResolvedValue(undefined),
-  })),
-}))
 
 describe('/api/jobs/[jobId]/episodes', () => {
   let mockDbService: any

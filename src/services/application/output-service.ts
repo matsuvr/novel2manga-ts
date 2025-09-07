@@ -4,30 +4,19 @@ import PDFDocument from 'pdfkit'
 import type { Episode, NewOutput } from '@/db'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { getStoragePorts } from '@/infrastructure/storage/ports'
-import { adaptAll } from '@/repositories/adapters'
-import { EpisodeRepository } from '@/repositories/episode-repository'
-import { JobRepository } from '@/repositories/job-repository'
-import { OutputRepository } from '@/repositories/output-repository'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 // YAML依存を撤廃。レイアウトはJSONとして扱う
 // StorageKeys は内部で直接使用しない
 
 export class OutputService {
-  private readonly outputRepo: OutputRepository
   private readonly ports = getStoragePorts()
 
-  constructor() {
-    const db = getDatabaseService()
-    const { output } = adaptAll(db)
-    this.outputRepo = new OutputRepository(output)
-  }
-
   async create(payload: Omit<NewOutput, 'createdAt'>): Promise<string> {
-    return this.outputRepo.create(payload)
+    return db.outputs().createOutput(payload)
   }
 
   async getById(id: string) {
-    return this.outputRepo.getById(id)
+    return db.outputs().getOutput(id)
   }
 
   async savePdf(userId: string, jobId: string, data: Buffer): Promise<string> {
@@ -77,15 +66,10 @@ export class OutputService {
     fileSize: number
     pageCount: number
   }> {
-    const db = getDatabaseService()
-    const { episode: episodePort, job: jobPort } = adaptAll(db)
-    const episodeRepo = new EpisodeRepository(episodePort)
-    const jobRepo = new JobRepository(jobPort)
-
-    const job = await jobRepo.getJob(jobId)
+    const job = await db.jobs().getJob(jobId)
     if (!job) throw new Error('指定されたジョブが見つかりません')
 
-    let allEpisodes = await episodeRepo.getByJobId(jobId)
+    let allEpisodes = await db.episodes().getEpisodesByJobId(jobId)
     const logger = getLogger().withContext({
       service: 'OutputService',
       operation: 'export',
@@ -188,7 +172,7 @@ export class OutputService {
 
     const outputId = `out_${randomUUID()}`
     try {
-      await this.outputRepo.create({
+      await db.outputs().createOutput({
         id: outputId,
         novelId: job.novelId,
         jobId,

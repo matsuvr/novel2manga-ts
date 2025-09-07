@@ -1,5 +1,5 @@
-import type { DialogueLine } from '@/types/script'
 import type { Dialogue } from '@/types/panel-layout'
+import type { DialogueLine } from '@/types/script'
 
 /**
  * dialogueフィールドの新旧フォーマット変換

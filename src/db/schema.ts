@@ -141,6 +141,8 @@ export const jobs = sqliteTable(
     episodesDataPath: text('episodes_data_path'),
     layoutsDirPath: text('layouts_dir_path'),
     rendersDirPath: text('renders_dir_path'),
+    characterMemoryPath: text('character_memory_path'),
+    promptMemoryPath: text('prompt_memory_path'),
 
     // 進捗詳細
     totalChunks: integer('total_chunks').default(0),

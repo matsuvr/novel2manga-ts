@@ -115,6 +115,8 @@ describe('ScriptMergeStep - coverage threshold', () => {
     expect(res.data.coverageWarnings?.length).toBe(1) // Only chunk 1 has low coverage
     expect(res.data.coverageWarnings?.[0].chunkIndex).toBe(1)
     expect(res.data.coverageWarnings?.[0].coverageRatio).toBe(0.4)
-    expect(res.data.coverageWarnings?.[0].message).toContain('カバレッジが低くなっています')
+    expect(res.data.coverageWarnings?.[0].message).toContain(
+      '原文の内容が十分に反映されていない可能性があります',
+    )
   })
 })

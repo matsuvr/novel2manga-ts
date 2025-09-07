@@ -105,3 +105,7 @@
 
 **STATUS**: ✅ 実装完了
 **CURRENT VERSION**: 本要件書は2025年8月現在の実装状況を反映
+
+## 認証要件
+
+- Google ログインを Auth.js v5 と D1 Adapter で提供する。詳細は docs/google-auth-requirements.md を参照。

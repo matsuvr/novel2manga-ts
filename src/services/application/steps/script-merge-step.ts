@@ -1,7 +1,5 @@
 import { COVERAGE_MESSAGES } from '@/constants/messages'
-import { adaptAll } from '@/repositories/adapters'
-import { EpisodeRepository } from '@/repositories/episode-repository'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface ScriptMergeResult {
@@ -140,10 +138,7 @@ export class ScriptMergeStep implements PipelineStep {
       // DB の取得や参照に失敗してもマージ自体は継続し、エピソード番号の付与を省略する
       let allEpisodes: Array<{ startChunk: number; endChunk: number; episodeNumber: number }> = []
       try {
-        const db = getDatabaseService()
-        const { episode: episodePort } = adaptAll(db)
-        const episodeRepo = new EpisodeRepository(episodePort)
-        allEpisodes = await episodeRepo.getByJobId(jobId)
+        allEpisodes = await db.episodes().getEpisodesByJobId(jobId)
       } catch (e) {
         logger.warn('Failed to load episodes for coverage mapping (continuing without episodes)', {
           jobId,

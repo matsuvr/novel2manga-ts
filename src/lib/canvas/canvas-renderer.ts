@@ -2,7 +2,9 @@ import { getAppConfigWithOverrides } from '@/config/app.config'
 import type { AppCanvasConfig } from '@/types/canvas-config'
 import type { MangaLayout, Panel, Dialogue } from '@/types/panel-layout'
 import { PanelLayoutCoordinator } from './panel-layout-coordinator'
+import type { MangaLayout, Panel } from '@/types/panel-layout'
 import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
+import { PanelLayoutCoordinator } from './panel-layout-coordinator'
 import { type SfxPlacement, SfxPlacer } from './sfx-placer'
 
 // Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
@@ -379,6 +381,48 @@ export class CanvasRenderer {
               imageWidth: drawW,
               imageHeight: drawH,
               bounds: panelBounds,
+          // 画像（縦書きセリフ）
+          const imgX = bx + (bubbleW - drawW) / 2
+          const imgY = by + (bubbleH - drawH) / 2
+          this.ctx.drawImage(asset.image as unknown as CanvasImageSource, imgX, imgY, drawW, drawH)
+
+          // 占有領域登録
+          this.layoutCoordinator.registerDialogueArea(dialogue, {
+            x: bx,
+            y: by,
+            width: bubbleW,
+            height: bubbleH,
+          })
+
+          // 話者ラベル
+          const speakerLabelCfg = this.appConfig.rendering.canvas.speakerLabel
+          const dialogueType = dialogue.type
+          // ナレーションでは話者ラベルを表示しない
+          const shouldShowLabel =
+            speakerLabelCfg?.enabled === true &&
+            dialogueType !== 'narration' &&
+            typeof dialogue.speaker === 'string' &&
+            dialogue.speaker.trim() !== ''
+          if (shouldShowLabel) {
+            const baseFontSize = this.config.fontSize || 16
+            const fontSize = Math.max(10, baseFontSize * (speakerLabelCfg.fontSize || 0.7))
+            const paddingLabel = speakerLabelCfg.padding ?? 4
+            const bg = speakerLabelCfg.backgroundColor ?? '#ffffff'
+            const border = speakerLabelCfg.borderColor ?? '#333333'
+            const textColor = speakerLabelCfg.textColor ?? '#333333'
+            const offsetXRatio = speakerLabelCfg.offsetX ?? 0.3
+            const offsetYRatio = speakerLabelCfg.offsetY ?? 0.7
+            const borderRadius = speakerLabelCfg.borderRadius ?? 3
+            this.drawSpeakerLabel(dialogue.speaker, bx + bubbleW, by, {
+              fontSize,
+              padding: paddingLabel,
+              backgroundColor: bg,
+              borderColor: border,
+              textColor,
+              offsetXRatio,
+              offsetYRatio,
+              borderRadius,
+              clampBounds: panelBounds,
             })
           }
         }
@@ -611,12 +655,25 @@ export class CanvasRenderer {
       this.ctx.fill()
       this.ctx.stroke()
     } else if (type === 'thought') {
-      const bumps = 8
-      const r = Math.max(6, Math.min(width, height) * 0.08)
+      // より“グネグネ”した雲形に強化（楕円外周の中点を外側に膨らませる）
+      const cfg = this.appConfig.rendering.canvas.bubble.thoughtShape
+      const bumps = Math.max(6, cfg.bumps)
       const cx = x + width / 2
       const cy = y + height / 2
       const rx = width / 2
       const ry = height / 2
+
+      // 基本ふくらみ量（短い方の半径に対する比率を使用）
+      const baseBulge = Math.max(cfg.minRadiusPx, Math.min(rx, ry) * cfg.amplitudeRatio)
+
+      // 疑似乱数はテスト安定性のために決定論的（x,y,w,h依存）
+      const prngCfg = this.appConfig.rendering.canvas.bubble.thoughtShape.prng
+      const seedConst = (cx + cy + rx + ry) * prngCfg.seedScale
+      const prand = (i: number): number => {
+        const s = Math.sin((i + 1) * prngCfg.sinScale * seedConst) * prngCfg.multiplier
+        return s - Math.floor(s)
+      }
+
       this.ctx.beginPath()
       let anglePrev = 0
       const pxStart = cx + Math.cos(anglePrev) * rx
@@ -626,15 +683,40 @@ export class CanvasRenderer {
         const angle = (k / bumps) * Math.PI * 2
         const px = cx + Math.cos(angle) * rx
         const py = cy + Math.sin(angle) * ry
+        // 中点方向に、こぶのふくらみ（ばらつき付き）を付与
         const midAngle = (anglePrev + angle) / 2
-        const cx1 = cx + Math.cos(midAngle) * (rx + r)
-        const cy1 = cy + Math.sin(midAngle) * (ry + r)
-        this.ctx.quadraticCurveTo(cx1, cy1, px, py)
+        const jitter = (prand(k) - 0.5) * 2 // [-1, 1]
+        const bulge = baseBulge * (1 + cfg.randomness * jitter)
+        const cpx = cx + Math.cos(midAngle) * (rx + bulge)
+        const cpy = cy + Math.sin(midAngle) * (ry + bulge)
+        this.ctx.quadraticCurveTo(cpx, cpy, px, py)
         anglePrev = angle
       }
       this.ctx.closePath()
       this.ctx.fill()
       this.ctx.stroke()
+
+      // 尾泡（小さな丸を2〜3個）
+      const tailCfg = this.appConfig.rendering.canvas.bubble.thoughtTail
+      if (tailCfg?.enabled) {
+        const shortR = Math.min(rx, ry)
+        const baseRadius = Math.max(2, shortR * tailCfg.startRadiusRatio)
+        const gap = shortR * tailCfg.gapRatio
+        const angle = tailCfg.angle
+        // 尾泡開始位置: 吹き出しの外周から少し外側
+        let tx = cx + Math.cos(angle) * (Math.max(rx, ry) * 0.2 + rx)
+        let ty = cy + Math.sin(angle) * (Math.max(rx, ry) * 0.2 + ry)
+        for (let i = 0; i < Math.max(1, tailCfg.count); i++) {
+          const r = baseRadius * Math.max(0.1, tailCfg.decay) ** i
+          this.ctx.beginPath()
+          this.ctx.arc(tx, ty, r, 0, Math.PI * 2)
+          this.ctx.closePath()
+          this.ctx.fill()
+          this.ctx.stroke()
+          tx += Math.cos(angle) * gap
+          ty += Math.sin(angle) * gap
+        }
+      }
     } else {
       // 楕円の描画: テキスト領域を外接する楕円
       this.ctx.beginPath()
@@ -701,21 +783,65 @@ export class CanvasRenderer {
     if (!speaker || speaker.trim() === '') return
 
     this.ctx.save()
-    this.ctx.font = `${fontSize}px ${this.config.fontFamily || 'Arial, sans-serif'}`
+    // 改行（1行最大文字数）
+    const maxChars = this.appConfig.rendering.canvas.speakerLabel.maxCharsPerLine ?? 5
+    const linesRaw = wrapJapaneseByBudoux(speaker, maxChars)
+    const lines = linesRaw.length > 0 ? linesRaw : [speaker]
 
-    // BudouXで安全な改行。上限は設定から取得（既定値8）
-    const maxChars = this.appConfig.rendering.canvas.speakerLabel.maxCharsPerLine ?? 8
-    const lines = wrapJapaneseByBudoux(speaker, maxChars)
-    const lineHeight = Math.ceil(fontSize * 1.2)
+    // 動的スケーリング（パネル内に収める）
+    const family = this.config.fontFamily || 'Arial, sans-serif'
+    const minFontSize = 8
+    let fs = Math.max(minFontSize, fontSize)
+    let lhRatio = 1.2
+    const minLhRatio = 1.05
 
-    // ラベルのサイズを行単位で算出
-    let textMaxWidth = 0
-    for (const line of lines.length > 0 ? lines : [speaker]) {
-      const w = this.ctx.measureText(line).width
-      textMaxWidth = Math.max(textMaxWidth, w)
+    const measureWith = (f: number): number => {
+      this.ctx.font = `${f}px ${family}`
+      let maxW = 0
+      for (const line of lines) {
+        const w = this.ctx.measureText(line).width
+        if (w > maxW) maxW = w
+      }
+      return maxW
     }
-    const labelWidth = textMaxWidth + padding * 2
-    const labelHeight = (lines.length > 0 ? lines.length : 1) * lineHeight + padding * 2
+
+    let textMaxWidth = measureWith(fs)
+    let lineHeight = Math.ceil(fs * lhRatio)
+    let labelWidth = textMaxWidth + padding * 2
+    let labelHeight = lines.length * lineHeight + padding * 2
+
+    if (options.clampBounds) {
+      // 収まり判定とスケール計算
+      const availW = Math.max(1, options.clampBounds.width - 4)
+      const availH = Math.max(1, options.clampBounds.height - 4)
+
+      // 幅・高さのスケーリング係数を計算
+      const widthScale =
+        labelWidth > availW ? (availW - padding * 2) / Math.max(1, textMaxWidth) : 1
+      const fsByWidth = Math.floor(fs * Math.min(1, widthScale))
+
+      const fsMaxByHeight = Math.floor((availH - padding * 2) / Math.max(1, lines.length * lhRatio))
+      const fsByHeight = Math.min(fs, fsMaxByHeight)
+
+      // フォントサイズを最小限まで下げる
+      const newFs = Math.max(minFontSize, Math.min(fsByWidth, fsByHeight))
+
+      // 必要に応じて行間も圧縮
+      if (newFs === minFontSize) {
+        const lhNeeded = (availH - padding * 2) / Math.max(1, lines.length * newFs)
+        lhRatio = Math.max(minLhRatio, Math.min(lhRatio, lhNeeded))
+      }
+
+      // 再計測
+      fs = newFs
+      textMaxWidth = measureWith(fs)
+      lineHeight = Math.ceil(fs * lhRatio)
+      labelWidth = textMaxWidth + padding * 2
+      labelHeight = lines.length * lineHeight + padding * 2
+    } else {
+      // 非クランプ時もフォント設定だけは適用
+      this.ctx.font = `${fs}px ${family}`
+    }
 
     // 位置: 吹き出し右上の少し外側
     let labelX = xRightEdge - labelWidth * offsetXRatio
@@ -726,6 +852,14 @@ export class CanvasRenderer {
       const maxY = clampBounds.y + clampBounds.height - labelHeight
       labelX = Math.max(Math.min(labelX, maxX), clampBounds.x)
       labelY = Math.max(Math.min(labelY, maxY), clampBounds.y)
+    // パネル内に収まるように位置をクランプ
+    if (options.clampBounds) {
+      const bxMin = options.clampBounds.x
+      const byMin = options.clampBounds.y
+      const bxMax = options.clampBounds.x + options.clampBounds.width - labelWidth
+      const byMax = options.clampBounds.y + options.clampBounds.height - labelHeight
+      labelX = Math.min(Math.max(labelX, bxMin), bxMax)
+      labelY = Math.min(Math.max(labelY, byMin), byMax)
     }
 
     // 背景（角丸）
@@ -743,13 +877,9 @@ export class CanvasRenderer {
     this.ctx.textAlign = 'center'
     this.ctx.textBaseline = 'middle'
     const cx = labelX + labelWidth / 2
-    if (lines.length === 0) {
-      this.ctx.fillText(speaker, cx, labelY + labelHeight / 2)
-    } else {
-      for (let i = 0; i < lines.length; i++) {
-        const lineCy = labelY + padding + i * lineHeight + lineHeight / 2
-        this.ctx.fillText(lines[i], cx, lineCy)
-      }
+    for (let i = 0; i < lines.length; i++) {
+      const lineCy = labelY + padding + i * lineHeight + lineHeight / 2
+      this.ctx.fillText(lines[i], cx, lineCy)
     }
 
     this.ctx.restore()

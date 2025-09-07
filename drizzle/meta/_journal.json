@@ -85,6 +85,13 @@
       "when": 1756737065545,
       "tag": "0011_gigantic_malice",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1757059097559,
+      "tag": "0012_thick_hiroim",
+      "breakpoints": true
     }
   ]
 }

@@ -101,3 +101,4 @@ logs/
 test-results/
 playwright-report/
 codex_auth.json
+data/

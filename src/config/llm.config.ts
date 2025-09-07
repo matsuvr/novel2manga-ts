@@ -20,8 +20,8 @@ export interface ProviderConfig {
   preferCerebras?: boolean
   // Vertex AI specific configuration
   vertexai?: {
-    project: string
-    location: string
+    project?: string
+    location?: string
     serviceAccountPath?: string
   }
 }
@@ -72,7 +72,7 @@ export function getDefaultProvider(): LLMProvider {
   if (process.env.NODE_ENV === 'test') {
     return 'fake'
   }
-  return 'groq'
+  return 'gemini'
 }
 
 // Provider fallback chain (first item is primary fallback)
@@ -95,8 +95,8 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
     //   単に本モジュールを import しただけで失敗してしまうため禁止。
     // - 値はプレースホルダで初期化し、実使用時に上書き・検証する。
     vertexai: {
-      project: '',
-      location: '',
+      project: undefined,
+      location: undefined,
       serviceAccountPath: undefined,
     },
   },
@@ -108,10 +108,14 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
     timeout: 30_000,
   },
   gemini: {
-    apiKey: process.env.GEMINI_API_KEY,
     model: 'gemini-2.5-flash',
     maxTokens: 16000,
     timeout: 30_000,
+    vertexai: {
+      project: undefined,
+      location: undefined,
+      serviceAccountPath: undefined,
+    },
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
@@ -181,7 +185,8 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
       case 'openrouter':
         return process.env.OPENROUTER_API_KEY
       case 'gemini':
-        return process.env.GEMINI_API_KEY
+        // Gemini 2.5 は Vertex AI のみ対応
+        return 'vertex-ai-auth'
       case 'vertexai':
         // Vertex AI uses service account authentication, not API keys
         return 'vertex-ai-auth'
@@ -215,7 +220,7 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
   })()
 
   // Vertex AI はここで実際の環境変数を読み込み・検証する（遅延検証）
-  if (provider === 'vertexai') {
+  if (provider === 'vertexai' || provider === 'gemini') {
     const project = process.env.VERTEX_AI_PROJECT
     const location = process.env.VERTEX_AI_LOCATION
     const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
@@ -233,13 +238,16 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
       throw new Error(`Missing required environment for Vertex AI: ${missing}`)
     }
 
+    const ensuredProject = project
+    const ensuredLocation = location
+
     return {
       ...cfg,
       apiKey: dynamicApiKey,
       model: modelOverride && modelOverride.trim().length > 0 ? modelOverride : cfg.model,
       vertexai: {
-        project,
-        location,
+        project: ensuredProject,
+        location: ensuredLocation,
         serviceAccountPath,
       },
     }

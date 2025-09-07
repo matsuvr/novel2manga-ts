@@ -25,7 +25,7 @@ export const bundleAnalysisSchema = z.object({
     .array(
       z.object({
         text: z.string().describe('重要な場面の内容'),
-        importance: z.number().min(1).max(10).describe('重要度（1-10）'),
+        importance: z.number().describe('重要度（1-10）'),
         context: z.string().nullable().optional().describe('場面の文脈や意味'),
       }),
     )
@@ -65,7 +65,7 @@ interface ChunkWithAnalysis {
 }
 
 // DEPRECATED: This function is no longer used in the current flow
-// The correct flow is: textAnalysis → narrativeArcAnalysis → scriptConversion → pageBreakEstimation
+// The current flow is: textAnalysis → scriptConversion → pageBreakEstimation
 export async function analyzeChunkBundle(
   chunksWithAnalyses: ChunkWithAnalysis[],
 ): Promise<BundleAnalysisResult> {

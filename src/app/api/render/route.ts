@@ -2,11 +2,8 @@ import type { NextRequest } from 'next/server'
 import { appConfig } from '@/config/app.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { getStoragePorts } from '@/infrastructure/storage/ports'
-import { adaptAll } from '@/repositories/adapters'
-import { EpisodeRepository } from '@/repositories/episode-repository'
-import { JobRepository } from '@/repositories/job-repository'
 import { renderBatchFromYaml } from '@/services/application/render'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 import { createErrorResponse, createSuccessResponse, ValidationError } from '@/utils/api-error'
 import { detectDemoMode } from '@/utils/request-mode'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
@@ -96,13 +93,9 @@ export async function POST(request: NextRequest) {
     }
 
     // DBチェック
-    const dbService = getDatabaseService()
-    const { episode: episodePort, job: jobPort } = adaptAll(dbService)
-    const episodeRepo = new EpisodeRepository(episodePort)
-    const jobRepo = new JobRepository(jobPort)
-    const job = await jobRepo.getJob(body.jobId)
+    const job = await db.jobs().getJob(body.jobId)
     if (!job) return createErrorResponse(new ValidationError('指定されたジョブが見つかりません'))
-    const episodes = await episodeRepo.getByJobId(body.jobId)
+    const episodes = await db.episodes().getEpisodesByJobId(body.jobId)
     const targetEpisode = episodes.find((e) => e.episodeNumber === body.episodeNumber)
     if (!targetEpisode)
       return createErrorResponse(

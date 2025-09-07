@@ -1,6 +1,6 @@
 import { getLogger } from '@/infrastructure/logging/logger'
-import { getJobRepository, getNovelRepository } from '@/repositories'
 import { AnalyzePipeline } from '@/services/application/analyze-pipeline'
+import { db } from '@/services/database/index'
 import { extractErrorMessage } from '@/utils/api-error'
 
 export interface ResumeResult {
@@ -16,17 +16,14 @@ export class JobResumeService {
   private readonly logger = getLogger().withContext({ service: 'job-resume' })
 
   async resumeByNovelId(novelId: string): Promise<ResumeResult> {
-    const jobRepo = getJobRepository()
-    const novelRepo = getNovelRepository()
-
     // novelIdが存在するか確認
-    const novel = await novelRepo.get(novelId)
+    const novel = await db.novels().getNovel(novelId)
     if (!novel) {
       throw new Error('指定されたnovelIdが見つかりません')
     }
 
     // そのnovelIdに関連する最新のジョブを取得
-    const jobs = await jobRepo.getByNovelId(novelId)
+    const jobs = await db.jobs().getJobsByNovelId(novelId)
     if (!jobs || jobs.length === 0) {
       throw new Error('指定されたnovelIdに関連するジョブが見つかりません')
     }
@@ -41,10 +38,8 @@ export class JobResumeService {
   }
 
   private async resumeJob(jobId: string, novelId: string): Promise<ResumeResult> {
-    const jobRepo = getJobRepository()
-
     // 現在のジョブ状態を確認
-    const currentJob = await jobRepo.getJob(jobId)
+    const currentJob = await db.jobs().getJob(jobId)
     if (!currentJob) {
       throw new Error('ジョブが見つかりません')
     }
@@ -64,7 +59,7 @@ export class JobResumeService {
 
     // 失敗したジョブの場合、ステータスをリセット
     if (currentJob.status === 'failed') {
-      await jobRepo.updateStatus(
+      db.jobs().updateJobStatus(
         jobId,
         'processing',
         'Resume requested - resetting from failed status',
@@ -112,8 +107,6 @@ export class JobResumeService {
   }
 
   private async executeResumeAsync(jobId: string): Promise<void> {
-    const jobRepo = getJobRepository()
-
     try {
       const pipeline = new AnalyzePipeline()
       await pipeline.resumeJob(jobId)
@@ -124,7 +117,7 @@ export class JobResumeService {
         error: extractErrorMessage(e),
       })
       try {
-        await jobRepo.updateStatus(jobId, 'failed', extractErrorMessage(e))
+        db.jobs().updateJobStatus(jobId, 'failed', extractErrorMessage(e))
       } catch {
         // Job status update failed - logged elsewhere
       }
