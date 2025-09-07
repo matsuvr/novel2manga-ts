@@ -158,7 +158,10 @@
 ### Bugfix: SFX prefix stripping (2025-09-03)
 
 - [x] `SFX:`/`sfx:` プレフィックスが残存するケースを修正（先頭空白/不可視文字、全角`：`、全角`ＳＦＸ`に対応）。
-- [x] ユニットテスト追加（半角/全角/不可視/BOM 前置の各パターン）。
+
+### Bugfix: Vertical text default font (2025-09-07)
+
+- [x] セリフのフォント指定を省略し、縦書きAPIデフォルトのアンチック体を適用。
 
 ### Bugfix: Bundled episode display (2025-09-06)
 
