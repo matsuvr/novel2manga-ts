@@ -1,5 +1,5 @@
 import type { Job } from '@/db/schema'
-import { getJobRepository } from '@/repositories'
+import { db } from '@/services/database/index'
 import { generateUUID } from '@/utils/uuid'
 import { BasePipelineStep, type StepContext, type StepExecutionResult } from './base-step'
 
@@ -29,7 +29,7 @@ export class JobManagementStep extends BasePipelineStep {
     context: Pick<StepContext, 'logger'>,
   ): Promise<StepExecutionResult<JobInitResult>> {
     const { logger } = context
-    const jobRepo = getJobRepository()
+    const jobDb = db.jobs()
 
     try {
       // 既存の jobId が指定されていればそれを使用。なければ新規発行
@@ -40,7 +40,7 @@ export class JobManagementStep extends BasePipelineStep {
 
       // Check if this is a resumed job
       if (options.existingJobId) {
-        existingJob = await jobRepo.getJob(options.existingJobId)
+        existingJob = await jobDb.getJob(options.existingJobId)
         if (!existingJob) {
           return {
             success: false,
@@ -60,11 +60,7 @@ export class JobManagementStep extends BasePipelineStep {
       if (!options.existingJobId) {
         // ここで「DBにジョブレコードを作成（書き込み）」
         //   - novelId を外部キーに持つ
-        await jobRepo.create({
-          id: jobId,
-          novelId,
-          title: `Analysis Job for ${title}`,
-        })
+        jobDb.createJobRecord({ id: jobId, novelId, title: `Analysis Job for ${title}` })
         logger.info('New job created', { jobId, novelId, title })
       }
 

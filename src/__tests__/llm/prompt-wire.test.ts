@@ -14,10 +14,11 @@ describe('LLM prompt wiring (temporary)', () => {
   it('textAnalysis prompt/systemPrompt が展開され、エージェントが実行できる', async () => {
     const cfg = getTextAnalysisConfig()
     const prompt = cfg.userPromptTemplate
-      .replace('{{chunkIndex}}', '1')
+      .replace(/\{\{chunkIndex\}\}/g, '1')
       .replace('{{chunkText}}', 'これはテスト用の本文です。')
       .replace('{{previousChunkText}}', '')
       .replace('{{nextChunkText}}', '')
+      .replace('{{previousCharacterMemoryJson}}', '[]')
 
     assertNoPlaceholders(prompt)
     assertNoPlaceholders(cfg.systemPrompt)

@@ -16,6 +16,7 @@ export interface GenerateArgs<T> {
   userPrompt: string
   schema: z.ZodType<T>
   schemaName: string
+  telemetry?: import('@/agents/llm/types').LlmTelemetryContext
 }
 
 export class DefaultLlmStructuredGenerator {
@@ -74,6 +75,11 @@ export class DefaultLlmStructuredGenerator {
           userPrompt,
           spec: { schema, schemaName },
           options: { maxTokens },
+          telemetry: {
+            ...args.telemetry,
+            // 名前をエージェント名として渡す（渡されていなければこのnameを使う）
+            agentName: args.telemetry?.agentName || args.name || 'llm-structured-generator',
+          },
         })
 
         // dialogue形式正規化処理を適用（該当する場合のみ）

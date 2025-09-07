@@ -1,10 +1,7 @@
 import crypto from 'node:crypto'
 import type { NextRequest } from 'next/server'
 import { getLogger } from '@/infrastructure/logging/logger'
-import { adaptAll } from '@/repositories/adapters'
-import { EpisodeRepository } from '@/repositories/episode-repository'
-import { JobRepository } from '@/repositories/job-repository'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 import { handleApiError, successResponse, validationError } from '@/utils/api-error'
 import { validateJobId } from '@/utils/validators'
 
@@ -39,20 +36,15 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     // データベースサービスの初期化
-    const dbService = getDatabaseService()
-    const { episode: episodePort, job: jobPort } = adaptAll(dbService)
-    const episodeRepo = new EpisodeRepository(episodePort)
-    const jobRepo = new JobRepository(jobPort)
-
     // ジョブの存在確認
-    const job = await jobRepo.getJob(body.jobId)
+    const job = await db.jobs().getJob(body.jobId)
     if (!job) {
       return validationError('指定されたジョブが見つかりません')
     }
 
     // エピソード指定がある場合は存在確認
     if (body.episodeNumbers && body.episodeNumbers.length > 0) {
-      const episodes = await episodeRepo.getByJobId(body.jobId)
+      const episodes = await db.episodes().getEpisodesByJobId(body.jobId)
       const existingEpisodeNumbers = new Set(episodes.map((e) => e.episodeNumber))
 
       const nonExistentEpisodes = body.episodeNumbers.filter(

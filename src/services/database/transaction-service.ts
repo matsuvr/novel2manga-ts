@@ -1,26 +1,53 @@
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
+import type { DatabaseAdapter } from '@/infrastructure/database/adapters/base-adapter'
 
-type Database = BetterSQLite3Database<typeof schema>
-type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]
+type DrizzleDatabase = BetterSQLite3Database<typeof schema>
+type Transaction = Parameters<Parameters<DrizzleDatabase['transaction']>[0]>[0]
 
+// Generic database type that can be either Drizzle or D1
+export type Database = DrizzleDatabase | unknown
+
+// Transaction operation that works with the actual database context
+export type TransactionOperation<T> = (tx: unknown) => T | Promise<T>
+
+// Legacy type aliases for backward compatibility
 export type SyncTransactionOperation<T> = (tx: Transaction) => T
-
 export type AsyncTransactionOperation<T> = () => Promise<T>
 
 /**
  * Unified transaction service that handles both sync and async operations
- * while respecting better-sqlite3's constraint that transaction functions must be synchronous
+ * Abstracts away the differences between better-sqlite3 and D1 using DatabaseAdapter
  */
 export class TransactionService {
-  constructor(private db: Database) {}
+  constructor(
+    private readonly db: Database,
+    private readonly adapter: DatabaseAdapter,
+  ) {}
+
+  /**
+   * Execute a transaction operation using the appropriate adapter
+   * This method handles both sync (better-sqlite3) and async (D1) operations
+   */
+  async execute<T>(operation: TransactionOperation<T>): Promise<T> {
+    return this.adapter.transaction((tx: unknown) => operation(tx))
+  }
 
   /**
    * Execute synchronous transaction operation
-   * This is the preferred method for better-sqlite3 compatibility
+   * @deprecated Use execute() instead for better cross-platform compatibility
+   * @throws Error if the adapter doesn't support sync operations
    */
   executeSync<T>(operation: SyncTransactionOperation<T>): T {
-    return this.db.transaction(operation)
+    if (!this.adapter.isSync()) {
+      throw new Error(
+        'Synchronous transactions are not supported in this environment. Use execute() instead.',
+      )
+    }
+
+    // For SQLite, we can directly use the Drizzle transaction
+    const drizzleDb = this.db as DrizzleDatabase
+    return drizzleDb.transaction(operation)
   }
 
   /**
@@ -28,19 +55,37 @@ export class TransactionService {
    * This method respects the UnitOfWork pattern
    */
   async executeWithUnitOfWork<T>(operation: () => Promise<T>): Promise<T> {
-    // For better-sqlite3, we need to ensure operations are properly coordinated
-    // This method should be used for complex multi-step operations
-    return await operation()
+    return this.adapter.transaction((_tx: unknown) => operation())
+  }
+
+  /**
+   * Check if the current adapter supports synchronous operations
+   */
+  isSync(): boolean {
+    return this.adapter.isSync()
   }
 
   /**
    * Create a transaction-aware operation wrapper
+   * @deprecated This only works with sync adapters. Use execute() with closures instead.
    */
   createTransactionWrapper<TArgs extends unknown[], TResult>(
     operation: (tx: Transaction, ...args: TArgs) => TResult,
   ): (...args: TArgs) => TResult {
+    if (!this.adapter.isSync()) {
+      throw new Error('Transaction wrappers are only supported with synchronous adapters')
+    }
+
     return (...args: TArgs) => {
       return this.executeSync((tx) => operation(tx, ...args))
     }
+  }
+
+  /**
+   * Get the underlying database adapter
+   * Useful for checking capabilities
+   */
+  getAdapter(): DatabaseAdapter {
+    return this.adapter
   }
 }

@@ -1,4 +1,4 @@
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 import { StorageFactory } from '@/utils/storage'
 
 /**
@@ -53,9 +53,8 @@ export async function getHealthStatus(): Promise<HealthResponse> {
 async function checkDatabase(): Promise<ComponentStatus> {
   const start = performance.now()
   try {
-    const db = getDatabaseService()
     // 軽量なメソッド呼び出し（存在しないID検索）で接続確認
-    await db.getNovel('health-check-novel-id')
+    await db.novels().getNovel('health-check-novel-id')
     return { status: 'ok', latencyMs: Math.round(performance.now() - start) }
   } catch (e) {
     const context = { operation: 'database_health_check', timestamp: new Date().toISOString() }

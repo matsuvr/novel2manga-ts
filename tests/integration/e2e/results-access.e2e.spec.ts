@@ -1,16 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import { encode } from 'next-auth/jwt'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 import { getBaseURL } from '../utils/getBaseURL'
 
 // next-auth v5 は AUTH_SECRET を利用するため、テスト側も AUTH_SECRET に合わせる
 const secret = process.env.AUTH_SECRET || 'test-secret'
 
 test('results pages enforce user access control', async ({ page }) => {
-  const db = getDatabaseService()
   const novel1 = randomUUID()
-  await db.ensureNovel(novel1, {
+  await db.novels().ensureNovel(novel1, {
     title: 'N1',
     author: '',
     originalTextPath: 'n1.txt',
@@ -18,10 +17,14 @@ test('results pages enforce user access control', async ({ page }) => {
     language: 'ja',
     metadataPath: null,
   })
-  const job1 = await db.createJob({ novelId: novel1, title: 'Job1', userId: 'user1' })
+  const job1 = (() => {
+    const id = randomUUID()
+    db.jobs().createJobRecord({ id, novelId: novel1, title: 'Job1', userId: 'user1' })
+    return id
+  })()
 
   const novel2 = randomUUID()
-  await db.ensureNovel(novel2, {
+  await db.novels().ensureNovel(novel2, {
     title: 'N2',
     author: '',
     originalTextPath: 'n2.txt',
@@ -29,7 +32,7 @@ test('results pages enforce user access control', async ({ page }) => {
     language: 'ja',
     metadataPath: null,
   })
-  await db.createJob({ novelId: novel2, title: 'Job2', userId: 'user2' })
+  db.jobs().createJobRecord({ id: randomUUID(), novelId: novel2, title: 'Job2', userId: 'user2' })
 
   const baseURL = getBaseURL()
 

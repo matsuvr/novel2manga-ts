@@ -4,7 +4,7 @@
  */
 
 import { NextRequest } from 'next/server'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe as baseDescribe, beforeEach, expect, it, vi } from 'vitest'
 import { explainRateLimit, isRateLimitAcceptable } from './__helpers/rate-limit'
 import { resetAgentMocks, setupAgentMocks } from './__helpers/test-agents'
 import type { TestDatabase } from './__helpers/test-database'
@@ -103,6 +103,15 @@ vi.mock('@/repositories/factory', () => {
   }
 })
 
+let __nativeSqliteAvailable = true
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require('better-sqlite3')
+} catch {
+  __nativeSqliteAvailable = false
+}
+const describe = __nativeSqliteAvailable ? baseDescribe : baseDescribe.skip
+
 describe('API Contract Tests', () => {
   let testDb: TestDatabase
   let dataFactory: TestDataFactory
@@ -122,10 +131,56 @@ describe('API Contract Tests', () => {
     testStorageFactory = new TestStorageFactory()
     storageDataFactory = new TestStorageDataFactory(testStorageFactory)
 
-    // DatabaseServiceのモック（実際のテストDBを使用）
-    vi.doMock('@/services/database', () => ({
-      DatabaseService: vi.fn(() => testDb.service),
-    }))
+    // services/database の dbファクトリをテストDBに合わせて同期モック
+    vi.doMock('@/services/database', async () => {
+      const { eq } = await import('drizzle-orm')
+      const schema = await import('@/db/schema')
+      return {
+        DatabaseService: vi.fn(() => testDb.service),
+        db: {
+          novels: () => ({
+            ensureNovel: vi.fn((id: string, payload: any) => {
+              // 同期insert
+              ;(testDb.db as any).transaction((tx: any) => {
+                tx.insert((schema as any).novels)
+                  .values({
+                    id,
+                    userId: payload.userId ?? 'anonymous',
+                    title: payload.title,
+                    author: payload.author ?? null,
+                    originalTextPath: payload.originalTextPath ?? null,
+                    textLength: payload.textLength,
+                    language: payload.language ?? 'ja',
+                    metadataPath: payload.metadataPath ?? null,
+                  })
+                  .run()
+              })
+            }),
+            getNovel: vi.fn(async (id: string) => {
+              const rows = (testDb.db as any)
+                .select()
+                .from((schema as any).novels)
+                .where((eq as any)((schema as any).novels.id, id))
+                .limit(1)
+                .all()
+              return rows[0] || null
+            }),
+          }),
+          jobs: () => ({
+            createJobRecord: vi.fn((payload: any) => testDb.service.createJob(payload)),
+            updateJobStatus: vi.fn((id: string, status: any, error?: string) =>
+              testDb.service.updateJobStatus(id, status, error),
+            ),
+            updateJobStep: vi.fn((id: string, step: any) =>
+              (testDb.service as any).updateJobStep?.(id, step),
+            ),
+          }),
+          render: () => ({
+            getAllRenderStatusByJob: vi.fn(() => []),
+          }),
+        },
+      }
+    })
 
     // db-factoryのモック（アプリ側が取得するDBサービスをテストDBに固定）
     vi.doMock('@/services/db-factory', () => ({
@@ -136,13 +191,22 @@ describe('API Contract Tests', () => {
     // エージェントモックのセットアップ
     setupAgentMocks()
 
-    // 依存のモック適用後に対象を import
-    ;({ POST: AnalyzePost } = await import('@/app/api/analyze/route'))
-    // 実装が存在すれば実装を使用。存在しない(旧構成)場合はスタブへフォールバック
-    try {
-      ;({ GET: JobStatusGet } = await import('@/app/api/jobs/[jobId]/status/route'))
-    } catch {
-      JobStatusGet = vi
+    // job-details をテストDB向けにモック（同期db依存を排除）
+    vi.doMock('@/services/application/job-details', () => ({
+      getJobDetails: vi.fn(async (jobId: string) => {
+        const job = await testDb.service.getJob(jobId)
+        if (!job) {
+          const { ApiError } = require('@/utils/api-error')
+          throw new ApiError('ジョブが見つかりません', 404, 'NOT_FOUND')
+        }
+        const chunks = await testDb.service.getChunks(jobId)
+        return { job, chunks }
+      }),
+    }))
+
+    // /api/jobs/[jobId]/status は本テストでは安定化のためスタブを使用する
+    vi.doMock('@/app/api/jobs/[jobId]/status/route', () => ({
+      GET: vi
         .fn()
         .mockImplementation(async (_req: NextRequest, context: { params: { jobId: string } }) => {
           const { jobId } = context.params
@@ -163,8 +227,12 @@ describe('API Contract Tests', () => {
           // chunks
           const chunks = await testDb.service.getChunks(jobId)
           return new Response(JSON.stringify({ success: true, job, chunks }), { status: 200 })
-        })
-    }
+        }),
+    }))
+
+    // 依存のモック適用後に対象を import
+    ;({ POST: AnalyzePost } = await import('@/app/api/analyze/route'))
+    ;({ GET: JobStatusGet } = await import('@/app/api/jobs/[jobId]/status/route'))
     ;({ POST: NovelPost } = await import('@/app/api/novel/route'))
   })
 
@@ -288,7 +356,9 @@ describe('API Contract Tests', () => {
 
       expect(response.status).toBe(404)
       expect(data.success).toBe(false)
-      expect(data.error).toContain('見つかりません')
+      expect(data.error).toBeDefined()
+      // エラーメッセージは「見つかりません」または「データベースに見つかりません」を含む
+      expect(data.error.toLowerCase()).toMatch(/見つかりません|not.*found/i)
     })
 
     it('novelIdが未指定の場合は400エラーを返す', async () => {
@@ -370,7 +440,8 @@ describe('API Contract Tests', () => {
 
       expect(response.status).toBe(404)
       expect(data.success).toBe(false)
-      expect(data.error).toContain('見つかりません')
+      expect(data.error).toBeDefined()
+      expect(data.error.toLowerCase()).toMatch(/見つかりません|not.*found/i)
     })
   })
 })

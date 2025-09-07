@@ -1,8 +1,6 @@
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST } from '@/app/api/share/route'
-import { DatabaseService } from '@/services/database'
-import { __resetDatabaseServiceForTest } from '@/services/db-factory'
 
 // ストレージとデータベースのモック
 vi.mock('@/utils/storage', () => ({
@@ -11,14 +9,17 @@ vi.mock('@/utils/storage', () => ({
   },
 }))
 
-vi.mock('@/services/database', () => ({
-  DatabaseService: vi.fn().mockImplementation(() => ({
-    createNovel: vi.fn(),
-    createJob: vi.fn(),
-    getJob: vi.fn(),
-    getEpisodesByJobId: vi.fn(),
-    getJobWithProgress: vi.fn(),
-  })),
+// New unified DB mock (override per test via mockDb)
+let mockDb: any
+vi.mock('@/services/database/index', () => ({
+  db: {
+    jobs: () => ({
+      getJob: (...args: any[]) => mockDb.jobs.getJob(...(args as any)),
+    }),
+    episodes: () => ({
+      getEpisodesByJobId: (...args: any[]) => mockDb.episodes.getEpisodesByJobId(...(args as any)),
+    }),
+  },
 }))
 
 // UUIDモック
@@ -33,6 +34,8 @@ describe('/api/share', () => {
   let testJobId: string
   let testNovelId: string
   let mockDbService: any
+  // テスト安定化用の固定現在時刻
+  let fixedNow: Date
 
   // ヘルパー関数: リクエストを作成してレスポンスを取得
   const makeShareRequest = async (requestBody: Record<string, unknown>) => {
@@ -69,39 +72,45 @@ describe('/api/share', () => {
   // ヘルパー関数: 有効期限の検証
   const expectExpiryTime = (expiresAt: string, expectedHours: number) => {
     const expiry = new Date(expiresAt)
-    const now = new Date()
-    const expectedExpiry = new Date(now.getTime() + expectedHours * 60 * 60 * 1000)
+    // 固定した基準時刻を用いて期待有効期限を計算
+    const expectedExpiry = new Date(fixedNow.getTime() + expectedHours * 60 * 60 * 1000)
     const timeDiff = Math.abs(expiry.getTime() - expectedExpiry.getTime())
-    expect(timeDiff).toBeLessThan(1000) // 1秒以内の誤差は許容
+    // fake timers により処理遅延の影響を排除し 1秒以内に安定させる
+    expect(timeDiff).toBeLessThan(1000)
   }
 
   beforeEach(async () => {
-    __resetDatabaseServiceForTest()
     vi.clearAllMocks()
+    // 固定時刻を設定 (任意の決め打ちUTC日時)
+    fixedNow = new Date('2025-01-01T00:00:00.000Z')
+    vi.useFakeTimers()
+    vi.setSystemTime(fixedNow)
 
     testJobId = 'test-share-job'
     testNovelId = 'test-novel-id'
 
-    // モックサービスの設定
+    // モック DB の設定（新API）
     mockDbService = {
-      createNovel: vi.fn().mockResolvedValue(testNovelId),
-      createJob: vi.fn(),
-      getJob: vi.fn().mockResolvedValue({ id: testJobId }),
-      getEpisodesByJobId: vi
-        .fn()
-        .mockResolvedValue([{ episodeNumber: 1 }, { episodeNumber: 2 }, { episodeNumber: 3 }]),
+      jobs: {
+        getJob: vi.fn().mockResolvedValue({ id: testJobId }),
+      },
+      episodes: {
+        getEpisodesByJobId: vi
+          .fn()
+          .mockResolvedValue([{ episodeNumber: 1 }, { episodeNumber: 2 }, { episodeNumber: 3 }]),
+      },
     }
-
-    vi.mocked(DatabaseService).mockImplementation(() => mockDbService)
+    mockDb = mockDbService
   })
 
   afterEach(async () => {
+    vi.useRealTimers()
     // テストデータのクリーンアップは統合テストで実施
   })
 
   describe('POST /api/share', () => {
     it('有効なリクエストで共有リンクを生成する', async () => {
-      mockDbService.getJob.mockResolvedValue({ id: testJobId })
+      mockDbService.jobs.getJob.mockResolvedValue({ id: testJobId })
       const requestBody = {
         jobId: testJobId,
         episodeNumbers: [1, 2],
@@ -117,7 +126,7 @@ describe('/api/share', () => {
     })
 
     it('デフォルトの有効期限（72時間）で共有リンクを生成する', async () => {
-      mockDbService.getJob.mockResolvedValue({ id: testJobId })
+      mockDbService.jobs.getJob.mockResolvedValue({ id: testJobId })
       const requestBody = {
         jobId: testJobId,
       }
@@ -129,7 +138,7 @@ describe('/api/share', () => {
     })
 
     it('特定のエピソードのみを共有する', async () => {
-      mockDbService.getJob.mockResolvedValue({ id: testJobId })
+      mockDbService.jobs.getJob.mockResolvedValue({ id: testJobId })
       const requestBody = {
         jobId: testJobId,
         episodeNumbers: [3],
@@ -142,7 +151,7 @@ describe('/api/share', () => {
     })
 
     it('jobIdが未指定の場合は400エラーを返す', async () => {
-      mockDbService.getJob.mockResolvedValue({ id: testJobId })
+      mockDbService.jobs.getJob.mockResolvedValue({ id: testJobId })
       const requestBody = {
         expiresIn: 24,
       }
@@ -153,7 +162,7 @@ describe('/api/share', () => {
     })
 
     it('expiresInが範囲外（小さすぎる）の場合は400エラーを返す', async () => {
-      mockDbService.getJob.mockResolvedValue({ id: testJobId })
+      mockDbService.jobs.getJob.mockResolvedValue({ id: testJobId })
       const requestBody = {
         jobId: testJobId,
         expiresIn: 0, // 1未満
@@ -165,7 +174,7 @@ describe('/api/share', () => {
     })
 
     it('expiresInが範囲外（大きすぎる）の場合は400エラーを返す', async () => {
-      mockDbService.getJob.mockResolvedValue({ id: testJobId })
+      mockDbService.jobs.getJob.mockResolvedValue({ id: testJobId })
       const requestBody = {
         jobId: testJobId,
         expiresIn: 200, // 168（1週間）を超過
@@ -177,7 +186,7 @@ describe('/api/share', () => {
     })
 
     it('存在しないジョブIDの場合は400エラーを返す', async () => {
-      mockDbService.getJob.mockResolvedValue(null)
+      mockDbService.jobs.getJob.mockResolvedValue(null)
       const requestBody = {
         jobId: 'nonexistent-job',
         expiresIn: 24,
@@ -189,7 +198,7 @@ describe('/api/share', () => {
     })
 
     it('最大有効期限（168時間）でも正常に処理される', async () => {
-      mockDbService.getJob.mockResolvedValue({ id: testJobId })
+      mockDbService.jobs.getJob.mockResolvedValue({ id: testJobId })
       const requestBody = {
         jobId: testJobId,
         expiresIn: 168, // 1週間
@@ -202,7 +211,7 @@ describe('/api/share', () => {
     })
 
     it('最小有効期限（1時間）でも正常に処理される', async () => {
-      mockDbService.getJob.mockResolvedValue({ id: testJobId })
+      mockDbService.jobs.getJob.mockResolvedValue({ id: testJobId })
       const requestBody = {
         jobId: testJobId,
         expiresIn: 1, // 1時間
@@ -215,7 +224,7 @@ describe('/api/share', () => {
     })
 
     it('空のepisodeNumbers配列でも正常に処理される', async () => {
-      mockDbService.getJob.mockResolvedValue({ id: testJobId })
+      mockDbService.jobs.getJob.mockResolvedValue({ id: testJobId })
       const requestBody = {
         jobId: testJobId,
         episodeNumbers: [],

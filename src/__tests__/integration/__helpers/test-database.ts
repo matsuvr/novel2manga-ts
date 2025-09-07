@@ -209,6 +209,9 @@ export async function createTestDatabase(): Promise<TestDatabase> {
         })
         .where(eq(schema.jobs.id, id))
     },
+    async updateJobTotalPages(id: string, totalPages: number) {
+      await db.update(schema.jobs).set({ totalPages }).where(eq(schema.jobs.id, id))
+    },
     async createEpisodes(
       episodeList: Array<Omit<schema.NewEpisode, 'id' | 'createdAt'>>,
     ): Promise<void> {

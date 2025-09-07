@@ -5,9 +5,18 @@ import {
   isRateLimitAcceptable,
 } from '@/__tests__/integration/__helpers/rate-limit'
 import { POST } from '@/app/api/analyze/route'
-import { DatabaseService } from '@/services/database'
+import { DatabaseService, db } from '@/services/database'
 import { __resetDatabaseServiceForTest } from '@/services/db-factory'
 import { StorageFactory } from '@/utils/storage'
+
+// モック用のヘルパー関数を定義（vi.mock より前に宣言）
+let mockDbService: any
+let mockNovelsService: any
+let mockJobsService: any
+let mockEpisodesService: any
+let mockChunksService: any
+let mockRenderService: any
+let mockLayoutService: any
 
 // モック設定
 vi.mock('@/agents/chunk-analyzer', () => ({
@@ -58,16 +67,6 @@ vi.mock('@/agents/chunk-analyzer', () => ({
   })),
 }))
 
-vi.mock('@/agents/narrative-arc-analyzer', () => ({
-  analyzeNarrativeArc: vi.fn().mockResolvedValue([]),
-}))
-
-vi.mock('@/utils/episode-utils', () => ({
-  prepareNarrativeAnalysisInput: vi
-    .fn()
-    .mockResolvedValue({ chunks: [{ chunkIndex: 0, text: 'dummy', metadata: {} }] }),
-}))
-
 vi.mock('@/config', () => ({
   getTextAnalysisConfig: vi.fn(() => ({
     userPromptTemplate:
@@ -102,26 +101,72 @@ vi.mock('@/utils/storage', () => ({
   saveEpisodeBoundaries: vi.fn(),
 }))
 
-vi.mock('@/services/database', () => ({
-  DatabaseService: vi.fn().mockImplementation(() => ({
-    createNovel: vi.fn(),
+vi.mock('@/services/database', () => {
+  // モック用のデータベースサービスを定義（ファクトリ内で初期化）
+  const mockNovelsService = {
     ensureNovel: vi.fn(),
     getNovel: vi.fn(),
-    createJob: vi.fn(),
-    updateJobStep: vi.fn(),
+    createNovel: vi.fn(),
+  }
+
+  const mockJobsService = {
+    createJobRecord: vi.fn(),
+    getJob: vi.fn(),
     updateJobStatus: vi.fn(),
+    updateJobStep: vi.fn(),
+    markStepCompleted: vi.fn(),
+    updateJobTotalPages: vi.fn(),
+    updateJobCoverageWarnings: vi.fn(),
+    updateProcessingPosition: vi.fn(),
+  }
+
+  const mockEpisodesService = {
+    getEpisodesByJobId: vi.fn().mockResolvedValue([]),
+    createEpisodes: vi.fn(),
+  }
+
+  const mockChunksService = {
     createChunk: vi.fn(),
-    // テストで呼ばれる場合のフォールバック: バッチは逐次
-    createChunksBatch: vi.fn(async (payloads: any[]) => {
-      for (const p of payloads) {
-        // eslint-disable-next-line no-await-in-loop
-        await (this as any).createChunk?.(p)
-      }
-    }),
-    markJobStepCompleted: vi.fn(),
-    updateJobError: vi.fn(),
-  })),
-}))
+    createChunksBatch: vi.fn(),
+  }
+
+  const mockRenderService = {
+    upsertRenderStatus: vi.fn(),
+  }
+
+  const mockLayoutService = {
+    upsertLayoutStatus: vi.fn(),
+  }
+
+  return {
+    DatabaseService: vi.fn().mockImplementation(() => ({
+      createNovel: vi.fn(),
+      ensureNovel: vi.fn(),
+      getNovel: vi.fn(),
+      createJob: vi.fn(),
+      updateJobStep: vi.fn(),
+      updateJobStatus: vi.fn(),
+      createChunk: vi.fn(),
+      // テストで呼ばれる場合のフォールバック: バッチは逐次
+      createChunksBatch: vi.fn(async (payloads: any[]) => {
+        for (const p of payloads) {
+          // eslint-disable-next-line no-await-in-loop
+          await (this as any).createChunk?.(p)
+        }
+      }),
+      markJobStepCompleted: vi.fn(),
+      updateJobError: vi.fn(),
+    })),
+    db: {
+      novels: () => mockNovelsService,
+      jobs: () => mockJobsService,
+      episodes: () => mockEpisodesService,
+      chunks: () => mockChunksService,
+      render: () => mockRenderService,
+      layout: () => mockLayoutService,
+    },
+  }
+})
 
 describe('/api/analyze', () => {
   let testNovelId: string
@@ -155,6 +200,28 @@ describe('/api/analyze', () => {
     }
 
     vi.mocked(DatabaseService).mockReturnValue(mockDbService)
+
+    // db() 関数用のモック設定
+    const mockedDb = vi.mocked(db)
+    mockedDb.novels().getNovel.mockResolvedValue({
+      id: testNovelId,
+      title: 'テスト小説',
+      originalTextPath: 'test-novel.txt',
+      textLength: 1000,
+      language: 'ja',
+    })
+    mockedDb.novels().ensureNovel.mockResolvedValue()
+    mockedDb.jobs().createJobRecord.mockResolvedValue()
+    mockedDb.jobs().getJob.mockResolvedValue(null)
+    mockedDb.jobs().updateJobStatus.mockResolvedValue()
+    mockedDb.jobs().updateJobStep.mockResolvedValue()
+    mockedDb.jobs().markStepCompleted.mockResolvedValue()
+    mockedDb.jobs().updateJobTotalPages.mockResolvedValue()
+    mockedDb.jobs().updateJobCoverageWarnings.mockResolvedValue()
+    mockedDb.chunks().createChunk.mockResolvedValue()
+    mockedDb.chunks().createChunksBatch.mockResolvedValue()
+    mockedDb.episodes().getEpisodesByJobId.mockResolvedValue([])
+    mockedDb.episodes().createEpisodes.mockResolvedValue()
 
     // ストレージのモック設定
     mockNovelStorage = {
@@ -267,6 +334,7 @@ describe('/api/analyze', () => {
     it('存在しないnovelIdの場合は404エラーを返す', async () => {
       // 存在しない小説のモック設定
       mockDbService.getNovel.mockResolvedValueOnce(null)
+      vi.mocked(db).novels().getNovel.mockResolvedValueOnce(null)
 
       const requestBody = {
         novelId: 'nonexistent-novel-id',
@@ -290,13 +358,15 @@ describe('/api/analyze', () => {
     it('ストレージに小説テキストが存在しない場合は404エラーを返す', async () => {
       // ストレージにテキストがない小説のモック設定
       const novelWithoutTextId = 'novel-without-text'
-      mockDbService.getNovel.mockResolvedValueOnce({
+      const novelData = {
         id: novelWithoutTextId,
         title: 'テキストなし小説',
         originalTextPath: 'missing-novel.txt',
         textLength: 1000,
         language: 'ja',
-      })
+      }
+      mockDbService.getNovel.mockResolvedValueOnce(novelData)
+      vi.mocked(db).novels().getNovel.mockResolvedValueOnce(novelData)
       mockNovelStorage.get.mockReturnValueOnce(null)
 
       const requestBody = {

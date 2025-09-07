@@ -20,9 +20,9 @@ const requestSchema = z.object({
           average: z.number().optional(),
         })
         .optional(),
-      dialogueDensity: z.number().min(0).max(1).optional(),
-      visualComplexity: z.number().min(0).max(1).optional(),
-      highlightPanelSizeMultiplier: z.number().min(1).max(3).optional(),
+      dialogueDensity: z.number().optional(),
+      visualComplexity: z.number().optional(),
+      highlightPanelSizeMultiplier: z.number().optional(),
       readingDirection: z.literal('right-to-left').optional(),
     })
     .optional(),

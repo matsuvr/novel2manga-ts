@@ -138,7 +138,7 @@ export function getCurrentLLMProvider() {
 
 // 特定のLLMプロバイダー設定を取得
 export function getLLMProviderConfig(
-  provider: 'openai' | 'gemini' | 'groq' | 'openrouter' | 'cerebras',
+  provider: 'openai' | 'gemini' | 'groq' | 'grok' | 'openrouter' | 'cerebras' | 'vertexai' | 'fake',
 ) {
   return getProviderConfig(provider)
 }
@@ -191,7 +191,9 @@ export function getEpisodeConfig() {
     targetCharsPerEpisode: config.processing.episode.targetCharsPerEpisode,
     minCharsPerEpisode: config.processing.episode.minCharsPerEpisode,
     maxCharsPerEpisode: config.processing.episode.maxCharsPerEpisode,
-    maxChunksPerEpisode: config.processing.episode.maxChunksPerEpisode,
+    smallPanelThreshold: config.processing.episode.smallPanelThreshold,
+    minPanelsPerEpisode: config.processing.episode.minPanelsPerEpisode,
+    maxPanelsPerEpisode: config.processing.episode.maxPanelsPerEpisode,
   }
 }
 
@@ -201,6 +203,7 @@ export function getFeatureConfig() {
   return {
     enableCaching: config.features.enableCaching,
     enableTextAnalysis: config.features.enableTextAnalysis,
+    enableCoverageCheck: config.features.enableCoverageCheck,
     enableBatchProcessing: true, // 固定値
   }
 }
@@ -252,6 +255,36 @@ export function getDatabaseConfig() {
     migrations: {
       enabled: true,
       migrationsPath: './database/migrations',
+    },
+  }
+}
+
+// キャラクターメモリ設定を取得 - app.config.tsから直接取得
+export function getCharacterMemoryConfig() {
+  const config = getAppConfig()
+  return {
+    summaryMaxLength: config.characterMemory.summaryMaxLength,
+    promptMemory: {
+      maxTokens: config.characterMemory.promptMemory.maxTokens,
+      recentChunkWindow: config.characterMemory.promptMemory.recentChunkWindow,
+      topProminentCount: config.characterMemory.promptMemory.topProminentCount,
+      tokenEstimatePerChar: config.characterMemory.promptMemory.tokenEstimatePerChar,
+    },
+    matching: {
+      confidenceThreshold: config.characterMemory.matching.confidenceThreshold,
+    },
+    prominence: {
+      weights: {
+        events: config.characterMemory.prominence.weights.events,
+        dialogue: config.characterMemory.prominence.weights.dialogue,
+        chunkSpan: config.characterMemory.prominence.weights.chunkSpan,
+        recent: config.characterMemory.prominence.weights.recent,
+      },
+      recentWindow: config.characterMemory.prominence.recentWindow,
+    },
+    majorActions: {
+      min: config.characterMemory.majorActions.min,
+      max: config.characterMemory.majorActions.max,
     },
   }
 }

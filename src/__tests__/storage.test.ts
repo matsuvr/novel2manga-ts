@@ -23,7 +23,7 @@ describe('Storage', () => {
       expect(StorageKeys.chunk('job-1', 3)).toBe('job-1/chunk_3.txt')
       expect(StorageKeys.chunkAnalysis('job-1', 0)).toBe('job-1/chunk_0.json')
       expect(StorageKeys.integratedAnalysis('job-1')).toBe('job-1/integrated.json')
-      expect(StorageKeys.narrativeAnalysis('job-1')).toBe('job-1/narrative.json')
+      expect(StorageKeys.episodeBoundaries('job-1')).toBe('job-1/episodes.json')
       // レイアウトはJSONに統一
       expect(StorageKeys.episodeLayout('job-1', 1)).toBe('job-1/episode_1.json')
       expect(StorageKeys.pageRender('job-1', 1, 1)).toBe('job-1/episode_1/page_1.png')
