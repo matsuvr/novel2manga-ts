@@ -807,3 +807,7 @@ LLM構造化ジェネレーターにおけるエラー処理は、共通のエ�
 - `RenderDatabaseService.upsertRenderStatus` は進捗更新のみに限定し、ステータス更新は行わない。
 - `JobDatabaseService.markJobStepCompleted('render')` からステータス更新を削除し、最終完了はパイプライン終端で一括実施。
 - フロントエンドの進捗表示とバックエンドのレンダリング状態が常に一致するようになった。
+
+## Render status transaction refactor (2025-09-11)
+
+- `RenderDatabaseService.upsertRenderStatus` の同期・非同期パスで重複していたジョブ完了更新処理を `upsertRenderStatusTx` と `completeJobIfNeeded` に集約し、DRYと保守性を向上。
