@@ -198,6 +198,14 @@
 - [x] `RenderDatabaseService.upsertRenderStatus` のジョブ完了判定を専用メソッドに集約し、同期・非同期パスの重複を排除。
 - [x] テストでDBモックを実装し、空オブジェクトの強制型変換を解消。
 
+### Refactor: render status object helpers (2025-09-13)
+
+- [x] レンダーステータスの更新・挿入オブジェクト生成をプライベートヘルパーに集約し、`upsertRenderStatusTxSync` と `upsertRenderStatusTxAsync` の重複を排除。
+
+### Fix: render status transaction atomicity (2025-09-12)
+
+- [x] 同期トランザクション内の非同期呼び出しを排除し、`upsertRenderStatusTxSync`/`Async` と `completeJobIfNeededSync`/`Async` を導入。
+
 ### Code Structure Refactoring (2025-09-04)
 
 - [x] **コンポーネントのリファクタリング**: 各種コンポーネントの構造を改善し、保守性を向上
