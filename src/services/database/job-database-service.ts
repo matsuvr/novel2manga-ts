@@ -410,7 +410,6 @@ export class JobDatabaseService extends BaseDatabaseService {
         break
       case 'render':
         updateData.renderCompleted = true
-        updateData.status = 'completed'
         break
     }
 

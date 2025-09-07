@@ -158,7 +158,10 @@
 ### Bugfix: SFX prefix stripping (2025-09-03)
 
 - [x] `SFX:`/`sfx:` プレフィックスが残存するケースを修正（先頭空白/不可視文字、全角`：`、全角`ＳＦＸ`に対応）。
-- [x] ユニットテスト追加（半角/全角/不可視/BOM 前置の各パターン）。
+
+### Bugfix: Vertical text default font (2025-09-07)
+
+- [x] セリフのフォント指定を省略し、縦書きAPIデフォルトのアンチック体を適用。
 
 ### Bugfix: Bundled episode display (2025-09-06)
 
@@ -182,6 +185,13 @@
 ### Runtime Configuration Cleanup (2025-09-09)
 
 - [x] API ルートから冗長な `export const runtime = 'nodejs'` 宣言を削除し、OpenNext の既定 Node.js ランタイムに統一。
+
+### Bugfix: rendering progress desync (2025-09-10)
+
+- [x] `upsertRenderStatus` が `jobs.status` を `completed` に設定していたため、レンダリング途中で完了扱いになる問題を修正。
+- [x] `markJobStepCompleted('render')` からステータス更新を除去し、完了判定をパイプライン終端に限定。
+- [x] レンダリング進捗のDB更新を `await` することでレースコンディションを排除。
+- [x] 進捗UIとバックエンドの状態が一致し、完了時に結果ページへ確実に遷移するようになった。
 
 ### Code Structure Refactoring (2025-09-04)
 

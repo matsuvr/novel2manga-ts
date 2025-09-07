@@ -281,6 +281,7 @@ const result = await agent.run({
 - エンドポイント: `POST /render/batch`
   - `defaults` にページ共通の `fontSize/lineHeight/letterSpacing/padding` を設定。
   - `items` に各ダイアログの `{ text, font?, maxCharsPerLine }` を順序保持で投入。
+  - 通常のセリフでは `font` を省略し、APIのデフォルトであるアンチック体を利用。
 - 目的: ネットワーク往復回数を削減し、1ページ内のセリフ描画を効率化。
 - エラー時はフォールバックせず即停止し、詳細ログを残す。
 
@@ -800,3 +801,10 @@ LLM構造化ジェネレーターにおけるエラー処理は、共通のエ�
 - 状況説明テキストはフォントサイズと占有領域を従来比2倍に拡大し、視認性を向上。
 - `PanelLayoutCoordinator` が吹き出し・描き文字・説明文の全占有領域を一元管理し、重なりを防止。
 - 1コマにセリフが2つある場合、吹き出しは必ず横方向に並べて描画する。
+
+## ジョブ完了判定の改善（2025-09-10）
+
+- レンダリング途中で `jobs.status` が `completed` になる競合を解消。
+- `RenderDatabaseService.upsertRenderStatus` は進捗更新のみに限定し、ステータス更新は行わない。
+- `JobDatabaseService.markJobStepCompleted('render')` からステータス更新を削除し、最終完了はパイプライン終端で一括実施。
+- フロントエンドの進捗表示とバックエンドのレンダリング状態が常に一致するようになった。

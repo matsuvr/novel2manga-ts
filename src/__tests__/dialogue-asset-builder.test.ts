@@ -40,6 +40,12 @@ describe('dialogue-asset-builder', () => {
     expect(items[0].text).toBe('こんにちは')
   })
 
+  it('collectDialogueRequests omits font when selector returns undefined', () => {
+    const fontNone = () => undefined
+    const { items } = collectDialogueRequests(dummyPage, compute, extract, fontNone)
+    expect('font' in items[0]).toBe(false)
+  })
+
   it('buildTestPlaceholderAssets creates deterministic dimensions', () => {
     const { map } = collectDialogueRequests(dummyPage, compute, extract, fontSel)
     const assets = buildTestPlaceholderAssets(map, { fontSize: 16, padding: 4 })

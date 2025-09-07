@@ -142,7 +142,7 @@ export class RenderingStep implements PipelineStep {
                   await ports.render.putPageThumbnail(jobId, ep, p.page_number, thumbnailBuffer)
 
                   // レンダリング状態をDBに記録（これによりrenderedPagesが自動的に増加）
-                  renderDb.upsertRenderStatus(jobId, ep, p.page_number, {
+                  await renderDb.upsertRenderStatus(jobId, ep, p.page_number, {
                     isRendered: true,
                     imagePath: `${jobId}/episode_${ep}/page_${p.page_number}.png`,
                     thumbnailPath: `${jobId}/episode_${ep}/thumbnails/page_${p.page_number}_thumb.png`,
