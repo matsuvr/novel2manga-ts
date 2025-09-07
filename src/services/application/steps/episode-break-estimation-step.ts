@@ -5,8 +5,7 @@ import {
   segmentScript,
 } from '@/agents/script/script-segmenter'
 import { DefaultLlmStructuredGenerator } from '@/agents/structured-generator'
-import { getAppConfigWithOverrides } from '@/config'
-import { EPISODE_CONSTANTS } from '@/config/constants'
+import { getAppConfigWithOverrides, getEpisodeConfig } from '@/config'
 import { getProviderForUseCase } from '@/config/llm.config'
 import { type EpisodeBreakPlan, EpisodeBreakSchema, type NewMangaScript } from '@/types/script'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
@@ -15,6 +14,8 @@ export interface EpisodeBreakResult {
   episodeBreaks: EpisodeBreakPlan
   totalEpisodes: number
 }
+
+type EpisodeConfig = ReturnType<typeof getEpisodeConfig>
 
 export class EpisodeBreakEstimationStep implements PipelineStep {
   readonly stepName = 'episode-break-estimation'
@@ -30,6 +31,9 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
 
     try {
       const totalPanels = combinedScript.panels?.length || 0
+      // Fetch app config once to avoid inconsistent per-call overrides
+      const appCfg = this.getAppConfig()
+      const episodeCfg = getEpisodeConfig()
       logger.info('Starting episode break estimation', {
         jobId,
         panelCount: totalPanels,
@@ -37,7 +41,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
 
       // Small-script local rule: if panel count is small, confirm a single episode 1..N
       // This is NOT a fallback; it is a deterministic rule to avoid invalid LLM splits on tiny scripts.
-      if (totalPanels > 0 && totalPanels <= EPISODE_CONSTANTS.SMALL_PANEL_THRESHOLD) {
+      if (totalPanels > 0 && totalPanels <= episodeCfg.smallPanelThreshold) {
         const plan: EpisodeBreakPlan = {
           episodes: [
             {
@@ -51,7 +55,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
         }
 
         const normalized = this.normalizeEpisodeBreaks(plan, totalPanels)
-        const validation = this.validateEpisodeBreaks(normalized, totalPanels)
+        const validation = this.validateEpisodeBreaks(normalized, totalPanels, episodeCfg)
         if (!validation.valid) {
           logger.error('Local small-script episode validation failed', {
             jobId,
@@ -65,7 +69,11 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
         }
 
         // Apply episode bundling based on page count
-        const bundled = this.bundleEpisodesByPageCount(normalized, context)
+        const bundled = this.bundleEpisodesByPageCount(
+          normalized,
+          context,
+          appCfg.episodeBundling || { minPageCount: 20, enabled: true },
+        )
 
         logger.info('Episode break determined by small-script rule', {
           jobId,
@@ -84,7 +92,6 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
       }
 
       // Read segmentation config from app config
-      const appCfg = getAppConfigWithOverrides()
       const segmentationConfig: ScriptSegmentationConfig = {
         ...DEFAULT_SCRIPT_SEGMENTATION_CONFIG,
         ...(appCfg.scriptSegmentation || {}),
@@ -96,7 +103,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
           jobId,
           panelCount: totalPanels,
         })
-        return await this.estimateEpisodeBreaksDirect(combinedScript, context)
+        return await this.estimateEpisodeBreaksDirect(combinedScript, context, appCfg, episodeCfg)
       } else {
         logger.info('Using sliding window episode break estimation (large script)', {
           jobId,
@@ -107,6 +114,8 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
           combinedScript,
           segmentationConfig,
           context,
+          appCfg,
+          episodeCfg,
         )
       }
     } catch (error) {
@@ -126,6 +135,8 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
   private async estimateEpisodeBreaksDirect(
     combinedScript: NewMangaScript,
     context: StepContext,
+    appCfg: AppConfig,
+    episodeCfg: EpisodeConfig,
   ): Promise<StepExecutionResult<EpisodeBreakResult>> {
     const { jobId, logger } = context
 
@@ -133,8 +144,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     const provider = getProviderForUseCase('episodeBreak')
     const generator = new DefaultLlmStructuredGenerator([provider])
 
-    // Read prompts from app config
-    const appCfg = getAppConfigWithOverrides()
+    // Read prompts from provided app config
     const eb = appCfg.llm.episodeBreakEstimation || { systemPrompt: '', userPromptTemplate: '' }
 
     // Create prompt with script data
@@ -149,6 +159,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
       userPrompt: prompt,
       schema: EpisodeBreakSchema as unknown as z.ZodTypeAny,
       schemaName: 'EpisodeBreakPlan',
+      telemetry: { jobId, stepName: 'episode' },
     })
 
     if (!result || !result.episodes || result.episodes.length === 0) {
@@ -158,18 +169,15 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     // Normalize and then validate for strict continuity and bounds
     const totalPanels = combinedScript.panels?.length || 0
     const normalized = this.normalizeEpisodeBreaks(result, totalPanels)
-    const validation = this.validateEpisodeBreaks(normalized, totalPanels)
-    if (!validation.valid) {
-      logger.error('Episode break validation failed after normalization', {
-        jobId,
-        issues: validation.issues,
-        totalPanels,
-      })
-      throw new Error(`Episode break validation failed: ${validation.issues.join(', ')}`)
-    }
-
-    // Apply episode bundling based on page count
-    const bundled = this.bundleEpisodesByPageCount(normalized, context)
+    // Enforce max-length deterministically before validation
+    const bundled = this.bundleAndValidate(
+      normalized,
+      totalPanels,
+      context,
+      appCfg,
+      episodeCfg,
+      'Episode break validation',
+    )
 
     logger.info('Episode break estimation completed', {
       jobId,
@@ -197,6 +205,8 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     combinedScript: NewMangaScript,
     segmentationConfig: ScriptSegmentationConfig,
     context: StepContext,
+    appCfg: AppConfig,
+    episodeCfg: EpisodeConfig,
   ): Promise<StepExecutionResult<EpisodeBreakResult>> {
     const { jobId, logger } = context
 
@@ -233,6 +243,8 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
       const segmentResult = await this.estimateEpisodeBreaksDirect(
         segmentScriptWithRenumberedPanels,
         context,
+        appCfg,
+        episodeCfg,
       )
       if (!segmentResult.success) {
         throw new Error(
@@ -266,18 +278,14 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     const totalPanels = combinedScript.panels?.length || 0
     const normalized = this.normalizeEpisodeBreaks(finalResult, totalPanels)
 
-    // Validate the merged results
-    const validation = this.validateEpisodeBreaks(normalized, totalPanels)
-    if (!validation.valid) {
-      logger.error('Merged episode break validation failed', {
-        jobId,
-        issues: validation.issues,
-      })
-      throw new Error(`Merged episode break validation failed: ${validation.issues.join(', ')}`)
-    }
-
-    // Apply episode bundling based on page count
-    const bundled = this.bundleEpisodesByPageCount(normalized, context)
+    const bundled = this.bundleAndValidate(
+      normalized,
+      totalPanels,
+      context,
+      appCfg,
+      episodeCfg,
+      'Merged episode break validation',
+    )
 
     logger.info('Sliding window episode break estimation completed', {
       jobId,
@@ -305,6 +313,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
   private validateEpisodeBreaks(
     episodeBreaks: EpisodeBreakPlan,
     totalPanels: number,
+    cfg: EpisodeConfig,
   ): { valid: boolean; issues: string[] } {
     const issues: string[] = []
 
@@ -333,13 +342,10 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
       // Check episode length constraints
       const episodeLength = episode.endPanelIndex - episode.startPanelIndex + 1
       // For very small scripts, accept any length as long as coverage is continuous
-      if (
-        totalPanels > EPISODE_CONSTANTS.SMALL_PANEL_THRESHOLD &&
-        episodeLength < EPISODE_CONSTANTS.MIN_EPISODE_LENGTH
-      ) {
+      if (totalPanels > cfg.smallPanelThreshold && episodeLength < cfg.minPanelsPerEpisode) {
         issues.push(`Episode ${episode.episodeNumber}: too short (${episodeLength} panels)`)
       }
-      if (episodeLength > EPISODE_CONSTANTS.MAX_EPISODE_LENGTH) {
+      if (episodeLength > cfg.maxPanelsPerEpisode) {
         issues.push(`Episode ${episode.episodeNumber}: too long (${episodeLength} panels)`)
       }
 
@@ -390,15 +396,59 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     }
 
     // Step 2: build normalized episodes strictly from unique, ordered starts
-    // エピソード数は starts の長さに合わせる（重複 start を与えた余剰エピソードは破棄）
+    //  - 複数エピソード: 「次の開始-1」まで連続カバレッジ
+    //  - 単一エピソード: LLM指定のendを尊重（totalPanelsまで強制拡張しない）
     const normalized = starts.map((start, idx) => {
       const base = sorted[Math.min(idx, sorted.length - 1)]
+      if (starts.length === 1) {
+        const endCandidate = Math.max(start, base.endPanelIndex)
+        const end = Math.min(totalPanels, endCandidate)
+        return { ...base, startPanelIndex: start, endPanelIndex: end }
+      }
       const nextStart = idx + 1 < starts.length ? starts[idx + 1] : totalPanels + 1
       const end = Math.min(totalPanels, Math.max(start, nextStart - 1))
       return { ...base, startPanelIndex: start, endPanelIndex: end }
     })
 
     return { episodes: normalized }
+  }
+
+  /**
+   * Enforce maximum episode length by deterministically splitting
+   * episodes that exceed the configured maximum.
+   * This is not a fallback; it guarantees constraints before validation.
+   */
+  private enforceEpisodeMaxLength(
+    episodeBreaks: EpisodeBreakPlan,
+    cfg: EpisodeConfig,
+  ): EpisodeBreakPlan {
+    const maxLen = cfg.maxPanelsPerEpisode
+    if (episodeBreaks.episodes.length === 0) return episodeBreaks
+
+    // Work on a copy sorted by episodeNumber
+    const sorted = [...episodeBreaks.episodes].sort((a, b) => a.episodeNumber - b.episodeNumber)
+    const output: EpisodeBreakPlan['episodes'] = []
+
+    for (const ep of sorted) {
+      const start = ep.startPanelIndex
+      const end = ep.endPanelIndex
+      let cursor = start
+
+      while (cursor <= end) {
+        const sliceStart = cursor
+        const sliceEnd = Math.min(end, sliceStart + maxLen - 1)
+        output.push({
+          ...ep,
+          startPanelIndex: sliceStart,
+          endPanelIndex: sliceEnd,
+        })
+        cursor = sliceEnd + 1
+      }
+    }
+
+    // Renumber sequentially to keep deterministic order
+    const renumbered = output.map((e, idx) => ({ ...e, episodeNumber: idx + 1 }))
+    return { episodes: renumbered }
   }
 
   /**
@@ -410,12 +460,9 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
   private bundleEpisodesByPageCount(
     episodeBreaks: EpisodeBreakPlan,
     context: StepContext,
+    bundlingConfig: BundlingConfig,
   ): EpisodeBreakPlan {
     const { jobId, logger } = context
-
-    // Get episode bundling configuration
-    const appConfig = getAppConfigWithOverrides()
-    const bundlingConfig = appConfig.episodeBundling || { minPageCount: 20, enabled: true }
 
     // Skip bundling if disabled
     if (!bundlingConfig.enabled) {
@@ -457,8 +504,8 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
           bundledEpisodes[nextIndex] = {
             ...nextEpisode,
             startPanelIndex: currentEpisode.startPanelIndex,
-            title: nextEpisode.title || currentEpisode.title,
-            description: nextEpisode.description || currentEpisode.description,
+            title: currentEpisode.title || nextEpisode.title,
+            description: currentEpisode.description || nextEpisode.description,
           }
 
           toRemove.add(i)
@@ -552,4 +599,58 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
 
     return { episodes: finalEpisodes }
   }
+
+  // Read app config via a typed helper (single source per run)
+  private getAppConfig(): AppConfig {
+    // getAppConfigWithOverrides は AppConfig を返すため、そのまま返却する
+    // 余計な型アサーションは不要（安全性のため排除）
+    return getAppConfigWithOverrides()
+  }
+
+  /**
+   * Shared helper to enforce max length, bundle by page count, validate, and throw on failure.
+   * Returns a valid, bundled EpisodeBreakPlan on success.
+   */
+  private bundleAndValidate(
+    breaks: EpisodeBreakPlan,
+    totalPanels: number,
+    context: StepContext,
+    appCfg: AppConfig,
+    episodeCfg: EpisodeConfig,
+    errorContext: string,
+  ): EpisodeBreakPlan {
+    const { jobId, logger } = context
+    const lengthConstrained = this.enforceEpisodeMaxLength(breaks, episodeCfg)
+    const bundled = this.bundleEpisodesByPageCount(
+      lengthConstrained,
+      context,
+      appCfg.episodeBundling || { minPageCount: 20, enabled: true },
+    )
+
+    const validation = this.validateEpisodeBreaks(bundled, totalPanels, episodeCfg)
+    if (!validation.valid) {
+      logger.error(`${errorContext} failed after bundling`, {
+        jobId,
+        issues: validation.issues,
+        totalPanels,
+      })
+      throw new Error(`${errorContext} failed after bundling: ${validation.issues.join(', ')}`)
+    }
+
+    return bundled
+  }
+}
+
+// Minimal config types used by this step (no any)
+interface AppConfig {
+  llm: {
+    episodeBreakEstimation?: { systemPrompt?: string; userPromptTemplate?: string }
+  }
+  scriptSegmentation?: ScriptSegmentationConfig
+  episodeBundling?: BundlingConfig
+}
+
+interface BundlingConfig {
+  minPageCount: number
+  enabled: boolean
 }

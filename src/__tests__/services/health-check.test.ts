@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getHealthStatus } from '@/services/application/health-check'
-import { getDatabaseService } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 import { StorageFactory } from '@/utils/storage'
 
-vi.mock('@/services/db-factory', () => ({
-  getDatabaseService: vi.fn(),
+vi.mock('@/services/database/index', () => ({
+  db: {
+    novels: () => ({ getNovel: vi.fn() }),
+  },
 }))
 
 vi.mock('@/utils/storage', () => ({
@@ -19,8 +21,9 @@ describe('HealthCheckService', () => {
   })
 
   it('should aggregate component statuses correctly', async () => {
-    const mockDb = { getNovel: vi.fn().mockResolvedValue(null) }
-    vi.mocked(getDatabaseService).mockReturnValue(mockDb)
+    // mock db
+    // @ts-ignore
+    vi.mocked(db.novels().getNovel).mockResolvedValue(null)
     vi.mocked(StorageFactory.getNovelStorage).mockResolvedValue({
       list: vi.fn().mockResolvedValue([]),
     })
@@ -41,8 +44,8 @@ describe('HealthCheckService', () => {
   })
 
   it('should measure latency accurately', async () => {
-    const mockDb = { getNovel: vi.fn().mockResolvedValue(null) }
-    vi.mocked(getDatabaseService).mockReturnValue(mockDb)
+    // @ts-ignore
+    vi.mocked(db.novels().getNovel).mockResolvedValue(null)
     vi.mocked(StorageFactory.getNovelStorage).mockResolvedValue({
       list: vi.fn().mockResolvedValue([]),
     })

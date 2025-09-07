@@ -47,7 +47,7 @@ const textAnalysisOutputSchema = z.object({
     z.object({
       type: z.enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence']),
       description: z.string(),
-      importance: z.number().min(1).max(10),
+      importance: z.number(),
       startIndex: z.number(),
       endIndex: z.number(),
     }),

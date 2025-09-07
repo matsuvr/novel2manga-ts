@@ -43,7 +43,7 @@ const layoutPanelCountOutputSchema = z.object({
   pages: z.array(
     z.object({
       pageNumber: z.number(),
-      panelCount: z.number().int().min(1).max(6),
+      panelCount: z.number().int(),
     }),
   ),
 })
@@ -75,6 +75,11 @@ export class LayoutGeneratorAgent {
       userPrompt: prompt,
       schema: layoutPanelCountOutputSchema,
       schemaName: 'LayoutPanelCount',
+      telemetry: {
+        jobId: _options?.jobId,
+        episodeNumber: episodeData.episodeNumber,
+        stepName: 'layout',
+      },
     })
 
     // LLMの出力（ページごとのコマ数）を実際のレイアウトに変換

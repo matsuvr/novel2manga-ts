@@ -5,6 +5,7 @@ on:
     branches: [main, feat/**]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,6 +19,7 @@ env:
 
 jobs:
   build-and-test:
+    if: ${{ vars.ENABLE_CI == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

@@ -18,6 +18,11 @@ vi.mock('@/utils/storage', () => {
   }
 })
 
+// モック用のヘルパー関数を定義（vi.mock より前に宣言）
+let mockJobsService: any
+let mockEpisodesService: any
+let mockRenderService: any
+
 vi.mock('@/services/database', () => ({
   DatabaseService: vi.fn().mockImplementation(() => ({
     createNovel: vi.fn(),
@@ -29,6 +34,11 @@ vi.mock('@/services/database', () => ({
     updateRenderStatus: vi.fn(),
     updateProcessingPosition: vi.fn(),
   })),
+  db: {
+    jobs: () => mockJobsService,
+    episodes: () => mockEpisodesService,
+    render: () => mockRenderService,
+  },
 }))
 
 // Mock db-factory to return the mockDbService
@@ -94,6 +104,12 @@ vi.mock('@/infrastructure/storage/ports', () => ({
       putPageRender: async () => 'render/key',
       putPageThumbnail: async () => 'thumb/key',
       getPageRender: async () => null,
+    },
+    characterMemory: {
+      putFull: async () => 'char/key',
+      getFull: async () => null,
+      putPrompt: async () => 'charprompt/key',
+      getPrompt: async () => null,
     },
   }),
 }))
@@ -199,40 +215,22 @@ pages:
     testDir = path.join(process.cwd(), '.test-storage')
     await fs.mkdir(testDir, { recursive: true })
 
-    // モックサービスの設定 - Update the existing mock functions
-    mockDbService.createNovel.mockResolvedValue(testNovelId)
-    mockDbService.getJob.mockResolvedValue({
-      id: testJobId,
-      novelId: testNovelId,
-      status: 'pending',
-      currentStep: 'render',
-      renderCompleted: false,
-    })
-    mockDbService.getEpisodesByJobId.mockResolvedValue([{ episodeNumber: 1, title: 'Episode 1' }])
-    mockDbService.getJobWithProgress.mockResolvedValue({
-      id: testJobId,
-      novelId: testNovelId,
-      status: 'pending',
-      currentStep: 'render',
-      renderCompleted: false,
-      progress: {
-        currentStep: 'render',
-        processedChunks: 5,
-        totalChunks: 5,
-        episodes: [
-          {
-            episodeNumber: 1,
-            title: 'Episode 1',
-            startChunk: 0,
-            endChunk: 2,
-          },
-        ],
-      },
-    })
-    mockDbService.updateRenderStatus.mockResolvedValue(undefined)
-    mockDbService.updateProcessingPosition.mockResolvedValue(undefined)
+    // Setup db mocks in new architecture
+    mockJobsService = { getJob: vi.fn(), updateProcessingPosition: vi.fn() }
+    mockEpisodesService = { getEpisodesByJobId: vi.fn() }
+    mockRenderService = { upsertRenderStatus: vi.fn() }
 
-    vi.mocked(DatabaseService).mockReturnValue(mockDbService)
+    // 同期API想定のため returnValue を使用
+    mockJobsService.getJob.mockReturnValue({
+      id: testJobId,
+      novelId: testNovelId,
+      status: 'pending',
+      currentStep: 'render',
+      renderCompleted: false,
+    })
+    mockEpisodesService.getEpisodesByJobId.mockReturnValue([
+      { id: 'ep1', episodeNumber: 1, jobId: testJobId, novelId: testNovelId, title: 'Episode 1' },
+    ])
   })
 
   afterEach(async () => {

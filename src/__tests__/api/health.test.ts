@@ -1,14 +1,23 @@
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GET } from '@/app/api/health/route'
-import { DatabaseService } from '@/services/database'
-import { __resetDatabaseServiceForTest } from '@/services/db-factory'
+import { db } from '@/services/database/index'
 
-vi.mock('@/services/database', () => ({
-  DatabaseService: vi.fn().mockImplementation(() => ({
+// モック用のヘルパー関数を定義（vi.mock より前に宣言）
+let mockNovelsService: any
+
+vi.mock('@/services/database/index', () => {
+  // モック用のデータベースサービスを定義（ファクトリ内で初期化）
+  const mockNovelsService = {
     getNovel: vi.fn().mockResolvedValue(null),
-  })),
-}))
+  }
+
+  return {
+    db: {
+      novels: () => mockNovelsService,
+    },
+  }
+})
 
 vi.mock('@/utils/storage', () => ({
   StorageFactory: {
@@ -19,18 +28,13 @@ vi.mock('@/utils/storage', () => ({
 }))
 
 describe('/api/health', () => {
-  let mockDb: any
-
   beforeEach(() => {
-    __resetDatabaseServiceForTest()
     vi.clearAllMocks()
-    mockDb = { getNovel: vi.fn().mockResolvedValue(null) }
-    vi.mocked(DatabaseService).mockReturnValue(mockDb)
+    // モックをリセット
+    vi.mocked(db).novels().getNovel.mockResolvedValue(null)
   })
 
-  afterEach(() => {
-    __resetDatabaseServiceForTest()
-  })
+  afterEach(() => {})
 
   it('正常系: 200 と ok ステータスを返す', async () => {
     const req = new NextRequest('http://localhost:3000/api/health')
@@ -46,7 +50,7 @@ describe('/api/health', () => {
   })
 
   it('DB エラー時は503 と error ステータスを返す', async () => {
-    mockDb.getNovel.mockRejectedValueOnce(new Error('DB down'))
+    vi.mocked(db).novels().getNovel.mockRejectedValueOnce(new Error('DB down'))
     const req = new NextRequest('http://localhost:3000/api/health')
     const res = await GET(req)
     const data = await res.json()

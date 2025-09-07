@@ -2,32 +2,62 @@ import type { Mocked } from 'vitest'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Episode, Job, RenderStatus } from '@/db'
 import type { LayoutStoragePort } from '@/infrastructure/storage/ports'
-import type { JobDbPort } from '@/repositories/ports'
 import { JobProgressService } from '@/services/application/job-progress'
-import type { DatabaseService } from '@/services/database'
 import type { JobProgress } from '@/types/job'
 
 // Mock dependencies
-vi.mock('@/services/db-factory', () => ({
-  getDatabaseService: vi.fn(() => mockDatabaseService),
+vi.mock('@/services/database/index', () => ({
+  db: {
+    jobs: () => ({
+      getJobWithProgress: vi.fn((...args: any[]) =>
+        mockJobDbPort.getJobWithProgress(...(args as any)),
+      ),
+      updateJobStatus: vi.fn(),
+      updateJobStep: vi.fn(),
+      markJobStepCompleted: vi.fn(),
+      updateJobProgress: vi.fn(),
+      updateJobError: vi.fn(),
+    }),
+    episodes: () => ({
+      getEpisodesByJobId: vi.fn((...args: any[]) =>
+        mockDatabaseService.getEpisodesByJobId(...(args as any)),
+      ),
+    }),
+    render: () => ({
+      getAllRenderStatusByJob: vi.fn((...args: any[]) =>
+        mockDatabaseService.getAllRenderStatusByJob(...(args as any)),
+      ),
+    }),
+  },
 }))
 
 vi.mock('@/infrastructure/storage/ports', () => ({
   getStoragePorts: vi.fn(() => ({
     layout: mockLayoutStorage,
+    characterMemory: {
+      putFull: async () => 'char/key',
+      getFull: async () => null,
+      putPrompt: async () => 'charprompt/key',
+      getPrompt: async () => null,
+    },
   })),
 }))
 
-vi.mock('@/repositories/adapters', () => ({
-  adaptAll: vi.fn(() => ({
-    job: mockJobDbPort,
-  })),
-}))
+// repositories no longer used
 
 // Mock objects (strictly typed)
-type MockDb = Pick<DatabaseService, 'getEpisodesByJobId' | 'getRenderStatusByEpisode'>
+type MockDb = Pick<
+  {
+    getEpisodesByJobId(jobId: string): Promise<Episode[]>
+    getAllRenderStatusByJob(jobId: string): Promise<RenderStatus[]>
+  },
+  'getEpisodesByJobId' | 'getAllRenderStatusByJob'
+>
 type MockLayout = Pick<LayoutStoragePort, 'getEpisodeLayoutProgress'>
-type MockJobPort = Pick<JobDbPort, 'getJobWithProgress'>
+type MockJobPort = Pick<
+  { getJobWithProgress(id: string): Promise<Job & { progress: any }> },
+  'getJobWithProgress'
+>
 
 let mockDatabaseService: Mocked<MockDb>
 let mockLayoutStorage: Mocked<MockLayout>
@@ -39,7 +69,7 @@ beforeEach(() => {
   // Mock database service concisely
   mockDatabaseService = {
     getEpisodesByJobId: vi.fn(),
-    getRenderStatusByEpisode: vi.fn(),
+    getAllRenderStatusByJob: vi.fn(),
   } as Mocked<MockDb>
 
   // Mock layout storage concisely
@@ -252,9 +282,9 @@ describe('JobProgressService Integration Tests', () => {
       mockLayoutStorage.getEpisodeLayoutProgress
         .mockResolvedValueOnce(mockLayoutProgress1)
         .mockResolvedValueOnce(mockLayoutProgress2)
-      mockDatabaseService.getRenderStatusByEpisode
-        .mockResolvedValueOnce(mockRenderStatus1)
-        .mockResolvedValueOnce(mockRenderStatus2)
+
+      // Return all render statuses for the job
+      mockDatabaseService.getAllRenderStatusByJob.mockResolvedValue(mockRenderStatus2)
 
       const service = new JobProgressService()
 
@@ -289,8 +319,7 @@ describe('JobProgressService Integration Tests', () => {
       expect(mockDatabaseService.getEpisodesByJobId).toHaveBeenCalledWith('job-1')
       expect(mockLayoutStorage.getEpisodeLayoutProgress).toHaveBeenCalledWith('job-1', 1)
       expect(mockLayoutStorage.getEpisodeLayoutProgress).toHaveBeenCalledWith('job-1', 2)
-      expect(mockDatabaseService.getRenderStatusByEpisode).toHaveBeenCalledWith('job-1', 1)
-      expect(mockDatabaseService.getRenderStatusByEpisode).toHaveBeenCalledWith('job-1', 2)
+      expect(mockDatabaseService.getAllRenderStatusByJob).toHaveBeenCalledWith('job-1')
     })
 
     it('handles layout progress parsing errors gracefully', async () => {
@@ -325,7 +354,7 @@ describe('JobProgressService Integration Tests', () => {
       mockDatabaseService.getEpisodesByJobId.mockResolvedValue(mockEpisodes)
       // Return invalid JSON that will cause parsing to fail
       mockLayoutStorage.getEpisodeLayoutProgress.mockResolvedValue('invalid-json')
-      mockDatabaseService.getRenderStatusByEpisode.mockResolvedValue([])
+      mockDatabaseService.getAllRenderStatusByJob.mockResolvedValue([])
 
       const service = new JobProgressService()
 

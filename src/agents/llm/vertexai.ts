@@ -17,12 +17,17 @@ export interface VertexAIConfig {
   serviceAccountPath?: string
 }
 
+export interface VertexAIClientConfig extends VertexAIConfig {
+  provider: 'vertexai' | 'gemini'
+}
+
 export class VertexAIClient implements LlmClient {
-  readonly provider = 'vertexai' as const
+  readonly provider: 'vertexai' | 'gemini'
   private readonly client: GoogleGenAI
   private readonly model: string
 
-  constructor(cfg: VertexAIConfig) {
+  constructor(cfg: VertexAIClientConfig) {
+    this.provider = cfg.provider
     this.model = cfg.model
 
     // Initialize Google GenAI client with Vertex AI configuration
@@ -30,12 +35,8 @@ export class VertexAIClient implements LlmClient {
       vertexai: true,
       project: cfg.project,
       location: cfg.location,
+      ...(cfg.serviceAccountPath ? { googleAuthOptions: { keyFile: cfg.serviceAccountPath } } : {}),
     })
-
-    // Set GOOGLE_APPLICATION_CREDENTIALS if serviceAccountPath is provided
-    if (cfg.serviceAccountPath) {
-      process.env.GOOGLE_APPLICATION_CREDENTIALS = cfg.serviceAccountPath
-    }
   }
 
   async generateStructured<T>({

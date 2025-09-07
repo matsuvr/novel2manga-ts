@@ -1,5 +1,8 @@
+import { appConfig } from '@/config/app.config'
 import { getStoragePorts } from '@/infrastructure/storage/ports'
 import type { PageBreakV2 } from '@/types/script'
+import { getMaxNormalizedPage, type LoosePanel, normalizePlanPanels } from '@/utils/page-normalizer'
+import { validatePageBreakV2 } from '@/utils/pagebreak-validator'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface RenderingOptions {
@@ -58,11 +61,14 @@ export class RenderingStep implements PipelineStep {
         const ports = getStoragePorts()
 
         // 進捗管理のためのヘルパー関数
-        const { getDatabaseService } = await import('@/services/db-factory')
-        const db = getDatabaseService()
+        const { db } = await import('@/services/database/index')
+        const jobDb = db.jobs()
+        const renderDb = db.render()
 
         let totalPagesProcessed = 0
         let totalPagesExpected = 0
+
+        // 全エピソードの総ページ数を事前に計算（安全のためページ番号を正規化してから計算）
 
         // 全エピソードの総ページ数を事前に計算
         for (const ep of episodeNumbers) {
@@ -73,7 +79,7 @@ export class RenderingStep implements PipelineStep {
               totalPagesExpected += parsed.pages.length
             } else if (Array.isArray(parsed?.panels)) {
               const panels = parsed.panels as Array<{ pageNumber?: number }>
-              const maxPage = Math.max(...panels.map((p) => p.pageNumber ?? 1))
+              const maxPage = getMaxNormalizedPage(panels)
               totalPagesExpected += maxPage
             }
           }
@@ -116,7 +122,7 @@ export class RenderingStep implements PipelineStep {
               try {
                 for (const p of normalized.layout.pages) {
                   // 現在処理中のページを更新
-                  await db.updateProcessingPosition(jobId, { episode: ep, page: p.page_number })
+                  jobDb.updateProcessingPosition(jobId, { episode: ep, page: p.page_number })
 
                   const imageBlob = await renderer.renderToImage(
                     normalized.layout,
@@ -136,7 +142,7 @@ export class RenderingStep implements PipelineStep {
                   await ports.render.putPageThumbnail(jobId, ep, p.page_number, thumbnailBuffer)
 
                   // レンダリング状態をDBに記録（これによりrenderedPagesが自動的に増加）
-                  await db.updateRenderStatus(jobId, ep, p.page_number, {
+                  renderDb.upsertRenderStatus(jobId, ep, p.page_number, {
                     isRendered: true,
                     imagePath: `${jobId}/episode_${ep}/page_${p.page_number}.png`,
                     thumbnailPath: `${jobId}/episode_${ep}/thumbnails/page_${p.page_number}_thumb.png`,
@@ -160,7 +166,38 @@ export class RenderingStep implements PipelineStep {
                 renderer.cleanup()
               }
             } else if (Array.isArray(parsed?.panels) && parsed.panels.length > 0) {
-              const pageBreakPlan: PageBreakV2 = parsed
+              // Validate PageBreakV2 (hard invalid → stop with explicit error)
+              const validation = validatePageBreakV2(parsed, {
+                maxPages: appConfig.rendering.limits.maxPages,
+              })
+              if (!validation.valid) {
+                throw new Error(
+                  `Invalid PageBreakV2: ${validation.issues.slice(0, 5).join('; ')}${
+                    validation.issues.length > 5 ? ' ...' : ''
+                  }`,
+                )
+              }
+              // Normalize page numbers to a safe contiguous range before rendering
+              const rawPanels = parsed.panels as LoosePanel[]
+              const { normalized: normalizedPanels, report } = normalizePlanPanels(rawPanels)
+              if (validation.needsNormalization || report.wasNormalized) {
+                logger.warn('PageBreakV2 panels normalized due to out-of-range page numbers', {
+                  jobId,
+                  episode: ep,
+                  uniquePages: report.uniqueCount,
+                  limitedTo: report.limitedTo,
+                  maxCap: appConfig.rendering.limits.maxPages,
+                })
+              }
+              const panelsFull: PageBreakV2['panels'] = normalizedPanels.map((p) => ({
+                pageNumber: p.pageNumber,
+                panelIndex: p.panelIndex ?? 1,
+                content: p.content ?? '',
+                dialogue: p.dialogue ?? [],
+                sfx: p.sfx ?? [],
+              })) as PageBreakV2['panels']
+
+              const pageBreakPlan: PageBreakV2 = { panels: panelsFull }
               const { renderFromPageBreakPlan } = await import('@/services/application/render')
 
               // PageBreakPlan形式でのレンダリング（進捗更新付き）

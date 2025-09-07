@@ -4,8 +4,11 @@ import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { getDatabaseConfig } from '@/config'
-import { cleanup } from '@/services/database/database-service-factory'
-// Import will be added when migration is complete to avoid circular dependency
+import { createDatabaseConnection } from '@/infrastructure/database/connection'
+import {
+  cleanup,
+  initializeDatabaseServiceFactory,
+} from '@/services/database/database-service-factory'
 import * as schema from './schema'
 
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null
@@ -19,18 +22,28 @@ export function shouldRunMigrations(env: NodeJS.ProcessEnv = process.env): boole
   return isDevOrTest || isVitest
 }
 
-// Setup cleanup handlers for graceful shutdown
+// Setup cleanup handlers for graceful shutdown (register once in dev/HMR)
 if (typeof process !== 'undefined') {
-  const handleShutdown = () => {
-    cleanup()
-    if (db) {
-      db = null
+  // Use a global flag to prevent duplicate listener registration across HMR reloads
+  const g = globalThis as unknown as { __n2m_db_cleanup_registered__?: boolean }
+  if (!g.__n2m_db_cleanup_registered__) {
+    const handleShutdown = () => {
+      try {
+        cleanup()
+      } catch {
+        // ignore cleanup errors intentionally (no fallback behavior)
+      }
+      if (db) {
+        db = null
+      }
     }
-  }
 
-  process.on('SIGINT', handleShutdown)
-  process.on('SIGTERM', handleShutdown)
-  process.on('exit', handleShutdown)
+    // Use once-listeners to avoid accumulation
+    process.once('SIGINT', handleShutdown)
+    process.once('SIGTERM', handleShutdown)
+    process.once('exit', handleShutdown)
+    g.__n2m_db_cleanup_registered__ = true
+  }
 }
 
 export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
@@ -53,8 +66,9 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
       const sqliteDb = new Database(dbPath)
       db = drizzle(sqliteDb, { schema })
 
-      // TODO: Initialize the new database service architecture when migration is complete
-      // initializeDatabaseServiceFactory(db)
+      // Initialize the new database service architecture
+      const connection = createDatabaseConnection({ sqlite: db })
+      initializeDatabaseServiceFactory(connection)
 
       // In dev/test, run migrations only when it's safe to do so.
       // 明示的にスキップ指定がある場合はマイグレーションを行わない

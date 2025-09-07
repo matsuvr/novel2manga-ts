@@ -32,11 +32,12 @@
 | チャンク本文         | `StorageKeys.chunk(jobId, index)`              | `{jobId}/chunk_0.txt`             |
 | チャンク分析         | `StorageKeys.chunkAnalysis(jobId, index)`      | `{jobId}/chunk_0.json`            |
 | 統合分析             | `StorageKeys.integratedAnalysis(jobId)`        | `{jobId}/integrated.json`         |
-| 物語構造(エピソード) | `StorageKeys.narrativeAnalysis(jobId)`         | `{jobId}/narrative.json`          |
+| エピソード境界       | `StorageKeys.episodeBoundaries(jobId)`         | `{jobId}/episodes.json`           |
 | エピソード本文       | `StorageKeys.episodeText(jobId, ep)`           | `{jobId}/episode_{ep}.txt`        |
 | エピソードレイアウト | `StorageKeys.episodeLayout(jobId, ep)`         | `{jobId}/episode_1.json`          |
 | **エピソード進捗**   | `StorageKeys.episodeLayoutProgress(jobId, ep)` | `{jobId}/episode_1.progress.json` |
 | ページ画像           | `StorageKeys.pageRender(jobId, ep, page)`      | `{jobId}/episode_1/page_1.png`    |
+
 
 以下は設計済み（計画中）のキーで、コード実装は未着手です。
 

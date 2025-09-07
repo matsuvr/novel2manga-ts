@@ -1,8 +1,5 @@
 import type { NextRequest } from 'next/server'
 import { getHealthStatus } from '@/services/application/health-check'
-
-export const runtime = 'nodejs'
-
 // 監視用途のヘルスチェック。DB/Storage の軽量疎通を行い、詳細を返す。
 export async function GET(_req: NextRequest) {
   const health = await getHealthStatus()

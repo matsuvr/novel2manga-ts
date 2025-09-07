@@ -55,9 +55,10 @@ export async function loadEpisodePreview(
     try {
       const prefix = `${jobId}/episode_${episodeNumber}/`
       const keys = await renderStorage.list(prefix)
+      // Windows/UNIXのパス区切り差異に対応（\\/ のいずれも許容）
       const fromRenders = keys
         .map((k) => {
-          const m = k.match(/episode_\d+\/page_(\d+)\.png$/)
+          const m = k.match(/episode_\d+[\\/]page_(\d+)\.png$/)
           return m ? Number(m[1]) : undefined
         })
         .filter((n): n is number => typeof n === 'number' && Number.isFinite(n))
@@ -88,7 +89,12 @@ export async function loadEpisodePreview(
         }
       }
       const np = progress.validation?.normalizedPages
-      if (Array.isArray(np)) normalizedPages = np as number[]
+      if (Array.isArray(np)) {
+        // 数値・文字列混在に頑健化して数値へ正規化
+        normalizedPages = np
+          .map((v) => (typeof v === 'string' ? Number(v) : v))
+          .filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+      }
       const iw = progress.validation?.pagesWithIssueCounts
       if (iw && typeof iw === 'object') {
         pagesWithIssueCounts = Object.fromEntries(
@@ -124,6 +130,10 @@ export async function loadEpisodePreview(
           base64 = normalized
         }
       } catch {
+        base64 = Buffer.from(file.text, 'utf-8').toString('base64')
+      }
+      // 追加フォールバック: 何らかの理由で空になった場合、UTF-8として再エンコード
+      if (!base64 && typeof file.text === 'string' && file.text.length > 0) {
         base64 = Buffer.from(file.text, 'utf-8').toString('base64')
       }
     }

@@ -1,83 +1,26 @@
-import { describe, expect, it, vi } from 'vitest'
-import type { ChunkAnalysisResult } from '@/types/chunk'
-import type { Storage } from '@/utils/storage'
+import { describe, expect, it } from 'vitest'
+import type { ChunkData } from '@/types/chunk'
+import { validateEpisodeBoundaries } from '@/utils/episode-utils'
 
-const analysisResult: ChunkAnalysisResult = {
-  chunkIndex: 0,
-  characters: [],
-  scenes: [],
-  dialogues: [],
-  highlights: [
-    {
-      importance: 1,
-      description: 'desc',
-      endIndex: 10,
-      startIndex: 0,
-      type: 'action',
-      content: 'highlight content',
-      intensity: 0,
-      relevance: 0,
-    },
-  ],
-  situations: [],
-  narrativeElements: {
-    tension: 0,
-    pacing: 'medium',
-    emotionalTone: '',
-    plotRelevance: 0,
-  },
-}
+describe('validateEpisodeBoundaries', () => {
+  const chunks: ChunkData[] = [
+    { chunkIndex: 0, text: 'foo' },
+    { chunkIndex: 1, text: 'bar' },
+  ]
 
-const chunkData = { text: 'chunk text' }
+  it('returns true for valid boundaries', () => {
+    const result = validateEpisodeBoundaries(
+      [{ startChunk: 0, startCharIndex: 0, endChunk: 1, endCharIndex: 3 }],
+      chunks,
+    )
+    expect(result).toBe(true)
+  })
 
-const mockChunkStorage: Storage = {
-  async put() {},
-  async get() {
-    return chunkData
-  },
-  async delete() {},
-  async exists() {
-    return true
-  },
-}
-
-const mockAnalysisStorage: Storage = {
-  async put() {},
-  async get() {
-    return { text: JSON.stringify(analysisResult) }
-  },
-  async delete() {},
-  async exists() {
-    return true
-  },
-}
-
-vi.mock('@/utils/storage', () => ({
-  StorageKeys: {
-    chunk: (_jobId: string, index: number) => `chunk_${index}.txt`,
-    chunkAnalysis: (_jobId: string, index: number) => `chunk_${index}.json`,
-  },
-  StorageFactory: {
-    getChunkStorage: async () => mockChunkStorage,
-    getAnalysisStorage: async () => mockAnalysisStorage,
-  },
-}))
-
-import { prepareNarrativeAnalysisInput } from '@/utils/episode-utils'
-
-describe('prepareNarrativeAnalysisInput', () => {
-  it('maps highlight content to text', async () => {
-    const result = await prepareNarrativeAnalysisInput({
-      jobId: 'job1',
-      startChunkIndex: 0,
-    })
-
-    expect(result?.chunks[0].analysis.highlights[0]).toEqual({
-      text: analysisResult.highlights[0].content,
-      importance: analysisResult.highlights[0].importance,
-      description: analysisResult.highlights[0].description,
-      startIndex: analysisResult.highlights[0].startIndex,
-      endIndex: analysisResult.highlights[0].endIndex,
-    })
+  it('returns false for invalid indices', () => {
+    const result = validateEpisodeBoundaries(
+      [{ startChunk: 0, startCharIndex: 0, endChunk: 2, endCharIndex: 1 }],
+      chunks,
+    )
+    expect(result).toBe(false)
   })
 })

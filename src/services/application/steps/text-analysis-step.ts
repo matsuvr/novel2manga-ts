@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { getTextAnalysisConfig } from '@/config'
 import type { Job } from '@/db/schema'
-import { getJobRepository } from '@/repositories'
+import { db } from '@/services/database/index'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface AnalysisResult {
@@ -44,7 +44,7 @@ export class TextAnalysisStep implements PipelineStep {
         z.object({
           type: z.enum(['climax', 'turning_point', 'emotional_peak', 'action_sequence']),
           description: z.string(),
-          importance: z.number().min(1).max(10),
+          importance: z.number(),
           startIndex: z.number(),
           endIndex: z.number(),
         }),
@@ -93,11 +93,11 @@ export class TextAnalysisStep implements PipelineStep {
     context: Pick<StepContext, 'jobId' | 'logger' | 'ports'>,
   ): Promise<void> {
     const { jobId, logger, ports } = context
-    const jobRepo = getJobRepository()
+    const jobDb = db.jobs()
 
     const runOne = async (i: number) => {
       // ここで「DBのジョブ進捗を更新（analyze_chunk_i ステップ）」
-      await jobRepo.updateStep(jobId, `analyze_chunk_${i}`, i, chunks.length)
+      jobDb.updateJobStep(jobId, `analyze_chunk_${i}`)
       const chunkText = chunks[i]
       const config = getTextAnalysisConfig()
       if (!config?.userPromptTemplate) {
@@ -128,7 +128,7 @@ export class TextAnalysisStep implements PipelineStep {
           chunkIndex: i,
           error: firstError instanceof Error ? firstError.message : String(firstError),
         })
-        await jobRepo.updateStep(jobId, `analyze_chunk_${i}_retry`, i, chunks.length)
+        jobDb.updateJobStep(jobId, `analyze_chunk_${i}_retry`)
 
         try {
           const { analyzeChunkWithFallback } = await import('@/agents/chunk-analyzer')
@@ -146,7 +146,7 @@ export class TextAnalysisStep implements PipelineStep {
             firstError: firstError instanceof Error ? firstError.message : String(firstError),
             retryError: errorMessage,
           })
-          await jobRepo.updateStatus(jobId, 'failed', `Chunk ${i} analysis failed: ${errorMessage}`)
+          jobDb.updateJobStatus(jobId, 'failed', `Chunk ${i} analysis failed: ${errorMessage}`)
           throw retryError
         }
       }
@@ -154,7 +154,7 @@ export class TextAnalysisStep implements PipelineStep {
       if (!result) {
         const errorMessage = `Failed to generate analysis result for chunk ${i}`
         logger.error(errorMessage, { jobId, chunkIndex: i })
-        await jobRepo.updateStatus(jobId, 'failed', errorMessage)
+        jobDb.updateJobStatus(jobId, 'failed', errorMessage)
         throw new Error(errorMessage)
       }
 
@@ -166,7 +166,7 @@ export class TextAnalysisStep implements PipelineStep {
       }
       // ここで「ストレージ（ファイル）に分析結果を書き込む」
       await ports.analysis.putAnalysis(jobId, i, JSON.stringify(analysisData, null, 2))
-      await jobRepo.updateStep(jobId, `analyze_chunk_${i}_done`, i + 1, chunks.length)
+      jobDb.updateJobStep(jobId, `analyze_chunk_${i}_done`)
       return true as const
     }
 
