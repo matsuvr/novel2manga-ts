@@ -794,3 +794,10 @@ LLM構造化ジェネレーターにおけるエラー処理は、共通のエ�
 
 - Google OAuth + Auth.js + D1 Adapter を採用予定。詳細は docs/google-auth-design.md を参照。
 - 必須環境変数未設定時は `RootLayout` が即時に構成エラーを表示し、ビルド失敗を防止する（2025-09-09）。
+
+## 縦書きテキスト生成API（2025-09-??）
+
+- Effect TS ベースの縦書き画像生成サービスを追加。
+- Playwright と Sharp を利用し、HTML/CSS で組版したテキストを PNG へ変換。
+- API ルート `/api/vertical-text/render` と `/api/vertical-text/render/batch` を追加。
+- BudouX による自動改行、フォント切り替え、透明背景トリミングをサポート。

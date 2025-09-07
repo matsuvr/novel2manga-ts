@@ -294,3 +294,8 @@
 ## 認証統合タスク
 
 - Google 認証導入の詳細タスクは docs/google-auth-tasks.md を参照。
+
+### Vertical Text API (2025-09-??)
+
+- [x] Effect TS による縦書き画像APIを実装し、Playwright + Sharp で生成。
+- [x] `/api/vertical-text/render` と `/api/vertical-text/render/batch` のエンドポイントを追加。
