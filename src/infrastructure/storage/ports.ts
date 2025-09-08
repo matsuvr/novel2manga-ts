@@ -1,7 +1,7 @@
 import { getLogger } from '@/infrastructure/logging/logger'
 import { executeStorageWithTracking } from '@/services/application/transaction-manager'
 import { db } from '@/services/database/index'
-import { JsonStorageKeys, StorageFactory, StorageKeys } from '@/utils/storage'
+import * as StorageUtil from '@/utils/storage'
 
 export interface ChunkStoragePort {
   getChunk(jobId: string, index: number): Promise<{ text: string } | null>
@@ -80,17 +80,27 @@ export interface StoragePorts {
 }
 
 export function getStoragePorts(): StoragePorts {
+  // ローカルファイルストレージのディレクトリ構造を事前に用意（冪等）
+  // テスト・開発環境の安定性確保
+  try {
+    // 安全に起動（テストの部分モック環境では未定義のことがある）
+    void Promise.resolve(StorageUtil.ensureLocalStorageStructure?.()).catch(() => {
+      // no-op: 事前ディレクトリ作成の失敗は本処理に影響しない
+    })
+  } catch (_err) {
+    // no-op: optional 呼び出しの同期例外を明示的に無視
+  }
   return {
     novel: {
       async getNovelText(novelId) {
-        const storage = await StorageFactory.getNovelStorage()
+        const storage = await StorageUtil.StorageFactory.getNovelStorage()
         const key = `${novelId}.json`
         const obj = await storage.get(key)
         if (!obj) return null
         return { text: obj.text }
       },
       async putNovelText(novelId, json) {
-        const storage = await StorageFactory.getNovelStorage()
+        const storage = await StorageUtil.StorageFactory.getNovelStorage()
         const key = `${novelId}.json`
 
         await executeStorageWithTracking({
@@ -112,15 +122,15 @@ export function getStoragePorts(): StoragePorts {
     },
     chunk: {
       async getChunk(jobId, index) {
-        const storage = await StorageFactory.getChunkStorage()
-        const key = StorageKeys.chunk(jobId, index)
+        const storage = await StorageUtil.StorageFactory.getChunkStorage()
+        const key = StorageUtil.StorageKeys.chunk(jobId, index)
         const obj = await storage.get(key)
         if (!obj) return null
         return { text: obj.text }
       },
       async putChunk(jobId, index, content) {
-        const storage = await StorageFactory.getChunkStorage()
-        const key = StorageKeys.chunk(jobId, index)
+        const storage = await StorageUtil.StorageFactory.getChunkStorage()
+        const key = StorageUtil.StorageKeys.chunk(jobId, index)
 
         await executeStorageWithTracking({
           storage,
@@ -141,15 +151,15 @@ export function getStoragePorts(): StoragePorts {
     },
     analysis: {
       async getAnalysis(jobId, index) {
-        const storage = await StorageFactory.getAnalysisStorage()
-        const key = StorageKeys.chunkAnalysis(jobId, index)
+        const storage = await StorageUtil.StorageFactory.getAnalysisStorage()
+        const key = StorageUtil.StorageKeys.chunkAnalysis(jobId, index)
         const obj = await storage.get(key)
         if (!obj) return null
         return { text: obj.text }
       },
       async putAnalysis(jobId, index, json) {
-        const storage = await StorageFactory.getAnalysisStorage()
-        const key = StorageKeys.chunkAnalysis(jobId, index)
+        const storage = await StorageUtil.StorageFactory.getAnalysisStorage()
+        const key = StorageUtil.StorageKeys.chunkAnalysis(jobId, index)
 
         await executeStorageWithTracking({
           storage,
@@ -170,8 +180,8 @@ export function getStoragePorts(): StoragePorts {
     },
     layout: {
       async putEpisodeLayout(jobId, episodeNumber, json) {
-        const storage = await StorageFactory.getLayoutStorage()
-        const key = StorageKeys.episodeLayout(jobId, episodeNumber)
+        const storage = await StorageUtil.StorageFactory.getLayoutStorage()
+        const key = StorageUtil.StorageKeys.episodeLayout(jobId, episodeNumber)
 
         await executeStorageWithTracking({
           storage,
@@ -190,8 +200,8 @@ export function getStoragePorts(): StoragePorts {
         return key
       },
       async getEpisodeLayout(jobId, episodeNumber) {
-        const storage = await StorageFactory.getLayoutStorage()
-        const key = StorageKeys.episodeLayout(jobId, episodeNumber)
+        const storage = await StorageUtil.StorageFactory.getLayoutStorage()
+        const key = StorageUtil.StorageKeys.episodeLayout(jobId, episodeNumber)
         const obj = await storage.get(key)
         // Add migration monitoring - MEDIUM PRIORITY
         getLogger()
@@ -203,11 +213,10 @@ export function getStoragePorts(): StoragePorts {
         return obj?.text ?? null
       },
       async putEpisodeLayoutProgress(jobId, episodeNumber, json) {
-        const storage = await StorageFactory.getLayoutStorage()
+        const storage = await StorageUtil.StorageFactory.getLayoutStorage()
         // Some tests mock StorageKeys partially. Fallback to string template if function missing.
-        const keyFn = (StorageKeys as unknown as Record<string, unknown>).episodeLayoutProgress as
-          | undefined
-          | ((jobId: string, ep: number) => string)
+        const keyFn = (StorageUtil.StorageKeys as unknown as Record<string, unknown>)
+          .episodeLayoutProgress as ((jobId: string, ep: number) => string) | undefined
         const key =
           typeof keyFn === 'function'
             ? keyFn(jobId, episodeNumber)
@@ -230,10 +239,9 @@ export function getStoragePorts(): StoragePorts {
         return key
       },
       async getEpisodeLayoutProgress(jobId, episodeNumber) {
-        const storage = await StorageFactory.getLayoutStorage()
-        const keyFn = (StorageKeys as unknown as Record<string, unknown>).episodeLayoutProgress as
-          | undefined
-          | ((jobId: string, ep: number) => string)
+        const storage = await StorageUtil.StorageFactory.getLayoutStorage()
+        const keyFn = (StorageUtil.StorageKeys as unknown as Record<string, unknown>)
+          .episodeLayoutProgress as ((jobId: string, ep: number) => string) | undefined
         const key =
           typeof keyFn === 'function'
             ? keyFn(jobId, episodeNumber)
@@ -244,11 +252,10 @@ export function getStoragePorts(): StoragePorts {
     },
     episodeText: {
       async putEpisodeText(jobId, episodeNumber, text) {
-        const storage = await StorageFactory.getAnalysisStorage()
+        const storage = await StorageUtil.StorageFactory.getAnalysisStorage()
         // Some tests mock StorageKeys partially. Fallback to string template if function missing.
-        const keyFn = (StorageKeys as unknown as Record<string, unknown>).episodeText as
-          | undefined
-          | ((jobId: string, ep: number) => string)
+        const keyFn = (StorageUtil.StorageKeys as unknown as Record<string, unknown>)
+          .episodeText as ((jobId: string, ep: number) => string) | undefined
         const key =
           typeof keyFn === 'function'
             ? keyFn(jobId, episodeNumber)
@@ -276,10 +283,9 @@ export function getStoragePorts(): StoragePorts {
         return key
       },
       async getEpisodeText(jobId, episodeNumber) {
-        const storage = await StorageFactory.getAnalysisStorage()
-        const keyFn = (StorageKeys as unknown as Record<string, unknown>).episodeText as
-          | undefined
-          | ((jobId: string, ep: number) => string)
+        const storage = await StorageUtil.StorageFactory.getAnalysisStorage()
+        const keyFn = (StorageUtil.StorageKeys as unknown as Record<string, unknown>)
+          .episodeText as ((jobId: string, ep: number) => string) | undefined
         const key =
           typeof keyFn === 'function'
             ? keyFn(jobId, episodeNumber)
@@ -290,8 +296,8 @@ export function getStoragePorts(): StoragePorts {
     },
     render: {
       async putPageRender(jobId, episodeNumber, pageNumber, data, meta) {
-        const storage = await StorageFactory.getRenderStorage()
-        const key = StorageKeys.pageRender(jobId, episodeNumber, pageNumber)
+        const storage = await StorageUtil.StorageFactory.getRenderStorage()
+        const key = StorageUtil.StorageKeys.pageRender(jobId, episodeNumber, pageNumber)
 
         await executeStorageWithTracking({
           storage,
@@ -317,8 +323,8 @@ export function getStoragePorts(): StoragePorts {
         return key
       },
       async putPageThumbnail(jobId, episodeNumber, pageNumber, data, meta) {
-        const storage = await StorageFactory.getRenderStorage()
-        const key = StorageKeys.pageThumbnail(jobId, episodeNumber, pageNumber)
+        const storage = await StorageUtil.StorageFactory.getRenderStorage()
+        const key = StorageUtil.StorageKeys.pageThumbnail(jobId, episodeNumber, pageNumber)
 
         await executeStorageWithTracking({
           storage,
@@ -345,16 +351,20 @@ export function getStoragePorts(): StoragePorts {
         return key
       },
       async getPageRender(jobId, episodeNumber, pageNumber) {
-        const storage = await StorageFactory.getRenderStorage()
-        const key = StorageKeys.pageRender(jobId, episodeNumber, pageNumber)
+        const storage = await StorageUtil.StorageFactory.getRenderStorage()
+        const key = StorageUtil.StorageKeys.pageRender(jobId, episodeNumber, pageNumber)
         const obj = await storage.get(key)
         return obj?.text ?? null
       },
     },
     output: {
       async putExport(userId, jobId, kind, data, meta) {
-        const storage = await StorageFactory.getOutputStorage()
-        const key = StorageKeys.exportOutput(userId, jobId, kind === 'pdf' ? 'pdf' : 'zip')
+        const storage = await StorageUtil.StorageFactory.getOutputStorage()
+        const key = StorageUtil.StorageKeys.exportOutput(
+          userId,
+          jobId,
+          kind === 'pdf' ? 'pdf' : 'zip',
+        )
 
         await executeStorageWithTracking({
           storage,
@@ -380,12 +390,12 @@ export function getStoragePorts(): StoragePorts {
         return key
       },
       async getExport(path) {
-        const storage = await StorageFactory.getOutputStorage()
+        const storage = await StorageUtil.StorageFactory.getOutputStorage()
         const obj = await storage.get(path)
         return obj ? { text: obj.text } : null
       },
       async deleteExport(path) {
-        const storage = await StorageFactory.getOutputStorage()
+        const storage = await StorageUtil.StorageFactory.getOutputStorage()
         await storage.delete(path)
       },
     },
@@ -407,11 +417,11 @@ export function getStoragePorts(): StoragePorts {
 }
 
 async function save(kind: 'full' | 'prompt', jobId: string, json: string): Promise<string> {
-  const storage = await StorageFactory.getAnalysisStorage()
+  const storage = await StorageUtil.StorageFactory.getAnalysisStorage()
   const key =
     kind === 'full'
-      ? JsonStorageKeys.characterMemoryFull(jobId)
-      : JsonStorageKeys.characterMemoryPrompt(jobId)
+      ? StorageUtil.JsonStorageKeys.characterMemoryFull(jobId)
+      : StorageUtil.JsonStorageKeys.characterMemoryPrompt(jobId)
   const job = await db.jobs().getJob(jobId)
   if (!job?.novelId) {
     throw new Error(`Novel ID not found for job ${jobId}`)
@@ -435,11 +445,11 @@ async function save(kind: 'full' | 'prompt', jobId: string, json: string): Promi
 }
 
 async function load(kind: 'full' | 'prompt', jobId: string): Promise<string | null> {
-  const storage = await StorageFactory.getAnalysisStorage()
+  const storage = await StorageUtil.StorageFactory.getAnalysisStorage()
   const key =
     kind === 'full'
-      ? JsonStorageKeys.characterMemoryFull(jobId)
-      : JsonStorageKeys.characterMemoryPrompt(jobId)
+      ? StorageUtil.JsonStorageKeys.characterMemoryFull(jobId)
+      : StorageUtil.JsonStorageKeys.characterMemoryPrompt(jobId)
   const obj = await storage.get(key)
   return obj?.text ?? null
 }

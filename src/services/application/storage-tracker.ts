@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import { eq } from 'drizzle-orm'
-import { getDatabase } from '@/db'
+import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
+import type * as schema from '@/db/schema'
+import { getDatabaseServiceFactory } from '@/services/database'
 import { jobs, storageFiles } from '@/db/schema'
 
 // Drizzle transaction type for internal use
-type DrizzleTransaction = Parameters<
-  Parameters<ReturnType<typeof getDatabase>['transaction']>[0]
->[0]
+type DrizzleDb = BetterSQLite3Database<typeof schema>
+type DrizzleTransaction = Parameters<Parameters<DrizzleDb['transaction']>[0]>[0]
 
 type FileCategory =
   | 'original'
@@ -39,7 +40,9 @@ export async function recordStorageFile(
   params: RecordStorageFileParams,
   tx?: DrizzleTransaction,
 ): Promise<void> {
-  const db = tx || getDatabase()
+  const db: DrizzleDb =
+    (tx as DrizzleDb | undefined) ||
+    (getDatabaseServiceFactory().getRawDatabase() as DrizzleDb)
 
   let novelId = params.novelId
   if (!novelId && params.jobId) {

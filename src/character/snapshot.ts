@@ -7,6 +7,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { generateCastList } from '@/character/finalize'
+import { storageBaseDirs } from '@/config/storage-paths.config'
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import type { CharacterCastEntry, CharacterMemoryIndex } from '@/types/extractionV2'
 
@@ -23,9 +24,12 @@ export interface CharacterMemorySnapshot {
  * Get snapshot directory path from config
  */
 function getSnapshotDir(dataDir?: string): string {
-  const config = getAppConfigWithOverrides()
-  const baseDir = dataDir || config.storage.local.basePath
-  return path.join(baseDir, config.storage.local.analysisDir, 'character-snapshots')
+  const baseDir =
+    dataDir ||
+    (process.env.NODE_ENV === 'test' || process.env.VITEST
+      ? path.join(process.cwd(), '.test-storage')
+      : path.join(process.cwd(), '.local-storage'))
+  return path.join(baseDir, storageBaseDirs.analysis, 'character-snapshots')
 }
 
 /**
