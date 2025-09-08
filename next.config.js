@@ -14,8 +14,7 @@ if (process.env.NODE_ENV === 'development') {
 
 const nextConfig = {
   reactStrictMode: true,
-  // better-sqlite3 をビルド時に含める必要があるための設定（OpenNext/CFへ影響しないローカル専用）
-  // NOTE: 本番ビルドは OpenNext によってラップされるため挙動は変わりません
+  // SQLite3 をビルド時に含めるための設定
   serverExternalPackages: ['better-sqlite3'],
   // Next.js のビルド時 ESLint 実行を無効化（CI では独自に `npm run lint:check` を走らせる）
   eslint: {

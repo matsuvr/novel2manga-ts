@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import NextAuth from 'next-auth'
 import Google from 'next-auth/providers/google'
-import { getDatabase } from '@/db'
+import { getDatabaseServiceFactory } from '@/services/database'
 import { getMissingAuthEnv } from '@/utils/auth-env'
 import { logAuthMetric, measure } from '@/utils/auth-metrics'
 
@@ -57,7 +57,9 @@ function createAuthModule(): Handlers {
   const { AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET, AUTH_SECRET } = process.env
   // DB初期化は必要時にのみ実行し、初回描画の遅延を避ける
   const configured = NextAuth({
-    adapter: DrizzleAdapter(getDatabase()),
+    adapter: DrizzleAdapter(
+      getDatabaseServiceFactory().getRawDatabase() as Parameters<typeof DrizzleAdapter>[0],
+    ),
     basePath: '/portal/api/auth',
     // セッションはJWT方式を採用し、D1への永続化を回避する
     session: { strategy: 'jwt' },

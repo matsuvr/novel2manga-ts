@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import { isDevelopment } from '@/config'
+import { storageBaseDirs } from '@/config/storage-paths.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 
 // Cloudflare Workers のグローバルバインディング型は型定義ファイルに集約されています
@@ -46,6 +47,20 @@ async function ensureDir(dirPath: string): Promise<void> {
   await fs.mkdir(dirPath, { recursive: true })
 }
 
+/**
+ * ローカルストレージの基底およびサブディレクトリ構造を作成（冪等）
+ * - テスト: .test-storage/{novels,chunks,analysis,layouts,renders,outputs}
+ * - 開発/本番ローカル: .local-storage/{...}
+ */
+export async function ensureLocalStorageStructure(): Promise<void> {
+  const base = getStorageBase()
+  await ensureDir(base)
+  const subdirs = Object.values(storageBaseDirs)
+  for (const dir of subdirs) {
+    await ensureDir(path.join(base, dir))
+  }
+}
+
 // ========================================
 // Local File Storage Implementation
 // ========================================
@@ -77,6 +92,7 @@ export class LocalFileStorage implements Storage {
 
       // メタデータは別ファイルに保存（常に isBinary:true を記録して復元時の誤判定を避ける）
       const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
+      await ensureDir(path.dirname(metadataPath))
       const metadataContent = {
         ...(metadata || {}),
         createdAt: new Date().toISOString(),
@@ -91,6 +107,7 @@ export class LocalFileStorage implements Storage {
       await fs.writeFile(filePath, buffer)
 
       const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
+      await ensureDir(path.dirname(metadataPath))
       const metadataContent = {
         ...(metadata || {}),
         createdAt: new Date().toISOString(),

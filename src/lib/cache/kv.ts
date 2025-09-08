@@ -1,27 +1,13 @@
 import { getAppConfig } from '@/config'
 
-// KVのバインディング型定義
-interface KVNamespace {
-  get(
-    key: string,
-    options?: { type?: 'text' | 'json' | 'arrayBuffer' | 'stream' },
-  ): Promise<string | ArrayBuffer | ReadableStream | null>
-  put(
-    key: string,
-    value: string | ArrayBuffer | ArrayBufferView | ReadableStream,
-    options?: KVPutOptions,
-  ): Promise<void>
-  delete(key: string): Promise<void>
-  list(options?: { prefix?: string; limit?: number; cursor?: string }): Promise<KVListResult>
-}
-
-interface KVPutOptions {
+// ローカルキャッシュの型定義（KV互換インターフェースの最小実装）
+interface LocalCachePutOptions {
   expiration?: number
   expirationTtl?: number
   metadata?: Record<string, string>
 }
 
-interface KVListResult {
+interface LocalCacheListResult {
   keys: Array<{ name: string; expiration?: number; metadata?: Record<string, string> }>
   list_complete: boolean
   cursor?: string
@@ -52,7 +38,7 @@ class MemoryCache {
   async put(
     key: string,
     value: string | ArrayBuffer | ReadableStream,
-    options?: KVPutOptions,
+    options?: LocalCachePutOptions,
   ): Promise<void> {
     let expiration: number | undefined
 
@@ -69,7 +55,7 @@ class MemoryCache {
     this.cache.delete(key)
   }
 
-  async list(options?: { prefix?: string; limit?: number }): Promise<KVListResult> {
+  async list(options?: { prefix?: string; limit?: number }): Promise<LocalCacheListResult> {
     const keys = Array.from(this.cache.keys())
       .filter((key) => !options?.prefix || key.startsWith(options.prefix))
       .slice(0, options?.limit || 1000)
@@ -85,22 +71,9 @@ class MemoryCache {
 // 開発環境用のメモリキャッシュインスタンス
 const memoryCache = new MemoryCache()
 
-// 環境に応じたキャッシュを取得
-export function getCache(): KVNamespace | MemoryCache {
-  const env = process.env.NODE_ENV
-  if (env === 'development' || env === 'test') {
-    return memoryCache
-  }
-
-  // 本番環境：KVを使用
-  // @ts-expect-error - KVバインディングはランタイムで利用可能
-  if (globalThis.CACHE) {
-    // @ts-expect-error - KVバインディングはランタイムで利用可能
-    return globalThis.CACHE as KVNamespace
-  }
-
-  // CACHE バインディングが未設定の場合は明示的にエラー
-  throw new Error('CACHE binding is not configured')
+// 常にローカルキャッシュを使用（Cloudflare KV 依存を排除）
+export function getCache(): MemoryCache {
+  return memoryCache
 }
 
 // キャッシュキーの生成ヘルパー
@@ -122,17 +95,10 @@ export function getLayoutCacheKey(episodeId: string, pageNumber: number): string
 export function getCacheTTL(type: 'analysis' | 'layout'): number {
   const app = getAppConfig()
   const baseTTL = app.processing.cache.ttl
-
-  // KVのベストプラクティス: 最小60秒のTTL
-  const minTTL = 60
-
-  // タイプ別の推奨TTL（パフォーマンス最適化）
-  const recommendedTTL = {
-    analysis: Math.max(3600, baseTTL), // 分析結果は1時間以上キャッシュ推奨
-    layout: Math.max(1800, baseTTL), // レイアウトは30分以上キャッシュ推奨
-  }
-
-  return Math.max(minTTL, recommendedTTL[type] || baseTTL)
+  const minTTL = app.processing.cache.minTtlSec
+  const recommended = app.processing.cache.recommended
+  const byType = type === 'analysis' ? recommended.analysisSec : recommended.layoutSec
+  return Math.max(minTTL, Math.max(byType, baseTTL))
 }
 
 // キャッシュの有効性チェック
@@ -165,8 +131,18 @@ export async function getCachedData<T>(
 ): Promise<T | null> {
   const cache = getCache()
   try {
-    // KVベストプラクティス: streamが最速、次にarrayBuffer、text、jsonの順
     const data = await cache.get(key, { type: options?.type || 'json' })
+    
+    // JSONデータの場合はパースする
+    if (options?.type === 'json' && typeof data === 'string') {
+      try {
+        return JSON.parse(data) as T
+      } catch (parseError) {
+        console.error(`Failed to parse cached JSON for key: ${key}`, parseError)
+        return null
+      }
+    }
+    
     return data as T
   } catch (error) {
     console.error(`Failed to get cached data for key ${key}:`, error)
@@ -178,18 +154,20 @@ export async function getCachedData<T>(
 export async function setCachedData<T>(key: string, data: T, ttl?: number): Promise<void> {
   const cache = getCache()
   try {
-    const options: KVPutOptions = {}
+    const options: LocalCachePutOptions = {}
 
-    // KVベストプラクティス: TTLは最小60秒
     if (ttl) {
-      options.expirationTtl = Math.max(60, ttl)
+      options.expirationTtl = Math.max(getAppConfig().processing.cache.minTtlSec, ttl)
     }
 
-    // データサイズチェック（KVの制限: 25MB）
+    // データサイズチェック（設定で管理）
     const serialized = JSON.stringify(data)
     const sizeInMB = new Blob([serialized]).size / (1024 * 1024)
-    if (sizeInMB > 25) {
-      console.error(`Data size (${sizeInMB.toFixed(2)}MB) exceeds KV limit of 25MB for key: ${key}`)
+    const maxItemSizeMB = getAppConfig().processing.cache.maxItemSizeMB
+    if (sizeInMB > maxItemSizeMB) {
+      console.error(
+        `Data size (${sizeInMB.toFixed(2)}MB) exceeds local cache limit of ${maxItemSizeMB}MB for key: ${key}`,
+      )
       return
     }
 

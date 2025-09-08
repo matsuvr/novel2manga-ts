@@ -32,6 +32,13 @@ beforeEach(async () => {
   // Clear vi module cache to force re-import
   vi.resetModules()
 
+  // Factory依存を最小モック（getRawDatabase のみ）
+  vi.mock('@/services/database', () => ({
+    getDatabaseServiceFactory: () => ({
+      getRawDatabase: () => mockDatabaseInstance,
+    }),
+  }))
+
   // モック適用後にTransactionManagerをインポート
   const transactionManagerModule = await import('@/services/application/transaction-manager')
   TransactionManager = transactionManagerModule.TransactionManager
