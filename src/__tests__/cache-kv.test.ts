@@ -14,10 +14,11 @@ describe('getCache', () => {
     }
   })
 
-  it('throws when CACHE binding is missing in production', () => {
+  it('returns memory cache in production (Cloudflare KV removed)', () => {
     process.env.NODE_ENV = 'production'
     delete (globalThis as any).CACHE
-    expect(() => getCache()).toThrow('CACHE binding is not configured')
+    const cache = getCache()
+    expect(cache).toBeDefined()
   })
 
   it('returns memory cache in test environment', () => {

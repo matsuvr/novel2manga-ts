@@ -323,28 +323,15 @@ export const appConfig = {
 
   // ストレージ設定
   storage: {
-    // ローカルストレージ（開発環境）
-    local: {
-      basePath: '.local-storage',
-      novelsDir: 'novels',
-      chunksDir: 'chunks',
-      analysisDir: 'analysis',
-      layoutsDir: 'layouts',
-      jobsDir: 'jobs',
-      rendersDir: 'renders',
-      thumbnailsDir: 'thumbnails',
-    },
-
-    // R2設定（本番環境）
-    r2: {
-      novelsBucket: 'NOVEL_STORAGE',
-      chunksBucket: 'CHUNKS_STORAGE',
-      analysisBucket: 'ANALYSIS_STORAGE',
-      layoutsBucket: 'LAYOUTS_STORAGE',
-      jobsBucket: 'JOBS_STORAGE',
-      rendersBucket: 'RENDERS_STORAGE',
-      thumbnailsBucket: 'THUMBNAILS_STORAGE',
-    },
+    // ローカルストレージ
+    basePath: 'storage',
+    novelsDir: 'novels',
+    chunksDir: 'chunks',
+    analysisDir: 'analysis',
+    layoutsDir: 'layouts',
+    jobsDir: 'jobs',
+    rendersDir: 'renders',
+    thumbnailsDir: 'thumbnails',
   },
 
   // 画像・ページサイズ設定
@@ -572,12 +559,22 @@ export const appConfig = {
       backoffFactor: 2, // バックオフ係数
     },
 
-    // キャッシュ設定
-    cache: {
-      ttl: 24 * 60 * 60, // キャッシュ有効期限（秒）
+  // キャッシュ設定
+  cache: {
+      ttl: 24 * 60 * 60, // デフォルトTTL（秒）
+      // 最小TTL（秒）: マジックナンバー禁止に基づき設定化
+      minTtlSec: 60,
+      // 推奨TTL（秒）: 種別ごとの下限
+      recommended: {
+        analysisSec: 60 * 60, // 1時間
+        layoutSec: 30 * 60, // 30分
+      },
+      // 1アイテムの最大サイズ（MB）: ストレージ/メモリ保護用の上限
+      maxItemSizeMB: 25,
+      // 機能トグル
       analysisCache: true, // 分析結果のキャッシュ有効化
       layoutCache: true, // レイアウトのキャッシュ有効化
-    },
+  },
 
     // エピソード処理設定
     episode: {

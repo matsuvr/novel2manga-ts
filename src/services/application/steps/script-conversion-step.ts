@@ -73,7 +73,9 @@ export class ScriptConversionStep implements PipelineStep {
 
       // Get app config for data directory
       const config = getAppConfigWithOverrides()
-      const dataDir = config.storage.local.basePath
+      const dataDir = process.env.NODE_ENV === 'test' || process.env.VITEST
+        ? require('node:path').join(process.cwd(), '.test-storage')
+        : require('node:path').join(process.cwd(), '.local-storage')
 
       // Get character information from snapshot (0-based index)
       const charactersList = await this.getCharacterInfoFromSnapshot(chunkIndex - 1, dataDir)

@@ -6,6 +6,8 @@ export { type AppConfig, appConfig, getAppConfigWithOverrides } from './app.conf
 // 旧config-loader依存は廃止（DRYに基づきapp.config/llm.configへ集約）
 
 import { type AppConfig, getAppConfigWithOverrides } from './app.config'
+import path from 'node:path'
+import { storageBaseDirs } from './storage-paths.config'
 import {
   getLLMDefaultProvider as getDefaultProvider,
   getLLMFallbackChain as getFallbackChain,
@@ -227,18 +229,20 @@ export function getApiConfig() {
 
 // ストレージ設定を取得 - app.config.tsから直接取得
 export function getStorageConfig() {
-  const config = getAppConfig()
   return {
     type: 'local' as const, // 現在はローカルのみサポート
     local: {
-      basePath: config.storage.local.basePath,
-      novelsDir: config.storage.local.novelsDir,
-      chunksDir: config.storage.local.chunksDir,
-      analysisDir: config.storage.local.analysisDir,
-      layoutsDir: config.storage.local.layoutsDir,
-      jobsDir: config.storage.local.jobsDir,
-      rendersDir: config.storage.local.rendersDir,
-      thumbnailsDir: config.storage.local.thumbnailsDir,
+      basePath:
+        process.env.NODE_ENV === 'test' || process.env.VITEST
+          ? path.join(process.cwd(), '.test-storage')
+          : path.join(process.cwd(), '.local-storage'),
+      novelsDir: storageBaseDirs.novels,
+      chunksDir: storageBaseDirs.chunks,
+      analysisDir: storageBaseDirs.analysis,
+      layoutsDir: storageBaseDirs.layouts,
+      jobsDir: 'jobs',
+      rendersDir: storageBaseDirs.renders,
+      thumbnailsDir: 'thumbnails',
     },
   }
 }

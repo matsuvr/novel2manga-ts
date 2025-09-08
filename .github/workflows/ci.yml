@@ -2,124 +2,73 @@ name: CI
 
 on:
   push:
-    branches: [main, feat/**]
+    branches: [ "**" ]
   pull_request:
-    branches: [main]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  checks: write
-  pull-requests: write
-
-env:
-  # Toggle this to 'true' when deploying and ready to run E2E on CI.
-  # Can also be overridden via repository/organization variables or workflow_dispatch inputs.
-  ENABLE_E2E: 'false'
+    branches: [ "**" ]
 
 jobs:
-  build-and-test:
-    if: ${{ vars.ENABLE_CI == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  install:
+    runs-on: ubuntu-22.04
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Use Node version from .nvmrc
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version-file: '.nvmrc'
+          node-version: '20'
           cache: 'npm'
-          check-latest: true
-
-      - name: Clean npm cache and dependencies
-        run: |
-          rm -rf node_modules package-lock.json
-          npm cache clean --force
-
       - name: Install dependencies
-        run: |
-          npm install --no-audit --no-fund
-          # Rollup optional dependencies workaround for CI
-          npm rebuild || true
+        run: npm ci
 
-      - name: Verify Tools Installation
-        run: |
-          npx biome --version
-          npx tsc --version
-          echo "Node.js version: $(node --version)"
-          echo "npm version: $(npm --version)"
-          echo "Vite version: $(npx vite --version || echo 'vite missing')"
-          echo "Vitest version: $(npx vitest --version || echo 'vitest missing')"
-
-      - name: Type Check
-        run: npx tsc --noEmit
-
-      - name: Lint and Format Check
-        run: npm run check:ci
-
-      - name: Unit Tests
-        run: |
-          set -e
-          mkdir -p test-results
-          npm run test:unit -- --run --reporter=junit --outputFile=test-results/junit-unit.xml || TEST_FAILED=$?
-          echo "Unit test exit code: ${TEST_FAILED:-0}"
-          exit ${TEST_FAILED:-0}
-
-      - name: Integration Tests
-        run: |
-          set -e
-          mkdir -p test-results
-          npm run test:integration -- --run --reporter=junit --outputFile=test-results/junit-integration.xml || TEST_FAILED=$?
-          echo "Integration test exit code: ${TEST_FAILED:-0}"
-          exit ${TEST_FAILED:-0}
-
-      # Removed legacy full-flow test step; integration tests run via npm run test:integration
-
-      - name: Start App (background) for E2E
-        if: ${{ env.ENABLE_E2E == 'true' }}
-        run: |
-          nohup npm run dev &
-          echo $! > dev.pid
-          n=0; until curl -sf http://localhost:3000/api/health || [ $n -ge 40 ]; do n=$((n+1)); sleep 3; done
-        shell: bash
-
-      - name: Playwright Install Browsers
-        if: ${{ env.ENABLE_E2E == 'true' }}
-        run: npx playwright install --with-deps
-
-      - name: E2E Tests (health)
-        if: ${{ env.ENABLE_E2E == 'true' }}
-        env:
-          E2E_BASE_URL: http://localhost:3000
-        run: npm run test:e2e -- --grep "health endpoint"
-
-      - name: Upload Test Results (optional)
-        if: always()
-        uses: actions/upload-artifact@v4
+  lint_and_typecheck:
+    runs-on: ubuntu-22.04
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          name: test-results
-          if-no-files-found: ignore
-          path: |
-            test-results
-            playwright-report
-            coverage
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
 
-      - name: Publish Unit Test Results to Summary
-        if: always()
-        uses: EnricoMi/publish-unit-test-result-action@v2
+  unit_tests:
+    runs-on: ubuntu-22.04
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          files: |
-            test-results/**/*.xml
-          # Avoid comparing to earlier commit to prevent 403 on forks or limited tokens
-          compare_to_earlier_commit: false
-          # Ensure it publishes a job summary and does not try to annotate existing check runs
-          check_run: false
-          job_summary: true
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Run unit tests
+        run: npm run test:unit
 
-      - name: Stop Dev Server
-        if: ${{ always() && env.ENABLE_E2E == 'true' }}
-        run: |
-          if [ -f dev.pid ]; then kill $(cat dev.pid) || true; fi
-        shell: bash
+  integration_tests:
+    runs-on: ubuntu-22.04
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Run integration tests
+        run: npm run test:integration
+
+  build:
+    runs-on: ubuntu-22.04
+    needs: [lint_and_typecheck, unit_tests, integration_tests]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Build
+        run: npm run build
+

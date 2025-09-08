@@ -83,6 +83,7 @@ export default [
       'no-restricted-imports': [
         'error',
         {
+          // API ルートでは旧来の HttpError の使用を禁止
           patterns: [
             {
               group: [
@@ -93,6 +94,31 @@ export default [
               ],
               message:
                 'Use ApiError and createErrorResponse (src/utils/api-error) instead of HttpError in routes.',
+            },
+            // 将来的な混入防止: Cloudflare 依存の禁止（OpenNext 依存の除去方針）
+            {
+              group: ['@opennextjs/cloudflare', '@opennextjs/cloudflare/*'],
+              message:
+                'API ルートでは @opennextjs/cloudflare の import を禁止します。環境は Effect の Layer や標準の環境変数経由で注入してください。',
+            },
+            // API ルートでの '@/db' 直接参照を禁止（型 import は許可）
+            {
+              group: ['@/db', 'src/db', '**/db/index'],
+              message:
+                "API ルートでの直接DB参照は禁止です。'@/services/database' のファクトリを経由してください。型のみの import は 'import type' を使用してください。",
+            },
+          ],
+          // 明示的なパス指定でも禁止
+          paths: [
+            {
+              name: '@opennextjs/cloudflare',
+              message:
+                'API ルートでは @opennextjs/cloudflare の import を禁止します。環境は Effect の Layer や標準の環境変数経由で注入してください。',
+            },
+            {
+              name: '@/db',
+              message:
+                "API ルートでの直接DB参照は禁止です。'@/services/database' のファクトリを経由してください。型のみの import は 'import type' を使用してください。",
             },
           ],
         },
@@ -117,14 +143,24 @@ export default [
       ],
     },
   },
-  // Disallow HttpError usage project-wide except inside api-error.ts compatibility layer
+  // Disallow HttpError usage project-wide (except compatibility layer)
+  // and forbid direct '@/db' imports outside tests (use services/database factory instead).
   {
     files: ['**/*.{ts,tsx,js,jsx}'],
-    excludedFiles: ['src/utils/api-error.ts', 'src/utils/http-errors.ts'],
+    excludedFiles: [
+      'src/utils/api-error.ts',
+      'src/utils/http-errors.ts',
+      '**/*.test.*',
+      '**/*.spec.*',
+      '**/__tests__/**',
+      // Databaseブートストラップは例外（ファクトリ初期化のために '@/db' を呼ぶ）
+      'src/services/database/index.ts',
+    ],
     rules: {
       'no-restricted-imports': [
         'error',
         {
+          allowTypeImports: true,
           paths: [
             {
               name: '@/utils/http-errors',
@@ -133,6 +169,23 @@ export default [
             {
               name: 'src/utils/http-errors',
               message: 'HttpError is deprecated. Use ApiError hierarchy instead.',
+            },
+            {
+              name: '@/db',
+              message:
+                "アプリ層での直接DB参照は禁止です。'@/services/database' のファクトリを経由してください。型のみの import は 'import type' を使用してください。",
+            },
+            {
+              name: 'src/db',
+              message:
+                "アプリ層での直接DB参照は禁止です。'@/services/database' のファクトリを経由してください。型のみの import は 'import type' を使用してください。",
+            },
+          ],
+          patterns: [
+            {
+              group: ['**/db/index', './src/db', '@@/db', '@@/db/*'],
+              message:
+                "アプリ層での直接DB参照は禁止です。'@/services/database' のファクトリを経由してください。型のみの import は 'import type' を使用してください。",
             },
           ],
         },
