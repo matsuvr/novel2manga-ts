@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import crypto from 'node:crypto'
+import { sql } from 'drizzle-orm'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { getDatabase, schema } from '@/db'
+import type { RecordStorageFileParams } from '@/services/application/storage-tracker'
+import { executeStorageWithTracking } from '@/services/application/transaction-manager'
 import { initializeDatabaseServiceFactory } from '@/services/database/database-service-factory'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
-import { executeStorageWithTracking } from '@/services/application/transaction-manager'
-import type { RecordStorageFileParams } from '@/services/application/storage-tracker'
-import { sql } from 'drizzle-orm'
 
 describe('storage_files compatibility', () => {
   const db = getDatabase()

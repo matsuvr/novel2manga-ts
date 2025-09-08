@@ -1,8 +1,8 @@
 import { and, eq } from 'drizzle-orm'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
-import { getDatabaseServiceFactory } from '@/services/database'
 import { storageFiles } from '@/db/schema'
+import { getDatabaseServiceFactory } from '@/services/database'
 
 export type StorageFileCategory =
   | 'original'
@@ -30,7 +30,17 @@ export class StorageFilesService {
   private readonly db: BetterSQLite3Database<typeof schema>
 
   constructor() {
-    this.db = getDatabaseServiceFactory().getRawDatabase() as BetterSQLite3Database<typeof schema>
+    const raw = getDatabaseServiceFactory().getRawDatabase()
+    const dbCandidate = raw as unknown as BetterSQLite3Database<typeof schema>
+    if (
+      !raw ||
+      typeof raw !== 'object' ||
+      typeof dbCandidate.select !== 'function' ||
+      typeof dbCandidate.insert !== 'function'
+    ) {
+      throw new Error('StorageFilesService: getRawDatabase() did not return a BetterSQLite3Database')
+    }
+    this.db = dbCandidate
   }
 
   async listByJobAndCategory(jobId: string, category: StorageFileCategory) {

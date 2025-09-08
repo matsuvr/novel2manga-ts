@@ -103,7 +103,7 @@ export default [
             },
             // API ルートでの '@/db' 直接参照を禁止（型 import は許可）
             {
-              group: ['@/db', 'src/db', '**/db/index'],
+              group: ['@/db', 'src/db', '@/db/index'],
               message:
                 "API ルートでの直接DB参照は禁止です。'@/services/database' のファクトリを経由してください。型のみの import は 'import type' を使用してください。",
             },
@@ -183,7 +183,7 @@ export default [
           ],
           patterns: [
             {
-              group: ['**/db/index', './src/db', '@@/db', '@@/db/*'],
+              group: ['**/db/index', './src/db', '@/db', '@/db/*'],
               message:
                 "アプリ層での直接DB参照は禁止です。'@/services/database' のファクトリを経由してください。型のみの import は 'import type' を使用してください。",
             },

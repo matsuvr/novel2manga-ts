@@ -132,6 +132,17 @@ export async function getCachedData<T>(
   const cache = getCache()
   try {
     const data = await cache.get(key, { type: options?.type || 'json' })
+    
+    // JSONデータの場合はパースする
+    if (options?.type === 'json' && typeof data === 'string') {
+      try {
+        return JSON.parse(data) as T
+      } catch (parseError) {
+        console.error(`Failed to parse cached JSON for key: ${key}`, parseError)
+        return null
+      }
+    }
+    
     return data as T
   } catch (error) {
     console.error(`Failed to get cached data for key ${key}:`, error)

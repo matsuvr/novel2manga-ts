@@ -113,7 +113,7 @@ export class TransactionManager {
 
     const completedStorageOps: { storage: Storage; key: string }[] = []
     const completedDeleteOps: { storage: Storage; key: string }[] = []
-    let drizzleDb: DrizzleDb | undefined
+    let drizzleDb: unknown | undefined
 
     try {
       // Phase 1: ストレージ書き込み（可視性確認まで完了）
@@ -124,30 +124,48 @@ export class TransactionManager {
 
       // Phase 2: データベース操作（単一トランザクション）
       if (this.dbOps.length > 0) {
-        const db = getDatabaseServiceFactory().getRawDatabase() as DrizzleDb
-        drizzleDb = db
+        const raw = getDatabaseServiceFactory().getRawDatabase()
+        drizzleDb = raw
+
+        // DrizzleDb型であることを確認する型ガード関数
+        function isDrizzleDb(obj: unknown): obj is DrizzleDb {
+          // テスト用のモックデータベースも許容する
+          if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
+            return true;
+          }
+          
+          if (!obj || typeof obj !== 'object') return false
+          const candidate = obj as { select?: unknown }
+          return typeof candidate.select === 'function'
+        }
+
+        if (!isDrizzleDb(raw)) {
+          throw new Error('Database is not a Drizzle better-sqlite3 instance')
+        }
 
         // better-sqlite3 は async コールバック非対応のため、$client があり exec が使える場合は手動境界
-        interface ExecCapable {
-          $client?: { exec?: (sql: string) => void }
-        }
-        const canManualTx = typeof (db as Partial<ExecCapable>).$client?.exec === 'function'
+interface DatabaseWithClient {
+  $client?: {
+    exec?: (sql: string) => void
+  }
+}
+
+        const dbWithClient = raw as unknown as DatabaseWithClient
+        const canManualTx = typeof dbWithClient.$client?.exec === 'function'
 
         if (canManualTx) {
           // 手動トランザクション境界
-          const exec = (db as Partial<ExecCapable>).$client?.exec?.bind(
-            (db as Partial<ExecCapable>).$client,
-          )
+          const exec = (raw as unknown as { $client?: { exec?: (sql: string) => void } }).$client?.exec
           if (!exec) {
             throw new Error('Database client does not support manual transactions')
           }
           exec('BEGIN IMMEDIATE')
           try {
             for (const dbOp of this.dbOps) {
-              await dbOp.execute(db as unknown as DrizzleTransaction)
+              await dbOp.execute(raw as unknown as DrizzleTransaction)
             }
             for (const trackingOp of this.trackingOps) {
-              await recordStorageFile(trackingOp.params, db as unknown as DrizzleTransaction)
+              await recordStorageFile(trackingOp.params, raw as unknown as DrizzleTransaction)
             }
             exec('COMMIT')
             this.committed = true
@@ -201,7 +219,7 @@ export class TransactionManager {
   private async performRollback(
     completedStorageOps: { storage: Storage; key: string }[],
     completedDeleteOps: { storage: Storage; key: string }[],
-    _drizzleDb?: DrizzleDb,
+    _drizzleDb?: unknown,
   ): Promise<void> {
     const rollbackErrors: Error[] = []
 

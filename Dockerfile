@@ -40,12 +40,14 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-# Copy node_modules and built app
-COPY --from=deps /app/node_modules ./node_modules
+# Install only production dependencies
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+# Copy built app
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/public ./public
-COPY package.json ./package.json
+COPY --from=build /app/package.json ./package.json
 
 EXPOSE 3000
 CMD ["npm", "run", "start"]
-

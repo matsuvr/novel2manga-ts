@@ -8,40 +8,46 @@
   - 実装: Effect TS で安全なエラー表現と段階的ロギング。
 */
 
-import { Effect } from 'effect'
 import { eq } from 'drizzle-orm'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
+import { Effect } from 'effect'
+import { pathMigrationConfig } from '@/config/storage-paths.config'
 import * as schema from '@/db/schema'
 import { getDatabaseServiceFactory } from '@/services/database'
 import { normalizeIfChanged } from '@/utils/storage-normalizer'
-import { pathMigrationConfig } from '@/config/storage-paths.config'
 
 type Db = BetterSQLite3Database<typeof schema>
+
+async function updateRows<T>(rows: T[], updater: (row: T) => Promise<boolean> | boolean) {
+  let updated = 0
+  for (const r of rows) {
+    const did = await updater(r)
+    if (did) updated++
+  }
+  return updated
+}
 
 // テーブルごとに更新対象列を定義
 const tableUpdaters = {
   novels: async (db: Db) => {
-    const rows = (await db.select().from(schema.novels))
-    let updated = 0
-    for (const r of rows) {
+    const rows = await db.select().from(schema.novels)
+    const updated = await updateRows(rows, async (r) => {
       const patches: Partial<typeof schema.novels.$inferInsert> = {}
       const a = normalizeIfChanged(r.originalTextPath)
       if (a.changed) patches.originalTextPath = a.next ?? null
       const b = normalizeIfChanged(r.metadataPath)
       if (b.changed) patches.metadataPath = b.next ?? null
-      if (Object.keys(patches).length > 0) {
-        updated++
-        if (!isDryRun()) {
-          await db.update(schema.novels).set(patches).where(eq(schema.novels.id, r.id))
-        }
+      if (Object.keys(patches).length === 0) return false
+      if (!isDryRun()) {
+        await db.update(schema.novels).set(patches).where(eq(schema.novels.id, r.id))
       }
-    }
+      return true
+    })
     return { table: 'novels', updated }
   },
   jobs: async (db: Db) => {
-    const rows = (await db.select().from(schema.jobs))
-    let updated = 0
-    for (const r of rows) {
+    const rows = await db.select().from(schema.jobs)
+    const updated = await updateRows(rows, async (r) => {
       const patches: Partial<typeof schema.jobs.$inferInsert> = {}
       const fields: Array<keyof typeof schema.jobs.$inferSelect> = [
         'chunksDirPath',
@@ -57,133 +63,112 @@ const tableUpdaters = {
         const { next, changed } = normalizeIfChanged(r[f] as string | null | undefined)
         if (changed) (patches as Record<string, unknown>)[f] = next ?? null
       }
-      if (Object.keys(patches).length > 0) {
-        updated++
-        if (!isDryRun()) {
-          await db.update(schema.jobs).set(patches).where(eq(schema.jobs.id, r.id))
-        }
+      if (Object.keys(patches).length === 0) return false
+      if (!isDryRun()) {
+        await db.update(schema.jobs).set(patches).where(eq(schema.jobs.id, r.id))
       }
-    }
+      return true
+    })
     return { table: 'jobs', updated }
   },
   chunks: async (db: Db) => {
-    const rows = (await db.select().from(schema.chunks))
-    let updated = 0
-    for (const r of rows) {
+    const rows = await db.select().from(schema.chunks)
+    const updated = await updateRows(rows, async (r) => {
       const { next, changed } = normalizeIfChanged(r.contentPath)
-      if (changed && next != null) {
-        updated++
-        if (!isDryRun()) {
-          await db
-            .update(schema.chunks)
-            .set({ contentPath: next })
-            .where(eq(schema.chunks.id, r.id))
-        }
+      if (!(changed && next != null)) return false
+      if (!isDryRun()) {
+        await db.update(schema.chunks).set({ contentPath: next }).where(eq(schema.chunks.id, r.id))
       }
-    }
+      return true
+    })
     return { table: 'chunks', updated }
   },
   chunk_analysis_status: async (db: Db) => {
-    const rows = (await db.select().from(schema.chunkAnalysisStatus))
-    let updated = 0
-    for (const r of rows) {
+    const rows = await db.select().from(schema.chunkAnalysisStatus)
+    const updated = await updateRows(rows, async (r) => {
       const { next, changed } = normalizeIfChanged(r.analysisPath)
-      if (changed) {
-        updated++
-        if (!isDryRun()) {
-          await db
-            .update(schema.chunkAnalysisStatus)
-            .set({ analysisPath: next ?? null })
-            .where(eq(schema.chunkAnalysisStatus.id, r.id))
-        }
+      if (!changed) return false
+      if (!isDryRun()) {
+        await db
+          .update(schema.chunkAnalysisStatus)
+          .set({ analysisPath: next ?? null })
+          .where(eq(schema.chunkAnalysisStatus.id, r.id))
       }
-    }
+      return true
+    })
     return { table: 'chunk_analysis_status', updated }
   },
   episodes: async (db: Db) => {
-    const rows = (await db.select().from(schema.episodes))
-    let updated = 0
-    for (const r of rows) {
+    const rows = await db.select().from(schema.episodes)
+    const updated = await updateRows(rows, async (r) => {
       const { next, changed } = normalizeIfChanged(r.episodeTextPath)
-      if (changed) {
-        updated++
-        if (!isDryRun()) {
-          await db
-            .update(schema.episodes)
-            .set({ episodeTextPath: next ?? null })
-            .where(eq(schema.episodes.id, r.id))
-        }
+      if (!changed) return false
+      if (!isDryRun()) {
+        await db
+          .update(schema.episodes)
+          .set({ episodeTextPath: next ?? null })
+          .where(eq(schema.episodes.id, r.id))
       }
-    }
+      return true
+    })
     return { table: 'episodes', updated }
   },
   layout_status: async (db: Db) => {
-    const rows = (await db.select().from(schema.layoutStatus))
-    let updated = 0
-    for (const r of rows) {
+    const rows = await db.select().from(schema.layoutStatus)
+    const updated = await updateRows(rows, async (r) => {
       const { next, changed } = normalizeIfChanged(r.layoutPath)
-      if (changed) {
-        updated++
-        if (!isDryRun()) {
-          await db
-            .update(schema.layoutStatus)
-            .set({ layoutPath: next ?? null })
-            .where(eq(schema.layoutStatus.id, r.id))
-        }
+      if (!changed) return false
+      if (!isDryRun()) {
+        await db
+          .update(schema.layoutStatus)
+          .set({ layoutPath: next ?? null })
+          .where(eq(schema.layoutStatus.id, r.id))
       }
-    }
+      return true
+    })
     return { table: 'layout_status', updated }
   },
   render_status: async (db: Db) => {
-    const rows = (await db.select().from(schema.renderStatus))
-    let updated = 0
-    for (const r of rows) {
+    const rows = await db.select().from(schema.renderStatus)
+    const updated = await updateRows(rows, async (r) => {
       const patches: Partial<typeof schema.renderStatus.$inferInsert> = {}
       const a = normalizeIfChanged(r.imagePath)
       if (a.changed) patches.imagePath = a.next ?? null
       const b = normalizeIfChanged(r.thumbnailPath)
       if (b.changed) patches.thumbnailPath = b.next ?? null
-      if (Object.keys(patches).length > 0) {
-        updated++
-        if (!isDryRun()) {
-          await db.update(schema.renderStatus).set(patches).where(eq(schema.renderStatus.id, r.id))
-        }
+      if (Object.keys(patches).length === 0) return false
+      if (!isDryRun()) {
+        await db.update(schema.renderStatus).set(patches).where(eq(schema.renderStatus.id, r.id))
       }
-    }
+      return true
+    })
     return { table: 'render_status', updated }
   },
   outputs: async (db: Db) => {
-    const rows = (await db.select().from(schema.outputs))
-    let updated = 0
-    for (const r of rows) {
+    const rows = await db.select().from(schema.outputs)
+    const updated = await updateRows(rows, async (r) => {
       const { next, changed } = normalizeIfChanged(r.outputPath)
-      if (changed && next != null) {
-        updated++
-        if (!isDryRun()) {
-          await db
-            .update(schema.outputs)
-            .set({ outputPath: next })
-            .where(eq(schema.outputs.id, r.id))
-        }
+      if (!(changed && next != null)) return false
+      if (!isDryRun()) {
+        await db.update(schema.outputs).set({ outputPath: next }).where(eq(schema.outputs.id, r.id))
       }
-    }
+      return true
+    })
     return { table: 'outputs', updated }
   },
   storage_files: async (db: Db) => {
-    const rows = (await db.select().from(schema.storageFiles))
-    let updated = 0
-    for (const r of rows) {
+    const rows = await db.select().from(schema.storageFiles)
+    const updated = await updateRows(rows, async (r) => {
       const { next, changed } = normalizeIfChanged(r.filePath)
-      if (changed && next != null) {
-        updated++
-        if (!isDryRun()) {
-          await db
-            .update(schema.storageFiles)
-            .set({ filePath: next })
-            .where(eq(schema.storageFiles.id, r.id))
-        }
+      if (!(changed && next != null)) return false
+      if (!isDryRun()) {
+        await db
+          .update(schema.storageFiles)
+          .set({ filePath: next })
+          .where(eq(schema.storageFiles.id, r.id))
       }
-    }
+      return true
+    })
     return { table: 'storage_files', updated }
   },
 } as const

@@ -7,8 +7,8 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { generateCastList } from '@/character/finalize'
-import { storageBaseDirs } from '@/config/storage-paths.config'
 import { getAppConfigWithOverrides } from '@/config/app.config'
+import { storageBaseDirs } from '@/config/storage-paths.config'
 import type { CharacterCastEntry, CharacterMemoryIndex } from '@/types/extractionV2'
 
 /**

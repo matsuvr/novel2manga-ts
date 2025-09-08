@@ -5,15 +5,15 @@ export { type AppConfig, appConfig, getAppConfigWithOverrides } from './app.conf
 
 // 旧config-loader依存は廃止（DRYに基づきapp.config/llm.configへ集約）
 
-import { type AppConfig, getAppConfigWithOverrides } from './app.config'
 import path from 'node:path'
-import { storageBaseDirs } from './storage-paths.config'
+import { type AppConfig, getAppConfigWithOverrides } from './app.config'
 import {
   getLLMDefaultProvider as getDefaultProvider,
   getLLMFallbackChain as getFallbackChain,
   getLLMProviderConfig as getProviderConfig,
   type LLMProvider,
 } from './llm.config'
+import { storageBaseDirs } from './storage-paths.config'
 
 // 初期化が必要な場合のヘルパー - app.config.tsベース
 export async function ensureConfigLoaded() {
