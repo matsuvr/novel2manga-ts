@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+
 // node-mocks-http は使用しない（エンドポイント互換の形だけ検証）
 
 // API互換性テスト - 認証エンドポイント

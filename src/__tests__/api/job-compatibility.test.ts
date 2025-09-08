@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
+
 // node-mocks-http は使用しない
 
 // API互換性テスト - ジョブ管理エンドポイント
