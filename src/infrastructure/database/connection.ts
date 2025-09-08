@@ -1,6 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
-import { getDatabase } from '@/db'
 import type * as schema from '@/db/schema'
 import type { DatabaseAdapter } from './adapters/base-adapter'
 import { D1Adapter, isD1Like } from './adapters/d1-adapter'
@@ -34,8 +33,10 @@ export function createDatabaseConnection(options?: {
     const adapter = new D1Adapter(options.d1)
     return { db: options.d1, adapter }
   }
-
-  const db = options?.sqlite ?? (getDatabase() as DrizzleSqlite)
+  if (!options?.sqlite) {
+    throw new Error('createDatabaseConnection requires a sqlite database instance in this environment')
+  }
+  const db = options.sqlite
   const adapter = new SqliteAdapter(db)
   return { db, adapter }
 }

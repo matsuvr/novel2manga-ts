@@ -246,10 +246,11 @@ export function setupUnifiedTestEnvironment() {
         getRenderStorage: () => testFactory.getRenderStorage(),
         getOutputStorage: () => testFactory.getOutputStorage(),
       },
+      ensureLocalStorageStructure: async () => {},
     }
   })
 
-  vi.mock('@/db/index', () => ({
+  vi.mock('@/db', () => ({
     getDatabase: () => globalMockDb,
   }))
 

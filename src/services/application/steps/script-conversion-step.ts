@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { convertChunkToMangaScript } from '@/agents/script/script-converter'
 import { formatSnapshotForPrompt, loadCharacterSnapshot } from '@/character/snapshot'
 import { getAppConfigWithOverrides } from '@/config/app.config'
@@ -73,7 +74,9 @@ export class ScriptConversionStep implements PipelineStep {
 
       // Get app config for data directory
       const config = getAppConfigWithOverrides()
-      const dataDir = config.storage.local.basePath
+      const dataDir = process.env.NODE_ENV === 'test' || process.env.VITEST
+        ? path.join(process.cwd(), '.test-storage')
+        : path.join(process.cwd(), '.local-storage')
 
       // Get character information from snapshot (0-based index)
       const charactersList = await this.getCharacterInfoFromSnapshot(chunkIndex - 1, dataDir)

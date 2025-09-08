@@ -1,4 +1,3 @@
-import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { Context, Layer } from 'effect'
 import { decode } from 'next-auth/jwt'
 
@@ -18,7 +17,7 @@ export function extractBearerToken(header: string | null): string | null {
 export const AuthSecret = Context.GenericTag<string>('AuthSecret')
 
 export const AuthSecretLive = Layer.sync(AuthSecret, () => {
-  const secret = getCloudflareContext().env.AUTH_SECRET
+  const secret = process.env.AUTH_SECRET
 
   if (!secret) {
     throw new Error('AUTH_SECRET environment variable not provided.')
