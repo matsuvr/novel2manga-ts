@@ -4,6 +4,8 @@ import ResultsDisplay from '@/components/ResultsDisplay'
 import { db } from '@/services/database/index'
 import { isRenderCompletelyDone } from '@/utils/completion'
 
+export const dynamic = 'force-dynamic';
+
 interface Params {
   jobId: string
 }
