@@ -19,7 +19,8 @@
     "build": "next build",
     "start": "next start",
     "preview": "next build && next start",
-    "deploy": "next build && next start",
+    "deploy:build": "next build",
+    "deploy:start": "next start",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,jsonc,md,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,jsonc,md,yml,yaml}\"",
     "format:json": "prettier --write \"**/*.{json,jsonc}\"",
@@ -39,7 +40,9 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "build:standalone": "next build",
+    "start:standalone": "next start"
   },
   "keywords": [],
   "author": "",
