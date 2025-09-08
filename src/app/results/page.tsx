@@ -3,17 +3,7 @@ import { redirect } from 'next/navigation'
 import { auth } from '@/auth'
 import { db } from '@/services/database/index'
 
-function _formatBytes(bytes: number | null): string {
-  if (!bytes) return '-'
-  const units = ['B', 'KB', 'MB', 'GB']
-  let index = 0
-  let value = bytes
-  while (value >= 1024 && index < units.length - 1) {
-    value /= 1024
-    index += 1
-  }
-  return `${value.toFixed(1)}${units[index]}`
-}
+export const dynamic = 'force-dynamic';
 
 export default async function ResultsPage() {
   const session = await auth()

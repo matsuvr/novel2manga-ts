@@ -1,0 +1,20 @@
+{
+    "$schema": "https://charm.land/crush.json",
+    "lsp": {
+        "typescript": {
+            "command": "typescript-language-server",
+            "args": [
+                "--stdio"
+            ]
+        }
+    },
+    "mcp": {
+        "context7": {
+            "type": "http",
+            "url": "https://mcp.context7.com/mcp",
+            "headers": {
+                "CONTEXT7_API_KEY": "ctx7sk-e9db7639-c9ed-431f-9c82-61ce695a8f20"
+            }
+        }
+    }
+}
