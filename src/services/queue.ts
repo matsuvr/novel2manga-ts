@@ -11,21 +11,26 @@ export interface JobQueue {
 // Non-LLM fallback is prohibited: require Cloudflare Queue binding explicitly.
 let singleton: JobQueue | null = null
 
+type JobsQueueBinding = { send?: (body: unknown) => Promise<void> }
+
+function getJobsQueueBinding(): JobsQueueBinding | undefined {
+  return (globalThis as unknown as { JOBS_QUEUE?: JobsQueueBinding }).JOBS_QUEUE
+}
+
 export function getJobQueue(): JobQueue {
-  const cfQueue = (globalThis as unknown as { JOBS_QUEUE?: { send?: (body: unknown) => Promise<void> } }).JOBS_QUEUE
+  const cfQueue = getJobsQueueBinding()
   if (!singleton) {
     if (!cfQueue || typeof cfQueue.send !== 'function') {
-      throw new Error(
-        'JOBS_QUEUE binding is not configured or invalid. Queue processing cannot proceed.',
-      )
+      throw new Error('JOBS_QUEUE binding is not configured or JOBS_QUEUE.send is not a function')
     }
     singleton = {
       async enqueue(message: JobQueueMessage): Promise<void> {
-          const sender = (cfQueue as { send?: (b: unknown) => Promise<void> })?.send
-          if (!sender) {
-            throw new Error('JOBS_QUEUE.send is not available')
-          }
-          await sender(message)
+        // cfQueue is captured from outer scope and typed via helper
+        const sender = cfQueue.send
+        if (!sender) {
+          throw new Error('JOBS_QUEUE.send is not available')
+        }
+        await sender(message)
       },
     }
   }

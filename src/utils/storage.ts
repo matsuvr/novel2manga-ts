@@ -19,6 +19,7 @@ export interface Storage {
   head?(key: string): Promise<{ size?: number; metadata?: Record<string, string> } | null>
 }
 
+
 // Deprecated DB adapter interfaces removed – DB access is unified via Drizzle in src/db
 
 // ========================================
@@ -324,7 +325,7 @@ async function resolveStorage(
       .error('[storage] Cloudflare R2 bindings are no longer supported in this build', {
         binding,
       })
-    throw new Error(`Cloudflare R2 binding detected for ${binding} but R2 support was removed`)
+  throw new Error(`Cloudflare R2 binding detected for ${binding} but R2 support was removed`)
   }
 
   throw new Error(errorMessage)
