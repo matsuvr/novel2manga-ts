@@ -50,3 +50,8 @@ export interface ChunkData {
   text: string
   analysis?: ChunkAnalysisResult
 }
+
+export interface ChunkSummary {
+  chunkIndex: number
+  summary: string
+}

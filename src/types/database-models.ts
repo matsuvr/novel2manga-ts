@@ -273,8 +273,8 @@ export const TextAnalysisSchema = z.object({
     .object({
       chunkIndex: z.number().optional(),
       totalChunks: z.number().optional(),
-      previousChunkText: z.string().optional(),
-      nextChunkText: z.string().optional(),
+      previousChunkSummary: z.string().optional(),
+      nextChunkSummary: z.string().optional(),
     })
     .optional(),
   createdAt: z.date(),

@@ -1,4 +1,5 @@
 import { convertChunkToMangaScript } from '@/agents/script/script-converter'
+import { getStoredSummary } from '@/utils/chunk-summary'
 import { db } from '@/services/database/index'
 import type { NewMangaScript } from '@/types/script'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
@@ -92,20 +93,18 @@ export class ChunkScriptStep implements PipelineStep {
           jobDb.updateJobStep(jobId, `script_chunk_${i}`)
           const text = (await resolveChunkText(i)) ?? ''
 
-          // Get previous and next chunks for context (load from storage if not in memory)
-          const previousText = await resolveChunkText(i - 1)
-          const nextChunk = await resolveChunkText(i + 1)
-
           // Read analysis data for this chunk
           const analysisData = await readChunkAnalysis(i)
 
+          const previousSummary = await getStoredSummary(jobId, i - 1)
+          const nextSummary = await getStoredSummary(jobId, i + 1)
           logger.info('Converting chunk to manga script', {
             jobId,
             chunkIndex: i,
             textLength: text.length,
             totalChunks: chunks.length,
-            hasPrevious: typeof previousText === 'string' && previousText.length > 0,
-            hasNext: typeof nextChunk === 'string' && nextChunk.length > 0,
+            hasPreviousSummary: !!previousSummary,
+            hasNextSummary: !!nextSummary,
             hasAnalysis: Object.values(analysisData).some((v) => v !== ''),
           })
 
@@ -122,8 +121,8 @@ export class ChunkScriptStep implements PipelineStep {
                 chunkText: text,
                 chunkIndex: i + 1,
                 chunksNumber: chunks.length,
-                previousText,
-                nextChunk,
+                previousSummary: previousSummary ?? undefined,
+                nextSummary: nextSummary ?? undefined,
                 ...analysisData,
               },
               { jobId, isDemo: context.isDemo },
@@ -151,8 +150,8 @@ export class ChunkScriptStep implements PipelineStep {
                 },
                 promptMeta: {
                   chunkTextPreview: text.substring(0, 120),
-                  hasPrevious: !!previousText,
-                  hasNext: !!nextChunk,
+                  hasPreviousSummary: !!previousSummary,
+                  hasNextSummary: !!nextSummary,
                   hasAnalysis: Object.values(analysisData).some((v) => v !== ''),
                 },
               } as const

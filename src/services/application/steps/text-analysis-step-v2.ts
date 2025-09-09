@@ -13,6 +13,7 @@ import type { AliasIndex, CharacterMemoryIndex, ExtractionV2 } from '@/types/ext
 import { isTempCharacterId } from '@/types/extractionV2'
 import { ExtractionV2Schema } from '@/validation/extractionV2'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
+import { getStoredSummary, loadOrGenerateSummary } from '@/utils/chunk-summary'
 
 export interface AnalysisResult {
   completed: boolean
@@ -93,17 +94,19 @@ export class TextAnalysisStep implements PipelineStep {
       // Load current prompt memory
       const promptMemory = await loadPromptMemory(jobId)
 
-      // Get context chunks
-      const prevText = i > 0 ? chunks[i - 1] : ''
-      const nextText = i + 1 < chunks.length ? chunks[i + 1] : ''
+      // Ensure summaries for current and adjacent chunks
+      await loadOrGenerateSummary(jobId, i, chunkText)
+      const prevSummary = i > 0 ? await getStoredSummary(jobId, i - 1) : ''
+      const nextSummary =
+        i + 1 < chunks.length ? await loadOrGenerateSummary(jobId, i + 1, chunks[i + 1]) : ''
 
       // Generate V2 prompts
       const systemPrompt = getExtractionV2SystemPrompt()
       const userPrompt = generateExtractionV2UserPrompt(
         i,
         chunkText,
-        prevText,
-        nextText,
+        prevSummary || '',
+        nextSummary || '',
         promptMemory,
       )
 

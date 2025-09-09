@@ -510,6 +510,10 @@ export const JsonStorageKeys = {
     validateId(jobId, 'jobId')
     return `${jobId}/character_memory.prompt.json`
   },
+  chunkSummary: (jobId: string, index: number) => {
+    validateId(jobId, 'jobId')
+    return `${jobId}/chunk_${index}.summary.json`
+  },
   // episodeBundling removed - replaced with episode break estimation
 } as const
 

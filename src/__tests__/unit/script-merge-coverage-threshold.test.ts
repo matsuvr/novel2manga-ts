@@ -36,6 +36,7 @@ vi.mock('@/utils/storage', async () => {
       scriptChunk: (jobId: string, index: number) => `${jobId}/script_chunk_${index}.json`,
       scriptCombined: (jobId: string) => `${jobId}/script_combined.json`,
       fullPages: (jobId: string) => `${jobId}/full_pages.json`,
+      chunkSummary: (jobId: string, index: number) => `${jobId}/chunk_${index}.summary.json`,
     },
   }
 })
@@ -96,6 +97,7 @@ describe('ScriptMergeStep - coverage threshold', () => {
           scriptChunk: (jobId: string, index: number) => `${jobId}/script_chunk_${index}.json`,
           scriptCombined: (jobId: string) => `${jobId}/script_combined.json`,
           fullPages: (jobId: string) => `${jobId}/full_pages.json`,
+          chunkSummary: (jobId: string, index: number) => `${jobId}/chunk_${index}.summary.json`,
         },
       }
     })

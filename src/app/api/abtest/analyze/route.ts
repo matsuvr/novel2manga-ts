@@ -85,8 +85,8 @@ export async function POST(req: Request) {
     const prompt = cfg.userPromptTemplate
       .replace('{{chunkIndex}}', String(body.chunkIndex))
       .replace('{{chunkText}}', body.text)
-      .replace('{{previousChunkText}}', '')
-      .replace('{{nextChunkText}}', '')
+      .replace('{{previousChunkSummary}}', '')
+      .replace('{{nextChunkSummary}}', '')
 
     const [gpt120b, llama70b] = await Promise.all([
       runWithModel('openai/gpt-oss-120b', prompt),

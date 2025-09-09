@@ -14,8 +14,8 @@ export interface ScriptConversionInput {
   chunkText: string
   chunkIndex: number
   chunksNumber: number
-  previousText?: string
-  nextChunk?: string
+  previousSummary?: string
+  nextSummary?: string
   charactersList?: string
   scenesList?: string
   dialoguesList?: string
@@ -137,8 +137,8 @@ export async function convertChunkToMangaScript(
     .replace('{{chunkText}}', input.chunkText)
     .replace('{{chunkIndex}}', input.chunkIndex.toString())
     .replace('{{chunksNumber}}', input.chunksNumber.toString())
-    .replace('{{previousText}}', input.previousText ?? '（本文の開始）')
-    .replace('{{nextChunk}}', input.nextChunk ?? '（本文終了）')
+    .replace('{{previousSummary}}', input.previousSummary ?? '（本文の開始）')
+    .replace('{{nextSummary}}', input.nextSummary ?? '（本文終了）')
     .replace('{{charactersList}}', input.charactersList ?? '')
     .replace('{{scenesList}}', input.scenesList ?? '')
     .replace('{{dialoguesList}}', input.dialoguesList ?? '')
