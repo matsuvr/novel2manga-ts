@@ -10,7 +10,7 @@ import {
   VerticalTextRenderResponseSchema,
 } from '@/types/vertical-text'
 
-const EnvSchema = z.object({ url: z.string().url(), token: z.string().min(1).optional() })
+const EnvSchema = z.object({ url: z.string().url(), token: z.string().trim().min(1).optional() })
 
 // Type-safe helpers for extracting error details without using `any`
 type NetErrorCause = {
