@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 import path from 'node:path'
-import { fileLogger } from './src/utils/logger.mjs'
 import { fileURLToPath } from 'node:url'
+
+import { fileLogger } from './src/utils/logger.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
