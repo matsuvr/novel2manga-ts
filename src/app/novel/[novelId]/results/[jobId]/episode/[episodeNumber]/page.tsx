@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation'
 import { loadEpisodePreview } from '@/services/application/episode-preview'
 import { db } from '@/services/database/index'
-import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { StorageFactory } from '@/utils/storage'
+import { StorageKeys } from '@/utils/storage-keys'
 
 interface Params {
   novelId: string

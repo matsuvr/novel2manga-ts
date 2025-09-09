@@ -1,3 +1,5 @@
+<!-- ARCHIVED: Historical OpenNext/Cloudflare research notes. For current guidance refer to docs/standard-next-migration-plan.md -->
+
 # Phase 0: Research & Analysis
 
 ## Research Objectives
@@ -10,10 +12,10 @@ Resolve all NEEDS CLARIFICATION items from the feature specification and gather 
 
 **Research Findings**:
 - **Decision**: Cloudflare KV (Key-Value storage) and R2 (Object storage) data will be migrated to SQLite3 with appropriate schema design
-- **Rationale**: 
+- **Rationale**:
   - KV data typically stores configuration, session data, caching → can be stored as key-value tables in SQLite
   - R2 data typically stores binary files, user uploads → can be stored as BLOB fields or file system references
-- **Alternatives considered**: 
+- **Alternatives considered**:
   - Keep using cloud storage (rejected - violates pure Next.js requirement)
   - Use local file system (viable for small scale, but SQLite provides better queryability)
 
@@ -22,11 +24,11 @@ Resolve all NEEDS CLARIFICATION items from the feature specification and gather 
 
 **Research Findings**:
 - **Decision**: Target < 5 minutes downtime for database migration
-- **Rationale**: 
+- **Rationale**:
   - Small to medium application can migrate quickly with SQLite
   - Use transaction-based migration to ensure consistency
   - Implement rollback capability
-- **Alternatives considered**: 
+- **Alternatives considered**:
   - Zero-downtime (complex for this scope)
   - Extended maintenance window (unnecessary for SQLite migration)
 
@@ -35,11 +37,11 @@ Resolve all NEEDS CLARIFICATION items from the feature specification and gather 
 
 **Research Findings**:
 - **Decision**: Maintain current response times within ±10%
-- **Rationale**: 
+- **Rationale**:
   - Page load times < 2 seconds
   - API response times < 500ms
   - Database query times < 100ms
-- **Alternatives considered**: 
+- **Alternatives considered**:
   - Performance improvements (nice-to-have but not required)
   - Strict performance budgets (overly restrictive for migration)
 

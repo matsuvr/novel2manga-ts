@@ -1,3 +1,5 @@
+<!-- ARCHIVED: Historical migration plan (Cloudflare). Refer to docs/standard-next-migration-plan.md for current state. -->
+
 # Implementation Plan: OpenNext・Cloudflare削除と純粋Next.js＋SQLite3移行
 
 **Branch**: `001-oepnnext-cloudflare-next` | **Date**: 2025-09-08 | **Spec**: [/specs/001-oepnnext-cloudflare-next/spec.md](/specs/001-oepnnext-cloudflare-next/spec.md)
@@ -32,14 +34,14 @@
 OpenNextとCloudflareの依存関係を完全に削除し、純粋なNext.jsアプリケーションに移行します。データベースはCloudflare D1からSQLite3に変更し、全ての既存機能とデータを維持します。
 
 ## Technical Context
-**Language/Version**: TypeScript, Next.js 14+ (現行環境から継続)  
-**Primary Dependencies**: Next.js, Drizzle ORM, SQLite3, Effect TS (段階的移行中)  
-**Storage**: SQLite3 (Cloudflare D1から移行)  
-**Testing**: Vitest, Playwright (現行環境から継続)  
-**Target Platform**: Node.jsサーバー (Cloudflare Workersから移行)  
-**Project Type**: web (Next.jsアプリケーション)  
-**Performance Goals**: 現行と同等のレスポンスタイム  
-**Constraints**: ゼロダウンタイム移行、データ完全性保証  
+**Language/Version**: TypeScript, Next.js 14+ (現行環境から継続)
+**Primary Dependencies**: Next.js, Drizzle ORM, SQLite3, Effect TS (段階的移行中)
+**Storage**: SQLite3 (Cloudflare D1から移行)
+**Testing**: Vitest, Playwright (現行環境から継続)
+**Target Platform**: Node.jsサーバー (Cloudflare Workersから移行)
+**Project Type**: web (Next.jsアプリケーション)
+**Performance Goals**: 現行と同等のレスポンスタイム
+**Constraints**: ゼロダウンタイム移行、データ完全性保証
 **Scale/Scope**: 中小規模アプリケーション
 
 ## Constitution Check
@@ -187,12 +189,12 @@ ios/ or android/
 - Load `/templates/tasks-template.md` as base
 - Generate tasks from Phase 1 design docs (contracts, data model, quickstart)
 - Each contract → contract test task [P]
-- Each entity → model creation task [P] 
+- Each entity → model creation task [P]
 - Each user story → integration test task
 - Implementation tasks to make tests pass
 
 **Ordering Strategy**:
-- TDD order: Tests before implementation 
+- TDD order: Tests before implementation
 - Dependency order: Models before services before UI
 - Mark [P] for parallel execution (independent files)
 
@@ -203,8 +205,8 @@ ios/ or android/
 ## Phase 3+: Future Implementation
 *These phases are beyond the scope of the /plan command*
 
-**Phase 3**: Task execution (/tasks command creates tasks.md)  
-**Phase 4**: Implementation (execute tasks.md following constitutional principles)  
+**Phase 3**: Task execution (/tasks command creates tasks.md)
+**Phase 4**: Implementation (execute tasks.md following constitutional principles)
 **Phase 5**: Validation (run tests, execute quickstart.md, performance validation)
 
 ## Complexity Tracking

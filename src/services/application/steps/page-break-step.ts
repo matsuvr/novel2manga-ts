@@ -9,7 +9,7 @@ import type {
   NewMangaScript,
   PageBreakV2,
 } from '@/types/script'
-import { StorageKeys } from '@/utils/storage'
+import { StorageKeys } from '@/utils/storage-keys'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface PageBreakResult {

@@ -1,15 +1,3 @@
 {
-	"servers": {
-		"cloudflare": {
-			"command": "cmd",
-			"args": [
-				"/c",
-				"npx",
-				"-y",
-				"mcp-remote",
-				"https://docs.mcp.cloudflare.com/sse"
-			],
-			"type": "stdio"
-		}
-	}
+	"servers": {}
 }

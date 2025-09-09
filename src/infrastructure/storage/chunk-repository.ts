@@ -1,5 +1,6 @@
 import type { AnalyzedChunk, IChunkRepository } from '@/domain/repositories/chunk-repository'
-import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { StorageFactory } from '@/utils/storage'
+import { StorageKeys } from '@/utils/storage-keys'
 
 // Repository implementation backed by StorageFactory, which selects the
 // appropriate storage (local filesystem in development, R2 in production).

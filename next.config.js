@@ -15,7 +15,7 @@ if (process.env.NODE_ENV === 'development') {
 const nextConfig = {
   reactStrictMode: true,
   // SQLite3 をビルド時に含めるための設定
-  serverExternalPackages: ['better-sqlite3'],
+  serverExternalPackages: ['better-sqlite3', 'jose'],
   // Next.js のビルド時 ESLint 実行を無効化（CI では独自に `npm run lint:check` を走らせる）
   eslint: {
     ignoreDuringBuilds: true,
@@ -29,9 +29,12 @@ const nextConfig = {
   // Fast Refreshの最適化とパフォーマンス改善
   webpack: (config, { dev, isServer }) => {
     if (dev && !isServer) {
+      // WSL2 + Docker環境でのファイル監視を最適化
       config.watchOptions = {
-        poll: 1000,
+        // pollを無効にしてinotifyを使用（可能であれば）
+        // poll: 1000, // コメントアウト
         aggregateTimeout: 300,
+        ignored: ['**/node_modules', '**/.next', '**/logs'],
       }
       // 開発環境でのビルド最適化
       config.optimization = {

@@ -24,6 +24,9 @@ RUN npm ci
 # Development image
 FROM deps AS dev
 ENV NODE_ENV=development
+# ファイル監視の最適化
+ENV CHOKIDAR_USEPOLLING=false
+ENV WATCHPACK_POLLING=false
 COPY . .
 EXPOSE 3000
 CMD ["npm", "run", "dev"]

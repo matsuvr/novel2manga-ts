@@ -1,5 +1,6 @@
 import { getLogger } from '@/infrastructure/logging/logger'
-import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { StorageFactory } from '@/utils/storage'
+import { StorageKeys } from '@/utils/storage-keys'
 
 export interface EpisodePagePreview {
   page: number
@@ -55,7 +56,7 @@ export async function loadEpisodePreview(
     try {
       const prefix = `${jobId}/episode_${episodeNumber}/`
       const keys = await renderStorage.list(prefix)
-      // Windows/UNIXのパス区切り差異に対応（\\/ のいずれも許容）
+      // Windows/UNIXのパス区切り差異に対応（\/ のいずれも許容）
       const fromRenders = keys
         .map((k) => {
           const m = k.match(/episode_\d+[\\/]page_(\d+)\.png$/)

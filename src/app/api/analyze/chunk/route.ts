@@ -9,7 +9,8 @@ import {
   createSuccessResponse,
   ValidationError,
 } from '@/utils/api-error'
-import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { StorageFactory } from '@/utils/storage'
+import { StorageKeys } from '@/utils/storage-keys'
 
 // リクエストボディのバリデーションスキーマ
 const analyzeChunkRequestSchema = z.object({

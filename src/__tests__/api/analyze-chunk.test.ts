@@ -6,6 +6,7 @@ import {
 } from '@/__tests__/integration/__helpers/rate-limit'
 import { POST } from '@/app/api/analyze/chunk/route'
 import { StorageFactory } from '@/utils/storage'
+import { StorageKeys } from '@/utils/storage-keys'
 
 // モック設定
 vi.mock('@/agents/chunk-analyzer', () => {

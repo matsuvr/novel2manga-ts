@@ -2,7 +2,8 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { createErrorResponse, handleApiError, validationError } from '@/utils/api-error'
-import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { StorageFactory } from '@/utils/storage'
+import { StorageKeys } from '@/utils/storage-keys'
 import { validateJobId } from '@/utils/validators'
 
 interface RouteParams {

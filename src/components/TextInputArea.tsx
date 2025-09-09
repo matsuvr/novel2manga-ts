@@ -17,6 +17,7 @@ export default function TextInputArea({
   isProcessing,
   maxLength = 100000,
 }: TextInputAreaProps) {
+  console.log('[TextInputArea] render')
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -131,6 +132,7 @@ export default function TextInputArea({
         <button
           type="button"
           onClick={(_e) => {
+            console.log('[TextInputArea] click submit button')
             onSubmit()
           }}
           disabled={isProcessing || !value.trim()}

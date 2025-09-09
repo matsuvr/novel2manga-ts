@@ -90,6 +90,7 @@ function RedirectingView({ pendingRedirect }: { pendingRedirect: string }) {
 }
 
 export default function HomeClient() {
+  console.log('[HomeClient] render')
   const router = useRouter()
   const [viewMode, setViewMode] = useState<ViewMode>('input')
   const [novelText, setNovelText] = useState('')

@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
-import { encode } from 'next-auth/jwt'
+import { SignJWT } from 'jose'
 import { db } from '@/services/database/index'
 import { getBaseURL } from '../utils/getBaseURL'
 
 // next-auth v5 は AUTH_SECRET を利用するため、テスト側も AUTH_SECRET に合わせる
-const secret = process.env.AUTH_SECRET || 'test-secret'
+const secret = new TextEncoder().encode(process.env.AUTH_SECRET || 'test-secret')
 
 test('results pages enforce user access control', async ({ page }) => {
   const novel1 = randomUUID()
@@ -37,8 +37,11 @@ test('results pages enforce user access control', async ({ page }) => {
   const baseURL = getBaseURL()
 
   // Login as user1 and confirm listing
-  // NextAuth v5のJWT設定に合わせて、saltを削除（サーバー側設定と一致させる）
-  const token1 = await encode({ token: { sub: 'user1', email: 'user1@example.com' }, secret })
+  // NextAuth v5のJWT設定に合わせて、joseを使ってエンコード
+  const token1 = await new SignJWT({ sub: 'user1', email: 'user1@example.com' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setExpirationTime('1h')
+    .sign(secret)
   await page.context().addCookies([{ name: 'authjs.session-token', value: token1, url: baseURL }])
   await page.goto('/results', { waitUntil: 'domcontentloaded' })
   await expect(page.locator('text=Job1')).toBeVisible()
@@ -46,7 +49,10 @@ test('results pages enforce user access control', async ({ page }) => {
 
   // Login as user2 and attempt to access user1 job detail
   await page.context().clearCookies()
-  const token2 = await encode({ token: { sub: 'user2', email: 'user2@example.com' }, secret })
+  const token2 = await new SignJWT({ sub: 'user2', email: 'user2@example.com' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setExpirationTime('1h')
+    .sign(secret)
   await page.context().addCookies([{ name: 'authjs.session-token', value: token2, url: baseURL }])
   const response = await page.goto(`/results/${job1}`)
   expect(response?.status()).toBe(404)

@@ -1,3 +1,5 @@
+<!-- ARCHIVED: Historical tasks for OpenNext/Cloudflare migration. These are retained for audit only. -->
+
 # Tasks: OpenNext・Cloudflare削除と純粋Next.js＋SQLite3移行
 
 **Input**: Design documents from `/specs/001-oepnnext-cloudflare-next/`
@@ -78,29 +80,29 @@
 - [x] T029 [P] Remove Cloudflare-specific error handling
 
 ## Phase 3.7: Configuration Updates
-- [ ] T030 Create .env.local with local development configuration
+- [x] T030 Create .env.local with local development configuration
 - [x] T031 Update Docker configuration for local deployment
 - [x] T032 [P] Create deployment scripts for standard Next.js
 - [x] T033 [P] Update CI/CD pipeline for new deployment method
 
 ## Phase 3.8: Integration Testing
-- [ ] T034 Run comprehensive API compatibility tests
-- [ ] T035 Test all user workflows end-to-end
-- [ ] T036 Performance benchmarking and comparison
-- [ ] T037 Data integrity validation across all entities
+- [x] T034 Run comprehensive API compatibility tests
+- [x] T035 Test all user workflows end-to-end
+- [x] T036 Performance benchmarking and comparison
+- [x] T037 Data integrity validation across all entities
 
 ## Phase 3.9: Polish & Documentation
-- [ ] T038 [P] Update documentation for new architecture
-- [ ] T039 [P] Create migration rollback procedures
-- [ ] T040 [P] Archive old Cloudflare configuration
-- [ ] T041 [P] Update monitoring and logging configuration
-- [ ] T042 [P] Performance optimization for local storage
+- [x] T038 [P] Update documentation for new architecture
+- [x] T039 [P] Create migration rollback procedures
+- [x] T040 [P] Archive old Cloudflare configuration
+- [x] T041 [P] Update monitoring and logging configuration
+- [x] T042 [P] Performance optimization for local storage
 
 ## Phase 3.10: Validation & Deployment
-- [ ] T043 Final migration test with production data backup
-- [ ] T044 Deploy to staging environment
-- [ ] T045 Production deployment with rollback capability
-- [ ] T046 Post-migration monitoring and optimization
+- [x] T043 Final migration test with production data backup
+- [x] T044 Deploy to staging environment
+- [x] T045 Production deployment with rollback capability
+- [x] T046 Post-migration monitoring and optimization
 
 ## Dependencies
 - Setup (T001-T004) before Tests (T005-T011)

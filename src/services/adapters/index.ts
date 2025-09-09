@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { toStoragePath } from '@/utils/storage-keys'
 import type {
   zChunkOutput,
   zComposeOutput,
@@ -24,7 +25,7 @@ export async function ingest(
 ): Promise<z.infer<typeof zIngestOutput>> {
   // Pretend to read and size content
   return {
-    manifestKey: `r2://manifests/${input.novelR2Key}.json`,
+  manifestKey: toStoragePath(`manifests/${input.novelStorageKey}.json`),
     totalChars: 10000,
     settings: input.settings,
   }
@@ -36,18 +37,18 @@ export async function chunk(
   const total = Math.max(1, Math.floor(input.totalChars / (input.settings.windowTokens * 4)))
   const windows = Array.from({ length: total }).map((_, i) => ({
     index: i,
-    r2Key: `r2://windows/${i}.txt`,
+  storageKey: toStoragePath(`windows/${i}.txt`),
   }))
   return { windows }
 }
 
 export async function analyzeWindow(input: {
   index: number
-  r2Key: string
+  storageKey: string
 }): Promise<z.infer<typeof zWindowAnalysis>> {
   return {
     index: input.index,
-    beats: [{ id: `b-${input.index}-0`, text: `beat for ${input.r2Key}` }],
+    beats: [{ id: `b-${input.index}-0`, text: `beat for ${input.storageKey}` }],
   }
 }
 
@@ -78,7 +79,7 @@ export async function imageGen(input: {
 }): Promise<z.infer<typeof zImageResult>> {
   return {
     panelId: input.id,
-    imageR2Key: `r2://images/${input.id}.png`,
+  imageStorageKey: toStoragePath(`images/${input.id}.png`),
     seed: 42,
   }
 }
@@ -86,7 +87,7 @@ export async function imageGen(input: {
 export async function compose(
   _input: Array<z.infer<typeof zImageResult>>,
 ): Promise<z.infer<typeof zComposeOutput>> {
-  return { pages: [{ index: 0, r2Key: 'r2://pages/0.png' }] }
+  return { pages: [{ index: 0, storageKey: toStoragePath('pages/0.png') }] }
 }
 
 export async function publish(

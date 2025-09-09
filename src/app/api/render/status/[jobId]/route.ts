@@ -9,7 +9,8 @@ import {
   createSuccessResponse,
   ValidationError,
 } from '@/utils/api-error'
-import { getLayoutStorage, StorageFactory, StorageKeys } from '@/utils/storage'
+import { getLayoutStorage, StorageFactory } from '@/utils/storage'
+import { StorageKeys } from '@/utils/storage-keys'
 import { validateJobId } from '@/utils/validators'
 
 export async function GET(

@@ -8,37 +8,26 @@ This guide provides step-by-step instructions for migrating from OpenNext/Cloudf
 ### Before Migration
 1. **Backup Current Data**
    ```bash
-   # Export current database
-   wrangler d1 export novel2manga --local --output=./backup/backup.sql
-   
-   # Download all R2 storage
-   wrangler r2 object list NOVEL_STORAGE --output=./backup/novel-storage-manifest.json
-   # Repeat for all R2 buckets
+   # Export current SQLite database
+   sqlite3 database/novel2manga.db ".backup './backup/backup.db'"
+
+   # Archive local storage directory
+   tar -czf backup/storage-backup.tar.gz storage/
    ```
 
 2. **Environment Setup**
    ```bash
    # Create new environment file
    cp .env.example .env.local
-   
+
    # Update database URL for local SQLite
    echo "DATABASE_URL=file:./dev.db" >> .env.local
    ```
 
 ## Migration Steps
 
-### Step 1: Remove OpenNext Dependencies
-```bash
-# Remove OpenNext packages
-npm uninstall @opennextjs/cloudflare
-npm uninstall wrangler
-npm uninstall @cloudflare/workers-types
-npm uninstall @miniflare/d1
-
-# Update package.json scripts
-# Remove: preview, deploy, cf-typegen
-# Update: build, start scripts for standard Next.js
-```
+### Step 1: Ensure project uses standard Next.js dependencies
+Update `package.json` scripts to standard Next.js build/start commands and remove any cloud-specific scripts. If Cloudflare packages remain in package.json, remove them and run `npm install`.
 
 ### Step 2: Update Next.js Configuration
 ```javascript
@@ -47,10 +36,10 @@ const nextConfig = {
   // Remove OpenNext-specific settings
   // Keep existing SQLite3 configuration
   serverExternalPackages: ['better-sqlite3'],
-  
+
   // Standard Next.js build output
   output: 'standalone',
-  
+
   // Keep existing environment variables
   env: {
     // ... existing env vars
@@ -77,15 +66,8 @@ mkdir -p storage/{novels,chunks,analysis,layouts,renders,outputs}
 echo "STORAGE_BASE_PATH=./storage" >> .env.local
 ```
 
-### Step 5: Remove Cloudflare Configuration
-```bash
-# Remove Cloudflare configuration files
-rm wrangler.toml
-rm cloudflare-env.d.ts
-
-# Update API routes to remove Cloudflare context
-# Replace getCloudflareContext() with process.env
-```
+### Step 5: Remove Cloudflare Configuration (if present)
+Remove any Cloudflare-specific config files (e.g. `wrangler.toml`, `cloudflare-env.d.ts`) from the repository and update API routes to use `process.env` or local environment-loading utilities instead of `getCloudflareContext()`.
 
 ### Step 6: Update Application Code
 ```typescript

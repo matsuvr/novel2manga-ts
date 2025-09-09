@@ -30,7 +30,7 @@ export function ScenarioViewer() {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          novelR2Key: 'novels/example.txt',
+          novelStorageKey: 'novels/example.txt',
           settings: { windowTokens: 512, strideTokens: 256 },
         }),
       })

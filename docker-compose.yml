@@ -8,15 +8,20 @@ services:
     ports:
       - '3000:3000'
     volumes:
-      - ./:/app
+      - ./:/app:cached  # cachedオプションを追加してマウントを高速化
       - node_modules:/app/node_modules
       - database:/app/database
+      # .nextディレクトリをtmpfsで高速化
+      - /tmp/.next:/app/.next
     env_file:
       - .env
       - .env.local
     environment:
       NODE_ENV: development
       VERTICAL_TEXT_GENERATOR_URL: http://vertical-text-generator:8000
+      # Next.jsのファイル監視を最適化
+      CHOKIDAR_USEPOLLING: 'false'
+      WATCHPACK_POLLING: 'false'
     command: npm run dev
     depends_on:
       - vertical-text-generator
@@ -24,13 +29,21 @@ services:
   vertical-text-generator:
     build:
       context: ./vertical_text_generator
+      dockerfile: Dockerfile
     ports:
       - '8000:8000'
     volumes:
       - ./vertical_text_generator:/app
+      - ./vertical_text_generator/fonts:/app/fonts:ro
+    env_file:
+      - ./vertical_text_generator/.env
     environment:
+      NODE_ENV: development
       PORT: 8000
       PYTHONPATH: /app
+      PYTHONUNBUFFERED: 1
+      DISPLAY: :99
+      API_TOKEN: ${API_TOKEN}
       PRELOAD_FONTS: 1
       FONT_MEMORY_RESERVE_MB: 128
       PAGE_POOL_SIZE: 8
@@ -41,6 +54,16 @@ services:
       GUNICORN_GRACEFUL_TIMEOUT: 30
       GUNICORN_KEEPALIVE: 5
       GUNICORN_MAX_REQUESTS: 0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - seccomp:unconfined
+    shm_size: 1gb
 
 volumes:
   node_modules:

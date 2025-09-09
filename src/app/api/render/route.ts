@@ -6,7 +6,8 @@ import { renderBatchFromYaml } from '@/services/application/render'
 import { db } from '@/services/database/index'
 import { createErrorResponse, createSuccessResponse, ValidationError } from '@/utils/api-error'
 import { detectDemoMode } from '@/utils/request-mode'
-import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { StorageFactory } from '@/utils/storage'
+import { StorageKeys } from '@/utils/storage-keys'
 import { validateJobId } from '@/utils/validators'
 
 interface RenderRequest {

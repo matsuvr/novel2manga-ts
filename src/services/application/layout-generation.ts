@@ -5,7 +5,7 @@ import type { JobWithProgress } from '@/services/database/index'
 import { db as dbFactory } from '@/services/database/index'
 import type { EpisodeData, MangaLayout } from '@/types/panel-layout'
 import { isTestEnv } from '@/utils/env'
-import { StorageKeys } from '@/utils/storage'
+import { StorageKeys } from '@/utils/storage-keys'
 
 // CONCURRENCY: In-memory lock to prevent race conditions in layout generation
 // This map tracks active layout generation processes to prevent multiple
@@ -319,7 +319,7 @@ async function _restoreLayoutProgress(
   ports: StoragePorts,
   logger: LoggerPort,
 ) {
-  let pagesCanonical: Array<{
+  let pagesCanonical: Array<{ 
     page_number: number
     panels: MangaLayout['pages'][number]['panels']
   }> = []
@@ -508,7 +508,7 @@ async function generateEpisodeLayoutInternal(
     const layoutBuilt = buildLayoutFromPageBreaks(pageBreaks, {
       title: episodeData.title,
       episodeNumber: episode.episodeNumber,
-      episodeTitle: episodeData.episodeTitle,
+      episodeTitle: episode.episodeTitle,
     })
 
     // Layout generation completed - log the results

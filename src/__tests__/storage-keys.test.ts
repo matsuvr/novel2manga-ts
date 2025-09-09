@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { StorageKeys } from '@/utils/storage'
+import { StorageKeys } from '@/utils/storage-keys'
 
 describe('StorageKeys', () => {
   it('episodeLayoutProgress builds path', () => {

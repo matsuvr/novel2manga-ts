@@ -1,3 +1,5 @@
+<!-- ARCHIVED: Historical data model for OpenNext/Cloudflare. Use local schema in src/db/schema.ts for current runtime. -->
+
 # Data Model
 
 ## Overview

@@ -5,7 +5,8 @@ import { getDatabase, schema } from '@/db'
 import type { RecordStorageFileParams } from '@/services/application/storage-tracker'
 import { executeStorageWithTracking } from '@/services/application/transaction-manager'
 import { initializeDatabaseServiceFactory } from '@/services/database/database-service-factory'
-import { StorageFactory, StorageKeys } from '@/utils/storage'
+import { StorageFactory } from '@/utils/storage'
+import { StorageKeys } from '@/utils/storage-keys'
 
 describe('storage_files compatibility', () => {
   const db = getDatabase()

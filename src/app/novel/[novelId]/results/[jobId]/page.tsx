@@ -3,7 +3,8 @@ import { db } from '@/services/database/index'
 import { type EpisodeBreakPlan, EpisodeBreakSchema } from '@/types/script'
 import { isRenderCompletelyDone } from '@/utils/completion'
 import { parseJsonWithSchema } from '@/utils/json'
-import { JsonStorageKeys, StorageFactory } from '@/utils/storage'
+import { StorageFactory } from '@/utils/storage'
+import { JsonStorageKeys } from '@/utils/storage-keys'
 
 interface Params {
   novelId: string
@@ -80,7 +81,7 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
         <div className="apple-card p-4 space-y-2">
           <div className="text-sm text-gray-600">Job: {job.id}</div>
           <div className="text-sm text-red-600">
-            エラー: 結果ファイル (full_pages.json) が見つかりませんでした。Storage Key:{' '}
+            エラー: 結果ファイル (full_pages.json) が見つかりませんでした。Storage Key: 
             {JsonStorageKeys.fullPages(job.id)}
           </div>
         </div>
@@ -98,7 +99,7 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
         <div className="apple-card p-4 space-y-2">
           <div className="text-sm text-gray-600">Job: {job.id}</div>
           <div className="text-sm text-red-600">
-            エラー: {e instanceof Error ? e.message : String(e)} (Storage Key:{' '}
+            エラー: {e instanceof Error ? e.message : String(e)} (Storage Key: 
             {JsonStorageKeys.fullPages(job.id)})
           </div>
         </div>
@@ -162,7 +163,7 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
         {/*１ページあたりの平均所要時間を表示*/}
         {processingTimeMs !== null && (
           <div className="text-sm text-gray-600">
-            1ページあたりの平均所要時間:{' '}
+            1ページあたりの平均所要時間: {' '}
             {(processingTimeMs / 1000 / Math.max(1, totalPageCount)).toFixed(1)} 秒
           </div>
         )}

@@ -65,7 +65,7 @@ export const MangaPageSchema = z.object({
   episodeId: z.string(), // Episode.idへの参照
   pageNumber: z.number().positive(),
   layoutFile: z.string(), // R2: novels/{novelId}/episodes/{episodeNumber}/pages/{pageNumber}/layout.yaml
-  previewImageFile: z.string().optional(), // R2: novels/{novelId}/episodes/{episodeNumber}/pages/{pageNumber}/preview.png
+  previewImageFile: z.string().optional(), // Storage: novels/{novelId}/episodes/{episodeNumber}/pages/{pageNumber}/preview.png
   panels: z.array(PanelSchema),
   createdAt: z.date(),
   updatedAt: z.date(),
