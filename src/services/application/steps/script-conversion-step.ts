@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { convertChunkToMangaScript } from '@/agents/script/script-converter'
+import { getStoredSummary } from '@/utils/chunk-summary'
 import { formatSnapshotForPrompt, loadCharacterSnapshot } from '@/character/snapshot'
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import type { NewMangaScript } from '@/types/script'
@@ -47,7 +48,7 @@ export class ScriptConversionStep implements PipelineStep {
     chunkText: string,
     chunkIndex: number,
     chunksNumber: number,
-    allChunks: string[],
+    _allChunks: string[],
     context: StepContext,
     analysisResults?: {
       scenes?: Array<{ location: string; description: string }>
@@ -59,17 +60,19 @@ export class ScriptConversionStep implements PipelineStep {
     const { jobId, logger } = context
 
     try {
-      // Get previous and next chunks for context
-      const previousText = chunkIndex > 1 ? allChunks[chunkIndex - 2] : undefined
-      const nextChunk = chunkIndex < chunksNumber ? allChunks[chunkIndex] : undefined
+      // Get previous and next summaries for context
+      const previousSummary =
+        chunkIndex > 1 ? await getStoredSummary(jobId, chunkIndex - 2) : undefined
+      const nextSummary =
+        chunkIndex < chunksNumber ? await getStoredSummary(jobId, chunkIndex) : undefined
 
       logger.info('Starting manga script conversion with character memory snapshot', {
         jobId,
         chunkIndex,
         chunksNumber,
         chunkTextLength: chunkText.length,
-        hasPrevious: !!previousText,
-        hasNext: !!nextChunk,
+        hasPreviousSummary: !!previousSummary,
+        hasNextSummary: !!nextSummary,
       })
 
       // Get app config for data directory
@@ -128,8 +131,8 @@ export class ScriptConversionStep implements PipelineStep {
           chunkText,
           chunkIndex,
           chunksNumber,
-          previousText,
-          nextChunk,
+          previousSummary,
+          nextSummary,
           charactersList,
           scenesList,
           dialoguesList,

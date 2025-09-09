@@ -70,7 +70,7 @@ vi.mock('@/agents/chunk-analyzer', () => ({
 vi.mock('@/config', () => ({
   getTextAnalysisConfig: vi.fn(() => ({
     userPromptTemplate:
-      'チャンク{{chunkIndex}}の分析: {{chunkText}} 前: {{previousChunkText}} 次: {{nextChunkText}}',
+      'チャンク{{chunkIndex}}の分析: {{chunkText}} 前要約: {{previousChunkSummary}} 次要約: {{nextChunkSummary}}',
   })),
   getLLMProviderConfig: vi.fn(() => ({ maxTokens: 1000 })),
   getDatabaseConfig: vi.fn(() => ({ sqlite: { path: ':memory:' } })),

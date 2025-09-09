@@ -213,8 +213,8 @@ async function runTextAnalysis(): Promise<NamedResult> {
   const prompt = cfg.userPromptTemplate
     .replace('{{chunkIndex}}', '1')
     .replace('{{chunkText}}', '「太郎は走った。花子は笑った。」という一文だけのチャンクです。')
-    .replace('{{previousChunkText}}', '')
-    .replace('{{nextChunkText}}', '')
+    .replace('{{previousChunkSummary}}', '')
+    .replace('{{nextChunkSummary}}', '')
 
   try {
     const agent = new CompatAgent({

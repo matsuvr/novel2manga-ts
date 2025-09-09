@@ -98,9 +98,9 @@ export function getExtractionV2UserPromptTemplate(): string {
 [人物メモリ（前回までの確定情報・JSON）]
 {{previousCharacterMemoryJson}}
 
-前: {{previousChunkText}}
+前要約: {{previousChunkSummary}}
 対象: {{chunkText}}
-次: {{nextChunkText}}
+次要約: {{nextChunkSummary}}
 
 指示:
 - 分析対象は「対象」のみ。前/次は同一人物判定や話の流れ把握にのみ使用。
@@ -134,8 +134,8 @@ export function formatCharacterMemoryForPrompt(memory: CharacterMemoryPromptJson
 export function generateExtractionV2UserPrompt(
   chunkIndex: number,
   chunkText: string,
-  previousChunkText: string,
-  nextChunkText: string,
+  previousChunkSummary: string,
+  nextChunkSummary: string,
   characterMemory: CharacterMemoryPromptJson[],
 ): string {
   const template = getExtractionV2UserPromptTemplate()
@@ -144,9 +144,9 @@ export function generateExtractionV2UserPrompt(
   return template
     .replace(/\{\{chunkIndex\}\}/g, chunkIndex.toString())
     .replace('{{previousCharacterMemoryJson}}', memoryJson)
-    .replace('{{previousChunkText}}', previousChunkText || '（なし）')
+    .replace('{{previousChunkSummary}}', previousChunkSummary || '（なし）')
     .replace('{{chunkText}}', chunkText)
-    .replace('{{nextChunkText}}', nextChunkText || '（なし）')
+    .replace('{{nextChunkSummary}}', nextChunkSummary || '（なし）')
 }
 
 /**
