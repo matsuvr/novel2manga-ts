@@ -2,15 +2,16 @@
 
 ## Preparation
 
-- [ ] Define summary data structure and size limits.
-- [ ] Create cache storage for chunk summaries.
+- [x] Define summary data structure and size limits.
+- [x] Create cache storage for chunk summaries.
 - [ ] Draft unified prompt schema for merged step.
 
 ## Implementation
 
-- [ ] Implement summary generation utility.
-- [ ] Integrate summary caching into chunk pipeline.
-- [ ] Replace raw text inclusion with summary references.
+- [x] Implement summary generation utility.
+- [x] Integrate summary caching into chunk pipeline.
+- [x] Pre-generate chunk summaries to avoid redundant LLM calls.
+- [x] Replace raw text inclusion with summary references.
 - [ ] Merge analysis and conversion into single LLM call.
 - [ ] Validate structured response and handle retries.
 

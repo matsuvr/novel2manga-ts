@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+process.env.N2M_MOCK_LLM = '1'
+
 vi.mock('@/character/persistence', () => ({
   loadCharacterMemory: vi.fn().mockResolvedValue({ memoryIndex: new Map(), aliasIndex: new Map() }),
   loadPromptMemory: vi.fn().mockResolvedValue([]),

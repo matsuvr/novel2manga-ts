@@ -81,7 +81,7 @@ vi.mock('@/utils/storage', async (importOriginal) => {
 vi.mock('@/config', () => ({
   getTextAnalysisConfig: vi.fn(() => ({
     userPromptTemplate:
-      'チャンク{{chunkIndex}}を分析してください: {{chunkText}} 前: {{previousChunkText}} 次: {{nextChunkText}}',
+      'チャンク{{chunkIndex}}を分析してください: {{chunkText}} 前要約: {{previousChunkSummary}} 次要約: {{nextChunkSummary}}',
   })),
 }))
 

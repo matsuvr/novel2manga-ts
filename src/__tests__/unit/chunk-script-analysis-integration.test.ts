@@ -23,6 +23,7 @@ vi.mock('@/utils/storage', async (importOriginal) => {
     },
     JsonStorageKeys: {
       scriptChunk: vi.fn(),
+      chunkSummary: vi.fn(),
     },
     StorageKeys: {
       chunkAnalysis: vi.fn(),
