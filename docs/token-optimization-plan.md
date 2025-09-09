@@ -12,7 +12,7 @@ Reduce exponential token growth by implementing strategies **Front/Back Compress
 ## Strategy 3: Front/Back Compression
 
 1. Replace full preceding and succeeding chunk inclusion with compact summaries.
-2. Store a rolling window of \~2 summaries (previous and next) of ~150 characters each.
+2. Store a rolling window of ~2 summaries (previous and next) of ~150 characters each.
 3. Summaries generated once per chunk; cached for reuse.
 4. Update prompts to include summaries instead of raw text.
 5. Provide utility to regenerate summaries when upstream text changes.
