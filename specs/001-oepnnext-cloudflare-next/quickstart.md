@@ -8,19 +8,20 @@ This guide provides step-by-step instructions for migrating from OpenNext/Cloudf
 ### Before Migration
 1. **Backup Current Data**
    ```bash
-   # Export current database
-   wrangler d1 export novel2manga --local --output=./backup/backup.sql
-   
-   # Download all R2 storage
-   wrangler r2 object list NOVEL_STORAGE --output=./backup/novel-storage-manifest.json
-   # Repeat for all R2 buckets
+   # Export current database (if you are using Cloudflare D1, use wrangler d1 export locally)
+   # If you already migrated to local SQLite, simply copy the DB file:
+   cp ./database/novel2manga.db ./backup/backup.sql
+
+   # Download object storage if applicable (Cloudflare R2 users only)
+   # wrangler r2 object list NOVEL_STORAGE --output=./backup/novel-storage-manifest.json
+   # Repeat for all R2 buckets if still using R2
    ```
 
 2. **Environment Setup**
    ```bash
    # Create new environment file
    cp .env.example .env.local
-   
+
    # Update database URL for local SQLite
    echo "DATABASE_URL=file:./dev.db" >> .env.local
    ```
@@ -29,15 +30,13 @@ This guide provides step-by-step instructions for migrating from OpenNext/Cloudf
 
 ### Step 1: Remove OpenNext Dependencies
 ```bash
-# Remove OpenNext packages
-npm uninstall @opennextjs/cloudflare
-npm uninstall wrangler
-npm uninstall @cloudflare/workers-types
-npm uninstall @miniflare/d1
+# If your project still contains OpenNext or Cloudflare-specific packages,
+# remove them locally. If already removed, skip.
+# Example (optional):
+# npm uninstall @opennextjs/cloudflare wrangler @cloudflare/workers-types @miniflare/d1
 
-# Update package.json scripts
-# Remove: preview, deploy, cf-typegen
-# Update: build, start scripts for standard Next.js
+# Update package.json scripts: remove Cloudflare-only scripts and ensure
+# standard Next.js scripts (build/start/dev) are present.
 ```
 
 ### Step 2: Update Next.js Configuration
@@ -47,10 +46,10 @@ const nextConfig = {
   // Remove OpenNext-specific settings
   // Keep existing SQLite3 configuration
   serverExternalPackages: ['better-sqlite3'],
-  
+
   // Standard Next.js build output
   output: 'standalone',
-  
+
   // Keep existing environment variables
   env: {
     // ... existing env vars
@@ -77,25 +76,25 @@ mkdir -p storage/{novels,chunks,analysis,layouts,renders,outputs}
 echo "STORAGE_BASE_PATH=./storage" >> .env.local
 ```
 
-### Step 5: Remove Cloudflare Configuration
+### Step 5: Remove Cloudflare Configuration (if present)
 ```bash
-# Remove Cloudflare configuration files
-rm wrangler.toml
-rm cloudflare-env.d.ts
+# Remove Cloudflare configuration files if they exist in your repo
+# rm wrangler.toml
+# rm cloudflare-env.d.ts
 
 # Update API routes to remove Cloudflare context
-# Replace getCloudflareContext() with process.env
+# Replace getCloudflareContext() with process.env or local env loading
 ```
 
 ### Step 6: Update Application Code
 ```typescript
 // Example: Update database connection
-// Before:
-import { getCloudflareContext } from '@opennextjs/cloudflare'
-const { env } = getCloudflareContext()
+// Before (Cloudflare/OpenNext):
+// import { getCloudflareContext } from '@opennextjs/cloudflare'
+// const { env } = getCloudflareContext()
 
-// After:
-import { env } from './env.mjs' // or process.env
+// After: use standard environment access (process.env or local env loader)
+// import { env } from './env.mjs' // or process.env
 ```
 
 ### Step 7: Update Deployment Configuration

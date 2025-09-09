@@ -1,30 +1,7 @@
-/**
- * NOTE: このテストは better-sqlite3 を利用するため、WSL2 などの環境では失敗する可能性があります。
- * バイナリ依存テストの実行は開発者に依頼してください。
- */
-import { D1Database, D1DatabaseAPI } from '@miniflare/d1'
-import Database from 'better-sqlite3'
-import { integer, sqliteTable } from 'drizzle-orm/sqlite-core'
-import { describe, expect, it } from 'vitest'
-import { createD1Client, type D1DatabaseLike } from '@/db/d1'
+// D1 関連テストはプロジェクトポリシーにより削除済みです。
+// ファイルは残存している可能性があるため、テストランで誤って実行されないよう skip にします。
+import { describe } from 'vitest'
 
-const testTable = sqliteTable('test_table', {
-  id: integer('id').primaryKey(),
-})
-
-const runD1: boolean = process.env.RUN_D1 === '1'
-
-// Miniflare の D1Database は Cloudflare 型との差異があるためテスト用にキャスト
-const testRunner = runD1 ? describe : describe.skip
-testRunner('createD1Client', () => {
-  it('executes basic queries', async () => {
-    const sqlite = new Database(':memory:')
-    const d1 = new D1Database(new D1DatabaseAPI(sqlite))
-    // テーブル作成は生の D1Database で先に実行
-    await d1.exec('CREATE TABLE test_table (id INTEGER PRIMARY KEY)')
-    const db = createD1Client(d1 as unknown as D1DatabaseLike, { testTable })
-    await db.insert(testTable).values({ id: 1 }).run()
-    const rows = await db.select().from(testTable).all()
-    expect(rows).toEqual([{ id: 1 }])
-  })
+describe.skip('d1-connection.test (removed)', () => {
+  // intentionally empty
 })

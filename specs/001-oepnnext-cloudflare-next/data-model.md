@@ -67,19 +67,90 @@ authenticators        chunkAnalysisStatus
 | DB | DATABASE_URL | Main database connection |
 | KV.CACHE | CACHE_FILE_PATH | Key-value cache file |
 
+````markdown
+# Data Model
+
+## Overview
+The application already uses a well-structured SQLite3 database with Drizzle ORM. The migration to a pure Next.js runtime preserves the data model; where legacy Cloudflare object storage references existed, they are mapped to local filesystem conventions.
+
+## Core Entities
+
+### User Management
+- **users**: Core user accounts with authentication data
+- **accounts**: OAuth provider account linking
+- **sessions**: User session management
+- **verificationTokens**: Email verification tokens
+- **authenticators**: WebAuthn/passkey authentication
+
+### Content Management
+- **novels**: Top-level entity for novel/manga content
+- **jobs**: Conversion processing jobs for each novel
+- **chunks**: Text segmentation results
+- **episodes**: Episode segmentation and metadata
+
+### Processing Pipeline
+- **chunkAnalysisStatus**: Analysis completion tracking
+- **layoutStatus**: Layout generation status
+- **renderStatus**: Page rendering completion status
+- **jobStepHistory**: Execution history and debugging
+
+### Storage & Output
+- **storageFiles**: File system tracking
+- **outputs**: Final export products (PDF, CBZ, etc.)
+- **tokenUsage**: LLM API usage tracking and cost monitoring
+
+## Key Relationships
+```
+users → novels → jobs → chunks → episodes → outputs
+       ↓        ↓       ↓        ↓
+accounts   storageFiles  tokenUsage  renderStatus
+sessions              layoutStatus
+authenticators        chunkAnalysisStatus
+```
+
+## Data Migration Strategy
+
+### Current State
+- Database: SQLite3 (no schema changes generally required)
+- Storage: Mix of local files and legacy Cloudflare object references
+- Configuration: Environment variables (migrated from bindings where applicable)
+
+### Migration Requirements
+1. **Database**: No schema changes required in most cases
+2. **Storage**: Migrate legacy object storage references to local filesystem paths
+3. **Configuration**: Convert any Cloudflare bindings to environment variables
+
+### Storage Migration Mapping
+| Legacy Object Bucket | Local Path | Content Type |
+|---------------------|------------|--------------|
+| NOVEL_STORAGE | ./storage/novels/ | Original novel files |
+| CHUNKS_STORAGE | ./storage/chunks/ | Text chunks |
+| ANALYSIS_STORAGE | ./storage/analysis/ | Analysis results |
+| LAYOUTS_STORAGE | ./storage/layouts/ | Layout data |
+| RENDERS_STORAGE | ./storage/renders/ | Rendered images |
+| OUTPUTS_STORAGE | ./storage/outputs/ | Final exports |
+
+### Configuration Migration
+| Legacy Binding | Environment Variable | Purpose |
+|-------------------|-------------------|---------|
+| CACHE.DB | CACHE_DATABASE_PATH | SQLite cache database |
+| DB | DATABASE_URL | Main database connection |
+| KV.CACHE | CACHE_FILE_PATH | Key-value cache file |
+
 ## Validation Rules
 
 ### Data Integrity
-- All foreign key relationships must be preserved
-- File path references must be updated to local paths
-- Job status and progress tracking must remain consistent
+- Preserve foreign key relationships
+- Update file path references to local paths
+- Keep job status and progress tracking consistent
 
 ### Performance Considerations
-- Local file access is faster than R2 API calls
-- SQLite3 performance will improve without network latency
-- Consider implementing file cleanup policies for local storage
+- Local file access reduces network latency compared to remote object storage
+- SQLite3 performance is generally suitable for the app's scale
+- Implement file lifecycle policies (cleanup/archival) as needed
 
 ### Backup Strategy
-- Implement automated database backups
-- Create file system backup procedures
-- Maintain migration rollback capability
+- Automated database backups
+- File system backup procedures for migrated objects
+- Maintain rollback capability during migration
+````

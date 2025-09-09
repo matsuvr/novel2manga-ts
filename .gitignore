@@ -63,11 +63,11 @@ codex_auth.json
 *.sqlite
 *.sqlite3
 
-# Cloudflare / Wrangler
-.wrangler/
-.dev.vars
-.miniflare/
-wrangler.toml.local
+# Cloudflare / Wrangler (deprecated - kept for historical reference)
+# .wrangler/
+# .dev.vars
+# .miniflare/
+# wrangler.toml.local
 
 # IDE
 .vscode/*
