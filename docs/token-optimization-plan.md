@@ -2,7 +2,7 @@
 
 ## Objective
 
-Reduce exponential token growth by implementing strategies **Front/Back Compression** (3) and **Chunk Step Merging** (4). Target: transform token cost into an approximately linear function of novel length.
+Reduce exponential token growth by implementing **Strategy 3: Front/Back Compression** and **Strategy 4: Chunk Step Merging**. Target: transform token cost into an approximately linear function of novel length.
 
 ## Scope
 
