@@ -39,21 +39,22 @@ export function isRenderCompletelyDone(job: JobStatusLite | null | undefined): b
 
   // Fall back to per-episode aggregation when totals are not set
   const per = job.progress?.perEpisodePages
-  if (per && typeof per === 'object') {
+  if (per && typeof per === 'object' && Object.keys(per).length > 0) {
     let total = 0
     let rendered = 0
     for (const v of Object.values(per)) {
       const r = typeof v?.rendered === 'number' ? v.rendered : 0
       const t = typeof v?.total === 'number' ? v.total : 0
-      // total がない場合は比較不能 -> このルートでは厳密完了とみなさない
-      if (t > 0) {
+      // total が 0 のケースも考慮する
+      if (t >= 0) {
         total += t
         rendered += r
+      } else {
+        // totalが未定義のエピソードがある場合、この集計は信頼できないためフォールバック
+        return job.renderCompleted === true
       }
     }
-    if (total > 0) {
-      return rendered >= total
-    }
+    return rendered >= total
   }
 
   // 最後のフォールバック: 明示フラグ
