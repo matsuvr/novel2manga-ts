@@ -10,7 +10,7 @@ import {
   VerticalTextRenderResponseSchema,
 } from '@/types/vertical-text'
 
-const EnvSchema = z.object({ url: z.string().url(), token: z.string().min(1) })
+const EnvSchema = z.object({ url: z.string().url(), token: z.string().trim().min(1).optional() })
 
 // Type-safe helpers for extracting error details without using `any`
 type NetErrorCause = {
@@ -83,7 +83,7 @@ function readEnv() {
       token: [...triedTokenKeys, 'API_TOKEN (fallback)'].filter((k) => !process.env[k]).join(' | '),
     }
     throw new Error(
-      `Vertical text API env not configured. Set URL and TOKEN. Tried URL keys: ${triedUrlKeys.join(', ')}; Token keys: ${triedTokenKeys.join(', ')}, and API_TOKEN (fallback).`,
+      `Vertical text API env not configured. Set URL (and optionally TOKEN). Tried URL keys: ${triedUrlKeys.join(', ')}; Token keys: ${triedTokenKeys.join(', ')}, and API_TOKEN (fallback).`,
     )
   }
 }
@@ -122,12 +122,11 @@ export async function renderVerticalText(
     const endpoint = `${url.replace(/\/$/, '')}/render`
     let res: Response
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
       res = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(toSnakeCasePayload(validated)),
         signal: signal ?? controller.signal,
       })
@@ -203,12 +202,11 @@ export async function renderVerticalTextBatch(
     const endpoint = `${url.replace(/\/$/, '')}/render/batch`
     let res: Response
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
       res = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(body),
         signal: signal ?? controller.signal,
       })
