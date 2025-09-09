@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
+import path from 'node:path'
 import { fileLogger } from './src/utils/logger.mjs'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // 開発環境でのログ機能を初期化
 if (process.env.NODE_ENV === 'development') {
@@ -40,6 +44,11 @@ const nextConfig = {
         removeEmptyChunks: false,
         splitChunks: false,
       }
+    }
+    // Path alias for '@/*' used throughout the project
+    config.resolve.alias = {
+      ...(config.resolve.alias ?? {}),
+      '@': path.resolve(__dirname, 'src'),
     }
     return config
   },
