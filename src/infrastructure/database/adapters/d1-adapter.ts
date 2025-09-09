@@ -1,27 +1,23 @@
-import type { D1Database } from '@cloudflare/workers-types'
 import { DatabaseAdapter, UnsupportedSyncOperationError } from './base-adapter'
 
 /**
- * D1Adapter wraps a Cloudflare D1 binding.
- * Notes:
- * - D1 auto-commits statements; `batch()` executes statements sequentially and transactionally.
- * - This adapter exposes a transaction(fn) that simply awaits `fn`.
- *   Callers SHOULD use D1's `batch()` within `fn` to achieve atomicity.
- * - No implicit fallbacks are implemented; misuse results in explicit errors at call sites.
+ * D1Adapter (compat shim)
+ *
+ * Cloudflare D1 support has been removed from the project. This shim keeps the
+ * module API shape but throws explicit errors at runtime to avoid accidental
+ * usage. Callers should migrate to the sqlite/better-sqlite3 adapter.
  */
 export class D1Adapter extends DatabaseAdapter {
-  constructor(private readonly d1: D1Database) {
+  constructor(_binding: unknown) {
     super()
+    throw new Error('D1Adapter is no longer supported. Remove D1 bindings and use the sqlite adapter.')
   }
 
-  async transaction<TTx, T>(fn: (tx: TTx) => T | Promise<T>): Promise<T> {
-    // There is no explicit BEGIN/COMMIT in the Worker binding API.
-    // Atomicity must be achieved via `batch()` by the caller.
-    return await fn(this.d1 as unknown as TTx)
+  async transaction<TTx, T>(_fn: (tx: TTx) => T | Promise<T>): Promise<T> {
+    throw new Error('D1Adapter is no longer supported')
   }
 
   runSync<T>(_fn: () => T): T {
-    // D1 is async-only; synchronous execution is unsupported.
     throw new UnsupportedSyncOperationError()
   }
 
@@ -29,15 +25,9 @@ export class D1Adapter extends DatabaseAdapter {
     return false
   }
 
-  getBinding(): D1Database {
-    return this.d1
+  getBinding(): unknown {
+    throw new Error('D1Adapter is no longer supported')
   }
 }
 
-// Type guard helpers for detection
-export function isD1Like(value: unknown): value is D1Database {
-  const v = value as { prepare?: unknown; batch?: unknown }
-  return Boolean(
-    v && typeof v === 'object' && typeof v.prepare === 'function' && typeof v.batch === 'function',
-  )
-}
+// Legacy type guard removed. Use explicit feature detection in callers if needed.

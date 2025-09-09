@@ -36,6 +36,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+  // Test-time mock for Miniflare's D1 to avoid requiring native binaries
+
     },
   },
   // Rollup optional dependencies workaround for CI environments

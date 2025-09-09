@@ -12,7 +12,7 @@ export interface JobQueue {
 let singleton: JobQueue | null = null
 
 export function getJobQueue(): JobQueue {
-  const cfQueue = globalThis.JOBS_QUEUE
+  const cfQueue = (globalThis as unknown as { JOBS_QUEUE?: { send?: (body: unknown) => Promise<void> } }).JOBS_QUEUE
   if (!singleton) {
     if (!cfQueue || typeof cfQueue.send !== 'function') {
       throw new Error(
@@ -21,7 +21,11 @@ export function getJobQueue(): JobQueue {
     }
     singleton = {
       async enqueue(message: JobQueueMessage): Promise<void> {
-        await (cfQueue as NonNullable<typeof cfQueue>).send(message)
+          const sender = (cfQueue as { send?: (b: unknown) => Promise<void> })?.send
+          if (!sender) {
+            throw new Error('JOBS_QUEUE.send is not available')
+          }
+          await sender(message)
       },
     }
   }
