@@ -1,0 +1,21 @@
+# Token Usage Optimization Tasks
+
+## Preparation
+
+- [ ] Define summary data structure and size limits.
+- [ ] Create cache storage for chunk summaries.
+- [ ] Draft unified prompt schema for merged step.
+
+## Implementation
+
+- [ ] Implement summary generation utility.
+- [ ] Integrate summary caching into chunk pipeline.
+- [ ] Replace raw text inclusion with summary references.
+- [ ] Merge analysis and conversion into single LLM call.
+- [ ] Validate structured response and handle retries.
+
+## Verification
+
+- [ ] Benchmark token usage against baseline with 10k and 100k char novels.
+- [ ] Ensure script quality and character consistency remain acceptable.
+- [ ] Update documentation and configs after implementation.
