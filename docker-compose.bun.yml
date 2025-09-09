@@ -16,7 +16,7 @@ services:
     environment:
       NODE_ENV: development
       VERTICAL_TEXT_GENERATOR_URL: http://vertical-text-generator:8000
-    command: npm run dev
+    command: ['bun', 'run', 'dev']
     depends_on:
       - vertical-text-generator
 
