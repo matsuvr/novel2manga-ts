@@ -1,0 +1,46 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.bun
+      target: dev
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./:/app
+      - node_modules:/app/node_modules
+      - database:/app/database
+    env_file:
+      - .env
+      - .env.local
+    environment:
+      NODE_ENV: development
+      VERTICAL_TEXT_GENERATOR_URL: http://vertical-text-generator:8000
+    command: ['bun', 'run', 'dev']
+    depends_on:
+      - vertical-text-generator
+
+  vertical-text-generator:
+    build:
+      context: ./vertical_text_generator
+    ports:
+      - '8000:8000'
+    volumes:
+      - ./vertical_text_generator:/app
+    environment:
+      PORT: 8000
+      PYTHONPATH: /app
+      PRELOAD_FONTS: 1
+      FONT_MEMORY_RESERVE_MB: 128
+      PAGE_POOL_SIZE: 8
+      PRECREATE_PAGES: 1
+      WARMUP_RENDER_ON_STARTUP: 1
+      WEB_CONCURRENCY: 4
+      GUNICORN_TIMEOUT: 180
+      GUNICORN_GRACEFUL_TIMEOUT: 30
+      GUNICORN_KEEPALIVE: 5
+      GUNICORN_MAX_REQUESTS: 0
+
+volumes:
+  node_modules:
+  database:
