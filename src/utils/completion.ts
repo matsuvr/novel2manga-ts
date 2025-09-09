@@ -43,14 +43,16 @@ export function isRenderCompletelyDone(job: JobStatusLite | null | undefined): b
     let total = 0
     let rendered = 0
     for (const v of Object.values(per)) {
-      const r = typeof v?.rendered === 'number' ? v.rendered : 0
-      const t = typeof v?.total === 'number' ? v.total : 0
-      // total が 0 のケースも考慮する
+      if (typeof v?.total !== 'number') {
+        // totalが未定義のエピソードがある場合、この集計は信頼できないためフォールバック
+        return job.renderCompleted === true
+      }
+      const t = v.total
+      const r = typeof v.rendered === 'number' ? v.rendered : 0
       if (t >= 0) {
         total += t
         rendered += r
       } else {
-        // totalが未定義のエピソードがある場合、この集計は信頼できないためフォールバック
         return job.renderCompleted === true
       }
     }
