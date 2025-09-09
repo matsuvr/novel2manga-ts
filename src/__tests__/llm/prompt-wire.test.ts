@@ -16,8 +16,8 @@ describe('LLM prompt wiring (temporary)', () => {
     const prompt = cfg.userPromptTemplate
       .replace(/\{\{chunkIndex\}\}/g, '1')
       .replace('{{chunkText}}', 'これはテスト用の本文です。')
-      .replace('{{previousChunkText}}', '')
-      .replace('{{nextChunkText}}', '')
+      .replace('{{previousChunkSummary}}', '')
+      .replace('{{nextChunkSummary}}', '')
       .replace('{{previousCharacterMemoryJson}}', '[]')
 
     assertNoPlaceholders(prompt)
@@ -44,9 +44,9 @@ describe('LLM prompt wiring (temporary)', () => {
     prompt = prompt
       .replace(/\{\{chunksNumber\}\}/g, '5')
       .replace(/\{\{chunkIndex\}\}/g, '1')
-      .replace(/\{\{previousText\}\}/g, '前のチャンクテキスト')
+      .replace(/\{\{previousSummary\}\}/g, '前の要約')
       .replace(/\{\{chunkText\}\}/g, '太郎は走った。花子は笑った。')
-      .replace(/\{\{nextChunk\}\}/g, '次のチャンクテキスト')
+      .replace(/\{\{nextSummary\}\}/g, '次の要約')
       .replace(/\{\{charactersList\}\}/g, '太郎（主人公）、花子（ヒロイン）')
       .replace(/\{\{scenesList\}\}/g, '公園、学校')
       .replace(/\{\{dialoguesList\}\}/g, '「行くぞ！」「待って！」')
@@ -57,9 +57,9 @@ describe('LLM prompt wiring (temporary)', () => {
     systemPrompt = systemPrompt
       .replace('{{chunksNumber}}', '5')
       .replace('{{chunkIndex}}', '1')
-      .replace('{{previousText}}', '前のチャンクテキスト')
+      .replace('{{previousSummary}}', '前の要約')
       .replace('{{chunkText}}', '太郎は走った。花子は笑った。')
-      .replace('{{nextChunk}}', '次のチャンクテキスト')
+      .replace('{{nextSummary}}', '次の要約')
       .replace('{{charactersList}}', '太郎（主人公）、花子（ヒロイン）')
       .replace('{{scenesList}}', '公園、学校')
       .replace('{{dialoguesList}}', '「行くぞ！」「待って！」')

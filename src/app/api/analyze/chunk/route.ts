@@ -108,8 +108,8 @@ export async function POST(request: NextRequest) {
     const prompt = config.userPromptTemplate
       .replace('{{chunkIndex}}', chunkIndex.toString())
       .replace('{{chunkText}}', chunkText)
-      .replace('{{previousChunkText}}', '') // 簡易版では前後のテキストは省略
-      .replace('{{nextChunkText}}', '')
+      .replace('{{previousChunkSummary}}', '') // 簡易版では前後のテキストは省略
+      .replace('{{nextChunkSummary}}', '')
 
     logger.info('Sending to LLM for analysis')
 

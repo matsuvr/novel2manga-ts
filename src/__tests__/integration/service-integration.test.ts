@@ -232,6 +232,7 @@ vi.mock('@/utils/storage', () => ({
     scriptCombined: (jobId: string) => `${jobId}/script_combined.json`,
     fullPages: (jobId: string) => `${jobId}/full_pages.json`,
     episodeBundling: (jobId: string) => `${jobId}/episode_bundling.json`,
+    chunkSummary: (jobId: string, index: number) => `${jobId}/chunk_${index}.summary.json`,
   },
   saveEpisodeBoundaries: vi.fn().mockImplementation(async (jobId: string, boundaries: any[]) => {
     // Mock implementation that saves episodes to test database

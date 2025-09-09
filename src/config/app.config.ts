@@ -61,6 +61,11 @@ export const appConfig = {
   },
   // LLM設定（モデル・パラメータは llm.config.ts に集約。ここではプロンプトのみ保持）
   llm: {
+    chunkSummary: {
+      systemPrompt:
+        '要約: 以下のテキストを150文字以内の簡潔な日本語要約にしてください。改行は使用しないでください。',
+      maxLength: 150,
+    },
     // テキスト分析用設定（プロンプトのみ）
     // NOTE: 以下のsystemPrompt/userPromptTemplateは、チャンク分析のJSON出力仕様を満たすように調整してください。
     // - コメント: ここに「抽出フィールド（characters/scenes/dialogues/highlights/situations）と任意のpacing」を明記
@@ -141,9 +146,9 @@ export const appConfig = {
 [人物メモリ（前回までの確定情報・JSON）]
 {{previousCharacterMemoryJson}}
 
-前: {{previousChunkText}}
+前要約: {{previousChunkSummary}}
 対象: {{chunkText}}
-次: {{nextChunkText}}
+次要約: {{nextChunkSummary}}
 
 指示:
 - 分析対象は「対象」のみ。前/次は同一人物判定や話の流れ把握にのみ使用。
@@ -189,13 +194,13 @@ export const appConfig = {
       userPromptTemplate: `文脈理解のために、直前のチャンクと直後のチャンクも付けます。**脚本変換対象とするのは脚本変換対象チャンクのみにしてください**
 
 直前のチャンク：
-{{previousText}}
+{{previousSummary}}
 
 脚本変換対象チャンク：
 {{chunkText}}
 
 直後のチャンク：
-{{nextChunk}}
+{{nextSummary}}
 
 脚本変換対象チャンクにおける、物語の要素を抽出した物を添付します。参考にしてください。
 
@@ -559,8 +564,8 @@ export const appConfig = {
       backoffFactor: 2, // バックオフ係数
     },
 
-  // キャッシュ設定
-  cache: {
+    // キャッシュ設定
+    cache: {
       ttl: 24 * 60 * 60, // デフォルトTTL（秒）
       // 最小TTL（秒）: マジックナンバー禁止に基づき設定化
       minTtlSec: 60,
@@ -574,7 +579,7 @@ export const appConfig = {
       // 機能トグル
       analysisCache: true, // 分析結果のキャッシュ有効化
       layoutCache: true, // レイアウトのキャッシュ有効化
-  },
+    },
 
     // エピソード処理設定
     episode: {

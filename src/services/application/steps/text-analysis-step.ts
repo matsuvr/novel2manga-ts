@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { getTextAnalysisConfig } from '@/config'
+import { loadOrGenerateSummary, getStoredSummary } from '@/utils/chunk-summary'
 import type { Job } from '@/db/schema'
 import { db } from '@/services/database/index'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
@@ -103,14 +104,16 @@ export class TextAnalysisStep implements PipelineStep {
       if (!config?.userPromptTemplate) {
         throw new Error('Text analysis config is invalid: userPromptTemplate is missing')
       }
-      const prevText = i > 0 ? chunks[i - 1] : ''
-      const nextText = i + 1 < chunks.length ? chunks[i + 1] : ''
+      await loadOrGenerateSummary(jobId, i, chunkText)
+      const prevSummary = i > 0 ? await getStoredSummary(jobId, i - 1) : ''
+      const nextSummary =
+        i + 1 < chunks.length ? await loadOrGenerateSummary(jobId, i + 1, chunks[i + 1]) : ''
       // ここで「LLM に渡すユーザープロンプトを生成」
       const prompt = config.userPromptTemplate
         .replace('{{chunkIndex}}', i.toString())
         .replace('{{chunkText}}', chunkText)
-        .replace('{{previousChunkText}}', prevText)
-        .replace('{{nextChunkText}}', nextText)
+        .replace('{{previousChunkSummary}}', prevSummary)
+        .replace('{{nextChunkSummary}}', nextSummary)
 
       const textAnalysisOutputSchema = TextAnalysisStep.textAnalysisOutputSchema
       let result: z.infer<typeof textAnalysisOutputSchema>
