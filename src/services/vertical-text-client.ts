@@ -123,7 +123,7 @@ export async function renderVerticalText(
     let res: Response
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (token) headers['Authorization'] = `Bearer ${token}`
+      if (token) headers.Authorization = `Bearer ${token}`
       res = await fetch(endpoint, {
         method: 'POST',
         headers,
@@ -203,7 +203,7 @@ export async function renderVerticalTextBatch(
     let res: Response
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (token) headers['Authorization'] = `Bearer ${token}`
+      if (token) headers.Authorization = `Bearer ${token}`
       res = await fetch(endpoint, {
         method: 'POST',
         headers,
