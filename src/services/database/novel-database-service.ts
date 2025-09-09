@@ -3,7 +3,6 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import type { NewNovel, Novel } from '@/db/schema'
 import { novels } from '@/db/schema'
-// d1-adapter is removed; keep adapter import placeholder if needed in future
 import { BaseDatabaseService } from './base-database-service'
 
 type DrizzleDatabase = BetterSQLite3Database<typeof schema>

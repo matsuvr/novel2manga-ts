@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
-// NOTE: Validate Cloudflare latest docs before binding to runtime specifics.
-// TODO(mcp): Verify queue/message size limits and durable object quotas. Pin links in PR.
+// NOTE: Validate legacy platform docs before binding to runtime specifics.
+// TODO(mcp): Verify queue/message size limits and durable object quotas if applicable.
 
 // Core identifiers
 export const zId = z.string().min(1)
@@ -62,7 +62,7 @@ export type ScenarioData = z.infer<typeof zScenario>
 
 // Novel → Manga contracts (lightweight; actual payloads may reference R2 paths)
 export const zIngestInput = z.object({
-  novelR2Key: z.string().min(1),
+  novelStorageKey: z.string().min(1),
   settings: z.object({
     windowTokens: z.number().int().positive(),
     strideTokens: z.number().int().positive(),
@@ -78,7 +78,7 @@ export const zIngestOutput = z.object({
 })
 
 export const zChunkOutput = z.object({
-  windows: z.array(z.object({ index: z.number().int().nonnegative(), r2Key: z.string() })),
+  windows: z.array(z.object({ index: z.number().int().nonnegative(), storageKey: z.string() })),
 })
 
 export const zWindowAnalysis = z.object({
@@ -102,12 +102,12 @@ export const zStoryboardOutput = z.object({
 
 export const zImageResult = z.object({
   panelId: z.string(),
-  imageR2Key: z.string(),
+  imageStorageKey: z.string(),
   seed: z.number().int(),
 })
 
 export const zComposeOutput = z.object({
-  pages: z.array(z.object({ index: z.number().int(), r2Key: z.string() })),
+  pages: z.array(z.object({ index: z.number().int(), storageKey: z.string() })),
 })
 
 // ==============================

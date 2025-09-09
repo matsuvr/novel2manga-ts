@@ -222,7 +222,7 @@ export const StorageFileSchema = z.object({
 })
 
 // ========================================
-// Content Models (R2に保存される詳細データ)
+// Content Models
 // ========================================
 
 // Character - 登場人物
@@ -261,7 +261,7 @@ export const SituationSchema = z.object({
   index: z.number(),
 })
 
-// TextAnalysis - 5要素の詳細（R2に保存）
+// TextAnalysis - 5要素の詳細
 export const TextAnalysisSchema = z.object({
   chunkId: z.string().optional(), // ChunkAnalysisの場合
   characters: z.array(CharacterSchema), // 登場人物

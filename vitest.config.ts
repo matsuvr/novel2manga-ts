@@ -36,9 +36,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-  // Test-time mock for Miniflare's D1 to avoid requiring native binaries
-  '@miniflare/d1': path.resolve(__dirname, './src/test/mocks/miniflare-d1.ts'),
-
+      // Alias map
     },
   },
   // Rollup optional dependencies workaround for CI environments

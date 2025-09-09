@@ -1,10 +1,9 @@
 approval_policy = "on-request"
 sandbox_mode    = "workspace-write"
 network_access = true
-
 [mcp_servers.cloudflare]
-command = "npx"
-args = ["mcp-remote", "https://docs.mcp.cloudflare.com/sse"]
+archived = true
+notes = "Cloudflare MCP server entry removed/archived as part of Cloudflare purge. Original entry is preserved in the repo history."
 
 [mcp_servers.playwright]
 command = "npx"

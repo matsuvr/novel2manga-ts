@@ -4,7 +4,7 @@ import { isDevelopment } from '@/config'
 import { storageBaseDirs } from '@/config/storage-paths.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 
-// Cloudflare Workers のグローバルバインディング型は型定義ファイルに集約されています
+// Platform-specific global binding types were previously provided here; all platform bindings removed.
 
 // ========================================
 // Storage Interfaces (設計書対応)
@@ -18,7 +18,6 @@ export interface Storage {
   list?(prefix?: string): Promise<string[]>
   head?(key: string): Promise<{ size?: number; metadata?: Record<string, string> } | null>
 }
-
 
 // Deprecated DB adapter interfaces removed – DB access is unified via Drizzle in src/db
 
@@ -227,9 +226,25 @@ export class LocalFileStorage implements Storage {
   }
 
   async list(prefix?: string): Promise<string[]> {
-    const baseDir = prefix ? path.join(this.baseDir, prefix) : this.baseDir
+    const startDir = prefix ? path.join(this.baseDir, prefix) : this.baseDir
+
+    async function walk(dir: string, base: string): Promise<string[]> {
+      let out: string[] = []
+      const entries = await fs.readdir(dir, { withFileTypes: true })
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name)
+        if (entry.isDirectory()) {
+          out = out.concat(await walk(fullPath, base))
+        } else if (entry.isFile()) {
+          const rel = path.relative(base, fullPath)
+          out.push(rel)
+        }
+      }
+      return out
+    }
+
     try {
-      const files = await fs.readdir(baseDir, { recursive: true })
+      const files = await walk(startDir, this.baseDir)
       return files
         .filter((file) => !file.endsWith('.meta.json')) // メタデータファイルは除外
         .map((file) => (prefix ? path.join(prefix, file as string) : (file as string)))
@@ -275,14 +290,13 @@ export class LocalFileStorage implements Storage {
 }
 
 // ========================================
-// Cloudflare R2 support removed
+// External object storage support removed
 // ========================================
 
 // NOTE:
-// This project no longer includes Cloudflare R2 bindings. Only LocalFileStorage
+// This project no longer includes external object storage bindings. Only LocalFileStorage
 // is supported by the built-in factory. In production, set STORAGE_MODE=local
 // or provide an alternative Storage implementation and wire it into the factory.
-
 
 // ========================================
 // SQLite Adapter Implementation (Development)
@@ -292,42 +306,26 @@ export class LocalFileStorage implements Storage {
 // Storage Factory (設計書対応)
 // ========================================
 
-type R2BindingName =
-  | 'NOVEL_STORAGE'
-  | 'CHUNKS_STORAGE'
-  | 'ANALYSIS_STORAGE'
-  | 'LAYOUTS_STORAGE'
-  | 'RENDERS_STORAGE'
-  | 'OUTPUTS_STORAGE'
-
-async function resolveStorage(
-  localDir: string,
-  binding: R2BindingName,
-  errorMessage: string,
-): Promise<Storage> {
-  // 明示ローカル指定 or 開発/テストはローカル
+async function resolveStorage(localDir: string, errorMessage: string): Promise<Storage> {
+  // Only local file storage is supported in this build. Development and
+  // explicit local mode use the local storage base. In any other environment
+  // we error out with a clear message to avoid accidental reliance on
+  // removed platform bindings.
+  const base = getStorageBase()
   if (isDevelopment() || process.env.STORAGE_MODE === 'local') {
-    const base = getStorageBase()
     getLogger()
       .withContext({ service: 'StorageFactory', method: 'resolveStorage' })
       .info('[storage] Using LocalFileStorage (dev/local)', { base, localDir })
     return new LocalFileStorage(path.join(base, localDir))
   }
 
-  // Production: Cloudflare R2 integration was removed. If running in a
-  // non-local environment the codebase expects STORAGE_MODE=local or an
-  // alternative Storage implementation to be provided by the caller.
-  // Explicitly error to avoid silent fallback.
-  const candidate = (globalThis as Record<string, unknown>)[binding]
-  if (candidate !== undefined) {
-    getLogger()
-      .withContext({ service: 'StorageFactory', method: 'resolveStorage' })
-      .error('[storage] Cloudflare R2 bindings are no longer supported in this build', {
-        binding,
-      })
-  throw new Error(`Cloudflare R2 binding detected for ${binding} but R2 support was removed`)
-  }
+  getLogger()
+    .withContext({ service: 'StorageFactory', method: 'resolveStorage' })
+    .error(
+      '[storage] External platform bindings removed from this build; set STORAGE_MODE=local or provide a Storage implementation',
+    )
 
+  // Intentionally fail fast to avoid silent misconfiguration.
   throw new Error(errorMessage)
 }
 
@@ -335,7 +333,7 @@ async function resolveStorage(
 let _novelStorage: Promise<Storage> | null = null
 export async function getNovelStorage(): Promise<Storage> {
   if (_novelStorage) return _novelStorage
-  _novelStorage = resolveStorage('novels', 'NOVEL_STORAGE', 'Novel storage not configured')
+  _novelStorage = resolveStorage('novels', 'Novel storage not configured')
   return _novelStorage
 }
 
@@ -343,7 +341,7 @@ export async function getNovelStorage(): Promise<Storage> {
 let _chunkStorage: Promise<Storage> | null = null
 export async function getChunkStorage(): Promise<Storage> {
   if (_chunkStorage) return _chunkStorage
-  _chunkStorage = resolveStorage('chunks', 'CHUNKS_STORAGE', 'Chunk storage not configured')
+  _chunkStorage = resolveStorage('chunks', 'Chunk storage not configured')
   return _chunkStorage
 }
 
@@ -351,11 +349,7 @@ export async function getChunkStorage(): Promise<Storage> {
 let _analysisStorage: Promise<Storage> | null = null
 export async function getAnalysisStorage(): Promise<Storage> {
   if (_analysisStorage) return _analysisStorage
-  _analysisStorage = resolveStorage(
-    'analysis',
-    'ANALYSIS_STORAGE',
-    'Analysis storage not configured',
-  )
+  _analysisStorage = resolveStorage('analysis', 'Analysis storage not configured')
   return _analysisStorage
 }
 
@@ -363,7 +357,7 @@ export async function getAnalysisStorage(): Promise<Storage> {
 let _layoutStorage: Promise<Storage> | null = null
 export async function getLayoutStorage(): Promise<Storage> {
   if (_layoutStorage) return _layoutStorage
-  _layoutStorage = resolveStorage('layouts', 'LAYOUTS_STORAGE', 'Layout storage not configured')
+  _layoutStorage = resolveStorage('layouts', 'Layout storage not configured')
   return _layoutStorage
 }
 
@@ -371,7 +365,7 @@ export async function getLayoutStorage(): Promise<Storage> {
 let _renderStorage: Promise<Storage> | null = null
 export async function getRenderStorage(): Promise<Storage> {
   if (_renderStorage) return _renderStorage
-  _renderStorage = resolveStorage('renders', 'RENDERS_STORAGE', 'Render storage not configured')
+  _renderStorage = resolveStorage('renders', 'Render storage not configured')
   return _renderStorage
 }
 
@@ -379,7 +373,7 @@ export async function getRenderStorage(): Promise<Storage> {
 let _outputStorage: Promise<Storage> | null = null
 export async function getOutputStorage(): Promise<Storage> {
   if (_outputStorage) return _outputStorage
-  _outputStorage = resolveStorage('outputs', 'OUTPUTS_STORAGE', 'Output storage not configured')
+  _outputStorage = resolveStorage('outputs', 'Output storage not configured')
   return _outputStorage
 }
 

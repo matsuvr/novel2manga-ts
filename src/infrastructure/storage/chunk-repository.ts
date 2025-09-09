@@ -2,7 +2,6 @@ import type { AnalyzedChunk, IChunkRepository } from '@/domain/repositories/chun
 import { StorageFactory, StorageKeys } from '@/utils/storage'
 
 // Repository implementation backed by StorageFactory, which selects the
-// appropriate storage (local filesystem in development, R2 in production).
 export class StorageChunkRepository implements IChunkRepository {
   async getAnalyzedChunks(jobId: string, chunkIndices: number[]): Promise<AnalyzedChunk[]> {
     const analysisStorage = await StorageFactory.getAnalysisStorage()
