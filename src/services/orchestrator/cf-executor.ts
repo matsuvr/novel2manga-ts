@@ -2,9 +2,15 @@ import { createHash } from 'node:crypto'
 import type { MessageEnvelope, ScenarioData } from '@/types/contracts'
 
 /**
- * Cloudflare Executor Skeleton (Queues + Durable Objects)
+ * Legacy Cloudflare Executor Skeleton (Queues + Durable Objects)
  *
- * References:
+ * NOTE: Cloudflare integration has been deprecated in this codebase. This
+ * file documents a lightweight executor abstraction that previously targeted
+ * Cloudflare services (Queues, Durable Objects, D1, R2). The implementation
+ * below intentionally avoids direct runtime bindings and instead defines
+ * abstract interfaces that can be implemented by platform-specific adapters.
+ *
+ * References (historical):
  * - Cloudflare Queues: https://developers.cloudflare.com/queues/
  * - Durable Objects: https://developers.cloudflare.com/durable-objects/
  * - D1: https://developers.cloudflare.com/d1/

@@ -118,26 +118,12 @@
   },
   "overrides": [
     {
-      "includes": ["**/*.css", "**/*.scss", "**/*.sass", "**/*.less"],
-      "linter": { "enabled": false },
-      "formatter": { "enabled": false }
-    },
-    {
-      "includes": ["cloudflare-env.d.ts"],
-      "linter": {
-        "rules": {
-          "suspicious": { "noExplicitAny": "off" }
-        }
-      },
-      "formatter": { "enabled": false }
-    },
-    {
-      "includes": ["**/*.jsonc", "**/tsconfig*.json"],
-      "linter": { "enabled": false },
-      "formatter": { "enabled": false }
-    },
-    {
-      "includes": ["**/__tests__/**", "**/tests/**", "**/*.test.*", "**/*.spec.*"],
+      "includes": [
+        "**/*.css",
+        "**/*.scss",
+        "**/*.sass",
+        "**/*.less"
+      ],
       "linter": {
         "enabled": false
       },
@@ -146,13 +132,49 @@
       }
     },
     {
-      "includes": ["*.ts", "*.tsx", "*.js", "*.jsx"],
+      "includes": [
+        "**/*.jsonc",
+        "**/tsconfig*.json"
+      ],
+      "linter": {
+        "enabled": false
+      },
+      "formatter": {
+        "enabled": false
+      }
+    },
+    {
+      "includes": [
+        "**/__tests__/**",
+        "**/tests/**",
+        "**/*.test.*",
+        "**/*.spec.*"
+      ],
+      "linter": {
+        "enabled": false
+      },
+      "formatter": {
+        "enabled": false
+      }
+    },
+    {
+      "includes": [
+        "*.ts",
+        "*.tsx",
+        "*.js",
+        "*.jsx"
+      ],
       "linter": {
         "rules": {}
       }
     },
     {
-      "includes": ["*.test.ts", "*.test.tsx", "*.spec.ts", "*.spec.tsx"],
+      "includes": [
+        "*.test.ts",
+        "*.test.tsx",
+        "*.spec.ts",
+        "*.spec.tsx"
+      ],
       "linter": {
         "rules": {
           "suspicious": {

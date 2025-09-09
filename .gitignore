@@ -63,11 +63,7 @@ codex_auth.json
 *.sqlite
 *.sqlite3
 
-# Cloudflare / Wrangler
-.wrangler/
-.dev.vars
-.miniflare/
-wrangler.toml.local
+# Deprecated platform entries removed
 
 # IDE
 .vscode/*

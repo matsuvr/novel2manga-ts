@@ -30,9 +30,7 @@ Thumbs.db
 .vscode
 .idea
 
-# Cloudflare
-.wrangler
-.miniflare
+# Deprecated platform entries removed
 
 # Database
 *.db

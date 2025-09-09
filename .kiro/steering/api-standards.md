@@ -221,26 +221,6 @@ export async function POST(request: NextRequest) {
 }
 ```
 
-## Cloudflare Workers固有の考慮事項
-
-### R2バインディングアクセス
-
-```typescript
-// グローバルオブジェクトからアクセス
-// @ts-ignore - ランタイムでのみ利用可能
-if (globalThis.NOVEL_STORAGE) {
-  await globalThis.NOVEL_STORAGE.put(key, value, {
-    httpMetadata: {
-      contentType: 'text/plain; charset=utf-8',
-    },
-    customMetadata: {
-      uploadedAt: new Date().toISOString(),
-    },
-  })
-} else {
-  throw new ApiError('STORAGE_UNAVAILABLE', 'ストレージが利用できません', 503)
-}
-```
 
 ### レート制限
 

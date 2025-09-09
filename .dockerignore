@@ -16,8 +16,7 @@ Thumbs.db
 .idea
 .open-next
 .opennext-cache
-.wrangler
-.miniflare
+# Wrangler/Cloudflare deployment artifacts removed
 **/*.tsbuildinfo
 database/*.db
 database/*.sqlite

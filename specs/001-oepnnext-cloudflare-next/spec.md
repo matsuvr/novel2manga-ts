@@ -1,8 +1,9 @@
+Archived. See `archive/cloudflare-legacy/specs/001-oepnnext-cloudflare-next-spec.md` for the original feature specification.
 # Feature Specification: OpenNext・Cloudflare削除と純粋Next.js＋SQLite3移行
 
-**Feature Branch**: `001-oepnnext-cloudflare-next`  
-**Created**: 2025-09-08  
-**Status**: Draft  
+**Feature Branch**: `001-oepnnext-cloudflare-next`
+**Created**: 2025-09-08
+**Status**: Draft
 **Input**: User description: "oepnnext, cloudflareを完全に削除し、純粋なNext.js実装にする。DBはSQLite3"
 
 ## Execution Flow (main)
@@ -44,7 +45,7 @@ When creating this spec from a user prompt:
 3. **Think like a tester**: Every vague requirement should fail the "testable and unambiguous" checklist item
 4. **Common underspecified areas**:
    - User types and permissions
-   - Data retention/deletion policies  
+   - Data retention/deletion policies
    - Performance targets and scale
    - Error handling behaviors
    - Integration requirements
@@ -73,7 +74,7 @@ As a system administrator, I want to migrate the application from OpenNext/Cloud
 
 ### Functional Requirements
 - **FR-001**: System MUST maintain all existing user-facing functionality after migration
-- **FR-002**: System MUST successfully migrate all existing data from Cloudflare D1 to SQLite3  
+- **FR-002**: System MUST successfully migrate all existing data from Cloudflare D1 to SQLite3
 - **FR-003**: System MUST remove all OpenNext dependencies and configurations
 - **FR-004**: System MUST remove all Cloudflare-specific bindings and configurations
 - **FR-005**: System MUST implement SQLite3 as the primary database
@@ -99,28 +100,4 @@ As a system administrator, I want to migrate the application from OpenNext/Cloud
 
 ### Content Quality
 - [ ] No implementation details (languages, frameworks, APIs)
-- [ ] Focused on user value and business needs
-- [ ] Written for non-technical stakeholders
-- [ ] All mandatory sections completed
-
-### Requirement Completeness
-- [ ] No [NEEDS CLARIFICATION] markers remain
-- [ ] Requirements are testable and unambiguous  
-- [ ] Success criteria are measurable
-- [ ] Scope is clearly bounded
-- [ ] Dependencies and assumptions identified
-
----
-
-## Execution Status
-*Updated by main() during processing*
-
-- [x] User description parsed
-- [x] Key concepts extracted
-- [x] Ambiguities marked
-- [x] User scenarios defined
-- [x] Requirements generated
-- [x] Entities identified
-- [ ] Review checklist passed
-
----
+Archived. See `archive/cloudflare-legacy/specs/001-oepnnext-cloudflare-next-spec.md` for the original feature specification.
