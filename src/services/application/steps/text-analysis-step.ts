@@ -76,6 +76,11 @@ export class TextAnalysisStep implements PipelineStep {
         return { success: true, data: { completed: true } }
       }
 
+      // Pre-generate summaries to avoid race conditions and redundant LLM calls
+      for (let i = 0; i < chunks.length; i++) {
+        await loadOrGenerateSummary(jobId, i, chunks[i])
+      }
+
       // Analyze chunks with limited concurrency
       const maxConcurrent = Math.max(1, Math.min(3, chunks.length))
       await this.analyzeConcurrently(chunks, maxConcurrent, { jobId, logger, ports })
@@ -104,10 +109,9 @@ export class TextAnalysisStep implements PipelineStep {
       if (!config?.userPromptTemplate) {
         throw new Error('Text analysis config is invalid: userPromptTemplate is missing')
       }
-      await loadOrGenerateSummary(jobId, i, chunkText)
-      const prevSummary = i > 0 ? await getStoredSummary(jobId, i - 1) : ''
+      const prevSummary = i > 0 ? ((await getStoredSummary(jobId, i - 1)) ?? '') : ''
       const nextSummary =
-        i + 1 < chunks.length ? await loadOrGenerateSummary(jobId, i + 1, chunks[i + 1]) : ''
+        i + 1 < chunks.length ? ((await getStoredSummary(jobId, i + 1)) ?? '') : ''
       // ここで「LLM に渡すユーザープロンプトを生成」
       const prompt = config.userPromptTemplate
         .replace('{{chunkIndex}}', i.toString())

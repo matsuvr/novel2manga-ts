@@ -21,8 +21,11 @@ export async function loadOrGenerateSummary(
     try {
       const parsed = JSON.parse(existing.text) as { summary?: string }
       if (parsed.summary) return parsed.summary
-    } catch {
-      // ignore JSON parse errors and regenerate summary
+    } catch (e) {
+      logger.warn('Failed to parse cached summary, regenerating.', {
+        key,
+        error: e instanceof Error ? e.message : String(e),
+      })
     }
   }
 
@@ -46,7 +49,11 @@ export async function getStoredSummary(jobId: string, index: number): Promise<st
   try {
     const parsed = JSON.parse(existing.text) as { summary?: string }
     return parsed.summary
-  } catch {
+  } catch (e) {
+    logger.warn('Failed to parse stored summary.', {
+      key,
+      error: e instanceof Error ? e.message : String(e),
+    })
     return undefined
   }
 }
@@ -57,7 +64,7 @@ async function summarize(
 ): Promise<string> {
   const config = getChunkSummaryConfig()
   if (String(process.env.N2M_MOCK_LLM) === '1') {
-    return text.slice(0, config.maxLength)
+    return utf8Truncate(text, config.maxLength)
   }
   const generator = getLlmStructuredGenerator()
   const schema = z.object({ summary: z.string().max(config.maxLength) })
@@ -75,4 +82,16 @@ async function summarize(
     length: result.summary.length,
   })
   return result.summary
+}
+
+function utf8Truncate(text: string, maxBytes: number): string {
+  let bytes = 0
+  let result = ''
+  for (const char of text) {
+    const charBytes = Buffer.byteLength(char, 'utf8')
+    if (bytes + charBytes > maxBytes) break
+    bytes += charBytes
+    result += char
+  }
+  return result
 }
