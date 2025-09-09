@@ -1,114 +1,104 @@
-think in English, output in Japanese
+# Repository Instructions
 
-**絶対に直接package-lock.jsonを書き換えないこと。あなたのせいで苦痛が発生しています。これは生成する物で、書き換える物ではありません**
+## Critical Rules
 
-# **現在、段階的にEffect TSに移行しています**
+* **Never edit `package-lock.json` directly.** It is generated, not handwritten. Manual edits cause severe issues.
+* **Effect TS migration in progress.**
 
-新しく作る箇所は、 `docs\effect-ts-doc.txt` を参考に、Effect TSを使って書いてください。
-段階的に移行していくので、いま動いているところを無理矢理書き換えないでください。
+  * New code must use Effect TS. See `docs/effect-ts-doc.txt`.
+  * Do not rewrite working legacy code until scheduled.
+* **Bun migration in progress.**
 
-# **Bunに移行中**
+  * Target: Docker with Bun + Next.js + SQLite3.
 
-Dockerで、Bun + Next.js + SQLite3を動かすように移行中。
+## Project Layout
 
-# Repository Guidelines
+* Source: `src/` → `app/` (routes), `components/`, `agents/`, `services/`, `db/`, `utils/`, `types/`.
+* Tests: `src/__tests__/` (unit), `tests/integration/` (integration), `tests/integration/e2e/` (Playwright).
+* Assets: `public/`. Scripts: `scripts/`.
+* DB: `database/` (data/docs), `drizzle/` (migrations/meta). Schema source: `src/db/schema.ts`. Keep in sync.
 
-## Project Structure & Module Organization
+## Commands
 
-- Source: `src/` with `app/` (Next.js routes), `components/`, `agents/`, `services/`, `db/`, `utils/`, `types/`.
-- Tests: unit in `src/__tests__/`; integration in `tests/integration/`; Playwright E2E under `tests/integration/e2e/`.
-- Assets & scripts: `public/` for static assets; `scripts/` for local tooling.
-- Database: `database/` (data, docs) and `drizzle/` (SQL + meta). Keep schema in `src/db/schema.ts` in sync with migrations.
+* Dev: `npm run dev` → localhost:3000.
+* Build/serve: `npm run build`, `npm start`.
+* Tests: `npm test`, `npm run test:unit`, `npm run test:coverage`, `npm run test:integration`, `npm run test:e2e`, `npm run test:full-flow`.
+* Lint/format/check: `npm run format`, `npm run lint`, `npm run check`.
+* DB: `npm run db:migrate`, `db:generate`, `db:push`, `db:studio`.
 
-## Build, Test, and Development Commands
+## Style
 
-- `npm run dev`: Start Next.js locally at `http://localhost:3000`.
-- `npm run build` / `npm start`: Production build and serve.
-- `npm test`, `npm run test:unit`: Run Vitest unit tests; `npm run test:coverage` for coverage.
-- `npm run test:integration` / `:run`: Vitest integration using `.env.test`.
-- `npm run test:e2e`: Playwright E2E; `npm run test:full-flow` (or `:win`) runs scripted flow.
-- `npm run format` / `npm run lint` / `npm run check`: Biome format, lint, and combined checks.
-- DB: `npm run db:migrate` / `db:generate` / `db:push` / `db:studio`.
-// Cloudflare deployment references removed: repository uses standard Next.js with local development commands.
+* TypeScript, Node ≥ 20.9. Strict typing. No `any`, no unexplained `@ts-ignore`.
+* Formatter: Biome (CI enforced).
+* Naming: PascalCase components, camelCase vars/functions, kebab-case files. Routes live in `src/app/`.
 
-## Coding Style & Naming Conventions
+### Config Centralization
 
-- Language: TypeScript (Node >= 20.9). Strict types; avoid `any` and unexplained `@ts-ignore`.
-- Formatting/Linting: Biome. Keep files formatted; CI enforces `format:check`/`lint:check`.
-- Naming: PascalCase React components; camelCase functions/vars; kebab-case files. Next.js routes live under `src/app/`.
+* No magic numbers.
+* All thresholds/limits/timeouts/pages → `*.config.ts`.
+* Example: `rendering.limits.maxPages` in `app.config.ts` is the only reference.
+* On finding hardcoded values, refactor immediately to config.
 
-### マジックナンバー禁止・設定の一元化（新規ルール）
+## Testing
 
-- マジックナンバーのハードコーディングは禁止です。
-- 閾値・上限・タイムアウト・ページ数などの設定値は、すべて `*.config.ts` に定義し、そこからのみ参照してください。
-- 既存コードにハードコードが見つかった場合は、即時に `*.config.ts` へ移動して参照を置換すること。
-- 例: レンダリング最大ページ数 `maxPages` は `app.config.ts` の `rendering.limits.maxPages` を唯一の参照源とする。
+* Frameworks: Vitest (unit/integration), Playwright (E2E).
+* Unit tests: `src/__tests__/*.test.ts(x)`.
+* Integration: `tests/integration/` (via `vitest.integration.config.ts`).
+* E2E: `tests/integration/e2e/`.
+* Keep `.env.test` current. Minimize side effects.
 
-## Testing Guidelines
+## Commits & PRs
 
-- Frameworks: Vitest for unit/integration; Playwright for E2E.
-- Location & names: Unit tests in `src/__tests__` as `*.test.ts(x)`; integration in `tests/integration/` (configured via `vitest.integration.config.ts`); E2E in `tests/integration/e2e/` (Playwright).
-- Running: Use commands above; prefer `npm run test:coverage` for meaningful PRs.
-- Test data/env: Keep `.env.test` current for integration; isolate side effects.
+* Conventional Commits (`feat:`, `fix:`, etc).
+* PRs: follow `.github/pull_request_template.md`. Include linked issues, test results, updated specs/docs (`.kiro/specs/...`, `src/db/schema.ts`, `drizzle/`, `database/storage-structure.md`).
+* Quality: 0 TS errors, clean lint/format, DRY/SOLID respected, tests required.
 
-## Commit & Pull Request Guidelines
+## Security
 
-- Commits: Use Conventional Commits (e.g., `feat:`, `fix:`, `chore:`). Keep changes focused.
-- PRs: Use `.github/pull_request_template.md`. Link issues, paste test summaries (unit/integration/E2E), update docs/specs in `.kiro/specs/...`, DB schema/migrations (`src/db/schema.ts`, `drizzle/`), and `database/storage-structure.md` when applicable.
-- Quality gates: zero TS errors, clean lint/format, DRY/SOLID respected, adequate tests for changes.
+* Never commit secrets. Copy `.env.example` → `.env`, `.env.local`, `.env.test`.
+* Cloudflare integration removed.
 
-## Security & Configuration Tips
+## Tools
 
-- Do not commit secrets. Copy `.env.example` to `.env`/`.env.local`; keep `.env.test` for integration.
-// Cloudflare bindings guidance removed as Cloudflare integration has been deprecated in this project.
+* `gh` CLI for branches/PRs.
+* `git-grep`.
 
-## CLI Tools
+---
 
-- `gh` (GitHub CLI): create branches, push, open PRs from the terminal. Requires configured credentials and network access.
-- `git-grep`
+## Mandatory Practices
 
-```instructions
-MANDATORY RULES FOR THIS REPOSITORY — READ BEFORE CODING
+* Always fetch latest official docs with MCP tools before coding. Validate library updates via web search + Deepwiki.
+* Forbid `any`. Use `unknown` + guards, generics, discriminated unions.
+* No unjustified disables of lint/format.
+* Enforce DRY + SOLID.
+* Unit tests for all public behavior; E2E required for critical flows.
+* Temp scripts → `/tmp_test` only, remove before merge.
 
-Non‑negotiables (do these every time):
-- Always fetch and develop against the latest official documentation via MCP tools before writing code.
-	- Use Web search + Deepwiki to gather current library information. Prefer primary sources; cross‑check breaking changes and version constraints.
-- TypeScript: The any type is forbidden. Use precise types (unknown + type guards, generics, discriminated unions). No ts-ignore/ts-expect-error unless absolutely necessary and justified with a comment and a tracking task.
-- Lint/Format: Resolve all linter errors and warnings. Do not merge with outstanding issues. Do not disable rules to “make it pass” unless there is a justified, documented rationale.
-- DRY: Eliminate duplication. Extract shared logic into reusable modules/functions. No copy-paste forks of similar code paths.
-- SOLID: Follow Single-responsibility, Open/closed, Liskov, Interface segregation, Dependency inversion. Prefer composition over inheritance and stable, testable boundaries.
+### Docs & Contracts
 
-Project conventions you must follow:
-- Unit tests: Place all unit tests under src/__tests__ using the repository’s test runner (Vitest). Every new/changed public behavior must have tests.
-- E2E tests: Implement and run end-to-end tests with Playwright MCP. Treat E2E as required for critical flows. Keep scenarios minimal, deterministic, and parallel‑safe.
-- Temporary scripts: Put any ad‑hoc verification or one‑off scripts in /tmp_test. Clearly mark them as temporary and remove or gate them before merging to main.
+* Keep design (`design.md`), tasks (`tasks.md`), schema (`schema.ts` + migrations), and storage (`storage-structure.md`) in sync with code in the same PR.
+* No hidden errors, no silent fallbacks. Fail visibly with detailed messages.
 
-Design, tasks, and data contracts — keep in sync in the same PR:
-- System design: .kiro\specs\novel-to-manga-converter\design.md must reflect the current architecture and decisions. Update it when introducing or changing components, flows, or boundaries.
-- Task breakdown: .kiro\specs\novel-to-manga-converter\tasks.md must be updated alongside code to reflect the actual scope, status, and acceptance criteria.
-- Database: Use Drizzle. The schema source of truth is src\db\schema.ts. Update schema and generate/apply migrations together with code changes; never drift the runtime DB from the schema.
-- Storage layout: database\storage-structure.md defines storage contracts and layout. Update it when files, buckets/paths, or retention rules change.
-- エラーの隠蔽がないか。LLMコール以外のフォールバックが実装されていないか。スキップが無いか。一気通貫の分析サービスである以上、フォールバックやスキップで正常な分析結果が得られないことはシステムの重要な欠陥である。フォールバックは実装してはいけない。エラーは詳細なメッセージと共に明示し、そこで処理をストップすべき
+### Dependency Policy
 
-Technology‑specific directives:
-- Libraries: When introducing or upgrading dependencies, use web search + Context7 + Deepwiki to validate stability, maintenance status, and migration notes. Include justification and links in the PR.
+* When adding/upgrading libs, verify stability/maintenance/migration notes. Link sources in PR.
 
-Quality gates (must pass before merge):
-- Build succeeds with zero TypeScript errors (no any), and linter passes with no errors and no unexplained disables.
-- Unit tests in src/__tests__ pass. E2E tests via Playwright MCP pass for core flows. Integration tests must pass if applicable.
-- Docs/specs/tasks updated in the same PR: design.md, tasks.md, schema.ts + migrations, storage-structure.md.
-- No duplicated code introduced; shared utilities factored appropriately.
+### Merge Gates
 
-PR checklist (copy into your PR and tick all):
-- [ ] No any types introduced; strict types only. No unjustified ts-ignore.
-- [ ] Linter and formatter clean (0 errors). No rule disabling without justification.
-- [ ] DRY and SOLID upheld; no redundant implementations.
-- [ ] Unit tests added/updated in src/__tests__ and passing.
-- [ ] E2E scenarios added/updated and passing with Playwright MCP.
-- [ ] Updated: .kiro\specs\novel-to-manga-converter\design.md
-- [ ] Updated: .kiro\specs\novel-to-manga-converter\tasks.md
-- [ ] Updated: src\db\schema.ts (+ migrations applied/generated as needed)
-- [ ] Updated: database\storage-structure.md
+* Build passes with 0 TS errors, linter clean.
+* Unit, integration, E2E tests pass.
+* Docs/specs/tasks updated.
+* No duplication.
 
-If any item cannot be satisfied, stop and resolve it first. Do not proceed with implementation or merging until all conditions above are met.
-```
+### PR Checklist
+
+* [ ] No `any` / unjustified ignores
+* [ ] Lint/format clean
+* [ ] DRY + SOLID upheld
+* [ ] Unit tests passing
+* [ ] E2E tests passing
+* [ ] Updated: `design.md`, `tasks.md`, `schema.ts` + migrations, `storage-structure.md`
+
+---
+
+Would you like me to **shrink this even further into a “bullet-only” version** (just rules, no prose) for maximum token savings, or keep it at this concise but descriptive level?

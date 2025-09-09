@@ -2,6 +2,10 @@
 
 ## Overview
 The application already uses a well-structured SQLite3 database with Drizzle ORM. The migration from OpenNext/Cloudflare to pure Next.js will maintain the existing data model, as the schema is already compatible with SQLite3.
+# Data Model
+
+## Overview
+The application already uses a well-structured SQLite3 database with Drizzle ORM. The migration from OpenNext/Cloudflare to pure Next.js will maintain the existing data model, as the schema is already compatible with SQLite3.
 
 ## Core Entities
 
@@ -31,8 +35,8 @@ The application already uses a well-structured SQLite3 database with Drizzle ORM
 
 ## Key Relationships
 ```
-users → novels → jobs → chunks → episodes → outputs
-       ↓        ↓       ↓        ↓
+users \u2192 novels \u2192 jobs \u2192 chunks \u2192 episodes \u2192 outputs
+       \u2193        \u2193       \u2193        \u2193
 accounts   storageFiles  tokenUsage  renderStatus
 sessions              layoutStatus
 authenticators        chunkAnalysisStatus
@@ -66,13 +70,6 @@ authenticators        chunkAnalysisStatus
 | CACHE.DB | CACHE_DATABASE_PATH | SQLite cache database |
 | DB | DATABASE_URL | Main database connection |
 | KV.CACHE | CACHE_FILE_PATH | Key-value cache file |
-
-````markdown
-# Data Model
-
-## Overview
-The application already uses a well-structured SQLite3 database with Drizzle ORM. The migration to a pure Next.js runtime preserves the data model; where legacy Cloudflare object storage references existed, they are mapped to local filesystem conventions.
-
 ## Core Entities
 
 ### User Management
