@@ -41,12 +41,12 @@ Documentation-driven framework built on Claude Code's native extensibility featu
 
 ### Deployment Platform
 
-- **Runtime**: Cloudflare Workers (Edge Computing)
-- **Adapter**: @opennextjs/cloudflare 1.6.1
-- **CLI**: Wrangler 4.26.0
-- **Compatibility**: Node.js compatibility flag enabled
-- **Caching**: Cloudflare KV for edge caching
-- **Image Optimization**: Cloudflare Images integration
+- **Runtime**: Edge or standard Node.js hosting depending on deployment target
+- **Adapter**: Use standard Next.js adapters or platform-appropriate adapters
+- **CLI**: Use standard deployment CLIs (e.g., Vercel CLI, Docker, or platform-specific tools)
+- **Compatibility**: Node.js compatibility flag enabled when required
+- **Caching**: Platform-appropriate caching (local or CDN)
+- **Image Optimization**: Use Next.js or CDN image optimization
 
 ### AI/ML Integration
 
@@ -57,7 +57,6 @@ Documentation-driven framework built on Claude Code's native extensibility featu
 
 ### Data Storage (Novel-to-Manga Project)
 
-- **Database**: Cloudflare D1 (SQLite at edge)
 - **Object Storage**: Cloudflare R2 (for text files, analysis results, YAML layouts)
 - **File Structure**:
   - Novels: `novels/{novelId}/original.txt`
@@ -119,22 +118,16 @@ Documentation-driven framework built on Claude Code's native extensibility featu
 /kiro:spec-status [name]          # Check progress and compliance
 ```
 
-### Cloudflare Workers Commands
+### Deployment Commands
 
 ```bash
 # Development
 npm run dev                       # Local Next.js development
-npm run preview                   # Preview with Cloudflare Workers runtime
-npm run cf-typegen               # Generate CloudflareEnv types
+npm run preview                   # Preview the app in local environment
 
 # Deployment
 npm run build                     # Build Next.js app
-npm run deploy                    # Deploy to Cloudflare Workers
-
-# OpenNext specific
-opennextjs-cloudflare build      # Build for Cloudflare Workers
-opennextjs-cloudflare preview    # Local preview with workerd runtime
-opennextjs-cloudflare deploy     # Deploy to production
+npm run deploy                    # Deploy using platform-specific deployment tools
 ```
 
 ### Legacy Commands (Deprecated)
@@ -243,19 +236,3 @@ cp CLAUDE.md /your-project/       # Copy project configuration
 - Progress tracking suitable for project management tool integration
 - Cloudflare Workers deployment via Wrangler CLI
 - GitHub Actions integration for automated deployments
-
-### Cloudflare Services Integration
-
-- **Workers KV**: For persistent caching and session storage
-- **D1 Database**: SQLite at the edge for structured data
-  - Novel metadata, job tracking, chunk management
-  - Episode and manga page relationships
-  - Optimized for small metadata, references to R2 objects
-- **R2 Storage**: Object storage for large files
-  - Original novel texts (can be several MB)
-  - Chunked text files for parallel processing
-  - JSON analysis results (5要素抽出データ)
-  - YAML layout definitions for manga pages
-  - Generated preview images
-- **Images**: Automatic image optimization and resizing
-- **AI Workers**: Potential integration for edge AI inference

@@ -1,4 +1,4 @@
-// Cloudflare bindings removed. Use unknown/optional types for any external
+// Platform bindings removed. Use unknown/optional types for any external
 // bindings that may still be referenced at runtime.
 
 export interface Env {

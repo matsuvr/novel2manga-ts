@@ -1,3 +1,5 @@
+Archived. See `archive/cloudflare-legacy/specs/001-oepnnext-cloudflare-next-contracts-api-contracts.md` for the original API contracts.
+Archived. See `archive/cloudflare-legacy/specs/001-oepnnext-cloudflare-next-contracts-api-contracts.md` for the original API contracts.
 # API Contracts
 
 ## Overview

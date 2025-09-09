@@ -1,3 +1,4 @@
+Archived. See `archive/cloudflare-legacy/specs/001-oepnnext-cloudflare-next-data-model.md` for the original data model.
 # Data Model
 
 ## Overview
@@ -46,8 +47,8 @@ authenticators        chunkAnalysisStatus
 
 ### Current State
 - Database: Already SQLite3 (no schema changes needed)
-- Storage: Mix of local files and Cloudflare R2
-- Configuration: Environment variables + Cloudflare bindings
+- Storage: Mix of local files and legacy object storage references
+- Configuration: Environment variables (migrated from bindings where applicable)
 
 ### Migration Requirements
 1. **Database**: No changes needed (already SQLite3)
@@ -55,7 +56,7 @@ authenticators        chunkAnalysisStatus
 3. **Configuration**: Convert Cloudflare bindings to environment variables
 
 ### Storage Migration Mapping
-| Cloudflare R2 Bucket | Local Path | Content Type |
+| Legacy Object Bucket | Local Path | Content Type |
 |---------------------|------------|--------------|
 | NOVEL_STORAGE | ./storage/novels/ | Original novel files |
 | CHUNKS_STORAGE | ./storage/chunks/ | Text chunks |
@@ -64,6 +65,7 @@ authenticators        chunkAnalysisStatus
 | RENDERS_STORAGE | ./storage/renders/ | Rendered images |
 | OUTPUTS_STORAGE | ./storage/outputs/ | Final exports |
 
+Archived. See `archive/cloudflare-legacy/specs/001-oepnnext-cloudflare-next-data-model.md`.
 ### Configuration Migration
 | Cloudflare Binding | Environment Variable | Purpose |
 |-------------------|-------------------|---------|
