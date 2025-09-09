@@ -118,7 +118,7 @@ export async function loadEpisodePreview(
     // ファイルが存在しない場合でも、ページ情報は返す（UI側で欠落を検知表示できるようにする）
     let base64 = ''
     if (file) {
-      // R2/Local両対応：常にBase64へ正規化
+      // 常にBase64へ正規化
       base64 = file.text || ''
       try {
         const normalized = base64.replace(/\s+/g, '')

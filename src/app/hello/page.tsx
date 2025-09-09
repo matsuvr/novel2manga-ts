@@ -1,3 +1,3 @@
 export default function HelloPage() {
-  return <div>Hello Cloudflare!</div>
+  return <div>Hello!</div>
 }

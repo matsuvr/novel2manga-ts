@@ -36,6 +36,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Alias map
     },
   },
   // Rollup optional dependencies workaround for CI environments

@@ -1,8 +1,6 @@
 import { getJobDetails } from '@/services/application/job-details'
 
-// Cloudflare Workers + OpenNext でのSSE実装
-// 参考: Cloudflare Workers は Response streaming をサポート
-// https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs (Response streaming supported)
+// SSE implementation using ReadableStream for server push. Platform-agnostic notes only.
 export async function GET(
   request: Request,
   ctx: { params: { jobId: string } | Promise<{ jobId: string }> },
@@ -123,10 +121,9 @@ export async function GET(
 
     return new Response(stream, {
       status: 200,
-      headers: {
+        headers: {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache, no-transform',
-        // Note: Cloudflare/Workers generally handle connection persistence
       },
     })
   } catch (e) {

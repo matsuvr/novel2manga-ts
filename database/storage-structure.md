@@ -2,7 +2,6 @@
 
 ## 2025-08-31 更新（ユーザーデータ連携）
 
-- Auth.js 対応の `users`/`accounts`/`sessions` テーブルを D1 に追加。
 - `novels` と `jobs` に `user_id` を追加し、ユーザー単位でのデータ分離を実現。
 - ストレージキー構造に変更はない。
 
@@ -223,7 +222,7 @@ const novelRepo = new NovelRepository(ports.novel) // NovelDbPortRW
 ... etc
 ```
 
-### 本番環境（Cloudflare R2）
+### 本番環境（外部オブジェクトストレージ）
 
 ```
 NOVEL_STORAGE: novels/{novelId}.json

@@ -4,7 +4,7 @@ import { isDevelopment } from '@/config'
 import { storageBaseDirs } from '@/config/storage-paths.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 
-// Cloudflare Workers のグローバルバインディング型は型定義ファイルに集約されています
+// Platform-specific global binding types were previously provided here; all platform bindings removed.
 
 // ========================================
 // Storage Interfaces (設計書対応)
@@ -226,9 +226,25 @@ export class LocalFileStorage implements Storage {
   }
 
   async list(prefix?: string): Promise<string[]> {
-    const baseDir = prefix ? path.join(this.baseDir, prefix) : this.baseDir
+    const startDir = prefix ? path.join(this.baseDir, prefix) : this.baseDir
+
+    async function walk(dir: string, base: string): Promise<string[]> {
+      let out: string[] = []
+      const entries = await fs.readdir(dir, { withFileTypes: true })
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name)
+        if (entry.isDirectory()) {
+          out = out.concat(await walk(fullPath, base))
+        } else if (entry.isFile()) {
+          const rel = path.relative(base, fullPath)
+          out.push(rel)
+        }
+      }
+      return out
+    }
+
     try {
-      const files = await fs.readdir(baseDir, { recursive: true })
+      const files = await walk(startDir, this.baseDir)
       return files
         .filter((file) => !file.endsWith('.meta.json')) // メタデータファイルは除外
         .map((file) => (prefix ? path.join(prefix, file as string) : (file as string)))
@@ -274,207 +290,13 @@ export class LocalFileStorage implements Storage {
 }
 
 // ========================================
-// R2 Storage Implementation
+// External object storage support removed
 // ========================================
 
-// Cloudflare R2 Bucket型定義
-interface R2Bucket {
-  put(
-    key: string,
-    value: string | ArrayBuffer | ReadableStream,
-    options?: {
-      httpMetadata?: { contentType?: string }
-      customMetadata?: Record<string, string>
-    },
-  ): Promise<unknown>
-  get(key: string): Promise<{
-    text(): Promise<string>
-    customMetadata?: Record<string, string>
-  } | null>
-  delete(key: string): Promise<void>
-  head(key: string): Promise<{
-    customMetadata?: Record<string, string>
-    size?: number
-    httpMetadata?: { contentType?: string }
-  } | null>
-  list(options?: { prefix?: string }): Promise<{
-    objects: Array<{ key: string }>
-  }>
-}
-
-function isR2Bucket(value: unknown): value is R2Bucket {
-  if (!value || typeof value !== 'object') return false
-  const obj = value as Record<string, unknown>
-  // Minimal contract to pass tests; other methods are optional and checked lazily
-  return typeof obj.put === 'function' && typeof obj.get === 'function'
-}
-
-export class R2Storage implements Storage {
-  constructor(private bucket: R2Bucket) {}
-
-  // リトライロジック付きの操作
-  private async retryableOperation<T>(
-    operation: () => Promise<T>,
-    maxRetries: number = 3,
-  ): Promise<T> {
-    let lastError: Error | null = null
-
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        return await operation()
-      } catch (error) {
-        lastError = error as Error
-
-        // R2特有のエラーをチェック
-        if (error instanceof Error) {
-          // レート制限エラーの場合は指数バックオフ
-          if (error.message.includes('rate limit')) {
-            const backoffMs = 2 ** i * 1000
-            await new Promise((resolve) => setTimeout(resolve, backoffMs))
-            continue
-          }
-
-          // その他の一時的なエラー
-          if (error.message.includes('timeout') || error.message.includes('network')) {
-            continue
-          }
-        }
-
-        // リトライ不可能なエラーは即座にthrow
-        throw error
-      }
-    }
-
-    throw lastError
-  }
-
-  // キャッシュヘッダーを取得
-  private getCacheHeaders(key: string): Record<string, string> {
-    if (key.includes('/analysis/')) {
-      // 分析結果は長期間キャッシュ可能
-      return {
-        'Cache-Control': 'public, max-age=86400, s-maxage=604800', // 1日、CDNは7日
-        'CDN-Cache-Control': 'max-age=604800', // Cloudflare CDN専用
-      }
-    } else if (key.includes('/novels/')) {
-      // 元データは変更されないため永続的にキャッシュ
-      return {
-        'Cache-Control': 'public, max-age=31536000, immutable', // 1年
-      }
-    } else if (key.includes('/layouts/') || key.includes('/renders/')) {
-      // レイアウト・レンダリングデータは更新される可能性があるため短めに
-      return {
-        'Cache-Control': 'public, max-age=3600, s-maxage=86400', // 1時間、CDNは1日
-      }
-    } else {
-      return {
-        'Cache-Control': 'public, max-age=3600', // デフォルト1時間
-      }
-    }
-  }
-
-  async put(key: string, value: string | Buffer, metadata?: Record<string, string>): Promise<void> {
-    const valueToStore = typeof value === 'string' ? value : value.toString()
-    const cacheHeaders = this.getCacheHeaders(key)
-
-    // content-type を推定（メタデータ指定があればそれを優先）
-    const inferContentType = (): string => {
-      const specified =
-        metadata && typeof metadata.contentType === 'string' ? metadata.contentType : ''
-      if (specified) return specified
-      const lower = key.toLowerCase()
-      if (lower.endsWith('.yaml') || lower.endsWith('.yml')) return 'text/yaml; charset=utf-8'
-      if (lower.endsWith('.json')) return 'application/json; charset=utf-8'
-      if (lower.endsWith('.txt')) return 'text/plain; charset=utf-8'
-      if (lower.endsWith('.png')) return 'image/png'
-      if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg'
-      return 'application/octet-stream'
-    }
-
-    await this.retryableOperation(async () => {
-      await this.bucket.put(key, valueToStore, {
-        httpMetadata: {
-          contentType: inferContentType(),
-          ...cacheHeaders,
-        },
-        customMetadata: metadata,
-      })
-    })
-
-    // 強整合性: 書き込み直後に可視性を確認（R2の最終的整合性影響を緩和）
-    // head/get が成功するまで短いバックオフで再試行
-    const maxChecks = 5
-    for (let i = 0; i < maxChecks; i++) {
-      // eslint-disable-next-line no-await-in-loop
-      const ok = await this.retryableOperation(async () => {
-        const h = await this.bucket.head(key)
-        return !!h
-      })
-      if (ok) break
-      // eslint-disable-next-line no-await-in-loop
-      await new Promise((r) => setTimeout(r, 50 * (i + 1)))
-      if (i === maxChecks - 1) {
-        // 最終試行で可視にならなければエラーにする（呼び出し側でリカバリ）
-        throw new Error(`R2Storage.put visibility check failed for key: ${key}`)
-      }
-    }
-  }
-
-  async get(key: string): Promise<{ text: string; metadata?: Record<string, string> } | null> {
-    return await this.retryableOperation(async () => {
-      const object = await this.bucket.get(key)
-      if (!object) {
-        return null
-      }
-
-      const text = await object.text()
-      return {
-        text,
-        metadata: object.customMetadata || {},
-      }
-    })
-  }
-
-  async delete(key: string): Promise<void> {
-    await this.retryableOperation(async () => {
-      await this.bucket.delete(key)
-    })
-  }
-
-  async exists(key: string): Promise<boolean> {
-    return await this.retryableOperation(async () => {
-      const object = await this.bucket.head(key)
-      return !!object
-    })
-  }
-
-  async list(prefix?: string): Promise<string[]> {
-    return await this.retryableOperation(async () => {
-      const result = await this.bucket.list(prefix ? { prefix } : undefined)
-      return result.objects.map((obj) => obj.key)
-    })
-  }
-
-  async head(key: string): Promise<{ size?: number; metadata?: Record<string, string> } | null> {
-    return await this.retryableOperation(async () => {
-      const object = await this.bucket.head(key)
-      if (!object) return null
-
-      // R2のheadレスポンスからサイズを取得（プロパティ名はR2の実装による）
-      const meta = object as {
-        contentLength?: number | string
-        size?: number | string
-        customMetadata?: Record<string, string>
-      }
-      const size = meta.contentLength ?? meta.size
-
-      return {
-        size: size ? Number(size) : undefined,
-        metadata: meta.customMetadata || {},
-      }
-    })
-  }
-}
+// NOTE:
+// This project no longer includes external object storage bindings. Only LocalFileStorage
+// is supported by the built-in factory. In production, set STORAGE_MODE=local
+// or provide an alternative Storage implementation and wire it into the factory.
 
 // ========================================
 // SQLite Adapter Implementation (Development)
@@ -484,39 +306,26 @@ export class R2Storage implements Storage {
 // Storage Factory (設計書対応)
 // ========================================
 
-type R2BindingName =
-  | 'NOVEL_STORAGE'
-  | 'CHUNKS_STORAGE'
-  | 'ANALYSIS_STORAGE'
-  | 'LAYOUTS_STORAGE'
-  | 'RENDERS_STORAGE'
-  | 'OUTPUTS_STORAGE'
-
-async function resolveStorage(
-  localDir: string,
-  binding: R2BindingName,
-  errorMessage: string,
-): Promise<Storage> {
-  // 明示ローカル指定 or 開発/テストはローカル
+async function resolveStorage(localDir: string, errorMessage: string): Promise<Storage> {
+  // Only local file storage is supported in this build. Development and
+  // explicit local mode use the local storage base. In any other environment
+  // we error out with a clear message to avoid accidental reliance on
+  // removed platform bindings.
+  const base = getStorageBase()
   if (isDevelopment() || process.env.STORAGE_MODE === 'local') {
-    const base = getStorageBase()
     getLogger()
       .withContext({ service: 'StorageFactory', method: 'resolveStorage' })
       .info('[storage] Using LocalFileStorage (dev/local)', { base, localDir })
     return new LocalFileStorage(path.join(base, localDir))
   }
 
-  // 本番: Cloudflare R2 バインディングがある場合のみR2、なければ明示エラー
-  const candidate = (globalThis as Record<string, unknown>)[binding]
-  const bucket = isR2Bucket(candidate) ? candidate : undefined
-  if (bucket) {
-    getLogger()
-      .withContext({ service: 'StorageFactory', method: 'resolveStorage' })
-      .info('[storage] Using R2Storage binding', { binding })
-    return new R2Storage(bucket)
-  }
+  getLogger()
+    .withContext({ service: 'StorageFactory', method: 'resolveStorage' })
+    .error(
+      '[storage] External platform bindings removed from this build; set STORAGE_MODE=local or provide a Storage implementation',
+    )
 
-  // ここでフォールバックせず、テスト期待に合わせてエラーを投げる
+  // Intentionally fail fast to avoid silent misconfiguration.
   throw new Error(errorMessage)
 }
 
@@ -524,7 +333,7 @@ async function resolveStorage(
 let _novelStorage: Promise<Storage> | null = null
 export async function getNovelStorage(): Promise<Storage> {
   if (_novelStorage) return _novelStorage
-  _novelStorage = resolveStorage('novels', 'NOVEL_STORAGE', 'Novel storage not configured')
+  _novelStorage = resolveStorage('novels', 'Novel storage not configured')
   return _novelStorage
 }
 
@@ -532,7 +341,7 @@ export async function getNovelStorage(): Promise<Storage> {
 let _chunkStorage: Promise<Storage> | null = null
 export async function getChunkStorage(): Promise<Storage> {
   if (_chunkStorage) return _chunkStorage
-  _chunkStorage = resolveStorage('chunks', 'CHUNKS_STORAGE', 'Chunk storage not configured')
+  _chunkStorage = resolveStorage('chunks', 'Chunk storage not configured')
   return _chunkStorage
 }
 
@@ -540,11 +349,7 @@ export async function getChunkStorage(): Promise<Storage> {
 let _analysisStorage: Promise<Storage> | null = null
 export async function getAnalysisStorage(): Promise<Storage> {
   if (_analysisStorage) return _analysisStorage
-  _analysisStorage = resolveStorage(
-    'analysis',
-    'ANALYSIS_STORAGE',
-    'Analysis storage not configured',
-  )
+  _analysisStorage = resolveStorage('analysis', 'Analysis storage not configured')
   return _analysisStorage
 }
 
@@ -552,7 +357,7 @@ export async function getAnalysisStorage(): Promise<Storage> {
 let _layoutStorage: Promise<Storage> | null = null
 export async function getLayoutStorage(): Promise<Storage> {
   if (_layoutStorage) return _layoutStorage
-  _layoutStorage = resolveStorage('layouts', 'LAYOUTS_STORAGE', 'Layout storage not configured')
+  _layoutStorage = resolveStorage('layouts', 'Layout storage not configured')
   return _layoutStorage
 }
 
@@ -560,7 +365,7 @@ export async function getLayoutStorage(): Promise<Storage> {
 let _renderStorage: Promise<Storage> | null = null
 export async function getRenderStorage(): Promise<Storage> {
   if (_renderStorage) return _renderStorage
-  _renderStorage = resolveStorage('renders', 'RENDERS_STORAGE', 'Render storage not configured')
+  _renderStorage = resolveStorage('renders', 'Render storage not configured')
   return _renderStorage
 }
 
@@ -568,7 +373,7 @@ export async function getRenderStorage(): Promise<Storage> {
 let _outputStorage: Promise<Storage> | null = null
 export async function getOutputStorage(): Promise<Storage> {
   if (_outputStorage) return _outputStorage
-  _outputStorage = resolveStorage('outputs', 'OUTPUTS_STORAGE', 'Output storage not configured')
+  _outputStorage = resolveStorage('outputs', 'Output storage not configured')
   return _outputStorage
 }
 

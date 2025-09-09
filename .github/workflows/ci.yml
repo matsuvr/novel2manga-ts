@@ -1,74 +1,54 @@
+# .github/workflows/ci.yml
 name: CI
 
 on:
-  push:
-    branches: [ "**" ]
-  pull_request:
-    branches: [ "**" ]
+  pull_request: # PR でのみ実行（全ブランチ対象）
+    branches: ['**']
+  push: # main への push（＝マージ後等）でも実行
+    branches: ['main']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  install:
+  ci:
+    name: ci
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+
+    env:
+      NODE_VERSION: '20'
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      - name: Install dependencies
+
+      - name: Install dependencies (npm ci)
         run: npm ci
 
-  lint_and_typecheck:
-    runs-on: ubuntu-22.04
-    needs: install
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
+      # --- ここから1ジョブ内でまとめて実行（npm ci は1回だけ）---
+
       - name: Lint
         run: npm run lint
+
       - name: Typecheck
         run: npm run typecheck
 
-  unit_tests:
-    runs-on: ubuntu-22.04
-    needs: install
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - name: Run unit tests
+      - name: Unit tests
         run: npm run test:unit
 
-  integration_tests:
-    runs-on: ubuntu-22.04
-    needs: install
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - name: Run integration tests
+      - name: Integration tests
         run: npm run test:integration
 
-  build:
-    runs-on: ubuntu-22.04
-    needs: [lint_and_typecheck, unit_tests, integration_tests]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
       - name: Build
+        # もし「PRではビルド不要」にしたい場合は下記の if を有効化:
+        # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: npm run build
-

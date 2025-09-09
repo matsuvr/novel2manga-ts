@@ -24,7 +24,7 @@ export async function ingest(
 ): Promise<z.infer<typeof zIngestOutput>> {
   // Pretend to read and size content
   return {
-    manifestKey: `r2://manifests/${input.novelR2Key}.json`,
+    manifestKey: `storage://manifests/${input.novelStorageKey}.json`,
     totalChars: 10000,
     settings: input.settings,
   }
@@ -36,7 +36,7 @@ export async function chunk(
   const total = Math.max(1, Math.floor(input.totalChars / (input.settings.windowTokens * 4)))
   const windows = Array.from({ length: total }).map((_, i) => ({
     index: i,
-    r2Key: `r2://windows/${i}.txt`,
+    storageKey: `storage://windows/${i}.txt`,
   }))
   return { windows }
 }
@@ -78,7 +78,7 @@ export async function imageGen(input: {
 }): Promise<z.infer<typeof zImageResult>> {
   return {
     panelId: input.id,
-    imageR2Key: `r2://images/${input.id}.png`,
+    imageStorageKey: `storage://images/${input.id}.png`,
     seed: 42,
   }
 }
@@ -86,7 +86,7 @@ export async function imageGen(input: {
 export async function compose(
   _input: Array<z.infer<typeof zImageResult>>,
 ): Promise<z.infer<typeof zComposeOutput>> {
-  return { pages: [{ index: 0, r2Key: 'r2://pages/0.png' }] }
+  return { pages: [{ index: 0, storageKey: 'storage://pages/0.png' }] }
 }
 
 export async function publish(

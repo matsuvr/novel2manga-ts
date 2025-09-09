@@ -33,5 +33,4 @@ biome-report.json
 .DS_Store
 Thumbs.db
 
-# cloudflare
-cloudflare-env.d.ts
+# Deprecated platform-specific ignore entries removed

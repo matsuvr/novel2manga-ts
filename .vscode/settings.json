@@ -96,8 +96,7 @@
   "problems.showCurrentInStatus": true,
   "kiroAgent.configureMCP": "Disabled",
 
-  // 生成Cloudflare型定義ファイルのみTS検証を実質無効化（plaintext関連付け）
+  // Removed platform-specific file associations
   "files.associations": {
-    "cloudflare-env.d.ts": "plaintext"
   }
 }

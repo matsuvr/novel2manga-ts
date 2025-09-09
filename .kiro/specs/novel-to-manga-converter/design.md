@@ -5,10 +5,6 @@
 このドキュメントは、LLMエージェントの実装を簡素化し、プロバイダー非依存で、決定論的テストが可能で、厳密な型安全性を提供する新しいアーキテクチャについて説明します。
 本システムは OpenNext の Node.js ランタイムを前提とし、API ルートから冗長な `export const runtime` 宣言を排除しています。
 
-## Deployment Baseline
-
-OpenNext と `wrangler` により Cloudflare Workers へのビルド・デプロイ基盤を構築しました。`wrangler.toml` では `nodejs_compat` と `global_fetch_strictly_public` を有効化し、`/hello` ページで Hello World を確認できます。
-
 ## アーキテクチャの利点
 
 ### 1. エージェントの簡素化
@@ -67,12 +63,6 @@ src/
 - Auth.js v5 を採用し、Google OAuth を `/portal/api/auth` 配下に設置
 - `/portal/api/auth/login`, `/callback/:provider`, `/logout`, `/session` を提供
 - セッションは JWT 方式でクッキーに保存し、`next-auth/jwt` を利用して検証
-- D1 はユーザー情報の永続化に利用し、セッション情報は保存しない
-
-## 出力ストレージ設計
-
-- 変換結果は Cloudflare R2 に保存し、ユーザー単位のパス `results/{userId}/{jobId}.{format}` を採用
-- 保存パスとメタ情報を D1 の `outputs` テーブルに記録し、ダウンロード URL 生成に利用
 
 ## パブリックAPI
 
@@ -242,24 +232,9 @@ const result = await agent.run({
   – 小規模スクリプト閾値や最小コマ数も同セクションに集約し、エピソード分割とバリデーションで参照。
   – テスト環境では `getEpisodeConfig` モックにこれらの閾値を明示し、欠落による NaN バリデーションエラーを防止。
 
-## データベースアクセス層の抽象化（2025-09-04 追加）
-
-- 目的: better-sqlite3（同期）と Cloudflare D1（非同期）の差異をアダプタ層で吸収し、業務ロジックから同期/非同期分岐を排除。
-- 主要コンポーネント:
-  - `src/infrastructure/database/adapters/base-adapter.ts`: `DatabaseAdapter` 抽象クラス（`transaction`/`runSync`/`isSync`）。
-  - `src/infrastructure/database/adapters/sqlite-adapter.ts`: Drizzle + better-sqlite3 用の同期アダプタ。同期 `transaction` を提供。非同期コールバックは明示エラーで拒否。
-  - `src/infrastructure/database/adapters/d1-adapter.ts`: Cloudflare D1 用の非同期アダプタ。`transaction` はコールバックを await。原子性は D1 の `batch()` 利用を前提とし、隠蔽フォールバックは実装しない。
-  - `src/infrastructure/database/connection.ts`: 接続生成とアダプタ自動判定（D1-like なら D1Adapter、それ以外は SqliteAdapter）。
-
-- 設計上の制約:
-  - フォールバック禁止: 非同期トランザクションを擬似的に同期化しない。better-sqlite3 のトランザクション内で `async` を投げると明示的に失敗させる。
-  - 型安全: `any` 不使用。D1 は `@cloudflare/workers-types` の `D1Database` を参照。
-  - テスト: アダプタはユニットテストで契約を検証（同期/非同期、エラー動作）。
-
 ### 実装インパクト（Phase 1）
 
 - God Object（`src/services/database.ts`）の段階的移行前提で、まず同期/非同期境界をアダプタで確立。
-- 既存の Drizzle（better-sqlite3）パスは動作維持。Workers/D1 導入時は `createDatabaseConnection({ d1 })` で切替可能。
 
 - 縦書きレンダリングAPIへ渡す `maxCharsPerLine` はコマの相対縦幅に応じて動的決定。
   - `height <= 0.2`: 6 文字/行
@@ -653,7 +628,6 @@ console.log(result.metadata?.provider)
 
 ## 認証とユーザー管理（2025-08-31 追加）
 
-- Auth.js 互換の `users`/`accounts`/`sessions` スキーマを導入し、D1 データベースでの認証情報を管理。
 - `novels` と `jobs` テーブルに `user_id` 外部キーを追加し、ユーザー単位でデータを紐付け。
 - これにより、マルチユーザー環境でのデータ分離とアクセス制御が可能になった。
 
@@ -681,11 +655,6 @@ console.log(result.metadata?.provider)
 
 - Scene と Highlight のスキーマで `endIndex` が `startIndex` と同一の場合も許容。
 - 単一点のシーンやハイライトに対するバリデーションエラーを解消。
-
-### Bugfix: full_pages JSON parsing (2025-09-08)
-
-- R2 経由の `full_pages.json` 末尾に混入する `null` 文字が原因で結果ページが JSON パースに失敗する問題を修正。
-- 末尾の `\u0000` を除去してから JSON を解析する `parseJson` ユーティリティを追加し、結果ページで利用。
 
 ### Bugfix: speech bubble scaling accuracy (2025-09-09)
 
@@ -761,7 +730,6 @@ LLM構造化ジェネレーターにおけるエラー処理は、共通のエ�
 ## 追加: Google OAuth 認証基盤（2025-09-02）
 
 - Auth.js v5 と Google プロバイダーによるログイン/ログアウトを実装
-- `@auth/drizzle-adapter` を用い、ユーザー・セッション情報を D1 に永続化
 - Next.js App Router 向けに `SessionProvider` を組み込み、クライアントでセッションを管理
 
 ## サインアップ同意フロー（2025-09-?? 更新）
@@ -793,7 +761,6 @@ LLM構造化ジェネレーターにおけるエラー処理は、共通のエ�
 
 ## 認証基盤
 
-- Google OAuth + Auth.js + D1 Adapter を採用予定。詳細は docs/google-auth-design.md を参照。
 - 必須環境変数未設定時は `RootLayout` が即時に構成エラーを表示し、ビルド失敗を防止する（2025-09-09）。
 
 ## パネル内テキスト配置の拡張（2025-09-07）
