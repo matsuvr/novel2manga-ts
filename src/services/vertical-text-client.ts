@@ -68,7 +68,7 @@ function readEnv() {
   ] as const
 
   const url = triedUrlKeys.map((k) => process.env[k]).find((v) => v && v.length > 0)
-  let token = triedTokenKeys.map((k) => process.env[k]).find((v) => v && v.length > 0) || undefined
+  let token = triedTokenKeys.map((k) => process.env[k]).find((v) => v && v.length > 0)
 
   // As a last resort, allow generic API_TOKEN only if a vertical-text URL is present
   if (!token && url && process.env.API_TOKEN) token = process.env.API_TOKEN
