@@ -7,9 +7,6 @@
 
   * New code must use Effect TS. See `docs/effect-ts-doc.txt`.
   * Do not rewrite working legacy code until scheduled.
-* **Bun migration in progress.**
-
-  * Target: Docker with Bun + Next.js + SQLite3.
 
 ## Project Layout
 
