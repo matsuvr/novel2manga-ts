@@ -1,6 +1,7 @@
 'use client'
 
-import { type ChangeEvent, type DragEvent, useRef, useState } from 'react'
+import { type ChangeEvent, type DragEvent, useEffect, useRef, useState } from 'react'
+import { estimateTokenCount } from '@/utils/textExtraction'
 
 interface TextInputAreaProps {
   value: string
@@ -10,6 +11,8 @@ interface TextInputAreaProps {
   maxLength?: number
 }
 
+
+
 export default function TextInputArea({
   value,
   onChange,
@@ -18,7 +21,15 @@ export default function TextInputArea({
   maxLength = 100000,
 }: TextInputAreaProps) {
   const [isDragging, setIsDragging] = useState(false)
+  const [estimatedTokens, setEstimatedTokens] = useState(0)
+  const [showTooltip, setShowTooltip] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Update token estimation when value changes
+  useEffect(() => {
+    const tokens = estimateTokenCount(value)
+    setEstimatedTokens(tokens)
+  }, [value])
 
   const handleDragOver = (e: DragEvent<HTMLTextAreaElement>) => {
     e.preventDefault()
@@ -108,7 +119,7 @@ export default function TextInputArea({
         )}
       </div>
 
-      {/* Footer with character count and submit button */}
+      {/* Footer with character count, token estimation and submit button */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <div className="text-sm text-gray-600">
@@ -126,6 +137,34 @@ export default function TextInputArea({
               }`}
               style={{ width: `${Math.min(characterPercentage, 100)}%` }}
             />
+          </div>
+          {/* Token Estimation Display */}
+          <div className="relative">
+            <button
+              type="button"
+              className="text-sm text-blue-600 font-medium cursor-help flex items-center space-x-1 bg-transparent border-none p-0"
+              onMouseEnter={() => setShowTooltip(true)}
+              onMouseLeave={() => setShowTooltip(false)}
+            >
+              <span>🔢 入力トークン見積り: {estimatedTokens.toLocaleString()}</span>
+              <span className="text-xs">ℹ️</span>
+            </button>
+            {/* Tooltip */}
+            {showTooltip && (
+              <div className="absolute bottom-full left-0 mb-2 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg z-10 max-w-xs">
+                <div className="font-medium mb-1">トークン見積りルール:</div>
+                <ul className="space-y-1 text-gray-300">
+                  <li>• 日本語/中国語/韓国語: 1文字 ≒ 1トークン</li>
+                  <li>• 英語: 4文字 ≒ 1トークン</li>
+                  <li>• 混合テキスト: 上記を按分して計算</li>
+                </ul>
+                <div className="mt-2 text-yellow-400 text-xs">
+                  ※ 確定値は送信後にAPIから取得されます
+                </div>
+                {/* Arrow */}
+                <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+              </div>
+            )}
           </div>
         </div>
         <button
