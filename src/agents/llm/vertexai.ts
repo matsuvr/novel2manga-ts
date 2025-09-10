@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { GoogleGenAI } from '@google/genai'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import { getLogger } from '@/infrastructure/logging/logger'
@@ -9,6 +11,24 @@ import {
 } from './openai-compatible'
 import type { GenerateStructuredParams, LlmClient } from './types'
 import { extractFirstJsonChunk, sanitizeLlmJsonResponse } from './utils'
+
+// Helpers for retry/backoff and raw response persistence
+async function sleep(ms: number): Promise<void> {
+  return new Promise((res) => setTimeout(res, ms))
+}
+
+async function saveRawResponse(resp: unknown, tag: string): Promise<void> {
+  try {
+    const dir = path.resolve(process.cwd(), 'raw-responses')
+    await fs.mkdir(dir, { recursive: true })
+    const filename = `${new Date().toISOString().replace(/[:.]/g, '-')}_${tag}.json`
+    const filePath = path.join(dir, filename)
+    const body = JSON.stringify(resp, null, 2)
+    await fs.writeFile(filePath, body, { encoding: 'utf-8' })
+  } catch {
+    // ignore failures to not block generation flow
+  }
+}
 
 export interface VertexAIConfig {
   model: string
@@ -110,30 +130,87 @@ export class VertexAIClient implements LlmClient {
         })
       } catch (e) {
         // noop - logging must not break generation, but log the failure itself for diagnostics
-        logger.warn('Failed to log LLM request payload', { error: e instanceof Error ? e.message : String(e) })
+        logger.warn('Failed to log LLM request payload', {
+          error: e instanceof Error ? e.message : String(e),
+        })
       }
 
-      // Generate content using Vertex AI
-      const response = await this.client.models.generateContent(request)
+      // Try generateContent with retries for empty responses.
+      const maxRetries = 2 // user requested: retry up to 2 times
+      let lastResponse: unknown = null
+      let lastContent: string | null = null
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        if (attempt > 0) {
+          const backoffMs = 300 * 2 ** (attempt - 1)
+          logger.warn('Empty response previously, retrying after backoff', { attempt, backoffMs })
+          // simple backoff
+          await sleep(backoffMs)
+        }
 
-      if (isVerbose) {
-        logger.debug('Raw response received')
+        // Generate content using Vertex AI
+        const response = await this.client.models.generateContent(request)
+        lastResponse = response
+
+        if (isVerbose) {
+          logger.debug('Raw response received', { attempt })
+        }
+
+        // Extract text from response with robust fallbacks.
+        lastContent = extractTextFromGenAIResponse(response)
+        if (lastContent && lastContent.trim().length > 0) {
+          // Got content - break retry loop and proceed to parse/validate
+          if (isVerbose) {
+            logger.debug('Extracted content (preview)', { preview: truncate(lastContent, 800) })
+            logger.debug('Content length', { length: lastContent.length })
+          }
+          break
+        }
+
+        // If reached here, content was empty
+        try {
+          const metaObj =
+            typeof response === 'object' && response !== null
+              ? (response as unknown as Record<string, unknown>)
+              : {}
+          const safeId = typeof metaObj.id === 'string' ? metaObj.id : undefined
+          const safeModelInResp = typeof metaObj.model === 'string' ? metaObj.model : undefined
+          const safeOutputTextLen =
+            typeof metaObj.output_text === 'string'
+              ? (metaObj.output_text as string).length
+              : undefined
+          const safeFields = Object.keys(metaObj).slice(0, 20)
+          logger.warn('Empty LLM content - response meta snapshot', {
+            attempt,
+            safeId,
+            safeModelInResp,
+            safeOutputTextLen,
+            safeFields,
+          })
+        } catch {
+          // noop
+        }
+
+        // if not last attempt, loop will retry
+        if (attempt === maxRetries) {
+          // persist raw response for postmortem
+          try {
+            await saveRawResponse(lastResponse, `no-content-${this.provider}-${this.model}`)
+          } catch (e) {
+            logger.warn('Failed to save raw LLM response for debugging', {
+              error: e instanceof Error ? e.message : String(e),
+            })
+          }
+        }
       }
 
-      // Extract text from response
-      const content = response.text
-      if (!content || content.trim().length === 0) {
-        throw new Error(`${this.provider}: empty or non-text response`)
-      }
-
-      if (isVerbose) {
-        logger.debug('Extracted content (preview)', { preview: this.truncate(content, 800) })
-        logger.debug('Content length', { length: content.length })
+      // After retries, if still no content -> surface a clear error
+      if (!lastContent || lastContent.trim().length === 0) {
+        throw new Error(`${this.provider}: no response content after ${maxRetries + 1} attempts`)
       }
 
       // Extract JSON from the response
-      const jsonText = extractFirstJsonChunk(content)
-      logger.debug('Extracted JSON text (preview)', { preview: this.truncate(jsonText, 200) })
+      const jsonText = extractFirstJsonChunk(lastContent)
+      logger.debug('Extracted JSON text (preview)', { preview: truncate(jsonText, 200) })
 
       // Parse JSON
       let parsed: unknown
@@ -143,13 +220,20 @@ export class VertexAIClient implements LlmClient {
         const errorMsg = jsonError instanceof Error ? jsonError.message : String(jsonError)
         logger.error('JSON parse error for LLM response', {
           error: errorMsg,
-          rawContent: this.truncate(jsonText, 500),
+          rawContent: truncate(jsonText, 500),
           contentLength: jsonText.length,
           provider: this.provider,
           model: this.model,
         })
+        try {
+          await saveRawResponse(lastResponse, `parse-failed-${this.provider}-${this.model}`)
+        } catch (e) {
+          logger.warn('Failed to save raw LLM response for parse failure debugging', {
+            error: e instanceof Error ? e.message : String(e),
+          })
+        }
         throw new Error(
-          `${this.provider}: JSON parse failed: ${errorMsg}. Content preview: ${this.truncate(jsonText, 200)}`,
+          `${this.provider}: JSON parse failed: ${errorMsg}. Content preview: ${truncate(jsonText, 200)}`,
         )
       }
 
@@ -189,14 +273,14 @@ export class VertexAIClient implements LlmClient {
           logger.error('Original parsed object keys', { keys: Object.keys(parsed || {}) })
           logger.error('Sanitized object keys', { keys: Object.keys(sanitized || {}) })
           if (isVerbose) {
-            logger.error('Parsed preview', { preview: this.safeObjectPreview(parsed) })
-            logger.error('Sanitized preview', { preview: this.safeObjectPreview(sanitized) })
+            logger.error('Parsed preview', { preview: safeObjectPreview(parsed) })
+            logger.error('Sanitized preview', { preview: safeObjectPreview(sanitized) })
           }
         } catch {
           // ignore preview failures
         }
         throw new Error(
-          `${this.provider}: schema validation failed: ${msg}. Raw: ${this.truncate(jsonText, 400)}`,
+          `${this.provider}: schema validation failed: ${msg}. Raw: ${truncate(jsonText, 400)}`,
         )
       }
     } catch (error) {
@@ -206,18 +290,65 @@ export class VertexAIClient implements LlmClient {
       throw error
     }
   }
+}
 
-  private truncate(s: string, n: number): string {
-    return s.length > n ? `${s.slice(0, n)}…` : s
+function extractTextFromGenAIResponse(resp: unknown): string | null {
+  if (!resp || typeof resp !== 'object') return null
+  const r = resp as Record<string, unknown>
+
+  // 1) Common SDK: response.text
+  if (typeof r.text === 'string' && r.text.trim().length > 0) return r.text
+
+  // 2) Responses API convenience field
+  if (typeof r.output_text === 'string' && r.output_text.trim().length > 0) return r.output_text
+
+  // 3) structured output: output: [{ content: [{ text: '...' }, ...] }, ...]
+  const output = r.output as unknown
+  if (Array.isArray(output)) {
+    for (const item of output) {
+      if (!item || typeof item !== 'object') continue
+      const obj = item as Record<string, unknown>
+      const content = obj.content as unknown
+      if (Array.isArray(content)) {
+        for (const part of content) {
+          if (!part || typeof part !== 'object') continue
+          const p = part as Record<string, unknown>
+          if (typeof p.text === 'string' && p.text.trim().length > 0) return p.text
+          if (p.type === 'json_schema' && typeof p.json === 'object' && p.json !== null) {
+            try {
+              return JSON.stringify(p.json)
+            } catch {
+              // ignore
+            }
+          }
+        }
+      }
+    }
   }
 
-  private safeObjectPreview(obj: unknown): string {
-    try {
-      if (!obj || typeof obj !== 'object') return String(obj)
-      const keys = Object.keys(obj as Record<string, unknown>)
-      return `{keys:${keys.length}, sampleKeys:${keys.slice(0, 10).join(',')}}`
-    } catch {
-      return '[unavailable]'
+  // 4) Chat-like: choices[0].message.content
+  const choices = r.choices as unknown
+  if (Array.isArray(choices) && choices.length > 0) {
+    const first = choices[0] as Record<string, unknown>
+    if (first && typeof first.message === 'object' && first.message !== null) {
+      const msg = (first.message as Record<string, unknown>).content
+      if (typeof msg === 'string' && msg.trim().length > 0) return msg
     }
+  }
+
+  return null
+}
+
+function truncate(s: string, n: number): string {
+  return s.length > n ? `${s.slice(0, n)}…` : s
+}
+
+function safeObjectPreview(obj: unknown): string {
+  try {
+    if (!obj || typeof obj !== 'object') return String(obj)
+    const keys = Object.keys(obj as Record<string, unknown>)
+    return `{keys:${keys.length}, sampleKeys:${keys.slice(0, 10).join(',')}}`
+  } catch {
+    return '[unavailable]'
   }
 }
