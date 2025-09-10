@@ -1,383 +1,889 @@
-# 概要
-**目的**: Cloudflare 依存を完全に排除し、クラウドVPS上で稼働する **Next.js/Node.js + SQLite3** 構成における、
-- Googleログイン（Auth.js v5 / NextAuth）
-- マイページ（小説入力履歴・漫画化ジョブ一覧・再開）
-- メール通知（成功/失敗・ON/OFF）
-- 退会（全データ削除）
-- 一時的な `?admin=true` ログインバイパス（**削除容易性**考慮）
-を最短で実装できるようにした設計と実装タスク表。AIエージェントがそのまま実装可能な粒度で、コード例を含む。
+# Novel2Manga 認証・マイページ機能 実装計画書
 
-> **想定ランタイム**: Next.js 14 App Router（Node runtime）/ Express でも同等API可
-> **DB**: SQLite3（drizzle）
-> **メール**: Nodemailer（SMTP: 任意のプロバイダ・自前Postfixも可）
-> **ジョブ**: SQLiteの`jobs`テーブルをキュー化（簡易ワーカー）
+## 概要
+既存のnovel2manga-tsプロジェクトに対して、**現在の実装を極力壊さずに**Googleログイン・マイページ機能を追加する計画書。AIエージェントによる実装を前提とした、具体的かつ実行可能なタスク定義。
+
+### 技術スタック（確認済み）
+- **Framework**: Next.js 15 (App Router)
+- **ORM**: Drizzle ORM（既に実装済み）
+- **DB**: SQLite3
+- **認証**: NextAuth v5（Auth.js）- 既に`src/auth.ts`に基礎実装あり
+- **新規実装**: Effect TSで段階的に移行
+- **スタイリング**: Tailwind CSS, MUI
+
+### 現状の確認
+- ✅ Drizzle スキーマに認証テーブル（users, accounts, sessions等）定義済み
+- ✅ NextAuth + Drizzle Adapter の基礎実装済み（`src/auth.ts`）
+- ✅ `/portal/api/auth/[...nextauth]/` のルート構造あり
+- ⚠️ マイページ機能は未実装
+- ⚠️ メール通知機能は未実装
 
 ---
 
-# 0. Cloudflare残存物 監査＆除去チェックリスト
-VPS/SQLite移行に伴い、以下に**残っていたら削除**。直下のシェルで一括検出→対応。
+## 1. 実装方針
 
-## 0.1 検出コマンド（プロジェクトルートで実行）
-```bash
-# 文字列検索（ripgrep 推奨。無ければ `grep -RIn`）
-rg -n "cloudflare|wrangler|R2|D1|Durable|KV|Workers|Queues|__CF|getMiniflare" || true
+### 1.1 基本方針
+- **既存コードの保護**: 現在動作している機能を壊さない
+- **段階的実装**: 小さなステップで確実に実装
+- **Effect TS採用**: 新規機能はEffect TSで実装（既存部分は触らない）
+- **型安全性**: Drizzle の型定義を活用
 
-# 設定ファイル候補
-ls -1 | rg -n "wrangler\.toml|\.dev\.vars|\.cf.*|\.workers\.|.*cloudflare.*" || true
-
-# TypeScript型やパッケージ
-rg -n "@cloudflare|workers-types|cloudflare.*sdk|itty-router|hono.*cloudflare" || true
-
-# CI / Docker / Infra
-rg -n ".github|Dockerfile|docker-compose|infra|terraform|pulumi" || true
+### 1.2 ディレクトリ構造（追加分のみ）
+```
+src/
+  server/              # 新規：サーバーサイドロジック
+    auth/
+      requireUser.ts   # 認証ガード（Effect版）
+    mailer/
+      index.ts         # メール送信（Effect版）
+  features/            # 新規：Effect TSによる機能実装
+    user/
+      service.ts       # ユーザー設定サービス
+      effects.ts       # Effect定義
+    jobs/
+      service.ts       # ジョブ管理サービス
+      effects.ts
+  app/
+    api/
+      me/              # 新規：ユーザー設定API
+      jobs/            # 新規：ジョブ管理API（既存と統合）
+    portal/
+      dashboard/       # 新規：ダッシュボード
+      settings/        # 新規：設定画面
+      jobs/           # 新規：ジョブ一覧・詳細
 ```
 
-## 0.2 よくある残存ファイル/依存（**見つけたら削除**）
-- ルート: `wrangler.toml`, `.dev.vars`, `cloudflare.*.md`, `*.worker.*`
-- 依存: `wrangler`, `@cloudflare/*`, `@cloudflare/workers-types`, `miniflare`, `itty-router`（Workers用のことが多い）
-- コード: `env.BUCKET`, `R2`/`KV`/`D1` という名前の変数、`context.env` や `ExecutionContext`
-- ストレージ: R2前提のアップロード/ダウンロードユーティリティ
-- キュー: Cloudflare Queues前提のプロデューサ/コンシューマ
-
-> **注意**: `hono` はCloudflare専用ではないため、即削除はしない。Workers向けラッパ利用箇所のみ除去。
-
-## 0.3 置換先の方針（VPS/SQLite版）
-- **DB**: D1 → **SQLite3（Prisma）**
-- **ストレージ**: R2 → **ローカルディスク**（`./storage/artifacts` など）
-- **キュー**: Queues → **SQLiteのキュー表 + ワーカープロセス**（PM2/forever/systemdで常駐）
-- **メール**: Resend等 → **Nodemailer + SMTP**（プロバイダは環境変数化）
-
 ---
 
-# 1. データモデル（Prisma / SQLite）
-`prisma/schema.prisma`（**Auth.js + アプリ用**）
-```prisma
-````markdown
-# 概要
-**目的**: Cloudflare 依存を完全に排除し、クラウドVPS上で稼働する **Next.js/Node.js + SQLite3** 構成における、
-- Googleログイン（NextAuth / Drizzle adapter）
-- マイページ（小説入力履歴・漫画化ジョブ一覧・再開）
-- メール通知（成功/失敗・ON/OFF）
-- 退会（全データ削除）
-- 一時的な `?admin=true` ログインバイパス（**削除容易性**考慮）
-を最短で実装できるようにした設計と実装タスク表。AIエージェントがそのまま実装可能な粒度で、コード例を含む。
+## 2. データモデル（既存を活用）
 
-> **想定ランタイム**: Next.js 14 App Router（Node runtime）/ Express でも同等API可
-> **DB**: SQLite3（Drizzle ORM）
-> **メール**: Nodemailer（SMTP: 任意のプロバイダ・自前Postfixも可）
-> **ジョブ**: Drizzle 管理下の `jobs` テーブルをキュー化（簡易ワーカー）
-
----
-
-# 0. Cloudflare残存物 監査＆除去チェックリスト
-VPS/SQLite移行に伴い、以下に**残っていたら削除**。直下のシェルで一括検出→対応。
-
-## 0.1 検出コマンド（プロジェクトルートで実行）
-```bash
-# 文字列検索（ripgrep 推奨。無ければ `grep -RIn`）
-rg -n "cloudflare|wrangler|R2|D1|Durable|KV|Workers|Queues|__CF|getMiniflare" || true
-
-# 設定ファイル候補
-ls -1 | rg -n "wrangler\.toml|\.dev\.vars|\.cf.*|\.workers\.|.*cloudflare.*" || true
-
-# TypeScript型やパッケージ
-rg -n "@cloudflare|workers-types|cloudflare.*sdk|itty-router|hono.*cloudflare" || true
-
-# CI / Docker / Infra
-rg -n ".github|Dockerfile|docker-compose|infra|terraform|pulumi" || true
+### 2.1 既存テーブル（`src/db/schema.ts`）
+```typescript
+// 既に定義済みのテーブルを活用
+- users（拡張が必要）
+- accounts
+- sessions
+- novels
+- jobs
+- outputs
+- storageFiles
 ```
 
-## 0.2 よくある残存ファイル/依存（**見つけたら削除**）
-- ルート: `wrangler.toml`, `.dev.vars`, `cloudflare.*.md`, `*.worker.*`
-- 依存: `wrangler`, `@cloudflare/*`, `@cloudflare/workers-types`, `miniflare`, `itty-router`（Workers用のことが多い）
-- コード: `env.BUCKET`, `R2`/`KV`/`D1` という名前の変数、`context.env` や `ExecutionContext`
-- ストレージ: R2前提のアップロード/ダウンロードユーティリティ
-- キュー: Cloudflare Queues前提のプロデューサ/コンシューマ
-
-> **注意**: `hono` はCloudflare専用ではないため、即削除はしない。Workers向けラッパ利用箇所のみ除去。
-
-## 0.3 置換先の方針（VPS/SQLite版）
-- **DB**: D1 → **SQLite3（Drizzle ORM）**（本リポジトリは Drizzle を既に採用しています。schema は `src/db/schema.ts` にあります。）
-- **ストレージ**: R2 → **ローカルディスク**（`./storage/artifacts` など）
-- **キュー**: Queues → **Drizzle 管理のテーブル + ワーカープロセス**（PM2/forever/systemdで常駐）
-- **メール**: Resend等 → **Nodemailer + SMTP**（プロバイダは環境変数化）
+### 2.2 必要な拡張
+```typescript
+// users テーブルに設定カラムを追加（マイグレーション作成）
+// drizzle/xxxx_add_user_settings.sql
+ALTER TABLE user ADD COLUMN email_notifications INTEGER DEFAULT 1;
+ALTER TABLE user ADD COLUMN theme TEXT DEFAULT 'light';
+ALTER TABLE user ADD COLUMN language TEXT DEFAULT 'ja';
+```
 
 ---
 
-# 1. データモデル（Drizzle ORM / SQLite）
+## 3. 認証実装（既存を拡張）
 
-このプロジェクトは Drizzle ORM を採用しており、スキーマは `src/db/schema.ts` に定義されています。
-主要テーブル（抜粋）: `users`, `account`, `session`, `novels`, `jobs`, `chunks`, `job_step_history`, `episodes`, `layout_status`, `render_status`, `outputs`, `storage_files`, `token_usage`。
+### 3.1 認証ガード実装（Effect TS版）
 
-実装のポイント:
-- スキーマは `drizzle-orm/sqlite-core` の `sqliteTable` で宣言されています。型は `export type X = typeof x.$inferSelect` でエクスポートされています。
-- マイグレーションは `drizzle-kit` と `drizzle-orm/better-sqlite3/migrator` を使います。初期化・マイグレーションの安全性を担保するロジックは `src/db/index.ts` に入っています（`__drizzle_migrations` の存在チェックなど）。
-- 既存データがある場合は `src/db/index.ts` の警告メッセージに従い、適切に対応してください（自動マイグレーションのスキップ等）。
+**ファイル**: `src/server/auth/requireUser.ts`
+```typescript
+import { Effect, Context } from 'effect'
+import { auth } from '@/auth'
+import type { Session } from 'next-auth'
 
-参考: スキーマ定義の実際の詳細は `src/db/schema.ts` を参照してください（型定義・relations もそこにあります）。
+// セッションコンテキスト
+export class SessionContext extends Context.Tag('SessionContext')<
+  SessionContext,
+  Session
+>() {}
+
+// 認証エラー
+export class AuthenticationError {
+  readonly _tag = 'AuthenticationError'
+  constructor(readonly message: string) {}
+}
+
+// 認証を要求するEffect
+export const requireAuth = Effect.gen(function* () {
+  const session = yield* Effect.tryPromise({
+    try: () => auth(),
+    catch: () => new AuthenticationError('Failed to get session')
+  })
+
+  if (!session?.user?.id) {
+    return yield* Effect.fail(new AuthenticationError('Not authenticated'))
+  }
+
+  return session
+})
+
+// 開発用バイパス（環境変数で制御）
+export const requireAuthWithBypass = Effect.gen(function* () {
+  if (process.env.ALLOW_ADMIN_BYPASS === 'true') {
+    // URLからadmin=trueを検出する場合の処理
+    // 注意: 本番環境では必ず無効化すること
+  }
+
+  return yield* requireAuth
+})
+```
 
 ---
 
-# 2. 認証（NextAuth + Drizzle adapter）
+## 4. API実装（Effect TS + Drizzle）
 
-このプロジェクトは `@auth/drizzle-adapter` と NextAuth（NextAuth v5）を組み合わせた実装を採用しています。実装ファイルは `src/auth.ts` です。
+### 4.1 ユーザー設定API
 
-重要ポイント:
-- `DrizzleAdapter` を利用し、リポジトリのデータアクセス層（`getDatabaseServiceFactory()` 経由）から Drizzle の生DBを渡しています。
-- `basePath` は `/portal/api/auth` に設定されています（`src/auth.ts` 内）。
-- セッションは JWT 戦略（session.strategy = 'jwt'）になっており、`session` callback で JWT の `sub` を `session.user.id` に反映しています。
-- 環境変数のチェックがあり（`AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AUTH_SECRET`）、未設定時は 503 を返す安全策が実装されています。
-
-App Router 側のルートハンドラは `src/auth.ts` が `GET/POST` ハンドラをエクスポートしているため、それを再エクスポートすれば動作します（例: `src/app/api/auth/[...nextauth]/route.ts`）。
-
----
-
-# 3. 認可ガード & `?admin=true` バイパス
-
-方針は単一点（中央化）で実装し、将来容易に削除できるようにします。
-
-実装方針:
-- 共通の `requireUser(req)` を用意し、`src/auth.ts` の `auth()` を呼び出して session?.user を返す。
-- 開発便利機能として `ALLOW_ADMIN_BYPASS=true` を `.env` に置き、`?admin=true` を許可するが、本番では必ず無効化（またはコード削除）すること。
-
-注: `src/auth.ts` の `auth()` は未設定環境時はエラー/503 を返すため、デプロイ前に環境変数が揃っていることを確認してください。
-
----
-
-# 4. API 設計（/api/*）
-Base: Next.js App Router の Route Handlers（必要なら Express 等でも同等のエンドポイント実装可）
-
-設計例（実装は Drizzle のクエリ構文を利用）
-
-## 4.1 自分情報/設定 `/api/me`
-機能:
-- GET: プロフィールと設定を返す
-- PATCH: { emailNotifications?: boolean } で設定を更新
-- DELETE: 退会要求（DeleteRequest）を登録し 202 を返す（ワーカーが非同期で完全削除）
-
-例（概念）:
-```ts
-import { getDatabase } from '@/db'
+**ファイル**: `src/features/user/service.ts`
+```typescript
+import { Effect, Context, Layer } from 'effect'
+import { db } from '@/db'
 import { users } from '@/db/schema'
-import { requireUser } from '@/server/requireUser'
+import { eq } from 'drizzle-orm'
 
-export async function GET(req: Request) {
-  const u = await requireUser(req)
-  const db = getDatabase()
-  // Drizzle のクエリで設定を取得
-  // 実装は schema に合わせて user settings テーブル/カラムを参照してください
+export interface UserService {
+  readonly getSettings: (userId: string) => Effect.Effect<UserSettings, DatabaseError>
+  readonly updateSettings: (userId: string, settings: Partial<UserSettings>) => Effect.Effect<void, DatabaseError>
+  readonly deleteAccount: (userId: string) => Effect.Effect<void, DatabaseError>
+}
+
+export const UserService = Context.GenericTag<UserService>('UserService')
+
+export const UserServiceLive = Layer.succeed(
+  UserService,
+  {
+    getSettings: (userId) =>
+      Effect.tryPromise({
+        try: async () => {
+          const [user] = await db.select().from(users).where(eq(users.id, userId))
+          return {
+            emailNotifications: user.emailNotifications ?? true,
+            theme: user.theme ?? 'light',
+            language: user.language ?? 'ja'
+          }
+        },
+        catch: (error) => new DatabaseError(String(error))
+      }),
+
+    updateSettings: (userId, settings) =>
+      Effect.tryPromise({
+        try: async () => {
+          await db.update(users).set(settings).where(eq(users.id, userId))
+        },
+        catch: (error) => new DatabaseError(String(error))
+      }),
+
+    deleteAccount: (userId) =>
+      Effect.tryPromise({
+        try: async () => {
+          // トランザクションで関連データも削除
+          await db.transaction(async (tx) => {
+            // 成果物ファイルのパスを取得
+            const files = await tx.select().from(storageFiles)
+              .where(eq(storageFiles.userId, userId))
+
+            // ユーザー削除（CASCADE設定済み）
+            await tx.delete(users).where(eq(users.id, userId))
+
+            // ファイル削除タスクをキューに追加
+            // TODO: ファイル削除ワーカーの実装
+          })
+        },
+        catch: (error) => new DatabaseError(String(error))
+      })
+  }
+)
+```
+
+**ファイル**: `src/app/api/me/route.ts`
+```typescript
+import { Effect, pipe } from 'effect'
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth } from '@/server/auth/requireUser'
+import { UserService } from '@/features/user/service'
+
+export async function GET(req: NextRequest) {
+  const program = pipe(
+    requireAuth,
+    Effect.flatMap((session) =>
+      UserService.pipe(
+        Effect.flatMap((service) => service.getSettings(session.user.id))
+      )
+    )
+  )
+
+  const result = await Effect.runPromiseEither(program)
+
+  return result._tag === 'Right'
+    ? NextResponse.json(result.right)
+    : NextResponse.json({ error: result.left.message }, { status: 401 })
+}
+
+export async function PATCH(req: NextRequest) {
+  const body = await req.json()
+
+  const program = pipe(
+    requireAuth,
+    Effect.flatMap((session) =>
+      UserService.pipe(
+        Effect.flatMap((service) => service.updateSettings(session.user.id, body))
+      )
+    )
+  )
+
+  const result = await Effect.runPromiseEither(program)
+
+  return result._tag === 'Right'
+    ? NextResponse.json({ success: true })
+    : NextResponse.json({ error: result.left.message }, { status: 401 })
+}
+
+export async function DELETE(req: NextRequest) {
+  const program = pipe(
+    requireAuth,
+    Effect.flatMap((session) =>
+      UserService.pipe(
+        Effect.flatMap((service) => service.deleteAccount(session.user.id))
+      )
+    )
+  )
+
+  const result = await Effect.runPromiseEither(program)
+
+  return result._tag === 'Right'
+    ? new NextResponse(null, { status: 202 }) // 非同期削除
+    : NextResponse.json({ error: result.left.message }, { status: 401 })
 }
 ```
 
-## 4.2 一覧 API `/api/novels` & `/api/jobs`
-- GET /api/novels?cursor=&limit=
-- GET /api/jobs?status=&novelId=&cursor=&limit=
+### 4.2 ジョブ管理API
 
-実装ポイント:
-- Drizzle の `select().from(...).where(...).orderBy(...).limit(...)` を使ってページネーションとフィルタを実装する。
+**ファイル**: `src/app/api/jobs/route.ts`
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/db'
+import { jobs, novels } from '@/db/schema'
+import { eq, and, desc } from 'drizzle-orm'
+import { auth } from '@/auth'
 
-## 4.3 再開 API `/api/jobs/[jobId]/resume`
-動作:
-- ユーザー認証を確認し、自分のジョブのみ `status` を `pending`（または schema で定義した再実行ステータス）に戻す。
-- 成功時は 202 を返す。
+export async function GET(req: NextRequest) {
+  const session = await auth()
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
-概念例:
-```ts
-import { getDatabase } from '@/db'
-import { jobs } from '@/db/schema'
-import { requireUser } from '@/server/requireUser'
+  const { searchParams } = new URL(req.url)
+  const limit = Number(searchParams.get('limit') ?? 10)
+  const offset = Number(searchParams.get('offset') ?? 0)
+  const status = searchParams.get('status')
 
-export async function POST(req: Request, { params }: { params: { jobId: string } }) {
-  const u = await requireUser(req)
-  const db = getDatabase()
-  // Drizzle で job を取得し userId を比較。問題なければ status を 'pending' 等に更新
+  const conditions = [eq(jobs.userId, session.user.id)]
+  if (status) conditions.push(eq(jobs.status, status))
+
+  const results = await db
+    .select({
+      job: jobs,
+      novel: novels
+    })
+    .from(jobs)
+    .leftJoin(novels, eq(jobs.novelId, novels.id))
+    .where(and(...conditions))
+    .orderBy(desc(jobs.createdAt))
+    .limit(limit)
+    .offset(offset)
+
+  return NextResponse.json(results)
+}
+```
+
+**ファイル**: `src/app/api/jobs/[jobId]/resume/route.ts`
+```typescript
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { jobId: string } }
+) {
+  const session = await auth()
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const [job] = await db
+    .select()
+    .from(jobs)
+    .where(and(
+      eq(jobs.id, params.jobId),
+      eq(jobs.userId, session.user.id)
+    ))
+
+  if (!job) {
+    return NextResponse.json({ error: 'Job not found' }, { status: 404 })
+  }
+
+  if (job.status !== 'failed' && job.status !== 'paused') {
+    return NextResponse.json({ error: 'Job cannot be resumed' }, { status: 400 })
+  }
+
+  await db
+    .update(jobs)
+    .set({
+      status: 'pending',
+      retryCount: job.retryCount + 1,
+      updatedAt: new Date().toISOString()
+    })
+    .where(eq(jobs.id, params.jobId))
+
+  return new NextResponse(null, { status: 202 })
 }
 ```
 
 ---
 
-# 5. メール通知（Nodemailer + SMTP）
-`src/server/mailer.ts` に実装例を置く想定です。
+## 5. メール通知実装
 
-ポイント:
-- `nodemailer.createTransport` を環境変数で設定（`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`）。
-- ジョブが `SUCCEEDED`/`FAILED` に遷移したタイミングで `sendJobNotification` を呼び、`storage_files` / `outputs` などに記録する。
+**ファイル**: `src/server/mailer/index.ts`
+```typescript
+import { Effect } from 'effect'
+import nodemailer from 'nodemailer'
+
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT ?? 587),
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+})
+
+export interface EmailOptions {
+  to: string
+  subject: string
+  html: string
+}
+
+export const sendEmail = (options: EmailOptions) =>
+  Effect.tryPromise({
+    try: () => transporter.sendMail({
+      from: process.env.MAIL_FROM ?? 'novel2manga@example.com',
+      ...options
+    }),
+    catch: (error) => new Error(`Failed to send email: ${error}`)
+  })
+
+export const sendJobNotification = (
+  email: string,
+  jobId: string,
+  status: 'completed' | 'failed'
+) => {
+  const subject = status === 'completed'
+    ? '漫画化が完了しました'
+    : '漫画化でエラーが発生しました'
+
+  const html = `
+    <h2>${subject}</h2>
+    <p>ジョブID: ${jobId}</p>
+    <p><a href="${process.env.NEXT_PUBLIC_URL}/portal/jobs/${jobId}">詳細を見る</a></p>
+  `
+
+  return sendEmail({ to: email, subject, html })
+}
+```
 
 ---
 
-# 6. ジョブワーカー（Drizzle + SQLite 簡易キュー）
-目的: 長時間処理を API から切り離す。VPS で `node worker/index.js` を PM2/systemd で常駐させる想定。
+## 6. UI実装（既存UIと統合）
 
-概念実装（リポジトリ構成に合わせて調整）:
-```ts
-import { getDatabase } from '@/db'
+### 6.1 設定画面
+
+**ファイル**: `src/app/portal/settings/page.tsx`
+```typescript
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Button, Switch, FormControlLabel, Container, Paper, Typography, Alert } from '@mui/material'
+import { useSession } from 'next-auth/react'
+
+export default function SettingsPage() {
+  const { data: session } = useSession()
+  const [settings, setSettings] = useState({
+    emailNotifications: true,
+    theme: 'light',
+    language: 'ja'
+  })
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    fetch('/api/me')
+      .then(res => res.json())
+      .then(data => setSettings(data))
+  }, [])
+
+  const handleSave = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      })
+      if (res.ok) {
+        setMessage('設定を保存しました')
+      }
+    } catch (error) {
+      setMessage('エラーが発生しました')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!confirm('本当にアカウントを削除しますか？この操作は取り消せません。')) {
+      return
+    }
+
+    try {
+      const res = await fetch('/api/me', { method: 'DELETE' })
+      if (res.status === 202) {
+        window.location.href = '/'
+      }
+    } catch (error) {
+      setMessage('削除に失敗しました')
+    }
+  }
+
+  if (!session) {
+    return <div>ログインが必要です</div>
+  }
+
+  return (
+    <Container maxWidth="md" sx={{ mt: 4 }}>
+      <Paper sx={{ p: 4 }}>
+        <Typography variant="h4" gutterBottom>設定</Typography>
+
+        {message && <Alert severity="info" sx={{ mb: 2 }}>{message}</Alert>}
+
+        <FormControlLabel
+          control={
+            <Switch
+              checked={settings.emailNotifications}
+              onChange={(e) => setSettings({...settings, emailNotifications: e.target.checked})}
+            />
+          }
+          label="メール通知を受け取る"
+        />
+
+        <div style={{ marginTop: 24, display: 'flex', gap: 16 }}>
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={loading}
+          >
+            保存
+          </Button>
+
+          <Button
+            variant="outlined"
+            color="error"
+            onClick={handleDelete}
+          >
+            アカウントを削除
+          </Button>
+        </div>
+      </Paper>
+    </Container>
+  )
+}
+```
+
+### 6.2 ダッシュボード
+
+**ファイル**: `src/app/portal/dashboard/page.tsx`
+```typescript
+'use client'
+
+import { useState, useEffect } from 'react'
+import {
+  Container, Grid, Card, CardContent, Typography,
+  Button, Chip, LinearProgress
+} from '@mui/material'
+import Link from 'next/link'
+import { useSession } from 'next-auth/react'
+
+interface JobWithNovel {
+  job: any // Job型
+  novel: any // Novel型
+}
+
+export default function DashboardPage() {
+  const { data: session } = useSession()
+  const [jobs, setJobs] = useState<JobWithNovel[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (session) {
+      fetch('/api/jobs?limit=10')
+        .then(res => res.json())
+        .then(data => {
+          setJobs(data)
+          setLoading(false)
+        })
+    }
+  }, [session])
+
+  const handleResume = async (jobId: string) => {
+    const res = await fetch(`/api/jobs/${jobId}/resume`, { method: 'POST' })
+    if (res.status === 202) {
+      // ジョブリストを更新
+      window.location.reload()
+    }
+  }
+
+  if (!session) {
+    return <div>ログインが必要です</div>
+  }
+
+  if (loading) {
+    return <LinearProgress />
+  }
+
+  return (
+    <Container maxWidth="lg" sx={{ mt: 4 }}>
+      <Typography variant="h4" gutterBottom>
+        ダッシュボード
+      </Typography>
+
+      <Grid container spacing={3}>
+        {jobs.map(({ job, novel }) => (
+          <Grid item xs={12} md={6} key={job.id}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6">
+                  {novel?.title || 'タイトルなし'}
+                </Typography>
+
+                <Chip
+                  label={job.status}
+                  color={
+                    job.status === 'completed' ? 'success' :
+                    job.status === 'failed' ? 'error' :
+                    job.status === 'processing' ? 'primary' : 'default'
+                  }
+                  size="small"
+                  sx={{ mb: 1 }}
+                />
+
+                {job.status === 'processing' && (
+                  <LinearProgress
+                    variant="determinate"
+                    value={(job.processedChunks / job.totalChunks) * 100}
+                    sx={{ my: 1 }}
+                  />
+                )}
+
+                <Typography variant="body2" color="text.secondary">
+                  作成日: {new Date(job.createdAt).toLocaleString('ja-JP')}
+                </Typography>
+
+                <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+                  <Link href={`/portal/jobs/${job.id}`} passHref>
+                    <Button size="small">詳細</Button>
+                  </Link>
+
+                  {(job.status === 'failed' || job.status === 'paused') && (
+                    <Button
+                      size="small"
+                      color="primary"
+                      onClick={() => handleResume(job.id)}
+                    >
+                      再開
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+    </Container>
+  )
+}
+```
+
+---
+
+## 7. ワーカー実装（簡易版）
+
+**ファイル**: `scripts/worker.ts`
+```typescript
+import { db } from '@/db'
 import { jobs, users } from '@/db/schema'
+import { eq } from 'drizzle-orm'
 import { sendJobNotification } from '@/server/mailer'
 
-const TICK_MS = Number(process.env.WORKER_TICK_MS ?? 1000)
+const TICK_MS = Number(process.env.WORKER_TICK_MS ?? 5000)
 
 async function processOne() {
-  const db = getDatabase()
-  const [job] = await db.select().from(jobs).where(jobs.status.eq('pending')).orderBy(jobs.createdAt).limit(1)
+  // pending ジョブを1つ取得
+  const [job] = await db
+    .select()
+    .from(jobs)
+    .where(eq(jobs.status, 'pending'))
+    .limit(1)
+
   if (!job) return
 
-  await db.update(jobs).set({ status: 'processing' }).where(jobs.id.eq(job.id))
+  // processing に更新
+  await db
+    .update(jobs)
+    .set({ status: 'processing', startedAt: new Date().toISOString() })
+    .where(eq(jobs.id, job.id))
 
   try {
-    // 漫画化パイプライン: job のパスを読み、./storage/artifacts/${job.id} に成果物を作成
-    await db.update(jobs).set({ status: 'completed', updatedAt: new Date().toISOString() }).where(jobs.id.eq(job.id))
+    // 既存の処理パイプラインを呼び出す
+    // TODO: 既存のジョブ処理ロジックと統合
 
-    const [user] = await db.select().from(users).where(users.id.eq(job.userId)).limit(1)
-    if (user?.email) {
-      await sendJobNotification({ to: user.email, jobId: job.id, event: 'SUCCEEDED' })
+    // 完了
+    await db
+      .update(jobs)
+      .set({
+        status: 'completed',
+        completedAt: new Date().toISOString()
+      })
+      .where(eq(jobs.id, job.id))
+
+    // メール通知
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, job.userId))
+
+    if (user?.email && user?.emailNotifications) {
+      await sendJobNotification(user.email, job.id, 'completed')
     }
-  } catch (e: any) {
-    await db.update(jobs).set({ status: 'failed', lastError: String(e?.message ?? e) }).where(jobs.id.eq(job.id))
-    const [user] = await db.select().from(users).where(users.id.eq(job.userId)).limit(1)
-    if (user?.email) {
-      await sendJobNotification({ to: user.email, jobId: job.id, event: 'FAILED' })
+  } catch (error) {
+    // エラー処理
+    await db
+      .update(jobs)
+      .set({
+        status: 'failed',
+        lastError: String(error)
+      })
+      .where(eq(jobs.id, job.id))
+
+    // エラー通知
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, job.userId))
+
+    if (user?.email && user?.emailNotifications) {
+      await sendJobNotification(user.email, job.id, 'failed')
     }
   }
 }
 
+// メインループ
 setInterval(processOne, TICK_MS)
+console.log(`Worker started (tick: ${TICK_MS}ms)`)
 ```
 
-注意: 上は概念例です。実コードでは `src/db/schema.ts` のカラム名（status の値）に合わせて `'pending'|'processing'|'completed'|'failed'` 等を使ってください。
+---
+
+## 8. 実装タスク表（AIエージェント向け）
+
+| ID | カテゴリ | タスク | 依存 | 実装ファイル | 完了条件 |
+|----|----------|--------|------|--------------|----------|
+| DB-1 | DB | ユーザー設定カラムの追加マイグレーション作成 | なし | `drizzle/add_user_settings.sql` | `npm run db:migrate` が成功 |
+| AUTH-1 | 認証 | Effect版認証ガード実装 | なし | `src/server/auth/requireUser.ts` | テストが通る |
+| AUTH-2 | 認証 | 開発用admin=trueバイパス実装 | AUTH-1 | `src/server/auth/requireUser.ts` | `?admin=true`でログインスキップ |
+| API-1 | API | ユーザー設定サービス実装（Effect） | DB-1 | `src/features/user/service.ts` | 単体テスト通過 |
+| API-2 | API | GET/PATCH/DELETE /api/me 実装 | API-1, AUTH-1 | `src/app/api/me/route.ts` | Postmanで動作確認 |
+| API-3 | API | GET /api/jobs 実装 | AUTH-1 | `src/app/api/jobs/route.ts` | 自分のジョブのみ返却 |
+| API-4 | API | POST /api/jobs/[id]/resume 実装 | AUTH-1 | `src/app/api/jobs/[jobId]/resume/route.ts` | 202返却、status更新 |
+| MAIL-1 | メール | Nodemailer設定・送信関数実装 | なし | `src/server/mailer/index.ts` | テストメール送信成功 |
+| UI-1 | UI | 設定画面実装 | API-2 | `src/app/portal/settings/page.tsx` | 設定変更・保存が動作 |
+| UI-2 | UI | ダッシュボード実装 | API-3 | `src/app/portal/dashboard/page.tsx` | ジョブ一覧表示 |
+| UI-3 | UI | ナビゲーション追加 | UI-1, UI-2 | `src/app/portal/layout.tsx` | メニューから画面遷移 |
+| WORK-1 | ワーカー | ジョブ処理ワーカー実装 | MAIL-1 | `scripts/worker.ts` | pending→completed遷移 |
+| WORK-2 | ワーカー | PM2設定作成 | WORK-1 | `ecosystem.config.js` | `pm2 start`で起動 |
+| TEST-1 | テスト | 認証フローE2Eテスト | 全API | `tests/auth.e2e.test.ts` | ログイン→設定変更→ログアウト |
+| ENV-1 | 環境 | 環境変数追加 | なし | `.env.example` | 必要な環境変数を追記 |
 
 ---
 
-# 7. マイページUI（簡易）
-`src/app/portal/settings/page.tsx` の例は有用です。Drizzle 側は API を通じて操作するため、フロントは既存の fetch 呼び出しをそのまま利用できます。
+## 9. 環境変数（追加分）
 
-（既存のクライアント実装のまま `GET /api/me`, `PATCH /api/me`, `DELETE /api/me` を呼ぶ想定）
-
----
-
-# 8. 退会フロー（非同期削除）
-方針: 即時に 202 を返し、ワーカー側で成果物（`storage_files`/outputs の path）と DB レコードを削除する。
-
-概念実装のポイント:
-- DeleteRequest テーブルがある場合はそれをキューに見立てる（schema に合わせて実装）。
-- ファイル削除は `storage_files` テーブルからパスを取得して fs.rm で削除。
-- DB 削除は user を削除（外部キー cascade に依存）するか、必要に応じてトランザクションで関連レコードを削除。
-
----
-
-# 9. 環境変数（.env）
-このプロジェクトは `src/db/index.ts` 側で DB パスを取得する設定になっています。参考例:
+`.env.example` に追加：
 ```env
-# SQLite DB 実ファイルを指定
-DATABASE_PATH=./database/novel2manga.db
-
-# NextAuth / Google
-AUTH_GOOGLE_ID=xxx
-AUTH_GOOGLE_SECRET=yyy
-AUTH_SECRET=your_jwt_secret
-
-# 管理バイパス（開発限定）
-ALLOW_ADMIN_BYPASS=true # 本番では false/削除
-
-# SMTP
-SMTP_HOST=smtp.example.com
+# メール送信設定
+SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=apikey
-SMTP_PASS=secret
-MAIL_FROM="novel2manga <no-reply@example.com>"
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+MAIL_FROM="Novel2Manga <noreply@novel2manga.com>"
 
-# ワーカー間隔
-WORKER_TICK_MS=1000
+# ワーカー設定
+WORKER_TICK_MS=5000
+
+# 開発用設定（本番では削除）
+ALLOW_ADMIN_BYPASS=false
+
+# 公開URL
+NEXT_PUBLIC_URL=http://localhost:3000
 ```
 
 ---
 
-# 10. セキュリティ/運用メモ
-- `?admin=true` は**開発限定**。本番では `ALLOW_ADMIN_BYPASS=false` を徹底し、最終的にコードを削除してください。
-- SQLite のバックアップ: `database/novel2manga.db` を定期スナップショット（`sqlite3 .backup`）で保存。
-- 成果物ディレクトリは jobId ベースにして権限管理を行い、直接公開しない（API 経由で署名付きダウンロードを提供するのが安全）。
-- メール送信の成功/失敗は `storage_files`/`outputs` と併せて `email_log`（必要なら新設）に記録することを推奨。
+## 10. 段階的実装手順
+
+### Phase 1: 基礎実装（1-2日）
+1. DB-1: マイグレーション作成・実行
+2. AUTH-1, AUTH-2: 認証ガード実装
+3. API-1, API-2: ユーザー設定API実装
+4. ENV-1: 環境変数設定
+
+### Phase 2: ジョブ管理（1日）
+1. API-3, API-4: ジョブ管理API実装
+2. UI-2: ダッシュボード実装
+3. UI-3: ナビゲーション統合
+
+### Phase 3: UI完成（1日）
+1. UI-1: 設定画面実装
+2. 既存UIとの統合テスト
+
+### Phase 4: 通知・ワーカー（1日）
+1. MAIL-1: メール送信実装
+2. WORK-1, WORK-2: ワーカー実装・設定
+
+### Phase 5: テスト・デプロイ（1日）
+1. TEST-1: E2Eテスト実装
+2. 本番環境設定
+3. デプロイ
 
 ---
 
-# 11. 実装タスク表（Drizzle を前提にした修正版）
+## 11. AIエージェント向け実装指示
 
-| ID | カテゴリ | タスク | 依存 | DoD（完了基準） |
-|----|----------|--------|------|------------------|
-| CF-1 | 監査 | `rg` で Cloudflare 痕跡を全検索 | なし | 0.1 の検索でヒット 0 または残件リスト化 |
-| CF-2 | 除去 | `wrangler.toml`, `.dev.vars`, `@cloudflare/*` 依存削除 | CF-1 | ファイル削除 & `npm i` 後ビルド成功 |
-| CF-3 | 除去 | R2/KV/Queues 参照ユーティリティを削除/置換 | CF-1 | 参照 0、代替 I/O 実装に差し替え完了 |
-| DB-1 | 準備 | Drizzle マイグレーションを確認・整備（`drizzle/`） | CF-2 | `drizzle-kit migrate` 実行可能、`database/novel2manga.db` が期待スキーマを持つ |
-| AUTH-1 | 認証 | NextAuth + `@auth/drizzle-adapter` 配線（`src/auth.ts` 確認） | DB-1 | `/portal/api/auth/signin` → Google 同意画面が開く |
-| AUTH-2 | 認可 | `requireUser()` 共通化 + `ALLOW_ADMIN_BYPASS`（開発限定） | AUTH-1 | 未ログインで 401、`?admin=true` で開発環境のみ通過 |
-| API-1 | 自分 | `GET/PATCH/DELETE /api/me` を Drizzle で実装 | AUTH-2 | 取得/更新/退会登録が動作、202 返却 |
-| API-2 | 一覧 | `GET /api/novels`, `GET /api/jobs` を Drizzle で実装 | AUTH-2 | 自分のデータのみ返る、ページネーション OK |
-| API-3 | 再開 | `POST /api/jobs/[id]/resume`（Drizzle） | API-2 | 自分のジョブのみ 202、他人は 403 |
-| MAIL-1 | 送信 | Nodemailer 設定 + `sendJobNotification` 実装 | API-2 | テストメール送信成功 & DB にログ可能 |
-| JOB-1 | ワーカー | Drizzle を使った簡易キュー（`jobs`処理） | API-3 | `pending→processing→completed/failed` の遷移が動作 |
-| JOB-2 | 通知 | ジョブ完了/失敗でメール発報 + ログ記録 | JOB-1, MAIL-1 | メール受信 & DB にログが残る |
-| DEL-1 | 退会 | DeleteRequest 処理ワーカー（成果物削除 + DB 削除） | API-1 | ユーザー行削除 & 成果物削除、状態更新 |
-| UI-1 | 設定 | `/portal/settings`（通知トグル/退会） | API-1 | PATCH/DELETE 連携 OK |
-| UI-2 | 一覧 | `/portal/dashboard`/`/portal/jobs/[id]` | API-2, API-3 | 再開ボタンで 202、一覧・詳細表示 OK |
-| TEST-1 | E2E | サインイン→一覧→再開→通知→退会 の E2E | 全体 | 手順書通過 |
+### 実装時の注意事項
+1. **既存コードを壊さない**: 新規ファイルの追加を優先し、既存ファイルの変更は最小限に
+2. **型安全性**: Drizzleの型定義を活用し、anyを使わない
+3. **Effect TS採用**: 新規機能はEffect TSで実装（学習コストを考慮し、簡単な部分から）
+4. **エラーハンドリング**: Effect のエラー型を活用した安全なエラー処理
+5. **テスト**: 各機能実装後、必ずテストを書く
 
----
+### コード生成時のテンプレート
 
-# 12. 手動テスト手順（抜粋）
-1. `.env` を設定し、`npm run dev` を起動。
-2. `/portal/api/auth/signin`（または `/portal/api/auth` の対応ルート）から Google でログイン。
-3. `/portal/settings` で通知 ON のまま保存。
-4. ダミーのジョブを投入（DB 直接挿入か簡易フォーム）。ワーカーが `completed` へ遷移 → メールが届くこと。
-5. `/portal/jobs/[id]` → 再開ボタンで `pending`（または schema で定義した再開ステータス）に戻ること。
-6. `/portal/settings` → 退会 → 202 が返り、ワーカー実行でユーザーと成果物が削除されること。
+#### Effect サービステンプレート
+```typescript
+import { Effect, Context, Layer } from 'effect'
 
----
+// エラー型定義
+export class ServiceError {
+  readonly _tag = 'ServiceError'
+  constructor(readonly message: string) {}
+}
 
-# 13. ディレクトリ構成（現状に合わせた例）
+// サービスインターフェース
+export interface MyService {
+  readonly method: (param: string) => Effect.Effect<Result, ServiceError>
+}
+
+// コンテキストタグ
+export const MyService = Context.GenericTag<MyService>('MyService')
+
+// 実装
+export const MyServiceLive = Layer.succeed(
+  MyService,
+  {
+    method: (param) =>
+      Effect.tryPromise({
+        try: async () => {
+          // 実装
+          return result
+        },
+        catch: (error) => new ServiceError(String(error))
+      })
+  }
+)
 ```
-src/
-  app/
-    api/
-      auth/[...nextauth]/route.ts
-      me/route.ts
-      jobs/route.ts
-      jobs/[jobId]/resume/route.ts
-    portal/
-      dashboard/page.tsx
-      jobs/[id]/page.tsx
-      settings/page.tsx
-  db/
-    index.ts        # getDatabase(), migrate 設定
-    schema.ts       # Drizzle schema
-  auth.ts           # NextAuth + Drizzle adapter のラッパ
-  server/
-    requireUser.ts
-    mailer.ts
-  worker/
-    index.ts
-    delete-user.ts
-drizzle/            # drizzle-kit マイグレーション
-database/
-  novel2manga.db
-storage/
-  artifacts/
+
+#### API ルートテンプレート
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/auth'
+
+export async function GET(req: NextRequest) {
+  const session = await auth()
+
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    )
+  }
+
+  try {
+    // 処理実装
+    return NextResponse.json(result)
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    )
+  }
+}
 ```
 
 ---
 
-# 14. 片付け（Cloudflare の完全撤去）
-- [ ] 0 章の検索がヒット 0 である
-- [ ] `package.json` の scripts から `wrangler`/`miniflare` 参照を削除
-- [ ] README の Cloudflare 記述を VPS/SQLite 版に更新
-- [ ] CI（GitHub Actions 等）から Cloudflare 部署手順を削除
+## 12. テスト戦略
+
+### 単体テスト（Vitest）
+- Effect サービスのテスト
+- API ルートハンドラのテスト
+- 認証ガードのテスト
+
+### 統合テスト
+- DB操作を含むテスト
+- メール送信のモックテスト
+
+### E2Eテスト（Playwright）
+- ログインフロー
+- 設定変更フロー
+- ジョブ管理フロー
 
 ---
 
-# 15. メモ
-- 将来 Redis 等を導入するなら、JOB キューを BullMQ 等に切替可能。
-- 画像/成果物の静的配信は**ディレクトリ外公開禁止**の方針を推奨（署名 URL や API ダウンロードで制御）。
+## 13. セキュリティ考慮事項
 
+1. **admin=trueバイパス**: 本番環境では必ず無効化
+2. **CSRF対策**: NextAuthのCSRF保護を活用
+3. **SQLインジェクション**: Drizzle ORMで防御
+4. **認可チェック**: 全APIで所有者確認を実装
+5. **レート制限**: 必要に応じて実装
 
-````
-`src/app/portal/settings/page.tsx`
+---
 
-```tsx
+## 14. パフォーマンス最適化
+
+1. **DB クエリ**: N+1問題を避ける（Drizzleのwith句活用）
+2. **キャッシュ**: 設定情報は適切にキャッシュ
+3. **非同期処理**: ワーカーで重い処理を分離
+4. **ページネーション**: 大量データは必ずページング
+
+---
+
+## 15. まとめ
+
+本計画書は、既存のnovel2manga-tsプロジェクトに対して、最小限の変更で認証・マイページ機能を追加するための具体的な実装計画です。AIエージェントは、タスク表の順番に従って実装を進めることで、確実に機能を完成させることができます。
+
+### 成功の鍵
+- 既存実装を活かす（Drizzle、NextAuth）
+- 新規部分はEffect TSで品質向上
+- 段階的実装で動作確認しながら進める
+- テストを書いて品質保証
+
+### 次のステップ
+1. `.env`ファイルの設定
+2. DB-1タスクから順次実装開始
+3. 各フェーズ完了時に動作確認
