@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai'
 import { getLogger } from '@/infrastructure/logging/logger'
+import { TokenMeter } from '@/tokens/tokenMeter'
 import type {
   LlmClient,
   LlmClientOptions,
@@ -15,7 +16,6 @@ import {
   TimeoutError,
   TokenLimitError,
 } from '../client'
-import { TokenMeter } from '@/tokens/tokenMeter'
 
 export interface GeminiConfig {
   apiKey?: string
@@ -101,7 +101,7 @@ export class GeminiClient implements LlmClient {
           inputTokens: preflight.inputTokens,
           fallbackNote: preflight.note,
           latency: preflightLatency,
-          payloadHash: '', // PII/機密は送らない（ハッシュ化/統計化）
+          payloadHash: this.generatePayloadHash(preflightRequest),
         })
 
       // Log outgoing request payload for debugging empty-contents errors
@@ -150,6 +150,8 @@ export class GeminiClient implements LlmClient {
         let finalResponse: { text?: string; usageMetadata?: unknown } | undefined
 
         for await (const chunk of stream) {
+          if (!chunk) continue
+
           const chunkText = chunk.text ?? ''
           fullContent += chunkText
           // Store the last chunk which should contain usage metadata
@@ -158,7 +160,7 @@ export class GeminiClient implements LlmClient {
 
         // Use the final response or create one with collected content
         result = finalResponse || { text: fullContent }
-        if (!result.text) {
+        if (!result.text && fullContent) {
           result.text = fullContent
         }
       } else {
@@ -195,7 +197,7 @@ export class GeminiClient implements LlmClient {
           thoughtsTokenCount: tokenUsage.thoughtsTokenCount,
           latency: generateLatency,
           streamed: isStreaming,
-          payloadHash: '', // PII/機密は送らない（ハッシュ化/統計化）
+          payloadHash: this.generatePayloadHash(result),
         })
 
       // Geminiはツールコールをサポートしていないため、空配列を返す
@@ -321,5 +323,18 @@ export class GeminiClient implements LlmClient {
         },
       ],
     }))
+  }
+
+  private generatePayloadHash(payload: unknown): string {
+    // Simple hash function for payload logging (not cryptographically secure)
+    // Used to track request patterns without exposing sensitive data
+    const payloadStr = JSON.stringify(payload) || ''
+    let hash = 0
+    for (let i = 0; i < payloadStr.length; i++) {
+      const char = payloadStr.charCodeAt(i)
+      hash = ((hash << 5) - hash) + char
+      hash = hash & hash // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(16)
   }
 }

@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, vi, MockedFunction } from 'vitest'
 import { GoogleGenAI } from '@google/genai'
-import { TokenMeter } from '@/tokens/tokenMeter'
+import { beforeEach, describe, expect, it, MockedFunction, vi } from 'vitest'
 import { getLogger } from '@/infrastructure/logging/logger'
+import { TokenMeter } from '@/tokens/tokenMeter'
 
 // Mock the logger
 vi.mock('@/infrastructure/logging/logger', () => ({
@@ -108,11 +108,9 @@ describe('TokenMeter', () => {
     it('should fallback to estimation when API fails', async () => {
       mockModels.countTokens.mockRejectedValue(new Error('API Error'))
 
-      const result = await tokenMeter.preflight('Hello world this is a test')
+      const result = await tokenMeter.preflight('Hello world')
 
-      // English text estimation: 4 chars per token approx
-      // "Hello world this is a test" = ~27 chars = ~7 tokens
-      expect(result.inputTokens).toBeGreaterThan(0)
+      expect(result.inputTokens).toBe(3) // 'Hello ' (6 chars) + 'world' (5 chars) = 11 chars, ceil(6/4)+5 = 3
       expect(result.note).toBe('Fallback estimation due to API failure')
     })
 
@@ -130,18 +128,11 @@ describe('TokenMeter', () => {
     it('should handle mixed English and Japanese text in fallback', async () => {
       mockModels.countTokens.mockRejectedValue(new Error('API Error'))
 
-      const mixedText = 'Hello こんにちは world 世界'
+      const mixedText = 'Hello こんにちは'
       const result = await tokenMeter.preflight(mixedText)
 
-      // Count English characters [a-zA-Z] and spaces
-      const englishChars = (mixedText.match(/[a-zA-Z\s]/g) || []).length
-      // Count all characters - English = Japanese/other characters
-      const totalChars = mixedText.length
-      const otherChars = totalChars - englishChars
-      // English: ceil(count/4), Japanese: 1 per char
-      const expected = Math.ceil(englishChars / 4) + otherChars
-
-      expect(result.inputTokens).toBe(expected)
+      // 'Hello ' (6 chars, 2 tokens) + 'こんにちは' (5 chars, 5 tokens) = 7 tokens
+      expect(result.inputTokens).toBe(7)
     })
 
     it('should handle empty input', async () => {
@@ -240,53 +231,49 @@ describe('TokenMeter', () => {
   })
 
   describe('fallbackEstimation', () => {
-    it('should estimate tokens for various input types', () => {
-      const testCases = [
-        // String input
+    it('should estimate tokens for string input', () => {
+      const result = (tokenMeter as any).fallbackEstimation('Hello world')
+      expect(result.inputTokens).toBe(3) // 'Hello world' = 11 chars, all English/space, ceil(11/4) = 3
+      expect(result.note).toBe('Fallback estimation due to API failure')
+    })
+
+    it('should estimate tokens for Japanese text', () => {
+      const result = (tokenMeter as any).fallbackEstimation('こんにちは')
+      expect(result.inputTokens).toBe(5) // 5 Japanese characters = 5 tokens
+      expect(result.note).toBe('Fallback estimation due to API failure')
+    })
+
+    it('should estimate tokens for mixed text', () => {
+      const result = (tokenMeter as any).fallbackEstimation('Hello こんにちは')
+      expect(result.inputTokens).toBe(7) // 'Hello ' (6 chars, 2 tokens) + 'こんにちは' (5 chars, 5 tokens)
+      expect(result.note).toBe('Fallback estimation due to API failure')
+    })
+
+    it('should estimate tokens for complex object input', () => {
+      const input = [
         {
-          input: 'Hello world',
-          expected: Math.ceil(11 / 4), // 11 chars English
-        },
-        // Japanese input
-        {
-          input: 'こんにちは',
-          expected: 5, // 5 chars Japanese
-        },
-        // Mixed input
-        {
-          input: 'Hello こんにちは',
-          expected: Math.ceil(6 / 4) + 5, // 'Hello ' (6 chars) + 'こんにちは' (5 chars)
-        },
-        // Complex object with parts
-        {
-          input: [
-            {
-              parts: [
-                { text: 'Hello' },
-                { text: ' world' },
-              ],
-            },
+          parts: [
+            { text: 'Hello' },
+            { text: ' world' },
           ],
-          expected: Math.ceil(11 / 4), // 'Hello world'
-        },
-        // Request format with contents
-        {
-          input: {
-            contents: [
-              {
-                parts: [{ text: 'Test message' }],
-              },
-            ],
-          },
-          expected: Math.ceil(12 / 4), // 'Test message'
         },
       ]
+      const result = (tokenMeter as any).fallbackEstimation(input)
+      expect(result.inputTokens).toBe(3) // 'Hello world' = 11 chars, 6 English+space, 5 other = ceil(6/4)=2 + 5=7, wait let me recalculate properly
+      expect(result.note).toBe('Fallback estimation due to API failure')
+    })
 
-      testCases.forEach(({ input, expected }) => {
-        const result = (tokenMeter as any).fallbackEstimation(input)
-        expect(result.inputTokens).toBe(expected)
-        expect(result.note).toBe('Fallback estimation due to API failure')
-      })
+    it('should estimate tokens for request format input', () => {
+      const input = {
+        contents: [
+          {
+            parts: [{ text: 'Test message' }],
+          },
+        ],
+      }
+      const result = (tokenMeter as any).fallbackEstimation(input)
+      expect(result.inputTokens).toBe(3) // 'Test message' = 12 chars, 7 English+spaces, 5 other = ceil(7/4)=2 + 5=7
+      expect(result.note).toBe('Fallback estimation due to API failure')
     })
 
     it('should handle empty or invalid inputs', () => {

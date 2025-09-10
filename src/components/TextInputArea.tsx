@@ -1,6 +1,7 @@
 'use client'
 
-import { type ChangeEvent, type DragEvent, useRef, useState, useEffect } from 'react'
+import { type ChangeEvent, type DragEvent, useEffect, useRef, useState } from 'react'
+import { estimateTokenCount } from '@/utils/textExtraction'
 
 interface TextInputAreaProps {
   value: string
@@ -10,18 +11,7 @@ interface TextInputAreaProps {
   maxLength?: number
 }
 
-// Simple token estimation function (fallback when API is not available)
-function estimateTokens(text: string): number {
-  if (!text) return 0
 
-  // For Japanese text: roughly 1 character = 1 token
-  // For English text: roughly 4 characters = 1 token
-  // Mixed content: heuristic approach
-  const englishChars = (text.match(/[a-zA-Z\s]/g) || []).length
-  const otherChars = text.length - englishChars
-
-  return Math.ceil(englishChars / 4) + otherChars
-}
 
 export default function TextInputArea({
   value,
@@ -37,7 +27,7 @@ export default function TextInputArea({
 
   // Update token estimation when value changes
   useEffect(() => {
-    const tokens = estimateTokens(value)
+    const tokens = estimateTokenCount(value)
     setEstimatedTokens(tokens)
   }, [value])
 
@@ -166,9 +156,7 @@ export default function TextInputArea({
                 <ul className="space-y-1 text-gray-300">
                   <li>• 日本語/中国語/韓国語: 1文字 ≒ 1トークン</li>
                   <li>• 英語: 4文字 ≒ 1トークン</li>
-                  <li>• 画像: 258トークン/タイル (384px以下)</li>
-                  <li>• 動画: 263トークン/秒</li>
-                  <li>• 音声: 32トークン/秒</li>
+                  <li>• 混合テキスト: 上記を按分して計算</li>
                 </ul>
                 <div className="mt-2 text-yellow-400 text-xs">
                   ※ 確定値は送信後にAPIから取得されます
