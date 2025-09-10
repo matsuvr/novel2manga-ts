@@ -7,6 +7,8 @@ import {
   JSON_SCHEMA_ERROR_PATTERNS,
   RETRYABLE_JSON_ERROR_PATTERNS,
 } from '@/errors/error-patterns'
+import { getLogger } from '@/infrastructure/logging/logger'
+import { InvalidRequestError } from '@/llm/client'
 import { normalizeLLMResponse } from '@/utils/dialogue-normalizer'
 import { getLLMProviderConfig } from '../config/llm.config'
 
@@ -43,7 +45,6 @@ export class DefaultLlmStructuredGenerator {
         }
         const next = this.providerOrder[i + 1]
         if (!next) throw e
-        const { getLogger } = await import('@/infrastructure/logging/logger')
         getLogger()
           .withContext({ service: 'llm-structured-generator', name })
           .warn('LLM provider switch due to connectivity error', {
@@ -70,9 +71,22 @@ export class DefaultLlmStructuredGenerator {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        // Guard: prevent sending empty user prompt which leads to provider SDK errors
+        const trimmedUserPrompt = typeof userPrompt === 'string' ? userPrompt.trim() : ''
+        if (!trimmedUserPrompt) {
+          getLogger()
+            .withContext({ service: 'llm-structured-generator', name })
+            .error('Empty userPrompt detected before LLM call - aborting request', {
+              reason: 'userPrompt is empty after trim',
+              telemetry: args.telemetry,
+            })
+          // throw structured invalid request error so callers can handle it
+          throw new InvalidRequestError('userPrompt is empty - aborting LLM request', 'userPrompt')
+        }
+
         const result = await client.generateStructured<T>({
           systemPrompt,
-          userPrompt,
+          userPrompt: trimmedUserPrompt,
           spec: { schema, schemaName },
           options: { maxTokens },
           telemetry: {
@@ -94,7 +108,6 @@ export class DefaultLlmStructuredGenerator {
           errorMessage.includes('schema validation failed') &&
           errorMessage.includes('dialogue')
         ) {
-          const { getLogger } = await import('@/infrastructure/logging/logger')
           getLogger()
             .withContext({ service: 'llm-structured-generator', name })
             .error('Dialogue schema validation failed - invalid dialogue format', {
@@ -116,7 +129,6 @@ export class DefaultLlmStructuredGenerator {
         }
 
         // リトライ実行をログ出力
-        const { getLogger } = await import('@/infrastructure/logging/logger')
         getLogger()
           .withContext({ service: 'llm-structured-generator', name })
           .warn('LLM JSON generation failed, retrying', {

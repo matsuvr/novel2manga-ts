@@ -99,6 +99,20 @@ export class VertexAIClient implements LlmClient {
         },
       }
 
+      // Log outgoing request payload (length and small preview) to help debug empty contents issues
+      try {
+        logger.info('LLM request payload', {
+          contentsLength: contents.length,
+          contentsPreview: contents.length
+            ? (contents[0]?.parts?.[0]?.text?.substring(0, 200) ?? null)
+            : null,
+          systemInstructionPresent: !!sys,
+        })
+      } catch (e) {
+        // noop - logging must not break generation, but log the failure itself for diagnostics
+        logger.warn('Failed to log LLM request payload', { error: e instanceof Error ? e.message : String(e) })
+      }
+
       // Generate content using Vertex AI
       const response = await this.client.models.generateContent(request)
 
