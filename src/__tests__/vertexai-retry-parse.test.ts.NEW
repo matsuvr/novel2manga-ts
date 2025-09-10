@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { z } from 'zod'
 
 // Top-level mock state used by the @google/genai mock below.
@@ -34,15 +34,12 @@ describe('VertexAIClient retry and parse failure', () => {
   beforeEach(() => {
     // stub fs write to avoid disk IO and observe attempts to persist raw responses
     fsWriteSpy = vi.spyOn(require('fs/promises'), 'writeFile').mockResolvedValue(undefined)
-    // enable raw response saving for the duration of these tests
-    process.env.SAVE_RAW_LLM_RESPONSES = '1'
     responses = []
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
     responses = []
-    delete process.env.SAVE_RAW_LLM_RESPONSES
   })
 
   it('retries on empty responses and throws after max attempts, saving raw response', async () => {
@@ -69,9 +66,6 @@ describe('VertexAIClient retry and parse failure', () => {
     const mod = await import('@/agents/llm/vertexai')
     const client = new (mod as any).VertexAIClient({ ...cfg })
     const schema = z.object({ foo: z.string() })
-    // implementation may throw different messages depending on whether a JSON
-    // chunk was found or a parse step failed; accept any thrown error and
-    // assert the raw response was persisted.
     await expect(
       client.generateStructured({
         systemPrompt: '',
@@ -79,7 +73,7 @@ describe('VertexAIClient retry and parse failure', () => {
         spec: { schema, schemaName: 's' },
         options: { maxTokens: 100 },
       }),
-    ).rejects.toThrow()
+    ).rejects.toThrow(/JSON parse failed/)
 
     expect(fsWriteSpy).toHaveBeenCalled()
   })

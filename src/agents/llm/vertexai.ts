@@ -17,13 +17,25 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((res) => setTimeout(res, ms))
 }
 
-async function saveRawResponse(resp: unknown, tag: string): Promise<void> {
+async function saveRawResponse(
+  resp: unknown,
+  tag: string,
+  meta?: { jobId?: string } | null,
+): Promise<void> {
+  // Only persist raw responses when explicitly enabled to avoid spamming CI
+  if (process.env.SAVE_RAW_LLM_RESPONSES !== '1') return
   try {
     const dir = path.resolve(process.cwd(), 'raw-responses')
     await fs.mkdir(dir, { recursive: true })
-    const filename = `${new Date().toISOString().replace(/[:.]/g, '-')}_${tag}.json`
+    const ts = new Date().toISOString().replace(/[:.]/g, '-')
+    const jid = meta?.jobId ? `${meta.jobId}_` : ''
+    const filename = `${ts}_${jid}${tag}.json`
     const filePath = path.join(dir, filename)
-    const body = JSON.stringify(resp, null, 2)
+    const body = JSON.stringify(
+      { savedAt: new Date().toISOString(), meta: meta ?? null, resp },
+      null,
+      2,
+    )
     await fs.writeFile(filePath, body, { encoding: 'utf-8' })
   } catch {
     // ignore failures to not block generation flow
@@ -194,7 +206,15 @@ export class VertexAIClient implements LlmClient {
         if (attempt === maxRetries) {
           // persist raw response for postmortem
           try {
-            await saveRawResponse(lastResponse, `no-content-${this.provider}-${this.model}`)
+            const maybeId =
+              typeof lastResponse === 'object' &&
+              lastResponse !== null &&
+              typeof (lastResponse as Record<string, unknown>).id === 'string'
+                ? ((lastResponse as Record<string, unknown>).id as string)
+                : undefined
+            await saveRawResponse(lastResponse, `no-content-${this.provider}-${this.model}`, {
+              jobId: maybeId,
+            })
           } catch (e) {
             logger.warn('Failed to save raw LLM response for debugging', {
               error: e instanceof Error ? e.message : String(e),
@@ -208,9 +228,37 @@ export class VertexAIClient implements LlmClient {
         throw new Error(`${this.provider}: no response content after ${maxRetries + 1} attempts`)
       }
 
-      // Extract JSON from the response
-      const jsonText = extractFirstJsonChunk(lastContent)
-      logger.debug('Extracted JSON text (preview)', { preview: truncate(jsonText, 200) })
+      // Extract JSON from the response. If extraction fails (no balanced JSON
+      // chunk found), persist raw response for postmortem and surface a
+      // clear error to callers.
+      let jsonText: string
+      try {
+        jsonText = extractFirstJsonChunk(lastContent)
+        logger.debug('Extracted JSON text (preview)', { preview: truncate(jsonText, 200) })
+      } catch (extractErr) {
+        const msg = extractErr instanceof Error ? extractErr.message : String(extractErr)
+        logger.error('Failed to extract JSON chunk from LLM response', {
+          error: msg,
+          provider: this.provider,
+          model: this.model,
+        })
+        try {
+          const maybeId =
+            typeof lastResponse === 'object' &&
+            lastResponse !== null &&
+            typeof (lastResponse as Record<string, unknown>).id === 'string'
+              ? ((lastResponse as Record<string, unknown>).id as string)
+              : undefined
+          await saveRawResponse(lastResponse, `no-json-${this.provider}-${this.model}`, {
+            jobId: maybeId,
+          })
+        } catch (e) {
+          logger.warn('Failed to save raw LLM response for no-json debugging', {
+            error: e instanceof Error ? e.message : String(e),
+          })
+        }
+        throw new Error(`${this.provider}: no JSON chunk found in response: ${msg}`)
+      }
 
       // Parse JSON
       let parsed: unknown
@@ -226,7 +274,15 @@ export class VertexAIClient implements LlmClient {
           model: this.model,
         })
         try {
-          await saveRawResponse(lastResponse, `parse-failed-${this.provider}-${this.model}`)
+          const maybeId =
+            typeof lastResponse === 'object' &&
+            lastResponse !== null &&
+            typeof (lastResponse as Record<string, unknown>).id === 'string'
+              ? ((lastResponse as Record<string, unknown>).id as string)
+              : undefined
+          await saveRawResponse(lastResponse, `parse-failed-${this.provider}-${this.model}`, {
+            jobId: maybeId,
+          })
         } catch (e) {
           logger.warn('Failed to save raw LLM response for parse failure debugging', {
             error: e instanceof Error ? e.message : String(e),
