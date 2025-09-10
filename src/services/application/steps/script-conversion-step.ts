@@ -1,9 +1,9 @@
 import path from 'node:path'
 import { convertChunkToMangaScript } from '@/agents/script/script-converter'
-import { getStoredSummary } from '@/utils/chunk-summary'
 import { formatSnapshotForPrompt, loadCharacterSnapshot } from '@/character/snapshot'
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import type { NewMangaScript } from '@/types/script'
+import { getStoredSummary } from '@/utils/chunk-summary'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface ScriptConversionResult {

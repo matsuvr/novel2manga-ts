@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai'
+import { getLogger } from '@/infrastructure/logging/logger'
 import type {
   LlmClient,
   LlmClientOptions,
@@ -14,7 +15,6 @@ import {
   TimeoutError,
   TokenLimitError,
 } from '../client'
-import { getLogger } from '@/infrastructure/logging/logger'
 
 export interface GeminiConfig {
   apiKey?: string
