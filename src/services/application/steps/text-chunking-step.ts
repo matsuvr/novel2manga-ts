@@ -48,10 +48,31 @@ export class TextChunkingStep implements PipelineStep {
           return { success: false, error: errorMessage }
         }
 
-        chunks = new Array(existingChunks.length).fill('')
-        logger.info('Loaded existing chunks metadata', {
+        // Load actual chunk text from storage for resumed jobs.
+        // Previously this returned an array of empty strings which caused
+        // downstream prompts to be empty and led to LLM SDK errors
+        // (e.g. "contents are required").
+        chunks = []
+        for (const c of existingChunks) {
+          try {
+            const stored = await ports.chunk.getChunk(jobId, (c as Chunk).chunkIndex)
+            chunks.push(stored?.text ?? '')
+          } catch (e) {
+            logger.warn(
+              'Failed to load chunk content from storage for resumed job, inserting empty string',
+              {
+                jobId,
+                chunkIndex: (c as Chunk).chunkIndex,
+                error: e instanceof Error ? e.message : String(e),
+              },
+            )
+            chunks.push('')
+          }
+        }
+
+        logger.info('Loaded existing chunks from storage', {
           jobId,
-          chunkCount: existingChunks.length,
+          chunkCount: chunks.length,
         })
 
         return {

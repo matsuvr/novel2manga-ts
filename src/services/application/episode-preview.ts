@@ -112,7 +112,14 @@ export async function loadEpisodePreview(
 
   // 画像取得
   const images: EpisodePagePreview[] = []
+  // Use a numeric set for fast/robust lookup; ensure page keys are numbers
+  const normalizedSet = new Set<number>(normalizedPages.map((n) => Number(n)))
+  const issueCountsNumeric: Record<number, number> = Object.fromEntries(
+    Object.entries(pagesWithIssueCounts).map(([k, v]) => [Number(k), Number(v)]),
+  )
+
   for (const p of pageNumbers) {
+    const pageNum = Number(p)
     const key = StorageKeys.pageRender(jobId, episodeNumber, p)
     const file = await renderStorage.get(key)
     // ファイルが存在しない場合でも、ページ情報は返す（UI側で欠落を検知表示できるようにする）
@@ -138,10 +145,10 @@ export async function loadEpisodePreview(
       }
     }
     images.push({
-      page: p,
+      page: pageNum,
       base64,
-      isNormalized: normalizedPages.includes(p),
-      issueCount: pagesWithIssueCounts[p] || 0,
+      isNormalized: normalizedSet.has(pageNum),
+      issueCount: issueCountsNumeric[pageNum] || 0,
     })
   }
 

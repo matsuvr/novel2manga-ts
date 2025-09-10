@@ -13,8 +13,11 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       python3 make g++ pkg-config \
       libsqlite3-dev \
-      libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev && \
+      libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
+      fonts-not-cjk-extra fonts-noto-color-emoji && \
     rm -rf /var/lib/apt/lists/*
+
+RUN kanji-config-updmap noto-otc
 
 # Install dependencies only (leverage Docker layer cache)
 FROM base AS deps
