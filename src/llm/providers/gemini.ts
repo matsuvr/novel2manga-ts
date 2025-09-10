@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai'
 import { getLogger } from '@/infrastructure/logging/logger'
+import { TokenMeter } from '@/tokens/tokenMeter'
 import type {
   LlmClient,
   LlmClientOptions,
@@ -30,6 +31,7 @@ export interface GeminiConfig {
 export class GeminiClient implements LlmClient {
   private client: GoogleGenAI
   private config: GeminiConfig
+  private tokenMeter: TokenMeter
 
   constructor(config: GeminiConfig) {
     this.config = config
@@ -46,8 +48,16 @@ export class GeminiClient implements LlmClient {
             }
           : {}),
       })
+      this.tokenMeter = new TokenMeter({
+        model: config.model,
+        vertexai: config.vertexai,
+      })
     } else {
       this.client = new GoogleGenAI({ apiKey: config.apiKey })
+      this.tokenMeter = new TokenMeter({
+        model: config.model,
+        apiKey: config.apiKey,
+      })
     }
   }
 
@@ -74,40 +84,121 @@ export class GeminiClient implements LlmClient {
           parts: [{ text: msg.content }],
         }))
 
+      // Preflight token estimation
+      const preflightStart = Date.now()
+      const preflightRequest = systemText
+        ? {
+            contents: geminiContents,
+            systemInstruction: { role: 'system', parts: [{ text: systemText }] },
+          }
+        : geminiContents
+      const preflight = await this.tokenMeter.preflight(preflightRequest)
+      const preflightLatency = Date.now() - preflightStart
+
+      getLogger()
+        .withContext({ service: 'tokens_preflight', model })
+        .info('Token preflight completed', {
+          inputTokens: preflight.inputTokens,
+          fallbackNote: preflight.note,
+          latency: preflightLatency,
+          payloadHash: this.generatePayloadHash(preflightRequest),
+        })
+
       // Log outgoing request payload for debugging empty-contents errors
       try {
         const contentsLength = Array.isArray(geminiContents) ? geminiContents.length : 0
         const preview = contentsLength
           ? String(geminiContents[0]?.parts?.[0]?.text || '').substring(0, 200)
           : null
-        getLogger()
-          .withContext({ service: 'llm-gemini' })
-          .info('Outgoing payload', {
-            contentsLength,
-            preview,
-            systemInstructionPresent: !!systemText,
-          })
+        getLogger().withContext({ service: 'llm-gemini' }).info('Outgoing payload', {
+          contentsLength,
+          preview,
+          systemInstructionPresent: !!systemText,
+          preflightTokens: preflight.inputTokens,
+          fallbackNote: preflight.note,
+        })
       } catch (e) {
         // no-op: logging must not break generation, but log the failure itself for diagnostics.
         // eslint-disable-next-line no-console
-        console.warn('[llm-gemini] Failed to log outgoing payload', { error: e instanceof Error ? e.message : String(e) });
+        console.warn('[llm-gemini] Failed to log outgoing payload', {
+          error: e instanceof Error ? e.message : String(e),
+        })
       }
 
-      const result = await this.client.models.generateContent({
-        model,
-        contents: geminiContents,
-        config: {
-          systemInstruction: systemText
-            ? { role: 'system', parts: [{ text: systemText }] }
-            : undefined,
-          maxOutputTokens: options.maxTokens,
-          temperature: options.temperature,
-          topP: options.topP,
-          tools: options.tools ? this.convertTools(options.tools) : undefined,
-        },
-      })
+      // Check if streaming is requested
+      const isStreaming = options.stream === true
+
+      let result: { text?: string; usageMetadata?: unknown }
+      if (isStreaming) {
+        // Use streaming API
+        const stream = await this.client.models.generateContentStream({
+          model,
+          contents: geminiContents,
+          config: {
+            systemInstruction: systemText
+              ? { role: 'system', parts: [{ text: systemText }] }
+              : undefined,
+            maxOutputTokens: options.maxTokens,
+            temperature: options.temperature,
+            topP: options.topP,
+            tools: options.tools ? this.convertTools(options.tools) : undefined,
+          },
+        })
+
+        // For streaming, we need to collect all chunks and get the final response
+        let fullContent = ''
+        let finalResponse: { text?: string; usageMetadata?: unknown } | undefined
+
+        for await (const chunk of stream) {
+          if (!chunk) continue
+
+          const chunkText = chunk.text ?? ''
+          fullContent += chunkText
+          // Store the last chunk which should contain usage metadata
+          finalResponse = chunk
+        }
+
+        // Use the final response or create one with collected content
+        result = finalResponse || { text: fullContent }
+        if (!result.text && fullContent) {
+          result.text = fullContent
+        }
+      } else {
+        // Use regular API
+        result = await this.client.models.generateContent({
+          model,
+          contents: geminiContents,
+          config: {
+            systemInstruction: systemText
+              ? { role: 'system', parts: [{ text: systemText }] }
+              : undefined,
+            maxOutputTokens: options.maxTokens,
+            temperature: options.temperature,
+            topP: options.topP,
+            tools: options.tools ? this.convertTools(options.tools) : undefined,
+          },
+        })
+      }
 
       const content = result.text ?? ''
+
+      // Finalize token usage with actual API response
+      const generateStart = Date.now()
+      const tokenUsage = this.tokenMeter.finalize(result as unknown as Record<string, unknown>)
+      const generateLatency = Date.now() - generateStart
+
+      getLogger()
+        .withContext({ service: 'tokens_final', model })
+        .info('Token finalization completed', {
+          promptTokenCount: tokenUsage.promptTokenCount,
+          candidatesTokenCount: tokenUsage.candidatesTokenCount,
+          totalTokenCount: tokenUsage.totalTokenCount,
+          cachedContentTokenCount: tokenUsage.cachedContentTokenCount,
+          thoughtsTokenCount: tokenUsage.thoughtsTokenCount,
+          latency: generateLatency,
+          streamed: isStreaming,
+          payloadHash: this.generatePayloadHash(result),
+        })
 
       // Geminiはツールコールをサポートしていないため、空配列を返す
       const toolCalls: LlmResponse['toolCalls'] = []
@@ -116,11 +207,11 @@ export class GeminiClient implements LlmClient {
         content,
         toolCalls,
         usage: {
-          promptTokens: result.usageMetadata?.promptTokenCount || 0,
-          completionTokens: result.usageMetadata?.candidatesTokenCount || 0,
-          totalTokens:
-            (result.usageMetadata?.promptTokenCount || 0) +
-            (result.usageMetadata?.candidatesTokenCount || 0),
+          promptTokens: tokenUsage.promptTokenCount,
+          completionTokens: tokenUsage.candidatesTokenCount,
+          totalTokens: tokenUsage.totalTokenCount,
+          cachedContentTokens: tokenUsage.cachedContentTokenCount,
+          thoughtsTokens: tokenUsage.thoughtsTokenCount,
         },
       }
     } catch (error) {
@@ -232,5 +323,18 @@ export class GeminiClient implements LlmClient {
         },
       ],
     }))
+  }
+
+  private generatePayloadHash(payload: unknown): string {
+    // Simple hash function for payload logging (not cryptographically secure)
+    // Used to track request patterns without exposing sensitive data
+    const payloadStr = JSON.stringify(payload) || ''
+    let hash = 0
+    for (let i = 0; i < payloadStr.length; i++) {
+      const char = payloadStr.charCodeAt(i)
+      hash = ((hash << 5) - hash) + char
+      hash = hash & hash // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(16)
   }
 }

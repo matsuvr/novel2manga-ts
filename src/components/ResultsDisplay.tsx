@@ -11,6 +11,8 @@ interface TokenUsage {
   promptTokens: number
   completionTokens: number
   totalTokens: number
+  cachedContentTokens?: number
+  thoughtsTokens?: number
   cost?: number
   stepName?: string
   chunkIndex?: number
@@ -77,6 +79,14 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
   const totalCost = tokenUsage.reduce((sum, usage) => sum + (usage.cost || 0), 0)
   const totalPromptTokens = tokenUsage.reduce((sum, usage) => sum + usage.promptTokens, 0)
   const totalCompletionTokens = tokenUsage.reduce((sum, usage) => sum + usage.completionTokens, 0)
+  const totalCachedTokens = tokenUsage.reduce(
+    (sum, usage) => sum + (usage.cachedContentTokens || 0),
+    0,
+  )
+  const totalThoughtsTokens = tokenUsage.reduce(
+    (sum, usage) => sum + (usage.thoughtsTokens || 0),
+    0,
+  )
 
   // プロバイダー別集計
   const providerStats = tokenUsage.reduce(
@@ -204,23 +214,38 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
       {!isLoadingTokenUsage && tokenUsage.length > 0 && (
         <div className="apple-card p-6">
           <h3 className="text-xl font-semibold gradient-text mb-4">トークン使用量</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <div className="text-center">
-              <p className="text-gray-500 text-sm">総トークン数</p>
-              <p className="font-bold text-lg">{totalTokens.toLocaleString()}</p>
+          <div className="space-y-4 mb-4">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <span className="text-sm font-medium">
+                入力: {totalPromptTokens.toLocaleString()} | 出力:{' '}
+                {totalCompletionTokens.toLocaleString()} | 合計: {totalTokens.toLocaleString()}
+              </span>
+              <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
+                確定値
+              </span>
             </div>
-            <div className="text-center">
-              <p className="text-gray-500 text-sm">概算コスト</p>
-              <p className="font-bold text-lg">${totalCost.toFixed(4)}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-gray-500 text-sm">プロンプト</p>
-              <p className="font-bold text-lg">{totalPromptTokens.toLocaleString()}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-gray-500 text-sm">生成</p>
-              <p className="font-bold text-lg">{totalCompletionTokens.toLocaleString()}</p>
-            </div>
+            {totalCachedTokens > 0 && (
+              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                <span className="text-sm font-medium">
+                  キャッシュ: {totalCachedTokens.toLocaleString()}
+                </span>
+              </div>
+            )}
+            {totalThoughtsTokens > 0 && (
+              <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                <span className="text-sm font-medium">
+                  思考: {totalThoughtsTokens.toLocaleString()}
+                </span>
+              </div>
+            )}
+            {totalCost > 0 && (
+              <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                <span className="text-sm font-medium">概算コスト: ${totalCost.toFixed(4)}</span>
+                <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
+                  概算
+                </span>
+              </div>
+            )}
           </div>
 
           {/* プロバイダー別詳細 */}

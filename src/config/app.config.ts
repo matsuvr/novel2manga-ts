@@ -602,6 +602,9 @@ export const appConfig = {
     enableCoverageCheck: false,
     enableParallelProcessing: true,
     enableProgressTracking: true,
+    enableTokenCounter: true, // Gemini Token Counter 機能
+    enableTokenCounterUI: true, // トークンカウンターUI表示
+    enableTokenCounterTelemetry: true, // トークン計測テレメトリ
   },
 
   // キャラクターメモリ設定（マジックナンバー禁止ルールに基づき閾値を一元化）

@@ -967,9 +967,13 @@ function ProcessingProgress({
         {/* 現在のトークン消費（完了済み呼び出しの累積） */}
         {jobId && (
           <div className="apple-card p-4">
-            <div className="text-sm text-gray-600">
-              現在 入力 {tokenPromptSum.toLocaleString()} トークン / 出力{' '}
-              {tokenCompletionSum.toLocaleString()} トークン 消費中…
+            <div className="text-sm text-gray-600 flex items-center justify-between">
+              <span>
+                入力 {tokenPromptSum.toLocaleString()} / 出力 {tokenCompletionSum.toLocaleString()} トークン
+              </span>
+              <span className={`text-xs px-2 py-1 rounded-full ${completed ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                {completed ? '確定' : '暫定'}
+              </span>
             </div>
           </div>
         )}
