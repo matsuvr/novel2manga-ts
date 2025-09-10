@@ -87,8 +87,10 @@ export class GeminiClient implements LlmClient {
             preview,
             systemInstructionPresent: !!systemText,
           })
-      } catch {
-        // no-op
+      } catch (e) {
+        // no-op: logging must not break generation, but log the failure itself for diagnostics.
+        // eslint-disable-next-line no-console
+        console.warn('[llm-gemini] Failed to log outgoing payload', { error: e instanceof Error ? e.message : String(e) });
       }
 
       const result = await this.client.models.generateContent({
