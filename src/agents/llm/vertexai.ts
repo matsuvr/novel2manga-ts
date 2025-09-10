@@ -108,8 +108,9 @@ export class VertexAIClient implements LlmClient {
             : null,
           systemInstructionPresent: !!sys,
         })
-      } catch {
-        // noop - logging must not break generation
+      } catch (e) {
+        // noop - logging must not break generation, but log the failure itself for diagnostics
+        logger.warn('Failed to log LLM request payload', { error: e instanceof Error ? e.message : String(e) })
       }
 
       // Generate content using Vertex AI

@@ -14,10 +14,9 @@ RUN apt-get update && \
       python3 make g++ pkg-config \
       libsqlite3-dev \
       libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
-      fonts-not-cjk-extra fonts-noto-color-emoji texlive-font-utils && \
+      fonts-noto-cjk-extra fonts-noto-color-emoji texlive-font-utils texlive-lang-cjk && \
+    kanji-config-updmap noto-otc && \
     rm -rf /var/lib/apt/lists/*
-
-RUN kanji-config-updmap noto-otc
 
 # Install dependencies only (leverage Docker layer cache)
 FROM base AS deps
