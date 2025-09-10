@@ -73,6 +73,24 @@ export class GeminiClient implements LlmClient {
           parts: [{ text: msg.content }],
         }))
 
+      // Log outgoing request payload for debugging empty-contents errors
+      try {
+        // Minimal logger to avoid importing heavy logger in this module scope
+        // Use console as fallback; in production getLogger is available globally via import if needed
+        const contentsLength = Array.isArray(geminiContents) ? geminiContents.length : 0
+        const preview = contentsLength
+          ? String(geminiContents[0]?.parts?.[0]?.text || '').substring(0, 200)
+          : null
+        // eslint-disable-next-line no-console
+        console.info('[llm-gemini] Outgoing payload', {
+          contentsLength,
+          preview,
+          systemInstructionPresent: !!systemText,
+        })
+      } catch {
+        // no-op
+      }
+
       const result = await this.client.models.generateContent({
         model,
         contents: geminiContents,

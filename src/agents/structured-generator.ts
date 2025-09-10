@@ -70,9 +70,24 @@ export class DefaultLlmStructuredGenerator {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        // Guard: prevent sending empty user prompt which leads to provider SDK errors
+        const trimmedUserPrompt = typeof userPrompt === 'string' ? userPrompt.trim() : ''
+        if (!trimmedUserPrompt) {
+          const { getLogger } = await import('@/infrastructure/logging/logger')
+          getLogger()
+            .withContext({ service: 'llm-structured-generator', name })
+            .error('Empty userPrompt detected before LLM call - aborting request', {
+              reason: 'userPrompt is empty after trim',
+              telemetry: args.telemetry,
+            })
+          // throw structured invalid request error so callers can handle it
+          const { InvalidRequestError } = await import('@/llm/client')
+          throw new InvalidRequestError('userPrompt is empty - aborting LLM request', 'userPrompt')
+        }
+
         const result = await client.generateStructured<T>({
           systemPrompt,
-          userPrompt,
+          userPrompt: trimmedUserPrompt,
           spec: { schema, schemaName },
           options: { maxTokens },
           telemetry: {
