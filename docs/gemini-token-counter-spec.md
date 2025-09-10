@@ -1,5 +1,7 @@
 # 設計書：Gemini（Vertex AI 含む）トークン計測・表示機能
 
+公式ドキュメント `docs/gemini-underdtand-tokens-count.md` も参照して下さい。
+
 ## 1. 目的・背景
 
 * 目的：Gemini API / Vertex AI 利用時に、**入力・出力・合計トークン数**（必要に応じて **思考トークン**・**キャッシュ**内訳）を
