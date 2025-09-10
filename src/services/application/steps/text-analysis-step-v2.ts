@@ -11,9 +11,9 @@ import { generateExtractionV2UserPrompt, getExtractionV2SystemPrompt } from '@/p
 import { db } from '@/services/database/index'
 import type { AliasIndex, CharacterMemoryIndex, ExtractionV2 } from '@/types/extractionV2'
 import { isTempCharacterId } from '@/types/extractionV2'
+import { getStoredSummary, loadOrGenerateSummary } from '@/utils/chunk-summary'
 import { ExtractionV2Schema } from '@/validation/extractionV2'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
-import { getStoredSummary, loadOrGenerateSummary } from '@/utils/chunk-summary'
 
 export interface AnalysisResult {
   completed: boolean

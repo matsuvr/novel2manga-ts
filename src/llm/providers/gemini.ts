@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai'
+import { getLogger } from '@/infrastructure/logging/logger'
 import type {
   LlmClient,
   LlmClientOptions,
@@ -72,6 +73,25 @@ export class GeminiClient implements LlmClient {
           role: this.convertRole(msg.role),
           parts: [{ text: msg.content }],
         }))
+
+      // Log outgoing request payload for debugging empty-contents errors
+      try {
+        const contentsLength = Array.isArray(geminiContents) ? geminiContents.length : 0
+        const preview = contentsLength
+          ? String(geminiContents[0]?.parts?.[0]?.text || '').substring(0, 200)
+          : null
+        getLogger()
+          .withContext({ service: 'llm-gemini' })
+          .info('Outgoing payload', {
+            contentsLength,
+            preview,
+            systemInstructionPresent: !!systemText,
+          })
+      } catch (e) {
+        // no-op: logging must not break generation, but log the failure itself for diagnostics.
+        // eslint-disable-next-line no-console
+        console.warn('[llm-gemini] Failed to log outgoing payload', { error: e instanceof Error ? e.message : String(e) });
+      }
 
       const result = await this.client.models.generateContent({
         model,
