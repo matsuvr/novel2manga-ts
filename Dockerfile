@@ -14,7 +14,7 @@ RUN apt-get update && \
       python3 make g++ pkg-config \
       libsqlite3-dev \
       libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
-      fonts-not-cjk-extra fonts-noto-color-emoji && \
+      fonts-not-cjk-extra fonts-noto-color-emoji texlive-font-utils && \
     rm -rf /var/lib/apt/lists/*
 
 RUN kanji-config-updmap noto-otc
