@@ -1,7 +1,7 @@
 import { convertChunkToMangaScript } from '@/agents/script/script-converter'
-import { getStoredSummary } from '@/utils/chunk-summary'
 import { db } from '@/services/database/index'
 import type { NewMangaScript } from '@/types/script'
+import { getStoredSummary } from '@/utils/chunk-summary'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface ChunkScriptResult {

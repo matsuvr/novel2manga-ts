@@ -7,10 +7,10 @@ import {
   JSON_SCHEMA_ERROR_PATTERNS,
   RETRYABLE_JSON_ERROR_PATTERNS,
 } from '@/errors/error-patterns'
-import { normalizeLLMResponse } from '@/utils/dialogue-normalizer'
-import { getLLMProviderConfig } from '../config/llm.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { InvalidRequestError } from '@/llm/client'
+import { normalizeLLMResponse } from '@/utils/dialogue-normalizer'
+import { getLLMProviderConfig } from '../config/llm.config'
 
 export interface GenerateArgs<T> {
   name?: string

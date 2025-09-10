@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import { getTextAnalysisConfig } from '@/config'
-import { loadOrGenerateSummary, getStoredSummary } from '@/utils/chunk-summary'
 import type { Job } from '@/db/schema'
 import { db } from '@/services/database/index'
+import { getStoredSummary, loadOrGenerateSummary } from '@/utils/chunk-summary'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface AnalysisResult {
