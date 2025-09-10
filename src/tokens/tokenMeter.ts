@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai'
 import { getLogger } from '@/infrastructure/logging/logger'
+import { estimateTokenCount, extractTextFromMessage, isEmptyContent } from '@/utils/textExtraction'
 
 export type TokenPreflight = {
   inputTokens: number
@@ -117,60 +118,17 @@ export class TokenMeter implements ITokenMeter {
   }
 
   private fallbackEstimation(contentsOrRequest: string | unknown[] | Record<string, unknown>): TokenPreflight {
-    let text = ''
-
-    if (typeof contentsOrRequest === 'string') {
-      text = contentsOrRequest
-    } else if (Array.isArray(contentsOrRequest)) {
-      // Extract text from parts
-      text = contentsOrRequest
-        .map((content) => {
-          if (typeof content === 'object' && content !== null && 'parts' in content) {
-            const parts = (content as Record<string, unknown>).parts as unknown[]
-            return parts?.map((part) => {
-              if (typeof part === 'object' && part !== null && 'text' in part) {
-                return (part as Record<string, unknown>).text as string || ''
-              }
-              return ''
-            }).join('') || ''
-          }
-          return ''
-        })
-        .join('')
-    } else if (typeof contentsOrRequest === 'object' && contentsOrRequest !== null && 'contents' in contentsOrRequest) {
-      text = this.normalizeContents(contentsOrRequest)
-        .map((content) => {
-          if (typeof content === 'object' && content !== null && 'parts' in content) {
-            const parts = (content as Record<string, unknown>).parts as unknown[]
-            return parts?.map((part) => {
-              if (typeof part === 'object' && part !== null && 'text' in part) {
-                return (part as Record<string, unknown>).text as string || ''
-              }
-              return ''
-            }).join('') || ''
-          }
-          return ''
-        })
-        .join('')
-    } else {
-      text = String(contentsOrRequest)
-    }
+    const text = extractTextFromMessage(contentsOrRequest)
 
     // Handle empty cases explicitly
-    if (!text ||
-        contentsOrRequest === null ||
-        contentsOrRequest === undefined ||
-        (Array.isArray(contentsOrRequest) && contentsOrRequest.length === 0) ||
-        (typeof contentsOrRequest === 'object' && Object.keys(contentsOrRequest).length === 0)) {
-      text = ''
+    if (isEmptyContent(contentsOrRequest)) {
+      return {
+        inputTokens: 0,
+        note: 'Fallback estimation due to API failure',
+      }
     }
 
-    // Simple estimation: 4 characters ≈ 1 token for English, 1 character ≈ 1 token for Japanese
-    // For mixed content, use a simple heuristic
-    const englishChars = (text.match(/[a-zA-Z\s]/g) || []).length
-    const otherChars = text.length - englishChars
-
-    const estimatedTokens = Math.ceil(englishChars / 4) + otherChars
+    const estimatedTokens = estimateTokenCount(text)
 
     return {
       inputTokens: estimatedTokens,
