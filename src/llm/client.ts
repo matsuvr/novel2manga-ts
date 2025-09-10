@@ -31,6 +31,8 @@ export interface LlmResponse {
     promptTokens: number
     completionTokens: number
     totalTokens: number
+    cachedContentTokens?: number // キャッシュ利用時のトークン数
+    thoughtsTokens?: number // 思考モデル使用時の思考トークン
   }
   refusal?: string | null // OpenAI Structured Outputsのrefusal対応
 }
@@ -59,6 +61,7 @@ export interface LlmClientOptions {
   frequencyPenalty?: number
   presencePenalty?: number
   timeout?: number // タイムアウト（ミリ秒）
+  stream?: boolean // ストリーミングを有効にするかどうか
   tools?: LlmTool[]
   toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } }
   responseFormat?: {
