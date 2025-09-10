@@ -17,6 +17,10 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((res) => setTimeout(res, ms))
 }
 
+// Tunables
+const BASE_BACKOFF_MS = 300
+const MAX_DEBUG_FIELDS = 20
+
 async function saveRawResponse(
   resp: unknown,
   tag: string,
@@ -38,7 +42,12 @@ async function saveRawResponse(
     )
     await fs.writeFile(filePath, body, { encoding: 'utf-8' })
   } catch {
-    // ignore failures to not block generation flow
+    // ignore failures to not block generation flow, but log for diagnostics
+    try {
+      getLogger().warn(`Failed to save raw LLM response for tag "${tag}"`)
+    } catch {
+      // noop - ensure we never throw while trying to log
+    }
   }
 }
 
@@ -153,7 +162,7 @@ export class VertexAIClient implements LlmClient {
       let lastContent: string | null = null
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         if (attempt > 0) {
-          const backoffMs = 300 * 2 ** (attempt - 1)
+          const backoffMs = BASE_BACKOFF_MS * 2 ** (attempt - 1)
           logger.warn('Empty response previously, retrying after backoff', { attempt, backoffMs })
           // simple backoff
           await sleep(backoffMs)
@@ -190,7 +199,7 @@ export class VertexAIClient implements LlmClient {
             typeof metaObj.output_text === 'string'
               ? (metaObj.output_text as string).length
               : undefined
-          const safeFields = Object.keys(metaObj).slice(0, 20)
+          const safeFields = Object.keys(metaObj).slice(0, MAX_DEBUG_FIELDS)
           logger.warn('Empty LLM content - response meta snapshot', {
             attempt,
             safeId,
@@ -199,7 +208,7 @@ export class VertexAIClient implements LlmClient {
             safeFields,
           })
         } catch {
-          // noop
+          // noop - logging must not break the flow
         }
 
         // if not last attempt, loop will retry
@@ -374,7 +383,12 @@ function extractTextFromGenAIResponse(resp: unknown): string | null {
             try {
               return JSON.stringify(p.json)
             } catch {
-              // ignore
+              // ignore stringify failures, but log for diagnostics
+              try {
+                getLogger().warn('Failed to stringify json_schema part from LLM response')
+              } catch {
+                // noop
+              }
             }
           }
         }
