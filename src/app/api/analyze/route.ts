@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { AnalyzePipeline } from '@/services/application/analyze-pipeline'
+import { InputValidationStep } from '@/services/application/steps'
 import { db } from '@/services/database'
 import { withAuth } from '@/utils/api-auth'
 import {
@@ -13,6 +14,7 @@ import {
 } from '@/utils/api-error'
 import { detectDemoMode } from '@/utils/request-mode'
 import { generateUUID } from '@/utils/uuid'
+import { getStoragePorts } from '@/infrastructure/storage/ports'
 
 const analyzeRequestSchema = z
   .object({
@@ -172,6 +174,30 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       title: `Analysis Job for ${title ?? 'Novel'}`,
       userId: user.id,
     })
+    if (novelText !== '__FETCH_FROM_STORAGE__') {
+      const validationStep = new InputValidationStep()
+      const validation = await validationStep.validate(novelText, {
+        jobId,
+        novelId: novelId as string,
+        logger: _logger,
+        ports: getStoragePorts(),
+        isDemo,
+      })
+
+      if (!validation.success) {
+        db.jobs().updateJobStatus(jobId, 'failed', validation.error)
+        return createErrorResponse(new ApiError(validation.error, 400, 'INVALID_INPUT'))
+      }
+
+      if (validation.data.status === 'SHORT' || validation.data.status === 'NON_NARRATIVE') {
+        db.jobs().updateJobStatus(jobId, 'paused', validation.data.status)
+        return createSuccessResponse({
+          id: jobId,
+          jobId,
+          requiresAction: validation.data.consentRequired,
+        })
+      }
+    }
     // 一部のテストモックでは updateJobStatus が未実装のため保護
     try {
       db.jobs().updateJobStatus(jobId, 'processing')

@@ -59,6 +59,18 @@ export const appConfig = {
     // Enable bundling by default
     enabled: true,
   },
+  validation: {
+    minInputChars: 1000,
+    narrativeJudgeEnabled: true,
+  },
+  expansion: {
+    enabled: true,
+    targetScenarioChars: 3000,
+  },
+  nonNarrative: {
+    enabled: true,
+    defaultExplainerCount: [2, 3] as [number, number],
+  },
   // LLM設定（モデル・パラメータは llm.config.ts に集約。ここではプロンプトのみ保持）
   llm: {
     chunkSummary: {
@@ -718,6 +730,33 @@ export function getAppConfigWithOverrides(): AppConfig {
 
   if (process.env.APP_ENABLE_CACHING !== undefined) {
     config.features.enableCaching = process.env.APP_ENABLE_CACHING === 'true'
+  }
+
+  if (process.env.APP_VALIDATION_MIN_INPUT_CHARS) {
+    const v = parseInt(process.env.APP_VALIDATION_MIN_INPUT_CHARS, 10)
+    if (!Number.isNaN(v) && v > 0) config.validation.minInputChars = v
+  }
+  if (process.env.APP_VALIDATION_NARRATIVE_JUDGE_ENABLED !== undefined) {
+    config.validation.narrativeJudgeEnabled =
+      process.env.APP_VALIDATION_NARRATIVE_JUDGE_ENABLED === 'true'
+  }
+  if (process.env.APP_EXPANSION_ENABLED !== undefined) {
+    config.expansion.enabled = process.env.APP_EXPANSION_ENABLED === 'true'
+  }
+  if (process.env.APP_EXPANSION_TARGET_SCENARIO_CHARS) {
+    const v = parseInt(process.env.APP_EXPANSION_TARGET_SCENARIO_CHARS, 10)
+    if (!Number.isNaN(v) && v > 0) config.expansion.targetScenarioChars = v
+  }
+  if (process.env.APP_NON_NARRATIVE_ENABLED !== undefined) {
+    config.nonNarrative.enabled = process.env.APP_NON_NARRATIVE_ENABLED === 'true'
+  }
+  if (process.env.APP_NON_NARRATIVE_DEFAULT_EXPLAINER_COUNT) {
+    const parts = process.env.APP_NON_NARRATIVE_DEFAULT_EXPLAINER_COUNT.split(',')
+      .map((p) => parseInt(p, 10))
+      .filter((n) => !Number.isNaN(n))
+    if (parts.length === 2) {
+      config.nonNarrative.defaultExplainerCount = [parts[0], parts[1]]
+    }
   }
 
   if (process.env.APP_LOG_LEVEL) {
