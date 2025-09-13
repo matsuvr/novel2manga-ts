@@ -7,14 +7,9 @@ import { type SfxPlacement, SfxPlacer } from './sfx-placer'
 
 // Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
 const isServer = typeof window === 'undefined'
-let createCanvas: ((width: number, height: number) => unknown) | undefined
-// node-canvas の Image は DOM の HTMLImageElement とは別物なので専用型を定義
-interface NodeCanvasImage {
-  src: string | Buffer
-  width: number
-  height: number
-}
-let NodeCanvasImageCtor: (new () => NodeCanvasImage) | undefined
+type CanvasModule = typeof import('@napi-rs/canvas')
+let createCanvas: CanvasModule['createCanvas'] | undefined
+let loadImageFn: CanvasModule['loadImage'] | undefined
 
 /** パネル全幅に対する水平スロット領域の割合。0.9はパネル幅の90%をスロット領域として確保するための値。 */
 const HORIZONTAL_SLOT_COVERAGE = 0.9
@@ -35,7 +30,7 @@ const MIN_BUBBLE_HEIGHT = 30
 /** バブル配置時に利用可能な垂直方向の最小マージン（px単位）。2pxはバブル同士が重ならないようにするための値。 */
 const AVAILABLE_VERTICAL_MARGIN = 2
 
-// node-canvas用の型定義
+// Node.js 向け canvas 実装の型定義
 interface NodeCanvasImpl {
   width: number
   height: number
@@ -61,14 +56,14 @@ async function initializeCanvas(): Promise<void> {
 
   canvasInitPromise = (async () => {
     if (isServer) {
-      // サーバーサイドではnode-canvasを使用
+      // サーバーサイドでは @napi-rs/canvas を使用
       try {
-        const canvasModule = await import('canvas')
+        const canvasModule = await import('@napi-rs/canvas')
         createCanvas = canvasModule.createCanvas
-        NodeCanvasImageCtor = canvasModule.Image
+        loadImageFn = canvasModule.loadImage
         canvasInitialized = true
       } catch (error) {
-        console.warn('node-canvas not available, Canvas functionality will be limited', error)
+        console.warn('@napi-rs/canvas not available, Canvas functionality will be limited', error)
       }
     } else {
       canvasInitialized = true
@@ -359,13 +354,11 @@ export class CanvasRenderer {
   }
 
   /** Create an Image from a PNG buffer (server only). */
-  static createImageFromBuffer(buffer: Buffer): DialogueAsset {
-    if (!isServer || !NodeCanvasImageCtor) {
-      throw new Error('createImageFromBuffer is only available on server with node-canvas')
+  static async createImageFromBuffer(buffer: Buffer): Promise<DialogueAsset> {
+    if (!isServer || !loadImageFn) {
+      throw new Error('createImageFromBuffer is only available on server with @napi-rs/canvas')
     }
-    const img = new NodeCanvasImageCtor()
-    img.src = buffer
-    // node-canvas の Image は読み込み後に width/height が同期的に得られる
+    const img = await loadImageFn(buffer)
     const width = img.width
     const height = img.height
 
@@ -1153,7 +1146,7 @@ export class CanvasRenderer {
 
   async toBlob(type: string = 'image/png', quality?: number): Promise<Blob> {
     if (isServer) {
-      // node-canvas の場合
+      // サーバー側の canvas 実装
       const nodeCanvas = this.canvas as NodeCanvas
 
       // toDataURL を優先的に使用（より安定している）

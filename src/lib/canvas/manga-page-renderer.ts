@@ -514,60 +514,47 @@ export class MangaPageRenderer {
         key: string
         image: CanvasImageSource
         meta: { width: number; height: number }
-      }> = allResults.map((res, idx) => {
-        const { key, panelId, dialogueIndex } = map[idx]
+      }> = await Promise.all(
+        allResults.map(async (res, idx) => {
+          const { key, panelId, dialogueIndex } = map[idx]
 
-        // Helper: create a safe placeholder image-like object for tests
-        const makePlaceholder = (w: number, h: number) =>
-          ({
-            // Minimal shape; CanvasRenderer tests assert sizes, not actual drawing here
-            width: w,
-            height: h,
-          }) as unknown as CanvasImageSource
+          // Helper: create a safe placeholder image-like object for tests
+          const makePlaceholder = (w: number, h: number) =>
+            ({
+              // Minimal shape; CanvasRenderer tests assert sizes, not actual drawing here
+              width: w,
+              height: h,
+            }) as unknown as CanvasImageSource
 
-        let image: CanvasImageSource | undefined
-        let width = res.meta.width
-        let height = res.meta.height
+          let image: CanvasImageSource | undefined
+          let width = res.meta.width
+          let height = res.meta.height
 
-        try {
-          if (
-            typeof (CanvasRenderer as unknown as { createImageFromBuffer?: unknown })
-              .createImageFromBuffer === 'function'
-          ) {
-            const created = (
-              CanvasRenderer as unknown as {
-                createImageFromBuffer: (buf: Buffer) => {
-                  image: CanvasImageSource
-                  width?: number
-                  height?: number
-                }
-              }
-            ).createImageFromBuffer(res.pngBuffer)
-            if (created?.image) {
-              image = created.image
-              width = created.width || width
-              height = created.height || height
-            }
+          try {
+            const created = await CanvasRenderer.createImageFromBuffer(res.pngBuffer)
+            image = created.image
+            width = created.width
+            height = created.height
+          } catch (err) {
+            logger.warn('createImageFromBuffer failed; using placeholder image', {
+              panelId,
+              dialogueIndex,
+              error: err instanceof Error ? err.message : String(err),
+            })
           }
-        } catch (err) {
-          logger.warn('createImageFromBuffer failed; using placeholder image', {
-            panelId,
-            dialogueIndex,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
 
-        if (!image) {
-          // Fallback for environments where node-canvas is unavailable or mocked differently
-          image = makePlaceholder(width, height)
-        }
+          if (!image) {
+            // Fallback for environments where @napi-rs/canvas is unavailable or mocked differently
+            image = makePlaceholder(width, height)
+          }
 
-        return {
-          key,
-          image,
-          meta: { width, height },
-        }
-      })
+          return {
+            key,
+            image,
+            meta: { width, height },
+          }
+        }),
+      )
 
       const built = buildAssetsFromImages(map, images)
       Object.assign(assets, built)

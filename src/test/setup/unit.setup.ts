@@ -566,7 +566,7 @@ if (process.env.CANVAS_RENDERER_MOCK === '1') {
     return {
       CanvasRenderer: {
         create: vi.fn().mockResolvedValue(mockInstance),
-        createImageFromBuffer: vi.fn().mockReturnValue({
+        createImageFromBuffer: vi.fn().mockResolvedValue({
           image: { __img: true } as unknown as CanvasImageSource,
           width: 200,
           height: 300,
