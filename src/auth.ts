@@ -15,6 +15,15 @@ function hasStatus(input: unknown): input is HasStatus {
   const rec = input as Record<string, unknown>
   return typeof rec.status === 'number'
 }
+
+// Helper to get the configured NEXTAUTH base URL.
+// Returns a trimmed absolute base URL (no trailing slash) when NEXTAUTH_URL is set,
+// otherwise returns undefined to indicate callers should use relative routes.
+function getNextAuthBaseUrl(): string | undefined {
+  const raw = process.env.NEXTAUTH_URL
+  if (!raw) return undefined
+  return raw.replace(/\/$/, '')
+}
 function extractStatus(input: unknown): number | undefined {
   return hasStatus(input) ? input.status : undefined
 }
@@ -106,8 +115,10 @@ export const auth = async (): Promise<Session | null | undefined> => {
 export const signIn = async (provider?: string) => {
   const missing = getMissingAuthEnv()
   if (missing.length > 0) return NextResponse.json({ error: 'Missing auth env', missing }, { status: 503 })
-  const base = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
-  const target = `${base.replace(/\/$/, '')}/portal/api/auth/signin${provider ? `?provider=${provider}` : ''}`
+  const base = getNextAuthBaseUrl()
+  const target = base
+    ? `${base}/portal/api/auth/signin${provider ? `?provider=${provider}` : ''}`
+    : `/portal/api/auth/signin${provider ? `?provider=${provider}` : ''}`
   const { ms, value } = await measure(() => {
     return NextResponse.redirect(target)
   })
@@ -119,8 +130,8 @@ export const signIn = async (provider?: string) => {
 export const signOut = async () => {
   const missing = getMissingAuthEnv()
   if (missing.length > 0) return NextResponse.json({ error: 'Missing auth env', missing }, { status: 503 })
-  const base = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
-  const target = `${base.replace(/\/$/, '')}/portal/api/auth/signout`
+  const base = getNextAuthBaseUrl()
+  const target = base ? `${base}/portal/api/auth/signout` : `/portal/api/auth/signout`
   const { ms, value } = await measure(() => NextResponse.redirect(target))
   const status = extractStatus(value)
   logAuthMetric('auth:signOut', { ms, status })
