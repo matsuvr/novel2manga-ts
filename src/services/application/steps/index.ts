@@ -14,6 +14,7 @@ export type { CompletionResult } from './completion-step'
 export { CompletionStep } from './completion-step'
 export type { EpisodeTextResult } from './episode-processing-step'
 export { EpisodeProcessingStep } from './episode-processing-step'
+export { InputValidationStep } from './input-validation-step'
 // Step-specific result types
 export type { JobInitResult, JobManagementOptions } from './job-management-step'
 export { JobManagementStep } from './job-management-step'
