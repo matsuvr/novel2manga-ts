@@ -46,11 +46,16 @@ export async function verifySessionToken(
     // JWT型をSessionTokenPayload型に変換して返す
     if (!jwt) return null
 
-    return {
+    // 明示的に SessionTokenPayload 型のオブジェクトを作成して返す
+    const payload: SessionTokenPayload = {
+      ...jwt,
       sub: jwt.sub,
-      email: jwt.email || undefined, // v4のJWT.emailはstring | undefinedなのでnull除去
-      ...jwt, // その他のプロパティも展開
-    } as SessionTokenPayload
+      // v4 の JWT.email は string | null | undefined の可能性があるため
+      // null を undefined に正規化する（SessionTokenPayload の email は string | undefined）
+      email: (jwt.email ?? undefined) as string | undefined,
+    }
+
+    return payload
   } catch (error) {
     console.error('Failed to decode or verify session token:', error)
     return null
