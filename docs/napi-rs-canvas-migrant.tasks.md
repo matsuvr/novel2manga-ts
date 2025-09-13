@@ -12,3 +12,4 @@
 - [ ] T10 Runtime check for Workers
 - [ ] T11 Feature flag & rollback
 - [ ] T12 Benchmark script
+- [x] Fix loadImage type assignment to match `@napi-rs/canvas`

@@ -7,10 +7,9 @@ import { type SfxPlacement, SfxPlacer } from './sfx-placer'
 
 // Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
 const isServer = typeof window === 'undefined'
-let createCanvas: ((width: number, height: number) => unknown) | undefined
-let loadImageFn:
-  | ((src: string | URL | Buffer) => Promise<{ width: number; height: number } & CanvasImageSource>)
-  | undefined
+type CanvasModule = typeof import('@napi-rs/canvas')
+let createCanvas: CanvasModule['createCanvas'] | undefined
+let loadImageFn: CanvasModule['loadImage'] | undefined
 
 /** パネル全幅に対する水平スロット領域の割合。0.9はパネル幅の90%をスロット領域として確保するための値。 */
 const HORIZONTAL_SLOT_COVERAGE = 0.9
