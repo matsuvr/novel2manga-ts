@@ -155,7 +155,7 @@ export function Navigation() {
               </div>
             ) : (
               <Link
-                href="/portal/auth/signin"
+                href="/portal/api/auth/login"
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 ログイン
@@ -289,7 +289,7 @@ export function Navigation() {
             <div className="pt-4 pb-3 border-t border-gray-200">
               <div className="px-4">
                 <Link
-                  href="/portal/auth/signin"
+                  href="/portal/api/auth/login"
                   className="block w-full text-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
                   onClick={() => setIsMenuOpen(false)}
                 >

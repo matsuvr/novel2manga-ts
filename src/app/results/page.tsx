@@ -3,13 +3,18 @@ import { redirect } from 'next/navigation'
 import { auth } from '@/auth'
 import { db } from '@/services/database/index'
 
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic'
 
 export default async function ResultsPage() {
   const session = await auth()
-  const userId = session?.user?.id
+  // Narrow session shape before accessing nested fields to satisfy strict TS checks
+  function hasUser(obj: unknown): obj is { user?: { id?: string } } {
+    return !!obj && typeof obj === 'object' && 'user' in (obj as Record<string, unknown>)
+  }
+
+  const userId = hasUser(session) ? session.user?.id : undefined
   if (!userId) {
-    redirect('/api/auth/signin?callbackUrl=/results')
+    redirect('/portal/api/auth/login?callbackUrl=/results')
   }
   const jobs = await db.jobs().getJobsByUser(userId)
   return (

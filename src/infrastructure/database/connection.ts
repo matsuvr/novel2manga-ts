@@ -1,8 +1,33 @@
 import type Database from 'better-sqlite3'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
+// Use static type import from the canonical schema file for TypeScript types,
+// but load the runtime schema value dynamically to avoid bundler/ESM shape
+// mismatch errors when modules re-export differently across the codebase.
 import type * as schema from '@/db/schema'
-import * as dbSchemaModule from '@/db/schema'
+
+// runtimeSchema will be assigned below using a dynamic require. We avoid
+// static `import` for the runtime value because some consumers import
+// `@/db` while others import `@/db/schema` and bundlers can emit shape
+// mismatches. Using `require()` here is a pragmatic compatibility shim
+// that works in Node-based dev server and in production builds that support
+// CommonJS interop.
+let dbSchemaModule: unknown
+try {
+  // Try the project's central re-export first
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  dbSchemaModule = require('@/db')
+} catch (_) {
+  try {
+    // Fallback to direct schema module
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    dbSchemaModule = require('@/db/schema')
+  } catch (_) {
+    // As a last resort, leave undefined and handle later
+    dbSchemaModule = undefined
+  }
+}
+
 import type { DatabaseAdapter } from './adapters/base-adapter'
 import { SqliteAdapter } from './adapters/sqlite-adapter'
 

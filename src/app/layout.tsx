@@ -11,6 +11,8 @@ export const metadata: Metadata = {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Initialize database connection early
+
   const missing = getMissingAuthEnv()
   if (missing.length > 0) {
     const message = `Authentication is not configured. Missing environment variables: ${missing.join(', ')}`
