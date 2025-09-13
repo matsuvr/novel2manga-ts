@@ -36,9 +36,8 @@ export default defineConfig({
       '**/.{idea,git,cache,output,temp}/**',
     ],
     globals: true,
-    clearMocks: false, // Don't clear mocks automatically in integration tests
-    restoreMocks: false, // Don't restore mocks automatically
-    mockReset: false, // Don't reset mocks automatically
+    clearMocks: true,
+    restoreMocks: true,
     // Detailed error reporting for integration tests
     reporters: ['verbose'],
     // Retry failed tests once (integration tests can be flaky)
