@@ -531,22 +531,10 @@ export class MangaPageRenderer {
           let height = res.meta.height
 
           try {
-            if (
-              typeof (CanvasRenderer as unknown as { createImageFromBuffer?: unknown })
-                .createImageFromBuffer === 'function'
-            ) {
-              const renderer = CanvasRenderer as unknown as {
-                createImageFromBuffer: (
-                  buf: Buffer,
-                ) => Promise<{ image: CanvasImageSource; width?: number; height?: number }>
-              }
-              const created = await renderer.createImageFromBuffer(res.pngBuffer)
-              if (created?.image) {
-                image = created.image
-                width = created.width || width
-                height = created.height || height
-              }
-            }
+            const created = await CanvasRenderer.createImageFromBuffer(res.pngBuffer)
+            image = created.image
+            width = created.width
+            height = created.height
           } catch (err) {
             logger.warn('createImageFromBuffer failed; using placeholder image', {
               panelId,
