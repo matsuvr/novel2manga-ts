@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import type { Session } from 'next-auth'
 import NextAuth, { type NextAuthOptions } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
+import { getDatabase } from '@/db'
 import { getDatabaseServiceFactory } from '@/services/database'
 import { getMissingAuthEnv } from '@/utils/auth-env'
 import { logAuthMetric, measure } from '@/utils/auth-metrics'
@@ -31,6 +32,7 @@ function extractStatus(input: unknown): number | undefined {
 // Request-time handlers to avoid executing DB-dependent code at module import
 function buildAuthOptionsForRequest(): NextAuthOptions {
   const { AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET, AUTH_SECRET } = process.env
+  void getDatabase() // ensure DatabaseServiceFactory initialized
   return {
     adapter: DrizzleAdapter(
       getDatabaseServiceFactory().getRawDatabase() as Parameters<typeof DrizzleAdapter>[0],
@@ -64,7 +66,7 @@ function buildAuthOptionsForRequest(): NextAuthOptions {
       },
       async session({ session, token }) {
         if (session.user && token.userId) {
-          ; (session.user as { id?: string }).id = token.userId as string
+          ;(session.user as { id?: string }).id = token.userId as string
         }
         return session
       },
@@ -114,7 +116,8 @@ export const auth = async (): Promise<Session | null | undefined> => {
 
 export const signIn = async (provider?: string) => {
   const missing = getMissingAuthEnv()
-  if (missing.length > 0) return NextResponse.json({ error: 'Missing auth env', missing }, { status: 503 })
+  if (missing.length > 0)
+    return NextResponse.json({ error: 'Missing auth env', missing }, { status: 503 })
   const base = getNextAuthBaseUrl()
   const target = base
     ? `${base}/portal/api/auth/signin${provider ? `?provider=${provider}` : ''}`
@@ -129,7 +132,8 @@ export const signIn = async (provider?: string) => {
 
 export const signOut = async () => {
   const missing = getMissingAuthEnv()
-  if (missing.length > 0) return NextResponse.json({ error: 'Missing auth env', missing }, { status: 503 })
+  if (missing.length > 0)
+    return NextResponse.json({ error: 'Missing auth env', missing }, { status: 503 })
   const base = getNextAuthBaseUrl()
   const target = base ? `${base}/portal/api/auth/signout` : `/portal/api/auth/signout`
   const { ms, value } = await measure(() => NextResponse.redirect(target))
@@ -143,6 +147,7 @@ export const signOut = async () => {
 // v4用のauthOptionsもexport
 // Export a lazy getter for authOptions to avoid DB access at module import
 export const getAuthOptions = (): NextAuthOptions => {
+  void getDatabase() // ensure DatabaseServiceFactory initialized
   return {
     adapter: DrizzleAdapter(
       getDatabaseServiceFactory().getRawDatabase() as Parameters<typeof DrizzleAdapter>[0],
@@ -176,7 +181,7 @@ export const getAuthOptions = (): NextAuthOptions => {
       },
       async session({ session, token }) {
         if (session.user && token.userId) {
-          ; (session.user as { id?: string }).id = token.userId as string
+          ;(session.user as { id?: string }).id = token.userId as string
         }
         return session
       },
