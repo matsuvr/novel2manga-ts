@@ -120,7 +120,7 @@ export function SettingsContent() {
       <div className="text-center py-12">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">ログインが必要です</h2>
         <Link
-          href="/portal/auth/signin"
+          href="/portal/api/auth/login"
           className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
         >
           ログイン

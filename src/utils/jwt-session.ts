@@ -1,5 +1,5 @@
 import { Context, Layer } from 'effect'
-import { decode } from 'next-auth/jwt'
+import { decode, type JWT } from 'next-auth/jwt'
 
 export interface SessionTokenPayload {
   sub?: string
@@ -35,9 +35,27 @@ export async function verifySessionToken(
     return null
   }
   try {
-    // next-auth/jwt の decode は JWTDecodeParams で salt が必須型になっているバージョンに追随
-    // salt 未指定時は secret を再利用（秘匿性を確保しつつ型要件を満たす）
-    return await decode({ token, secret, salt: salt ?? secret })
+    // NextAuth v4のjwt.decode関数を使用
+    const jwt: JWT | null = await decode({
+      token,
+      secret,
+      // v4では salt パラメータがオプショナル
+      ...(salt && { salt })
+    })
+
+    // JWT型をSessionTokenPayload型に変換して返す
+    if (!jwt) return null
+
+    // 明示的に SessionTokenPayload 型のオブジェクトを作成して返す
+    const payload: SessionTokenPayload = {
+      ...jwt,
+      sub: jwt.sub,
+      // v4 の JWT.email は string | null | undefined の可能性があるため
+      // null を undefined に正規化する（SessionTokenPayload の email は string | undefined）
+      email: (jwt.email ?? undefined) as string | undefined,
+    }
+
+    return payload
   } catch (error) {
     console.error('Failed to decode or verify session token:', error)
     return null

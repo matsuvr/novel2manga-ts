@@ -15,9 +15,33 @@
 * Assets: `public/`. Scripts: `scripts/`.
 * DB: `database/` (data/docs), `drizzle/` (migrations/meta). Schema source: `src/db/schema.ts`. Keep in sync.
 
+## Database Access
+
+* **Drizzle-only policy:** All database operations MUST go through Drizzle ORM. Never import or use `better-sqlite3` directly except in `src/db/index.ts` for initialization.
+* **Service layer required:** Database operations must use service classes extending `BaseDatabaseService` or the centralized `DatabaseServiceFactory`.
+* **Transaction wrapper:** Use `executeInTransaction()` for all database operations requiring atomicity. Direct `db.transaction()` calls are forbidden outside the adapter layer.
+* **Adapter pattern:** Database-specific behavior must be encapsulated in adapter classes (`src/infrastructure/database/adapters/`). No SQLite-specific code outside adapters.
+* **Type safety:** Always use typed Drizzle queries with schema imports from `@/db/schema`. Raw SQL via `db.prepare()` or similar is forbidden.
+
+### Forbidden Patterns
+
+* ❌ `import Database from 'better-sqlite3'` (except in `src/db/index.ts`)
+* ❌ `db.prepare()`, `db.exec()`, or any raw SQLite methods
+* ❌ Direct `transaction()` calls without service layer wrapper
+* ❌ Accessing `.statement` or other internal Drizzle/SQLite properties
+* ❌ Creating new database connections outside `createDatabaseConnection()`
+
+### Required Patterns
+
+* ✅ `import { getDatabase } from '@/db'` for singleton access
+* ✅ `extends BaseDatabaseService` for new database services
+* ✅ `this.executeInTransaction()` for transactional operations
+* ✅ `DatabaseServiceFactory.get*Service()` for service access
+* ✅ Typed Drizzle query builders: `db.select()`, `db.insert()`, `db.update()`, `db.delete()`
+
 ## Commands
 
-* Dev: `npm run dev` → localhost:3000.
+* Dev: `docker compose up -d` → localhost:3000.
 * Build/serve: `npm run build`, `npm start`.
 * Tests: `npm test`, `npm run test:unit`, `npm run test:coverage`, `npm run test:integration`, `npm run test:e2e`, `npm run test:full-flow`.
 * Lint/format/check: `npm run format`, `npm run lint`, `npm run check`.

@@ -4,7 +4,7 @@ import ResultsDisplay from '@/components/ResultsDisplay'
 import { db } from '@/services/database/index'
 import { isRenderCompletelyDone } from '@/utils/completion'
 
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic'
 
 interface Params {
   jobId: string
@@ -13,9 +13,13 @@ interface Params {
 export default async function JobResultsPage({ params }: { params: Promise<Params> }) {
   const { jobId } = await params
   const session = await auth()
-  const userId = session?.user?.id
+  function hasUser(obj: unknown): obj is { user?: { id?: string } } {
+    return !!obj && typeof obj === 'object' && 'user' in (obj as Record<string, unknown>)
+  }
+
+  const userId = hasUser(session) ? session.user?.id : undefined
   if (!userId) {
-    redirect('/api/auth/signin')
+    redirect('/portal/api/auth/login')
   }
   const job = await db.jobs().getJob(jobId)
   if (!job) return notFound()
