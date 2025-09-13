@@ -9,7 +9,7 @@ export default async function ResultsPage() {
   const session = await auth()
   const userId = session?.user?.id
   if (!userId) {
-    redirect('/api/auth/signin?callbackUrl=/results')
+    redirect('/portal/api/auth/login?callbackUrl=/results')
   }
   const jobs = await db.jobs().getJobsByUser(userId)
   return (
