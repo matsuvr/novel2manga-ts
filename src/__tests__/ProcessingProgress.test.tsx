@@ -3,6 +3,26 @@ import React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ProcessingProgress from '@/components/ProcessingProgress'
 
+vi.mock('@/config/app.config', () => ({
+  appConfig: {
+    rendering: {
+      limits: {
+        maxPages: 100,
+      },
+    },
+    ui: {
+      progress: {
+        currentEpisodeProgressWeight: 0.5,
+        defaultEpisodeNumber: 1,
+      },
+      logs: {
+        maxEntries: 100,
+        maxVisibleLogHeightVh: 30,
+      },
+    },
+  },
+}))
+
 // Mock the component to render episode progress immediately without polling
 vi.mock('@/components/ProcessingProgress', async () => {
   const actual = await vi.importActual('@/components/ProcessingProgress')

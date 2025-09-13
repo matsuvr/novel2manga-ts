@@ -1,0 +1,1 @@
+2025-09-13T01:57:19.026Z [sync-migrate] migrationsDir=G:\TsProjects\novel2manga-ts\G:\TsProjects\novel2manga-ts\drizzle

@@ -1,4 +1,7 @@
+import { Effect } from 'effect'
 import { getJobDetails } from '@/services/application/job-details'
+import { db } from '@/services/database'
+import { getAuthenticatedUser } from '@/utils/api-auth'
 
 // SSE implementation using ReadableStream for server push. Platform-agnostic notes only.
 export async function GET(
@@ -6,10 +9,41 @@ export async function GET(
   ctx: { params: { jobId: string } | Promise<{ jobId: string }> },
 ) {
   try {
+    // Authentication check
+    let user: { id: string; email?: string | null; name?: string | null }
+    try {
+      user = await Effect.runPromise(
+        getAuthenticatedUser(request as unknown as import('next/server').NextRequest),
+      )
+    } catch (_error) {
+      return new Response('event: error\n' + 'data: {"error":"認証が必要です"}\n\n', {
+        status: 401,
+        headers: { 'Content-Type': 'text/event-stream; charset=utf-8' },
+      })
+    }
+
     const { jobId } = await ctx.params
     if (!jobId || jobId === 'undefined') {
       return new Response('event: error\n' + 'data: {"error":"ジョブIDが指定されていません"}\n\n', {
         status: 400,
+        headers: { 'Content-Type': 'text/event-stream; charset=utf-8' },
+      })
+    }
+
+    // User ownership check
+    const job = await db.jobs().getJob(jobId)
+    if (!job) {
+      return new Response(
+        'event: error\n' + 'data: {"error":"指定されたジョブが見つかりません"}\n\n',
+        {
+          status: 404,
+          headers: { 'Content-Type': 'text/event-stream; charset=utf-8' },
+        },
+      )
+    }
+    if (job.userId && job.userId !== user.id) {
+      return new Response('event: error\n' + 'data: {"error":"アクセス権限がありません"}\n\n', {
+        status: 403,
         headers: { 'Content-Type': 'text/event-stream; charset=utf-8' },
       })
     }
@@ -121,7 +155,7 @@ export async function GET(
 
     return new Response(stream, {
       status: 200,
-        headers: {
+      headers: {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache, no-transform',
       },

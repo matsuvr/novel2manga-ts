@@ -1,7 +1,7 @@
 import { buildLayoutFromPageBreaks } from '@/agents/script/panel-assignment'
 import { estimatePageBreaksSegmented } from '@/agents/script/segmented-page-break-estimator'
 import { getAppConfigWithOverrides } from '@/config'
-import { db } from '@/services/database/index'
+import { db } from '@/services/database'
 import type { MangaLayout } from '@/types/panel-layout'
 import type {
   PageBreakV2 as _PageBreakV2,

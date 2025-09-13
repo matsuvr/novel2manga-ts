@@ -162,7 +162,12 @@ export async function renderBatchFromJson(
       await Promise.all(chunk.map(renderPage))
     }
   } finally {
-    renderer.cleanup()
+    try {
+      // Guard for tests/mocks where renderer may be undefined on error paths
+      ;(renderer as unknown as { cleanup?: () => void })?.cleanup?.()
+    } catch {
+      // Ignore cleanup errors in tests/mocks
+    }
   }
 
   const duration = Date.now() - startTime

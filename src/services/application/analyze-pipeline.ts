@@ -225,7 +225,7 @@ export class AnalyzePipeline extends BasePipelineStep {
 
     // エピソード境界をDBへ永続化（最小フィールドでのアップサート）
     try {
-      const { db } = await import('@/services/database/index')  // 動的にインポート
+      const { db } = await import('@/services/database') // 動的にインポート
       const job = await db.jobs().getJob(jobId)
       if (!job) throw new Error(`Job not found for episode persistence: ${jobId}`)
 
@@ -265,7 +265,7 @@ export class AnalyzePipeline extends BasePipelineStep {
 
       await episodeWriter.bulkUpsert(episodesForDb)
       try {
-        const { db } = await import('@/services/database/index')  // 動的にインポート
+        const { db } = await import('@/services/database') // 動的にインポート
         const persisted = await db.episodes().getEpisodesByJobId(jobId)
         logger.info('Episode persistence summary', {
           jobId,
@@ -345,7 +345,7 @@ export class AnalyzePipeline extends BasePipelineStep {
         jobId,
         expectedEpisodes: episodeNumbers.length,
       })
-      const { db } = await import('@/services/database/index')  // 動的にインポート
+      const { db } = await import('@/services/database') // 動的にインポート
       const episodes = await db.episodes().getEpisodesByJobId(jobId)
       const epCount = episodes.length
       if (epCount === 0) {
@@ -423,7 +423,7 @@ export class AnalyzePipeline extends BasePipelineStep {
     logger.info('AnalyzePipeline.resumeJob: start', { jobId })
 
     // ジョブの現在の状態を取得
-    const { db } = await import('@/services/database/index')  // 動的にインポート
+    const { db } = await import('@/services/database/index') // 動的にインポート
     const job = await db.jobs().getJob(jobId)
     if (!job) {
       throw new Error(`Job not found: ${jobId}`)

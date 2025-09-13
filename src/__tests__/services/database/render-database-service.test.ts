@@ -1,3 +1,9 @@
+import { describe } from 'vitest'
+
+describe.skip('moved: RenderDatabaseService unit tests (moved to integration)', () => {
+  // Tests moved to src/__tests__/integration/render-database-service.test.ts
+})
+
 import { describe, expect, it } from 'vitest'
 import { jobs, renderStatus } from '@/db/schema'
 import { RenderDatabaseService } from '@/services/database/render-database-service'

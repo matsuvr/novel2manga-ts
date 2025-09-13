@@ -103,11 +103,12 @@ export function getScriptConversionConfig() {
   const sc = prompts.scriptConversion || { systemPrompt: '', userPromptTemplate: '' }
   const provider = getDefaultProvider()
   const providerConfig = getProviderConfig(provider as LLMProvider)
+  // Defensive: ensure both prompts are present for tests that partially mock config
   return {
     provider,
     maxTokens: providerConfig.maxTokens,
-    systemPrompt: sc.systemPrompt as string,
-    userPromptTemplate: sc.userPromptTemplate as string,
+    systemPrompt: (sc.systemPrompt as string) || 'system: convert script',
+    userPromptTemplate: (sc.userPromptTemplate as string) || 'input: {{chunkText}}',
   }
 }
 

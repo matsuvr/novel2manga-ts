@@ -64,15 +64,35 @@ function createAuthModule(): Handlers {
     // セッションはJWT方式を採用し、D1への永続化を回避する
     session: { strategy: 'jwt' },
     providers: [
-      Google({ clientId: String(AUTH_GOOGLE_ID), clientSecret: String(AUTH_GOOGLE_SECRET) }),
+      Google({
+        clientId: String(AUTH_GOOGLE_ID),
+        clientSecret: String(AUTH_GOOGLE_SECRET),
+        authorization: {
+          params: {
+            prompt: 'consent',
+            access_type: 'offline',
+            response_type: 'code',
+          },
+        },
+      }),
     ],
     secret: String(AUTH_SECRET),
+    pages: {
+      signIn: '/portal/auth/signin',
+      error: '/portal/auth/error',
+    },
     callbacks: {
+      async jwt({ token, user }) {
+        // ユーザー情報が利用可能な場合（初回ログイン時）、トークンにユーザーIDを保存
+        if (user) {
+          token.userId = user.id
+        }
+        return token
+      },
       async session({ session, token }) {
-        // JWTのsub(=ユーザーID)をsession.user.idに反映
-        if (session.user) {
-          ;(session.user as { id?: string }).id =
-            (token?.sub as string | undefined) || (session.user as { id?: string }).id
+        // JWTのuserIdをsession.user.idに反映
+        if (session.user && token.userId) {
+          ;(session.user as { id?: string }).id = token.userId as string
         }
         return session
       },

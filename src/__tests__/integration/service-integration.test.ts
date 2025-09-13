@@ -187,6 +187,7 @@ vi.mock('@/config', () => ({
 
 import crypto from 'node:crypto'
 import { afterEach, describe as baseDescribe, beforeEach, describe, expect, it, vi } from 'vitest'
+import { users as schemaUsers } from '@/db/schema'
 // AnalyzePipeline は下のモック適用後に動的import
 import {
   resetAgentMocks,
@@ -373,8 +374,8 @@ let __testDbForFactory: TestDatabase | undefined
 vi.mock('@/repositories/factory', () => {
   const factory = () => ({
     getJobRepository: () => ({
-      create: (payload: any) => __testDbForFactory!.service.createJob(payload),
-      getJob: (id: string) => __testDbForFactory!.service.getJob(id),
+      create: (payload: any) => (__testDbForFactory!.service as any).createJob(payload),
+      getJob: (id: string) => (__testDbForFactory!.service as any).getJob(id),
       updateJobTotalPages: (id: string, totalPages: number) =>
         (__testDbForFactory!.service as any).updateJobTotalPages?.(id, totalPages),
       updateStep: (
@@ -394,25 +395,30 @@ vi.mock('@/repositories/factory', () => {
           errorStep,
         ),
       markStepCompleted: (id: string, step: any) =>
-        __testDbForFactory!.service.markJobStepCompleted(id, step),
+        (__testDbForFactory!.service as any).markJobStepCompleted(id, step),
       updateStatus: (id: string, status: any) =>
-        __testDbForFactory!.service.updateJobStatus(id, status),
-      getJobWithProgress: (id: string) => __testDbForFactory!.service.getJobWithProgress(id),
+        (__testDbForFactory!.service as any).updateJobStatus(id, status),
+      getJobWithProgress: (id: string) =>
+        (__testDbForFactory!.service as any).getJobWithProgress(id),
     }),
     getNovelRepository: () => ({
-      get: (id: string) => __testDbForFactory!.service.getNovel(id),
-      ensure: (id: string, payload: any) => __testDbForFactory!.service.ensureNovel(id, payload),
+      get: (id: string) => (__testDbForFactory!.service as any).getNovel(id),
+      ensure: (id: string, payload: any) =>
+        (__testDbForFactory!.service as any).ensureNovel(id, payload),
     }),
     getChunkRepository: () => ({
-      create: (payload: any) => __testDbForFactory!.service.createChunk(payload),
-      createBatch: (payloads: any[]) => __testDbForFactory!.service.createChunksBatch(payloads),
-      getByJobId: (jobId: string) => __testDbForFactory!.service.getChunksByJobId(jobId) as any,
+      create: (payload: any) => (__testDbForFactory!.service as any).createChunk(payload),
+      createBatch: (payloads: any[]) =>
+        (__testDbForFactory!.service as any).createChunksBatch(payloads),
+      getByJobId: (jobId: string) =>
+        (__testDbForFactory!.service as any).getChunksByJobId(jobId) as any,
       db: {
-        getChunksByJobId: (jobId: string) => __testDbForFactory!.service.getChunksByJobId(jobId),
+        getChunksByJobId: (jobId: string) =>
+          (__testDbForFactory!.service as any).getChunksByJobId(jobId),
       },
     }),
     getEpisodeRepository: () => ({
-      getByJobId: (jobId: string) => __testDbForFactory!.service.getEpisodesByJobId(jobId),
+      getByJobId: (jobId: string) => (__testDbForFactory!.service as any).getEpisodesByJobId(jobId),
     }),
   })
   return {
@@ -445,8 +451,10 @@ describe('Service Integration Tests', () => {
       // dbファクトリーを追加
       db: {
         novels: () => ({
-          getNovel: vi.fn((id: string) => testDb.service.getNovel(id)),
-          ensureNovel: vi.fn((id: string, payload: any) => testDb.service.ensureNovel(id, payload)),
+          getNovel: vi.fn((id: string) => (testDb.service as any).getNovel(id)),
+          ensureNovel: vi.fn((id: string, payload: any) =>
+            (testDb.service as any).ensureNovel(id, payload),
+          ),
           createNovel: vi.fn((payload: any) => testDb.service.createNovel(payload)),
         }),
         jobs: () => ({
@@ -651,13 +659,15 @@ describe('Service Integration Tests', () => {
           no: 1,
           cut: 'テスト舞台設定',
           camera: 'medium',
+          importance: 1,
           dialogue: [],
         },
         {
           no: 2,
           cut: 'テストセリフ',
           camera: 'close',
-          dialogue: ['太郎: テストセリフ'],
+          importance: 1,
+          dialogue: [{ text: 'テストセリフ', type: 'speech', speaker: '太郎' }],
         },
       ],
       continuity_checks: [],
@@ -689,17 +699,29 @@ describe('Service Integration Tests', () => {
           no: 1,
           cut: 'テスト舞台設定',
           camera: 'medium',
+          importance: 1,
           dialogue: [],
         },
         {
           no: 2,
           cut: 'テストセリフ',
           camera: 'close',
-          dialogue: ['太郎: テストセリフ'],
+          importance: 1,
+          dialogue: [{ text: 'テストセリフ', type: 'speech', speaker: '太郎' }],
         },
       ],
       continuity_checks: [],
     })
+
+    // 外部キー制約対策: デフォルトユーザーを作成
+    await testDb.db
+      .insert(schemaUsers)
+      .values({
+        id: 'test-user-bypass',
+        name: 'Test User',
+        email: `test-${Date.now()}@example.com`,
+      })
+      .onConflictDoNothing()
 
     // PageBreakStep を steps バレル経由で上書き（AnalyzePipeline は './steps' から import）
     vi.doMock('@/services/application/steps', async () => {
@@ -716,12 +738,15 @@ describe('Service Integration Tests', () => {
                   pages: [
                     {
                       pageNumber: 1,
-                      panelCount: 1,
-                      panels: [{ panelIndex: 1, content: 'demo', dialogue: [] }],
+                      panelCount: 2,
+                      panels: [
+                        { panelIndex: 1, content: 'demo-1', dialogue: [] },
+                        { panelIndex: 2, content: 'demo-2', dialogue: [] },
+                      ],
                     },
                   ],
                 },
-                totalPages: 1,
+                totalPages: 2,
               },
             }
           }
@@ -776,7 +801,7 @@ describe('Service Integration Tests', () => {
       expect(job?.novelId).toBe(novel.id)
 
       // 検証: チャンクが作成されている
-      const chunks = await testDb.service.getChunksByJobId(result.jobId)
+      const chunks = await (testDb.service as any).getChunksByJobId(result.jobId)
       expect(chunks.length).toBe(result.chunkCount)
       expect(chunks[0].contentPath).toBeDefined()
       expect(chunks[0].wordCount).toBeGreaterThan(0)
@@ -851,13 +876,13 @@ describe('Service Integration Tests', () => {
       expect(job?.novelId).toBe(novel.id)
 
       // データベースに小説データが存在することを確認
-      const dbNovel = await testDb.service.getNovel(novel.id)
+      const dbNovel = await (testDb.service as any).getNovel(novel.id)
       expect(dbNovel).toBeDefined()
       expect(dbNovel?.id).toBe(novel.id)
       expect(dbNovel?.title).toBe('Consistency Test Novel')
 
       // チャンクがデータベースとストレージの両方に存在することを確認
-      const chunks = await testDb.service.getChunksByJobId(result.jobId)
+      const chunks = await (testDb.service as any).getChunksByJobId(result.jobId)
       expect(chunks.length).toBe(result.chunkCount)
       expect(chunks[0].contentPath).toBeDefined()
 

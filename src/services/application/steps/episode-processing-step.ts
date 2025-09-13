@@ -1,6 +1,6 @@
 import type { Chunk } from '@/db/schema'
 import { getChunkRepository } from '@/repositories'
-import { db } from '@/services/database/index'
+import { db } from '@/services/database'
 import type { EpisodeBoundary } from '@/types/episode'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
@@ -272,7 +272,7 @@ export class EpisodeProcessingStep implements PipelineStep {
         episode: String(episodeNumber),
       },
       dbOperation: async () => {
-        const { db } = await import('@/services/database/index')
+        const { db } = await import('@/services/database')
         db.episodes().updateEpisodeTextPath(jobId, episodeNumber, key)
       },
       tracking: {

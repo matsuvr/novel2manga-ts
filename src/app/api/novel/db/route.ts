@@ -2,12 +2,13 @@ import { randomUUID } from 'node:crypto'
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { getLogger } from '@/infrastructure/logging/logger'
-import { db } from '@/services/database/index'
+import { db } from '@/services/database'
+import { withAuth } from '@/utils/api-auth'
 import { ApiError, createErrorResponse, createSuccessResponse } from '@/utils/api-error'
 import { generateUUID } from '@/utils/uuid'
 
 // Novel要素を保存
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, user) => {
   try {
     // スキーマ定義（エラー整形のため issues を収集）
     const schema = z.object({
@@ -52,12 +53,17 @@ export async function POST(request: NextRequest) {
       textLength: length,
       language: 'ja',
       metadataPath: null,
-      userId: 'anonymous',
+      userId: user.id,
     })
 
     // 処理ジョブを作成
     const jobId = generateUUID()
-    db.jobs().createJobRecord({ id: jobId, novelId: uuid as string, title: 'text_analysis' })
+    db.jobs().createJobRecord({
+      id: jobId,
+      novelId: uuid as string,
+      title: 'text_analysis',
+      userId: user.id,
+    })
 
     return createSuccessResponse({
       novel: {
@@ -89,30 +95,40 @@ export async function POST(request: NextRequest) {
       })
     return createErrorResponse(error, 'Novelの保存中にエラーが発生しました')
   }
-}
+})
 
 // Novel一覧を取得
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest, user) => {
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
 
     if (id) {
-      // 特定のNovelを取得
+      // 特定のNovelを取得（ユーザー所有権チェック）
       const novel = await db.novels().getNovel(id)
 
       if (!novel) {
         return createErrorResponse(new Error('Novelが見つかりません'), 'Novelが見つかりません')
       }
 
-      // 関連するジョブを取得
-      const jobsList = await db.jobs().getJobsByNovelId(id)
+      // ユーザー所有権チェック
+      if (novel.userId && novel.userId !== user.id) {
+        return createErrorResponse(
+          new Error('アクセス権限がありません'),
+          'アクセス権限がありません',
+        )
+      }
 
-      return createSuccessResponse({ novel, jobs: jobsList })
+      // 関連するジョブを取得（ユーザーフィルタリング）
+      const jobsList = await db.jobs().getJobsByNovelId(id)
+      const userJobs = jobsList.filter((job) => !job.userId || job.userId === user.id)
+
+      return createSuccessResponse({ novel, jobs: userJobs })
     } else {
-      // 全てのNovelを取得
-      const novelsList = await db.novels().getAllNovels()
-      return createSuccessResponse({ novels: novelsList })
+      // ユーザーのNovelのみを取得
+      const allNovels = await db.novels().getAllNovels()
+      const userNovels = allNovels.filter((novel) => !novel.userId || novel.userId === user.id)
+      return createSuccessResponse({ novels: userNovels })
     }
   } catch (error) {
     getLogger().withContext({ route: 'api/novel/db', method: 'GET' }).error('Novel取得エラー', {
@@ -122,4 +138,4 @@ export async function GET(request: NextRequest) {
     })
     return createErrorResponse(error, 'Novelの取得中にエラーが発生しました')
   }
-}
+})

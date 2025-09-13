@@ -1,10 +1,11 @@
 import type { NextRequest } from 'next/server'
 import { getLogger } from '@/infrastructure/logging/logger'
-import { db } from '@/services/database/index'
+import { db } from '@/services/database'
+import { withAuth } from '@/utils/api-auth'
 import { createErrorResponse, createSuccessResponse, ValidationError } from '@/utils/api-error'
 import { saveNovelToStorage } from './storage/route'
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, user) => {
   const logger = getLogger().withContext({ api: 'novel/POST' })
 
   try {
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
         textLength: data.length,
         language: 'ja',
         metadataPath: null,
-        userId: 'anonymous',
+        userId: user.id,
       })
 
       logger.info('Novel successfully saved to database', {
@@ -93,4 +94,4 @@ export async function POST(request: NextRequest) {
       'サーバーエラーが発生しました',
     )
   }
-}
+})

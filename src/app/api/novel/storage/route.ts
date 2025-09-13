@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { getLogger } from '@/infrastructure/logging/logger'
+import { withAuth } from '@/utils/api-auth'
 import {
   createErrorResponse,
   createSuccessResponse,
@@ -48,7 +49,7 @@ export async function saveNovelToStorage(text: string) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, _user) => {
   try {
     getLogger()
       .withContext({ route: 'api/novel/storage', method: 'POST' })
@@ -82,10 +83,10 @@ export async function POST(request: NextRequest) {
       })
     return createErrorResponse(error, 'ファイルの保存中にエラーが発生しました')
   }
-}
+})
 
 // ファイルを取得するGETエンドポイント
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest, _user) => {
   try {
     const { searchParams } = new URL(request.url)
     const uuid = searchParams.get('uuid')
@@ -121,4 +122,4 @@ export async function GET(request: NextRequest) {
       })
     return createErrorResponse(error, 'ファイルの取得中にエラーが発生しました')
   }
-}
+})

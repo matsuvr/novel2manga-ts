@@ -1,8 +1,14 @@
 import type { NextRequest } from 'next/server'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { createErrorResponse, createSuccessResponse } from '@/utils/api-error'
+import { createEndpointDisabledResponse, validateDebugAccess } from '@/utils/api-protection'
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
+  // Check if debug endpoints are allowed in current environment
+  if (!validateDebugAccess(request)) {
+    return createEndpointDisabledResponse()
+  }
+
   try {
     const logger = getLogger().withContext({
       route: 'api/debug/env',

@@ -15,13 +15,15 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    "downlevelIteration": true,
     "plugins": [
       {
         "name": "next"
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@test/*": ["./src/__tests__/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "**/*.d.ts", ".next/types/**/*.ts"],
@@ -40,6 +42,7 @@
     "**/*.spec.tsx",
     "**/__tests__/**/*",
     "**/test/**/*",
+    "**/src/test/**/*",
     "**/tests/**/*",
     "**/AppData/Local/Temp/**/*",
     "C:/Users/*/AppData/Local/Temp/**/*"
