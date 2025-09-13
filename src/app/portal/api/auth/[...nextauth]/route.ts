@@ -1,7 +1,16 @@
 // app/portal/api/auth/[...nextauth]/route.ts
 import NextAuth from 'next-auth'
-import { authOptions } from '@/auth'
+import { getAuthOptions } from '@/auth'
 
-const handler = NextAuth(authOptions)
+export const GET = async (req: Request) => {
+    const handler = NextAuth(getAuthOptions())
+    // Treat the NextAuth handler as an edge-compatible function for this route.
+    const asEdge = handler as unknown as (r: Request) => Promise<Response>
+    return asEdge(req)
+}
 
-export { handler as GET, handler as POST }
+export const POST = async (req: Request) => {
+    const handler = NextAuth(getAuthOptions())
+    const asEdge = handler as unknown as (r: Request) => Promise<Response>
+    return asEdge(req)
+}

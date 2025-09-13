@@ -27,9 +27,13 @@ export interface StorageFileRecord {
 }
 
 export class StorageFilesService {
-  private readonly db: BetterSQLite3Database<typeof schema>
+  // Lazily-resolved DB instance. Avoid calling getDatabaseServiceFactory() at
+  // module import or during construction to prevent accidental import-time
+  // DB initialization. The DB is resolved on first method access.
+  private db?: BetterSQLite3Database<typeof schema>
 
-  constructor() {
+  private ensureDb(): BetterSQLite3Database<typeof schema> {
+    if (this.db) return this.db
     const raw = getDatabaseServiceFactory().getRawDatabase()
     const dbCandidate = raw as unknown as BetterSQLite3Database<typeof schema>
     if (
@@ -41,10 +45,12 @@ export class StorageFilesService {
       throw new Error('StorageFilesService: getRawDatabase() did not return a BetterSQLite3Database')
     }
     this.db = dbCandidate
+    return this.db
   }
 
   async listByJobAndCategory(jobId: string, category: StorageFileCategory) {
-    const rows = await this.db
+    const db = this.ensureDb()
+    const rows = await db
       .select()
       .from(storageFiles)
       .where(and(eq(storageFiles.jobId, jobId), eq(storageFiles.fileCategory, category)))
@@ -52,12 +58,14 @@ export class StorageFilesService {
   }
 
   async listByNovel(novelId: string) {
-    const rows = await this.db.select().from(storageFiles).where(eq(storageFiles.novelId, novelId))
+    const db = this.ensureDb()
+    const rows = await db.select().from(storageFiles).where(eq(storageFiles.novelId, novelId))
     return rows as unknown as StorageFileRecord[]
   }
 
   async existsPath(filePath: string) {
-    const rows = await this.db
+    const db = this.ensureDb()
+    const rows = await db
       .select({ id: storageFiles.id })
       .from(storageFiles)
       .where(eq(storageFiles.filePath, filePath))

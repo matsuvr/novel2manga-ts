@@ -488,4 +488,13 @@ export class JobWorker {
 }
 
 // Export singleton instance for easy use
-export const jobWorker = new JobWorker()
+// Export a lazily-created singleton. This avoids instantiating the worker at module
+// import time which can cause side-effects (timers, DB access) during SSR or tests.
+let _jobWorker: JobWorker | null = null
+
+export function getJobWorker(config: Partial<JobWorkerConfig> = {}): JobWorker {
+  if (!_jobWorker) {
+    _jobWorker = new JobWorker(config)
+  }
+  return _jobWorker
+}
