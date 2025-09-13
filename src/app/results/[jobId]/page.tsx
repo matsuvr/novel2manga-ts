@@ -15,7 +15,7 @@ export default async function JobResultsPage({ params }: { params: Promise<Param
   const session = await auth()
   const userId = session?.user?.id
   if (!userId) {
-    redirect('/api/auth/signin')
+    redirect('/portal/api/auth/login')
   }
   const job = await db.jobs().getJob(jobId)
   if (!job) return notFound()
