@@ -106,8 +106,10 @@ export const auth = async (): Promise<Session | null | undefined> => {
 export const signIn = async (provider?: string) => {
   const missing = getMissingAuthEnv()
   if (missing.length > 0) return NextResponse.json({ error: 'Missing auth env', missing }, { status: 503 })
+  const base = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
+  const target = `${base.replace(/\/$/, '')}/portal/api/auth/signin${provider ? `?provider=${provider}` : ''}`
   const { ms, value } = await measure(() => {
-    return NextResponse.redirect(`/portal/api/auth/signin${provider ? `?provider=${provider}` : ''}`)
+    return NextResponse.redirect(target)
   })
   const status = extractStatus(value)
   logAuthMetric('auth:signIn', { ms, status })
@@ -117,7 +119,9 @@ export const signIn = async (provider?: string) => {
 export const signOut = async () => {
   const missing = getMissingAuthEnv()
   if (missing.length > 0) return NextResponse.json({ error: 'Missing auth env', missing }, { status: 503 })
-  const { ms, value } = await measure(() => NextResponse.redirect('/portal/api/auth/signout'))
+  const base = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
+  const target = `${base.replace(/\/$/, '')}/portal/api/auth/signout`
+  const { ms, value } = await measure(() => NextResponse.redirect(target))
   const status = extractStatus(value)
   logAuthMetric('auth:signOut', { ms, status })
   return value
