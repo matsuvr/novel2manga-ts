@@ -4,8 +4,8 @@ import { appConfig } from '@/config/app.config'
 // Spy for drawImage to assert scaled dimensions
 const drawImageSpy = vi.fn()
 
-// Mock the 'canvas' module BEFORE importing renderer pipeline
-vi.mock('canvas', () => {
+// Mock the '@napi-rs/canvas' module BEFORE importing renderer pipeline
+vi.mock('@napi-rs/canvas', () => {
   const ctx = {
     fillStyle: '#fff',
     strokeStyle: '#000',
@@ -43,6 +43,7 @@ vi.mock('canvas', () => {
       return canvas as unknown as HTMLCanvasElement
     },
     Image: class {},
+    loadImage: vi.fn(),
   }
 })
 
@@ -73,7 +74,7 @@ describe.skip('integration: vertical text drawImage bounds and concurrency', () 
     // Oversized image; stub Image creation to return same size
     const canvasMod = await import('@/lib/canvas/canvas-renderer')
     // @ts-expect-error test shim
-    canvasMod.CanvasRenderer.createImageFromBuffer = vi.fn().mockReturnValue({
+    canvasMod.CanvasRenderer.createImageFromBuffer = vi.fn().mockResolvedValue({
       image: { __img: true },
       width: 800,
       height: 1200,
@@ -142,7 +143,7 @@ pages:
 
     const canvasMod = await import('@/lib/canvas/canvas-renderer')
     // @ts-expect-error test shim
-    canvasMod.CanvasRenderer.createImageFromBuffer = vi.fn().mockReturnValue({
+    canvasMod.CanvasRenderer.createImageFromBuffer = vi.fn().mockResolvedValue({
       image: { __img: true },
       width: 120,
       height: 300,

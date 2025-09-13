@@ -168,6 +168,10 @@ const img = await loadImage(buffer) // buffer | path | URL supported
 
 ---
 
+## Implementation Status
+
+See `docs/napi-rs-canvas-migrant.tasks.md` for the current task checklist. The core renderer now relies on `@napi-rs/canvas` and tests mock this module accordingly.
+
 If you want, I can turn this into a PR-ready branch plan (commits per task), or generate the **vitest mocks** for `@napi-rs/canvas` so your agent can drop them in.
 
 [1]: https://www.npmjs.com/package/%40napi-rs/canvas/v/0.1.44?utm_source=chatgpt.com '@napi-rs/canvas - npm'
