@@ -44,9 +44,15 @@ export async function createTestDatabase(): Promise<TestDatabase> {
         Partial<Pick<schema.NewNovel, 'author' | 'originalTextPath' | 'language' | 'metadataPath'>>,
     ): Promise<string> {
       const id = crypto.randomUUID()
+      const userId = 'test-user-bypass'
+      // Ensure default user exists to satisfy FK
+      await db
+        .insert(schema.users)
+        .values({ id: userId, name: 'Test User', email: `${userId}@test.local` })
+        .onConflictDoNothing()
       await db.insert(schema.novels).values({
         id,
-        userId: 'anonymous',
+        userId,
         title: novel.title,
         author: novel.author || null,
         originalTextPath: novel.originalTextPath || null,
@@ -61,11 +67,17 @@ export async function createTestDatabase(): Promise<TestDatabase> {
       novel: Pick<schema.NewNovel, 'title' | 'textLength'> &
         Partial<Pick<schema.NewNovel, 'author' | 'originalTextPath' | 'language' | 'metadataPath'>>,
     ): Promise<void> {
+      const userId = 'test-user-bypass'
+      // Ensure default user exists to satisfy FK
+      await db
+        .insert(schema.users)
+        .values({ id: userId, name: 'Test User', email: `${userId}@test.local` })
+        .onConflictDoNothing()
       await db
         .insert(schema.novels)
         .values({
           id,
-          userId: 'anonymous',
+          userId,
           title: novel.title,
           author: novel.author || null,
           originalTextPath: novel.originalTextPath || null,
@@ -87,6 +99,12 @@ export async function createTestDatabase(): Promise<TestDatabase> {
       status?: 'pending' | 'processing' | 'completed' | 'failed' | 'paused'
     }) {
       const id = payload.id || crypto.randomUUID()
+      const userId = (payload as any).userId ?? 'test-user-bypass'
+      // Ensure user exists before inserting job to satisfy FK
+      await db
+        .insert(schema.users)
+        .values({ id: userId, name: 'Test User', email: `${userId}@test.local` })
+        .onConflictDoNothing()
       await db.insert(schema.jobs).values({
         id,
         novelId: payload.novelId,
@@ -94,6 +112,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
         status: payload.status || 'processing',
         currentStep: 'initialized',
         totalChunks: payload.totalChunks || 0,
+        userId,
       })
       return id
     },
@@ -278,12 +297,19 @@ export class TestDataFactory {
   constructor(private db: ReturnType<typeof drizzle>) {}
 
   async createNovel(overrides: Partial<typeof schema.novels.$inferInsert> = {}) {
+    const userId = overrides.userId || 'test-user-bypass'
+    // Ensure user exists for FK
+    await this.db
+      .insert(schema.users)
+      .values({ id: userId, name: 'Test User', email: `${userId}@test.local` })
+      .onConflictDoNothing()
+
     const novel = {
       id: crypto.randomUUID(),
       title: 'Test Novel',
       textLength: 1000,
       language: 'ja' as const,
-      userId: 'anonymous' as const,
+      userId: userId as const,
       ...overrides,
     }
 
@@ -292,9 +318,17 @@ export class TestDataFactory {
   }
 
   async createJob(overrides: Partial<typeof schema.jobs.$inferInsert> = {}) {
+    const userId = overrides.userId || 'test-user-bypass'
+    // Ensure user exists for FK
+    await this.db
+      .insert(schema.users)
+      .values({ id: userId, name: 'Test User', email: `${userId}@test.local` })
+      .onConflictDoNothing()
+
     const job = {
       id: crypto.randomUUID(),
       novelId: overrides.novelId || 'test-novel-default',
+      userId,
       status: 'processing' as const,
       currentStep: 'initialized' as const,
       ...overrides,

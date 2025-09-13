@@ -1,5 +1,5 @@
 import { getStoragePorts } from '@/infrastructure/storage/ports'
-import { db } from '@/services/database/index'
+import { db } from '@/services/database'
 
 type JobStep = 'initialized' | 'split' | 'analyze' | 'episode' | 'layout' | 'render' | 'complete'
 

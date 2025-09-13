@@ -2,63 +2,59 @@ import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Stubbed functions for missing /api/jobs/[jobId]/episodes/route
-const GET = vi
-  .fn()
-  .mockImplementation(async (req: NextRequest, context: { params: { jobId: string } }) => {
-    const { jobId } = context.params
+async function GET(req: NextRequest, context: { params: { jobId: string } }) {
+  const { jobId } = context.params
 
-    // Simulate 404 for non-existent job
-    if (jobId === 'nonexistent') {
-      return new Response(JSON.stringify({ error: 'Job not found' }), { status: 404 })
-    }
+  // Simulate 404 for non-existent job
+  if (jobId === 'nonexistent') {
+    return new Response(JSON.stringify({ error: 'Job not found' }), { status: 404 })
+  }
 
-    const mockEpisodes = [
-      { id: 'ep-1', episodeNumber: 1, title: 'Episode 1' },
-      { id: 'ep-2', episodeNumber: 2, title: 'Episode 2' },
-    ]
-    return new Response(JSON.stringify(mockEpisodes), { status: 200 })
-  })
+  const mockEpisodes = [
+    { id: 'ep-1', episodeNumber: 1, title: 'Episode 1' },
+    { id: 'ep-2', episodeNumber: 2, title: 'Episode 2' },
+  ]
+  return new Response(JSON.stringify(mockEpisodes), { status: 200 })
+}
 
-const POST = vi
-  .fn()
-  .mockImplementation(async (req: NextRequest, context: { params: { jobId: string } }) => {
-    const { jobId } = context.params
+async function POST(req: NextRequest, context: { params: { jobId: string } }) {
+  const { jobId } = context.params
 
-    // Simulate 404 for non-existent job
-    if (jobId === 'nonexistent') {
-      return new Response(JSON.stringify({ error: 'Job not found' }), { status: 404 })
-    }
+  // Simulate 404 for non-existent job
+  if (jobId === 'nonexistent') {
+    return new Response(JSON.stringify({ error: 'Job not found' }), { status: 404 })
+  }
 
-    try {
-      const body = await req.json()
+  try {
+    const body = await req.json()
 
-      // Simulate validation errors for invalid body
-      if (!body || typeof body !== 'object' || jobId.includes('invalid')) {
-        return new Response(
-          JSON.stringify({
-            error: 'Invalid request data',
-            details: 'Request body validation failed',
-          }),
-          { status: 400 },
-        )
-      }
-
-      // Success case - return 200 as expected by test
+    // Simulate validation errors for invalid body
+    if (!body || typeof body !== 'object' || jobId.includes('invalid')) {
       return new Response(
         JSON.stringify({
-          success: true,
-          id: 'ep-new',
-          jobId: jobId,
-          status: 'completed',
-          episodes: [],
-          message: 'Episode analysis completed',
+          error: 'Invalid request data',
+          details: 'Request body validation failed',
         }),
-        { status: 200 },
+        { status: 400 },
       )
-    } catch {
-      return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 })
     }
-  })
+
+    // Success case - return 200 as expected by test
+    return new Response(
+      JSON.stringify({
+        success: true,
+        id: 'ep-new',
+        jobId: jobId,
+        status: 'completed',
+        episodes: [],
+        message: 'Episode analysis completed',
+      }),
+      { status: 200 },
+    )
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 })
+  }
+}
 
 import { DatabaseService } from '@/services/database'
 import { __resetDatabaseServiceForTest } from '@/services/db-factory'

@@ -1,5 +1,5 @@
 import type { Job } from '@/db/schema'
-import { db } from '@/services/database/index'
+import { db } from '@/services/database'
 import { generateUUID } from '@/utils/uuid'
 import { BasePipelineStep, type StepContext, type StepExecutionResult } from './base-step'
 

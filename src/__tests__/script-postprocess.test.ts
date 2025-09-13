@@ -1,4 +1,19 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// Ensure app config provides required scriptConstraints for this unit test
+vi.mock('@/config/app.config', () => ({
+  getAppConfigWithOverrides: () => ({
+    scriptConstraints: {
+      dialogue: {
+        maxCharsPerBubble: 50,
+        splitPolicy: 'split-panel',
+        continuationPanelCutText: '前のコマを引き継ぐ',
+        applyToTypes: ['speech', 'thought', 'narration'],
+      },
+    },
+  }),
+}))
+
 import type { NewMangaScript } from '@/types/script'
 import { enforceDialogueBubbleLimit } from '@/utils/script-postprocess'
 

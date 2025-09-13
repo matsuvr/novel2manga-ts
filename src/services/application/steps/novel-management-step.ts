@@ -1,4 +1,4 @@
-import { db } from '@/services/database/index'
+import { db } from '@/services/database'
 import { ApiError } from '@/utils/api-error'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 

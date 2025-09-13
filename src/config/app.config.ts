@@ -732,6 +732,15 @@ export function getAppConfigWithOverrides(): AppConfig {
     config.development.enableErrorDetails = true
   }
 
+  // Episode bundling overrides for tests/CI
+  if (process.env.APP_EPISODE_BUNDLING_ENABLED !== undefined) {
+    config.episodeBundling.enabled = process.env.APP_EPISODE_BUNDLING_ENABLED === 'true'
+  }
+  if (process.env.APP_EPISODE_BUNDLING_MIN_PAGE_COUNT) {
+    const v = parseInt(process.env.APP_EPISODE_BUNDLING_MIN_PAGE_COUNT, 10)
+    if (!Number.isNaN(v) && v > 0) config.episodeBundling.minPageCount = v
+  }
+
   // Vertical text feature flags / overrides (no secrets here)
   if (process.env.APP_RENDER_VERTICAL_TEXT_ENABLED !== undefined) {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-boolean-literal-compare
@@ -754,6 +763,20 @@ export function getAppConfigWithOverrides(): AppConfig {
     if (!Number.isNaN(v) && v > 0) {
       config.rendering.verticalText.defaults.maxCharsPerLine = v
     }
+  }
+
+  // Episode constraints overrides (for tests/CI)
+  if (process.env.APP_EPISODE_SMALL_PANEL_THRESHOLD) {
+    const v = parseInt(process.env.APP_EPISODE_SMALL_PANEL_THRESHOLD, 10)
+    if (!Number.isNaN(v) && v >= 0) config.processing.episode.smallPanelThreshold = v
+  }
+  if (process.env.APP_EPISODE_MIN_PANELS_PER_EPISODE) {
+    const v = parseInt(process.env.APP_EPISODE_MIN_PANELS_PER_EPISODE, 10)
+    if (!Number.isNaN(v) && v > 0) config.processing.episode.minPanelsPerEpisode = v
+  }
+  if (process.env.APP_EPISODE_MAX_PANELS_PER_EPISODE) {
+    const v = parseInt(process.env.APP_EPISODE_MAX_PANELS_PER_EPISODE, 10)
+    if (!Number.isNaN(v) && v > 0) config.processing.episode.maxPanelsPerEpisode = v
   }
 
   return config

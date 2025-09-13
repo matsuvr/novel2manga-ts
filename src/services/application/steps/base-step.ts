@@ -1,6 +1,6 @@
 import type { LoggerPort } from '@/infrastructure/logging/logger'
 import type { StoragePorts } from '@/infrastructure/storage/ports'
-import { db } from '@/services/database/index'
+import { db } from '@/services/database'
 import type { JobStatus, JobStep } from '@/types/job'
 
 /**
@@ -104,6 +104,23 @@ export abstract class BasePipelineStep implements PipelineStep {
     try {
       db.jobs().updateJobStatus(jobId, status, errorMessage)
       context.logger.info('Job status updated', { jobId, status, errorMessage })
+
+      // Send notification for completed or failed jobs
+      if (status === 'completed' || status === 'failed') {
+        // Import and call notification service asynchronously
+        // Don't await to avoid blocking job processing
+        import('@/services/notification/integration')
+          .then(({ sendJobNotification }) => {
+            sendJobNotification(jobId, status as 'completed' | 'failed', errorMessage)
+          })
+          .catch((error) => {
+            context.logger.error('Failed to send job notification', {
+              jobId,
+              status,
+              error: String(error),
+            })
+          })
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       context.logger.error('Failed to update job status', { jobId, status, error: message })

@@ -2,10 +2,14 @@ import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { JobResumeService } from '@/services/application/job-resume-service'
+import { db } from '@/services/database'
+import { withAuth } from '@/utils/api-auth'
 import {
   createErrorResponse,
   createSuccessResponse,
   extractErrorMessage,
+  ForbiddenError,
+  NotFoundError,
   ValidationError,
 } from '@/utils/api-error'
 
@@ -13,7 +17,7 @@ const resumeRequestSchema = z.object({
   novelId: z.string().uuid(),
 })
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, user) => {
   const _logger = getLogger().withContext({
     route: 'api/resume',
     method: 'POST',
@@ -42,6 +46,15 @@ export async function POST(request: NextRequest) {
     const { novelId } = parsed.data
     _logger.info('Resume request received', { novelId })
 
+    // ユーザー所有権チェック
+    const novel = await db.novels().getNovel(novelId)
+    if (!novel) {
+      return createErrorResponse(new NotFoundError('指定された小説が見つかりません'))
+    }
+    if (novel.userId && novel.userId !== user.id) {
+      return createErrorResponse(new ForbiddenError('アクセス権限がありません'))
+    }
+
     const resumeService = new JobResumeService()
     const result = await resumeService.resumeByNovelId(novelId)
 
@@ -59,4 +72,4 @@ export async function POST(request: NextRequest) {
     })
     return createErrorResponse(error, 'ジョブの再開中にエラーが発生しました')
   }
-}
+})

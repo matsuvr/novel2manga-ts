@@ -1,8 +1,9 @@
+import crypto from 'node:crypto'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import type { RenderStatus } from '@/db/schema'
-import { jobs, renderStatus } from '@/db/schema'
+import { jobs, outputs, renderStatus } from '@/db/schema'
 import { BaseDatabaseService } from './base-database-service'
 
 type DrizzleDatabase = BetterSQLite3Database<typeof schema>
@@ -28,6 +29,46 @@ export class RenderDatabaseService extends BaseDatabaseService {
           eq(renderStatus.pageNumber, pageNumber),
         ),
       )
+  }
+
+  /**
+   * Create a render entry (placeholder) for a job and return the generated id
+   */
+  async createRenderEntry(params: {
+    jobId: string
+    pageCount: number
+    requestedBy: string
+    settings?: unknown
+  }): Promise<string> {
+    const id = crypto.randomUUID()
+    const now = new Date().toISOString()
+
+    const record: typeof outputs.$inferInsert = {
+      id,
+      novelId: null as unknown as string,
+      jobId: params.jobId,
+      userId: params.requestedBy,
+      outputType: 'render',
+      outputPath: null as unknown as string,
+      fileSize: null as unknown as number,
+      pageCount: params.pageCount,
+      metadataPath: null as unknown as string,
+      createdAt: now,
+    }
+
+    if (this.isSync()) {
+      const drizzleDb = this.db as DrizzleDatabase
+      drizzleDb.transaction((tx) => {
+        // Use outputs table as a placeholder for render entries
+        tx.insert(outputs).values(record).run()
+      })
+    } else {
+      await this.adapter.transaction(async (tx: DrizzleDatabase) => {
+        await tx.insert(outputs).values(record)
+      })
+    }
+
+    return id
   }
   /**
    * Get render status for a specific page
