@@ -51,9 +51,9 @@ export const signIn = async (provider?: string) => {
   const missingResponse = respondIfMissingAuthEnv('Missing auth env')
   if (missingResponse) return missingResponse
   const base = getNextAuthBaseUrl()
-  const target = base
-    ? `${base}${authConfig.basePath}/signin${provider ? `?provider=${provider}` : ''}`
-    : `${authConfig.basePath}/signin${provider ? `?provider=${provider}` : ''}`
+  const target = `${base ?? ''}${authConfig.basePath}/signin${
+    provider ? `?provider=${provider}` : ''
+  }`
   const { ms, value } = await measure(() => {
     return NextResponse.redirect(target)
   })
@@ -66,7 +66,7 @@ export const signOut = async () => {
   const missingResponse = respondIfMissingAuthEnv('Missing auth env')
   if (missingResponse) return missingResponse
   const base = getNextAuthBaseUrl()
-  const target = base ? `${base}${authConfig.basePath}/signout` : `${authConfig.basePath}/signout`
+  const target = `${base ?? ''}${authConfig.basePath}/signout`
   const { ms, value } = await measure(() => NextResponse.redirect(target))
   const status = extractStatus(value)
   logAuthMetric('auth:signOut', { ms, status })
