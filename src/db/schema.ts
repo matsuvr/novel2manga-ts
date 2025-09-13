@@ -88,6 +88,10 @@ export const users = sqliteTable('user', {
   emailVerified: integer('emailVerified', { mode: 'timestamp_ms' }),
   image: text('image'),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  // User settings for authentication dashboard
+  emailNotifications: integer('email_notifications', { mode: 'boolean' }).default(true),
+  theme: text('theme', { enum: ['light', 'dark'] }).default('light'),
+  language: text('language', { enum: ['ja', 'en', 'zh-TW'] }).default('ja'),
 })
 
 // 小説テーブル（最上位エンティティ）
@@ -103,6 +107,7 @@ export const novels = sqliteTable(
     metadataPath: text('metadata_path'),
     userId: text('user_id')
       .notNull()
+      .default('anonymous')
       .references(() => users.id, { onDelete: 'cascade' }),
     createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
@@ -122,7 +127,10 @@ export const jobs = sqliteTable(
       .notNull()
       .references(() => novels.id, { onDelete: 'cascade' }),
     jobName: text('job_name'),
-    userId: text('user_id').notNull().default('anonymous'),
+    userId: text('user_id')
+      .notNull()
+      .default('anonymous')
+      .references(() => users.id, { onDelete: 'cascade' }),
 
     // ステータス管理
     status: text('status').notNull().default('pending'), // pending/processing/completed/failed/paused
@@ -371,6 +379,9 @@ export const storageFiles = sqliteTable(
       .notNull()
       .references(() => novels.id, { onDelete: 'cascade' }),
     jobId: text('job_id').references(() => jobs.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     filePath: text('file_path').notNull().unique(),
     fileCategory: text('file_category').notNull(), // original/chunk/analysis/episode/layout/render/output/metadata
     fileType: text('file_type').notNull(), // txt/json/yaml/png/jpg/pdf/zip
@@ -380,6 +391,7 @@ export const storageFiles = sqliteTable(
   },
   (table) => ({
     novelIdIdx: index('idx_storage_files_novel_id').on(table.novelId),
+    userIdIdx: index('idx_storage_files_user_id').on(table.userId),
   }),
 )
 
@@ -456,6 +468,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   authenticators: many(authenticators),
   novels: many(novels),
   jobs: many(jobs),
+  storageFiles: many(storageFiles),
 }))
 
 export const accountsRelations = relations(accounts, ({ one }) => ({
@@ -541,6 +554,10 @@ export const storageFilesRelations = relations(storageFiles, ({ one }) => ({
   job: one(jobs, {
     fields: [storageFiles.jobId],
     references: [jobs.id],
+  }),
+  user: one(users, {
+    fields: [storageFiles.userId],
+    references: [users.id],
   }),
 }))
 

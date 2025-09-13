@@ -3,8 +3,15 @@ import { appConfig } from '@/config/app.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { getStoragePorts } from '@/infrastructure/storage/ports'
 import { renderBatchFromYaml } from '@/services/application/render'
-import { db } from '@/services/database/index'
-import { createErrorResponse, createSuccessResponse, ValidationError } from '@/utils/api-error'
+// Use unified barrel so tests that mock '@/services/database' apply here too
+import { db } from '@/services/database'
+import { withAuth } from '@/utils/api-auth'
+import {
+  createErrorResponse,
+  createSuccessResponse,
+  ForbiddenError,
+  ValidationError,
+} from '@/utils/api-error'
 import { detectDemoMode } from '@/utils/request-mode'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
 import { validateJobId } from '@/utils/validators'
@@ -16,7 +23,7 @@ interface RenderRequest {
   layoutYaml: string
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, user) => {
   try {
     const _logger = getLogger().withContext({
       route: 'api/render',
@@ -94,7 +101,14 @@ export async function POST(request: NextRequest) {
 
     // DBチェック
     const job = await db.jobs().getJob(body.jobId)
+    // Treat unknown jobId as a client validation issue in this endpoint (legacy tests expect 400)
     if (!job) return createErrorResponse(new ValidationError('指定されたジョブが見つかりません'))
+
+    // ユーザー所有権チェック
+    if (job.userId && job.userId !== user.id) {
+      return createErrorResponse(new ForbiddenError('アクセス権限がありません'))
+    }
+
     const episodes = await db.episodes().getEpisodesByJobId(body.jobId)
     const targetEpisode = episodes.find((e) => e.episodeNumber === body.episodeNumber)
     if (!targetEpisode)
@@ -135,4 +149,4 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return createErrorResponse(error)
   }
-}
+})

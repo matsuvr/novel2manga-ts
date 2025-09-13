@@ -1,5 +1,5 @@
 import { COVERAGE_MESSAGES } from '@/constants/messages'
-import { db } from '@/services/database/index'
+import { db } from '@/services/database'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface ScriptMergeResult {

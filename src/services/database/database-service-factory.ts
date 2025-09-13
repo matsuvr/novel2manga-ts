@@ -193,16 +193,249 @@ export function initializeDatabaseServiceFactory(
 ): void {
   // Clean up existing factory if it exists
   if (globalFactory) {
-    cleanup()
+    // Avoid closing the existing factory's raw DB here. In test environments
+    // multiple test suites may initialize the factory concurrently with
+    // different sqlite handles. Calling cleanup() will close the other
+    // suites' connections and cause "The database connection is not open"
+    // errors. Instead, drop our reference and allow the test harness (which
+    // manages TestDatabase lifecycles) to close DBs explicitly.
+    console.warn(
+      'initializeDatabaseServiceFactory: replacing existing globalFactory without closing raw DB (test-safe)',
+    )
+    globalFactory = null
   }
 
   // Handle both connection objects and legacy database instances
-  if ('adapter' in connectionOrDb) {
-    // It's a DatabaseConnection
-    globalFactory = new DatabaseServiceFactory(connectionOrDb)
-  } else {
-    // It's a legacy database instance - create adapter automatically
+  // Defensive normalization: some tests may pass a raw better-sqlite3 handle or a drizzle-like
+  // object that lacks runtime helpers (transaction/schema). Detect common cases and normalize
+  // to a proper DatabaseConnection<DrizzleDatabase> before constructing the factory.
+  const maybeConn = connectionOrDb as unknown
+
+  // Diagnostic logging: print a compact shape summary to help locate where invalid dbs originate
+  try {
+    const shapeSummary = (() => {
+      const out: Record<string, unknown> = {}
+      out.typeof = typeof connectionOrDb
+      if (connectionOrDb && typeof connectionOrDb === 'object') {
+        const asObj = connectionOrDb as unknown as Record<string, unknown>
+        out.keys = Object.keys(asObj)
+        out.hasTransaction =
+          typeof (asObj as unknown as { transaction?: unknown }).transaction === 'function'
+        out.hasSchema = 'schema' in asObj
+        if ('adapter' in asObj) {
+          try {
+            const adapter = (asObj as unknown as Record<string, unknown>).adapter
+            out.adapterType =
+              adapter && (adapter as { constructor?: { name?: string } })
+                ? (adapter as { constructor?: { name?: string } }).constructor?.name
+                : typeof adapter
+            out.adapterHasIsSync = !!(
+              adapter && typeof (adapter as { isSync?: unknown }).isSync === 'function'
+            )
+            out.adapterHasDb = !!(
+              adapter &&
+              (adapter as unknown) &&
+              (adapter as unknown as Record<string, unknown>).db
+            )
+            if ((adapter as unknown as Record<string, unknown>).db) {
+              const adapterDb = (adapter as unknown as Record<string, unknown>)
+                .db as unknown as Record<string, unknown>
+              out.adapterDbKeys = Object.keys(adapterDb)
+              out.adapterDbHasTransaction =
+                typeof (adapterDb as unknown as { transaction?: unknown }).transaction ===
+                'function'
+            }
+          } catch (_e) {
+            // ignore
+          }
+        }
+      }
+      return out
+    })()
+    // Use console.info so test output surfaces during CI runs
+    // Keep message compact to avoid huge logs
+    console.info('DB factory init shape:', JSON.stringify(shapeSummary))
+  } catch (_e) {
+    // best-effort logging only
+  }
+
+  // If it's already a DatabaseConnection with adapter, try to normalize it.
+  if (
+    maybeConn &&
+    typeof maybeConn === 'object' &&
+    'adapter' in (maybeConn as unknown as Record<string, unknown>)
+  ) {
+    const conn = maybeConn as DatabaseConnection<Database>
+
+    // 1) If conn.db already looks like a drizzle instance, prefer it.
+    try {
+      if (
+        conn.db &&
+        typeof (conn.db as unknown as { transaction?: unknown }).transaction === 'function'
+      ) {
+        // If the provided conn.db looks drizzle-like but doesn't expose
+        // a wrapped schema, avoid mutating it by attaching the raw module
+        // schema. Instead, try to create a fresh drizzle wrapper from the
+        // underlying sqlite handle and replace conn.db with that wrapped
+        // instance so the factory receives a canonical Drizzle DB with
+        // internal Symbols intact.
+        if (!('schema' in (conn.db as unknown as Record<string, unknown>))) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const schemaMod = require('@/db/schema')
+            const maybeDb = conn.db as unknown as Record<string, unknown>
+            const candidateRaw = maybeDb && (maybeDb.sqlite || maybeDb.db || maybeDb.client)
+            if (
+              candidateRaw &&
+              typeof candidateRaw === 'object' &&
+              candidateRaw !== null &&
+              'prepare' in candidateRaw &&
+              typeof (candidateRaw as { prepare: unknown }).prepare === 'function'
+            ) {
+              try {
+                const { drizzle } = require('drizzle-orm/better-sqlite3')
+                const wrapped = drizzle(candidateRaw, { schema: schemaMod })
+                // Replace conn.db with the wrapped instance rather than
+                // mutating the existing object. Keep adapter as-is.
+                ;(conn as unknown as Record<string, unknown>).db = wrapped
+              } catch (wrapErr) {
+                // If wrapping fails, fall back to leaving conn.db untouched
+                console.warn(
+                  'initializeDatabaseServiceFactory: failed to create wrapped dripzzle instance, leaving conn.db as-is',
+                  wrapErr,
+                )
+              }
+            } else {
+              // No raw handle available: safest course is to leave conn.db as-is
+            }
+          } catch (_e) {
+            // best-effort: leave conn.db unchanged
+          }
+        }
+        globalFactory = new DatabaseServiceFactory(conn)
+        console.info('DB factory: using conn.db as-is')
+        // final runtime assertion happens below
+        // return after assignment
+        // but do not return here; fall through to final assertion block
+      } else if (conn.adapter) {
+        // 2) if adapter contains the real db, prefer adapter.db
+        const adapterAny = conn.adapter as unknown as Record<string, unknown>
+        if (
+          adapterAny?.db &&
+          typeof (adapterAny.db as unknown as Record<string, unknown>).transaction === 'function'
+        ) {
+          const fixedConn: DatabaseConnection<Database> = {
+            db: adapterAny.db as Database,
+            adapter: conn.adapter,
+          }
+          // ensure schema attached without overwriting wrapped schema
+          try {
+            if (!('schema' in (fixedConn.db as unknown as Record<string, unknown>))) {
+              // eslint-disable-next-line @typescript-eslint/no-var-requires
+              const schemaMod = require('@/db/schema')
+              Object.defineProperty(fixedConn.db as unknown as Record<string, unknown>, 'schema', {
+                value: schemaMod,
+                enumerable: false,
+                configurable: true,
+                writable: false,
+              })
+            }
+          } catch {
+            // ignore
+          }
+          globalFactory = new DatabaseServiceFactory(fixedConn)
+          console.info('DB factory: using adapter.db')
+        } else if (conn.db) {
+          // conn.db exists but isn't drizzle-like. We avoid trying to re-wrap
+          // arbitrary conn.db here because type/signature mismatches can occur.
+          // Prefer adapter.db or other normalization strategies above.
+          console.info('DB factory: conn.db present but not drizzle-like; skipping unsafe wrap')
+        }
+      }
+
+      // If we didn't set globalFactory yet, fall through to later attempts / error
+      if (globalFactory) return
+    } catch {
+      // ignore and try other normalization strategies below
+    }
+  }
+
+  // If it's a drizzle BetterSQLite3Database instance with transaction method, use it
+  const isDrizzleLike = (obj: unknown): obj is DrizzleDatabase => {
+    try {
+      if (!obj || typeof obj !== 'object') return false
+      const asUnknown = obj as unknown
+      // Narrow via unknown to satisfy TS strict checks
+      return typeof (asUnknown as { transaction?: unknown }).transaction === 'function'
+    } catch {
+      return false
+    }
+  }
+
+  if (isDrizzleLike(connectionOrDb)) {
+    // It's a drizzle-compatible instance
     globalFactory = DatabaseServiceFactory.fromDatabase(connectionOrDb as DrizzleDatabase)
+    return
+  }
+
+  // We intentionally avoid attempting to wrap arbitrary objects using drizzle here.
+  // Normalization is handled via:
+  //  - prefer conn.db when it's drizzle-like
+  //  - prefer conn.adapter.db when present and drizzle-like
+  //  - accept a direct drizzle instance via isDrizzleLike
+  // Tests should ensure they pass a proper drizzle instance (TestDatabaseManager guarantees this).
+
+  // If we reach here and still don't have a factory, provide a more informative error
+  if (!globalFactory) {
+    // Attempt to print the shape of the provided value for easier debugging
+    try {
+      const asObj = connectionOrDb as unknown as Record<string, unknown>
+      const summary: Record<string, unknown> = { typeof: typeof connectionOrDb }
+      if (asObj && typeof asObj === 'object') {
+        summary.keys = Object.keys(asObj)
+        summary.hasTransaction =
+          typeof (asObj as unknown as Record<string, unknown>).transaction === 'function'
+        summary.hasSchema = 'schema' in asObj
+      }
+      console.error(
+        'initializeDatabaseServiceFactory cannot normalize connection. shape:',
+        JSON.stringify(summary),
+      )
+    } catch (_e) {
+      // ignore
+    }
+    throw new Error(
+      'initializeDatabaseServiceFactory received unsupported database/connection shape',
+    )
+  }
+
+  // Final runtime assertion: ensure the created globalFactory has a raw database that exposes transaction and schema
+  try {
+    const raw = globalFactory.getRawDatabase() as unknown as Record<string, unknown>
+    if (
+      !raw ||
+      typeof raw !== 'object' ||
+      typeof (raw as unknown as Record<string, unknown>).transaction !== 'function' ||
+      !('schema' in raw)
+    ) {
+      const shape = {
+        keys: raw && typeof raw === 'object' ? Object.keys(raw) : null,
+        hasTransaction:
+          raw && typeof (raw as unknown as Record<string, unknown>).transaction === 'function',
+        hasSchema: raw && raw && 'schema' in raw,
+      }
+      throw new Error(
+        `DatabaseFactory initialization produced invalid raw database: ${JSON.stringify(shape)}`,
+      )
+    }
+  } catch (err) {
+    // If assertion fails, clean up and rethrow for faster feedback in CI/tests
+    try {
+      cleanup()
+    } catch (cleanupErr) {
+      console.warn('cleanup after failed DB init also failed:', cleanupErr)
+    }
+    throw err
   }
 }
 
@@ -225,13 +458,65 @@ export function getDatabaseServiceFactory(): DatabaseServiceFactory {
 export function cleanup(): void {
   if (globalFactory) {
     const raw = globalFactory.getRawDatabase() as unknown
-    if (
-      raw &&
-      typeof raw === 'object' &&
-      'close' in raw &&
-      typeof (raw as { close: unknown }).close === 'function'
-    ) {
-      ;(raw as { close: () => void }).close()
+    // In test environments, TestDatabaseManager is responsible for closing
+    // sqlite handles. If we close the raw DB here, other test suites that
+    // share the global factory may fail with "The database connection is not open".
+    // Therefore, avoid closing the raw DB when running under tests and
+    // only clear the in-memory factory reference. The TestDatabaseManager
+    // cleanup routines will handle actual sqlite.close() calls.
+    try {
+      // In test environments, TestDatabaseManager is responsible for closing sqlite handles.
+      if (process.env.NODE_ENV === 'test') {
+        console.info(
+          'cleanup(): skipping raw DB close in test environment (delegated to TestDatabaseManager)',
+        )
+      } else {
+        // Extra guard: if the raw handle carries a test-suite ownership marker,
+        // avoid closing it even in non-test envs to be conservative. This protects
+        // against accidental leakage of test handles into other contexts.
+        try {
+          const ownerMarker =
+            raw && typeof raw === 'object'
+              ? (raw as unknown as Record<string, unknown>).__testSuiteName
+              : undefined
+          if (ownerMarker) {
+            console.warn(
+              `cleanup(): raw DB appears to be owned by test suite (${String(ownerMarker)}); skipping close for safety`,
+            )
+          } else if (
+            raw &&
+            typeof raw === 'object' &&
+            'close' in raw &&
+            typeof (raw as { close: unknown }).close === 'function'
+          ) {
+            ;(raw as { close: () => void }).close()
+          }
+        } catch (_guardErr) {
+          // If introspection fails, attempt best-effort close as before
+          try {
+            if (
+              raw &&
+              typeof raw === 'object' &&
+              'close' in raw &&
+              typeof (raw as { close: unknown }).close === 'function'
+            ) {
+              ;(raw as { close: () => void }).close()
+            }
+          } catch (_e) {
+            console.warn(
+              'database-service-factory.cleanup: failed to close raw DB after introspection error',
+              _e,
+            )
+          }
+        }
+      }
+    } catch (err) {
+      // best-effort: log and continue to clear factory reference
+      // eslint-disable-next-line no-console
+      console.warn(
+        'database-service-factory.cleanup: failed to close raw DB, continuing to clear factory',
+        err,
+      )
     }
     globalFactory = null
   }

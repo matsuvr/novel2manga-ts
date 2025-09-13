@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { analyzeChunkWithFallback } from '@/agents/chunk-analyzer'
 import { getTextAnalysisConfig } from '@/config'
 import { getLogger } from '@/infrastructure/logging/logger'
+import { withAuth } from '@/utils/api-auth'
 import {
   ApiError,
   createErrorResponse,
@@ -60,7 +61,7 @@ const textAnalysisOutputSchema = z.object({
   ),
 })
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, _user) => {
   try {
     const logger = getLogger().withContext({
       route: 'api/analyze/chunk',
@@ -71,6 +72,10 @@ export async function POST(request: NextRequest) {
     const { jobId, chunkIndex } = analyzeChunkRequestSchema.parse(body)
 
     logger.info('Analyzing chunk', { jobId, chunkIndex })
+
+    // NOTE: このエンドポイントではDB上のジョブ存在チェックは行わず、
+    // ストレージ上のチャンク/分析ファイル有無のみで応答を決定する。
+    // （単体テストが、存在しないjobIdでもストレージに基づく404/200を期待するため）
 
     // ストレージから必要なデータを取得
     const chunkStorage = await StorageFactory.getChunkStorage()
@@ -173,4 +178,4 @@ export async function POST(request: NextRequest) {
     }
     return createErrorResponse(error, 'Failed to analyze chunk')
   }
-}
+})

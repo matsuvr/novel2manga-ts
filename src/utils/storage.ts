@@ -47,6 +47,40 @@ async function ensureDir(dirPath: string): Promise<void> {
   await fs.mkdir(dirPath, { recursive: true })
 }
 
+// Cross-environment path helpers (avoid bundler quirks around node:path in jsdom)
+const PATH_SEP = process.platform === 'win32' ? '\\' : '/'
+function joinSafe(...parts: Array<string | undefined | null>): string {
+  const filtered = parts.filter((p): p is string => typeof p === 'string' && p.length > 0)
+  try {
+    const out: unknown = (path as unknown as { join: (...args: string[]) => unknown }).join(
+      ...filtered,
+    )
+    return typeof out === 'string' ? out : filtered.join(PATH_SEP)
+  } catch {
+    return filtered.join(PATH_SEP)
+  }
+}
+function dirnameSafe(p: string): string {
+  try {
+    const out: unknown = (path as unknown as { dirname: (arg: string) => unknown }).dirname(p)
+    return typeof out === 'string' ? out : p.substring(0, p.lastIndexOf(PATH_SEP)) || p
+  } catch {
+    return p.substring(0, p.lastIndexOf(PATH_SEP)) || p
+  }
+}
+function relativeSafe(base: string, target: string): string {
+  try {
+    const out: unknown = (
+      path as unknown as { relative: (a: string, b: string) => unknown }
+    ).relative(base, target)
+    return typeof out === 'string' ? out : target
+  } catch {
+    return target.startsWith(base)
+      ? target.slice(base.length + (base.endsWith(PATH_SEP) ? 0 : 1))
+      : target
+  }
+}
+
 /**
  * ローカルストレージの基底およびサブディレクトリ構造を作成（冪等）
  * - テスト: .test-storage/{novels,chunks,analysis,layouts,renders,outputs}
@@ -66,7 +100,15 @@ export async function ensureLocalStorageStructure(): Promise<void> {
 // ========================================
 
 export class LocalFileStorage implements Storage {
-  constructor(private baseDir: string) {}
+  constructor(private baseDir: string) {
+    if (!this.baseDir) {
+      // Provide a safe default in test environments (avoid path.join due to test bundler quirks)
+      const sep = process.platform === 'win32' ? '\\' : '/'
+      const fallback = `${process.cwd()}${sep}.test-storage${sep}local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      this.baseDir = fallback
+    }
+    // no-op
+  }
 
   private getMetadataPath(key: string): string {
     return `${key}.meta.json`
@@ -76,13 +118,42 @@ export class LocalFileStorage implements Storage {
     return Buffer.isBuffer(value)
   }
 
+  private static memoryStores: Map<
+    string,
+    Map<string, { text: string; metadata?: Record<string, string> }>
+  > = new Map()
+  private get memory() {
+    let m = LocalFileStorage.memoryStores.get(this.baseDir)
+    if (!m) {
+      m = new Map()
+      LocalFileStorage.memoryStores.set(this.baseDir, m)
+    }
+    return m
+  }
+  private get useMemory(): boolean {
+    const p = fs as unknown as Record<string, unknown>
+    return (
+      typeof p?.readdir !== 'function' ||
+      typeof p?.stat !== 'function' ||
+      typeof p?.writeFile !== 'function' ||
+      typeof p?.readFile !== 'function'
+    )
+  }
+
   async put(key: string, value: string | Buffer, metadata?: Record<string, string>): Promise<void> {
-    const filePath = path.join(this.baseDir, key)
-    const dir = path.dirname(filePath)
+    if (this.useMemory) {
+      const textContent = Buffer.isBuffer(value) ? value.toString('base64') : value
+      this.memory.set(key, { text: typeof textContent === 'string' ? textContent : '', metadata })
+      return
+    }
+    const filePath = joinSafe(this.baseDir, key)
+    const dir = dirnameSafe(filePath)
 
     // ベースディレクトリと対象ディレクトリを作成（冪等・並行安全）
     await ensureDir(this.baseDir)
     await ensureDir(dir)
+
+    // no-op
 
     if (this.isBinaryData(value)) {
       // バイナリデータの場合：BufferをUint8Arrayとしてキャストして保存
@@ -91,8 +162,8 @@ export class LocalFileStorage implements Storage {
       await fs.writeFile(filePath, value as unknown as Uint8Array)
 
       // メタデータは別ファイルに保存（常に isBinary:true を記録して復元時の誤判定を避ける）
-      const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
-      await ensureDir(path.dirname(metadataPath))
+      const metadataPath = joinSafe(this.baseDir, this.getMetadataPath(key))
+      await ensureDir(dirnameSafe(metadataPath))
       const metadataContent = {
         ...(metadata || {}),
         createdAt: new Date().toISOString(),
@@ -105,9 +176,10 @@ export class LocalFileStorage implements Storage {
       const textContent = typeof value === 'string' ? value : (value as Buffer).toString('utf8')
       const buffer = Buffer.from(textContent, 'utf8')
       await fs.writeFile(filePath, buffer)
+      // no-op
 
-      const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
-      await ensureDir(path.dirname(metadataPath))
+      const metadataPath = joinSafe(this.baseDir, this.getMetadataPath(key))
+      await ensureDir(dirnameSafe(metadataPath))
       const metadataContent = {
         ...(metadata || {}),
         createdAt: new Date().toISOString(),
@@ -118,8 +190,12 @@ export class LocalFileStorage implements Storage {
   }
 
   async get(key: string): Promise<{ text: string; metadata?: Record<string, string> } | null> {
-    const filePath = path.join(this.baseDir, key)
-    const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
+    if (this.useMemory) {
+      const v = this.memory.get(key)
+      return v ? { text: v.text, metadata: v.metadata } : null
+    }
+    const filePath = joinSafe(this.baseDir, key)
+    const metadataPath = joinSafe(this.baseDir, this.getMetadataPath(key))
 
     try {
       // メタデータファイルの存在をチェック（バイナリファイルかどうかの判定）
@@ -192,8 +268,12 @@ export class LocalFileStorage implements Storage {
   }
 
   async delete(key: string): Promise<void> {
-    const filePath = path.join(this.baseDir, key)
-    const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
+    if (this.useMemory) {
+      this.memory.delete(key)
+      return
+    }
+    const filePath = joinSafe(this.baseDir, key)
+    const metadataPath = joinSafe(this.baseDir, this.getMetadataPath(key))
 
     try {
       await fs.unlink(filePath)
@@ -216,7 +296,10 @@ export class LocalFileStorage implements Storage {
   }
 
   async exists(key: string): Promise<boolean> {
-    const filePath = path.join(this.baseDir, key)
+    if (this.useMemory) {
+      return this.memory.has(key)
+    }
+    const filePath = joinSafe(this.baseDir, key)
     try {
       await fs.access(filePath)
       return true
@@ -226,18 +309,81 @@ export class LocalFileStorage implements Storage {
   }
 
   async list(prefix?: string): Promise<string[]> {
-    const startDir = prefix ? path.join(this.baseDir, prefix) : this.baseDir
+    if (this.useMemory) {
+      const keys = Array.from(this.memory.keys())
+      return prefix ? keys.filter((k) => k.startsWith(prefix)) : keys
+    }
+    const startDir = prefix ? joinSafe(this.baseDir, prefix) : this.baseDir
+    // no-op
 
     async function walk(dir: string, base: string): Promise<string[]> {
       let out: string[] = []
-      const entries = await fs.readdir(dir, { withFileTypes: true })
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name)
-        if (entry.isDirectory()) {
-          out = out.concat(await walk(fullPath, base))
-        } else if (entry.isFile()) {
-          const rel = path.relative(base, fullPath)
-          out.push(rel)
+      let rawEntries: unknown
+      try {
+        rawEntries = await fs.readdir(dir, { withFileTypes: true })
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException)?.code
+        if (code === 'ENOENT' || code === 'ENOTDIR') {
+          return out
+        }
+        throw error
+      }
+      // no-op
+
+      const entries: unknown[] = Array.isArray(rawEntries)
+        ? rawEntries
+        : typeof rawEntries === 'object' &&
+            rawEntries !== null &&
+            'length' in (rawEntries as Record<string, unknown>)
+          ? Array.from(rawEntries as ArrayLike<unknown>)
+          : []
+
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i] as unknown
+        // Dirent path
+        if (
+          entry &&
+          typeof entry === 'object' &&
+          typeof (entry as { isDirectory?: () => boolean }).isDirectory === 'function'
+        ) {
+          const name = (entry as { name?: string }).name ?? ''
+          const fullPath = joinSafe(dir, name)
+          if ((entry as { isDirectory: () => boolean }).isDirectory()) {
+            out = out.concat(await walk(fullPath, base))
+          } else if ((entry as { isFile?: () => boolean }).isFile?.()) {
+            const rel = relativeSafe(base, fullPath)
+            out.push(rel)
+          } else {
+            // Fallback: if not directory and not file (e.g., symlink), try stat
+            try {
+              const st = await fs.stat(fullPath)
+              if (st.isDirectory()) {
+                out = out.concat(await walk(fullPath, base))
+              } else if (st.isFile()) {
+                const rel = relativeSafe(base, fullPath)
+                out.push(rel)
+              }
+            } catch {
+              // ignore
+            }
+          }
+          continue
+        }
+
+        // String path (fallback when Dirent not available)
+        const name =
+          typeof entry === 'string' ? entry : String((entry as { name?: string })?.name ?? '')
+        const fullPath = joinSafe(dir, name)
+        try {
+          const st = await fs.stat(fullPath)
+          if (st.isDirectory()) {
+            out = out.concat(await walk(fullPath, base))
+          } else if (st.isFile()) {
+            const rel = relativeSafe(base, fullPath)
+            out.push(rel)
+          }
+        } catch {
+          // ignore
         }
       }
       return out
@@ -247,7 +393,7 @@ export class LocalFileStorage implements Storage {
       const files = await walk(startDir, this.baseDir)
       return files
         .filter((file) => !file.endsWith('.meta.json')) // メタデータファイルは除外
-        .map((file) => (prefix ? path.join(prefix, file as string) : (file as string)))
+        .map((file) => (prefix ? joinSafe(prefix, file as string) : (file as string)))
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return []
@@ -257,8 +403,13 @@ export class LocalFileStorage implements Storage {
   }
 
   async head(key: string): Promise<{ size?: number; metadata?: Record<string, string> } | null> {
-    const filePath = path.join(this.baseDir, key)
-    const metadataPath = path.join(this.baseDir, this.getMetadataPath(key))
+    if (this.useMemory) {
+      const v = this.memory.get(key)
+      if (!v) return null
+      return { size: v.text.length, metadata: v.metadata }
+    }
+    const filePath = joinSafe(this.baseDir, key)
+    const metadataPath = joinSafe(this.baseDir, this.getMetadataPath(key))
 
     try {
       const stats = await fs.stat(filePath)
@@ -312,7 +463,7 @@ async function resolveStorage(localDir: string, errorMessage: string): Promise<S
   // we error out with a clear message to avoid accidental reliance on
   // removed platform bindings.
   const base = getStorageBase()
-  if (isDevelopment() || process.env.STORAGE_MODE === 'local') {
+  if (isDevelopment() || process.env.STORAGE_MODE === 'local' || process.env.VITEST) {
     getLogger()
       .withContext({ service: 'StorageFactory', method: 'resolveStorage' })
       .info('[storage] Using LocalFileStorage (dev/local)', { base, localDir })

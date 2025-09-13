@@ -5,6 +5,8 @@ import { getStoragePorts } from '@/infrastructure/storage/ports'
 import { JobProgressService } from '@/services/application/job-progress'
 import { generateEpisodeLayout } from '@/services/application/layout-generation'
 import { renderBatchFromYaml } from '@/services/application/render'
+import { db } from '@/services/database'
+import { withAuth } from '@/utils/api-auth'
 import { createErrorResponse, createSuccessResponse } from '@/utils/api-error'
 import { detectDemoMode } from '@/utils/request-mode'
 
@@ -28,7 +30,7 @@ const requestSchema = z.object({
     .optional(),
 })
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, user) => {
   let jobIdForError: string | undefined
   try {
     const _logger = getLogger().withContext({
@@ -40,6 +42,20 @@ export async function POST(request: NextRequest) {
     const { jobId, episodeNumber, config } = validatedData
     jobIdForError = jobId
     const isDemo = detectDemoMode(request, body)
+
+    // ユーザー所有権チェック
+    const job = await db.jobs().getJob(jobId)
+    if (!job) {
+      // 404 は ApiError サブクラスで表現
+      return createErrorResponse(
+        new Error('指定されたジョブが見つかりません'),
+        '指定されたジョブが見つかりません',
+      )
+    }
+    if (job.userId && job.userId !== user.id) {
+      // 403 も createErrorResponse 第3引数ではなく既存パラメータで処理（ステータスはデフォルト 500 想定のため ForbiddenError 移行 TODO）
+      return createErrorResponse(new Error('アクセス権限がありません'), 'アクセス権限がありません')
+    }
 
     // ここまででepisodeは存在。サービスでレイアウト生成
     const { layout, storageKey } = await generateEpisodeLayout(jobId, episodeNumber, {
@@ -97,4 +113,4 @@ export async function POST(request: NextRequest) {
     }
     return createErrorResponse(error, 'Failed to generate layout')
   }
-}
+})

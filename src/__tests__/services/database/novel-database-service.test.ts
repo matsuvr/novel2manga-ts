@@ -1,3 +1,9 @@
+import { describe } from 'vitest'
+
+describe.skip('moved: NovelDatabaseService unit tests (moved to integration)', () => {
+  // Tests moved to src/__tests__/integration/novel-database-service.test.ts
+})
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NovelDatabaseService } from '@/services/database/novel-database-service'
 

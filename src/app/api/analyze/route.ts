@@ -2,7 +2,8 @@ import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { AnalyzePipeline } from '@/services/application/analyze-pipeline'
-import { db } from '@/services/database/index'
+import { db } from '@/services/database'
+import { withAuth } from '@/utils/api-auth'
 import {
   ApiError,
   createErrorResponse,
@@ -25,7 +26,7 @@ const analyzeRequestSchema = z
     path: ['novelId'],
   })
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, user) => {
   try {
     const _logger = getLogger().withContext({
       route: 'api/analyze',
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
             : 0) || 1,
         language: 'ja',
         metadataPath: null,
-        userId: 'anonymous',
+        userId: user.id,
       })
 
       const jobId = generateUUID()
@@ -78,6 +79,7 @@ export async function POST(request: NextRequest) {
         novelId,
         title: 'Demo Analyze Job',
         status: 'processing',
+        userId: user.id,
       })
 
       return createSuccessResponse(
@@ -121,19 +123,45 @@ export async function POST(request: NextRequest) {
           textLength: typeof inputText === 'string' ? inputText.length : 0,
           language: 'ja',
           metadataPath: null,
-          userId: 'anonymous',
+          userId: user.id,
         })
       } catch (e) {
         return createErrorResponse(e, '小説の準備に失敗しました')
       }
     } else {
-      // novelId のみが与えられた場合、外部キー制約違反を避けるため事前にDB存在を確認する。
-      // 見つからない場合はテスト互換の文言で404を返す。
-      const existing = await db.novels().getNovel(novelId as string)
-      if (!existing) {
-        return createErrorResponse(
-          new ApiError('小説ID がデータベースに見つかりません', 404, 'NOT_FOUND'),
-        )
+      // novelIdのみ指定時はDB上の存在チェックを明示。見つからなければ404。
+      try {
+        const existing = await db.novels().getNovel(novelId as string)
+        if (!existing) {
+          return createErrorResponse(
+            new ApiError('小説ID がデータベースに見つかりません', 404, 'NOT_FOUND'),
+          )
+        }
+        if (
+          (existing as { userId?: string }).userId &&
+          (existing as { userId?: string }).userId !== user.id
+        ) {
+          return createErrorResponse(new ApiError('アクセス権限がありません', 403, 'FORBIDDEN'))
+        }
+      } catch (e) {
+        return createErrorResponse(e, '小説の取得に失敗しました')
+      }
+
+      // 追加: ストレージに小説テキストが無ければ早期に 404 を返す（契約テスト準拠）
+      try {
+        const novelStorage = await (
+          await import('@/utils/storage')
+        ).StorageFactory.getNovelStorage()
+        const key = `${novelId}.json`
+        const novelData = await novelStorage.get(key)
+        if (!novelData || !novelData.text) {
+          return createErrorResponse(
+            new ApiError('小説のテキストがストレージに見つかりません', 404, 'NOT_FOUND'),
+          )
+        }
+      } catch (e) {
+        // ストレージエラーは 404 と区別するため 500 で返す（詳細はメッセージに含める）
+        return createErrorResponse(e, '小説テキストの確認に失敗しました')
       }
     }
 
@@ -142,6 +170,7 @@ export async function POST(request: NextRequest) {
       id: jobId,
       novelId: novelId as string,
       title: `Analysis Job for ${title ?? 'Novel'}`,
+      userId: user.id,
     })
     // 一部のテストモックでは updateJobStatus が未実装のため保護
     try {
@@ -240,4 +269,4 @@ export async function POST(request: NextRequest) {
     })
     return createErrorResponse(error, 'テキストの分析中にエラーが発生しました')
   }
-}
+})

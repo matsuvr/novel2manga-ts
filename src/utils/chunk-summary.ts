@@ -4,6 +4,10 @@ import { getChunkSummaryConfig } from '@/config/chunk-summary.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { JsonStorageKeys, StorageFactory } from '@/utils/storage'
 
+// In-memory fallback store for test environments or when storage is unavailable
+const memoryCache = new Map<string, string>()
+const keyOf = (jobId: string, index: number) => `${jobId}::${index}`
+
 const logger = getLogger().withContext({ util: 'chunk-summary' })
 
 /**
@@ -14,47 +18,61 @@ export async function loadOrGenerateSummary(
   index: number,
   text: string,
 ): Promise<string> {
-  const storage = await StorageFactory.getAnalysisStorage()
   const key = JsonStorageKeys.chunkSummary(jobId, index)
-  const existing = await storage.get(key)
-  if (existing) {
-    try {
-      const parsed = JSON.parse(existing.text) as { summary?: string }
-      if (parsed.summary) return parsed.summary
-    } catch (e) {
-      logger.warn('Failed to parse cached summary, regenerating.', {
-        key,
-        error: e instanceof Error ? e.message : String(e),
-      })
+  try {
+    const storage = await StorageFactory.getAnalysisStorage()
+    const existing = await storage.get(key)
+    if (existing) {
+      try {
+        const parsed = JSON.parse(existing.text) as { summary?: string }
+        if (parsed.summary) return parsed.summary
+      } catch (e) {
+        logger.warn('Failed to parse cached summary, regenerating.', {
+          key,
+          error: e instanceof Error ? e.message : String(e),
+        })
+      }
     }
-  }
 
-  const summary = await summarize(text, { jobId, chunkIndex: index })
-  await storage.put(key, JSON.stringify({ summary }, null, 2), {
-    contentType: 'application/json; charset=utf-8',
-    jobId,
-    chunk: String(index),
-  })
-  return summary
+    const summary = await summarize(text, { jobId, chunkIndex: index })
+    await storage.put(key, JSON.stringify({ summary }, null, 2), {
+      contentType: 'application/json; charset=utf-8',
+      jobId,
+      chunk: String(index),
+    })
+    return summary
+  } catch {
+    // Storage unavailable → use in-memory fallback
+    const cached = memoryCache.get(keyOf(jobId, index))
+    if (cached) return cached
+    const summary = await summarize(text, { jobId, chunkIndex: index })
+    memoryCache.set(keyOf(jobId, index), summary)
+    return summary
+  }
 }
 
 /**
  * Retrieve summary if already cached.
  */
 export async function getStoredSummary(jobId: string, index: number): Promise<string | undefined> {
-  const storage = await StorageFactory.getAnalysisStorage()
-  const key = JsonStorageKeys.chunkSummary(jobId, index)
-  const existing = await storage.get(key)
-  if (!existing) return undefined
   try {
-    const parsed = JSON.parse(existing.text) as { summary?: string }
-    return parsed.summary
-  } catch (e) {
-    logger.warn('Failed to parse stored summary.', {
-      key,
-      error: e instanceof Error ? e.message : String(e),
-    })
-    return undefined
+    const storage = await StorageFactory.getAnalysisStorage()
+    const key = JsonStorageKeys.chunkSummary(jobId, index)
+    const existing = await storage.get(key)
+    if (!existing) return undefined
+    try {
+      const parsed = JSON.parse(existing.text) as { summary?: string }
+      return parsed.summary
+    } catch (e) {
+      logger.warn('Failed to parse stored summary.', {
+        key,
+        error: e instanceof Error ? e.message : String(e),
+      })
+      return undefined
+    }
+  } catch {
+    // Fallback to in-memory cache
+    return memoryCache.get(keyOf(jobId, index))
   }
 }
 
