@@ -142,6 +142,9 @@ beforeEach(async () => {
  */
 afterEach(async () => {
   // Transaction rollback is handled automatically by TestDatabaseManager
+  // Ensure mocks are cleaned up between tests
+  const { vi } = await import('vitest')
+  vi.restoreAllMocks()
 }, TEST_TIMEOUTS.UNIT)
 
 /**
