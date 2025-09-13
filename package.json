@@ -131,7 +131,7 @@
     "prettier": "^3.6.2",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.4",
-    "typescript": "^5.8.3",
+    "typescript": "5.9.2",
     "vite": "^5.4.10",
     "vitest": "^3.2.4"
   },
