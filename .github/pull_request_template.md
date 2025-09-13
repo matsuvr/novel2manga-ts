@@ -54,6 +54,8 @@
 - [ ] `database/storage-structure.md` を更新
 - [ ] バックグラウンド実行（キュー/ワーカー想定）に適合（APIハンドラ内で長処理を行っていない）
 - [ ] 通知（メール等）の導線/仕様を更新（実装 or 仕様反映）
+- [ ] Database access via Drizzle only (no direct better-sqlite3 usage)
+
 
 <!--
 いずれかの項目を満たせない場合は、実装/マージを進めず先に解消してください。
