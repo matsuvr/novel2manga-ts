@@ -73,13 +73,23 @@ describe('Storage', () => {
         expect(result?.metadata).not.toHaveProperty('isBinary')
         expect(result?.metadata).not.toHaveProperty('createdAt')
       } finally {
-        // テスト後のクリーンアップ
-        await fs.rm(baseDir, { recursive: true, force: true }).catch((error) => {
+        // テスト後のクリーンアップ（環境により rm が未実装のためフォールバック）
+        try {
+          const anyFs = fs as unknown as {
+            rm?: (p: string, opts?: { recursive?: boolean; force?: boolean }) => Promise<void>
+            rmdir?: (p: string, opts?: { recursive?: boolean }) => Promise<void>
+          }
+          if (typeof anyFs.rm === 'function') {
+            await anyFs.rm(baseDir, { recursive: true, force: true })
+          } else if (typeof anyFs.rmdir === 'function') {
+            await anyFs.rmdir(baseDir, { recursive: true })
+          }
+        } catch (error) {
           console.warn('Failed to clean up test directory:', {
             baseDir,
             error: error instanceof Error ? error.message : String(error),
           })
-        })
+        }
       }
     })
   })

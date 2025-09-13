@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+// Use Web standard Response for tests and runtime; avoid importing next/server at runtime
 import { ZodError } from 'zod'
 import { isRateLimitError } from '@/errors/rate-limit-error'
 import { isRetryableError } from '@/errors/retryable-error'
@@ -83,6 +83,8 @@ export class ForbiddenError extends ApiError {
 
 // 認証エラー
 export class AuthenticationError extends ApiError {
+  _tag = 'AuthenticationError' as const
+
   constructor(message: string = '認証が必要です') {
     super(message, 401, ERROR_CODES.AUTH_REQUIRED)
     this.name = 'AuthenticationError'
@@ -132,7 +134,7 @@ export class StorageError extends ApiError {
 export function createErrorResponse(
   error: unknown,
   defaultMessage: string = '内部サーバーエラーが発生しました',
-): NextResponse {
+): Response {
   console.error('API Error:', error)
 
   // RetryableError 系（RateLimit を含む）
@@ -147,12 +149,12 @@ export function createErrorResponse(
     const status = isRateLimit ? 429 : 503
     const headers = error.retryAfter ? { 'Retry-After': error.retryAfter.toString() } : undefined
 
-    return NextResponse.json(response, { status, headers })
+    return json(response, { status, headers })
   }
 
   // Zod バリデーションエラー
   if (error instanceof ZodError) {
-    return NextResponse.json(
+    return json(
       {
         success: false as const,
         error: 'Invalid request data',
@@ -174,7 +176,7 @@ export function createErrorResponse(
 
     // ApiError はこの段階ではリトライ系ではない（リトライ系は上で処理済み）
 
-    return NextResponse.json(response, { status: error.statusCode })
+    return json(response, { status: error.statusCode })
   }
 
   // 既存の HttpError 互換は削除（使用箇所なしのため）
@@ -183,7 +185,7 @@ export function createErrorResponse(
   if (error instanceof Error) {
     // ファイルが見つからないエラー
     if ('code' in error && error.code === 'ENOENT') {
-      return NextResponse.json(
+      return json(
         {
           success: false as const,
           error: 'リソースが見つかりません',
@@ -195,7 +197,7 @@ export function createErrorResponse(
 
     // ファイル権限エラー
     if ('code' in error && error.code === 'EACCES') {
-      return NextResponse.json(
+      return json(
         {
           success: false as const,
           error: 'ファイルアクセス権限がありません',
@@ -207,7 +209,7 @@ export function createErrorResponse(
 
     // ディスク容量不足エラー
     if ('code' in error && error.code === 'ENOSPC') {
-      return NextResponse.json(
+      return json(
         {
           success: false as const,
           error: 'ディスク容量が不足しています',
@@ -219,7 +221,7 @@ export function createErrorResponse(
 
     // タイムアウトエラー
     if ('code' in error && error.code === 'ETIMEDOUT') {
-      return NextResponse.json(
+      return json(
         {
           success: false as const,
           error: 'リクエストがタイムアウトしました',
@@ -230,7 +232,7 @@ export function createErrorResponse(
     }
 
     // その他のエラー
-    return NextResponse.json(
+    return json(
       {
         success: false as const,
         error: error.message && error.message.trim() !== '' ? error.message : defaultMessage,
@@ -242,7 +244,7 @@ export function createErrorResponse(
   }
 
   // 予期しないエラー
-  return NextResponse.json(
+  return json(
     {
       success: false as const,
       error: defaultMessage,
@@ -291,44 +293,44 @@ export function extractErrorMessage(raw: unknown): string {
 // Legacy Functions (後方互換性)
 // ========================================
 
-export function handleApiError(error: unknown): NextResponse {
+export function handleApiError(error: unknown): Response {
   return createErrorResponse(error)
 }
 
-export function validationError(message: string, details?: Record<string, unknown>): NextResponse {
+export function validationError(message: string, details?: Record<string, unknown>): Response {
   return createErrorResponse(new ValidationError(message, undefined, details))
 }
 
-export function authError(message: string = '認証が必要です'): NextResponse {
+export function authError(message: string = '認証が必要です'): Response {
   return createErrorResponse(new AuthenticationError(message))
 }
 
-export function forbiddenError(message: string = 'アクセス権限がありません'): NextResponse {
+export function forbiddenError(message: string = 'アクセス権限がありません'): Response {
   return createErrorResponse(new ForbiddenError(message))
 }
 
-export function notFoundError(resource: string): NextResponse {
+export function notFoundError(resource: string): Response {
   return createErrorResponse(new NotFoundError(resource))
 }
 
 export function createSuccessResponse<T extends Record<string, unknown> | unknown>(
   data: T,
   status: number = 200,
-): NextResponse {
+): Response {
   // If payload already contains a top-level success flag, trust caller (idempotent wrap)
   if (typeof data === 'object' && data && 'success' in (data as Record<string, unknown>)) {
-    return NextResponse.json(data, { status })
+    return json(data, { status })
   }
   // For common API patterns expecting flattened fields (tests read data.job, not data.data.job)
   if (typeof data === 'object' && data && !Array.isArray(data)) {
-    return NextResponse.json({ success: true, ...(data as Record<string, unknown>) }, { status })
+    return json({ success: true, ...(data as Record<string, unknown>) }, { status })
   }
   // Primitive or array payloads go under data key
-  return NextResponse.json({ success: true, data }, { status })
+  return json({ success: true, data }, { status })
 }
 
 // Alias for backward compatibility (to be removed)
-export function successResponse<T>(data: T, status: number = 200): NextResponse {
+export function successResponse<T>(data: T, status: number = 200): Response {
   return createSuccessResponse(data, status)
 }
 
@@ -345,20 +347,17 @@ const env = (process.env.NODE_ENV as Env) ?? 'development'
 export function toLegacyErrorResponse(
   error: unknown,
   fallbackMessage: string = 'Internal Server Error',
-): NextResponse {
+): Response {
   // Retryable errors (RateLimit included)
   if (isRetryableError(error)) {
     const status = isRateLimitError(error) ? 429 : 503
     const headers = error.retryAfter ? { 'Retry-After': error.retryAfter.toString() } : undefined
-    return NextResponse.json({ error: error.message }, { status, headers })
+    return json({ error: error.message }, { status, headers })
   }
 
   // Zod validation
   if (error instanceof ZodError) {
-    return NextResponse.json(
-      { error: 'Invalid request data', details: error.errors },
-      { status: 400 },
-    )
+    return json({ error: 'Invalid request data', details: error.errors }, { status: 400 })
   }
 
   // New ApiError hierarchy
@@ -368,7 +367,7 @@ export function toLegacyErrorResponse(
       body.details = error.details
       body.code = error.code
     }
-    return NextResponse.json(body, { status: error.statusCode })
+    return json(body, { status: error.statusCode })
   }
 
   // Legacy HttpError: 互換レイヤは撤去済み（個別クラス分岐は行わない）
@@ -376,28 +375,28 @@ export function toLegacyErrorResponse(
   // Node/system errors
   if (error instanceof Error) {
     if ('code' in error && error.code === 'ENOENT') {
-      return NextResponse.json({ error: 'リソースが見つかりません' }, { status: 404 })
+      return json({ error: 'リソースが見つかりません' }, { status: 404 })
     }
     if ('code' in error && error.code === 'EACCES') {
-      return NextResponse.json({ error: 'ファイルアクセス権限がありません' }, { status: 403 })
+      return json({ error: 'ファイルアクセス権限がありません' }, { status: 403 })
     }
     if ('code' in error && error.code === 'ENOSPC') {
-      return NextResponse.json({ error: 'ディスク容量が不足しています' }, { status: 507 })
+      return json({ error: 'ディスク容量が不足しています' }, { status: 507 })
     }
     if ('code' in error && error.code === 'ETIMEDOUT') {
-      return NextResponse.json({ error: 'リクエストがタイムアウトしました' }, { status: 408 })
+      return json({ error: 'リクエストがタイムアウトしました' }, { status: 408 })
     }
 
     const details = error.message
     if (env !== 'production') {
       console.error('[api] Unhandled error:', error)
-      return NextResponse.json({ error: fallbackMessage, details }, { status: 500 })
+      return json({ error: fallbackMessage, details }, { status: 500 })
     }
-    return NextResponse.json({ error: fallbackMessage }, { status: 500 })
+    return json({ error: fallbackMessage }, { status: 500 })
   }
 
   // Unknown type
-  return NextResponse.json({ error: fallbackMessage }, { status: 500 })
+  return json({ error: fallbackMessage }, { status: 500 })
 }
 
 // ========================================
@@ -518,4 +517,13 @@ export function reportError(error: unknown, context?: Record<string, unknown>): 
       stack: error instanceof Error ? error.stack : undefined,
     })
   }
+}
+
+// Minimal JSON response helper using the Web Response API
+function json(
+  body: unknown,
+  init?: { status?: number; headers?: Record<string, string> },
+): Response {
+  const headers = new Headers({ 'Content-Type': 'application/json', ...(init?.headers ?? {}) })
+  return new Response(JSON.stringify(body), { status: init?.status ?? 200, headers })
 }

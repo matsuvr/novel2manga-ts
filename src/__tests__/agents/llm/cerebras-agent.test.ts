@@ -5,14 +5,15 @@ import { CerebrasClient } from '../../../agents/llm/cerebras'
 // Mock Cerebras SDK
 const mockCreate = vi.fn()
 vi.mock('@cerebras/cerebras_cloud_sdk', () => {
-  return {
-    default: vi.fn().mockImplementation(() => ({
-      chat: {
-        completions: {
-          create: mockCreate,
-        },
+  class MockCerebras {
+    chat = {
+      completions: {
+        create: mockCreate,
       },
-    })),
+    }
+  }
+  return {
+    default: MockCerebras,
   }
 })
 

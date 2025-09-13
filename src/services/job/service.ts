@@ -1,0 +1,348 @@
+/**
+ * Job Service Interface and Implementation using Effect TS
+ */
+
+import { and, desc, eq } from 'drizzle-orm'
+import { Context, Effect, Layer } from 'effect'
+import { getDatabase } from '@/db'
+import { jobs, novels } from '@/db/schema'
+import {
+  DatabaseError,
+  JobAccessDeniedError,
+  JobError,
+  JobNotFoundError,
+  type JobQueryOptions,
+  type JobWithNovel,
+} from './types'
+
+/**
+ * Job Service Interface
+ */
+export interface JobService {
+  readonly getUserJobs: (
+    userId: string,
+    options?: JobQueryOptions,
+  ) => Effect.Effect<JobWithNovel[], DatabaseError>
+  readonly resumeJob: (
+    userId: string,
+    jobId: string,
+  ) => Effect.Effect<void, JobError | JobNotFoundError | JobAccessDeniedError | DatabaseError>
+  readonly getJobDetails: (
+    userId: string,
+    jobId: string,
+  ) => Effect.Effect<
+    JobWithNovel,
+    JobError | JobNotFoundError | JobAccessDeniedError | DatabaseError
+  >
+}
+
+/**
+ * Job Service Context Tag
+ */
+export const JobService = Context.GenericTag<JobService>('JobService')
+
+/**
+ * Job Service Live Implementation
+ */
+export const JobServiceLive = Layer.succeed(JobService, {
+  getUserJobs: (userId: string, options: JobQueryOptions = {}) =>
+    Effect.tryPromise({
+      try: async () => {
+        const db = getDatabase()
+        const { limit = 10, offset = 0, status } = options
+
+        // Build base where clause
+        const baseCondition = status
+          ? and(eq(jobs.userId, userId), eq(jobs.status, status))
+          : eq(jobs.userId, userId)
+
+        const results = await db
+          .select({
+            id: jobs.id,
+            novelId: jobs.novelId,
+            jobName: jobs.jobName,
+            userId: jobs.userId,
+            status: jobs.status,
+            currentStep: jobs.currentStep,
+            splitCompleted: jobs.splitCompleted,
+            analyzeCompleted: jobs.analyzeCompleted,
+            episodeCompleted: jobs.episodeCompleted,
+            layoutCompleted: jobs.layoutCompleted,
+            renderCompleted: jobs.renderCompleted,
+            chunksDirPath: jobs.chunksDirPath,
+            analysesDirPath: jobs.analysesDirPath,
+            episodesDataPath: jobs.episodesDataPath,
+            layoutsDirPath: jobs.layoutsDirPath,
+            rendersDirPath: jobs.rendersDirPath,
+            characterMemoryPath: jobs.characterMemoryPath,
+            promptMemoryPath: jobs.promptMemoryPath,
+            totalChunks: jobs.totalChunks,
+            processedChunks: jobs.processedChunks,
+            totalEpisodes: jobs.totalEpisodes,
+            processedEpisodes: jobs.processedEpisodes,
+            totalPages: jobs.totalPages,
+            renderedPages: jobs.renderedPages,
+            processingEpisode: jobs.processingEpisode,
+            processingPage: jobs.processingPage,
+            lastError: jobs.lastError,
+            lastErrorStep: jobs.lastErrorStep,
+            retryCount: jobs.retryCount,
+            resumeDataPath: jobs.resumeDataPath,
+            coverageWarnings: jobs.coverageWarnings,
+            createdAt: jobs.createdAt,
+            updatedAt: jobs.updatedAt,
+            startedAt: jobs.startedAt,
+            completedAt: jobs.completedAt,
+            novelTitle: novels.title,
+            novelAuthor: novels.author,
+            novelOriginalTextPath: novels.originalTextPath,
+            novelTextLength: novels.textLength,
+            novelLanguage: novels.language,
+            novelMetadataPath: novels.metadataPath,
+            novelUserId: novels.userId,
+            novelCreatedAt: novels.createdAt,
+            novelUpdatedAt: novels.updatedAt,
+          })
+          .from(jobs)
+          .leftJoin(novels, eq(jobs.novelId, novels.id))
+          .where(baseCondition)
+          .orderBy(desc(jobs.createdAt))
+          .limit(limit)
+          .offset(offset)
+
+        return results.map((row) => ({
+          job: {
+            id: row.id,
+            novelId: row.novelId,
+            jobName: row.jobName,
+            userId: row.userId,
+            status: row.status,
+            currentStep: row.currentStep,
+            splitCompleted: row.splitCompleted,
+            analyzeCompleted: row.analyzeCompleted,
+            episodeCompleted: row.episodeCompleted,
+            layoutCompleted: row.layoutCompleted,
+            renderCompleted: row.renderCompleted,
+            chunksDirPath: row.chunksDirPath,
+            analysesDirPath: row.analysesDirPath,
+            episodesDataPath: row.episodesDataPath,
+            layoutsDirPath: row.layoutsDirPath,
+            rendersDirPath: row.rendersDirPath,
+            characterMemoryPath: row.characterMemoryPath,
+            promptMemoryPath: row.promptMemoryPath,
+            totalChunks: row.totalChunks,
+            processedChunks: row.processedChunks,
+            totalEpisodes: row.totalEpisodes,
+            processedEpisodes: row.processedEpisodes,
+            totalPages: row.totalPages,
+            renderedPages: row.renderedPages,
+            processingEpisode: row.processingEpisode,
+            processingPage: row.processingPage,
+            lastError: row.lastError,
+            lastErrorStep: row.lastErrorStep,
+            retryCount: row.retryCount,
+            resumeDataPath: row.resumeDataPath,
+            coverageWarnings: row.coverageWarnings,
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+            startedAt: row.startedAt,
+            completedAt: row.completedAt,
+          },
+          novel: row.novelTitle
+            ? {
+                id: row.novelId,
+                title: row.novelTitle,
+                author: row.novelAuthor,
+                originalTextPath: row.novelOriginalTextPath,
+                textLength: row.novelTextLength ?? 0,
+                language: row.novelLanguage,
+                metadataPath: row.novelMetadataPath,
+                userId: row.novelUserId ?? userId,
+                createdAt: row.novelCreatedAt,
+                updatedAt: row.novelUpdatedAt,
+              }
+            : null,
+        }))
+      },
+      catch: (error) => new DatabaseError(`Failed to get user jobs: ${String(error)}`, error),
+    }),
+
+  resumeJob: (userId: string, jobId: string) =>
+    Effect.gen(function* () {
+      const db = getDatabase()
+
+      // First, verify job exists and user has access
+      const [jobRecord] = yield* Effect.tryPromise({
+        try: async () => {
+          return await db.select().from(jobs).where(eq(jobs.id, jobId))
+        },
+        catch: (error) => new DatabaseError(`Failed to fetch job: ${String(error)}`, error),
+      })
+
+      if (!jobRecord) {
+        return yield* Effect.fail(new JobNotFoundError(jobId))
+      }
+
+      if (jobRecord.userId !== userId) {
+        return yield* Effect.fail(new JobAccessDeniedError(jobId, userId))
+      }
+
+      // Check if job is in a resumable state
+      if (jobRecord.status !== 'failed' && jobRecord.status !== 'paused') {
+        return yield* Effect.fail(
+          new JobError(
+            `Job cannot be resumed. Current status: ${jobRecord.status}`,
+            'INVALID_STATUS',
+          ),
+        )
+      }
+
+      // Reset job to processing state and clear error
+      yield* Effect.tryPromise({
+        try: async () => {
+          await db
+            .update(jobs)
+            .set({
+              status: 'processing',
+              lastError: null,
+              updatedAt: new Date().toISOString(),
+            })
+            .where(eq(jobs.id, jobId))
+        },
+        catch: (error) => new DatabaseError(`Failed to resume job: ${String(error)}`, error),
+      })
+
+      // TODO: Trigger job processing worker
+      // This would integrate with the existing job processing pipeline
+    }),
+
+  getJobDetails: (userId: string, jobId: string) =>
+    Effect.gen(function* () {
+      const db = getDatabase()
+
+      // Get job with novel information, ensuring user access
+      const results = yield* Effect.tryPromise({
+        try: async () => {
+          return await db
+            .select({
+              // Job fields
+              id: jobs.id,
+              novelId: jobs.novelId,
+              jobName: jobs.jobName,
+              userId: jobs.userId,
+              status: jobs.status,
+              currentStep: jobs.currentStep,
+              splitCompleted: jobs.splitCompleted,
+              analyzeCompleted: jobs.analyzeCompleted,
+              episodeCompleted: jobs.episodeCompleted,
+              layoutCompleted: jobs.layoutCompleted,
+              renderCompleted: jobs.renderCompleted,
+              chunksDirPath: jobs.chunksDirPath,
+              analysesDirPath: jobs.analysesDirPath,
+              episodesDataPath: jobs.episodesDataPath,
+              layoutsDirPath: jobs.layoutsDirPath,
+              rendersDirPath: jobs.rendersDirPath,
+              characterMemoryPath: jobs.characterMemoryPath,
+              promptMemoryPath: jobs.promptMemoryPath,
+              totalChunks: jobs.totalChunks,
+              processedChunks: jobs.processedChunks,
+              totalEpisodes: jobs.totalEpisodes,
+              processedEpisodes: jobs.processedEpisodes,
+              totalPages: jobs.totalPages,
+              renderedPages: jobs.renderedPages,
+              processingEpisode: jobs.processingEpisode,
+              processingPage: jobs.processingPage,
+              lastError: jobs.lastError,
+              lastErrorStep: jobs.lastErrorStep,
+              retryCount: jobs.retryCount,
+              resumeDataPath: jobs.resumeDataPath,
+              coverageWarnings: jobs.coverageWarnings,
+              createdAt: jobs.createdAt,
+              updatedAt: jobs.updatedAt,
+              startedAt: jobs.startedAt,
+              completedAt: jobs.completedAt,
+              // Novel fields (nullable)
+              novelTitle: novels.title,
+              novelAuthor: novels.author,
+              novelOriginalTextPath: novels.originalTextPath,
+              novelTextLength: novels.textLength,
+              novelLanguage: novels.language,
+              novelMetadataPath: novels.metadataPath,
+              novelUserId: novels.userId,
+              novelCreatedAt: novels.createdAt,
+              novelUpdatedAt: novels.updatedAt,
+            })
+            .from(jobs)
+            .leftJoin(novels, eq(jobs.novelId, novels.id))
+            .where(eq(jobs.id, jobId))
+        },
+        catch: (error) => new DatabaseError(`Failed to get job details: ${String(error)}`, error),
+      })
+
+      if (results.length === 0) {
+        return yield* Effect.fail(new JobNotFoundError(jobId))
+      }
+
+      const row = results[0]
+
+      // Verify user access
+      if (row.userId !== userId) {
+        return yield* Effect.fail(new JobAccessDeniedError(jobId, userId))
+      }
+
+      // Transform result to JobWithNovel format
+      return {
+        job: {
+          id: row.id,
+          novelId: row.novelId,
+          jobName: row.jobName,
+          userId: row.userId,
+          status: row.status,
+          currentStep: row.currentStep,
+          splitCompleted: row.splitCompleted,
+          analyzeCompleted: row.analyzeCompleted,
+          episodeCompleted: row.episodeCompleted,
+          layoutCompleted: row.layoutCompleted,
+          renderCompleted: row.renderCompleted,
+          chunksDirPath: row.chunksDirPath,
+          analysesDirPath: row.analysesDirPath,
+          episodesDataPath: row.episodesDataPath,
+          layoutsDirPath: row.layoutsDirPath,
+          rendersDirPath: row.rendersDirPath,
+          characterMemoryPath: row.characterMemoryPath,
+          promptMemoryPath: row.promptMemoryPath,
+          totalChunks: row.totalChunks,
+          processedChunks: row.processedChunks,
+          totalEpisodes: row.totalEpisodes,
+          processedEpisodes: row.processedEpisodes,
+          totalPages: row.totalPages,
+          renderedPages: row.renderedPages,
+          processingEpisode: row.processingEpisode,
+          processingPage: row.processingPage,
+          lastError: row.lastError,
+          lastErrorStep: row.lastErrorStep,
+          retryCount: row.retryCount,
+          resumeDataPath: row.resumeDataPath,
+          coverageWarnings: row.coverageWarnings,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+          startedAt: row.startedAt,
+          completedAt: row.completedAt,
+        },
+        novel: row.novelTitle
+          ? {
+              id: row.novelId,
+              title: row.novelTitle,
+              author: row.novelAuthor,
+              originalTextPath: row.novelOriginalTextPath,
+              textLength: row.novelTextLength ?? 0,
+              language: row.novelLanguage,
+              metadataPath: row.novelMetadataPath,
+              userId: row.novelUserId ?? userId,
+              createdAt: row.novelCreatedAt,
+              updatedAt: row.novelUpdatedAt,
+            }
+          : null,
+      }
+    }),
+})

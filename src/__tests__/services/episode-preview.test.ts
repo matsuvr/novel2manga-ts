@@ -1,9 +1,44 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadEpisodePreview } from '@/services/application/episode-preview'
-import { clearStorageCache, getLayoutStorage, getRenderStorage, StorageKeys } from '@/utils/storage'
+
+// Provide in-memory storage mocks to avoid external bindings
+vi.mock('@/utils/storage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/storage')>()
+  const makeStore = () => {
+    const map = new Map<string, { text: string }>()
+    return {
+      get: vi.fn(async (key: string) => map.get(key)),
+      put: vi.fn(async (key: string, value: Buffer | string) => {
+        const text = typeof value === 'string' ? value : Buffer.from(value).toString('base64')
+        map.set(key, { text })
+      }),
+      list: vi.fn(async (_prefix: string) => Array.from(map.keys())),
+    }
+  }
+  const stores = {
+    layout: makeStore(),
+    render: makeStore(),
+  }
+  return {
+    ...actual,
+    clearStorageCache: () => {
+      // reset stores between tests
+      Object.assign(stores, { layout: makeStore(), render: makeStore() })
+    },
+    // Provide factory API used by episode-preview
+    StorageFactory: {
+      getLayoutStorage: vi.fn(async () => stores.layout),
+      getRenderStorage: vi.fn(async () => stores.render),
+    },
+    // Keep helpers available for tests that import functions
+    getLayoutStorage: vi.fn(async () => stores.layout),
+    getRenderStorage: vi.fn(async () => stores.render),
+  }
+})
 
 describe('loadEpisodePreview', () => {
   beforeEach(async () => {
+    const { clearStorageCache } = await import('@/utils/storage')
     clearStorageCache()
   })
 
@@ -14,6 +49,7 @@ describe('loadEpisodePreview', () => {
       pages: [{ page_number: 2 }, { page_number: 1 }],
     }
 
+    const { getLayoutStorage, getRenderStorage, StorageKeys } = await import('@/utils/storage')
     const layoutStorage = await getLayoutStorage()
     await layoutStorage.put(StorageKeys.episodeLayout(jobId, episode), JSON.stringify(layout))
 
@@ -42,6 +78,7 @@ describe('loadEpisodePreview', () => {
       },
     }
 
+    const { getLayoutStorage, getRenderStorage, StorageKeys } = await import('@/utils/storage')
     const layoutStorage = await getLayoutStorage()
     await layoutStorage.put(StorageKeys.episodeLayout(jobId, episode), JSON.stringify(layout))
     await layoutStorage.put(

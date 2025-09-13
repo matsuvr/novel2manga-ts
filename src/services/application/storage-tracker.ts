@@ -26,6 +26,7 @@ export interface RecordStorageFileParams {
   fileType: FileType
   novelId?: string
   jobId?: string
+  userId?: string
   mimeType?: string
   fileSize?: number
 }
@@ -75,6 +76,7 @@ export async function recordStorageFile(
       id,
       novelId,
       jobId: params.jobId || null, // Convert undefined to null for database
+      userId: params.userId || 'anonymous', // Default to 'anonymous' for backward compatibility
       filePath: params.filePath,
       fileCategory: params.fileCategory,
       fileType: params.fileType,
@@ -120,6 +122,7 @@ export function recordStorageFileSync(
       id,
       novelId: params.novelId,
       jobId: params.jobId || null, // Convert undefined to null for database
+      userId: params.userId || 'anonymous', // Default to 'anonymous' for backward compatibility
       filePath: params.filePath,
       fileCategory: params.fileCategory,
       fileType: params.fileType,

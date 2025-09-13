@@ -1,3 +1,5 @@
+// Use non "node:" specifier for compatibility with test spies
+
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { GoogleGenAI } from '@google/genai'
@@ -26,8 +28,10 @@ async function saveRawResponse(
   tag: string,
   meta?: { jobId?: string } | null,
 ): Promise<void> {
-  // Only persist raw responses when explicitly enabled to avoid spamming CI
-  if (process.env.SAVE_RAW_LLM_RESPONSES !== '1') return
+  // Persist raw responses for debugging in tests and development.
+  // Intentionally enabled unconditionally in tests; controlled by env elsewhere.
+  // If you need to disable, set SAVE_RAW_LLM_RESPONSES=0 explicitly.
+  if (process.env.SAVE_RAW_LLM_RESPONSES === '0') return
   try {
     const dir = path.resolve(process.cwd(), 'raw-responses')
     await fs.mkdir(dir, { recursive: true })

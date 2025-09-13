@@ -1,8 +1,15 @@
 import type { NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { OutputService } from '@/services/application/output-service'
-import { createErrorResponse, createSuccessResponse, ValidationError } from '@/utils/api-error'
-import { getCurrentUserId } from '@/utils/current-user'
+import { withAuth } from '@/utils/api-auth'
+import {
+  createErrorResponse,
+  createSuccessResponse,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/utils/api-error'
 import { validateJobId } from '@/utils/validators'
 
 interface ExportRequest {
@@ -22,7 +29,7 @@ interface ExportResponse {
   exportedAt: string
 }
 
-export async function POST(request: NextRequest): Promise<Response> {
+export const POST = withAuth(async (request: NextRequest, user) => {
   try {
     getLogger().withContext({ route: 'api/export', method: 'POST' })
     const body = (await request.json()) as Partial<ExportRequest>
@@ -35,8 +42,11 @@ export async function POST(request: NextRequest): Promise<Response> {
       return createErrorResponse(new ValidationError('有効なformatが必要です（pdf, images_zip）'))
     }
 
+    // ユーザー所有権チェックは OutputService 内の DB 参照に任せる
+    // ここでは形式と入力のみ検証し、存在しないジョブはサービス側で明確なエラーを投げる
+
     const outputService = new OutputService()
-    const userId = getCurrentUserId()
+    const userId = user.id
     const { outputId, fileSize, pageCount } = await outputService.export(
       body.jobId as string,
       body.format as 'pdf' | 'images_zip',
@@ -60,16 +70,16 @@ export async function POST(request: NextRequest): Promise<Response> {
   } catch (error) {
     return createErrorResponse(error)
   }
-}
+})
 
 // ダウンロード用エンドポイント
-export async function GET(_request: NextRequest): Promise<Response> {
+export const GET = withAuth(async (request: NextRequest, user) => {
   try {
     const _logger = getLogger().withContext({
       route: 'api/export',
       method: 'GET',
     })
-    const url = new URL(_request.url)
+    const url = new URL(request.url)
     // 形式: /api/export/download/[outputId]
     const segments = url.pathname.split('/').filter(Boolean)
     const outputId = segments[segments.length - 1] || ''
@@ -78,9 +88,14 @@ export async function GET(_request: NextRequest): Promise<Response> {
     // outputId -> outputs 内の実ファイルパスはDBに記録済み（OutputRepository）
     const outputService = new OutputService()
     const record = await outputService.getById(outputId as string)
-    if (!record) return createErrorResponse(new ValidationError('出力が見つかりません'))
+    if (!record) return createErrorResponse(new NotFoundError('出力が見つかりません'))
+
+    // ユーザー所有権チェック
+    if (record.userId && record.userId !== user.id) {
+      return createErrorResponse(new ForbiddenError('アクセス権限がありません'))
+    }
     const buffer = await outputService.getExportContent(record.outputPath)
-    if (!buffer) return createErrorResponse(new ValidationError('ファイルが存在しません'))
+    if (!buffer) return createErrorResponse(new NotFoundError('ファイルが存在しません'))
 
     // 形式に応じてContent-Type
     const isPdf = record.outputType === 'pdf'
@@ -89,7 +104,8 @@ export async function GET(_request: NextRequest): Promise<Response> {
     // LocalFileStorageはBase64ではなくプレーン文字列(JSONなど)を返すケースがあるため、Buffer変換を試行
     // LocalFileStorage.get はバイナリ保存時でも Base64 を返す設計
     // ただし互換のため UTF-8 もフォールバック
-    return new Response(new Uint8Array(buffer), {
+    // NextResponse は body:ReadableStream/Blob 等を想定するため ArrayBuffer を渡す
+    return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         'Content-Type': contentType,
@@ -100,4 +116,4 @@ export async function GET(_request: NextRequest): Promise<Response> {
   } catch (error) {
     return createErrorResponse(error)
   }
-}
+})

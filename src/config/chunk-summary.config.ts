@@ -12,9 +12,15 @@ const defaultConfig: ChunkSummaryConfig = {
 }
 
 export function getChunkSummaryConfig(): ChunkSummaryConfig {
-  const overrides = getAppConfigWithOverrides().llm?.chunkSummary
-  return {
-    maxLength: overrides?.maxLength ?? defaultConfig.maxLength,
-    systemPrompt: overrides?.systemPrompt ?? defaultConfig.systemPrompt,
+  try {
+    const cfg = getAppConfigWithOverrides()
+    const overrides = (cfg as unknown as { llm?: { chunkSummary?: Partial<ChunkSummaryConfig> } })
+      ?.llm?.chunkSummary
+    return {
+      maxLength: overrides?.maxLength ?? defaultConfig.maxLength,
+      systemPrompt: overrides?.systemPrompt ?? defaultConfig.systemPrompt,
+    }
+  } catch {
+    return { ...defaultConfig }
   }
 }

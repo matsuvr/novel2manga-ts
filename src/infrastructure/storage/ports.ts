@@ -1,6 +1,6 @@
 import { getLogger } from '@/infrastructure/logging/logger'
 import { executeStorageWithTracking } from '@/services/application/transaction-manager'
-import { db } from '@/services/database/index'
+import { db } from '@/services/database'
 import * as StorageUtil from '@/utils/storage'
 
 export interface ChunkStoragePort {

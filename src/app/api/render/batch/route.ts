@@ -1,8 +1,15 @@
 import type { NextRequest } from 'next/server'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { renderBatchFromYaml } from '@/services/application/render'
-import { db } from '@/services/database/index'
-import { createErrorResponse, createSuccessResponse, ValidationError } from '@/utils/api-error'
+// Use unified barrel so tests that mock '@/services/database' apply here too
+import { db } from '@/services/database'
+import { withAuth } from '@/utils/api-auth'
+import {
+  createErrorResponse,
+  createSuccessResponse,
+  ForbiddenError,
+  ValidationError,
+} from '@/utils/api-error'
 import { validateJobId } from '@/utils/validators'
 
 interface BatchRenderRequest {
@@ -18,7 +25,7 @@ interface BatchRenderRequest {
 
 // response 型はサービス関数の戻り値型に準拠
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, user) => {
   try {
     const logger = getLogger().withContext({
       route: 'api/render/batch',
@@ -46,9 +53,14 @@ export async function POST(request: NextRequest) {
 
     // ジョブ/エピソードの存在確認
     const job = await db.jobs().getJob(validatedBody.jobId)
-    if (!job) {
-      return createErrorResponse(new ValidationError('指定されたジョブが見つかりません'))
+    // Treat unknown jobId as invalid input per legacy test expectations (400)
+    if (!job) return createErrorResponse(new ValidationError('指定されたジョブが見つかりません'))
+
+    // ユーザー所有権チェック
+    if (job.userId && job.userId !== user.id) {
+      return createErrorResponse(new ForbiddenError('アクセス権限がありません'))
     }
+
     const episodes = await db.episodes().getEpisodesByJobId(validatedBody.jobId)
     const targetEpisode = episodes.find((e) => e.episodeNumber === validatedBody.episodeNumber)
     if (!targetEpisode) {
@@ -76,4 +88,4 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return createErrorResponse(error)
   }
-}
+})

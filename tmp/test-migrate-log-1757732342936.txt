@@ -1,0 +1,318 @@
+2025-09-13T02:59:02.936Z [sync-migrate] migrationsDir=G:\TsProjects\novel2manga-ts\drizzle
+2025-09-13T02:59:02.937Z [attempt] file=0000_fast_obadiah_stane.sql full=G:\TsProjects\novel2manga-ts\drizzle\0000_fast_obadiah_stane.sql
+2025-09-13T02:59:02.937Z [exec-stmt-preview] -- Reordered to satisfy SQLite FK requirements: create referenced tables first
+2025-09-13T02:59:02.937Z [exec-stmt] success
+2025-09-13T02:59:02.937Z [exec-stmt-preview] CREATE INDEX `idx_novels_created_at` ON `novels` (`created_at`);
+2025-09-13T02:59:02.937Z [exec-stmt] success
+2025-09-13T02:59:02.937Z [exec-stmt-preview] -- 2) jobs (FK -> novels)
+2025-09-13T02:59:02.938Z [exec-stmt] success
+2025-09-13T02:59:02.938Z [exec-stmt-preview] CREATE INDEX `idx_jobs_novel_id` ON `jobs` (`novel_id`);
+2025-09-13T02:59:02.938Z [exec-stmt] success
+2025-09-13T02:59:02.938Z [exec-stmt-preview] CREATE INDEX `idx_jobs_status` ON `jobs` (`status`);
+2025-09-13T02:59:02.938Z [exec-stmt] success
+2025-09-13T02:59:02.939Z [exec-stmt-preview] CREATE INDEX `idx_jobs_novel_id_status` ON `jobs` (`novel_id`,`status`);
+2025-09-13T02:59:02.939Z [exec-stmt] success
+2025-09-13T02:59:02.939Z [exec-stmt-preview] CREATE INDEX `idx_jobs_current_step` ON `jobs` (`current_step`);
+2025-09-13T02:59:02.939Z [exec-stmt] success
+2025-09-13T02:59:02.939Z [exec-stmt-preview] -- 3) tables that reference jobs/novels
+2025-09-13T02:59:02.939Z [exec-stmt] success
+2025-09-13T02:59:02.939Z [exec-stmt-preview] CREATE INDEX `idx_chunk_analysis_status_job_id` ON `chunk_analysis_status` (`job_id`);
+2025-09-13T02:59:02.939Z [exec-stmt] success
+2025-09-13T02:59:02.939Z [exec-stmt-preview] CREATE INDEX `unique_job_chunk_analysis` ON `chunk_analysis_status` (`job_id`,`chunk_index`);
+2025-09-13T02:59:02.940Z [exec-stmt] success
+2025-09-13T02:59:02.940Z [exec-stmt-preview] CREATE TABLE `chunks` (
+2025-09-13T02:59:02.940Z [exec-stmt] success
+2025-09-13T02:59:02.940Z [exec-stmt-preview] CREATE INDEX `idx_chunks_novel_id` ON `chunks` (`novel_id`);
+2025-09-13T02:59:02.940Z [exec-stmt] success
+2025-09-13T02:59:02.940Z [exec-stmt-preview] CREATE INDEX `idx_chunks_job_id` ON `chunks` (`job_id`);
+2025-09-13T02:59:02.940Z [exec-stmt] success
+2025-09-13T02:59:02.940Z [exec-stmt-preview] CREATE INDEX `unique_job_chunk` ON `chunks` (`job_id`,`chunk_index`);
+2025-09-13T02:59:02.941Z [exec-stmt] success
+2025-09-13T02:59:02.941Z [exec-stmt-preview] CREATE TABLE `episodes` (
+2025-09-13T02:59:02.941Z [exec-stmt] success
+2025-09-13T02:59:02.941Z [exec-stmt-preview] CREATE INDEX `idx_episodes_novel_id` ON `episodes` (`novel_id`);
+2025-09-13T02:59:02.941Z [exec-stmt] success
+2025-09-13T02:59:02.941Z [exec-stmt-preview] CREATE INDEX `idx_episodes_job_id` ON `episodes` (`job_id`);
+2025-09-13T02:59:02.941Z [exec-stmt] success
+2025-09-13T02:59:02.942Z [exec-stmt-preview] CREATE INDEX `unique_job_episode` ON `episodes` (`job_id`,`episode_number`);
+2025-09-13T02:59:02.942Z [exec-stmt] success
+2025-09-13T02:59:02.942Z [exec-stmt-preview] CREATE TABLE `job_step_history` (
+2025-09-13T02:59:02.942Z [exec-stmt] success
+2025-09-13T02:59:02.942Z [exec-stmt-preview] CREATE INDEX `idx_job_step_history_job_id` ON `job_step_history` (`job_id`);
+2025-09-13T02:59:02.942Z [exec-stmt] success
+2025-09-13T02:59:02.942Z [exec-stmt-preview] CREATE TABLE `layout_status` (
+2025-09-13T02:59:02.943Z [exec-stmt] success
+2025-09-13T02:59:02.943Z [exec-stmt-preview] CREATE INDEX `idx_layout_status_job_id` ON `layout_status` (`job_id`);
+2025-09-13T02:59:02.943Z [exec-stmt] success
+2025-09-13T02:59:02.943Z [exec-stmt-preview] CREATE INDEX `unique_job_episode_layout` ON `layout_status` (`job_id`,`episode_number`);
+2025-09-13T02:59:02.943Z [exec-stmt] success
+2025-09-13T02:59:02.943Z [exec-stmt-preview] CREATE TABLE `outputs` (
+2025-09-13T02:59:02.944Z [exec-stmt] success
+2025-09-13T02:59:02.944Z [exec-stmt-preview] CREATE INDEX `idx_outputs_novel_id` ON `outputs` (`novel_id`);
+2025-09-13T02:59:02.944Z [exec-stmt] success
+2025-09-13T02:59:02.944Z [exec-stmt-preview] CREATE INDEX `idx_outputs_job_id` ON `outputs` (`job_id`);
+2025-09-13T02:59:02.944Z [exec-stmt] success
+2025-09-13T02:59:02.944Z [exec-stmt-preview] CREATE TABLE `render_status` (
+2025-09-13T02:59:02.944Z [exec-stmt] success
+2025-09-13T02:59:02.945Z [exec-stmt-preview] CREATE INDEX `idx_render_status_job_id` ON `render_status` (`job_id`);
+2025-09-13T02:59:02.945Z [exec-stmt] success
+2025-09-13T02:59:02.945Z [exec-stmt-preview] CREATE INDEX `unique_job_episode_page` ON `render_status` (`job_id`,`episode_number`,`page_number`);
+2025-09-13T02:59:02.945Z [exec-stmt] success
+2025-09-13T02:59:02.945Z [exec-stmt-preview] CREATE TABLE `storage_files` (
+2025-09-13T02:59:02.945Z [exec-stmt] success
+2025-09-13T02:59:02.946Z [exec-stmt-preview] CREATE UNIQUE INDEX `storage_files_file_path_unique` ON `storage_files` (`file_path`);
+2025-09-13T02:59:02.946Z [exec-stmt] success
+2025-09-13T02:59:02.946Z [exec-stmt-preview] CREATE INDEX `idx_storage_files_novel_id` ON `storage_files` (`novel_id`);
+2025-09-13T02:59:02.946Z [exec-stmt] success
+2025-09-13T02:59:02.946Z [applied] 0000_fast_obadiah_stane.sql
+2025-09-13T02:59:02.947Z [attempt] file=0001_luxuriant_red_hulk.sql full=G:\TsProjects\novel2manga-ts\drizzle\0001_luxuriant_red_hulk.sql
+2025-09-13T02:59:02.947Z [exec-stmt-preview] DROP INDEX `unique_job_episode`;
+2025-09-13T02:59:02.947Z [exec-stmt] success
+2025-09-13T02:59:02.947Z [exec-stmt-preview] CREATE UNIQUE INDEX `unique_job_episode` ON `episodes` (`job_id`,`episode_number`);
+2025-09-13T02:59:02.947Z [exec-stmt] success
+2025-09-13T02:59:02.948Z [applied] 0001_luxuriant_red_hulk.sql
+2025-09-13T02:59:02.948Z [attempt] file=0002_serious_paper_doll.sql full=G:\TsProjects\novel2manga-ts\drizzle\0002_serious_paper_doll.sql
+2025-09-13T02:59:02.948Z [exec-stmt-preview] CREATE TABLE `token_usage` (
+2025-09-13T02:59:02.948Z [exec-stmt] success
+2025-09-13T02:59:02.948Z [exec-stmt-preview] CREATE INDEX `idx_token_usage_job_id` ON `token_usage` (`job_id`);
+2025-09-13T02:59:02.948Z [exec-stmt] success
+2025-09-13T02:59:02.949Z [exec-stmt-preview] CREATE INDEX `idx_token_usage_agent_name` ON `token_usage` (`agent_name`);
+2025-09-13T02:59:02.949Z [exec-stmt] success
+2025-09-13T02:59:02.949Z [exec-stmt-preview] CREATE INDEX `idx_token_usage_provider` ON `token_usage` (`provider`);
+2025-09-13T02:59:02.949Z [exec-stmt] success
+2025-09-13T02:59:02.949Z [exec-stmt-preview] CREATE INDEX `idx_token_usage_created_at` ON `token_usage` (`created_at`);
+2025-09-13T02:59:02.949Z [exec-stmt] success
+2025-09-13T02:59:02.950Z [exec-stmt-preview] PRAGMA foreign_keys=OFF;
+2025-09-13T02:59:02.950Z [exec-stmt] success
+2025-09-13T02:59:02.950Z [exec-stmt-preview] CREATE TABLE `__new_novels` (
+2025-09-13T02:59:02.950Z [exec-stmt] success
+2025-09-13T02:59:02.950Z [exec-stmt-preview] INSERT INTO `__new_novels`("id", "title", "author", "original_text_path", "text_length", "language", "metadata_path", "created_at", "updated_at") SELECT "id", "title", "author", "original_text_path", "text_length", "language", "metadata_path", "created_at", "updated_at" FROM `novels`;
+2025-09-13T02:59:02.950Z [exec-stmt] success
+2025-09-13T02:59:02.950Z [exec-stmt-preview] DROP TABLE `novels`;
+2025-09-13T02:59:02.951Z [exec-stmt] success
+2025-09-13T02:59:02.951Z [exec-stmt-preview] ALTER TABLE `__new_novels` RENAME TO `novels`;
+2025-09-13T02:59:02.951Z [exec-stmt] success
+2025-09-13T02:59:02.951Z [exec-stmt-preview] PRAGMA foreign_keys=ON;
+2025-09-13T02:59:02.952Z [exec-stmt] success
+2025-09-13T02:59:02.952Z [exec-stmt-preview] CREATE INDEX `idx_novels_created_at` ON `novels` (`created_at`);
+2025-09-13T02:59:02.952Z [exec-stmt] success
+2025-09-13T02:59:02.952Z [applied] 0002_serious_paper_doll.sql
+2025-09-13T02:59:02.952Z [attempt] file=0003_mute_gauntlet.sql full=G:\TsProjects\novel2manga-ts\drizzle\0003_mute_gauntlet.sql
+2025-09-13T02:59:02.952Z [exec-stmt-preview] ALTER TABLE `episodes` ADD `episode_text_path` text;
+2025-09-13T02:59:02.952Z [exec-stmt] success
+2025-09-13T02:59:02.953Z [applied] 0003_mute_gauntlet.sql
+2025-09-13T02:59:02.953Z [attempt] file=0004_icy_speed.sql full=G:\TsProjects\novel2manga-ts\drizzle\0004_icy_speed.sql
+2025-09-13T02:59:02.953Z [exec-stmt-preview] ALTER TABLE `episodes` DROP COLUMN `estimated_pages`;
+2025-09-13T02:59:02.953Z [exec-stmt] success
+2025-09-13T02:59:02.954Z [applied] 0004_icy_speed.sql
+2025-09-13T02:59:02.954Z [attempt] file=0005_chief_lady_deathstrike.sql full=G:\TsProjects\novel2manga-ts\drizzle\0005_chief_lady_deathstrike.sql
+2025-09-13T02:59:02.954Z [exec-stmt-preview] ALTER TABLE `jobs` ADD `processing_episode` integer;
+2025-09-13T02:59:02.954Z [exec-stmt] success
+2025-09-13T02:59:02.954Z [exec-stmt-preview] ALTER TABLE `jobs` ADD `processing_page` integer;
+2025-09-13T02:59:02.955Z [exec-stmt] success
+2025-09-13T02:59:02.955Z [applied] 0005_chief_lady_deathstrike.sql
+2025-09-13T02:59:02.955Z [attempt] file=0006_burly_kree.sql full=G:\TsProjects\novel2manga-ts\drizzle\0006_burly_kree.sql
+2025-09-13T02:59:02.955Z [exec-stmt-preview] DROP INDEX `unique_job_episode_layout`;
+2025-09-13T02:59:02.955Z [exec-stmt] success
+2025-09-13T02:59:02.955Z [exec-stmt-preview] CREATE UNIQUE INDEX `unique_job_episode_layout` ON `layout_status` (`job_id`,`episode_number`);
+2025-09-13T02:59:02.955Z [exec-stmt] success
+2025-09-13T02:59:02.955Z [exec-stmt-preview] ALTER TABLE `jobs` ADD `coverage_warnings` text;
+2025-09-13T02:59:02.956Z [exec-stmt] success
+2025-09-13T02:59:02.956Z [applied] 0006_burly_kree.sql
+2025-09-13T02:59:02.956Z [attempt] file=0007_add_user_id_to_jobs.sql full=G:\TsProjects\novel2manga-ts\drizzle\0007_add_user_id_to_jobs.sql
+2025-09-13T02:59:02.956Z [exec-stmt-preview] ALTER TABLE jobs ADD COLUMN user_id text NOT NULL DEFAULT 'anonymous';
+2025-09-13T02:59:02.956Z [exec-stmt] success
+2025-09-13T02:59:02.957Z [exec-stmt-preview] CREATE INDEX idx_jobs_user_id ON jobs (user_id);
+2025-09-13T02:59:02.957Z [exec-stmt] success
+2025-09-13T02:59:02.957Z [exec-stmt-preview] -- Also prepare novels table with user_id before 0008 rebuild
+2025-09-13T02:59:02.957Z [exec-stmt] success
+2025-09-13T02:59:02.957Z [exec-stmt-preview] CREATE INDEX idx_novels_user_id ON novels (user_id);
+2025-09-13T02:59:02.957Z [exec-stmt] success
+2025-09-13T02:59:02.957Z [applied] 0007_add_user_id_to_jobs.sql
+2025-09-13T02:59:02.958Z [attempt] file=0007_icy_vivisector.sql full=G:\TsProjects\novel2manga-ts\drizzle\0007_icy_vivisector.sql
+2025-09-13T02:59:02.958Z [exec-stmt-preview] -- NOTE: This migration was superseded by 0007_milky_killer_shrike and 0008_nervous_colossus.
+2025-09-13T02:59:02.958Z [exec-stmt] success
+2025-09-13T02:59:02.958Z [applied] 0007_icy_vivisector.sql
+2025-09-13T02:59:02.958Z [attempt] file=0007_milky_killer_shrike.sql full=G:\TsProjects\novel2manga-ts\drizzle\0007_milky_killer_shrike.sql
+2025-09-13T02:59:02.958Z [exec-stmt-preview] CREATE TABLE `account` (
+2025-09-13T02:59:02.958Z [exec-stmt] success
+2025-09-13T02:59:02.958Z [exec-stmt-preview] CREATE TABLE `authenticator` (
+2025-09-13T02:59:02.959Z [exec-stmt] success
+2025-09-13T02:59:02.959Z [exec-stmt-preview] CREATE UNIQUE INDEX `authenticator_credentialID_unique` ON `authenticator` (`credentialID`);
+2025-09-13T02:59:02.959Z [exec-stmt] success
+2025-09-13T02:59:02.959Z [exec-stmt-preview] CREATE TABLE `session` (
+2025-09-13T02:59:02.959Z [exec-stmt] success
+2025-09-13T02:59:02.959Z [exec-stmt-preview] CREATE TABLE `user` (
+2025-09-13T02:59:02.959Z [exec-stmt] success
+2025-09-13T02:59:02.959Z [exec-stmt-preview] CREATE UNIQUE INDEX `user_email_unique` ON `user` (`email`);
+2025-09-13T02:59:02.960Z [exec-stmt] success
+2025-09-13T02:59:02.960Z [exec-stmt-preview] CREATE TABLE `verificationToken` (
+2025-09-13T02:59:02.960Z [exec-stmt] success
+2025-09-13T02:59:02.960Z [applied] 0007_milky_killer_shrike.sql
+2025-09-13T02:59:02.960Z [attempt] file=0007_smiling_madrox.sql full=G:\TsProjects\novel2manga-ts\drizzle\0007_smiling_madrox.sql
+2025-09-13T02:59:02.960Z [exec-stmt-preview] ALTER TABLE `outputs` ADD `user_id` text NOT NULL DEFAULT '';
+2025-09-13T02:59:02.961Z [exec-stmt] success
+2025-09-13T02:59:02.961Z [applied] 0007_smiling_madrox.sql
+2025-09-13T02:59:02.961Z [attempt] file=0008_nervous_colossus.sql full=G:\TsProjects\novel2manga-ts\drizzle\0008_nervous_colossus.sql
+2025-09-13T02:59:02.961Z [exec-stmt-preview] DROP TABLE IF EXISTS `__legacy_authenticator`;
+2025-09-13T02:59:02.961Z [exec-stmt] success
+2025-09-13T02:59:02.961Z [exec-stmt-preview] ALTER TABLE `authenticator` RENAME TO `__legacy_authenticator`;
+2025-09-13T02:59:02.962Z [exec-stmt] success
+2025-09-13T02:59:02.962Z [exec-stmt-preview] -- user.emailVerified is already camelCase in prior migration; skip if not present
+2025-09-13T02:59:02.962Z [exec-stmt] success
+2025-09-13T02:59:02.962Z [exec-stmt-preview] CREATE TABLE `__new_authenticators` (
+2025-09-13T02:59:02.962Z [exec-stmt] success
+2025-09-13T02:59:02.962Z [exec-stmt-preview] INSERT INTO `__new_authenticators`(
+2025-09-13T02:59:02.962Z [exec-stmt] success
+2025-09-13T02:59:02.962Z [exec-stmt-preview] DROP TABLE IF EXISTS `authenticators`;
+2025-09-13T02:59:02.962Z [exec-stmt] success
+2025-09-13T02:59:02.963Z [exec-stmt-preview] ALTER TABLE `__new_authenticators` RENAME TO `authenticators`;
+2025-09-13T02:59:02.963Z [exec-stmt] success
+2025-09-13T02:59:02.963Z [exec-stmt-preview] PRAGMA foreign_keys=ON;
+2025-09-13T02:59:02.963Z [exec-stmt] success
+2025-09-13T02:59:02.963Z [exec-stmt-preview] CREATE UNIQUE INDEX `authenticators_credential_id_unique` ON `authenticators` (`credential_id`);
+2025-09-13T02:59:02.964Z [exec-stmt] success
+2025-09-13T02:59:02.964Z [exec-stmt-preview] DROP INDEX IF EXISTS `users_email_unique`;
+2025-09-13T02:59:02.964Z [exec-stmt] success
+2025-09-13T02:59:02.964Z [exec-stmt-preview] ALTER TABLE `user` ADD `created_at` text DEFAULT CURRENT_TIMESTAMP;
+2025-09-13T02:59:02.964Z [exec-stmt] success
+2025-09-13T02:59:02.964Z [exec-stmt-preview] CREATE UNIQUE INDEX IF NOT EXISTS `user_email_unique` ON `user` (`email`);
+2025-09-13T02:59:02.964Z [exec-stmt] success
+2025-09-13T02:59:02.964Z [exec-stmt-preview] -- Ensure default user exists for FK targets
+2025-09-13T02:59:02.965Z [exec-stmt] success
+2025-09-13T02:59:02.965Z [exec-stmt-preview] CREATE TABLE `__new_jobs` (
+2025-09-13T02:59:02.965Z [exec-stmt] success
+2025-09-13T02:59:02.965Z [exec-stmt-preview] INSERT INTO `__new_jobs`(
+2025-09-13T02:59:02.965Z [exec-stmt] success
+2025-09-13T02:59:02.965Z [exec-stmt-preview] DROP TABLE `jobs`;
+2025-09-13T02:59:02.965Z [exec-stmt] success
+2025-09-13T02:59:02.965Z [exec-stmt-preview] ALTER TABLE `__new_jobs` RENAME TO `jobs`;
+2025-09-13T02:59:02.966Z [exec-stmt] success
+2025-09-13T02:59:02.966Z [exec-stmt-preview] CREATE INDEX `idx_jobs_novel_id` ON `jobs` (`novel_id`);
+2025-09-13T02:59:02.966Z [exec-stmt] success
+2025-09-13T02:59:02.966Z [exec-stmt-preview] CREATE INDEX `idx_jobs_status` ON `jobs` (`status`);
+2025-09-13T02:59:02.967Z [exec-stmt] success
+2025-09-13T02:59:02.967Z [exec-stmt-preview] CREATE INDEX `idx_jobs_novel_id_status` ON `jobs` (`novel_id`,`status`);
+2025-09-13T02:59:02.967Z [exec-stmt] success
+2025-09-13T02:59:02.967Z [exec-stmt-preview] CREATE INDEX `idx_jobs_current_step` ON `jobs` (`current_step`);
+2025-09-13T02:59:02.967Z [exec-stmt] success
+2025-09-13T02:59:02.967Z [exec-stmt-preview] CREATE INDEX `idx_jobs_user_id` ON `jobs` (`user_id`);
+2025-09-13T02:59:02.967Z [exec-stmt] success
+2025-09-13T02:59:02.967Z [exec-stmt-preview] CREATE TABLE `__new_novels` (
+2025-09-13T02:59:02.967Z [exec-stmt] success
+2025-09-13T02:59:02.968Z [exec-stmt-preview] INSERT INTO `__new_novels`(
+2025-09-13T02:59:02.968Z [exec-stmt] success
+2025-09-13T02:59:02.968Z [exec-stmt-preview] DROP TABLE `novels`;
+2025-09-13T02:59:02.968Z [exec-stmt] success
+2025-09-13T02:59:02.968Z [exec-stmt-preview] ALTER TABLE `__new_novels` RENAME TO `novels`;
+2025-09-13T02:59:02.969Z [exec-stmt] success
+2025-09-13T02:59:02.969Z [exec-stmt-preview] CREATE INDEX `idx_novels_user_id` ON `novels` (`user_id`);
+2025-09-13T02:59:02.969Z [exec-stmt] success
+2025-09-13T02:59:02.969Z [exec-stmt-preview] CREATE INDEX `idx_novels_created_at` ON `novels` (`created_at`);
+2025-09-13T02:59:02.969Z [exec-stmt] success
+2025-09-13T02:59:02.969Z [exec-stmt-preview] CREATE TABLE `__new_session` (
+2025-09-13T02:59:02.969Z [exec-stmt] success
+2025-09-13T02:59:02.969Z [exec-stmt-preview] INSERT INTO `__new_session`("sessionToken", "userId", "expires") SELECT "sessionToken", "userId", "expires" FROM `session`;
+2025-09-13T02:59:02.969Z [exec-stmt] success
+2025-09-13T02:59:02.969Z [exec-stmt-preview] DROP TABLE `session`;
+2025-09-13T02:59:02.970Z [exec-stmt] success
+2025-09-13T02:59:02.970Z [exec-stmt-preview] ALTER TABLE `__new_session` RENAME TO `session`;
+2025-09-13T02:59:02.970Z [exec-stmt] success
+2025-09-13T02:59:02.970Z [applied] 0008_nervous_colossus.sql
+2025-09-13T02:59:02.971Z [attempt] file=0011_gigantic_malice.sql full=G:\TsProjects\novel2manga-ts\drizzle\0011_gigantic_malice.sql
+2025-09-13T02:59:02.971Z [exec-stmt-preview] PRAGMA foreign_keys=OFF;
+2025-09-13T02:59:02.971Z [exec-stmt] success
+2025-09-13T02:59:02.971Z [exec-stmt-preview] CREATE TABLE `__new_authenticators` (
+2025-09-13T02:59:02.971Z [exec-stmt] success
+2025-09-13T02:59:02.971Z [exec-stmt-preview] INSERT INTO `__new_authenticators`("credential_id", "user_id", "provider_account_id", "credential_public_key", "counter", "credential_device_type", "credential_backed_up", "transports") SELECT "credential_id", "user_id", "provider_account_id", "credential_public_key", "counter", "credential_device_type", "credential_backed_up", "transports" FROM `authenticators`;
+2025-09-13T02:59:02.971Z [exec-stmt] success
+2025-09-13T02:59:02.971Z [exec-stmt-preview] DROP TABLE `authenticators`;
+2025-09-13T02:59:02.971Z [exec-stmt] success
+2025-09-13T02:59:02.971Z [exec-stmt-preview] ALTER TABLE `__new_authenticators` RENAME TO `authenticators`;
+2025-09-13T02:59:02.972Z [exec-stmt] success
+2025-09-13T02:59:02.972Z [exec-stmt-preview] PRAGMA foreign_keys=ON;
+2025-09-13T02:59:02.972Z [exec-stmt] success
+2025-09-13T02:59:02.972Z [exec-stmt-preview] CREATE UNIQUE INDEX `authenticators_credential_id_unique` ON `authenticators` (`credential_id`);
+2025-09-13T02:59:02.972Z [exec-stmt] success
+2025-09-13T02:59:02.973Z [applied] 0011_gigantic_malice.sql
+2025-09-13T02:59:02.973Z [attempt] file=0012_render_status_unique_page.sql full=G:\TsProjects\novel2manga-ts\drizzle\0012_render_status_unique_page.sql
+2025-09-13T02:59:02.973Z [exec-stmt-preview] DROP INDEX IF EXISTS `unique_job_episode_page`;
+2025-09-13T02:59:02.973Z [exec-stmt] success
+2025-09-13T02:59:02.973Z [exec-stmt-preview] CREATE UNIQUE INDEX `unique_job_episode_page` ON `render_status` ("job_id","episode_number","page_number");
+2025-09-13T02:59:02.973Z [exec-stmt] success
+2025-09-13T02:59:02.973Z [applied] 0012_render_status_unique_page.sql
+2025-09-13T02:59:02.973Z [attempt] file=0012_thick_hiroim.sql full=G:\TsProjects\novel2manga-ts\drizzle\0012_thick_hiroim.sql
+2025-09-13T02:59:02.973Z [exec-stmt-preview] DROP INDEX `unique_job_episode_page`;
+2025-09-13T02:59:02.974Z [exec-stmt] success
+2025-09-13T02:59:02.974Z [exec-stmt-preview] CREATE UNIQUE INDEX `unique_job_episode_page` ON `render_status` (`job_id`,`episode_number`,`page_number`);
+2025-09-13T02:59:02.974Z [exec-stmt] success
+2025-09-13T02:59:02.974Z [exec-stmt-preview] ALTER TABLE `jobs` ADD `character_memory_path` text;
+2025-09-13T02:59:02.974Z [exec-stmt] success
+2025-09-13T02:59:02.974Z [exec-stmt-preview] ALTER TABLE `jobs` ADD `prompt_memory_path` text;
+2025-09-13T02:59:02.974Z [exec-stmt] success
+2025-09-13T02:59:02.975Z [applied] 0012_thick_hiroim.sql
+2025-09-13T02:59:02.975Z [attempt] file=0013_futuristic_boomer.sql full=G:\TsProjects\novel2manga-ts\drizzle\0013_futuristic_boomer.sql
+2025-09-13T02:59:02.975Z [exec-stmt-preview] ALTER TABLE `user` ADD `email_notifications` integer DEFAULT 1;
+2025-09-13T02:59:02.975Z [exec-stmt] success
+2025-09-13T02:59:02.975Z [exec-stmt-preview] ALTER TABLE `user` ADD `theme` text DEFAULT 'light';
+2025-09-13T02:59:02.976Z [exec-stmt] success
+2025-09-13T02:59:02.976Z [exec-stmt-preview] ALTER TABLE `user` ADD `language` text DEFAULT 'ja';
+2025-09-13T02:59:02.976Z [exec-stmt] success
+2025-09-13T02:59:02.976Z [exec-stmt-preview] INSERT OR IGNORE INTO `user` (id, name, email, created_at) VALUES ('user1', 'User 1', 'user1@example.com', CURRENT_TIMESTAMP);
+2025-09-13T02:59:02.976Z [exec-stmt] success
+2025-09-13T02:59:02.976Z [exec-stmt-preview] INSERT OR IGNORE INTO `user` (id, name, email, created_at) VALUES ('user2', 'User 2', 'user2@example.com', CURRENT_TIMESTAMP);
+2025-09-13T02:59:02.976Z [exec-stmt] success
+2025-09-13T02:59:02.977Z [exec-stmt-preview] PRAGMA foreign_keys=OFF;
+2025-09-13T02:59:02.977Z [exec-stmt] success
+2025-09-13T02:59:02.977Z [exec-stmt-preview] CREATE TABLE `__new_jobs` (
+2025-09-13T02:59:02.977Z [exec-stmt] success
+2025-09-13T02:59:02.977Z [exec-stmt-preview] INSERT INTO `__new_jobs`("id", "novel_id", "job_name", "user_id", "status", "current_step", "split_completed", "analyze_completed", "episode_completed", "layout_completed", "render_completed", "chunks_dir_path", "analyses_dir_path", "episodes_data_path", "layouts_dir_path", "renders_dir_path", "character_memory_path", "prompt_memory_path", "total_chunks", "processed_chunks", "total_episodes", "processed_episodes", "total_pages", "rendered_pages", "processing_episode", "processing_page", "last_error", "last_error_step", "retry_count", "resume_data_path", "coverage_warnings", "created_at", "updated_at", "started_at", "completed_at") SELECT "id", "novel_id", "job_name", "user_id", "status", "current_step", "split_completed", "analyze_completed", "episode_completed", "layout_completed", "render_completed", "chunks_dir_path", "analyses_dir_path", "episodes_data_path", "layouts_dir_path", "renders_dir_path", "character_memory_path", "prompt_memory_path", "total_chunks", "processed_chunks", "total_episodes", "processed_episodes", "total_pages", "rendered_pages", "processing_episode", "processing_page", "last_error", "last_error_step", "retry_count", "resume_data_path", "coverage_warnings", "created_at", "updated_at", "started_at", "completed_at" FROM `jobs`;
+2025-09-13T02:59:02.977Z [exec-stmt] success
+2025-09-13T02:59:02.977Z [exec-stmt-preview] DROP TABLE `jobs`;
+2025-09-13T02:59:02.977Z [exec-stmt] success
+2025-09-13T02:59:02.977Z [exec-stmt-preview] ALTER TABLE `__new_jobs` RENAME TO `jobs`;
+2025-09-13T02:59:02.978Z [exec-stmt] success
+2025-09-13T02:59:02.978Z [exec-stmt-preview] PRAGMA foreign_keys=ON;
+2025-09-13T02:59:02.978Z [exec-stmt] success
+2025-09-13T02:59:02.978Z [exec-stmt-preview] CREATE INDEX `idx_jobs_novel_id` ON `jobs` (`novel_id`);
+2025-09-13T02:59:02.978Z [exec-stmt] success
+2025-09-13T02:59:02.978Z [exec-stmt-preview] CREATE INDEX `idx_jobs_status` ON `jobs` (`status`);
+2025-09-13T02:59:02.979Z [exec-stmt] success
+2025-09-13T02:59:02.979Z [exec-stmt-preview] CREATE INDEX `idx_jobs_novel_id_status` ON `jobs` (`novel_id`,`status`);
+2025-09-13T02:59:02.979Z [exec-stmt] success
+2025-09-13T02:59:02.979Z [exec-stmt-preview] CREATE INDEX `idx_jobs_current_step` ON `jobs` (`current_step`);
+2025-09-13T02:59:02.979Z [exec-stmt] success
+2025-09-13T02:59:02.979Z [exec-stmt-preview] CREATE INDEX `idx_jobs_user_id` ON `jobs` (`user_id`);
+2025-09-13T02:59:02.979Z [exec-stmt] success
+2025-09-13T02:59:02.979Z [exec-stmt-preview] ALTER TABLE `storage_files` ADD `user_id` text;
+2025-09-13T02:59:02.980Z [exec-stmt] success
+2025-09-13T02:59:02.980Z [exec-stmt-preview] UPDATE `storage_files` SET `user_id` = (SELECT `novels`.`user_id` FROM `novels` WHERE `novels`.`id` = `storage_files`.`novel_id`);
+2025-09-13T02:59:02.980Z [exec-stmt] success
+2025-09-13T02:59:02.980Z [exec-stmt-preview] UPDATE `storage_files` SET `user_id` = 'anonymous' WHERE `user_id` IS NULL;
+2025-09-13T02:59:02.980Z [exec-stmt] success
+2025-09-13T02:59:02.980Z [exec-stmt-preview] PRAGMA foreign_keys=OFF;
+2025-09-13T02:59:02.980Z [exec-stmt] success
+2025-09-13T02:59:02.981Z [exec-stmt-preview] CREATE TABLE `__new_storage_files` (
+2025-09-13T02:59:02.981Z [exec-stmt] success
+2025-09-13T02:59:02.981Z [exec-stmt-preview] INSERT INTO `__new_storage_files`("id", "novel_id", "job_id", "user_id", "file_path", "file_category", "file_type", "mime_type", "file_size", "created_at") SELECT "id", "novel_id", "job_id", "user_id", "file_path", "file_category", "file_type", "mime_type", "file_size", "created_at" FROM `storage_files`;
+2025-09-13T02:59:02.981Z [exec-stmt] success
+2025-09-13T02:59:02.981Z [exec-stmt-preview] DROP TABLE `storage_files`;
+2025-09-13T02:59:02.981Z [exec-stmt] success
+2025-09-13T02:59:02.981Z [exec-stmt-preview] ALTER TABLE `__new_storage_files` RENAME TO `storage_files`;
+2025-09-13T02:59:02.982Z [exec-stmt] success
+2025-09-13T02:59:02.982Z [exec-stmt-preview] PRAGMA foreign_keys=ON;
+2025-09-13T02:59:02.982Z [exec-stmt] success
+2025-09-13T02:59:02.982Z [exec-stmt-preview] CREATE UNIQUE INDEX `storage_files_file_path_unique` ON `storage_files` (`file_path`);
+2025-09-13T02:59:02.982Z [exec-stmt] success
+2025-09-13T02:59:02.982Z [exec-stmt-preview] CREATE INDEX `idx_storage_files_novel_id` ON `storage_files` (`novel_id`);
+2025-09-13T02:59:02.983Z [exec-stmt] success
+2025-09-13T02:59:02.983Z [exec-stmt-preview] CREATE INDEX `idx_storage_files_user_id` ON `storage_files` (`user_id`);
+2025-09-13T02:59:02.983Z [exec-stmt] success
+2025-09-13T02:59:02.983Z [applied] 0013_futuristic_boomer.sql
+2025-09-13T02:59:02.983Z [attempt] file=0014_pink_bromley.sql full=G:\TsProjects\novel2manga-ts\drizzle\0014_pink_bromley.sql
+2025-09-13T02:59:02.983Z [exec-stmt-preview] CREATE TABLE IF NOT EXISTS `authenticators` (
+2025-09-13T02:59:02.983Z [exec-stmt] success
+2025-09-13T02:59:02.983Z [exec-stmt-preview] CREATE UNIQUE INDEX IF NOT EXISTS `authenticators_credential_id_unique` ON `authenticators` (`credential_id`);
+2025-09-13T02:59:02.983Z [exec-stmt] success
+2025-09-13T02:59:02.984Z [applied] 0014_pink_bromley.sql
+2025-09-13T02:59:02.984Z [pragma-jobs] [{"cid":0,"name":"id","type":"TEXT","notnull":1,"dflt_value":null,"pk":1},{"cid":1,"name":"novel_id","type":"TEXT","notnull":1,"dflt_value":null,"pk":0},{"cid":2,"name":"job_name","type":"TEXT","notnull":0,"dflt_value":null,"pk":0},{"cid":3,"name":"user_id","type":"TEXT","notnull":1,"dflt_value":"'anonymous'","pk":0},{"cid":4,"name":"status","type":"TEXT","notnull":1,"dflt_value":"'pending'","pk":0},{"cid":5,"name":"current_step","type":"TEXT","notnull":1,"dflt_value":"'initialized'","pk":0},{"cid":6,"name":"split_completed","type":"INTEGER","notnull":0,"dflt_value":"false","pk":0},{"cid":7,"name":"analyze_completed","type":"INTEGER","notnull":0,"dflt_value":"false","pk":0},{"cid":8,"name":"episode_completed","type":"INTEGER","notnull":0,"dflt_value":"false","pk":0},{"cid":9,"name":"layout_completed","type":"INTEGER","notnull":0,"dflt_value":"false","pk":0},{"cid":10,"name":"render_completed","type":"INTEGER","notnull":0,"dflt_value":"false","pk":0},{"cid":11,"name":"chunks_dir_path","type":"TEXT","notnull":0,"dflt_value":null,"pk":0},{"cid":12,"name":"analyses_dir_path","type":"TEXT","notnull":0,"dflt_value":null,"pk":0},{"cid":13,"name":"episodes_data_path","type":"TEXT","notnull":0,"dflt_value":null,"pk":0},{"cid":14,"name":"layouts_dir_path","type":"TEXT","notnull":0,"dflt_value":null,"pk":0},{"cid":15,"name":"renders_dir_path","type":"TEXT","notnull":0,"dflt_value":null,"pk":0},{"cid":16,"name":"character_memory_path","type":"TEXT","notnull":0,"dflt_value":null,"pk":0},{"cid":17,"name":"prompt_memory_path","type":"TEXT","notnull":0,"dflt_value":null,"pk":0},{"cid":18,"name":"total_chunks","type":"INTEGER","notnull":0,"dflt_value":"0","pk":0},{"cid":19,"name":"processed_chunks","type":"INTEGER","notnull":0,"dflt_value":"0","pk":0},{"cid":20,"name":"total_episodes","type":"INTEGER","notnull":0,"dflt_value":"0","pk":0},{"cid":21,"name":"processed_episodes","type":"INTEGER","notnull":0,"dflt_value":"0","pk":0},{"cid":22,"name":"total_pages","type":"INTEGER","notnull":0,"dflt_value":"0","pk":0},{"cid":23,"name":"rendered_pages","type":"INTEGER","notnull":0,"dflt_value":"0","pk":0},{"cid":24,"name":"processing_episode","type":"INTEGER","notnull":0,"dflt_value":null,"pk":0},{"cid":25,"name":"processing_page","type":"INTEGER","notnull":0,"dflt_value":null,"pk":0},{"cid":26,"name":"last_error","type":"TEXT","notnull":0,"dflt_value":null,"pk":0},{"cid":27,"name":"last_error_step","type":"TEXT","notnull":0,"dflt_value":null,"pk":0},{"cid":28,"name":"retry_count","type":"INTEGER","notnull":0,"dflt_value":"0","pk":0},{"cid":29,"name":"resume_data_path","type":"TEXT","notnull":0,"dflt_value":null,"pk":0},{"cid":30,"name":"coverage_warnings","type":"TEXT","notnull":0,"dflt_value":null,"pk":0},{"cid":31,"name":"created_at","type":"TEXT","notnull":0,"dflt_value":"CURRENT_TIMESTAMP","pk":0},{"cid":32,"name":"updated_at","type":"TEXT","notnull":0,"dflt_value":"CURRENT_TIMESTAMP","pk":0},{"cid":33,"name":"started_at","type":"TEXT","notnull":0,"dflt_value":null,"pk":0},{"cid":34,"name":"completed_at","type":"TEXT","notnull":0,"dflt_value":null,"pk":0}]

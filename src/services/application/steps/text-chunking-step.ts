@@ -1,6 +1,6 @@
 import { getChunkingConfig } from '@/config'
 import type { Chunk, Job } from '@/db/schema'
-import { db } from '@/services/database/index'
+import { db } from '@/services/database'
 import { splitTextIntoSlidingChunks } from '@/utils/text-splitter'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
@@ -52,22 +52,24 @@ export class TextChunkingStep implements PipelineStep {
         // Previously this returned an array of empty strings which caused
         // downstream prompts to be empty and led to LLM SDK errors
         // (e.g. "contents are required").
-        chunks = await Promise.all(existingChunks.map(async (c) => {
-          try {
-            const stored = await ports.chunk.getChunk(jobId, (c as Chunk).chunkIndex);
-            return stored?.text ?? '';
-          } catch (e) {
-            logger.warn(
-              'Failed to load chunk content from storage for resumed job, inserting empty string',
-              {
-                jobId,
-                chunkIndex: (c as Chunk).chunkIndex,
-                error: e instanceof Error ? e.message : String(e),
-              },
-            );
-            return '';
-          }
-        }));
+        chunks = await Promise.all(
+          existingChunks.map(async (c) => {
+            try {
+              const stored = await ports.chunk.getChunk(jobId, (c as Chunk).chunkIndex)
+              return stored?.text ?? ''
+            } catch (e) {
+              logger.warn(
+                'Failed to load chunk content from storage for resumed job, inserting empty string',
+                {
+                  jobId,
+                  chunkIndex: (c as Chunk).chunkIndex,
+                  error: e instanceof Error ? e.message : String(e),
+                },
+              )
+              return ''
+            }
+          }),
+        )
 
         logger.info('Loaded existing chunks from storage', {
           jobId,

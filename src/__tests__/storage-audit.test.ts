@@ -15,6 +15,7 @@ describe('storage audit', () => {
     // このテスト専用の一時ディレクトリを使用し、StorageFactory.getNovelStorage を差し替える。
     clearStorageCache()
     const basePath = path.join(process.cwd(), '.test-storage', `novels-audit-${Date.now()}`)
+    // no-op
     const storage = new LocalFileStorage(basePath)
 
     // 直下にテスト用ファイルを作成（prefix は指定しない）

@@ -2,8 +2,6 @@
  * Character Memory Persistence via Repository Layer
  */
 
-import { getStoragePorts } from '@/infrastructure/storage/ports'
-import { db } from '@/services/database/index'
 import type {
   AliasIndex,
   CharacterId,
@@ -85,6 +83,7 @@ export async function saveCharacterMemory(
   jobId: string,
   memoryIndex: CharacterMemoryIndex,
 ): Promise<void> {
+  const { getStoragePorts } = await import('@/infrastructure/storage/ports')
   const ports = getStoragePorts().characterMemory
   const fullMemoryArray: CharacterMemoryJson[] = []
   for (const memory of memoryIndex.values()) {
@@ -92,6 +91,10 @@ export async function saveCharacterMemory(
   }
   const json = JSON.stringify(fullMemoryArray, null, 2)
   const key = await ports.putFull(jobId, json)
+  if (!key || typeof key !== 'string' || key.length === 0) {
+    throw new Error('Failed to persist character memory (no key returned)')
+  }
+  const { db } = await import('@/services/database')
   await db.jobs().updateCharacterMemoryPaths(jobId, { full: key })
 }
 
@@ -99,6 +102,7 @@ export async function saveCharacterMemory(
 export async function loadCharacterMemory(
   jobId: string,
 ): Promise<{ memoryIndex: CharacterMemoryIndex; aliasIndex: AliasIndex }> {
+  const { getStoragePorts } = await import('@/infrastructure/storage/ports')
   const ports = getStoragePorts().characterMemory
   const content = await ports.getFull(jobId)
   const memoryIndex = createCharacterMemoryIndex()
@@ -166,13 +170,16 @@ export async function savePromptMemory(
     estimatedTokens += estimatedTokensForThis
   }
   const json = JSON.stringify(promptMemory, null, 2)
+  const { getStoragePorts } = await import('@/infrastructure/storage/ports')
   const ports = getStoragePorts().characterMemory
   const key = await ports.putPrompt(jobId, json)
+  const { db } = await import('@/services/database')
   await db.jobs().updateCharacterMemoryPaths(jobId, { prompt: key })
 }
 
 /** Load prompt memory for inclusion in LLM prompt */
 export async function loadPromptMemory(jobId: string): Promise<CharacterMemoryPromptJson[]> {
+  const { getStoragePorts } = await import('@/infrastructure/storage/ports')
   const ports = getStoragePorts().characterMemory
   const content = await ports.getPrompt(jobId)
   if (!content) return []

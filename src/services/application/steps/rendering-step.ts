@@ -61,7 +61,7 @@ export class RenderingStep implements PipelineStep {
         const ports = getStoragePorts()
 
         // 進捗管理のためのヘルパー関数
-        const { db } = await import('@/services/database/index')
+        const { db } = await import('@/services/database')
         const jobDb = db.jobs()
         const renderDb = db.render()
 
