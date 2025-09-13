@@ -55,7 +55,7 @@ function makeMemoryRenderPorts() {
   } as unknown as StoragePorts & { __dump(): { renders: typeof renders; thumbs: typeof thumbs } }
 }
 
-// Mock vertical text API client and node-canvas image creation
+// Mock vertical text API client and @napi-rs/canvas image creation
 vi.mock('@/services/vertical-text-client', () => ({
   renderVerticalText: vi.fn().mockResolvedValue({
     meta: { image_base64: 'x', width: 120, height: 300 },
@@ -84,7 +84,7 @@ describe.skip('integration: renderBatchFromYaml with vertical text', () => {
     // Mock createImageFromBuffer
     const canvasMod = await import('@/lib/canvas/canvas-renderer')
     // @ts-expect-error test shim
-    canvasMod.CanvasRenderer.createImageFromBuffer = vi.fn().mockReturnValue({
+    canvasMod.CanvasRenderer.createImageFromBuffer = vi.fn().mockResolvedValue({
       image: { __img: true },
       width: 120,
       height: 300,
