@@ -1,8 +1,6 @@
 import { DrizzleAdapter } from '@auth/drizzle-adapter'
-import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import type { Session } from 'next-auth'
-import NextAuth, { type NextAuthOptions } from 'next-auth'
+import type { NextAuthOptions, Session } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
 import { getDatabase } from '@/db'
 import { getDatabaseServiceFactory } from '@/services/database'
@@ -38,72 +36,7 @@ function respondIfMissingAuthEnv(message: string): NextResponse | undefined {
   return undefined
 }
 
-// Request-time handlers to avoid executing DB-dependent code at module import
-function buildAuthOptionsForRequest(): NextAuthOptions {
-  const { AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET, AUTH_SECRET } = process.env
-  void getDatabase() // ensure DatabaseServiceFactory initialized
-  return {
-    adapter: DrizzleAdapter(
-      getDatabaseServiceFactory().getRawDatabase() as Parameters<typeof DrizzleAdapter>[0],
-    ),
-    session: { strategy: 'jwt' },
-    debug: process.env.NODE_ENV === 'development',
-    secret: String(AUTH_SECRET),
-    providers: [
-      GoogleProvider({
-        clientId: String(AUTH_GOOGLE_ID),
-        clientSecret: String(AUTH_GOOGLE_SECRET),
-        authorization: {
-          params: {
-            prompt: 'consent',
-            access_type: 'offline',
-            response_type: 'code',
-          },
-        },
-      }),
-    ],
-    pages: {
-      signIn: '/portal/auth/signin',
-      error: '/portal/auth/error',
-    },
-    callbacks: {
-      async jwt({ token, user }) {
-        if (user) {
-          token.userId = user.id
-        }
-        return token
-      },
-      async session({ session, token }) {
-        if (session.user && token.userId) {
-          ;(session.user as { id?: string }).id = token.userId as string
-        }
-        return session
-      },
-    },
-  }
-}
-
-export const GET = async (req: NextRequest) => {
-  const missingResponse = respondIfMissingAuthEnv('Missing authentication environment variables')
-  if (missingResponse) return missingResponse
-  const url = req.nextUrl.pathname
-  const handler = NextAuth(buildAuthOptionsForRequest())
-  const { ms, value } = await measure(() => handler(req as unknown as Request, new NextResponse()))
-  const status = extractStatus(value)
-  logAuthMetric('auth:GET', { ms, path: url, status })
-  return value
-}
-
-export const POST = async (req: NextRequest) => {
-  const missingResponse = respondIfMissingAuthEnv('Missing authentication environment variables')
-  if (missingResponse) return missingResponse
-  const url = req.nextUrl.pathname
-  const handler = NextAuth(buildAuthOptionsForRequest())
-  const { ms, value } = await measure(() => handler(req as unknown as Request, new NextResponse()))
-  const status = extractStatus(value)
-  logAuthMetric('auth:POST', { ms, path: url, status })
-  return value
-}
+// Removed App Router direct GET/POST handlers.
 
 export const auth = async (): Promise<Session | null | undefined> => {
   const missing = getMissingAuthEnv()
@@ -178,7 +111,7 @@ export const getAuthOptions = (): NextAuthOptions => {
       },
       async session({ session, token }) {
         if (session.user && token.userId) {
-          ;(session.user as { id?: string }).id = token.userId as string
+          ; (session.user as { id?: string }).id = token.userId as string
         }
         return session
       },

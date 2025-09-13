@@ -2,15 +2,7 @@
 import NextAuth from 'next-auth'
 import { getAuthOptions } from '@/auth'
 
-export const GET = async (req: Request) => {
-    const handler = NextAuth(getAuthOptions())
-    // Treat the NextAuth handler as an edge-compatible function for this route.
-    const asEdge = handler as unknown as (r: Request) => Promise<Response>
-    return asEdge(req)
-}
-
-export const POST = async (req: Request) => {
-    const handler = NextAuth(getAuthOptions())
-    const asEdge = handler as unknown as (r: Request) => Promise<Response>
-    return asEdge(req)
-}
+// In App Router, export the handler reference directly so Next.js supplies
+// the correct (req, { params: { nextauth } }) context that NextAuth expects.
+const handler = NextAuth(getAuthOptions())
+export { handler as GET, handler as POST }
