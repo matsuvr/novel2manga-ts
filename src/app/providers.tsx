@@ -3,6 +3,7 @@
 import type { Session } from 'next-auth'
 import { SessionProvider } from 'next-auth/react'
 import { AppLayout } from '@/components/AppLayout'
+import { authConfig } from '@/config/auth.config'
 
 interface ProvidersProps {
   children: React.ReactNode
@@ -11,7 +12,12 @@ interface ProvidersProps {
 
 export default function Providers({ children, session }: ProvidersProps) {
   return (
-    <SessionProvider session={session} refetchOnWindowFocus={false} refetchInterval={0}>
+    <SessionProvider
+      basePath={authConfig.basePath}
+      session={session}
+      refetchOnWindowFocus={false}
+      refetchInterval={0}
+    >
       <AppLayout>{children}</AppLayout>
     </SessionProvider>
   )

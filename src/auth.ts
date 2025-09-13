@@ -4,6 +4,7 @@ import type { NextAuthOptions, Session } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
 import { getDatabase } from '@/db'
 import { getDatabaseServiceFactory } from '@/services/database'
+import { authConfig } from '@/config/auth.config'
 import { getMissingAuthEnv } from '@/utils/auth-env'
 import { logAuthMetric, measure } from '@/utils/auth-metrics'
 
@@ -50,9 +51,9 @@ export const signIn = async (provider?: string) => {
   const missingResponse = respondIfMissingAuthEnv('Missing auth env')
   if (missingResponse) return missingResponse
   const base = getNextAuthBaseUrl()
-  const target = base
-    ? `${base}/portal/api/auth/signin${provider ? `?provider=${provider}` : ''}`
-    : `/portal/api/auth/signin${provider ? `?provider=${provider}` : ''}`
+  const target = `${base ?? ''}${authConfig.basePath}/signin${
+    provider ? `?provider=${provider}` : ''
+  }`
   const { ms, value } = await measure(() => {
     return NextResponse.redirect(target)
   })
@@ -65,7 +66,7 @@ export const signOut = async () => {
   const missingResponse = respondIfMissingAuthEnv('Missing auth env')
   if (missingResponse) return missingResponse
   const base = getNextAuthBaseUrl()
-  const target = base ? `${base}/portal/api/auth/signout` : `/portal/api/auth/signout`
+  const target = `${base ?? ''}${authConfig.basePath}/signout`
   const { ms, value } = await measure(() => NextResponse.redirect(target))
   const status = extractStatus(value)
   logAuthMetric('auth:signOut', { ms, status })
