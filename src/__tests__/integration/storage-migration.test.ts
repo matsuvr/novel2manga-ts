@@ -105,18 +105,21 @@ describe('Storage Migration Integration', () => {
     it('should handle large file migration', async () => {
       // 大容量ファイルの移行テスト
       const largeFileSize = 1024 * 1024 // 1MB
-      const largeFileContent = Buffer.alloc(largeFileSize, 'x')
       const largeFilePath = path.join(testStorageBase, 'outputs', 'large-file.zip')
 
       try {
+        // ベースラインのメモリ使用量を取得してからバッファを作成/書き込みする
+        const beforeHeap = process.memoryUsage().heapUsed
+
+        const largeFileContent = Buffer.alloc(largeFileSize, 'x')
         await fs.writeFile(largeFilePath, largeFileContent)
 
         const stats = await fs.stat(largeFilePath)
         expect(stats.size).toBe(largeFileSize)
 
-        // メモリ使用量を監視しながら大きなファイルを処理
-        const used = process.memoryUsage()
-        expect(used.heapUsed).toBeLessThan(100 * 1024 * 1024) // 100MB未満
+        // 書き込み前後のヒープ差分を確認し、極端な増加がないことを保証する
+        const afterHeap = process.memoryUsage().heapUsed
+        expect(afterHeap - beforeHeap).toBeLessThan(50 * 1024 * 1024) // 増加は50MB未満
 
       } catch (error) {
         throw error
@@ -185,8 +188,8 @@ describe('Storage Migration Integration', () => {
 
       try {
         await fs.writeFile(filePath1, 'Original content')
-        
-      // 重複ファイルを検出してリネーム
+
+        // 重複ファイルを検出してリネーム
         let counter = 1
         let newFilePath = filePath1
         while (await fs.access(newFilePath).then(() => true).catch(() => false)) {

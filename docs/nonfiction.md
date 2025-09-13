@@ -4,6 +4,11 @@
 
 ---
 
+## Implementation Status
+
+- InputValidationStep now validates text length and classifies narrativity.
+- Configuration flags for `validation`, `expansion`, and `nonNarrative` are available via `app.config.ts`.
+
 ## Design Doc (for coding AIs)
 
 ### 1) Where these changes plug into the current app
