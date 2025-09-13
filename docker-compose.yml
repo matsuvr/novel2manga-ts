@@ -6,9 +6,9 @@ services:
     ports:
       - '3000:3000'
     volumes:
-      - ./:/app
-      - node_modules:/app/node_modules
-      - database:/app/database
+      - ./:/app # ソースコードのみマウント
+      # - node_modules:/app/node_modules  # これをコメントアウト or 削除
+      - /app/node_modules # 追加: コンテナ内専用のnode_modulesパス（匿名volume相当）
     env_file:
       - .env
       - .env.local
