@@ -3,16 +3,17 @@ import { z } from 'zod'
 /** High-level result of the new InputValidationStep. */
 export type InputValidationStatus = 'OK' | 'SHORT' | 'NON_NARRATIVE' | 'LLM_ERROR'
 
-/** Coarse classification of text kind. */
-export type NarrativeKind =
-  | 'novel'
-  | 'short_story'
-  | 'play'
-  | 'rakugo'
-  | 'nonfiction'
-  | 'report'
-  | 'manual'
-  | 'other'
+export const NarrativeKindEnum = z.enum([
+  'novel',
+  'short_story',
+  'play',
+  'rakugo',
+  'nonfiction',
+  'report',
+  'manual',
+  'other',
+])
+export type NarrativeKind = z.infer<typeof NarrativeKindEnum>
 
 /** JSON returned by the narrativity judge prompt. */
 export interface NarrativeJudgeResult {
@@ -25,16 +26,7 @@ export interface NarrativeJudgeResult {
 /** Zod schema for safe parsing of NarrativeJudgeResult JSON. */
 export const NarrativeJudgeSchema = z.object({
   isNarrative: z.boolean(),
-  kind: z.enum([
-    'novel',
-    'short_story',
-    'play',
-    'rakugo',
-    'nonfiction',
-    'report',
-    'manual',
-    'other',
-  ]),
+  kind: NarrativeKindEnum,
   confidence: z.number().min(0).max(1),
   reason: z.string().min(1),
 })

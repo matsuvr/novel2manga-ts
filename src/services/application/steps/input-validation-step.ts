@@ -1,13 +1,13 @@
 import { getLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import {
-  NARRATIVITY_JUDGE_SYSTEM,
   buildNarrativityJudgeUser,
+  NARRATIVITY_JUDGE_SYSTEM,
 } from '@/prompts/narrativityJudge.prompt'
-import { NarrativeJudgeSchema } from '@/types/validation'
 import type { ValidationOutcome } from '@/types/validation'
-import { BasePipelineStep } from './base-step'
+import { NarrativeJudgeSchema } from '@/types/validation'
 import type { StepContext, StepExecutionResult } from './base-step'
+import { BasePipelineStep } from './base-step'
 
 export class InputValidationStep extends BasePipelineStep {
   readonly stepName = 'input-validation'
@@ -52,7 +52,8 @@ export class InputValidationStep extends BasePipelineStep {
     } catch (error) {
       this.logStructuredError(context, 'narrativity-judge', error)
       const message = error instanceof Error ? error.message : String(error)
-      return this.createSuccess({ status: 'LLM_ERROR' }, message)
+      // Return an error result so callers can detect LLM failures and mark the job failed
+      return this.createError(message)
     }
   }
 }

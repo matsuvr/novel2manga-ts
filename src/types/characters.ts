@@ -1,10 +1,20 @@
 import { z } from 'zod'
 
+export const ExplainerCharacterRoleEnum = z.enum([
+  'Teacher',
+  'Student',
+  'Skeptic',
+  'Expert',
+  'Narrator',
+  'Other',
+])
+export type ExplainerCharacterRole = z.infer<typeof ExplainerCharacterRoleEnum>
+
 /** Minimal per-character spec for explanatory manga. */
 export interface ExplainerCharacter {
   id: string // stable within a job
   name: string // short, distinct
-  role: 'Teacher' | 'Student' | 'Skeptic' | 'Expert' | 'Narrator' | 'Other'
+  role: ExplainerCharacterRole
   voice: string // tone register and typical phrasing (JP)
   style: string // mannerisms, pacing (JP)
   quirks?: string // small memorable traits (JP)
@@ -17,7 +27,7 @@ export const ExplainerCharactersSchema = z
     z.object({
       id: z.string().min(1),
       name: z.string().min(1),
-      role: z.enum(['Teacher', 'Student', 'Skeptic', 'Expert', 'Narrator', 'Other']),
+      role: ExplainerCharacterRoleEnum,
       voice: z.string().min(1),
       style: z.string().min(1),
       quirks: z.string().optional(),

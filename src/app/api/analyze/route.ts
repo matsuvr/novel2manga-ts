@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { getLogger } from '@/infrastructure/logging/logger'
+import { getStoragePorts } from '@/infrastructure/storage/ports'
 import { AnalyzePipeline } from '@/services/application/analyze-pipeline'
 import { InputValidationStep } from '@/services/application/steps'
 import { db } from '@/services/database'
@@ -14,7 +15,8 @@ import {
 } from '@/utils/api-error'
 import { detectDemoMode } from '@/utils/request-mode'
 import { generateUUID } from '@/utils/uuid'
-import { getStoragePorts } from '@/infrastructure/storage/ports'
+
+const FETCH_FROM_STORAGE = '__FETCH_FROM_STORAGE__'
 
 const analyzeRequestSchema = z
   .object({
@@ -116,7 +118,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     // 外部キー制約のための Novel 事前処理
     // - text が与えられている場合のみ ensure（新規作成または更新）
     // - novelId のみの場合は存在確認を行い、無ければ 404 を返す
-    if (novelText !== '__FETCH_FROM_STORAGE__') {
+    if (novelText !== FETCH_FROM_STORAGE) {
       try {
         await db.novels().ensureNovel(novelId as string, {
           title: title || `Novel ${(novelId as string).slice(0, 8)}`,
@@ -168,29 +170,48 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     }
 
     const jobId = generateUUID()
+    if (!novelId) {
+      return createErrorResponse(new ApiError('Internal error: novelId is missing.', 500))
+    }
+
     db.jobs().createJobRecord({
       id: jobId,
-      novelId: novelId as string,
+      novelId: novelId,
       title: `Analysis Job for ${title ?? 'Novel'}`,
       userId: user.id,
     })
-    if (novelText !== '__FETCH_FROM_STORAGE__') {
+
+    if (novelText !== FETCH_FROM_STORAGE) {
       const validationStep = new InputValidationStep()
       const validation = await validationStep.validate(novelText, {
         jobId,
-        novelId: novelId as string,
+        novelId,
         logger: _logger,
         ports: getStoragePorts(),
         isDemo,
       })
 
       if (!validation.success) {
-        db.jobs().updateJobStatus(jobId, 'failed', validation.error)
+        try {
+          db.jobs().updateJobStatus?.(jobId, 'failed', validation.error)
+        } catch (e) {
+          _logger.warn('updateJobStatus failed while handling validation error', {
+            jobId,
+            error: extractErrorMessage(e),
+          })
+        }
         return createErrorResponse(new ApiError(validation.error, 400, 'INVALID_INPUT'))
       }
 
       if (validation.data.status === 'SHORT' || validation.data.status === 'NON_NARRATIVE') {
-        db.jobs().updateJobStatus(jobId, 'paused', validation.data.status)
+        try {
+          db.jobs().updateJobStatus?.(jobId, 'paused', validation.data.status)
+        } catch (e) {
+          _logger.warn('updateJobStatus failed while pausing job for validation', {
+            jobId,
+            error: extractErrorMessage(e),
+          })
+        }
         return createSuccessResponse({
           id: jobId,
           jobId,
@@ -219,15 +240,15 @@ export const POST = withAuth(async (request: NextRequest, user) => {
         const result =
           novelText === '__FETCH_FROM_STORAGE__'
             ? await pipeline.runWithNovelId(safeNovelId, {
-                isDemo,
-                title,
-                existingJobId: jobId,
-              })
+              isDemo,
+              title,
+              existingJobId: jobId,
+            })
             : await pipeline.runWithText(safeNovelId, novelText, {
-                isDemo,
-                title,
-                existingJobId: jobId,
-              })
+              isDemo,
+              title,
+              existingJobId: jobId,
+            })
 
         return createSuccessResponse(
           {
@@ -247,7 +268,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     }
 
     // 本番/開発は非同期で実行して即時応答
-    ;(async () => {
+    ; (async () => {
       try {
         const pipeline = new AnalyzePipeline()
         const safeNovelId = novelId as string
