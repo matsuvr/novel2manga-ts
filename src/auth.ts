@@ -83,7 +83,6 @@ export const getAuthOptions = (): NextAuthOptions => {
     adapter: DrizzleAdapter(
       getDatabaseServiceFactory().getRawDatabase() as Parameters<typeof DrizzleAdapter>[0],
     ),
-    basePath: authConfig.basePath,
     session: { strategy: 'jwt' },
     debug: process.env.NODE_ENV === 'development',
     secret: String(process.env.AUTH_SECRET),
