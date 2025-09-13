@@ -35,7 +35,7 @@ export async function generateThumbnail(
 }
 
 /**
- * サーバーサイドでのサムネイル生成（node-canvas使用）
+ * サーバーサイドでのサムネイル生成（@napi-rs/canvas使用）
  */
 async function generateServerSideThumbnail(
   sourceBlob: Blob,
@@ -45,7 +45,7 @@ async function generateServerSideThumbnail(
   format: string,
 ): Promise<Blob> {
   try {
-    const { createCanvas, loadImage } = await import('canvas')
+    const { createCanvas, loadImage } = await import('@napi-rs/canvas')
 
     const arrayBuffer = await sourceBlob.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
