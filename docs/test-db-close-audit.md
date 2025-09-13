@@ -14,7 +14,7 @@ Findings
 - `src/db/index.ts`
   - Calls `initializeDatabaseServiceFactory()` during `getDatabase()`; which itself is conservative about closing existing factory in test environments.
 - `src/auth.ts`
-  - Invokes `getDatabase()` to initialize the DatabaseServiceFactory before configuring NextAuth.
+  - `buildAuthOptionsForRequest()` and `getAuthOptions()` call `getDatabase()` to initialize the `DatabaseServiceFactory` before configuring NextAuth.
 - Scripts
   - `scripts/debug/inspect-test-schema.ts` — previously closed db directly; now wraps `db.close()` in try/catch.
   - `scripts/deploy/*` — contain short-lived validation code that opens/closes sqlite; considered low-risk for test runs but noted.
