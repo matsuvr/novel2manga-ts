@@ -20,7 +20,7 @@ if (process.env.NODE_ENV === 'development') {
 const nextConfig = {
   reactStrictMode: true,
   // SQLite3 をビルド時に含めるための設定
-  serverExternalPackages: ['better-sqlite3'],
+  serverExternalPackages: ['better-sqlite3', '@napi-rs/canvas'],
   // Next.js のビルド時 ESLint 実行を無効化（CI では独自に `npm run lint:check` を走らせる）
   eslint: {
     ignoreDuringBuilds: true,
