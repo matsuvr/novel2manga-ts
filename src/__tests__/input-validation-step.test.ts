@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { InputValidationStep } from '@/services/application/steps/input-validation-step'
-import type { StepContext } from '@/services/application/steps'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getLogger } from '@/infrastructure/logging/logger'
 import type { StoragePorts } from '@/infrastructure/storage/ports'
+import type { StepContext } from '@/services/application/steps'
+import { InputValidationStep } from '@/services/application/steps/input-validation-step'
 
 vi.mock('@/agents/structured-generator', () => ({
   getLlmStructuredGenerator: vi.fn(),
@@ -40,7 +40,7 @@ describe('InputValidationStep', () => {
     })
     vi.mocked(getLlmStructuredGenerator).mockReturnValue({
       generateObjectWithFallback: mockGen,
-    } as any)
+    } as unknown as ReturnType<typeof getLlmStructuredGenerator>)
     const step = new InputValidationStep()
     const res = await step.validate('これは説明書です。'.repeat(200), dummyContext)
     expect(res.success).toBe(true)
@@ -59,7 +59,7 @@ describe('InputValidationStep', () => {
     })
     vi.mocked(getLlmStructuredGenerator).mockReturnValue({
       generateObjectWithFallback: mockGen,
-    } as any)
+    } as unknown as ReturnType<typeof getLlmStructuredGenerator>)
     const step = new InputValidationStep()
     const res = await step.validate('物語のテキストがここにあります。'.repeat(200), dummyContext)
     expect(res.success).toBe(true)

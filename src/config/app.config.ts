@@ -704,8 +704,8 @@ export type AppConfig = typeof appConfig
 // 環境変数オーバーライド用の変更可能な型
 type MutableAppConfig = {
   [K in keyof AppConfig]: AppConfig[K] extends Record<string, unknown>
-    ? { [P in keyof AppConfig[K]]: AppConfig[K][P] }
-    : AppConfig[K]
+  ? { [P in keyof AppConfig[K]]: AppConfig[K][P] }
+  : AppConfig[K]
 }
 
 // 環境変数オーバーライド機能
@@ -756,6 +756,14 @@ export function getAppConfigWithOverrides(): AppConfig {
       .filter((n) => !Number.isNaN(n))
     if (parts.length === 2) {
       config.nonNarrative.defaultExplainerCount = [parts[0], parts[1]]
+    } else {
+      // Warn about malformed environment variable to aid debugging/misconfiguration
+      // console is acceptable here because this runs at startup/config time
+      // and should be visible to operators.
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[CONFIG] Invalid format for APP_NON_NARRATIVE_DEFAULT_EXPLAINER_COUNT: "${process.env.APP_NON_NARRATIVE_DEFAULT_EXPLAINER_COUNT}". Expected two comma-separated numbers. Using default.`,
+      )
     }
   }
 
