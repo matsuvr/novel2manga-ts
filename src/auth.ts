@@ -29,6 +29,15 @@ function extractStatus(input: unknown): number | undefined {
   return hasStatus(input) ? input.status : undefined
 }
 
+// Return an error response when authentication env vars are missing
+function respondIfMissingAuthEnv(message: string): NextResponse | undefined {
+  const missing = getMissingAuthEnv()
+  if (missing.length > 0) {
+    return NextResponse.json({ error: message, missing }, { status: 503 })
+  }
+  return undefined
+}
+
 // Request-time handlers to avoid executing DB-dependent code at module import
 function buildAuthOptionsForRequest(): NextAuthOptions {
   const { AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET, AUTH_SECRET } = process.env
@@ -75,13 +84,8 @@ function buildAuthOptionsForRequest(): NextAuthOptions {
 }
 
 export const GET = async (req: NextRequest) => {
-  const missing = getMissingAuthEnv()
-  if (missing.length > 0) {
-    return NextResponse.json(
-      { error: 'Missing authentication environment variables', missing },
-      { status: 503 },
-    )
-  }
+  const missingResponse = respondIfMissingAuthEnv('Missing authentication environment variables')
+  if (missingResponse) return missingResponse
   const url = req.nextUrl.pathname
   const handler = NextAuth(buildAuthOptionsForRequest())
   const { ms, value } = await measure(() => handler(req as unknown as Request, new NextResponse()))
@@ -91,13 +95,8 @@ export const GET = async (req: NextRequest) => {
 }
 
 export const POST = async (req: NextRequest) => {
-  const missing = getMissingAuthEnv()
-  if (missing.length > 0) {
-    return NextResponse.json(
-      { error: 'Missing authentication environment variables', missing },
-      { status: 503 },
-    )
-  }
+  const missingResponse = respondIfMissingAuthEnv('Missing authentication environment variables')
+  if (missingResponse) return missingResponse
   const url = req.nextUrl.pathname
   const handler = NextAuth(buildAuthOptionsForRequest())
   const { ms, value } = await measure(() => handler(req as unknown as Request, new NextResponse()))
@@ -115,9 +114,8 @@ export const auth = async (): Promise<Session | null | undefined> => {
 }
 
 export const signIn = async (provider?: string) => {
-  const missing = getMissingAuthEnv()
-  if (missing.length > 0)
-    return NextResponse.json({ error: 'Missing auth env', missing }, { status: 503 })
+  const missingResponse = respondIfMissingAuthEnv('Missing auth env')
+  if (missingResponse) return missingResponse
   const base = getNextAuthBaseUrl()
   const target = base
     ? `${base}/portal/api/auth/signin${provider ? `?provider=${provider}` : ''}`
@@ -131,9 +129,8 @@ export const signIn = async (provider?: string) => {
 }
 
 export const signOut = async () => {
-  const missing = getMissingAuthEnv()
-  if (missing.length > 0)
-    return NextResponse.json({ error: 'Missing auth env', missing }, { status: 503 })
+  const missingResponse = respondIfMissingAuthEnv('Missing auth env')
+  if (missingResponse) return missingResponse
   const base = getNextAuthBaseUrl()
   const target = base ? `${base}/portal/api/auth/signout` : `/portal/api/auth/signout`
   const { ms, value } = await measure(() => NextResponse.redirect(target))
