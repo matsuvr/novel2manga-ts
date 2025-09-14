@@ -68,7 +68,7 @@ const img = await loadImage(buffer) // buffer | path | URL supported
 ## 5) Build/Runtime Notes
 
 - **Linux glibc ≥ 2.18** required by Skia builds—CI/container base images should meet this. ([npm][1])
-- **CI optimization**: GitHub Actions installs dependencies with `npm ci --ignore-scripts` on `ubuntu-22.04` to skip native builds for `@napi-rs/canvas` and `better-sqlite3`, keeping runs fast.
+- **CI coverage**: GitHub Actions runs on `ubuntu-22.04`, `macos-latest`, and `windows-latest` and installs dependencies with `npm ci` to build and test native modules like `@napi-rs/canvas` and `better-sqlite3`.
 - **AWS Lambda**: use the published Lambda layer; bundle should **externalize** `@napi-rs/canvas` (provided by layer at runtime). ([npm][1])
 - **Vercel/Node**: supported (native N-API addon prebuilds). ([npm][1])
 - **Cloudflare Workers/Pages**: Workers add Node _APIs_ via `nodejs_compat(_v2)` but are **not a Node native-addons runtime**. Packages with `.node` binaries can usually be imported but may not function. If deploying to Workers, run rendering off-Worker (e.g., Lambda/Vercel/Cloud Run) behind an internal HTTP API, or switch to a WASM/JS renderer for edge. (Reference background on Node compatibility & flags.) ([Cloudflare Docs][4], [The Cloudflare Blog][5])
