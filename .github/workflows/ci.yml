@@ -31,8 +31,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Install dependencies (npm ci)
-        run: npm ci
+      - name: Install dependencies (npm ci --ignore-scripts)
+        run: npm ci --ignore-scripts
 
       # --- ここから1ジョブ内でまとめて実行（npm ci は1回だけ）---
 
@@ -49,6 +49,5 @@ jobs:
         run: npm run test:integration
 
       - name: Build
-        # もし「PRではビルド不要」にしたい場合は下記の if を有効化:
-        # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: npm run build
