@@ -8,7 +8,7 @@
 - [x] T6 Update tests to mock `@napi-rs/canvas`
 - [ ] T7 Golden-image tests
 - [ ] T8 Pixel diff harness
-- [x] T9 CI optimization: run on `ubuntu-22.04` and skip native builds with `npm ci --ignore-scripts`
+- [x] T9 CI cross-platform: run on `ubuntu-22.04`, `macos-latest`, and `windows-latest` with `npm ci` to verify native builds
 - [ ] T10 Runtime check for Workers
 - [ ] T11 Feature flag & rollback
 - [ ] T12 Benchmark script
