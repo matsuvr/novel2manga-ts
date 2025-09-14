@@ -47,16 +47,18 @@ export const auth = async (): Promise<Session | null | undefined> => {
   return value
 }
 
-export const signIn = async (provider?: string, callbackUrl?: string) => {
+export const signIn = async (
+  provider?: string,
+  callbackUrl: string = authConfig.defaultCallbackUrl,
+) => {
   const missingResponse = respondIfMissingAuthEnv('Missing auth env')
   if (missingResponse) return missingResponse
   const base = getNextAuthBaseUrl()
-  const url = new URL(`${base ?? ''}${authConfig.basePath}/signin`)
-  if (provider) url.searchParams.set('provider', provider)
-  if (callbackUrl) url.searchParams.set('callbackUrl', callbackUrl)
-  const { ms, value } = await measure(() => {
-    return NextResponse.redirect(url.toString())
-  })
+  const params = new URLSearchParams({ callbackUrl })
+  if (provider) params.set('provider', provider)
+  const queryString = params.toString()
+  const target = `${base ?? ''}${authConfig.basePath}/signin${queryString ? `?${queryString}` : ''}`
+  const { ms, value } = await measure(() => NextResponse.redirect(target))
   const status = extractStatus(value)
   logAuthMetric('auth:signIn', { ms, status })
   return value

@@ -2,6 +2,7 @@
 
 import { signOut } from 'next-auth/react'
 import { useState } from 'react'
+import { routesConfig } from '@/config/routes.config'
 
 interface DeleteAccountDialogProps {
   isOpen: boolean
@@ -38,7 +39,7 @@ export function DeleteAccountDialog({ isOpen, onClose, userEmail }: DeleteAccoun
       }
 
       // Sign out and redirect to home
-      await signOut({ callbackUrl: '/' })
+      await signOut({ callbackUrl: routesConfig.home })
     } catch (err) {
       setError(err instanceof Error ? err.message : '予期しないエラーが発生しました')
     } finally {
