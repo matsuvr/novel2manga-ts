@@ -61,6 +61,28 @@ async function initializeCanvas(): Promise<void> {
         const canvasModule = await import('@napi-rs/canvas')
         createCanvas = canvasModule.createCanvas
         loadImageFn = canvasModule.loadImage
+        // Register Japanese-capable font for server-side rendering so
+        // Noto / project fonts are available when calling ctx.fillText.
+        // Use a bundled font as a sensible default; allow override via
+        // environment variable CANVAS_FONT_PATH if needed.
+        try {
+          const fontPath = process.env.CANVAS_FONT_PATH || `${__dirname}/../../fonts/NotoSansJP-Light.ttf`
+          // @napi-rs/canvas exposes GlobalFonts.register in recent versions
+          // Define a narrow interface for the subset we need to avoid `any`.
+          interface CanvasModuleWithGlobalFonts {
+            GlobalFonts?: {
+              register: (path: string, opts?: { family?: string }) => void
+            }
+          }
+          const maybeModule = canvasModule as unknown as CanvasModuleWithGlobalFonts
+          if (maybeModule?.GlobalFonts && typeof maybeModule.GlobalFonts.register === 'function') {
+            // Prefer the Noto Sans JP family supplied in the repository
+            maybeModule.GlobalFonts.register(fontPath, { family: 'NotoSansJP' })
+          }
+        } catch (fontErr) {
+          // Non-fatal: proceed without registered font but log warning
+          console.warn('Failed to register server-side canvas font', fontErr)
+        }
         canvasInitialized = true
       } catch (error) {
         console.warn('@napi-rs/canvas not available, Canvas functionality will be limited', error)
@@ -202,12 +224,13 @@ export class CanvasRenderer {
     }
     this.config = {
       backgroundColor: '#ffffff',
-      fontFamily: 'Arial, sans-serif',
+      // Prefer bundled Japanese-capable font when available; fall back to Arial
+      fontFamily: 'NotoSansJP, GenEiMGothic2, Arial, sans-serif',
       fontSize: 16,
       lineColor: '#000000',
       lineWidth: 2,
       textColor: '#000000',
-      font: 'Arial, sans-serif',
+      font: 'NotoSansJP, GenEiMGothic2, Arial, sans-serif',
       defaultFontSize: 16,
       ...config,
     }
@@ -468,7 +491,7 @@ export class CanvasRenderer {
     if (canClip && this.hasRect(this.ctx)) {
       this.ctx.beginPath()
       this.ctx.rect(x, y, width, height)
-      ;(this.ctx as unknown as CanvasRenderingContext2D & { clip: () => void }).clip()
+        ; (this.ctx as unknown as CanvasRenderingContext2D & { clip: () => void }).clip()
     }
 
     // 吹き出しを描画し、占有領域を登録
@@ -891,7 +914,7 @@ export class CanvasRenderer {
           const r = baseRadius * Math.max(0.1, tailCfg.decay) ** i
           this.ctx.beginPath()
           if (hasArc) {
-            ;(
+            ; (
               this.ctx as unknown as CanvasRenderingContext2D & {
                 arc: typeof CanvasRenderingContext2D.prototype.arc
               }

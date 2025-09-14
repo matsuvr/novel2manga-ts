@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import type { Session } from 'next-auth'
 import { auth } from '@/auth'
 import { authConfig } from '@/config/auth.config'
 import { getMissingAuthEnv } from '@/utils/auth-env'
@@ -29,14 +30,22 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // Start auth but do not swallow its errors — we only want to fallback on *timeout*.
   // If auth later fails with a fatal initialization error (missing env, migration failure),
   // we must not hide it; detect and escalate.
-  const authPromise = auth()
+  // Treat `auth` as the runtime function returning Promise<Session | null>.
+  // NextAuth's exported `auth` has overloads (including middleware), so cast
+  // to the expected runtime signature to avoid mixing middleware types.
+  const authPromise = (auth as unknown as () => Promise<Session | null>)()
 
-  const timeoutMarker = Symbol('timeout') as unknown as { timeout: true }
+  const timeoutMarker = { timeout: true } as const
   const timeoutPromise = new Promise<typeof timeoutMarker>((resolve) =>
     setTimeout(() => resolve(timeoutMarker), authConfig.timeoutMs),
   )
 
-  const raceResult = await Promise.race([authPromise.then((s) => ({ session: s })), timeoutPromise])
+  const raceRaw = await Promise.race([
+    authPromise.then((s: Session | null) => ({ session: s })),
+    timeoutPromise,
+  ])
+
+  const raceResult = raceRaw as unknown
 
   // Helper to detect fatal auth errors that must not be hidden.
   const isFatalAuthError = (err: unknown): boolean => {
@@ -52,18 +61,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   // If we hit the timeout, return null for session but attach a handler to the
   // ongoing authPromise to surface any fatal errors (and avoid unhandled rejections).
-  let session: Awaited<ReturnType<typeof auth>> | null = null
-  if (raceResult === (timeoutMarker as unknown)) {
+  let session: Session | null = null
+  if (typeof (raceResult as { timeout?: boolean }).timeout === 'boolean') {
     // Background handling: log completion or failure. If failure is fatal, escalate.
     authPromise
-      .then((s) => {
+      .then((s: Session | null) => {
         console.debug('[auth] completed after timeout')
         return s
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         console.error('[auth] failed after timeout', err)
         if (isFatalAuthError(err)) {
-          console.error('[auth] fatal initialization error detected after timeout — exiting')
+          console.error('[auth] fatal initialization error detected after timeout  exiting')
           // Explicitly terminate so the fatal error is not silently ignored.
           // This follows repository policy: do not hide initialization failures.
           if (typeof process !== 'undefined' && typeof process.exit === 'function') {
@@ -73,14 +82,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       })
     session = null
   } else {
-    // raceResult is { session }
-    session = (raceResult as { session: Awaited<ReturnType<typeof auth>> }).session
+    // At this point it's the resolved session object
+    session = (raceResult as { session: Session | null }).session
   }
 
   return (
     <html lang="ja">
       <body className="antialiased">
-        <Providers session={session}>{children}</Providers>
+        <Providers session={session ?? undefined}>{children}</Providers>
       </body>
     </html>
   )

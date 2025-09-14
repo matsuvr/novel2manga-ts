@@ -5,8 +5,8 @@
 import { Effect } from 'effect'
 import nodemailer from 'nodemailer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { EmailService, EmailServiceLive } from '../../../services/email/service'
 import { routesConfig } from '@/config/routes.config'
+import { EmailService, EmailServiceLive } from '../../../services/email/service'
 
 // Mock nodemailer
 vi.mock('nodemailer', () => ({

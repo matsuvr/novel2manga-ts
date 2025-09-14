@@ -567,15 +567,47 @@ export class MangaPageRenderer {
       totalDialogues,
     })
 
-    // In test environments or when a simplified renderer is used,
-    // setDialogueAssets may be a no-op; guard accordingly.
+    // Ensure dialogue assets are attached to the concrete renderer instance.
+    // Previously we extracted the method reference and invoked it unbound which
+    // caused `this` to be undefined inside the method (strict mode) and the
+    // assignment to `this.dialogueAssets` to throw. That exception was silently
+    // swallowed here, leaving the renderer without assets and causing later
+    // rendering to fail with "Dialogue asset missing". Call the method on the
+    // instance (preserving `this`) and fail loudly if it errors.
     try {
-      const cr: unknown = this.canvasRenderer as unknown
-      const fn = (cr as { setDialogueAssets?: (a: Record<string, DialogueAsset>) => void })
-        .setDialogueAssets
-      if (typeof fn === 'function') fn(assets)
-    } catch {
-      // no-op for overly strict mocks
+      if (!this.canvasRenderer) {
+        const error = 'canvasRenderer is not initialized when attaching dialogue assets'
+        logger.error(error)
+        throw new Error(error)
+      }
+
+      const maybeFn = (
+        this.canvasRenderer as unknown as {
+          setDialogueAssets?: (a: Record<string, DialogueAsset>) => void
+        }
+      ).setDialogueAssets
+      if (typeof maybeFn === 'function') {
+        // Call as a method on the instance to preserve `this` binding
+        ;(
+          this.canvasRenderer as unknown as {
+            setDialogueAssets: (a: Record<string, DialogueAsset>) => void
+          }
+        ).setDialogueAssets(assets)
+        logger.info('Attached dialogue assets to canvasRenderer', {
+          total: Object.keys(assets).length,
+        })
+      } else {
+        logger.warn('canvasRenderer.setDialogueAssets is not a function; assets not attached', {
+          available: typeof maybeFn,
+        })
+      }
+    } catch (err) {
+      logger.error('Failed to attach dialogue assets to canvasRenderer', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+      // Re-throw so calling code can surface the failure instead of continuing
+      // with an incomplete state (which previously produced "Dialogue asset missing").
+      throw err
     }
   }
 

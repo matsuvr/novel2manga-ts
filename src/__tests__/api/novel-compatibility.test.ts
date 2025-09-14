@@ -13,8 +13,8 @@ describe.skip('Novel Management API Compatibility', () => {
         url: '/api/novel',
         query: {
           page: '1',
-          limit: '10'
-        }
+          limit: '10',
+        },
       })
 
       // 期待されるレスポンス形式
@@ -28,15 +28,15 @@ describe.skip('Novel Management API Compatibility', () => {
             language: expect.any(String),
             userId: expect.any(String),
             createdAt: expect.any(String),
-            updatedAt: expect.any(String)
-          }
+            updatedAt: expect.any(String),
+          },
         ],
         pagination: {
           page: 1,
           limit: 10,
           total: expect.any(Number),
-          totalPages: expect.any(Number)
-        }
+          totalPages: expect.any(Number),
+        },
       }
 
       expect(true).toBe(true)
@@ -48,8 +48,8 @@ describe.skip('Novel Management API Compatibility', () => {
         url: '/api/novel',
         query: {
           page: '2',
-          limit: '20'
-        }
+          limit: '20',
+        },
       })
 
       expect(true).toBe(true)
@@ -65,8 +65,8 @@ describe.skip('Novel Management API Compatibility', () => {
           title: 'Test Novel',
           author: 'Test Author',
           originalText: 'This is a test novel content...',
-          language: 'ja'
-        }
+          language: 'ja',
+        },
       })
 
       expect(true).toBe(true)
@@ -78,9 +78,9 @@ describe.skip('Novel Management API Compatibility', () => {
         url: '/api/novel',
         body: {
           title: '', // 無効なタイトル
-          author: 'Test Author'
+          author: 'Test Author',
           // originalText が不足
-        }
+        },
       })
 
       expect(true).toBe(true)
@@ -93,8 +93,8 @@ describe.skip('Novel Management API Compatibility', () => {
         method: 'GET',
         url: '/api/novel/storage',
         query: {
-          novelId: 'test-novel-id'
-        }
+          novelId: 'test-novel-id',
+        },
       })
 
       expect(true).toBe(true)
@@ -108,8 +108,8 @@ describe.skip('Novel Management API Compatibility', () => {
         url: '/api/novel/db',
         body: {
           operation: 'backup',
-          novelId: 'test-novel-id'
-        }
+          novelId: 'test-novel-id',
+        },
       })
 
       expect(true).toBe(false) // TODO: 実装後に更新

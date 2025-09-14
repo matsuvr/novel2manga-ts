@@ -45,7 +45,9 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
 
       setIsLoadingTokenUsage(true)
       try {
-        const response = await fetch(`/api/jobs/${jobId}/token-usage`)
+        const response = await fetch(`/api/jobs/${jobId}/token-usage`, {
+          credentials: 'include',
+        })
         if (response.ok) {
           const data = (await response.json()) as { tokenUsage?: TokenUsage[] }
           // Double-check mount state before updating component state
@@ -120,6 +122,7 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
     try {
       const response = await fetch('/api/export', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jobId,
@@ -175,6 +178,7 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
             onClick={async () => {
               const res = await fetch('/api/export', {
                 method: 'POST',
+                credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ jobId, format: 'pdf' }),
               })
@@ -194,6 +198,7 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
             onClick={async () => {
               const res = await fetch('/api/export', {
                 method: 'POST',
+                credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ jobId, format: 'images_zip' }),
               })

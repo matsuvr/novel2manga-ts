@@ -32,4 +32,3 @@ describe('normalizeStoragePath', () => {
     expect(normalizeStoragePath('   ')).toBe('')
   })
 })
-

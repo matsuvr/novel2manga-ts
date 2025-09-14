@@ -1,10 +1,12 @@
 Archived. See `archive/cloudflare-legacy/specs/001-oepnnext-cloudflare-next-tasks.md` for the original task list.
+
 # Tasks: OpenNext・Cloudflare削除と純粋Next.js＋SQLite3移行
 
 **Input**: Design documents from `/specs/001-oepnnext-cloudflare-next/`
 **Prerequisites**: plan.md (required), research.md, data-model.md, contracts/
 
 ## Execution Flow (main)
+
 ```
 1. Load plan.md from feature directory
    → Extract: tech stack (Next.js, SQLite3, Drizzle, Effect TS), libraries, structure
@@ -34,6 +36,7 @@ Archived. See `archive/cloudflare-legacy/specs/001-oepnnext-cloudflare-next-task
 ```
 
 ## Format: `[ID] [P?] Description`
+
 - **[P]**: Can run in parallel (different files, no dependencies)
 - Include exact file paths in descriptions
 

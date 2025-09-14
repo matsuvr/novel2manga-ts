@@ -23,6 +23,7 @@ export default function NovelUploader() {
     try {
       const res = await fetch('/api/novel', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },

@@ -26,4 +26,3 @@ export const pathMigrationConfig = {
   // 1回のUPDATEトランザクションで処理する最大件数（必要に応じて調整）
   batchSize: 500,
 } as const
-

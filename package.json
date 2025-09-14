@@ -90,7 +90,7 @@
     "js-yaml": "^4.1.0",
     "jszip": "^3.10.1",
     "next": "15.3.3",
-    "next-auth": "4.24.11",
+    "next-auth": "^5.0.0-beta.29",
     "nodemailer": "^6.10.1",
     "openai": "^5.12.2",
     "pdfkit": "^0.17.1",

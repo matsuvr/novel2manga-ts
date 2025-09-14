@@ -18,7 +18,9 @@ export type TokenUsage = {
 }
 
 export interface ITokenMeter {
-  preflight(contentsOrRequest: string | unknown[] | Record<string, unknown>): Promise<TokenPreflight>
+  preflight(
+    contentsOrRequest: string | unknown[] | Record<string, unknown>,
+  ): Promise<TokenPreflight>
   finalize(generateContentResponse: Record<string, unknown>): TokenUsage
 }
 
@@ -59,7 +61,9 @@ export class TokenMeter implements ITokenMeter {
     this.model = model
   }
 
-  async preflight(contentsOrRequest: string | unknown[] | Record<string, unknown>): Promise<TokenPreflight> {
+  async preflight(
+    contentsOrRequest: string | unknown[] | Record<string, unknown>,
+  ): Promise<TokenPreflight> {
     try {
       // Convert input to the format expected by countTokens
       const contents = this.normalizeContents(contentsOrRequest)
@@ -75,7 +79,9 @@ export class TokenMeter implements ITokenMeter {
     } catch (error) {
       getLogger()
         .withContext({ service: 'token-meter' })
-        .warn('countTokens failed, using fallback estimation', { error: error instanceof Error ? error.message : String(error) })
+        .warn('countTokens failed, using fallback estimation', {
+          error: error instanceof Error ? error.message : String(error),
+        })
 
       // Fallback estimation
       return this.fallbackEstimation(contentsOrRequest)
@@ -83,7 +89,9 @@ export class TokenMeter implements ITokenMeter {
   }
 
   finalize(generateContentResponse: Record<string, unknown>): TokenUsage {
-    const usageMetadata = generateContentResponse.usageMetadata as Record<string, unknown> | undefined
+    const usageMetadata = generateContentResponse.usageMetadata as
+      | Record<string, unknown>
+      | undefined
 
     if (!usageMetadata) {
       throw new Error('usageMetadata not found in response')
@@ -100,7 +108,9 @@ export class TokenMeter implements ITokenMeter {
     }
   }
 
-  private normalizeContents(contentsOrRequest: string | unknown[] | Record<string, unknown>): unknown[] {
+  private normalizeContents(
+    contentsOrRequest: string | unknown[] | Record<string, unknown>,
+  ): unknown[] {
     if (typeof contentsOrRequest === 'string') {
       return [{ parts: [{ text: contentsOrRequest }] }]
     }
@@ -109,7 +119,11 @@ export class TokenMeter implements ITokenMeter {
       return contentsOrRequest
     }
 
-    if (typeof contentsOrRequest === 'object' && contentsOrRequest !== null && 'contents' in contentsOrRequest) {
+    if (
+      typeof contentsOrRequest === 'object' &&
+      contentsOrRequest !== null &&
+      'contents' in contentsOrRequest
+    ) {
       return (contentsOrRequest as Record<string, unknown>).contents as unknown[]
     }
 
@@ -117,7 +131,9 @@ export class TokenMeter implements ITokenMeter {
     return [{ parts: [{ text: String(contentsOrRequest) }] }]
   }
 
-  private fallbackEstimation(contentsOrRequest: string | unknown[] | Record<string, unknown>): TokenPreflight {
+  private fallbackEstimation(
+    contentsOrRequest: string | unknown[] | Record<string, unknown>,
+  ): TokenPreflight {
     const text = extractTextFromMessage(contentsOrRequest)
 
     // Handle empty cases explicitly

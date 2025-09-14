@@ -35,23 +35,29 @@ describe.skip('Database Connectivity Integration', () => {
       // 基本的なCRUD操作テスト
       const db = getDatabase()
       const testUserId = 'test-user-' + Date.now()
-      
+
       try {
         // Create
         await db.insert(schema.users).values({
           id: testUserId,
           name: 'Test User',
           email: 'test@example.com',
-          emailVerified: new Date().getTime()
+          emailVerified: new Date().getTime(),
         })
 
         // Read
-        const users = await db.select().from(schema.users).where(sql`id = ${testUserId}`)
+        const users = await db
+          .select()
+          .from(schema.users)
+          .where(sql`id = ${testUserId}`)
         expect(users.length).toBe(1)
         expect(users[0].name).toBe('Test User')
 
         // Update
-        await db.update(schema.users).set({ name: 'Updated User' }).where(sql`id = ${testUserId}`)
+        await db
+          .update(schema.users)
+          .set({ name: 'Updated User' })
+          .where(sql`id = ${testUserId}`)
 
         // Delete
         await db.delete(schema.users).where(sql`id = ${testUserId}`)
@@ -75,7 +81,7 @@ describe.skip('Database Connectivity Integration', () => {
         await db.insert(schema.users).values({
           id: userId,
           name: 'Test User',
-          email: 'test@example.com'
+          email: 'test@example.com',
         })
 
         await db.insert(schema.novels).values({
@@ -84,7 +90,7 @@ describe.skip('Database Connectivity Integration', () => {
           author: 'Test Author',
           textLength: 1000,
           language: 'ja',
-          userId: userId
+          userId: userId,
         })
 
         await db.insert(schema.jobs).values({
@@ -92,15 +98,17 @@ describe.skip('Database Connectivity Integration', () => {
           novelId: novelId,
           jobName: 'Test Job',
           status: 'pending',
-          userId: userId
+          userId: userId,
         })
 
         // リレーションシップを検証
-        const jobWithRelations = await db.select({
-          job: schema.jobs,
-          novel: schema.novels,
-          user: schema.users
-        }).from(schema.jobs)
+        const jobWithRelations = await db
+          .select({
+            job: schema.jobs,
+            novel: schema.novels,
+            user: schema.users,
+          })
+          .from(schema.jobs)
           .leftJoin(schema.novels, sql`${schema.jobs.novelId} = ${schema.novels.id}`)
           .leftJoin(schema.users, sql`${schema.jobs.userId} = ${schema.users.id}`)
           .where(sql`${schema.jobs.id} = ${jobId}`)
@@ -125,18 +133,20 @@ describe.skip('Database Connectivity Integration', () => {
     it('should handle concurrent connections', async () => {
       // 同時接続処理のテスト
       const db = getDatabase()
-      const concurrentQueries = Array(10).fill(0).map(async (_, index) => {
-        try {
-          const result = await db.select({ count: sql`count(*)` }).from(schema.users)
-          return { success: true, index, result }
-        } catch (error) {
-          return { success: false, index, error }
-        }
-      })
+      const concurrentQueries = Array(10)
+        .fill(0)
+        .map(async (_, index) => {
+          try {
+            const result = await db.select({ count: sql`count(*)` }).from(schema.users)
+            return { success: true, index, result }
+          } catch (error) {
+            return { success: false, index, error }
+          }
+        })
 
       const results = await Promise.all(concurrentQueries)
-      const successCount = results.filter(r => r.success).length
-      
+      const successCount = results.filter((r) => r.success).length
+
       expect(successCount).toBe(10)
       expect(true).toBe(true)
     })
@@ -146,22 +156,28 @@ describe.skip('Database Connectivity Integration', () => {
       try {
         const db = getDatabase()
         const userId = 'test-user-' + Date.now()
-        
+
         // トランザクション開始
         await db.transaction(async (tx) => {
           await tx.insert(schema.users).values({
             id: userId,
             name: 'Test User',
-            email: 'test@example.com'
+            email: 'test@example.com',
           })
-          
+
           // トランザクション内でデータを検証
-          const user = await tx.select().from(schema.users).where(sql`id = ${userId}`)
+          const user = await tx
+            .select()
+            .from(schema.users)
+            .where(sql`id = ${userId}`)
           expect(user.length).toBe(1)
         })
 
         // トランザクション完了後にデータを検証
-        const user = await db.select().from(schema.users).where(sql`id = ${userId}`)
+        const user = await db
+          .select()
+          .from(schema.users)
+          .where(sql`id = ${userId}`)
         expect(user.length).toBe(1)
 
         // クリーンアップ
@@ -178,17 +194,29 @@ describe.skip('Database Connectivity Integration', () => {
     it('should have all required tables', async () => {
       // 必要なテーブルが存在することを確認
       const requiredTables = [
-        'users', 'accounts', 'sessions', 'novels', 'jobs',
-        'chunks', 'episodes', 'layoutStatus', 'renderStatus',
-        'outputs', 'storageFiles', 'tokenUsage'
+        'users',
+        'accounts',
+        'sessions',
+        'novels',
+        'jobs',
+        'chunks',
+        'episodes',
+        'layoutStatus',
+        'renderStatus',
+        'outputs',
+        'storageFiles',
+        'tokenUsage',
       ]
 
       const db = getDatabase()
       for (const tableName of requiredTables) {
         try {
-          const result = await db.select({ name: sql`name` }).from(sql`sqlite_master`)
-            .where(sql`type = 'table'`).where(sql`name = ${tableName}`)
-          
+          const result = await db
+            .select({ name: sql`name` })
+            .from(sql`sqlite_master`)
+            .where(sql`type = 'table'`)
+            .where(sql`name = ${tableName}`)
+
           expect(result.length).toBeGreaterThan(0)
         } catch (error) {
           expect.fail(`Table ${tableName} not found: ${error}`)
@@ -203,11 +231,11 @@ describe.skip('Database Connectivity Integration', () => {
       try {
         // ユニーク制約のテスト
         const userId = 'test-user-' + Date.now()
-        
+
         await db.insert(schema.users).values({
           id: userId,
           name: 'Test User',
-          email: 'unique@test.com'
+          email: 'unique@test.com',
         })
 
         // 同じメールアドレスで再度挿入しようとすると失敗するはず
@@ -215,8 +243,8 @@ describe.skip('Database Connectivity Integration', () => {
           db.insert(schema.users).values({
             id: userId + '-2',
             name: 'Test User 2',
-            email: 'unique@test.com' // 同じメールアドレス
-          })
+            email: 'unique@test.com', // 同じメールアドレス
+          }),
         ).rejects.toThrow()
 
         // クリーンアップ

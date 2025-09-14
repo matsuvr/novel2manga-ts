@@ -2,8 +2,6 @@ Understand and count tokens
 
 Python JavaScript Go
 
-
-
 Gemini and other generative AI models process input and output at a granularity called a token.
 
 About tokens
@@ -41,14 +39,14 @@ The total number of tokens in both the input and the output (totalTokenCount)
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const prompt = "The quick brown fox jumps over the lazy dog.";
 const countTokensResponse = await ai.models.countTokens({
-  model: "gemini-2.5-flash",
-  contents: prompt,
+model: "gemini-2.5-flash",
+contents: prompt,
 });
 console.log(countTokensResponse.totalTokens);
 
 const generateResponse = await ai.models.generateContent({
-  model: "gemini-2.5-flash",
-  contents: prompt,
+model: "gemini-2.5-flash",
+contents: prompt,
 });
 console.log(generateResponse.usageMetadata);
 
@@ -62,46 +60,45 @@ The token count for the thinking process (thoughtsTokenCount)
 The total number of tokens in both the input and the output (totalTokenCount)
 To understand how big your next conversational turn will be, you need to append it to the history when you call countTokens.
 
-
 // Make sure to include the following import:
 // import {GoogleGenAI} from '@google/genai';
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 // Initial chat history.
 const history = [
-  { role: "user", parts: [{ text: "Hi my name is Bob" }] },
-  { role: "model", parts: [{ text: "Hi Bob!" }] },
+{ role: "user", parts: [{ text: "Hi my name is Bob" }] },
+{ role: "model", parts: [{ text: "Hi Bob!" }] },
 ];
 const chat = ai.chats.create({
-  model: "gemini-2.5-flash",
-  history: history,
+model: "gemini-2.5-flash",
+history: history,
 });
 
 // Count tokens for the current chat history.
 const countTokensResponse = await ai.models.countTokens({
-  model: "gemini-2.5-flash",
-  contents: chat.getHistory(),
+model: "gemini-2.5-flash",
+contents: chat.getHistory(),
 });
 console.log(countTokensResponse.totalTokens);
 
 const chatResponse = await chat.sendMessage({
-  message: "In one sentence, explain how a computer works to a young child.",
+message: "In one sentence, explain how a computer works to a young child.",
 });
 console.log(chatResponse.usageMetadata);
 
 // Add an extra user message to the history.
 const extraMessage = {
-  role: "user",
-  parts: [{ text: "What is the meaning of life?" }],
+role: "user",
+parts: [{ text: "What is the meaning of life?" }],
 };
 const combinedHistory = chat.getHistory();
 combinedHistory.push(extraMessage);
 const combinedCountTokensResponse = await ai.models.countTokens({
-  model: "gemini-2.5-flash",
-  contents: combinedHistory,
+model: "gemini-2.5-flash",
+contents: combinedHistory,
 });
 console.log(
-  "Combined history token count:",
-  combinedCountTokensResponse.totalTokens,
+"Combined history token count:",
+combinedCountTokensResponse.totalTokens,
 );
 
 Count multimodal tokens
@@ -122,36 +119,34 @@ The total number of tokens in both the input and the output (totalTokenCount)
 Note: You'll get the same token count if you use a file uploaded using the File API or you provide the file as inline data.
 Example that uses an uploaded image from the File API:
 
-
 // Make sure to include the following import:
 // import {GoogleGenAI} from '@google/genai';
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const prompt = "Tell me about this image";
 const organ = await ai.files.upload({
-  file: path.join(media, "organ.jpg"),
-  config: { mimeType: "image/jpeg" },
+file: path.join(media, "organ.jpg"),
+config: { mimeType: "image/jpeg" },
 });
 
 const countTokensResponse = await ai.models.countTokens({
-  model: "gemini-2.5-flash",
-  contents: createUserContent([
-    prompt,
-    createPartFromUri(organ.uri, organ.mimeType),
-  ]),
+model: "gemini-2.5-flash",
+contents: createUserContent([
+prompt,
+createPartFromUri(organ.uri, organ.mimeType),
+]),
 });
 console.log(countTokensResponse.totalTokens);
 
 const generateResponse = await ai.models.generateContent({
-  model: "gemini-2.5-flash",
-  contents: createUserContent([
-    prompt,
-    createPartFromUri(organ.uri, organ.mimeType),
-  ]),
+model: "gemini-2.5-flash",
+contents: createUserContent([
+prompt,
+createPartFromUri(organ.uri, organ.mimeType),
+]),
 });
 console.log(generateResponse.usageMetadata);
 
 Example that provides the image as inline data:
-
 
 // Make sure to include the following import:
 // import {GoogleGenAI} from '@google/genai';
@@ -164,19 +159,19 @@ const imageBase64 = imageBuffer.toString("base64");
 
 // Build contents using createUserContent and createPartFromBase64.
 const contents = createUserContent([
-  prompt,
-  createPartFromBase64(imageBase64, "image/jpeg"),
+prompt,
+createPartFromBase64(imageBase64, "image/jpeg"),
 ]);
 
 const countTokensResponse = await ai.models.countTokens({
-  model: "gemini-2.5-flash",
-  contents: contents,
+model: "gemini-2.5-flash",
+contents: contents,
 });
 console.log(countTokensResponse.totalTokens);
 
 const generateResponse = await ai.models.generateContent({
-  model: "gemini-2.5-flash",
-  contents: contents,
+model: "gemini-2.5-flash",
+contents: contents,
 });
 console.log(generateResponse.usageMetadata);
 
@@ -199,33 +194,33 @@ Note: You'll get the same token count if you use a file uploaded using the File 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const prompt = "Tell me about this video";
 let videoFile = await ai.files.upload({
-  file: path.join(media, "Big_Buck_Bunny.mp4"),
-  config: { mimeType: "video/mp4" },
+file: path.join(media, "Big_Buck_Bunny.mp4"),
+config: { mimeType: "video/mp4" },
 });
 
 // Poll until the video file is completely processed (state becomes ACTIVE).
 while (!videoFile.state || videoFile.state.toString() !== "ACTIVE") {
-  console.log("Processing video...");
-  console.log("File state: ", videoFile.state);
-  await sleep(5000);
-  videoFile = await ai.files.get({ name: videoFile.name });
+console.log("Processing video...");
+console.log("File state: ", videoFile.state);
+await sleep(5000);
+videoFile = await ai.files.get({ name: videoFile.name });
 }
 
 const countTokensResponse = await ai.models.countTokens({
-  model: "gemini-2.5-flash",
-  contents: createUserContent([
-    prompt,
-    createPartFromUri(videoFile.uri, videoFile.mimeType),
-  ]),
+model: "gemini-2.5-flash",
+contents: createUserContent([
+prompt,
+createPartFromUri(videoFile.uri, videoFile.mimeType),
+]),
 });
 console.log(countTokensResponse.totalTokens);
 
 const generateResponse = await ai.models.generateContent({
-  model: "gemini-2.5-flash",
-  contents: createUserContent([
-    prompt,
-    createPartFromUri(videoFile.uri, videoFile.mimeType),
-  ]),
+model: "gemini-2.5-flash",
+contents: createUserContent([
+prompt,
+createPartFromUri(videoFile.uri, videoFile.mimeType),
+]),
 });
 console.log(generateResponse.usageMetadata);
 
