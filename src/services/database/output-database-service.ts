@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import type { NewOutput, Output } from '@/db/schema'
@@ -106,6 +106,33 @@ export class OutputDatabaseService extends BaseDatabaseService {
 
       return rows as Output[]
     }
+  }
+
+  /**
+   * Get recent outputs by user ID
+   */
+  async getOutputsByUserId(userId: string, limit: number): Promise<Output[]> {
+    if (this.isSync()) {
+      const drizzleDb = this.db as DrizzleDatabase
+
+      return drizzleDb
+        .select()
+        .from(outputs)
+        .where(eq(outputs.userId, userId))
+        .orderBy(desc(outputs.createdAt))
+        .limit(limit)
+        .all() as Output[]
+    }
+
+    const drizzleDb = this.db as DrizzleDatabase
+    const rows = await drizzleDb
+      .select()
+      .from(outputs)
+      .where(eq(outputs.userId, userId))
+      .orderBy(desc(outputs.createdAt))
+      .limit(limit)
+
+    return rows as Output[]
   }
 
   /**
