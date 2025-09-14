@@ -336,7 +336,7 @@ export async function POST(req: NextRequest, { params }: { params: { jobId: stri
 
 ## 5. メール通知実装
 
-**ファイル**: `src/server/mailer/index.ts`
+**ファイル**: `src/services/email/service.ts`
 
 ```typescript
 import { Effect } from 'effect'
@@ -375,10 +375,16 @@ export const sendJobNotification = (
 ) => {
   const subject = status === 'completed' ? '漫画化が完了しました' : '漫画化でエラーが発生しました'
 
+  const url =
+    status === 'completed'
+      ? `${process.env.NEXT_PUBLIC_URL}/portal/jobs/${jobId}`
+      : `${process.env.NEXT_PUBLIC_URL}/portal/dashboard`
+  const action = status === 'completed' ? '結果を見る' : 'マイページを開く'
+
   const html = `
     <h2>${subject}</h2>
     <p>ジョブID: ${jobId}</p>
-    <p><a href="${process.env.NEXT_PUBLIC_URL}/portal/jobs/${jobId}">詳細を見る</a></p>
+    <p><a href="${url}">${action}</a></p>
   `
 
   return sendEmail({ to: email, subject, html })
@@ -618,7 +624,7 @@ export default function DashboardPage() {
 import { db } from '@/db'
 import { jobs, users } from '@/db/schema'
 import { eq } from 'drizzle-orm'
-import { sendJobNotification } from '@/server/mailer'
+import { notificationService } from '@/services/notification/service'
 
 const TICK_MS = Number(process.env.WORKER_TICK_MS ?? 5000)
 
@@ -648,11 +654,7 @@ async function processOne() {
       .where(eq(jobs.id, job.id))
 
     // メール通知
-    const [user] = await db.select().from(users).where(eq(users.id, job.userId))
-
-    if (user?.email && user?.emailNotifications) {
-      await sendJobNotification(user.email, job.id, 'completed')
-    }
+    await notificationService.sendJobCompletionNotification(job.id, 'completed')
   } catch (error) {
     // エラー処理
     await db
@@ -664,11 +666,7 @@ async function processOne() {
       .where(eq(jobs.id, job.id))
 
     // エラー通知
-    const [user] = await db.select().from(users).where(eq(users.id, job.userId))
-
-    if (user?.email && user?.emailNotifications) {
-      await sendJobNotification(user.email, job.id, 'failed')
-    }
+    await notificationService.sendJobCompletionNotification(job.id, 'failed', String(error))
   }
 }
 
@@ -690,7 +688,7 @@ console.log(`Worker started (tick: ${TICK_MS}ms)`)
 | API-2  | API      | GET/PATCH/DELETE /api/me 実装                | API-1, AUTH-1 | `src/app/api/me/route.ts`                  | Postmanで動作確認               |
 | API-3  | API      | GET /api/jobs 実装                           | AUTH-1        | `src/app/api/jobs/route.ts`                | 自分のジョブのみ返却            |
 | API-4  | API      | POST /api/jobs/[id]/resume 実装              | AUTH-1        | `src/app/api/jobs/[jobId]/resume/route.ts` | 202返却、status更新             |
-| MAIL-1 | メール   | Nodemailer設定・送信関数実装                 | なし          | `src/server/mailer/index.ts`               | テストメール送信成功            |
+| MAIL-1 | メール   | Nodemailer設定・送信関数実装                 | なし          | `src/services/email/service.ts`            | テストメール送信成功            |
 | UI-1   | UI       | 設定画面実装                                 | API-2         | `src/app/portal/settings/page.tsx`         | 設定変更・保存が動作            |
 | UI-2   | UI       | ダッシュボード実装                           | API-3         | `src/app/portal/dashboard/page.tsx`        | ジョブ一覧表示                  |
 | UI-3   | UI       | ナビゲーション追加                           | UI-1, UI-2    | `src/app/portal/layout.tsx`                | メニューから画面遷移            |
