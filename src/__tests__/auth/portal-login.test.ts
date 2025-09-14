@@ -4,12 +4,12 @@ vi.mock('@/auth', () => ({
   signIn: vi.fn(),
 }))
 
-import { GET } from '@/app/api/login/route'
+import { GET } from '@/app/portal/api/auth/login/route'
 import { signIn } from '@/auth'
 import { authConfig } from '@/config/auth.config'
 
-describe('login route', () => {
-  it('calls signIn with google and returns response', async () => {
+describe('portal login route', () => {
+  it('calls signIn with google and root callback', async () => {
     const response = new Response(null, { status: 302 })
     const mockedSignIn = signIn as unknown as Mock
     mockedSignIn.mockResolvedValue(response)
