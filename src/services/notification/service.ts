@@ -32,6 +32,7 @@ async function sendEmail(
   })
   const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'
   const jobUrl = `${baseUrl}/portal/jobs/${jobId}`
+  const dashboardUrl = `${baseUrl}/portal/dashboard`
   const isCompleted = status === 'completed'
   const subject = isCompleted
     ? '漫画化が完了しました - Novel2Manga'
@@ -55,12 +56,12 @@ async function sendEmail(
     <p><strong>ジョブID:</strong> ${jobId}</p>
     ${errorMessage ? `<p><strong>エラー詳細:</strong> ${errorMessage}</p>` : ''}
   </div>
-  <p><a href="${jobUrl}" style="background-color: #f44336; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">詳細を確認する</a></p>
-  <p style="color: #666; font-size: 14px; margin-top: 30px;">問題が解決しない場合は、サポートまでお問い合わせください。<br>このメールは自動送信されています。返信はできません。</p>
+  <p><a href="${dashboardUrl}" style="background-color: #f44336; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">マイページを開く</a></p>
+  <p style="color: #666; font-size: 14px; margin-top: 30px;">マイページでエラー内容を確認し、ジョブを再開するか選択できます。<br>問題が解決しない場合は、サポートまでお問い合わせください。<br>このメールは自動送信されています。返信はできません。</p>
 </div>`
   const text = isCompleted
     ? `漫画化が完了しました\n\nジョブID: ${jobId}\n${jobUrl}`
-    : `漫画化でエラーが発生しました\n\nジョブID: ${jobId}\n${errorMessage ? `エラー詳細: ${errorMessage}\n` : ''}${jobUrl}`
+    : `漫画化でエラーが発生しました\n\nジョブID: ${jobId}\n${errorMessage ? `エラー詳細: ${errorMessage}\n` : ''}マイページでエラー内容を確認し再開できます:\n${dashboardUrl}`
   await transporter.sendMail({
     from: process.env.MAIL_FROM || 'Novel2Manga <noreply@novel2manga.com>',
     to: email,

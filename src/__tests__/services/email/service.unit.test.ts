@@ -64,4 +64,45 @@ describe('Email Service Unit Tests', () => {
       })
     })
   })
+
+  describe('sendJobNotification', () => {
+    it('should include job URL when job completes', async () => {
+      mockSendMail.mockResolvedValueOnce({ messageId: 'job-success-1' })
+
+      const program = Effect.gen(function* () {
+        const emailService = yield* EmailService
+        yield* emailService.sendJobNotification('user@example.com', {
+          jobId: 'job-1',
+          jobName: 'Job 1',
+          status: 'completed',
+          novelTitle: 'Novel 1',
+        })
+      })
+
+      await Effect.runPromise(program.pipe(Effect.provide(EmailServiceLive)))
+
+      const html = mockSendMail.mock.calls[0][0].html as string
+      expect(html).toContain('/portal/jobs/job-1')
+    })
+
+    it('should link to dashboard when job fails', async () => {
+      mockSendMail.mockResolvedValueOnce({ messageId: 'job-fail-1' })
+
+      const program = Effect.gen(function* () {
+        const emailService = yield* EmailService
+        yield* emailService.sendJobNotification('user@example.com', {
+          jobId: 'job-2',
+          jobName: 'Job 2',
+          status: 'failed',
+          novelTitle: 'Novel 2',
+          errorMessage: 'boom',
+        })
+      })
+
+      await Effect.runPromise(program.pipe(Effect.provide(EmailServiceLive)))
+
+      const html = mockSendMail.mock.calls[0][0].html as string
+      expect(html).toContain('/portal/dashboard')
+    })
+  })
 })
