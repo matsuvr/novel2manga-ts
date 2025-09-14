@@ -7,7 +7,7 @@ import { useState } from 'react'
 export function SignInForm() {
   const searchParams = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
-  const callbackUrl = searchParams.get('callbackUrl') || '/portal/dashboard'
+  const callbackUrl = searchParams.get('callbackUrl') || '/'
   const error = searchParams.get('error')
 
   const handleGoogleSignIn = async () => {

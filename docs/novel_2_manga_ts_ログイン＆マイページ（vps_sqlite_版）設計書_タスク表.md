@@ -19,6 +19,7 @@
 - ✅ NextAuth + Drizzle Adapter の基礎実装済み（`src/auth.ts`）
 - ✅ `/portal/api/auth/[...nextauth]/` のルート構造あり
 - ✅ NextAuth basePath は `/portal/api/auth` に設定済み
+- ✅ ログイン後はトップページへリダイレクトされ、ナビゲーション右上にマイページ/ログアウトメニューが表示される
 - ⚠️ マイページ機能は未実装
 - ⚠️ メール通知機能は未実装
 

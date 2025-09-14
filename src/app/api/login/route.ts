@@ -1,5 +1,5 @@
 import { signIn } from '@/auth'
 
 export async function GET() {
-  return signIn('google')
+  return signIn('google', '/')
 }
