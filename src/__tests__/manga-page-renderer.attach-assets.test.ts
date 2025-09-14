@@ -1,3 +1,5 @@
+/// <reference types="vitest" />
+import { describe, expect, it, vi } from 'vitest'
 import { MangaPageRenderer } from '@/lib/canvas/manga-page-renderer'
 import type { MangaLayout, Panel } from '@/types/panel-layout'
 
@@ -12,7 +14,7 @@ class MockCanvasRenderer {
   toBlob() {
     return new Blob(['x'], { type: 'image/png' })
   }
-  cleanup() {}
+  cleanup() { }
   setDialogueAssets(a: Record<string, any>) {
     this.dialogueAssets = a
   }
