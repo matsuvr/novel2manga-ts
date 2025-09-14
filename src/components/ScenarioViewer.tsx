@@ -28,6 +28,7 @@ export function ScenarioViewer() {
     try {
       const res = await fetch('/api/scenario/run', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           novelStorageKey: 'novels/example.json',

@@ -15,15 +15,15 @@ describe.skip('Job Management API Compatibility', () => {
           novelId: 'test-novel-id',
           options: {
             chunkSize: 1000,
-            analysisModel: 'gpt-4'
-          }
-        }
+            analysisModel: 'gpt-4',
+          },
+        },
       })
 
       const expectedResponse = {
         jobId: expect.any(String),
         status: 'pending',
-        message: 'Analysis job started successfully'
+        message: 'Analysis job started successfully',
       }
 
       expect(true).toBe(true)
@@ -34,8 +34,8 @@ describe.skip('Job Management API Compatibility', () => {
         method: 'POST',
         url: '/api/analyze',
         body: {
-          novelId: 'non-existent-novel-id'
-        }
+          novelId: 'non-existent-novel-id',
+        },
       })
 
       expect(true).toBe(true)
@@ -54,10 +54,10 @@ describe.skip('Job Management API Compatibility', () => {
             quality: 'high',
             pageSize: {
               width: 1200,
-              height: 1800
-            }
-          }
-        }
+              height: 1800,
+            },
+          },
+        },
       })
 
       expect(true).toBe(false) // TODO: 実装後に更新
@@ -72,9 +72,9 @@ describe.skip('Job Management API Compatibility', () => {
         body: {
           novelIds: ['novel-1', 'novel-2'],
           options: {
-            format: 'cbz'
-          }
-        }
+            format: 'cbz',
+          },
+        },
       })
 
       expect(true).toBe(false) // TODO: 実装後に更新
@@ -85,7 +85,7 @@ describe.skip('Job Management API Compatibility', () => {
     it('should return job status by ID', async () => {
       const { req } = createMocks({
         method: 'GET',
-        url: '/api/job/test-job-id'
+        url: '/api/job/test-job-id',
       })
 
       const expectedResponse = {
@@ -100,10 +100,10 @@ describe.skip('Job Management API Compatibility', () => {
           totalEpisodes: expect.any(Number),
           processedEpisodes: expect.any(Number),
           totalPages: expect.any(Number),
-          renderedPages: expect.any(Number)
+          renderedPages: expect.any(Number),
         },
         createdAt: expect.any(String),
-        updatedAt: expect.any(String)
+        updatedAt: expect.any(String),
       }
 
       expect(true).toBe(false) // TODO: 実装後に更新
@@ -112,7 +112,7 @@ describe.skip('Job Management API Compatibility', () => {
     it('should handle non-existent job ID', async () => {
       const { req } = createMocks({
         method: 'GET',
-        url: '/api/job/non-existent-job-id'
+        url: '/api/job/non-existent-job-id',
       })
 
       expect(true).toBe(false) // TODO: 実装後に更新
@@ -123,7 +123,7 @@ describe.skip('Job Management API Compatibility', () => {
     it('should provide real-time job status updates', async () => {
       const { req } = createMocks({
         method: 'GET',
-        url: '/api/jobs/test-job-id/status'
+        url: '/api/jobs/test-job-id/status',
       })
 
       expect(true).toBe(false) // TODO: 実装後に更新
@@ -134,7 +134,7 @@ describe.skip('Job Management API Compatibility', () => {
     it('should stream job events', async () => {
       const { req } = createMocks({
         method: 'GET',
-        url: '/api/jobs/test-job-id/events'
+        url: '/api/jobs/test-job-id/events',
       })
 
       expect(true).toBe(false) // TODO: 実装後に更新

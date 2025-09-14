@@ -5,7 +5,9 @@
 /**
  * Extract text content from various message formats used in LLM interactions
  */
-export function extractTextFromMessage(contentsOrRequest: string | unknown[] | Record<string, unknown>): string {
+export function extractTextFromMessage(
+  contentsOrRequest: string | unknown[] | Record<string, unknown>,
+): string {
   let text = ''
 
   if (typeof contentsOrRequest === 'string') {
@@ -21,7 +23,11 @@ export function extractTextFromMessage(contentsOrRequest: string | unknown[] | R
         return ''
       })
       .join('')
-  } else if (typeof contentsOrRequest === 'object' && contentsOrRequest !== null && 'contents' in contentsOrRequest) {
+  } else if (
+    typeof contentsOrRequest === 'object' &&
+    contentsOrRequest !== null &&
+    'contents' in contentsOrRequest
+  ) {
     // Handle request format with contents field
     const contents = (contentsOrRequest as Record<string, unknown>).contents as unknown[]
     text = contents
@@ -49,7 +55,7 @@ function extractTextFromParts(parts: unknown[]): string {
   return parts
     .map((part) => {
       if (typeof part === 'object' && part !== null && 'text' in part) {
-        return (part as Record<string, unknown>).text as string || ''
+        return ((part as Record<string, unknown>).text as string) || ''
       }
       return ''
     })
@@ -76,11 +82,17 @@ export function estimateTokenCount(text: string): number {
 /**
  * Check if input represents empty or invalid content
  */
-export function isEmptyContent(contentsOrRequest: string | unknown[] | Record<string, unknown> | null | undefined): boolean {
-  return !contentsOrRequest ||
-         contentsOrRequest === null ||
-         contentsOrRequest === undefined ||
-         (typeof contentsOrRequest === 'string' && contentsOrRequest.trim() === '') ||
-         (Array.isArray(contentsOrRequest) && contentsOrRequest.length === 0) ||
-         (typeof contentsOrRequest === 'object' && contentsOrRequest !== null && Object.keys(contentsOrRequest).length === 0)
+export function isEmptyContent(
+  contentsOrRequest: string | unknown[] | Record<string, unknown> | null | undefined,
+): boolean {
+  return (
+    !contentsOrRequest ||
+    contentsOrRequest === null ||
+    contentsOrRequest === undefined ||
+    (typeof contentsOrRequest === 'string' && contentsOrRequest.trim() === '') ||
+    (Array.isArray(contentsOrRequest) && contentsOrRequest.length === 0) ||
+    (typeof contentsOrRequest === 'object' &&
+      contentsOrRequest !== null &&
+      Object.keys(contentsOrRequest).length === 0)
+  )
 }

@@ -2,8 +2,8 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { signOut, useSession } from 'next-auth/react'
-import { useState } from 'react'
+import { signIn, signOut, useSession } from 'next-auth/react'
+import React, { useState } from 'react'
 import { routesConfig } from '@/config/routes.config'
 
 type SessionUserExtended = {
@@ -18,6 +18,30 @@ const hasProfile = (u: unknown): u is SessionUserExtended =>
 export function Navigation() {
   const { data: session, status } = useSession()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+
+  // If the user returns from an OAuth callback, the browser might not trigger
+  // a focus/visibility event that SessionProvider listens to. In that case,
+  // force a small revalidation attempt so the UI reflects newly-set cookies.
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (status !== 'unauthenticated') return
+
+    const t = setTimeout(() => {
+      try {
+        // Dispatch events SessionProvider listens for (focus/visibilitychange)
+        window.dispatchEvent(new Event('visibilitychange'))
+        window.dispatchEvent(new Event('focus'))
+      } catch {
+        // ignore
+      }
+    }, 150)
+
+    return () => clearTimeout(t)
+  }, [status])
+
+  const handleSignIn = () => {
+    signIn('google')
+  }
 
   const handleSignOut = () => {
     signOut({ callbackUrl: routesConfig.home })
@@ -138,7 +162,6 @@ export function Navigation() {
                         onClick={() => setIsMenuOpen(false)}
                       >
                         設定
-
                       </Link>
 
                       <button
@@ -156,12 +179,13 @@ export function Navigation() {
                 )}
               </div>
             ) : (
-              <Link
-                href="/portal/api/auth/login"
+              <button
+                type="button"
+                onClick={handleSignIn}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 ログイン
-              </Link>
+              </button>
             )}
           </div>
 
@@ -277,7 +301,6 @@ export function Navigation() {
                 </Link>
                 <Link
                   href={routesConfig.portal.settings}
-
                   className="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
                   onClick={() => setIsMenuOpen(false)}
                 >
@@ -298,13 +321,16 @@ export function Navigation() {
           ) : (
             <div className="pt-4 pb-3 border-t border-gray-200">
               <div className="px-4">
-                <Link
-                  href="/portal/api/auth/login"
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    handleSignIn()
+                  }}
                   className="block w-full text-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                  onClick={() => setIsMenuOpen(false)}
                 >
                   ログイン
-                </Link>
+                </button>
               </div>
             </div>
           )}

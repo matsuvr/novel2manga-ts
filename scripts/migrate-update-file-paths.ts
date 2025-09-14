@@ -185,7 +185,8 @@ const Program = Effect.gen(function* () {
     const k = key as keyof typeof tableUpdaters
     const res = yield* Effect.tryPromise({
       try: async () => tableUpdaters[k](db),
-      catch: (e) => new Error(`Failed to update ${k}: ${e instanceof Error ? e.message : String(e)}`),
+      catch: (e) =>
+        new Error(`Failed to update ${k}: ${e instanceof Error ? e.message : String(e)}`),
     })
     results.push(res)
   }

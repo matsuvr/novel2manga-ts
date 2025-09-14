@@ -240,15 +240,15 @@ export const POST = withAuth(async (request: NextRequest, user) => {
         const result =
           novelText === '__FETCH_FROM_STORAGE__'
             ? await pipeline.runWithNovelId(safeNovelId, {
-              isDemo,
-              title,
-              existingJobId: jobId,
-            })
+                isDemo,
+                title,
+                existingJobId: jobId,
+              })
             : await pipeline.runWithText(safeNovelId, novelText, {
-              isDemo,
-              title,
-              existingJobId: jobId,
-            })
+                isDemo,
+                title,
+                existingJobId: jobId,
+              })
 
         return createSuccessResponse(
           {
@@ -268,7 +268,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     }
 
     // 本番/開発は非同期で実行して即時応答
-    ; (async () => {
+    ;(async () => {
       try {
         const pipeline = new AnalyzePipeline()
         const safeNovelId = novelId as string

@@ -1,16 +1,20 @@
 ```markdown
 <!-- archived: 2025-09-09 -->
+
 # Data Model (Archived)
 
 Archived copy of the data model that accompanied the OpenNext/Cloudflare migration.
 
 -- archived by automation to remove active Cloudflare-specific docs --
 ```
+
 ---
+
 archived: true
 source: specs/001-oepnnext-cloudflare-next/data-model.md
 notes: |
-  Archived Cloudflare/OpenNext data model. See git history for original.
+Archived Cloudflare/OpenNext data model. See git history for original.
+
 ---
 
 # Original data-model.md (archived)

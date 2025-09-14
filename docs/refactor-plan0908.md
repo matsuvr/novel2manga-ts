@@ -32,6 +32,7 @@
 1. **エラーハンドリングの重複**
 
 現状の問題：
+
 ```typescript
 // base-step.ts内に同様のパターンが繰り返されている
 protected async executeWithJobErrorHandling<T>(
@@ -52,6 +53,7 @@ protected async executeWithJobErrorHandling<T>(
 ```
 
 **提案: Effect TSのエラーハンドリング機能を活用**
+
 ```typescript
 import { Effect, pipe } from 'effect'
 
@@ -59,7 +61,7 @@ import { Effect, pipe } from 'effect'
 export const withJobErrorHandling = <A>(
   operation: Effect.Effect<A, Error>,
   context: StepContext,
-  operationName: string
+  operationName: string,
 ) =>
   pipe(
     operation,
@@ -67,9 +69,9 @@ export const withJobErrorHandling = <A>(
       pipe(
         Effect.logError(`${operationName} failed: ${error.message}`),
         Effect.flatMap(() => updateJobStatus(context.jobId, 'failed')),
-        Effect.flatMap(() => Effect.fail(error))
-      )
-    )
+        Effect.flatMap(() => Effect.fail(error)),
+      ),
+    ),
   )
 ```
 
@@ -88,6 +90,7 @@ export const withJobErrorHandling = <A>(
 1. **単一責任の原則（SRP）違反**
 
 `BasePipelineStep`クラスが多くの責任を持ちすぎている：
+
 - ジョブ管理
 - エラーロギング
 - 結果作成
@@ -95,6 +98,7 @@ export const withJobErrorHandling = <A>(
 - カバレッジ警告更新
 
 **提案: 責任の分離**
+
 ```typescript
 // ジョブ管理の責任を分離
 export class JobProgressManager {
@@ -122,7 +126,7 @@ export class PipelineErrorLogger {
 export abstract class BasePipelineStep implements PipelineStep {
   constructor(
     private readonly jobManager: JobProgressManager,
-    private readonly errorLogger: PipelineErrorLogger
+    private readonly errorLogger: PipelineErrorLogger,
   ) {}
 
   // ステップ実行のコア機能のみに集中
@@ -133,6 +137,7 @@ export abstract class BasePipelineStep implements PipelineStep {
 2. **インターフェース分離の原則（ISP）違反**
 
 `LlmClient`インターフェースにオプショナルメソッドが存在：
+
 ```typescript
 export interface LlmClient {
   chat(messages: LlmMessage[], options?: LlmClientOptions): Promise<LlmResponse>
@@ -141,6 +146,7 @@ export interface LlmClient {
 ```
 
 **提案: インターフェースの分離**
+
 ```typescript
 // チャット機能のインターフェース
 export interface ChatClient {
@@ -178,13 +184,14 @@ export class ChatOnlyClient implements ChatClient {
 現状、ドメインロジックがサービス層に散在している。ビジネスルールをドメインモデルに集約すべき。
 
 **提案: リッチドメインモデルの導入**
+
 ```typescript
 // src/domain/novel/entities/novel.ts
 export class Novel {
   private constructor(
     private readonly id: NovelId,
     private readonly title: Title,
-    private readonly chunks: Chunk[] = []
+    private readonly chunks: Chunk[] = [],
   ) {}
 
   // ビジネスルールをドメインモデルに集約
@@ -206,10 +213,7 @@ export class Novel {
     if (props.title.length > 200) {
       throw new DomainError('Title too long')
     }
-    return new Novel(
-      new NovelId(generateId()),
-      new Title(props.title)
-    )
+    return new Novel(new NovelId(generateId()), new Title(props.title))
   }
 }
 ```
@@ -217,12 +221,13 @@ export class Novel {
 2. **値オブジェクトの活用不足**
 
 **提案: 値オブジェクトの導入**
+
 ```typescript
 // src/domain/shared/value-objects/page-range.ts
 export class PageRange {
   constructor(
     private readonly start: number,
-    private readonly end: number
+    private readonly end: number,
   ) {
     if (start < 1) throw new Error('Start page must be positive')
     if (end < start) throw new Error('End page must be after start page')
@@ -246,10 +251,12 @@ export class PageRange {
 AGENTS.mdに記載されている通り、段階的にEffect TSへ移行中。以下の戦略を提案：
 
 ### フェーズ1: 新規機能から導入（現在進行中）
+
 - 新しいサービスはEffect TSで実装
 - 既存の動作しているコードは無理に書き換えない
 
 ### フェーズ2: エラーハンドリングの統一
+
 ```typescript
 import { Effect, pipe } from 'effect'
 import { Schema } from '@effect/schema'
@@ -266,31 +273,21 @@ export const analyzeChunk = (chunk: string) =>
   pipe(
     Effect.tryPromise({
       try: () => llmClient.analyze(chunk),
-      catch: (error) => new LlmError('Analysis failed', error)
+      catch: (error) => new LlmError('Analysis failed', error),
     }),
-    Effect.flatMap((result) =>
-      Schema.decodeUnknown(ChunkAnalysisResult)(result)
-    ),
-    Effect.catchTag('ParseError', (error) =>
-      Effect.logError('Invalid analysis result')
-    )
+    Effect.flatMap((result) => Schema.decodeUnknown(ChunkAnalysisResult)(result)),
+    Effect.catchTag('ParseError', (error) => Effect.logError('Invalid analysis result')),
   )
 ```
 
 ### フェーズ3: Layerパターンの活用
+
 ```typescript
 // CloudflareバインディングをLayerとして提供
-const CloudflareEnvLayer = Layer.succeed(
-  CloudflareEnv,
-  getCloudflareContext().env
-)
+const CloudflareEnvLayer = Layer.succeed(CloudflareEnv, getCloudflareContext().env)
 
 // サービスの組み合わせ
-const MainLayer = Layer.mergeAll(
-  CloudflareEnvLayer,
-  DatabaseLayer,
-  LlmClientLayer
-)
+const MainLayer = Layer.mergeAll(CloudflareEnvLayer, DatabaseLayer, LlmClientLayer)
 ```
 
 ---

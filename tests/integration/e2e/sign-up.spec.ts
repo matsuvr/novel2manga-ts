@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import { E2ETestHelpers } from './helpers/test-data'
 
 test.describe('Sign-up flow', () => {

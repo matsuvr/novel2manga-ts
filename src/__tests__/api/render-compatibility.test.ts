@@ -20,8 +20,8 @@ describe('Rendering API Compatibility', () => {
           width: expect.any(Number),
           height: expect.any(Number),
           format: expect.stringMatching(/png|jpg|webp/),
-          fileSize: expect.any(Number)
-        }
+          fileSize: expect.any(Number),
+        },
       }
 
       expect(true).toBe(true)
@@ -51,11 +51,11 @@ describe('Rendering API Compatibility', () => {
           currentPage: expect.any(Number),
           totalPages: expect.any(Number),
           renderedPages: expect.any(Number),
-          percentage: expect.any(Number)
+          percentage: expect.any(Number),
         },
         estimatedTimeRemaining: expect.any(Number),
         startedAt: expect.any(String),
-        updatedAt: expect.any(String)
+        updatedAt: expect.any(String),
       }
 
       expect(true).toBe(true)
@@ -100,7 +100,7 @@ describe('Rendering API Compatibility', () => {
           timestamp: expect.any(String),
           version: expect.any(String),
           database: 'connected',
-          storage: 'available'
+          storage: 'available',
         }
 
         expect(true).toBe(true)

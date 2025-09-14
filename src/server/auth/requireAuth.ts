@@ -54,9 +54,18 @@ export const requireAuth = Effect.gen(function* () {
           err && (err as { message?: unknown }).message
             ? String((err as { message?: unknown }).message)
             : String(err)
+        // Development-time logging to aid debugging of authentication failures
+        if (process.env.NODE_ENV === 'development') {
+          // eslint-disable-next-line no-console
+          console.error('[requireAuth] authFn failed:', msg)
+        }
         throw new Error(`Failed to get session: ${msg}`)
       }
     })
+    if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.debug('[requireAuth] authFn session result:', session)
+    }
 
     const sess = session as unknown
     // Validate presence of user and that id is a non-empty, non-whitespace string
@@ -72,6 +81,10 @@ export const requireAuth = Effect.gen(function* () {
     const idIsNonEmpty = idIsString && rawId.trim().length > 0
 
     if (!hasUser || !idIsString || !idIsNonEmpty) {
+      if (process.env.NODE_ENV === 'development') {
+        // eslint-disable-next-line no-console
+        console.debug('[requireAuth] session did not contain user id', { sess })
+      }
       return yield* Effect.fail(new AuthenticationError('Not authenticated'))
     }
 

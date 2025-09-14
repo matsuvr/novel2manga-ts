@@ -41,7 +41,7 @@ export function SettingsContent() {
     setError(null)
 
     try {
-      const response = await fetch('/api/me')
+      const response = await fetch('/api/me', { credentials: 'include' })
 
       if (!response.ok) {
         throw new Error('ユーザー情報の取得に失敗しました')
@@ -71,6 +71,7 @@ export function SettingsContent() {
     try {
       const response = await fetch('/api/me', {
         method: 'PATCH',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
