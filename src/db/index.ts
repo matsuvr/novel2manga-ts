@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import Database from 'better-sqlite3'
+import { spawnSync } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { getDatabaseConfig } from '@/config'
@@ -11,7 +12,30 @@ import {
 } from '@/services/database/database-service-factory'
 import * as schema from './schema'
 
+const require = createRequire(import.meta.url)
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null
+let rebuildAttempted = false
+
+function isNativeModuleError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /NODE_MODULE_VERSION/i.test(message) || /ERR_DLOPEN_FAILED/i.test(message)
+}
+
+function rebuildBetterSqlite3(): void {
+  const result = spawnSync('npm', ['rebuild', 'better-sqlite3'], {
+    stdio: 'inherit',
+  })
+  if (result.status !== 0) {
+    throw new Error(`npm rebuild better-sqlite3 failed with code ${result.status}`)
+  }
+}
+
+function loadBetterSqlite3(reload = false) {
+  if (reload) {
+    delete require.cache[require.resolve('better-sqlite3')]
+  }
+  return require('better-sqlite3') as typeof import('better-sqlite3')
+}
 
 export function shouldRunMigrations(env: NodeJS.ProcessEnv = process.env): boolean {
   const skipMigrate = env.DB_SKIP_MIGRATE === '1'
@@ -62,15 +86,15 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
       fs.mkdirSync(dbDir, { recursive: true })
     }
 
-    try {
-      const sqliteDb = new Database(dbPath)
-      db = drizzle(sqliteDb, { schema })
+    const initialize = (Driver: typeof import('better-sqlite3')) => {
+      const sqliteDb = new Driver(dbPath)
+      const drizzleDb = drizzle(sqliteDb, { schema })
 
       // Initialize the new database service architecture
-      const connection = createDatabaseConnection({ sqlite: db })
+      const connection = createDatabaseConnection({ sqlite: drizzleDb })
       initializeDatabaseServiceFactory(connection)
 
-      // In dev/test, run migrations only when it's safe to do so.
+      // In dev/test, run migrations only when it's safe to do so。
       // 明示的にスキップ指定がある場合はマイグレーションを行わない
       if (shouldRunMigrations()) {
         // Detect if the DB already has application tables but lacks drizzle's meta table.
@@ -97,7 +121,7 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
 
         if (!hasDrizzleMeta && hasUserTables) {
           // DBは既にアプリのテーブルを持つが、マイグレーション管理テーブルが無い状態。
-          // この場合は自動migrateをスキップし、明確なメッセージを出す。
+          // この場合は自動migrateをスキップし、明確なメッセジを出す。
           console.warn(
             '[Database:migrate] 既存テーブルを検出しましたが __drizzle_migrations が存在しません。マイグレーションをスキップします。',
             {
@@ -112,7 +136,7 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
           )
         } else {
           try {
-            migrate(db, { migrationsFolder: path.join(process.cwd(), 'drizzle') })
+            migrate(drizzleDb, { migrationsFolder: path.join(process.cwd(), 'drizzle') })
           } catch (migrateError) {
             // フォールバック禁止方針: マイグレーション失敗は重大事として明示し、起動を停止する
             const message =
@@ -132,29 +156,49 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
           }
         }
       }
+
+      return drizzleDb
+    }
+
+    try {
+      const Driver = loadBetterSqlite3()
+      db = initialize(Driver)
     } catch (error) {
-      // 特定: ネイティブモジュール ABI 不一致 (ERR_DLOPEN_FAILED) などのロード失敗を捕捉
       const msg = error instanceof Error ? error.message : String(error)
-      const isAbiMismatch = /NODE_MODULE_VERSION/i.test(msg) || /ERR_DLOPEN_FAILED/i.test(msg)
-      if (isAbiMismatch) {
-        console.error(
-          '[Database:init] better-sqlite3 のネイティブモジュール読み込みに失敗しました (ABI mismatch 可能性)',
-          {
-            message: msg,
-            hint: '再ビルド手順: npm rebuild better-sqlite3 もしくは node_modules 再生成 (postinstall で自動実行設定済み)',
-            steps: [
-              'npm rebuild better-sqlite3',
-              'rm -rf node_modules package-lock.json',
-              'npm ci',
-            ],
-            nodeVersion: process.version,
-            cwd: process.cwd(),
-          },
-        )
+      if (isNativeModuleError(error) && !rebuildAttempted) {
+        rebuildAttempted = true
+        try {
+          rebuildBetterSqlite3()
+          const Driver = loadBetterSqlite3(true)
+          db = initialize(Driver)
+        } catch (innerError) {
+          const innerMsg = innerError instanceof Error ? innerError.message : String(innerError)
+          console.error('[Database:init] better-sqlite3 の自動再ビルドに失敗しました', {
+            message: innerMsg,
+          })
+          throw innerError
+        }
       } else {
-        console.error('[Database:init] 予期しない初期化エラー', msg)
+        if (isNativeModuleError(error)) {
+          console.error(
+            '[Database:init] better-sqlite3 のネイティブモジュール読み込みに失敗しました (ABI mismatch 可能性)',
+            {
+              message: msg,
+              hint: '再ビルド手順: npm rebuild better-sqlite3 もしくは node_modules 再生成 (postinstall で自動実行設定済み)',
+              steps: [
+                'npm rebuild better-sqlite3',
+                'rm -rf node_modules package-lock.json',
+                'npm ci',
+              ],
+              nodeVersion: process.version,
+              cwd: process.cwd(),
+            },
+          )
+        } else {
+          console.error('[Database:init] 予期しない初期化エラー', msg)
+        }
+        throw error
       }
-      throw error
     }
     // Migrations are handled above inside the initialization try-block with safety checks.
   }
