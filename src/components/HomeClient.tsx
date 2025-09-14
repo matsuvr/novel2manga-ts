@@ -113,34 +113,11 @@ export default function HomeClient() {
     }
   }, [])
 
-  // If user was redirected back from auth callback, NextAuth may have set cookies
-  // but the client-side session might not refetch immediately. Force a refetch
-  // when the page mounts or when the URL contains `callbackUrl` markers.
-  React.useEffect(() => {
-    // When session status is 'unauthenticated' we used to refetch once after mount
-    // to pick up recently-set auth cookies from the callback flow. That extra
-    // fetch can interfere with tests that mock `fetch` call order. Limit the
-    // refetch to only run when the URL contains callback markers (callbackUrl,
-    // nextauth.callbackUrl) which indicates we just returned from an auth flow.
-    if (status === 'unauthenticated' && typeof window !== 'undefined') {
-      try {
-        const params = new URLSearchParams(window.location.search)
-        const hasCallbackMarker = params.has('callbackUrl') || params.has('nextauth.callbackUrl')
-        if (!hasCallbackMarker) return
-      } catch {
-        return
-      }
-
-      ;(async () => {
-        try {
-          await fetch('/api/auth/session', { cache: 'no-store', credentials: 'include' })
-        } catch (_) {
-          // ignore
-        }
-      })()
-    }
-    // Only run on mount / when status changes
-  }, [status])
+  // Session refetching on OAuth callback is handled centrally in `Navigation`.
+  // Navigation dispatches focus/visibility events which the SessionProvider
+  // listens to, so the manual fetch here was redundant and caused test
+  // interference (mocked fetch order). The logic is intentionally removed to
+  // avoid duplicate refetch attempts and to prefer the single, robust mechanism.
 
   const handleSubmit = async () => {
     if (!novelText.trim()) return
