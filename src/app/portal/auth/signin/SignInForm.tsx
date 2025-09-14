@@ -3,11 +3,12 @@
 import { useSearchParams } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import { useState } from 'react'
+import { authConfig } from '@/config/auth.config'
 
 export function SignInForm() {
   const searchParams = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
-  const callbackUrl = searchParams.get('callbackUrl') || '/'
+  const callbackUrl = searchParams.get('callbackUrl') || authConfig.defaultCallbackUrl
   const error = searchParams.get('error')
 
   const handleGoogleSignIn = async () => {

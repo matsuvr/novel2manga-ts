@@ -6,6 +6,7 @@ import { Effect } from 'effect'
 import nodemailer from 'nodemailer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EmailService, EmailServiceLive } from '../../../services/email/service'
+import { routesConfig } from '@/config/routes.config'
 
 // Mock nodemailer
 vi.mock('nodemailer', () => ({
@@ -102,7 +103,7 @@ describe('Email Service Unit Tests', () => {
       await Effect.runPromise(program.pipe(Effect.provide(EmailServiceLive)))
 
       const html = mockSendMail.mock.calls[0][0].html as string
-      expect(html).toContain('/portal/dashboard')
+      expect(html).toContain(routesConfig.portal.dashboard)
     })
   })
 })

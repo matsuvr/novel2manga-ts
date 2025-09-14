@@ -1,9 +1,10 @@
 import type { JobNotificationData } from './types'
+import { routesConfig } from '@/config/routes.config'
 
 export const generateJobNotificationContent = (data: JobNotificationData) => {
   const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'
   const jobUrl = `${baseUrl}/portal/jobs/${data.jobId}`
-  const dashboardUrl = `${baseUrl}/portal/dashboard`
+  const dashboardUrl = `${baseUrl}${routesConfig.portal.dashboard}`
   const isCompleted = data.status === 'completed'
 
   const subject = isCompleted
