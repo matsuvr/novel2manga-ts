@@ -13,6 +13,12 @@ interface AggregateRow {
   totalTokens: number
 }
 
+export type JobTokenUsage = {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+}
+
 export interface RecordTokenUsageParams {
   jobId: string
   agentName: string
@@ -79,11 +85,7 @@ export class TokenUsageDatabaseService extends BaseDatabaseService {
   /**
    * Get aggregated token usage totals for multiple jobs
    */
-  async getTotalsByJobIds(
-    jobIds: readonly string[],
-  ): Promise<
-    Record<string, { promptTokens: number; completionTokens: number; totalTokens: number }>
-  > {
+  async getTotalsByJobIds(jobIds: readonly string[]): Promise<Record<string, JobTokenUsage>> {
     if (jobIds.length === 0) return {}
 
     const db = this.db as DrizzleDatabase
@@ -100,15 +102,15 @@ export class TokenUsageDatabaseService extends BaseDatabaseService {
 
     const rows = this.isSync() ? (query.all() as AggregateRow[]) : ((await query) as AggregateRow[])
 
-    return rows.reduce<
-      Record<string, { promptTokens: number; completionTokens: number; totalTokens: number }>
-    >((acc, row) => {
-      acc[row.jobId] = {
-        promptTokens: row.promptTokens ?? 0,
-        completionTokens: row.completionTokens ?? 0,
-        totalTokens: row.totalTokens ?? 0,
-      }
-      return acc
-    }, {})
+    return Object.fromEntries(
+      rows.map((row): [string, JobTokenUsage] => [
+        row.jobId,
+        {
+          promptTokens: row.promptTokens ?? 0,
+          completionTokens: row.completionTokens ?? 0,
+          totalTokens: row.totalTokens ?? 0,
+        },
+      ]),
+    )
   }
 }

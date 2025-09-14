@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { TokenUsageDatabaseService } from '@/services/database/token-usage-database-service'
+import { DatabaseAdapter } from '@/infrastructure/database/adapters/base-adapter'
 
 describe('TokenUsageDatabaseService', () => {
   it('getTotalsByJobIds aggregates tokens by job', async () => {
@@ -9,16 +10,30 @@ describe('TokenUsageDatabaseService', () => {
     ]
 
     const db = {
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            groupBy: () => ({ all: () => rows }),
+      select: (..._args: unknown[]) => ({
+        from: (..._args2: unknown[]) => ({
+          where: (..._args3: unknown[]) => ({
+            groupBy: (..._args4: unknown[]) => ({ all: () => rows }),
           }),
         }),
       }),
     }
-    const adapter = { isSync: () => true, transaction: (fn: (tx: unknown) => unknown) => fn({}) }
-    const service = new TokenUsageDatabaseService(db as any, adapter as any)
+
+    class MockAdapter extends DatabaseAdapter {
+      isSync(): boolean {
+        return true
+      }
+
+      runSync<T>(fn: () => T): T {
+        return fn()
+      }
+
+      async transaction<TTx, T>(fn: (tx: TTx) => T | Promise<T>): Promise<T> {
+        return fn({} as TTx)
+      }
+    }
+
+    const service = new TokenUsageDatabaseService(db, new MockAdapter())
 
     const result = await service.getTotalsByJobIds(['job1', 'job2'])
     expect(result).toEqual({
