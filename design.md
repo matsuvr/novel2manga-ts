@@ -7,4 +7,4 @@
 ## Storage Tracking
 
 - `recordStorageFile` and `recordStorageFileSync` skip tracking when the database service is unavailable or invalid.
-- These functions log informative messages and return early instead of throwing, preventing noisy test failures.
+- These functions log info-level messages via `logError` and return early instead of throwing, preventing noisy test failures.
