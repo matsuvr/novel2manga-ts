@@ -4,10 +4,15 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import { jobs, storageFiles } from '@/db/schema'
 import { getDatabaseServiceFactory } from '@/services/database'
+import { logError } from '@/utils/api-error'
 
 // Drizzle transaction type for internal use
 type DrizzleDb = BetterSQLite3Database<typeof schema>
 type DrizzleTransaction = Parameters<Parameters<DrizzleDb['transaction']>[0]>[0]
+
+function isDrizzleDb(obj: unknown): obj is DrizzleDb | DrizzleTransaction {
+  return Boolean(obj && typeof (obj as { select?: unknown }).select === 'function')
+}
 
 type FileCategory =
   | 'original'
@@ -41,26 +46,26 @@ export async function recordStorageFile(
   params: RecordStorageFileParams,
   tx?: DrizzleTransaction,
 ): Promise<void> {
-  function isDrizzleDb(obj: unknown): obj is DrizzleDb {
-    if (!obj || typeof obj !== 'object') return false
-    const candidate = obj as { select?: unknown }
-    return typeof candidate.select === 'function'
-  }
   let raw: unknown = tx
   if (!raw) {
     try {
       raw = getDatabaseServiceFactory().getRawDatabase()
     } catch (error) {
-      console.info('Storage tracking skipped: database service factory unavailable', error)
+      logError(
+        'Storage tracking skipped: database service factory unavailable',
+        error,
+        undefined,
+        'info',
+      )
       return
     }
   }
 
   if (!isDrizzleDb(raw)) {
-    console.info('Storage tracking skipped: database is not initialized')
+    logError('Storage tracking skipped: database is not initialized', undefined, undefined, 'info')
     return
   }
-  const db = raw
+  const db = raw as DrizzleDb
 
   let novelId = params.novelId
   if (!novelId && params.jobId) {
@@ -104,12 +109,8 @@ export function recordStorageFileSync(
   params: RecordStorageFileParams,
   tx: DrizzleTransaction,
 ): void {
-  function isDrizzleDb(obj: unknown): obj is DrizzleTransaction {
-    return Boolean(obj && typeof (obj as { select?: unknown }).select === 'function')
-  }
-
   if (!isDrizzleDb(tx)) {
-    console.info('Storage tracking skipped: invalid transaction context')
+    logError('Storage tracking skipped: invalid transaction context', undefined, undefined, 'info')
     return
   }
 
