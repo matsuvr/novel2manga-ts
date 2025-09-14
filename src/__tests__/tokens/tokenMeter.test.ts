@@ -202,9 +202,7 @@ describe('TokenMeter', () => {
         text: 'Hello world',
       }
 
-      expect(() => tokenMeter.finalize(mockResponse)).toThrow(
-        'usageMetadata not found in response',
-      )
+      expect(() => tokenMeter.finalize(mockResponse)).toThrow('usageMetadata not found in response')
     })
 
     it('should return 0 for numeric fields when they are falsy', () => {
@@ -252,10 +250,7 @@ describe('TokenMeter', () => {
     it('should estimate tokens for complex object input', () => {
       const input = [
         {
-          parts: [
-            { text: 'Hello' },
-            { text: ' world' },
-          ],
+          parts: [{ text: 'Hello' }, { text: ' world' }],
         },
       ]
       const result = (tokenMeter as any).fallbackEstimation(input)
@@ -277,13 +272,7 @@ describe('TokenMeter', () => {
     })
 
     it('should handle empty or invalid inputs', () => {
-      const emptyCases = [
-        null,
-        undefined,
-        [],
-        {},
-        '',
-      ]
+      const emptyCases = [null, undefined, [], {}, '']
 
       emptyCases.forEach((input) => {
         const result = (tokenMeter as any).fallbackEstimation(input)

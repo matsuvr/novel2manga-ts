@@ -3,7 +3,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
 import { appConfig } from '@/config/app.config'
-import { isRenderCompletelyDone } from '@/utils/completion'
 
 const _MAX_PAGES = appConfig.rendering.limits.maxPages
 
@@ -823,10 +822,14 @@ function ProcessingProgress({
   // 画面更新（render）の外でのみルーター更新を行う
   useEffect(() => {
     if (!completed) return
-    // Allow route transition only after strict completion (page count matches)
-    if (!isRenderCompletelyDone(lastJobRef.current)) return
-    // onComplete内でのrouter操作はここから呼ぶことで、
-    // 「別コンポーネントのレンダー中にsetStateする」警告を回避
+    // NOTE:
+    // Previously we required `isRenderCompletelyDone(lastJobRef.current)` here
+    // before calling `onComplete`. That made client-side redirection fail when
+    // the server had marked the job completed but aggregated page counts had
+    // not yet propagated to the SSE snapshot. For navigation purposes we only
+    // need the component to know the job finished; result page performs its
+    // own strict verification server-side. Therefore call onComplete when the
+    // component's completed flag is set.
     onComplete?.()
   }, [completed, onComplete])
 
@@ -969,9 +972,12 @@ function ProcessingProgress({
           <div className="apple-card p-4">
             <div className="text-sm text-gray-600 flex items-center justify-between">
               <span>
-                入力 {tokenPromptSum.toLocaleString()} / 出力 {tokenCompletionSum.toLocaleString()} トークン
+                入力 {tokenPromptSum.toLocaleString()} / 出力 {tokenCompletionSum.toLocaleString()}{' '}
+                トークン
               </span>
-              <span className={`text-xs px-2 py-1 rounded-full ${completed ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+              <span
+                className={`text-xs px-2 py-1 rounded-full ${completed ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}
+              >
                 {completed ? '確定' : '暫定'}
               </span>
             </div>

@@ -4,13 +4,13 @@
 import { Context, Effect, Layer } from 'effect'
 import type { Transporter } from 'nodemailer'
 import nodemailer from 'nodemailer'
+import { generateJobNotificationContent } from './templates'
 import {
   EmailConfigurationError,
   EmailError,
   type EmailOptions,
   type JobNotificationData,
 } from './types'
-import { generateJobNotificationContent } from './templates'
 
 /**
  * Email Service Interface

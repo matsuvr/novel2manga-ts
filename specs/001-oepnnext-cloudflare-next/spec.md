@@ -1,4 +1,5 @@
 Archived. See `archive/cloudflare-legacy/specs/001-oepnnext-cloudflare-next-spec.md` for the original feature specification.
+
 # Feature Specification: OpenNext・Cloudflare削除と純粋Next.js＋SQLite3移行
 
 **Feature Branch**: `001-oepnnext-cloudflare-next`
@@ -7,6 +8,7 @@ Archived. See `archive/cloudflare-legacy/specs/001-oepnnext-cloudflare-next-spec
 **Input**: User description: "oepnnext, cloudflareを完全に削除し、純粋なNext.js実装にする。DBはSQLite3"
 
 ## Execution Flow (main)
+
 ```
 1. Parse user description from Input
    → Feature description: Remove OpenNext/Cloudflare, migrate to pure Next.js with SQLite3
@@ -29,17 +31,21 @@ Archived. See `archive/cloudflare-legacy/specs/001-oepnnext-cloudflare-next-spec
 ---
 
 ## ⚡ Quick Guidelines
+
 - ✅ Focus on WHAT users need and WHY
 - ❌ Avoid HOW to implement (no tech stack, APIs, code structure)
 - 👥 Written for business stakeholders, not developers
 
 ### Section Requirements
+
 - **Mandatory sections**: Must be completed for every feature
 - **Optional sections**: Include only when relevant to the feature
 - When a section doesn't apply, remove it entirely (don't leave as "N/A")
 
 ### For AI Generation
+
 When creating this spec from a user prompt:
+
 1. **Mark all ambiguities**: Use [NEEDS CLARIFICATION: specific question] for any assumption you'd need to make
 2. **Don't guess**: If the prompt doesn't specify something (e.g., "login system" without auth method), mark it
 3. **Think like a tester**: Every vague requirement should fail the "testable and unambiguous" checklist item
@@ -53,26 +59,30 @@ When creating this spec from a user prompt:
 
 ---
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### Primary User Story
+
 As a system administrator, I want to migrate the application from OpenNext/Cloudflare deployment to a pure Next.js implementation with SQLite3 database, so that I can simplify the deployment architecture and reduce dependency on third-party services while maintaining all existing functionality.
 
 ### Acceptance Scenarios
+
 1. **Given** the current OpenNext/Cloudflare deployment is running, **When** the migration is completed, **Then** all existing user-facing features must work identically to the previous implementation
 2. **Given** data exists in the current system, **When** the migration is performed, **Then** all data must be successfully migrated to SQLite3 without data loss
 3. **Given** the new pure Next.js implementation, **When** deployed, **Then** the application must start successfully and serve all routes
 4. **Given** the new SQLite3 database, **When** the application runs, **Then** all database operations must function correctly
 
 ### Edge Cases
+
 - What happens when the database schema differs between Cloudflare D1 and SQLite3?
 - How does system handle large dataset migration from Cloudflare to local SQLite3?
 - What happens when Cloudflare-specific features (like KV storage, R2) are removed?
 - How does system handle environment-specific configurations during migration?
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
+
 - **FR-001**: System MUST maintain all existing user-facing functionality after migration
 - **FR-002**: System MUST successfully migrate all existing data from Cloudflare D1 to SQLite3
 - **FR-003**: System MUST remove all OpenNext dependencies and configurations
@@ -82,12 +92,14 @@ As a system administrator, I want to migrate the application from OpenNext/Cloud
 - **FR-007**: System MUST provide equivalent performance characteristics after migration
 - **FR-008**: System MUST support all existing API endpoints and routes
 
-*Example of marking unclear requirements:*
+_Example of marking unclear requirements:_
+
 - **FR-009**: System MUST handle migration of [NEEDS CLARIFICATION: what specific data types are stored in Cloudflare KV/R2 that need SQLite3 equivalent?]
 - **FR-010**: System MUST complete migration within [NEEDS CLARIFICATION: acceptable downtime window not specified]
 - **FR-011**: System MUST maintain [NEEDS CLARIFICATION: what specific performance metrics are critical?]
 
-### Key Entities *(include if feature involves data)*
+### Key Entities _(include if feature involves data)_
+
 - **User Data**: All user account information and preferences currently stored in Cloudflare D1
 - **Application Data**: All application-specific data including novels, manga, and conversion results
 - **Configuration Data**: Environment-specific configurations currently managed by Cloudflare
@@ -96,8 +108,10 @@ As a system administrator, I want to migrate the application from OpenNext/Cloud
 ---
 
 ## Review & Acceptance Checklist
-*GATE: Automated checks run during main() execution*
+
+_GATE: Automated checks run during main() execution_
 
 ### Content Quality
+
 - [ ] No implementation details (languages, frameworks, APIs)
-Archived. See `archive/cloudflare-legacy/specs/001-oepnnext-cloudflare-next-spec.md` for the original feature specification.
+      Archived. See `archive/cloudflare-legacy/specs/001-oepnnext-cloudflare-next-spec.md` for the original feature specification.

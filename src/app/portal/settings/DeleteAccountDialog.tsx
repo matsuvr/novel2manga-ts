@@ -27,6 +27,7 @@ export function DeleteAccountDialog({ isOpen, onClose, userEmail }: DeleteAccoun
     try {
       const response = await fetch('/api/me', {
         method: 'DELETE',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },

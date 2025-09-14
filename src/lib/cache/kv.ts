@@ -132,7 +132,7 @@ export async function getCachedData<T>(
   const cache = getCache()
   try {
     const data = await cache.get(key, { type: options?.type || 'json' })
-    
+
     // JSONデータの場合はパースする
     if (options?.type === 'json' && typeof data === 'string') {
       try {
@@ -142,7 +142,7 @@ export async function getCachedData<T>(
         return null
       }
     }
-    
+
     return data as T
   } catch (error) {
     console.error(`Failed to get cached data for key ${key}:`, error)

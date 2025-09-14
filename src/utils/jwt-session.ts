@@ -36,12 +36,12 @@ export async function verifySessionToken(
   }
   try {
     // NextAuth v4のjwt.decode関数を使用
-    const jwt: JWT | null = await decode({
-      token,
-      secret,
-      // v4では salt パラメータがオプショナル
-      ...(salt && { salt })
-    })
+    // next-auth's decode expects a required salt in its type; construct
+    // the params object conditionally and cast to satisfy the typings.
+    const decodeParams: Partial<Parameters<typeof decode>[0]> = { token, secret }
+    if (typeof salt === 'string') decodeParams.salt = salt
+
+    const jwt: JWT | null = await decode(decodeParams as Parameters<typeof decode>[0])
 
     // JWT型をSessionTokenPayload型に変換して返す
     if (!jwt) return null

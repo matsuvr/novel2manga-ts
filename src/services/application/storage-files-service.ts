@@ -42,7 +42,9 @@ export class StorageFilesService {
       typeof dbCandidate.select !== 'function' ||
       typeof dbCandidate.insert !== 'function'
     ) {
-      throw new Error('StorageFilesService: getRawDatabase() did not return a BetterSQLite3Database')
+      throw new Error(
+        'StorageFilesService: getRawDatabase() did not return a BetterSQLite3Database',
+      )
     }
     this.db = dbCandidate
     return this.db

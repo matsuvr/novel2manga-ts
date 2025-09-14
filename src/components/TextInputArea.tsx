@@ -11,8 +11,6 @@ interface TextInputAreaProps {
   maxLength?: number
 }
 
-
-
 export default function TextInputArea({
   value,
   onChange,
