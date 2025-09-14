@@ -9,9 +9,22 @@ test.describe('Sign-up flow', () => {
     const submit = page.getByRole('button', { name: /sign up/i })
     await expect(submit).toBeDisabled()
 
+    await page.getByRole('textbox', { type: 'email' }).fill('test@example.com')
+
     await page.getByRole('checkbox').check()
     await expect(submit).toBeEnabled()
 
+    let submitted = false
+    await page.exposeBinding('recordSubmit', () => {
+      submitted = true
+    })
+    await page.evaluate(() => {
+      document.querySelector('form')?.addEventListener('submit', () => {
+        ;(window as unknown as { recordSubmit: () => void }).recordSubmit()
+      })
+    })
+
     await submit.click()
+    expect(submitted).toBe(true)
   })
 })
