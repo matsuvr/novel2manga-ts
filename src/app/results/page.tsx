@@ -24,7 +24,11 @@ export default async function ResultsPage() {
       <h1 className="text-2xl font-bold">変換結果一覧</h1>
       <ul className="space-y-2">
         {jobs.map((job) => {
-          const totals = tokenTotals[job.id] ?? { promptTokens: 0, completionTokens: 0 }
+          const totals = tokenTotals[job.id] ?? {
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+          }
           return (
             <li key={job.id} className="apple-card p-4 flex items-center justify-between">
               <div>
