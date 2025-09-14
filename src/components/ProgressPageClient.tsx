@@ -21,6 +21,7 @@ export default function ProgressPageClient({ novelId }: Props) {
         setMessage('ジョブを確認/再開しています…')
         const res = await fetch('/api/resume', {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ novelId }),
           cache: 'no-store',

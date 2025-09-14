@@ -131,9 +131,9 @@ export class TransactionManager {
         function isDrizzleDb(obj: unknown): obj is DrizzleDb {
           // テスト用のモックデータベースも許容する
           if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
-            return true;
+            return true
           }
-          
+
           if (!obj || typeof obj !== 'object') return false
           const candidate = obj as { select?: unknown }
           return typeof candidate.select === 'function'
@@ -144,18 +144,19 @@ export class TransactionManager {
         }
 
         // better-sqlite3 は async コールバック非対応のため、$client があり exec が使える場合は手動境界
-interface DatabaseWithClient {
-  $client?: {
-    exec?: (sql: string) => void
-  }
-}
+        interface DatabaseWithClient {
+          $client?: {
+            exec?: (sql: string) => void
+          }
+        }
 
         const dbWithClient = raw as unknown as DatabaseWithClient
         const canManualTx = typeof dbWithClient.$client?.exec === 'function'
 
         if (canManualTx) {
           // 手動トランザクション境界
-          const exec = (raw as unknown as { $client?: { exec?: (sql: string) => void } }).$client?.exec
+          const exec = (raw as unknown as { $client?: { exec?: (sql: string) => void } }).$client
+            ?.exec
           if (!exec) {
             throw new Error('Database client does not support manual transactions')
           }

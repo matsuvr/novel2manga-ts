@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { TokenUsageDatabaseService } from '@/services/database/token-usage-database-service'
 import { DatabaseAdapter } from '@/infrastructure/database/adapters/base-adapter'
+import { TokenUsageDatabaseService } from '@/services/database/token-usage-database-service'
 
 describe('TokenUsageDatabaseService', () => {
   it('getTotalsByJobIds aggregates tokens by job', async () => {

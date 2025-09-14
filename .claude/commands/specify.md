@@ -1,4 +1,3 @@
-
 Start a new feature by creating a specification and feature branch.
 
 This is the first step in the Spec-Driven Development lifecycle.

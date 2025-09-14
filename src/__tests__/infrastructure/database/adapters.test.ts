@@ -6,7 +6,9 @@ import { SqliteAdapter } from '@/infrastructure/database/adapters/sqlite-adapter
 describe('Database adapters', () => {
   it('SqliteAdapter: isSync=true and runSync works', () => {
     const fakeSqlite = { transaction: (cb: (tx: unknown) => unknown) => cb({}) }
-  const adapter = new SqliteAdapter(fakeSqlite as unknown as ConstructorParameters<typeof SqliteAdapter>[0])
+    const adapter = new SqliteAdapter(
+      fakeSqlite as unknown as ConstructorParameters<typeof SqliteAdapter>[0],
+    )
     expect(adapter.isSync()).toBe(true)
     const result = adapter.runSync(() => 123)
     expect(result).toBe(123)
@@ -14,7 +16,9 @@ describe('Database adapters', () => {
 
   it('SqliteAdapter: transaction rejects async callback', async () => {
     const fakeSqlite = { transaction: (cb: (tx: unknown) => unknown) => cb({}) }
-  const adapter = new SqliteAdapter(fakeSqlite as unknown as ConstructorParameters<typeof SqliteAdapter>[0])
+    const adapter = new SqliteAdapter(
+      fakeSqlite as unknown as ConstructorParameters<typeof SqliteAdapter>[0],
+    )
     await expect(
       adapter.transaction(async () => {
         return Promise.resolve(1)
@@ -24,7 +28,9 @@ describe('Database adapters', () => {
 
   it('SqliteAdapter: transaction returns sync result', async () => {
     const fakeSqlite = { transaction: (cb: (tx: unknown) => unknown) => cb({}) }
-  const adapter = new SqliteAdapter(fakeSqlite as unknown as ConstructorParameters<typeof SqliteAdapter>[0])
+    const adapter = new SqliteAdapter(
+      fakeSqlite as unknown as ConstructorParameters<typeof SqliteAdapter>[0],
+    )
     const out = await adapter.transaction(() => 42)
     expect(out).toBe(42)
   })

@@ -1,5 +1,5 @@
-import type { JobNotificationData } from './types'
 import { routesConfig } from '@/config/routes.config'
+import type { JobNotificationData } from './types'
 
 export const generateJobNotificationContent = (data: JobNotificationData) => {
   const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'
