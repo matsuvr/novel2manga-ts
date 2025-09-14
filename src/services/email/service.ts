@@ -64,6 +64,7 @@ const createTransportEffect = (): Effect.Effect<Transporter, EmailConfigurationE
 const generateJobNotificationContent = (data: JobNotificationData) => {
   const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'
   const jobUrl = `${baseUrl}/portal/jobs/${data.jobId}`
+  const dashboardUrl = `${baseUrl}/portal/dashboard`
 
   if (data.status === 'completed') {
     return {
@@ -110,11 +111,12 @@ ${jobUrl}
                         ${data.errorMessage ? `<p><strong>エラー詳細:</strong> ${data.errorMessage}</p>` : ''}
                     </div>
                     <p>
-                        <a href="${jobUrl}" style="background-color: #f44336; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
-                            詳細を確認する
+                        <a href="${dashboardUrl}" style="background-color: #f44336; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                            マイページを開く
                         </a>
                     </p>
                     <p style="color: #666; font-size: 14px; margin-top: 30px;">
+                        マイページでエラー内容を確認し、ジョブを再開するか選択できます。<br>
                         問題が解決しない場合は、サポートまでお問い合わせください。<br>
                         このメールは自動送信されています。返信はできません。
                     </p>
@@ -128,8 +130,8 @@ ${jobUrl}
 ジョブID: ${data.jobId}
 ${data.errorMessage ? `エラー詳細: ${data.errorMessage}` : ''}
 
-詳細を確認するには以下のURLにアクセスしてください：
-${jobUrl}
+マイページでエラー内容を確認し、ジョブを再開できます：
+${dashboardUrl}
 
 問題が解決しない場合は、サポートまでお問い合わせください。
 このメールは自動送信されています。
