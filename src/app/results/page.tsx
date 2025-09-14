@@ -17,23 +17,32 @@ export default async function ResultsPage() {
     redirect('/portal/api/auth/login?callbackUrl=/results')
   }
   const jobs = await db.jobs().getJobsByUser(userId)
+  const jobIds = jobs.map((job) => job.id)
+  const tokenTotals = await db.tokenUsage().getTotalsByJobIds(jobIds)
   return (
     <main className="max-w-3xl mx-auto p-6 space-y-4">
       <h1 className="text-2xl font-bold">変換結果一覧</h1>
       <ul className="space-y-2">
-        {jobs.map((job) => (
-          <li key={job.id} className="apple-card p-4 flex items-center justify-between">
-            <div>
-              <div className="font-semibold">{job.jobName ?? '無題'}</div>
-              <div className="text-sm text-gray-600">{job.createdAt}</div>
-            </div>
-            <div className="flex items-center gap-4">
-              <Link className="btn-secondary text-sm" href={`/results/${job.id}`}>
-                詳細
-              </Link>
-            </div>
-          </li>
-        ))}
+        {jobs.map((job) => {
+          const totals = tokenTotals[job.id] ?? { promptTokens: 0, completionTokens: 0 }
+          return (
+            <li key={job.id} className="apple-card p-4 flex items-center justify-between">
+              <div>
+                <div className="font-semibold">{job.jobName ?? '無題'}</div>
+                <div className="text-sm text-gray-600">{job.createdAt}</div>
+                <div className="text-xs text-gray-600 mt-1">
+                  入力 {totals.promptTokens.toLocaleString()}t / 出力{' '}
+                  {totals.completionTokens.toLocaleString()}t
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <Link className="btn-secondary text-sm" href={`/results/${job.id}`}>
+                  詳細
+                </Link>
+              </div>
+            </li>
+          )
+        })}
       </ul>
     </main>
   )
