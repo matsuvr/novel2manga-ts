@@ -1,3 +1,3 @@
 import { signIn } from '@/auth'
 
-export const GET = () => signIn('google')
+export const GET = () => signIn('google', '/')
