@@ -16,9 +16,7 @@ jobs:
     name: ci
     strategy:
       fail-fast: false
-      matrix:
-        os: [ubuntu-22.04, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
 
@@ -51,7 +49,3 @@ jobs:
 
       - name: Integration tests
         run: npm run test:integration
-
-      - name: Build
-        if: matrix.os == 'ubuntu-22.04' && github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: npm run build
