@@ -5,14 +5,13 @@ test.describe('Google OAuth login', () => {
   test('triggers NextAuth signIn with google provider', async ({ page }) => {
     await E2ETestHelpers.setupTestEnvironment(page)
     let signInCalled = false
-
     await page.route('**/api/auth/signin/google**', (route) => {
       signInCalled = true
-      route.abort()
+      route.fulfill({ status: 200, body: 'ok' })
     })
 
     await page.goto('/portal/auth/signin')
-    await page.getByRole('button', { name: 'Googleでログイン' }).click()
+    await page.getByTestId('google-signin-button').click()
 
     expect(signInCalled).toBe(true)
   })
