@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useState } from 'react'
+import { routesConfig } from '@/config/routes.config'
 import type { JobWithNovel } from '@/services/job/types'
 
 interface JobDetailsProps {
@@ -106,7 +107,7 @@ export function JobDetails({ jobId }: JobDetailsProps) {
                 再試行
               </button>
               <Link
-                href="/portal/dashboard"
+                href={routesConfig.portal.dashboard}
                 className="text-sm bg-gray-100 text-gray-800 rounded-md px-2 py-1 hover:bg-gray-200"
               >
                 ダッシュボードに戻る
@@ -185,7 +186,7 @@ export function JobDetails({ jobId }: JobDetailsProps) {
 
         <div className="flex space-x-4">
           <Link
-            href="/portal/dashboard"
+            href={routesConfig.portal.dashboard}
             className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
           >
             ← ダッシュボードに戻る
