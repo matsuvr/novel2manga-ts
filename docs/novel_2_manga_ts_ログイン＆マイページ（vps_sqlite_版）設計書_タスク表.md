@@ -882,3 +882,7 @@ export async function GET(req: NextRequest) {
 1. `.env`ファイルの設定
 2. DB-1タスクから順次実装開始
 3. 各フェーズ完了時に動作確認
+
+## 16. 実装履歴
+
+- 2024-12-21: `requireUser` 認証ヘルパーと `/api/mypage/dashboard` エンドポイントを追加。ユーザーの小説数・ジョブ状況・最新出力を取得。
