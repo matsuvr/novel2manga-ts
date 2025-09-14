@@ -16,14 +16,21 @@ describe('requireUser', () => {
   })
 
   it('fails when authentication fails', async () => {
-    class AuthenticationError extends Error { _tag = 'AuthenticationError' }
+    class AuthenticationError extends Error {
+      _tag = 'AuthenticationError'
+    }
     vi.doMock('@/server/auth/requireAuth', () => ({
       requireAuth: Effect.fail(new AuthenticationError('no auth')),
       AuthenticationError,
     }))
     const { requireUser } = await import('@/server/auth/requireUser')
-    await expect(Effect.runPromise(requireUser)).rejects.toBeInstanceOf(
-      AuthenticationError,
-    )
+    const result = (await Effect.runPromiseExit(requireUser)) as any
+    expect(result._tag).toBe('Failure')
+    if (result._tag === 'Failure') {
+      expect(result.cause._tag).toBe('Fail')
+      if (result.cause._tag === 'Fail') {
+        expect(result.cause.error).toBeInstanceOf(AuthenticationError)
+      }
+    }
   })
 })
