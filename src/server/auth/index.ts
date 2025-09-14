@@ -16,3 +16,4 @@ export {
   requireAuth,
   requireAuthWithBypass,
 } from './requireAuth'
+export { requireUser } from './requireUser'
