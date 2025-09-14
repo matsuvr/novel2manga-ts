@@ -12,3 +12,4 @@
 ## Database Initialization
 
 - `getDatabase` automatically triggers `npm rebuild better-sqlite3` when an ABI mismatch is detected and retries initialization.
+- Initialization logs now differentiate between failures before and after the automatic rebuild for clearer diagnostics.
