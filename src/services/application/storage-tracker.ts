@@ -46,9 +46,19 @@ export async function recordStorageFile(
     const candidate = obj as { select?: unknown }
     return typeof candidate.select === 'function'
   }
-  const raw = tx || getDatabaseServiceFactory().getRawDatabase()
+  let raw: unknown = tx
+  if (!raw) {
+    try {
+      raw = getDatabaseServiceFactory().getRawDatabase()
+    } catch (error) {
+      console.info('Storage tracking skipped: database service factory unavailable', error)
+      return
+    }
+  }
+
   if (!isDrizzleDb(raw)) {
-    throw new Error('recordStorageFile: database is not a Drizzle better-sqlite3 instance')
+    console.info('Storage tracking skipped: database is not initialized')
+    return
   }
   const db = raw
 
@@ -94,6 +104,15 @@ export function recordStorageFileSync(
   params: RecordStorageFileParams,
   tx: DrizzleTransaction,
 ): void {
+  function isDrizzleDb(obj: unknown): obj is DrizzleTransaction {
+    return Boolean(obj && typeof (obj as { select?: unknown }).select === 'function')
+  }
+
+  if (!isDrizzleDb(tx)) {
+    console.info('Storage tracking skipped: invalid transaction context')
+    return
+  }
+
   // For SQLite transactions, we need the novelId upfront since we can't do async operations
   if (!params.novelId && params.jobId) {
     // Try to get novelId from the transaction context

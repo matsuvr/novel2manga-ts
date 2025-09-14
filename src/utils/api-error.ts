@@ -135,7 +135,7 @@ export function createErrorResponse(
   error: unknown,
   defaultMessage: string = '内部サーバーエラーが発生しました',
 ): Response {
-  console.error('API Error:', error)
+  logError('API Error', error)
 
   // RetryableError 系（RateLimit を含む）
   if (isRetryableError(error)) {
