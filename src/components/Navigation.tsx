@@ -138,6 +138,7 @@ export function Navigation() {
                         onClick={() => setIsMenuOpen(false)}
                       >
                         設定
+
                       </Link>
 
                       <button
@@ -276,10 +277,11 @@ export function Navigation() {
                 </Link>
                 <Link
                   href={routesConfig.portal.settings}
+
                   className="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  設定
+                  マイページ
                 </Link>
                 <button
                   type="button"

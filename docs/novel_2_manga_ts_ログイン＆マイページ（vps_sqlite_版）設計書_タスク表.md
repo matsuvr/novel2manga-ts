@@ -20,6 +20,7 @@
 - ✅ `/portal/api/auth/[...nextauth]/` のルート構造あり
 - ✅ NextAuth basePath は `/portal/api/auth` に設定済み
 - ✅ ログイン後はトップページへリダイレクトされ、ナビゲーション右上にマイページ/設定/ログアウトメニューが表示される
+
 - ⚠️ マイページ機能は未実装
 - ⚠️ メール通知機能は未実装
 
@@ -887,3 +888,4 @@ export async function GET(req: NextRequest) {
 - 2024-12-21: `requireUser` 認証ヘルパーと `/api/mypage/dashboard` エンドポイントを追加。ユーザーの小説数・ジョブ状況・最新出力を取得。
 - 2025-09-14: 認証コールバックとポータルルートを設定ファイルに集約し、NEXTAUTH_URL 未設定環境でも動作するサインインリダイレクトを実装。
 - 2025-09-14: NextAuth オプションに `basePath` を追加し、Google ログインコールバックが `/portal/api/auth/callback/*` に正しくリダイレクトされるよう修正。
+

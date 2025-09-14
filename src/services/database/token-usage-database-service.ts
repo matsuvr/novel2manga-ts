@@ -1,10 +1,23 @@
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, inArray, sql } from 'drizzle-orm'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import { tokenUsage } from '@/db/schema'
 import { BaseDatabaseService } from './base-database-service'
 
 type DrizzleDatabase = BetterSQLite3Database<typeof schema>
+
+interface AggregateRow {
+  jobId: string
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+}
+
+export type JobTokenUsage = {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+}
 
 export interface RecordTokenUsageParams {
   jobId: string
@@ -67,5 +80,37 @@ export class TokenUsageDatabaseService extends BaseDatabaseService {
       .where(eq(tokenUsage.jobId, jobId))
       .orderBy(desc(tokenUsage.createdAt))
     return rows as schema.TokenUsage[]
+  }
+
+  /**
+   * Get aggregated token usage totals for multiple jobs
+   */
+  async getTotalsByJobIds(jobIds: readonly string[]): Promise<Record<string, JobTokenUsage>> {
+    if (jobIds.length === 0) return {}
+
+    const db = this.db as DrizzleDatabase
+    const query = db
+      .select({
+        jobId: tokenUsage.jobId,
+        promptTokens: sql<number>`sum(${tokenUsage.promptTokens})`.mapWith(Number),
+        completionTokens: sql<number>`sum(${tokenUsage.completionTokens})`.mapWith(Number),
+        totalTokens: sql<number>`sum(${tokenUsage.totalTokens})`.mapWith(Number),
+      })
+      .from(tokenUsage)
+      .where(inArray(tokenUsage.jobId, jobIds))
+      .groupBy(tokenUsage.jobId)
+
+    const rows = this.isSync() ? (query.all() as AggregateRow[]) : ((await query) as AggregateRow[])
+
+    return Object.fromEntries(
+      rows.map((row): [string, JobTokenUsage] => [
+        row.jobId,
+        {
+          promptTokens: row.promptTokens ?? 0,
+          completionTokens: row.completionTokens ?? 0,
+          totalTokens: row.totalTokens ?? 0,
+        },
+      ]),
+    )
   }
 }
