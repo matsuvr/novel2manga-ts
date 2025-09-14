@@ -121,7 +121,7 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
 
         if (!hasDrizzleMeta && hasUserTables) {
           // DBは既にアプリのテーブルを持つが、マイグレーション管理テーブルが無い状態。
-          // この場合は自動migrateをスキップし、明確なメッセジを出す。
+          // この場合は自動migrateをスキップし、明確なメッセージを出す。
           console.warn(
             '[Database:migrate] 既存テーブルを検出しましたが __drizzle_migrations が存在しません。マイグレーションをスキップします。',
             {
@@ -165,26 +165,13 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
       db = initialize(Driver)
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
-      if (isNativeModuleError(error) && !rebuildAttempted) {
-        rebuildAttempted = true
-        try {
-          rebuildBetterSqlite3()
-          const Driver = loadBetterSqlite3(true)
-          db = initialize(Driver)
-        } catch (innerError) {
-          const innerMsg = innerError instanceof Error ? innerError.message : String(innerError)
-          console.error('[Database:init] better-sqlite3 の自動再ビルドに失敗しました', {
-            message: innerMsg,
-          })
-          throw innerError
-        }
-      } else {
+      if (!isNativeModuleError(error) || rebuildAttempted) {
         if (isNativeModuleError(error)) {
           console.error(
-            '[Database:init] better-sqlite3 のネイティブモジュール読み込みに失敗しました (ABI mismatch 可能性)',
+            '[Database:init] better-sqlite3 のネイティブモジュール読み込みに失敗しました (自動再ビルド後)',
             {
               message: msg,
-              hint: '再ビルド手順: npm rebuild better-sqlite3 もしくは node_modules 再生成 (postinstall で自動実行設定済み)',
+              hint: '自動再ビルド後も失敗しました。手動での対応が必要です。',
               steps: [
                 'npm rebuild better-sqlite3',
                 'rm -rf node_modules package-lock.json',
@@ -198,6 +185,27 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
           console.error('[Database:init] 予期しない初期化エラー', msg)
         }
         throw error
+      }
+
+      // First-time ABI mismatch detected; attempt automatic rebuild
+      rebuildAttempted = true
+      console.info(
+        '[Database:init] better-sqlite3 ABI mismatch detected. Attempting to rebuild...',
+        {
+          message: msg,
+        },
+      )
+      try {
+        rebuildBetterSqlite3()
+        const Driver = loadBetterSqlite3(true)
+        db = initialize(Driver)
+        console.info('[Database:init] Successfully rebuilt and initialized better-sqlite3.')
+      } catch (rebuildError) {
+        const innerMsg = rebuildError instanceof Error ? rebuildError.message : String(rebuildError)
+        console.error('[Database:init] Failed to automatically rebuild better-sqlite3.', {
+          message: innerMsg,
+        })
+        throw rebuildError
       }
     }
     // Migrations are handled above inside the initialization try-block with safety checks.
