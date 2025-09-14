@@ -14,3 +14,4 @@
 - `getDatabase` automatically triggers `npm rebuild better-sqlite3` when an ABI mismatch is detected and retries initialization.
 - Initialization logs now differentiate between failures before and after the automatic rebuild for clearer diagnostics.
 - Docker runtime now uses Node 20 LTS to align native module ABI with `better-sqlite3`.
+- Detection of native module errors now includes "Module did not self-register" messages, ensuring auto-rebuild covers more failure modes.
