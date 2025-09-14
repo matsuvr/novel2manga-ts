@@ -10,6 +10,7 @@ import {
   type EmailOptions,
   type JobNotificationData,
 } from './types'
+import { generateJobNotificationContent } from './templates'
 
 /**
  * Email Service Interface
@@ -57,86 +58,6 @@ const createTransportEffect = (): Effect.Effect<Transporter, EmailConfigurationE
 
     return transporter
   })
-
-/**
- * Generate job notification email content
- */
-const generateJobNotificationContent = (data: JobNotificationData) => {
-  const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'
-  const jobUrl = `${baseUrl}/portal/jobs/${data.jobId}`
-
-  if (data.status === 'completed') {
-    return {
-      subject: '漫画化が完了しました - Novel2Manga',
-      html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2 style="color: #4CAF50;">漫画化が完了しました</h2>
-                    <p>お疲れ様です！あなたの小説の漫画化処理が正常に完了しました。</p>
-                    <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                        <p><strong>ジョブID:</strong> ${data.jobId}</p>
-                    </div>
-                    <p>
-                        <a href="${jobUrl}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
-                            結果を確認する
-                        </a>
-                    </p>
-                    <p style="color: #666; font-size: 14px; margin-top: 30px;">
-                        このメールは自動送信されています。返信はできません。
-                    </p>
-                </div>
-            `,
-      text: `
-漫画化が完了しました
-
-お疲れ様です！あなたの小説の漫画化処理が正常に完了しました。
-
-ジョブID: ${data.jobId}
-
-結果を確認するには以下のURLにアクセスしてください：
-${jobUrl}
-
-このメールは自動送信されています。
-            `.trim(),
-    }
-  } else {
-    return {
-      subject: '漫画化でエラーが発生しました - Novel2Manga',
-      html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2 style="color: #f44336;">漫画化でエラーが発生しました</h2>
-                    <p>申し訳ございません。あなたの小説の漫画化処理中にエラーが発生しました。</p>
-                    <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                        <p><strong>ジョブID:</strong> ${data.jobId}</p>
-                        ${data.errorMessage ? `<p><strong>エラー詳細:</strong> ${data.errorMessage}</p>` : ''}
-                    </div>
-                    <p>
-                        <a href="${jobUrl}" style="background-color: #f44336; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
-                            詳細を確認する
-                        </a>
-                    </p>
-                    <p style="color: #666; font-size: 14px; margin-top: 30px;">
-                        問題が解決しない場合は、サポートまでお問い合わせください。<br>
-                        このメールは自動送信されています。返信はできません。
-                    </p>
-                </div>
-            `,
-      text: `
-漫画化でエラーが発生しました
-
-申し訳ございません。あなたの小説の漫画化処理中にエラーが発生しました。
-
-ジョブID: ${data.jobId}
-${data.errorMessage ? `エラー詳細: ${data.errorMessage}` : ''}
-
-詳細を確認するには以下のURLにアクセスしてください：
-${jobUrl}
-
-問題が解決しない場合は、サポートまでお問い合わせください。
-このメールは自動送信されています。
-            `.trim(),
-    }
-  }
-}
 
 /**
  * Email Service Live Implementation
