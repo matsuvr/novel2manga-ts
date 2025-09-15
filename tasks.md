@@ -10,3 +10,4 @@
 - [x] Place first dialogue bubble on the right and second on the left for two speech elements per panel
 - [x] Fix segmented page break carry-over to ensure panel templates match accumulated importance.
 - [x] Harden page break estimation for empty scripts and negative page offsets.
+- [x] Display My Page job list with result links and resume actions.

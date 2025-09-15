@@ -24,3 +24,9 @@
 
 - Segmented estimator now carries over importance sums between segments, maintaining correct panel grouping and template selection across page boundaries.
 - Importance-based calculator exposes remaining importance even for empty scripts and clamps segment page offsets to avoid negative numbering.
+
+## My Page Dashboard
+
+- Dashboard data retrieval moved to `getMypageDashboard` service for reuse.
+- API `/api/mypage/dashboard` now returns job summaries including status and novel titles for client display.
+- New My Page route lists each job with links to finished results and resume actions for failed jobs.
