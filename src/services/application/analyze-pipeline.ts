@@ -519,7 +519,10 @@ export class AnalyzePipeline extends BasePipelineStep {
     } else {
       resumePoint = 'completed'
       logger.info('All steps completed, marking as completed', { jobId })
-      db.jobs().updateJobStatus(jobId, 'completed')
+      const { updateJobStatusWithNotification } = await import(
+        '@/services/notification/integration'
+      )
+      await updateJobStatusWithNotification(db.jobs().updateJobStatus, jobId, 'completed')
       return { resumePoint }
     }
 
