@@ -7,7 +7,14 @@
 - [x] Detect "Module did not self-register" errors to trigger automatic rebuild of `better-sqlite3`.
 - [ ] Upgrade Docker base Node image when `better-sqlite3` adds support for newer versions.
 
+- [x] Notify users via email when jobs complete and redirect unauthorized access to the dashboard.
+- [x] Centralize job notification logic via `updateJobStatusWithNotification` to prevent duplicate emails.
+
 - [x] Place first dialogue bubble on the right and second on the left for two speech elements per panel
 - [x] Fix segmented page break carry-over to ensure panel templates match accumulated importance.
+
 - [x] Harden page break estimation for empty scripts and negative page offsets.
 - [x] Display My Page job list with result links and resume actions.
+
+- [x] Harden page break estimation for empty scripts and negative page offsets.
+

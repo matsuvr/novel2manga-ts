@@ -117,7 +117,8 @@ export class JobResumeService {
         error: extractErrorMessage(e),
       })
       try {
-        db.jobs().updateJobStatus(jobId, 'failed', extractErrorMessage(e))
+        const jobs = db.jobs()
+        await jobs.updateJobStatus(jobId, 'failed', extractErrorMessage(e))
       } catch {
         // Job status update failed - logged elsewhere
       }
