@@ -116,7 +116,7 @@ export async function estimatePageBreaksSegmented(
     throw new Error(`Script segmentation failed: ${validation.issues.join(', ')}`)
   }
 
-  const wasSegmented = segments.length > 1 || opts.forceSegmentation
+  const wasSegmented = segments.length > 1 || !!opts.forceSegmentation
   const jsonSizes = segments.map(estimateSegmentJsonSize)
 
   // Process segments sequentially, carrying over importance sum
@@ -135,7 +135,7 @@ export async function estimatePageBreaksSegmented(
 
       importanceCarry = segmentResult.stats.remainingImportance
       const maxPage = segmentResult.pageBreaks.panels.reduce((m, p) => Math.max(m, p.pageNumber), 0)
-      const completedPages = maxPage - (importanceCarry > 0 ? 1 : 0)
+      const completedPages = Math.max(0, maxPage - (importanceCarry > 0 ? 1 : 0))
       pageOffset += completedPages
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)

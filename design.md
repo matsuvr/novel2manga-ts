@@ -19,3 +19,4 @@
 ## Page Break Estimation
 
 - Segmented estimator now carries over importance sums between segments, maintaining correct panel grouping and template selection across page boundaries.
+- Importance-based calculator exposes remaining importance even for empty scripts and clamps segment page offsets to avoid negative numbering.

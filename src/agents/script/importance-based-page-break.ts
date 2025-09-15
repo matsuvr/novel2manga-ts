@@ -38,6 +38,7 @@ export function calculateImportanceBasedPageBreaks(
         totalPanels: 0,
         averagePanelsPerPage: 0,
         importanceDistribution: {},
+        remainingImportance: Math.max(0, Math.min(5, initialImportance)),
       },
     }
   }
