@@ -242,20 +242,6 @@ export class JobDatabaseService extends BaseDatabaseService {
           .where(eq(jobs.id, jobId))
       })
     }
-
-    // Send notification for completed or failed jobs
-    if (status === 'completed' || status === 'failed') {
-      // Import and call notification service asynchronously
-      // Don't await to avoid blocking job processing
-      import('@/services/notification/integration')
-        .then(({ sendJobNotification }) => {
-          sendJobNotification(jobId, status as 'completed' | 'failed', error)
-        })
-        .catch((notificationError) => {
-          // Log but don't throw - notifications should not affect job processing
-          console.error('Failed to send job notification:', notificationError)
-        })
-    }
   }
 
   /**
