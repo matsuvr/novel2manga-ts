@@ -85,20 +85,17 @@ export class SpeechBubblePlacer {
     let tailDirection: 'left' | 'right' | 'up' | 'down' = 'left'
 
     switch (strategy) {
-      case 'vertical':
+      case 'vertical': {
         // 縦に並べる（日本式：右から左へ）
-        if (total === 2 && index === 1) {
-          x = panelX + panelWidth * LEFT_X_RATIO
-          tailDirection = 'left'
-        } else {
-          x = panelX + panelWidth * RIGHT_X_RATIO
-          tailDirection = 'right'
-        }
+        const isSecondOfTwo = total === 2 && index === 1
+        x = panelX + panelWidth * (isSecondOfTwo ? LEFT_X_RATIO : RIGHT_X_RATIO)
+        tailDirection = isSecondOfTwo ? 'left' : 'right'
         y =
           panelY +
           panelHeight *
             (TOP_OFFSET_RATIO + (index * VERTICAL_SPREAD_RATIO) / Math.max(total - 1, 1))
         break
+      }
 
       case 'zigzag': {
         // ジグザグ配置
