@@ -1,10 +1,9 @@
 import { Effect } from 'effect'
 import { mypageConfig } from '@/config'
 import { db } from '@/services/database/database-service-factory'
-import { ApiError } from '@/utils/api-error'
+import type { JobStatus, Novel } from '@/types'
 import type { MypageDashboardData, MypageJobSummary, RecentOutputSummary } from '@/types/mypage'
-import type { JobStatus } from '@/types'
-import type { Novel } from '@/types'
+import { ApiError } from '@/utils/api-error'
 
 export function getMypageDashboard(userId: string): Effect.Effect<MypageDashboardData, ApiError> {
   return Effect.gen(function* () {
