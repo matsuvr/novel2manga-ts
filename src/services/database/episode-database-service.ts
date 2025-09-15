@@ -3,6 +3,7 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import type { Episode, NewEpisode } from '@/db/schema'
 import { episodes, jobs } from '@/db/schema'
+import { ensureCreatedAtString } from '@/utils/db'
 import { makeEpisodeId } from '@/utils/ids'
 import { BaseDatabaseService } from './base-database-service'
 
@@ -123,9 +124,11 @@ export class EpisodeDatabaseService extends BaseDatabaseService {
       .orderBy(asc(episodes.episodeNumber))
 
     if (this.isSync()) {
-      return query.all()
+      const results = query.all() as unknown as Array<Record<string, unknown>>
+      return results.map((r) => ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) })) as Episode[]
     }
-    return await query
+    const results = (await query) as unknown as Array<Record<string, unknown>>
+    return results.map((r) => ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) })) as Episode[]
   }
 
   /**

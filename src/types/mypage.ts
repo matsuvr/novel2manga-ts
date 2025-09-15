@@ -5,6 +5,8 @@ export interface MypageJobSummary {
   novelId: string
   novelTitle: string
   status: JobStatus
+  // ISO string when the job record was created. DB schema provides a default timestamp so this is required.
+  createdAt: string
 }
 
 export interface RecentOutputSummary {

@@ -4,6 +4,7 @@ import type * as schema from '@/db/schema'
 import type { LayoutStatus } from '@/db/schema'
 import { jobs, layoutStatus } from '@/db/schema'
 import type { LayoutStatusModel } from '@/types/database-models'
+import { ensureCreatedAtString } from '@/utils/db'
 import { BaseDatabaseService } from './base-database-service'
 
 type DrizzleDatabase = BetterSQLite3Database<typeof schema>
@@ -180,10 +181,11 @@ export class LayoutDatabaseService extends BaseDatabaseService {
       layoutPath: result.layoutPath ?? undefined,
       totalPages: result.totalPages ?? undefined,
       totalPanels: result.totalPanels ?? undefined,
-      generatedAt: result.generatedAt ? new Date(result.generatedAt) : undefined,
+      generatedAt: result.generatedAt ? new Date(result.generatedAt).toISOString() : undefined,
       retryCount: result.retryCount ?? 0,
       lastError: result.lastError ?? undefined,
-      createdAt: result.createdAt ? new Date(result.createdAt) : new Date(0),
+      // Normalize createdAt to ISO string at the adapter boundary
+      createdAt: ensureCreatedAtString(result),
     }))
   }
 

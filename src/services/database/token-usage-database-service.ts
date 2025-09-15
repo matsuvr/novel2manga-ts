@@ -1,7 +1,9 @@
+import crypto from 'node:crypto'
 import { desc, eq, inArray, sql } from 'drizzle-orm'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import { tokenUsage } from '@/db/schema'
+import { ensureCreatedAtString } from '@/utils/db'
 import { BaseDatabaseService } from './base-database-service'
 
 type DrizzleDatabase = BetterSQLite3Database<typeof schema>
@@ -66,12 +68,14 @@ export class TokenUsageDatabaseService extends BaseDatabaseService {
   async listByJob(jobId: string): Promise<schema.TokenUsage[]> {
     if (this.isSync()) {
       const db = this.db as DrizzleDatabase
-      return db
+      const rows = db
         .select()
         .from(tokenUsage)
         .where(eq(tokenUsage.jobId, jobId))
         .orderBy(desc(tokenUsage.createdAt))
-        .all() as schema.TokenUsage[]
+        .all() as Record<string, unknown>[]
+
+      return rows.map((r) => ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) } as schema.TokenUsage))
     }
     const db = this.db as DrizzleDatabase
     const rows = await db
@@ -79,7 +83,8 @@ export class TokenUsageDatabaseService extends BaseDatabaseService {
       .from(tokenUsage)
       .where(eq(tokenUsage.jobId, jobId))
       .orderBy(desc(tokenUsage.createdAt))
-    return rows as schema.TokenUsage[]
+
+    return (rows as Record<string, unknown>[]).map((r) => ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) } as schema.TokenUsage))
   }
 
   /**

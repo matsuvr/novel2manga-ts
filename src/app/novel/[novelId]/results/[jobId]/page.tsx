@@ -1,6 +1,8 @@
 import { notFound, redirect } from 'next/navigation'
+import { completionRateForTokens, promptRateForTokens } from '@/config/pricing.config'
 import { db } from '@/services/database/index'
 import { isRenderCompletelyDone } from '@/utils/completion'
+import { parseToDate } from '@/utils/date'
 import { JsonStorageKeys, StorageFactory } from '@/utils/storage'
 
 interface Params {
@@ -91,10 +93,11 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
   const layoutStatusMap = new Map(layoutStatuses.map((s) => [s.episodeNumber, s]))
 
   // 冗長計算を事前に集約
+  // Compute processing time defensively: job timestamps may be strings.
+  const completedDate = parseToDate(job.completedAt)
+  const createdDate = parseToDate(job.createdAt)
   const processingTimeMs =
-    job.completedAt && job.createdAt
-      ? new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()
-      : null
+    completedDate && createdDate ? completedDate.getTime() - createdDate.getTime() : null
   const totalPageCount = layoutStatuses.reduce((sum, status) => sum + (status.totalPages || 0), 0)
 
   // トークン使用量の合計を取得（DBに記録済みのものを集計）
@@ -244,11 +247,9 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
               const completion = tokenTotals.completionTokens ?? 0
               const total = tokenTotals.totalTokens ?? 0
 
-              // Gemini pricing (approximate per 1M tokens)
-              // Input (prompt): $1.25 per 1M <=200k, $2.50 per 1M >200k
-              const promptRate = prompt <= 200_000 ? 1.25 / 1_000_000 : 2.5 / 1_000_000
-              // Output (completion): $10.00 per 1M <=200k, $15.00 per 1M >200k
-              const completionRate = completion <= 200_000 ? 10.0 / 1_000_000 : 15.0 / 1_000_000
+              // Pricing rates are centralized in config
+              const promptRate = promptRateForTokens(prompt)
+              const completionRate = completionRateForTokens(completion)
               // Context caching price ignored (キャッシュなし想定)
               const promptCost = prompt * promptRate
               const completionCost = completion * completionRate

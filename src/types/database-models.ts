@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { SceneSchema } from '@/domain/models/scene'
+import { parseToDate } from '@/utils/date'
 export { SceneSchema }
 
 // ========================================
@@ -41,8 +42,8 @@ export const NovelSchema = z.object({
   textLength: z.number(), // 総文字数
   language: z.string(), // 言語コード
   metadataPath: z.string().optional(), // メタデータJSONパス
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
 })
 
 // Job - 変換ジョブ（Novelに対する処理単位）
@@ -89,10 +90,10 @@ export const JobSchema = z.object({
   resumeDataPath: z.string().optional(), // 中断時の詳細状態JSONファイル
 
   // タイムスタンプ
-  createdAt: z.date(),
-  updatedAt: z.date(),
-  startedAt: z.date().optional(),
-  completedAt: z.date().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  startedAt: z.string().optional(),
+  completedAt: z.string().optional(),
 })
 
 // JobStepHistory - 各処理ステップの履歴
@@ -101,14 +102,14 @@ export const JobStepHistorySchema = z.object({
   jobId: z.string(),
   stepName: JobStepSchema,
   status: StepStatusSchema, // started/completed/failed/skipped
-  startedAt: z.date(),
-  completedAt: z.date().optional(),
+  startedAt: z.string(),
+  completedAt: z.string().optional(),
   durationSeconds: z.number().optional(),
   inputPath: z.string().optional(), // このステップへの入力
   outputPath: z.string().optional(), // このステップの出力
   errorMessage: z.string().optional(),
   metadata: z.record(z.unknown()).optional(), // JSON形式の追加情報
-  createdAt: z.date(),
+  createdAt: z.string(),
 })
 
 // Chunk - 分割されたテキストチャンク
@@ -121,7 +122,7 @@ export const ChunkSchema = z.object({
   startPosition: z.number(), // テキスト内の開始位置
   endPosition: z.number(), // テキスト内の終了位置
   wordCount: z.number().optional(),
-  createdAt: z.date(),
+  createdAt: z.string(),
 })
 
 // ChunkAnalysisStatus - チャンク分析状態
@@ -131,10 +132,10 @@ export const ChunkAnalysisStatusSchema = z.object({
   chunkIndex: z.number(),
   isAnalyzed: z.boolean(),
   analysisPath: z.string().optional(), // 分析結果ファイルパス
-  analyzedAt: z.date().optional(),
+  analyzedAt: z.string().optional(),
   retryCount: z.number(),
   lastError: z.string().optional(),
-  createdAt: z.date(),
+  createdAt: z.string(),
 })
 
 // Episode - エピソード境界情報
@@ -150,7 +151,7 @@ export const EpisodeSchema = z.object({
   endChunk: z.number(),
   endCharIndex: z.number(),
   confidence: z.number(),
-  createdAt: z.date(),
+  createdAt: z.string(),
 })
 
 // LayoutStatus - レイアウト生成状態
@@ -162,10 +163,11 @@ export const LayoutStatusModelSchema = z.object({
   layoutPath: z.string().optional(), // レイアウトYAMLパス
   totalPages: z.number().optional(),
   totalPanels: z.number().optional(),
-  generatedAt: z.date().optional(),
+  generatedAt: z.string().optional(),
   retryCount: z.number(),
   lastError: z.string().optional(),
-  createdAt: z.date(),
+  // createdAt is emitted by DB adapters as ISO string
+  createdAt: z.string(),
 })
 
 // RenderStatus - 描画状態
@@ -180,10 +182,10 @@ export const RenderStatusModelSchema = z.object({
   width: z.number().optional(),
   height: z.number().optional(),
   fileSize: z.number().optional(),
-  renderedAt: z.date().optional(),
+  renderedAt: z.string().optional(),
   retryCount: z.number(),
   lastError: z.string().optional(),
-  createdAt: z.date(),
+  createdAt: z.string(),
 })
 
 // Output - 最終成果物
@@ -197,7 +199,7 @@ export const OutputSchema = z.object({
   fileSize: z.number().optional(),
   pageCount: z.number().optional(),
   metadataPath: z.string().optional(),
-  createdAt: z.date(),
+  createdAt: z.string(),
 })
 
 // StorageFile - ファイル管理
@@ -218,7 +220,7 @@ export const StorageFileSchema = z.object({
   ]),
   fileType: z.enum(['txt', 'json', 'yaml', 'png', 'jpg', 'pdf', 'zip']),
   fileSize: z.number().optional(),
-  createdAt: z.date(),
+  createdAt: z.string(),
 })
 
 // ========================================
@@ -277,8 +279,8 @@ export const TextAnalysisSchema = z.object({
       nextChunkSummary: z.string().optional(),
     })
     .optional(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
 })
 
 // CachedAnalysisResult - キャッシュされた分析結果
@@ -318,7 +320,7 @@ export const TokenUsageSchema = z.object({
   stepName: z.string().optional(), // analyze, layout, etc.
   chunkIndex: z.number().optional(), // チャンク分析の場合
   episodeNumber: z.number().optional(), // エピソード処理の場合
-  createdAt: z.date(),
+  createdAt: z.string(),
 })
 
 export const NewTokenUsageSchema = TokenUsageSchema.omit({
@@ -375,9 +377,9 @@ export interface JobProgress {
   }
 
   // タイムスタンプ
-  startedAt?: Date
-  estimatedCompletion?: Date
-  updatedAt: Date
+  startedAt?: string
+  estimatedCompletion?: string
+  updatedAt: string
 }
 
 // ExtendedJob - Job + Novel情報
@@ -453,8 +455,8 @@ export function createNovel(
     originalTextPath,
     textLength,
     language,
-    createdAt: now,
-    updatedAt: now,
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
   }
 }
 
@@ -479,7 +481,7 @@ export function createChunk(
     startPosition,
     endPosition,
     wordCount,
-    createdAt: new Date(),
+    createdAt: new Date().toISOString(),
   }
 }
 
@@ -488,15 +490,19 @@ export function createJobStepHistory(
   jobId: string,
   stepName: JobStep,
   status: StepStatus,
-  startedAt: Date,
-  completedAt?: Date,
+  startedAt: string | Date,
+  completedAt?: string | Date,
   errorMessage?: string,
   inputPath?: string,
   outputPath?: string,
   metadata?: Record<string, unknown>,
 ): JobStepHistory {
-  const durationSeconds = completedAt
-    ? Math.floor((completedAt.getTime() - startedAt.getTime()) / 1000)
+  // Parse inputs defensively (they may be string or Date or invalid)
+  const startedDate = parseToDate(startedAt)
+  const completedDate = parseToDate(completedAt)
+
+  const durationSeconds = startedDate && completedDate
+    ? Math.floor((completedDate.getTime() - startedDate.getTime()) / 1000)
     : undefined
 
   return {
@@ -504,14 +510,16 @@ export function createJobStepHistory(
     jobId,
     stepName,
     status,
-    startedAt,
-    completedAt,
+    // emit ISO strings for timestamps
+    // Emit ISO strings; if parsing failed for required startedAt, fall back to now
+    startedAt: startedDate ? startedDate.toISOString() : new Date().toISOString(),
+    completedAt: completedDate ? completedDate.toISOString() : undefined,
     durationSeconds,
     inputPath,
     outputPath,
     errorMessage,
     metadata,
-    createdAt: new Date(),
+    createdAt: new Date().toISOString(),
   }
 }
 
@@ -602,10 +610,10 @@ export function createJobProgress(job: Job): JobProgress {
     },
     error: job.lastError
       ? {
-          message: job.lastError,
-          step: job.lastErrorStep || job.currentStep,
-          retryCount: job.retryCount,
-        }
+        message: job.lastError,
+        step: job.lastErrorStep || job.currentStep,
+        retryCount: job.retryCount,
+      }
       : undefined,
     startedAt: job.startedAt,
     updatedAt: job.updatedAt,

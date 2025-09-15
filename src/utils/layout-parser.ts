@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { getLogger } from '@/infrastructure/logging/logger'
 import type { MangaLayout } from '@/types/panel-layout'
 import { DialogueSchema, MangaLayoutSchema } from '@/types/panel-layout.zod'
+import { ensureISOString } from '@/utils/date'
 
 // BBox 形式（public/docs/panel_layout_sample の形）を受け入れるためのスキーマ
 const PanelBBoxSchema = z.object({
@@ -118,12 +119,7 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
     const normalized = {
       title: (raw as { title?: string }).title ?? 'Untitled',
       author: (raw as { author?: string }).author,
-      created_at:
-        typeof rawCreated === 'string'
-          ? rawCreated
-          : rawCreated instanceof Date
-            ? rawCreated.toISOString()
-            : new Date().toISOString(),
+      created_at: ensureISOString(rawCreated),
       episodeNumber: (raw as { episodeNumber?: number }).episodeNumber ?? 1,
       episodeTitle: (raw as { episodeTitle?: string }).episodeTitle,
       pages: (raw as { pages: Array<{ page_number: number; panels: unknown[] }> }).pages.map(
@@ -141,25 +137,25 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
             const dialoguesRaw = (panel as { dialogues?: Array<unknown> }).dialogues
             const normalizedDialogs = Array.isArray(dialoguesRaw)
               ? dialoguesRaw.map((d) =>
-                  typeof d === 'string'
-                    ? { speaker: '', text: d }
-                    : (() => {
-                        if (!d || typeof d !== 'object') {
-                          return { speaker: '', text: '' }
-                        }
-                        const obj = d as Record<string, unknown>
-                        const speaker = typeof obj.speaker === 'string' ? obj.speaker : ''
-                        const text = typeof obj.text === 'string' ? obj.text : ''
-                        const emotion = typeof obj.emotion === 'string' ? obj.emotion : undefined
-                        const tRaw = typeof obj.type === 'string' ? obj.type : undefined
-                        const allowed: ReadonlyArray<string> = ['speech', 'thought', 'narration']
-                        const type =
-                          tRaw && allowed.includes(tRaw)
-                            ? (tRaw as 'speech' | 'thought' | 'narration')
-                            : undefined
-                        return { speaker, text, emotion, type }
-                      })(),
-                )
+                typeof d === 'string'
+                  ? { speaker: '', text: d }
+                  : (() => {
+                    if (!d || typeof d !== 'object') {
+                      return { speaker: '', text: '' }
+                    }
+                    const obj = d as Record<string, unknown>
+                    const speaker = typeof obj.speaker === 'string' ? obj.speaker : ''
+                    const text = typeof obj.text === 'string' ? obj.text : ''
+                    const emotion = typeof obj.emotion === 'string' ? obj.emotion : undefined
+                    const tRaw = typeof obj.type === 'string' ? obj.type : undefined
+                    const allowed: ReadonlyArray<string> = ['speech', 'thought', 'narration']
+                    const type =
+                      tRaw && allowed.includes(tRaw)
+                        ? (tRaw as 'speech' | 'thought' | 'narration')
+                        : undefined
+                    return { speaker, text, emotion, type }
+                  })(),
+              )
               : []
             return {
               id: (panel as { id: string | number }).id,
@@ -305,32 +301,32 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
         const [x, y, w, h] = panel.bbox
           ? panel.bbox
           : [
-              panel.position?.x ?? 0,
-              panel.position?.y ?? 0,
-              panel.size?.width ?? 0,
-              panel.size?.height ?? 0,
-            ]
+            panel.position?.x ?? 0,
+            panel.position?.y ?? 0,
+            panel.size?.width ?? 0,
+            panel.size?.height ?? 0,
+          ]
 
         // dialogues は string を許容して {text} に正規化
         const normalizedDialogs = Array.isArray(panel.dialogues)
           ? panel.dialogues.map((d) =>
-              typeof d === 'string'
-                ? { speaker: '', text: d }
-                : {
-                    speaker: d.speaker || '',
-                    text: d.text,
-                    emotion: 'emotion' in d ? d.emotion : undefined,
-                    // 新フォーマットの type を保持（存在すれば）
-                    type: (() => {
-                      const tVal = (d as { type?: unknown }).type
-                      const t = typeof tVal === 'string' ? tVal : undefined
-                      const allowed: ReadonlyArray<string> = ['speech', 'thought', 'narration']
-                      return t && allowed.includes(t)
-                        ? (t as 'speech' | 'thought' | 'narration')
-                        : undefined
-                    })(),
-                  },
-            )
+            typeof d === 'string'
+              ? { speaker: '', text: d }
+              : {
+                speaker: d.speaker || '',
+                text: d.text,
+                emotion: 'emotion' in d ? d.emotion : undefined,
+                // 新フォーマットの type を保持（存在すれば）
+                type: (() => {
+                  const tVal = (d as { type?: unknown }).type
+                  const t = typeof tVal === 'string' ? tVal : undefined
+                  const allowed: ReadonlyArray<string> = ['speech', 'thought', 'narration']
+                  return t && allowed.includes(t)
+                    ? (t as 'speech' | 'thought' | 'narration')
+                    : undefined
+                })(),
+              },
+          )
           : panel.dialogue
             ? [{ speaker: '', text: panel.dialogue }]
             : []
@@ -349,12 +345,7 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
     const rawCreated2 = (raw as { created_at?: unknown }).created_at
     const parsed = MangaLayoutSchema.safeParse({
       title: (raw as { title?: string }).title ?? 'Untitled',
-      created_at:
-        typeof rawCreated2 === 'string'
-          ? rawCreated2
-          : rawCreated2 instanceof Date
-            ? rawCreated2.toISOString()
-            : new Date().toISOString(),
+      created_at: ensureISOString(rawCreated2),
       episodeNumber: (raw as { episodeNumber?: number }).episodeNumber ?? 1,
       pages,
     })
@@ -396,29 +387,29 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
         const [x, y, w, h] = panel.bbox
           ? panel.bbox
           : [
-              panel.position?.x ?? 0,
-              panel.position?.y ?? 0,
-              panel.size?.width ?? 0,
-              panel.size?.height ?? 0,
-            ]
+            panel.position?.x ?? 0,
+            panel.position?.y ?? 0,
+            panel.size?.width ?? 0,
+            panel.size?.height ?? 0,
+          ]
         const normalizedDialogs = Array.isArray(panel.dialogues)
           ? panel.dialogues.map((d) =>
-              typeof d === 'string'
-                ? { speaker: '', text: d }
-                : {
-                    speaker: d.speaker || '',
-                    text: d.text,
-                    emotion: 'emotion' in d ? d.emotion : undefined,
-                    type: (() => {
-                      const tVal = (d as { type?: unknown }).type
-                      const t = typeof tVal === 'string' ? tVal : undefined
-                      const allowed: ReadonlyArray<string> = ['speech', 'thought', 'narration']
-                      return t && allowed.includes(t)
-                        ? (t as 'speech' | 'thought' | 'narration')
-                        : undefined
-                    })(),
-                  },
-            )
+            typeof d === 'string'
+              ? { speaker: '', text: d }
+              : {
+                speaker: d.speaker || '',
+                text: d.text,
+                emotion: 'emotion' in d ? d.emotion : undefined,
+                type: (() => {
+                  const tVal = (d as { type?: unknown }).type
+                  const t = typeof tVal === 'string' ? tVal : undefined
+                  const allowed: ReadonlyArray<string> = ['speech', 'thought', 'narration']
+                  return t && allowed.includes(t)
+                    ? (t as 'speech' | 'thought' | 'narration')
+                    : undefined
+                })(),
+              },
+          )
           : panel.dialogue
             ? [{ speaker: '', text: panel.dialogue }]
             : []

@@ -3,6 +3,7 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import type { Job, NewJob } from '@/db/schema'
 import { chunks, episodes, jobs } from '@/db/schema'
+import { ensureCreatedAtString } from '@/utils/db'
 import { BaseDatabaseService } from './base-database-service'
 
 type DrizzleDatabase = BetterSQLite3Database<typeof schema>
@@ -25,7 +26,7 @@ export interface JobWithProgress {
   novelId: string
   status: string
   currentStep: string
-  createdAt: string | null
+  createdAt: string
   updatedAt: string | null
   totalChunks?: number | null
   totalEpisodes?: number | null
@@ -130,12 +131,16 @@ export class JobDatabaseService extends BaseDatabaseService {
   async getJob(id: string): Promise<Job | null> {
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
-      const results = drizzleDb.select().from(jobs).where(eq(jobs.id, id)).limit(1).all()
-      return results.length > 0 ? (results[0] as Job) : null
+      const results = drizzleDb.select().from(jobs).where(eq(jobs.id, id)).limit(1).all() as unknown as Array<Record<string, unknown>>
+      if (results.length === 0) return null
+      const r = results[0]
+      return ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) } as Job)
     } else {
       const drizzleDb = this.db as DrizzleDatabase
-      const results = await drizzleDb.select().from(jobs).where(eq(jobs.id, id)).limit(1)
-      return results.length > 0 ? (results[0] as Job) : null
+      const results = (await drizzleDb.select().from(jobs).where(eq(jobs.id, id)).limit(1)) as unknown as Array<Record<string, unknown>>
+      if (results.length === 0) return null
+      const r = results[0]
+      return ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) } as Job)
     }
   }
 
@@ -209,6 +214,9 @@ export class JobDatabaseService extends BaseDatabaseService {
 
     return {
       ...job,
+      // Ensure createdAt is non-nullable: DB schema provides CURRENT_TIMESTAMP, but
+      // TypeScript sometimes types it as nullable. Coerce here to satisfy the stricter type.
+      createdAt: job.createdAt ?? new Date().toISOString(),
       progress,
     }
   }
@@ -436,20 +444,23 @@ export class JobDatabaseService extends BaseDatabaseService {
   async getJobsByNovelId(novelId: string): Promise<Job[]> {
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
-
-      return drizzleDb
+      const results = drizzleDb
         .select()
         .from(jobs)
         .where(eq(jobs.novelId, novelId))
         .orderBy(desc(jobs.createdAt))
-        .all()
+        .all() as unknown as Array<Record<string, unknown>>
+
+      return results.map((r) => ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) })) as Job[]
     } else {
       const drizzleDb = this.db as DrizzleDatabase
-      return await drizzleDb
+      const results = (await drizzleDb
         .select()
         .from(jobs)
         .where(eq(jobs.novelId, novelId))
-        .orderBy(desc(jobs.createdAt))
+        .orderBy(desc(jobs.createdAt))) as unknown as Array<Record<string, unknown>>
+
+      return results.map((r) => ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) })) as Job[]
     }
   }
 
@@ -457,20 +468,23 @@ export class JobDatabaseService extends BaseDatabaseService {
   async getJobsByUser(userId: string): Promise<Job[]> {
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
-
-      return drizzleDb
+      const results = drizzleDb
         .select()
         .from(jobs)
         .where(eq(jobs.userId, userId))
         .orderBy(desc(jobs.createdAt))
-        .all()
+        .all() as unknown as Array<Record<string, unknown>>
+
+      return results.map((r) => ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) })) as Job[]
     } else {
       const drizzleDb = this.db as DrizzleDatabase
-      return await drizzleDb
+      const results = (await drizzleDb
         .select()
         .from(jobs)
         .where(eq(jobs.userId, userId))
-        .orderBy(desc(jobs.createdAt))
+        .orderBy(desc(jobs.createdAt))) as unknown as Array<Record<string, unknown>>
+
+      return results.map((r) => ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) })) as Job[]
     }
   }
 
