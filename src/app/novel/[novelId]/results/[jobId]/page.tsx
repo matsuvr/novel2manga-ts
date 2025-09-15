@@ -1,8 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import { db } from '@/services/database/index'
-import { type EpisodeBreakPlan, EpisodeBreakSchema } from '@/types/script'
 import { isRenderCompletelyDone } from '@/utils/completion'
-import { parseJsonWithSchema } from '@/utils/json'
 import { JsonStorageKeys, StorageFactory } from '@/utils/storage'
 
 interface Params {
@@ -74,38 +72,8 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
   const fullPagesKey = JsonStorageKeys.fullPages(job.id)
   const fullPages = await layoutStorage.get(fullPagesKey)
   if (!fullPages) {
-    return (
-      <main className="max-w-3xl mx-auto p-6 space-y-4">
-        <h1 className="text-2xl font-bold">処理結果の表示に失敗しました</h1>
-        <div className="apple-card p-4 space-y-2">
-          <div className="text-sm text-gray-600">Job: {job.id}</div>
-          <div className="text-sm text-red-600">
-            エラー: 結果ファイル (full_pages.json) が見つかりませんでした。Storage Key:{' '}
-            {JsonStorageKeys.fullPages(job.id)}
-          </div>
-        </div>
-      </main>
-    )
+    return notFound()
   }
-
-  let parsedFull: EpisodeBreakPlan
-  try {
-    parsedFull = parseJsonWithSchema<EpisodeBreakPlan>(fullPages.text, EpisodeBreakSchema)
-  } catch (e) {
-    return (
-      <main className="max-w-3xl mx-auto p-6 space-y-4">
-        <h1 className="text-2xl font-bold">結果データの解析に失敗しました</h1>
-        <div className="apple-card p-4 space-y-2">
-          <div className="text-sm text-gray-600">Job: {job.id}</div>
-          <div className="text-sm text-red-600">
-            エラー: {e instanceof Error ? e.message : String(e)} (Storage Key:{' '}
-            {JsonStorageKeys.fullPages(job.id)})
-          </div>
-        </div>
-      </main>
-    )
-  }
-  const episodes = parsedFull.episodes
 
   // レイアウトステータスを取得してページ数情報を含める（責務をLayoutDatabaseServiceへ委譲）
   const layoutStatuses = await db.layout().getLayoutStatusByJobId(job.id)
@@ -133,12 +101,27 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
     }
   }
 
+  const episodes = await db.episodes().getEpisodesByJobId(job.id)
+
+  // エピソードの結合を考慮して、重複するエピソードをフィルタリング
+  const uniqueEpisodes = episodes.reduce(
+    (acc, episode) => {
+      const existing = acc.find(
+        (e) => e.startChunk === episode.startChunk && e.endChunk === episode.endChunk,
+      )
+      if (!existing) {
+        acc.push(episode)
+      }
+      return acc
+    },
+    [] as typeof episodes,
+  )
+
   // エピソードが1件のみの場合は、そのプレビューへ自動遷移
-  if (episodes.length === 1) {
-    const only = episodes[0]
+  if (uniqueEpisodes.length === 1) {
+    const only = uniqueEpisodes[0]
     redirect(`/novel/${novelId}/results/${job.id}/episode/${only.episodeNumber}`)
   }
-
   return (
     <main className="max-w-6xl mx-auto p-6 space-y-6">
       <h1 className="text-2xl font-bold">
@@ -196,7 +179,7 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
         </a>
       </div>
       <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {episodes.map((e) => {
+        {uniqueEpisodes.map((e) => {
           const layoutStatus = layoutStatusMap.get(e.episodeNumber)
           const pageCount = layoutStatus?.totalPages
 
