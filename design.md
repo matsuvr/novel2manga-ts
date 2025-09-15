@@ -15,3 +15,11 @@
 - Initialization logs now differentiate between failures before and after the automatic rebuild for clearer diagnostics.
 - Docker runtime now uses Node 20 LTS to align native module ABI with `better-sqlite3`.
 - Detection of native module errors now includes "Module did not self-register" messages, ensuring auto-rebuild covers more failure modes.
+
+## Authentication
+
+- Exported NextAuth helpers (`auth`, `signIn`, `signOut`) directly to ensure runtime consumers receive callable functions. This resolves "auth is not a function" failures observed during E2E startup.
+
+## E2E Testing
+
+- Docker image installs Playwright system libraries via `npx --yes playwright@1.44.0 install-deps` to prevent missing library errors during end-to-end tests.

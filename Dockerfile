@@ -8,13 +8,14 @@ ENV PNPM_HOME=/root/.local/share/pnpm \
 
 WORKDIR /app
 
-# Install system dependencies for native modules (better-sqlite3, sqlite3, canvas)
+# Install system dependencies for native modules and Playwright
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       python3 make g++ pkg-config \
       libsqlite3-dev \
       libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
       fonts-noto-cjk fonts-noto-color-emoji texlive-font-utils texlive-lang-cjk && \
+    npx --yes playwright@1.44.0 install-deps && \
     # Rebuild fontconfig cache so installed fonts are immediately usable inside the image
     fc-cache -f -v || true && \
     rm -rf /var/lib/apt/lists/*
