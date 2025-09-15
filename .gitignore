@@ -98,4 +98,4 @@ logs/
 test-results/
 playwright-report/
 codex_auth.json
-data/
+data/scripts/output/*.png
