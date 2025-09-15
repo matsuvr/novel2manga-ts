@@ -112,20 +112,75 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
     }
   }
 
-  const episodes = await db.episodes().getEpisodesByJobId(job.id)
+  const episodesFromDb = await db.episodes().getEpisodesByJobId(job.id)
 
-  // エピソードの結合を考慮して、重複するエピソードをフィルタリング
-  const uniqueEpisodes = Array.from(
-    episodes
-      .reduce((map, episode) => {
-        const key = `${episode.startChunk}-${episode.endChunk}`
-        if (!map.has(key)) {
-          map.set(key, episode)
-        }
-        return map
-      }, new Map<string, (typeof episodes)[0]>())
-      .values(),
-  )
+  // Try to prefer the bundled episode list stored in full_pages.json (this reflects
+  // any bundling done after page-break estimation). If present, use it as the
+  // authoritative source for UI listing. Fall back to DB episodes when absent.
+  let episodesForUi: Array<{
+    episodeNumber: number
+    title?: string | null
+    // optional panel range (from full_pages.json)
+    startPanelIndex?: number
+    endPanelIndex?: number
+    // optional chunk range (from DB)
+    startChunk?: number
+    endChunk?: number
+  }> = []
+
+  try {
+    const parsed = JSON.parse(fullPages.text)
+    if (parsed && Array.isArray(parsed.episodes) && parsed.episodes.length > 0) {
+      episodesForUi = parsed.episodes
+        .filter((raw: unknown) => raw && typeof raw === 'object')
+        .map((raw: unknown) => {
+          const ep = raw as Record<string, unknown>
+          const episodeNumber = ep.episodeNumber ?? ep.episodeNo ?? ep.no
+          const title =
+            typeof ep.title === 'string'
+              ? ep.title
+              : typeof ep.episodeTitle === 'string'
+                ? ep.episodeTitle
+                : null
+          const startPanelIndex =
+            typeof ep.startPanelIndex === 'number' ? ep.startPanelIndex : undefined
+          const endPanelIndex = typeof ep.endPanelIndex === 'number' ? ep.endPanelIndex : undefined
+          return {
+            episodeNumber: Number(episodeNumber ?? 0),
+            title,
+            startPanelIndex,
+            endPanelIndex,
+          }
+        })
+        .filter(
+          (e: { episodeNumber: number }) => Number.isFinite(e.episodeNumber) && e.episodeNumber > 0,
+        )
+    }
+  } catch (e) {
+    // If parsing fails, fall back to DB episodes below
+    console.warn('Failed to parse full_pages.json episodes, falling back to DB episodes', e)
+  }
+
+  if (episodesForUi.length === 0) {
+    // Map DB episodes into unified shape
+    episodesForUi = episodesFromDb.map((ep) => ({
+      episodeNumber: ep.episodeNumber,
+      title: ep.title,
+      startChunk: ep.startChunk,
+      endChunk: ep.endChunk,
+    }))
+  }
+
+  // Deduplicate episodes: prefer panel-range when available, otherwise chunk-range
+  const uniqueMap = new Map<string, (typeof episodesForUi)[0]>()
+  for (const ep of episodesForUi) {
+    const key =
+      typeof ep.startPanelIndex === 'number' && typeof ep.endPanelIndex === 'number'
+        ? `${ep.startPanelIndex}-${ep.endPanelIndex}`
+        : `${ep.startChunk ?? 'na'}-${ep.endChunk ?? 'na'}`
+    if (!uniqueMap.has(key)) uniqueMap.set(key, ep)
+  }
+  const uniqueEpisodes = Array.from(uniqueMap.values())
 
   // エピソードが1件のみの場合は、そのプレビューへ自動遷移
   if (uniqueEpisodes.length === 1) {
