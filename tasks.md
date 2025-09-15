@@ -7,6 +7,10 @@
 - [x] Detect "Module did not self-register" errors to trigger automatic rebuild of `better-sqlite3`.
 - [ ] Upgrade Docker base Node image when `better-sqlite3` adds support for newer versions.
 
+- [x] Export NextAuth helpers directly to prevent "auth is not a function" during E2E startup.
+- [x] Install Playwright system libraries for E2E tests.
+
+
 - [x] Notify users via email when jobs complete and redirect unauthorized access to the dashboard.
 - [x] Centralize job notification logic via `updateJobStatusWithNotification` to prevent duplicate emails.
 
@@ -17,4 +21,5 @@
 - [x] Display My Page job list with result links and resume actions.
 
 - [x] Harden page break estimation for empty scripts and negative page offsets.
+
 
