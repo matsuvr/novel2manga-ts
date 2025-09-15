@@ -1,6 +1,12 @@
 import type { Dialogue } from '@/types/panel-layout'
 import type { PanelLayout } from './panel-layout-engine'
 
+const RIGHT_X_RATIO = 0.7
+const LEFT_X_RATIO = 0.3
+const TOP_OFFSET_RATIO = 0.2
+const VERTICAL_SPREAD_RATIO = 0.6
+const CIRCULAR_RADIUS_RATIO = 0.3
+
 export interface BubblePlacement {
   dialogue: Dialogue
   position: { x: number; y: number }
@@ -81,16 +87,27 @@ export class SpeechBubblePlacer {
     switch (strategy) {
       case 'vertical':
         // 縦に並べる（日本式：右から左へ）
-        x = panelX + panelWidth * 0.7
-        y = panelY + panelHeight * (0.2 + (index * 0.6) / Math.max(total - 1, 1))
-        tailDirection = 'right'
+        if (total === 2 && index === 1) {
+          x = panelX + panelWidth * LEFT_X_RATIO
+          tailDirection = 'left'
+        } else {
+          x = panelX + panelWidth * RIGHT_X_RATIO
+          tailDirection = 'right'
+        }
+        y =
+          panelY +
+          panelHeight *
+            (TOP_OFFSET_RATIO + (index * VERTICAL_SPREAD_RATIO) / Math.max(total - 1, 1))
         break
 
       case 'zigzag': {
         // ジグザグ配置
         const isRight = index % 2 === 0
-        x = panelX + panelWidth * (isRight ? 0.7 : 0.3)
-        y = panelY + panelHeight * (0.2 + (index * 0.6) / Math.max(total - 1, 1))
+        x = panelX + panelWidth * (isRight ? RIGHT_X_RATIO : LEFT_X_RATIO)
+        y =
+          panelY +
+          panelHeight *
+            (TOP_OFFSET_RATIO + (index * VERTICAL_SPREAD_RATIO) / Math.max(total - 1, 1))
         tailDirection = isRight ? 'right' : 'left'
         break
       }
@@ -98,8 +115,8 @@ export class SpeechBubblePlacer {
       case 'circular': {
         // 円形配置
         const angle = (index / total) * Math.PI * 2 - Math.PI / 2
-        const radiusX = panelWidth * 0.3
-        const radiusY = panelHeight * 0.3
+        const radiusX = panelWidth * CIRCULAR_RADIUS_RATIO
+        const radiusY = panelHeight * CIRCULAR_RADIUS_RATIO
         x = panelX + panelWidth * 0.5 + Math.cos(angle) * radiusX
         y = panelY + panelHeight * 0.5 + Math.sin(angle) * radiusY
 
