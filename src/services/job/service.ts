@@ -48,6 +48,17 @@ export const JobServiceLive = Layer.succeed(JobService, {
   getUserJobs: (userId: string, options: JobQueryOptions = {}) =>
     Effect.tryPromise({
       try: async () => {
+        const normalizeTimestamp = (v: unknown): string | null => {
+          if (v === undefined || v === null) return null
+          if (typeof v === 'string') return v
+          if (v instanceof Date) return v.toISOString()
+          if (typeof v === 'number') return new Date(v).toISOString()
+          try {
+            return String(v)
+          } catch {
+            return null
+          }
+        }
         const db = getDatabase()
         const { limit = 10, offset = 0, status } = options
 
@@ -110,59 +121,94 @@ export const JobServiceLive = Layer.succeed(JobService, {
           .limit(limit)
           .offset(offset)
 
-        return results.map((row) => ({
-          job: {
-            id: row.id,
-            novelId: row.novelId,
-            jobName: row.jobName,
-            userId: row.userId,
-            status: row.status,
-            currentStep: row.currentStep,
-            splitCompleted: row.splitCompleted,
-            analyzeCompleted: row.analyzeCompleted,
-            episodeCompleted: row.episodeCompleted,
-            layoutCompleted: row.layoutCompleted,
-            renderCompleted: row.renderCompleted,
-            chunksDirPath: row.chunksDirPath,
-            analysesDirPath: row.analysesDirPath,
-            episodesDataPath: row.episodesDataPath,
-            layoutsDirPath: row.layoutsDirPath,
-            rendersDirPath: row.rendersDirPath,
-            characterMemoryPath: row.characterMemoryPath,
-            promptMemoryPath: row.promptMemoryPath,
-            totalChunks: row.totalChunks,
-            processedChunks: row.processedChunks,
-            totalEpisodes: row.totalEpisodes,
-            processedEpisodes: row.processedEpisodes,
-            totalPages: row.totalPages,
-            renderedPages: row.renderedPages,
-            processingEpisode: row.processingEpisode,
-            processingPage: row.processingPage,
-            lastError: row.lastError,
-            lastErrorStep: row.lastErrorStep,
-            retryCount: row.retryCount,
-            resumeDataPath: row.resumeDataPath,
-            coverageWarnings: row.coverageWarnings,
-            createdAt: row.createdAt,
-            updatedAt: row.updatedAt,
-            startedAt: row.startedAt,
-            completedAt: row.completedAt,
-          },
-          novel: row.novelTitle
-            ? {
-                id: row.novelId,
-                title: row.novelTitle,
-                author: row.novelAuthor,
-                originalTextPath: row.novelOriginalTextPath,
-                textLength: row.novelTextLength ?? 0,
-                language: row.novelLanguage,
-                metadataPath: row.novelMetadataPath,
-                userId: row.novelUserId ?? userId,
-                createdAt: row.novelCreatedAt,
-                updatedAt: row.novelUpdatedAt,
+        // Prepare job IDs for token aggregation
+        const jobIds = results.map((r) => r.id)
+
+        // Use database service factory to get token usage totals
+        const { db: databaseServices } = await import('@/services/database')
+        const totals = await databaseServices.tokenUsage().getTotalsByJobIds(jobIds)
+
+        // For each job row, attempt to read novel preview (first 100 chars) and attach token summary
+        const enhanced = await Promise.all(
+          results.map(async (row) => {
+            let novelPreview: string | undefined
+            if (row.novelOriginalTextPath) {
+              try {
+                const fs = await import('fs/promises')
+                const content = await fs.readFile(row.novelOriginalTextPath, { encoding: 'utf-8' })
+                novelPreview = content.slice(0, 100)
+              } catch {
+                novelPreview = undefined
               }
-            : null,
-        }))
+            }
+
+            const tu = totals[row.id] || { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+
+            // normalize timestamps for job and novel
+            return {
+              job: {
+                id: row.id,
+                novelId: row.novelId,
+                jobName: row.jobName,
+                userId: row.userId,
+                status: row.status,
+                currentStep: row.currentStep,
+                splitCompleted: row.splitCompleted,
+                analyzeCompleted: row.analyzeCompleted,
+                episodeCompleted: row.episodeCompleted,
+                layoutCompleted: row.layoutCompleted,
+                renderCompleted: row.renderCompleted,
+                chunksDirPath: row.chunksDirPath,
+                analysesDirPath: row.analysesDirPath,
+                episodesDataPath: row.episodesDataPath,
+                layoutsDirPath: row.layoutsDirPath,
+                rendersDirPath: row.rendersDirPath,
+                characterMemoryPath: row.characterMemoryPath,
+                promptMemoryPath: row.promptMemoryPath,
+                totalChunks: row.totalChunks,
+                processedChunks: row.processedChunks,
+                totalEpisodes: row.totalEpisodes,
+                processedEpisodes: row.processedEpisodes,
+                totalPages: row.totalPages,
+                renderedPages: row.renderedPages,
+                processingEpisode: row.processingEpisode,
+                processingPage: row.processingPage,
+                lastError: row.lastError,
+                lastErrorStep: row.lastErrorStep,
+                retryCount: row.retryCount,
+                resumeDataPath: row.resumeDataPath,
+                coverageWarnings: row.coverageWarnings,
+                createdAt: normalizeTimestamp(row.createdAt),
+                updatedAt: normalizeTimestamp(row.updatedAt),
+                startedAt: normalizeTimestamp(row.startedAt),
+                completedAt: normalizeTimestamp(row.completedAt),
+              },
+              novel: row.novelTitle
+                ? {
+                  id: row.novelId,
+                  title: row.novelTitle,
+                  author: row.novelAuthor,
+                  originalTextPath: row.novelOriginalTextPath,
+                  textLength: row.novelTextLength ?? 0,
+                  language: row.novelLanguage,
+                  metadataPath: row.novelMetadataPath,
+                  userId: row.novelUserId ?? userId,
+                  createdAt: normalizeTimestamp(row.novelCreatedAt),
+                  updatedAt: normalizeTimestamp(row.novelUpdatedAt),
+                  // add preview field on novel object for convenience
+                  preview: novelPreview,
+                }
+                : null,
+              tokenUsageSummary: {
+                promptTokens: tu.promptTokens ?? 0,
+                completionTokens: tu.completionTokens ?? 0,
+                totalTokens: tu.totalTokens ?? 0,
+              },
+            }
+          }),
+        )
+
+        return enhanced
       },
       catch: (error) => new DatabaseError(`Failed to get user jobs: ${String(error)}`, error),
     }),
@@ -219,6 +265,18 @@ export const JobServiceLive = Layer.succeed(JobService, {
   getJobDetails: (userId: string, jobId: string) =>
     Effect.gen(function* () {
       const db = getDatabase()
+
+      const normalizeTimestamp = (v: unknown): string | null => {
+        if (v === undefined || v === null) return null
+        if (typeof v === 'string') return v
+        if (v instanceof Date) return v.toISOString()
+        if (typeof v === 'number') return new Date(v).toISOString()
+        try {
+          return String(v)
+        } catch {
+          return null
+        }
+      }
 
       // Get job with novel information, ensuring user access
       const results = yield* Effect.tryPromise({
@@ -290,7 +348,7 @@ export const JobServiceLive = Layer.succeed(JobService, {
         return yield* Effect.fail(new JobAccessDeniedError(jobId, userId))
       }
 
-      // Transform result to JobWithNovel format
+      // Transform result to JobWithNovel format (normalize timestamps)
       return {
         job: {
           id: row.id,
@@ -324,24 +382,24 @@ export const JobServiceLive = Layer.succeed(JobService, {
           retryCount: row.retryCount,
           resumeDataPath: row.resumeDataPath,
           coverageWarnings: row.coverageWarnings,
-          createdAt: row.createdAt,
-          updatedAt: row.updatedAt,
-          startedAt: row.startedAt,
-          completedAt: row.completedAt,
+          createdAt: normalizeTimestamp(row.createdAt),
+          updatedAt: normalizeTimestamp(row.updatedAt),
+          startedAt: normalizeTimestamp(row.startedAt),
+          completedAt: normalizeTimestamp(row.completedAt),
         },
         novel: row.novelTitle
           ? {
-              id: row.novelId,
-              title: row.novelTitle,
-              author: row.novelAuthor,
-              originalTextPath: row.novelOriginalTextPath,
-              textLength: row.novelTextLength ?? 0,
-              language: row.novelLanguage,
-              metadataPath: row.novelMetadataPath,
-              userId: row.novelUserId ?? userId,
-              createdAt: row.novelCreatedAt,
-              updatedAt: row.novelUpdatedAt,
-            }
+            id: row.novelId,
+            title: row.novelTitle,
+            author: row.novelAuthor,
+            originalTextPath: row.novelOriginalTextPath,
+            textLength: row.novelTextLength ?? 0,
+            language: row.novelLanguage,
+            metadataPath: row.novelMetadataPath,
+            userId: row.novelUserId ?? userId,
+            createdAt: normalizeTimestamp(row.novelCreatedAt),
+            updatedAt: normalizeTimestamp(row.novelUpdatedAt),
+          }
           : null,
       }
     }),
