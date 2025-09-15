@@ -19,3 +19,8 @@
 ## Speech Bubble Placement
 
 - When a panel contains two dialogue or narration elements, the first bubble is positioned on the right and the second on the left to follow vertical Japanese reading order.
+
+## Page Break Estimation
+
+- Segmented estimator now carries over importance sums between segments, maintaining correct panel grouping and template selection across page boundaries.
+- Importance-based calculator exposes remaining importance even for empty scripts and clamps segment page offsets to avoid negative numbering.
