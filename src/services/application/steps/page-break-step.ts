@@ -9,7 +9,7 @@ import type {
   NewMangaScript,
   PageBreakV2,
 } from '@/types/script'
-import { StorageKeys } from '@/utils/storage'
+import { StorageKeys, saveEpisodeBoundaries } from '@/utils/storage'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface PageBreakResult {
@@ -213,6 +213,95 @@ export class PageBreakStep implements PipelineStep {
         totalPages: allPages.length,
         totalEpisodes: bundledEpisodes.episodes.length,
       })
+
+      // Persist bundled episode boundaries to storage + DB (map panels -> chunks)
+      try {
+        const analysisStorage = await StorageFactory.getAnalysisStorage()
+
+        // Attempt to discover all script_chunk keys for this job
+        let chunkKeys: string[] = []
+        if (typeof analysisStorage.list === 'function') {
+          const keys = await analysisStorage.list(jobId)
+          chunkKeys = Array.isArray(keys)
+            ? keys.filter((k) => /script_chunk_\d+\.json$/.test(k))
+            : []
+        }
+
+        // Parse indices and sort
+        const chunkIndexes = chunkKeys
+          .map((k) => {
+            const m = k.match(/script_chunk_(\d+)\.json$/)
+            return m ? Number(m[1]) : NaN
+          })
+          .filter((n) => Number.isFinite(n))
+          .sort((a, b) => a - b)
+
+        // Build mapping from panel index -> chunkIndex
+        const mapping: Array<{ chunkIndex: number; startPanel: number; endPanel: number }> = []
+        let currentPanelIndex = 1
+        for (const idx of chunkIndexes) {
+          const key = JsonStorageKeys.scriptChunk(jobId, idx)
+          const obj = await analysisStorage.get(key)
+          if (!obj) {
+            // If any chunk file missing, skip and continue
+            continue
+          }
+          let panelCount = 0
+          try {
+            const parsed = JSON.parse(obj.text)
+            panelCount = Array.isArray(parsed.panels) ? parsed.panels.length : 0
+          } catch {
+            continue
+          }
+          if (panelCount > 0) {
+            const startPanel = currentPanelIndex
+            const endPanel = currentPanelIndex + panelCount - 1
+            mapping.push({ chunkIndex: idx, startPanel, endPanel })
+            currentPanelIndex = endPanel + 1
+          }
+        }
+
+        if (mapping.length > 0) {
+          const episodesForDb = bundledEpisodes.episodes.map((ep) => {
+            // find chunk for start/end panels
+            const findChunk = (panelIndex: number) => {
+              const m = mapping.find((mm) => panelIndex >= mm.startPanel && panelIndex <= mm.endPanel)
+              return m ? m.chunkIndex : 0
+            }
+
+            const startChunk = findChunk(ep.startPanelIndex)
+            const endChunk = findChunk(ep.endPanelIndex)
+            return {
+              episodeNumber: ep.episodeNumber,
+              title: ep.title,
+              summary: undefined,
+              startChunk,
+              startCharIndex: 0,
+              endChunk,
+              endCharIndex: 0,
+              confidence: 1,
+            }
+          })
+
+          try {
+            await saveEpisodeBoundaries(jobId, episodesForDb)
+            logger.info('Persisted bundled episode boundaries to storage+DB', {
+              jobId,
+              persisted: episodesForDb.length,
+            })
+          } catch (e) {
+            logger.warn('Failed to persist bundled episode boundaries', {
+              jobId,
+              error: e instanceof Error ? e.message : String(e),
+            })
+          }
+        }
+      } catch (err) {
+        logger.warn('Episode boundary persistence skipped due to error', {
+          jobId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
 
       // Log upsert summary
       logger.info('Layout status upsert summary', {
