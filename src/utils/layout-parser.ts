@@ -119,7 +119,7 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
     const normalized = {
       title: (raw as { title?: string }).title ?? 'Untitled',
       author: (raw as { author?: string }).author,
-      created_at: typeof rawCreated === 'string' ? rawCreated : ensureISOString(rawCreated),
+      created_at: ensureISOString(rawCreated),
       episodeNumber: (raw as { episodeNumber?: number }).episodeNumber ?? 1,
       episodeTitle: (raw as { episodeTitle?: string }).episodeTitle,
       pages: (raw as { pages: Array<{ page_number: number; panels: unknown[] }> }).pages.map(
@@ -345,7 +345,7 @@ export function parseMangaLayoutFromYaml(layoutYaml: string): MangaLayout {
     const rawCreated2 = (raw as { created_at?: unknown }).created_at
     const parsed = MangaLayoutSchema.safeParse({
       title: (raw as { title?: string }).title ?? 'Untitled',
-      created_at: typeof rawCreated2 === 'string' ? rawCreated2 : ensureISOString(rawCreated2),
+      created_at: ensureISOString(rawCreated2),
       episodeNumber: (raw as { episodeNumber?: number }).episodeNumber ?? 1,
       pages,
     })
