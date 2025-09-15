@@ -97,6 +97,16 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
       : null
   const totalPageCount = layoutStatuses.reduce((sum, status) => sum + (status.totalPages || 0), 0)
 
+  // トークン使用量の合計を取得（DBに記録済みのものを集計）
+  let tokenTotals: { promptTokens: number; completionTokens: number; totalTokens: number } | null =
+    null
+  try {
+    const totals = await db.tokenUsage().getTotalsByJobIds([job.id])
+    tokenTotals = totals[job.id] ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+  } catch (e) {
+    console.warn('Failed to fetch token totals for job', job.id, e)
+  }
+
   // Parse coverage warnings from job if any
   let coverageWarnings: Array<{
     chunkIndex: number
@@ -193,28 +203,91 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
         解析結果（小説ID: {novelId} ）<br />
         このページをブックマークすれば、後で直接アクセスできます。
       </h1>
-      <div className="apple-card p-4">
-        <div className="text-sm text-gray-600">ステータス: {job.status}</div>
-        <div className="text-sm text-gray-600">作成日時: {job.createdAt}</div>
-        {job.completedAt && (
-          <div className="text-sm text-gray-600">完了日時: {job.completedAt}</div>
-        )}
-        {/* 完了と作成日時の差から、処理時間を表示 */}
-        {processingTimeMs !== null && (
-          <div className="text-sm text-gray-600">
-            処理時間: {(processingTimeMs / 1000).toFixed(1)} 秒
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="apple-card p-4 lg:col-span-2">
+          <div className="text-sm text-gray-600">ステータス: {job.status}</div>
+          <div className="text-sm text-gray-600">作成日時: {job.createdAt}</div>
+          {job.completedAt && (
+            <div className="text-sm text-gray-600">完了日時: {job.completedAt}</div>
+          )}
+          {/* 完了と作成日時の差から、処理時間を表示 */}
+          {processingTimeMs !== null && (
+            <div className="text-sm text-gray-600">
+              処理時間: {(processingTimeMs / 1000).toFixed(1)} 秒
+            </div>
+          )}
+          {/*総ページ数を表示*/}
+          <div className="text-sm text-gray-600">総ページ数: {totalPageCount} ページ</div>
+          {/*１ページあたりの平均所要時間を表示*/}
+          {processingTimeMs !== null && (
+            <div className="text-sm text-gray-600">
+              1ページあたりの平均所要時間:{' '}
+              {(processingTimeMs / 1000 / Math.max(1, totalPageCount)).toFixed(1)} 秒
+            </div>
+          )}
+          <div className="text-sm text-gray-600">ジョブID: {job.id}</div>
+        </div>
+
+        {/* 目立つトークン使用量カード */}
+        <div className="apple-card p-4 border-blue-200 bg-blue-50">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-semibold text-blue-800">トークン使用量と推定コスト</div>
+              <div className="text-xs text-blue-700">キャッシュヒットなしの想定見積もり</div>
+            </div>
           </div>
-        )}
-        {/*総ページ数を表示*/}
-        <div className="text-sm text-gray-600">総ページ数: {totalPageCount} ページ</div>
-        {/*１ページあたりの平均所要時間を表示*/}
-        {processingTimeMs !== null && (
-          <div className="text-sm text-gray-600">
-            1ページあたりの平均所要時間:{' '}
-            {(processingTimeMs / 1000 / Math.max(1, totalPageCount)).toFixed(1)} 秒
-          </div>
-        )}
-        <div className="text-sm text-gray-600">ジョブID: {job.id}</div>
+
+          {tokenTotals ? (
+            (() => {
+              // cost calc: use Gemini-like tiers provided in the user's message
+              const prompt = tokenTotals.promptTokens ?? 0
+              const completion = tokenTotals.completionTokens ?? 0
+              const total = tokenTotals.totalTokens ?? 0
+
+              // Gemini pricing (approximate per 1M tokens)
+              // Input (prompt): $1.25 per 1M <=200k, $2.50 per 1M >200k
+              const promptRate = prompt <= 200_000 ? 1.25 / 1_000_000 : 2.5 / 1_000_000
+              // Output (completion): $10.00 per 1M <=200k, $15.00 per 1M >200k
+              const completionRate = completion <= 200_000 ? 10.0 / 1_000_000 : 15.0 / 1_000_000
+              // Context caching price ignored (キャッシュなし想定)
+              const promptCost = prompt * promptRate
+              const completionCost = completion * completionRate
+              const estimatedCost = promptCost + completionCost
+
+              return (
+                <div className="mt-3 space-y-2">
+                  <div className="text-sm">
+                    入力: <span className="font-medium">{prompt.toLocaleString()}</span> トークン
+                  </div>
+                  <div className="text-sm">
+                    出力: <span className="font-medium">{completion.toLocaleString()}</span>{' '}
+                    トークン
+                  </div>
+                  <div className="text-sm">
+                    合計: <span className="font-medium">{total.toLocaleString()}</span> トークン
+                  </div>
+
+                  <div className="pt-2 border-t border-blue-100" />
+
+                  <div className="text-sm text-gray-700">
+                    <div>料金推定（USD）:</div>
+                    <div className="mt-1">
+                      入力コスト: <span className="font-medium">${promptCost.toFixed(4)}</span>
+                    </div>
+                    <div>
+                      出力コスト: <span className="font-medium">${completionCost.toFixed(4)}</span>
+                    </div>
+                    <div className="mt-1">
+                      合計推定: <span className="font-semibold">${estimatedCost.toFixed(4)}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()
+          ) : (
+            <div className="text-sm text-gray-600">トークン情報がありません</div>
+          )}
+        </div>
       </div>
       {coverageWarnings.length > 0 && (
         <div className="apple-card p-4 border-yellow-200 bg-yellow-50">

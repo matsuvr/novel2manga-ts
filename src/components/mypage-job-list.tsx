@@ -12,6 +12,8 @@ interface Props {
 export default function MypageJobList({ jobs }: Props) {
   const router = useRouter()
   const [loadingId, setLoadingId] = useState<string | null>(null)
+  // Defensive: accept undefined/null or non-array values by normalizing to an array
+  const safeJobs = Array.isArray(jobs) ? jobs : []
 
   const handleResume = async (jobId: string) => {
     setLoadingId(jobId)
@@ -34,26 +36,68 @@ export default function MypageJobList({ jobs }: Props) {
 
   return (
     <ul className="space-y-2">
-      {jobs.map((job) => (
-        <li key={job.id} className="flex items-center justify-between border p-2 rounded">
-          <span className="font-medium">{job.novelTitle || job.novelId}</span>
-          {job.status === 'completed' && (
-            <Link href={`/results/${job.id}`} className="text-blue-600 hover:underline">
-              結果を見る
-            </Link>
-          )}
-          {job.status === 'failed' && (
-            <button
-              type="button"
-              onClick={() => handleResume(job.id)}
-              className="text-red-600 hover:underline disabled:opacity-50"
-              disabled={loadingId === job.id}
-            >
-              {loadingId === job.id ? '再開中...' : '再開'}
-            </button>
-          )}
-        </li>
-      ))}
+      {safeJobs.map((job) => {
+        const jobWithCreatedAt = job as MypageJobSummary & { createdAt?: string }
+        return (
+          <li key={job.id} className="border rounded p-3 bg-white shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold text-gray-900">
+                      {job.novelTitle || job.novelId}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">ジョブID: {job.id}</div>
+                  </div>
+                  <div className="text-right text-sm text-gray-600">
+                    {/* createdAt is not part of MypageJobSummary; show placeholder if missing */}
+                    <div>{jobWithCreatedAt.createdAt ?? ''}</div>
+                    <div className="mt-1">{job.status}</div>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex items-center gap-3">
+                  {job.status === 'completed' && (
+                    <Link
+                      href={`/results/${job.id}`}
+                      className="text-blue-600 hover:underline text-sm"
+                      aria-label={`結果を見る ${job.novelTitle || job.id}`}
+                    >
+                      結果を見る
+                    </Link>
+                  )}
+
+                  {job.status === 'processing' && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(`/novel/${encodeURIComponent(job.novelId)}/progress`)
+                      }
+                      className="inline-flex items-center gap-2 text-sm text-gray-700"
+                      aria-label={`処理中 ${job.novelTitle || job.id}`}
+                    >
+                      <span className="w-3 h-3 rounded-full bg-blue-500 animate-ping inline-block" />
+                      処理中
+                    </button>
+                  )}
+
+                  {job.status === 'failed' && (
+                    <button
+                      type="button"
+                      onClick={() => handleResume(job.id)}
+                      className="text-red-600 hover:underline text-sm disabled:opacity-50"
+                      disabled={loadingId === job.id}
+                      aria-label={`再開 ${job.novelTitle || job.id}`}
+                    >
+                      {loadingId === job.id ? '再開中...' : '再開'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </li>
+        )
+      })}
     </ul>
   )
 }

@@ -24,7 +24,18 @@ export function effectToApiResponse<T, E = unknown>(
 ): Promise<NextResponse> {
   return Effect.runPromise(
     effect.pipe(
-      Effect.map((data) => NextResponse.json({ data })),
+      // If handler already returns a NextResponse, pass it through.
+      Effect.map((data) => {
+        // If the effect produced a NextResponse, return as-is
+        if (data instanceof NextResponse) return data as unknown as NextResponse
+
+        // If the data already looks like an API envelope (has 'data' or 'error'), assume it's ready
+        if (data && typeof data === 'object' && ('data' in (data as Record<string, unknown>) || 'error' in (data as Record<string, unknown>))) {
+          return NextResponse.json(data as unknown)
+        }
+
+        return NextResponse.json({ data })
+      }),
       Effect.catchAll((error) => {
         console.error('API Effect Error:', error)
 

@@ -2,6 +2,7 @@
 
 ## Critical Rules
 
+- Dockerで開発しています。動作は `docker compose up -d`で立ち上げて確認してください。npm run devは禁止
 - **Never edit `package-lock.json` directly.** It is generated, not handwritten. Manual edits cause severe issues.
 - **Effect TS migration in progress.**
   - New code must use Effect TS. See `docs/effect-ts-doc.txt`.

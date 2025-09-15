@@ -17,10 +17,14 @@ export default async function MypagePage() {
     redirect('/portal/api/auth/login')
   }
   const dashboard = await Effect.runPromise(getMypageDashboard(userId))
+
+  // Defensive: ensure jobs is always an array to avoid runtime errors in client components
+  const jobs = Array.isArray(dashboard?.jobs) ? dashboard.jobs : []
+
   return (
     <main className="max-w-4xl mx-auto p-6 space-y-6">
       <h1 className="text-2xl font-bold">マイページ</h1>
-      <MypageJobList jobs={dashboard.jobs} />
+      <MypageJobList jobs={jobs} />
     </main>
   )
 }
