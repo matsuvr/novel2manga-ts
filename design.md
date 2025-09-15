@@ -16,6 +16,10 @@
 - Docker runtime now uses Node 20 LTS to align native module ABI with `better-sqlite3`.
 - Detection of native module errors now includes "Module did not self-register" messages, ensuring auto-rebuild covers more failure modes.
 
+## Speech Bubble Placement
+
+- When a panel contains two dialogue or narration elements, the first bubble is positioned on the right and the second on the left to follow vertical Japanese reading order.
+
 ## Page Break Estimation
 
 - Segmented estimator now carries over importance sums between segments, maintaining correct panel grouping and template selection across page boundaries.
