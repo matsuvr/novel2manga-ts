@@ -6,3 +6,5 @@
 - [x] Auto rebuild better-sqlite3 on Node ABI mismatch during database initialization.
 - [x] Detect "Module did not self-register" errors to trigger automatic rebuild of `better-sqlite3`.
 - [ ] Upgrade Docker base Node image when `better-sqlite3` adds support for newer versions.
+- [x] Fix segmented page break carry-over to ensure panel templates match accumulated importance.
+- [x] Harden page break estimation for empty scripts and negative page offsets.

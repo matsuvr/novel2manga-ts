@@ -16,7 +16,9 @@ export function getMissingAuthEnv(env: NodeJS.ProcessEnv = process.env): string[
 
   // If neither AUTH_SECRET nor NEXTAUTH_SECRET is provided, report the missing secret.
   const hasAuthSecret = Boolean(env.AUTH_SECRET && String(env.AUTH_SECRET).trim() !== '')
-  const hasNextAuthSecret = Boolean(env.NEXTAUTH_SECRET && String(env.NEXTAUTH_SECRET).trim() !== '')
+  const hasNextAuthSecret = Boolean(
+    env.NEXTAUTH_SECRET && String(env.NEXTAUTH_SECRET).trim() !== '',
+  )
   if (!hasAuthSecret && !hasNextAuthSecret) {
     // Report the canonical variable name used in the app (AUTH_SECRET) for clarity,
     // but also accept NEXTAUTH_SECRET as valid at runtime.

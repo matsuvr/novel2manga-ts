@@ -15,3 +15,8 @@
 - Initialization logs now differentiate between failures before and after the automatic rebuild for clearer diagnostics.
 - Docker runtime now uses Node 20 LTS to align native module ABI with `better-sqlite3`.
 - Detection of native module errors now includes "Module did not self-register" messages, ensuring auto-rebuild covers more failure modes.
+
+## Page Break Estimation
+
+- Segmented estimator now carries over importance sums between segments, maintaining correct panel grouping and template selection across page boundaries.
+- Importance-based calculator exposes remaining importance even for empty scripts and clamps segment page offsets to avoid negative numbering.

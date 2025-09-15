@@ -66,7 +66,8 @@ async function initializeCanvas(): Promise<void> {
         // Use a bundled font as a sensible default; allow override via
         // environment variable CANVAS_FONT_PATH if needed.
         try {
-          const fontPath = process.env.CANVAS_FONT_PATH || `${__dirname}/../../fonts/NotoSansJP-Light.ttf`
+          const fontPath =
+            process.env.CANVAS_FONT_PATH || `${__dirname}/../../fonts/NotoSansJP-Light.ttf`
           // @napi-rs/canvas exposes GlobalFonts.register in recent versions
           // Define a narrow interface for the subset we need to avoid `any`.
           interface CanvasModuleWithGlobalFonts {
@@ -491,7 +492,7 @@ export class CanvasRenderer {
     if (canClip && this.hasRect(this.ctx)) {
       this.ctx.beginPath()
       this.ctx.rect(x, y, width, height)
-        ; (this.ctx as unknown as CanvasRenderingContext2D & { clip: () => void }).clip()
+      ;(this.ctx as unknown as CanvasRenderingContext2D & { clip: () => void }).clip()
     }
 
     // 吹き出しを描画し、占有領域を登録
@@ -914,7 +915,7 @@ export class CanvasRenderer {
           const r = baseRadius * Math.max(0.1, tailCfg.decay) ** i
           this.ctx.beginPath()
           if (hasArc) {
-            ; (
+            ;(
               this.ctx as unknown as CanvasRenderingContext2D & {
                 arc: typeof CanvasRenderingContext2D.prototype.arc
               }
