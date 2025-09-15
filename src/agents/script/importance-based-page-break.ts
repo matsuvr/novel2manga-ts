@@ -18,6 +18,8 @@ export interface ImportancePageBreakResult {
     totalPanels: number
     averagePanelsPerPage: number
     importanceDistribution: Record<number, number>
+    /** Remaining importance sum to carry over to next segment */
+    remainingImportance: number
   }
 }
 
@@ -26,6 +28,7 @@ export interface ImportancePageBreakResult {
  */
 export function calculateImportanceBasedPageBreaks(
   script: NewMangaScript,
+  initialImportance = 0,
 ): ImportancePageBreakResult {
   if (!script.panels || script.panels.length === 0) {
     return {
@@ -35,6 +38,7 @@ export function calculateImportanceBasedPageBreaks(
         totalPanels: 0,
         averagePanelsPerPage: 0,
         importanceDistribution: {},
+        remainingImportance: Math.max(0, Math.min(5, initialImportance)),
       },
     }
   }
@@ -44,7 +48,7 @@ export function calculateImportanceBasedPageBreaks(
 
   let currentPage = 1
   let currentPanelIndex = 1
-  let importanceSum = 0
+  let importanceSum = Math.max(0, Math.min(5, initialImportance))
 
   for (const panel of script.panels) {
     const importance = Math.max(1, Math.min(6, panel.importance || 1))
@@ -86,6 +90,7 @@ export function calculateImportanceBasedPageBreaks(
       totalPanels,
       averagePanelsPerPage: Math.round(averagePanelsPerPage * 100) / 100,
       importanceDistribution,
+      remainingImportance: importanceSum,
     },
   }
 }
