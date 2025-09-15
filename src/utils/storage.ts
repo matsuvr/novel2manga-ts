@@ -333,8 +333,8 @@ export class LocalFileStorage implements Storage {
       const entries: unknown[] = Array.isArray(rawEntries)
         ? rawEntries
         : typeof rawEntries === 'object' &&
-            rawEntries !== null &&
-            'length' in (rawEntries as Record<string, unknown>)
+          rawEntries !== null &&
+          'length' in (rawEntries as Record<string, unknown>)
           ? Array.from(rawEntries as ArrayLike<unknown>)
           : []
 
@@ -723,7 +723,7 @@ export async function saveEpisodeBoundaries(
         confidence: episode.confidence,
       }))
 
-      await episodeService.bulkUpsert(episodesForDb)
+      await episodeService.bulkReplaceByJobId(episodesForDb)
     },
     tracking: {
       filePath: key,

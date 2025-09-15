@@ -72,7 +72,18 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
   const fullPagesKey = JsonStorageKeys.fullPages(job.id)
   const fullPages = await layoutStorage.get(fullPagesKey)
   if (!fullPages) {
-    return notFound()
+    return (
+      <main className="max-w-3xl mx-auto p-6 space-y-4">
+        <h1 className="text-2xl font-bold">処理結果の表示に失敗しました</h1>
+        <div className="apple-card p-4 space-y-2">
+          <div className="text-sm text-gray-600">Job: {job.id}</div>
+          <div className="text-sm text-red-600">
+            エラー: 結果ファイル (full_pages.json) が見つかりませんでした。Storage Key:{' '}
+            {JsonStorageKeys.fullPages(job.id)}
+          </div>
+        </div>
+      </main>
+    )
   }
 
   // レイアウトステータスを取得してページ数情報を含める（責務をLayoutDatabaseServiceへ委譲）
@@ -104,17 +115,16 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
   const episodes = await db.episodes().getEpisodesByJobId(job.id)
 
   // エピソードの結合を考慮して、重複するエピソードをフィルタリング
-  const uniqueEpisodes = episodes.reduce(
-    (acc, episode) => {
-      const existing = acc.find(
-        (e) => e.startChunk === episode.startChunk && e.endChunk === episode.endChunk,
-      )
-      if (!existing) {
-        acc.push(episode)
-      }
-      return acc
-    },
-    [] as typeof episodes,
+  const uniqueEpisodes = Array.from(
+    episodes
+      .reduce((map, episode) => {
+        const key = `${episode.startChunk}-${episode.endChunk}`
+        if (!map.has(key)) {
+          map.set(key, episode)
+        }
+        return map
+      }, new Map<string, (typeof episodes)[0]>())
+      .values(),
   )
 
   // エピソードが1件のみの場合は、そのプレビューへ自動遷移
