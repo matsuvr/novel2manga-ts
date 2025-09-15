@@ -289,7 +289,8 @@ export const POST = withAuth(async (request: NextRequest, user) => {
         // エラーの詳細ログはAnalyzePipeline内で出力済み
         // API層では最小限のエラーハンドリングのみ
         try {
-          db.jobs().updateJobStatus(jobId, 'failed', extractErrorMessage(e))
+          const jobs = db.jobs()
+          await jobs.updateJobStatus(jobId, 'failed', extractErrorMessage(e))
         } catch {
           // Job status update failed - logged elsewhere
         }
