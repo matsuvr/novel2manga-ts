@@ -3,6 +3,7 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import type { NewNovel, Novel } from '@/db/schema'
 import { novels } from '@/db/schema'
+import { ensureCreatedAtString } from '@/utils/db'
 import { BaseDatabaseService } from './base-database-service'
 
 type DrizzleDatabase = BetterSQLite3Database<typeof schema>
@@ -109,7 +110,9 @@ export class NovelDatabaseService extends BaseDatabaseService {
         .where(and(...conditions))
         .limit(1)
         .all()
-      return (rows[0] as Novel | undefined) ?? null
+      const row = rows[0] as Record<string, unknown> | undefined
+      if (!row) return null
+      return ({ ...(row as Record<string, unknown>), createdAt: ensureCreatedAtString(row) } as Novel)
     } else {
       throw new Error('Async D1 adapters are not supported. Use the sync BetterSQLite3 adapter.')
     }
@@ -121,15 +124,18 @@ export class NovelDatabaseService extends BaseDatabaseService {
   async getAllNovels(userId?: string): Promise<Novel[]> {
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
+      let rows: Record<string, unknown>[]
       if (userId) {
-        return drizzleDb
+        rows = drizzleDb
           .select()
           .from(novels)
           .where(eq(novels.userId, userId))
           .orderBy(desc(novels.createdAt))
-          .all() as Novel[]
+          .all() as Record<string, unknown>[]
+      } else {
+        rows = drizzleDb.select().from(novels).orderBy(desc(novels.createdAt)).all() as Record<string, unknown>[]
       }
-      return drizzleDb.select().from(novels).orderBy(desc(novels.createdAt)).all() as Novel[]
+      return rows.map((r) => ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) } as Novel))
     } else {
       throw new Error('Async D1 adapters are not supported. Use the sync BetterSQLite3 adapter.')
     }

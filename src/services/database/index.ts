@@ -49,6 +49,7 @@ export type { AsyncTransactionOperation, SyncTransactionOperation } from './tran
 export { TransactionService } from './transaction-service'
 
 import type { NewEpisode, NewNovel, RenderStatus } from '@/db'
+import { parseToDate } from '@/utils/date'
 
 // Legacy-compatible wrapper used by existing tests. New code should use `db.*()` directly.
 export class DatabaseService {
@@ -195,10 +196,10 @@ export class DatabaseService {
         layoutPath: r.layoutPath ?? undefined,
         totalPages: r.totalPages ?? undefined,
         totalPanels: r.totalPanels ?? undefined,
-        generatedAt: r.generatedAt ? new Date(r.generatedAt) : undefined,
+        generatedAt: r.generatedAt ? parseToDate(r.generatedAt) : undefined,
         retryCount: r.retryCount ?? 0,
         lastError: r.lastError ?? undefined,
-        createdAt: r.createdAt ? new Date(r.createdAt) : new Date(0),
+        createdAt: r.createdAt ? parseToDate(r.createdAt) ?? new Date(0) : new Date(0),
       }))
     }
     // Fallback: derive from layout service if needed (not used in current tests)

@@ -3,6 +3,7 @@ import { auth } from '@/auth'
 import ResultsDisplay from '@/components/ResultsDisplay'
 import { db } from '@/services/database/index'
 import { isRenderCompletelyDone } from '@/utils/completion'
+import { ensureISOString } from '@/utils/date'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,10 +29,10 @@ export default async function JobResultsPage({ params }: { params: Promise<Param
   }
   const episodes = await db.episodes().getEpisodesByJobId(jobId)
 
-  // Convert string dates to Date objects and handle nulls to match component expectations
+  // Ensure createdAt is an ISO string (normalize nulls). Components expect string timestamps.
   const formattedEpisodes = episodes.map((ep) => ({
     ...ep,
-    createdAt: ep.createdAt ? new Date(ep.createdAt) : new Date(),
+    createdAt: ensureISOString(ep.createdAt),
     title: ep.title || undefined, // Convert null to undefined
     summary: ep.summary || undefined, // Convert null to undefined
   }))

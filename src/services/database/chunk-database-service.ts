@@ -3,6 +3,7 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import type { Chunk, NewChunk } from '@/db/schema'
 import { chunks } from '@/db/schema'
+import { ensureCreatedAtString } from '@/utils/db'
 import { BaseDatabaseService } from './base-database-service'
 
 type DrizzleDatabase = BetterSQLite3Database<typeof schema>
@@ -90,21 +91,29 @@ export class ChunkDatabaseService extends BaseDatabaseService {
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
 
-      return drizzleDb
+      const results = drizzleDb
         .select()
         .from(chunks)
         .where(eq(chunks.jobId, jobId))
         .orderBy(asc(chunks.chunkIndex))
-        .all() as Chunk[]
+        .all() as unknown as Array<Record<string, unknown>>
+
+      return results.map((r) => ({
+        ...(r as Record<string, unknown>),
+        createdAt: ensureCreatedAtString(r),
+      })) as Chunk[]
     } else {
       const drizzleDb = this.db as DrizzleDatabase
-      const results = await drizzleDb
+      const results = (await drizzleDb
         .select()
         .from(chunks)
         .where(eq(chunks.jobId, jobId))
-        .orderBy(asc(chunks.chunkIndex))
+        .orderBy(asc(chunks.chunkIndex))) as unknown as Array<Record<string, unknown>>
 
-      return results as Chunk[]
+      return results.map((r) => ({
+        ...(r as Record<string, unknown>),
+        createdAt: ensureCreatedAtString(r),
+      })) as Chunk[]
     }
   }
 
@@ -120,18 +129,28 @@ export class ChunkDatabaseService extends BaseDatabaseService {
         .from(chunks)
         .where(and(eq(chunks.jobId, jobId), eq(chunks.chunkIndex, chunkIndex)))
         .limit(1)
-        .all()
+        .all() as unknown as Array<Record<string, unknown>>
 
-      return results.length > 0 ? (results[0] as Chunk) : null
+      if (results.length === 0) return null
+      const r = results[0]
+      return ({
+        ...(r as Record<string, unknown>),
+        createdAt: ensureCreatedAtString(r),
+      } as Chunk)
     } else {
       const drizzleDb = this.db as DrizzleDatabase
-      const results = await drizzleDb
+      const results = (await drizzleDb
         .select()
         .from(chunks)
         .where(and(eq(chunks.jobId, jobId), eq(chunks.chunkIndex, chunkIndex)))
-        .limit(1)
+        .limit(1)) as unknown as Array<Record<string, unknown>>
 
-      return results.length > 0 ? (results[0] as Chunk) : null
+      if (results.length === 0) return null
+      const r = results[0]
+      return ({
+        ...(r as Record<string, unknown>),
+        createdAt: ensureCreatedAtString(r),
+      } as Chunk)
     }
   }
 

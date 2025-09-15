@@ -89,7 +89,7 @@ export interface JobResponse {
     lastError: string | null
     lastErrorStep: string | null
     retryCount: number | null
-    createdAt: string | null
+    createdAt: string
     updatedAt: string | null
     startedAt: string | null
     completedAt: string | null
@@ -109,6 +109,6 @@ export interface JobResponse {
     startPosition: number
     endPosition: number
     wordCount?: number | null
-    createdAt: string | null
+    createdAt: string
   }>
 }

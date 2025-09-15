@@ -15,7 +15,7 @@ export function getMypageDashboard(userId: string): Effect.Effect<MypageDashboar
     const jobs = (yield* Effect.tryPromise({
       try: () => db.jobs().getJobsByUser(userId),
       catch: (error) => new ApiError('Failed to fetch jobs', 500, 'DATABASE_ERROR', { error }),
-    })) as { id: string; novelId: string; status: JobStatus }[]
+    })) as Array<{ id: string; novelId: string; status: JobStatus; createdAt: string }>
 
     const outputs = (yield* Effect.tryPromise({
       try: () => db.outputs().getOutputsByUserId(userId, mypageConfig.recentOutputsLimit),
@@ -31,6 +31,8 @@ export function getMypageDashboard(userId: string): Effect.Effect<MypageDashboar
         id: j.id,
         novelId: j.novelId,
         novelTitle: novel?.title ?? '',
+        // createdAt is provided by DB schema (CURRENT_TIMESTAMP)
+        createdAt: j.createdAt,
         status: j.status,
       }
     })

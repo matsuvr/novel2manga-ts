@@ -3,6 +3,7 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import { storageFiles } from '@/db/schema'
 import { getDatabaseServiceFactory } from '@/services/database'
+import { ensureCreatedAtString } from '@/utils/db'
 
 export type StorageFileCategory =
   | 'original'
@@ -23,7 +24,7 @@ export interface StorageFileRecord {
   fileType: string
   mimeType: string | null
   fileSize: number | null
-  createdAt: string | null
+  createdAt: string
 }
 
 export class StorageFilesService {
@@ -50,22 +51,29 @@ export class StorageFilesService {
     return this.db
   }
 
-  async listByJobAndCategory(jobId: string, category: StorageFileCategory) {
+  async listByJobAndCategory(jobId: string, category: StorageFileCategory): Promise<StorageFileRecord[]> {
     const db = this.ensureDb()
     const rows = await db
       .select()
       .from(storageFiles)
       .where(and(eq(storageFiles.jobId, jobId), eq(storageFiles.fileCategory, category)))
-    return rows as unknown as StorageFileRecord[]
+    // Normalize createdAt to a string (DB has DEFAULT CURRENT_TIMESTAMP, but be defensive)
+    return (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
+      ...(r as Record<string, unknown>),
+      createdAt: ensureCreatedAtString(r),
+    })) as StorageFileRecord[]
   }
 
-  async listByNovel(novelId: string) {
+  async listByNovel(novelId: string): Promise<StorageFileRecord[]> {
     const db = this.ensureDb()
     const rows = await db.select().from(storageFiles).where(eq(storageFiles.novelId, novelId))
-    return rows as unknown as StorageFileRecord[]
+    return (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
+      ...(r as Record<string, unknown>),
+      createdAt: ensureCreatedAtString(r),
+    })) as StorageFileRecord[]
   }
 
-  async existsPath(filePath: string) {
+  async existsPath(filePath: string): Promise<boolean> {
     const db = this.ensureDb()
     const rows = await db
       .select({ id: storageFiles.id })

@@ -3,6 +3,7 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import type { NewOutput, Output } from '@/db/schema'
 import { outputs } from '@/db/schema'
+import { ensureCreatedAtString } from '@/utils/db'
 import { BaseDatabaseService } from './base-database-service'
 
 type DrizzleDatabase = BetterSQLite3Database<typeof schema>
@@ -67,12 +68,14 @@ export class OutputDatabaseService extends BaseDatabaseService {
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
 
-      const rows = drizzleDb.select().from(outputs).where(eq(outputs.id, id)).limit(1).all()
-      return (rows[0] as Output | undefined) ?? null
+      const rows = drizzleDb.select().from(outputs).where(eq(outputs.id, id)).limit(1).all() as Array<Record<string, unknown>>
+      const r = rows[0]
+      return (r ? ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) } as Output) : null)
     } else {
       const drizzleDb = this.db as DrizzleDatabase
-      const rows = await drizzleDb.select().from(outputs).where(eq(outputs.id, id)).limit(1)
-      return (rows[0] as Output | undefined) ?? null
+      const rows = await drizzleDb.select().from(outputs).where(eq(outputs.id, id)).limit(1) as Array<Record<string, unknown>>
+      const r = rows[0]
+      return (r ? ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) } as Output) : null)
     }
   }
 
@@ -82,13 +85,12 @@ export class OutputDatabaseService extends BaseDatabaseService {
   async getOutputsByJobId(jobId: string): Promise<Output[]> {
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
-
-      return drizzleDb.select().from(outputs).where(eq(outputs.jobId, jobId)).all() as Output[]
+      const rows = drizzleDb.select().from(outputs).where(eq(outputs.jobId, jobId)).all() as Array<Record<string, unknown>>
+      return rows.map((r) => ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) })) as Output[]
     } else {
       const drizzleDb = this.db as DrizzleDatabase
-      const rows = await drizzleDb.select().from(outputs).where(eq(outputs.jobId, jobId))
-
-      return rows as Output[]
+      const rows = await drizzleDb.select().from(outputs).where(eq(outputs.jobId, jobId)) as Array<Record<string, unknown>>
+      return rows.map((r) => ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) })) as Output[]
     }
   }
 
@@ -98,13 +100,12 @@ export class OutputDatabaseService extends BaseDatabaseService {
   async getOutputsByNovelId(novelId: string): Promise<Output[]> {
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
-
-      return drizzleDb.select().from(outputs).where(eq(outputs.novelId, novelId)).all() as Output[]
+      const rows = drizzleDb.select().from(outputs).where(eq(outputs.novelId, novelId)).all() as Array<Record<string, unknown>>
+      return rows.map((r) => ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) })) as Output[]
     } else {
       const drizzleDb = this.db as DrizzleDatabase
-      const rows = await drizzleDb.select().from(outputs).where(eq(outputs.novelId, novelId))
-
-      return rows as Output[]
+      const rows = await drizzleDb.select().from(outputs).where(eq(outputs.novelId, novelId)) as Array<Record<string, unknown>>
+      return rows.map((r) => ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) })) as Output[]
     }
   }
 
@@ -114,14 +115,15 @@ export class OutputDatabaseService extends BaseDatabaseService {
   async getOutputsByUserId(userId: string, limit: number): Promise<Output[]> {
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
-
-      return drizzleDb
+      const rows = drizzleDb
         .select()
         .from(outputs)
         .where(eq(outputs.userId, userId))
         .orderBy(desc(outputs.createdAt))
         .limit(limit)
-        .all() as Output[]
+        .all() as Array<Record<string, unknown>>
+
+      return rows.map((r) => ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) })) as Output[]
     }
 
     const drizzleDb = this.db as DrizzleDatabase
@@ -130,9 +132,9 @@ export class OutputDatabaseService extends BaseDatabaseService {
       .from(outputs)
       .where(eq(outputs.userId, userId))
       .orderBy(desc(outputs.createdAt))
-      .limit(limit)
+      .limit(limit) as Array<Record<string, unknown>>
 
-    return rows as Output[]
+    return rows.map((r) => ({ ...(r as Record<string, unknown>), createdAt: ensureCreatedAtString(r) })) as Output[]
   }
 
   /**

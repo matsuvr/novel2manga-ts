@@ -49,8 +49,8 @@ export const TextAnalysisSchema = z.object({
   dialogues: z.array(DialogueSchema),
   highlights: z.array(HighlightSchema),
   situations: z.array(SituationSchema),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
 })
 
 // TypeScript型定義のエクスポート

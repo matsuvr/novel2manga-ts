@@ -4,6 +4,7 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import type { RenderStatus } from '@/db/schema'
 import { jobs, outputs, renderStatus } from '@/db/schema'
+import { ensureCreatedAtString } from '@/utils/db'
 import { BaseDatabaseService } from './base-database-service'
 
 type DrizzleDatabase = BetterSQLite3Database<typeof schema>
@@ -83,7 +84,13 @@ export class RenderDatabaseService extends BaseDatabaseService {
       const rows = this.buildRenderStatusSelect(drizzleDb, jobId, episodeNumber, pageNumber)
         .limit(1)
         .all()
-      return (rows[0] as RenderStatus | undefined) ?? null
+      const row = rows[0] as Record<string, unknown> | undefined
+      if (!row) return null
+      return ({
+        ...(row as Record<string, unknown>),
+        createdAt: ensureCreatedAtString(row),
+        renderedAt: row.renderedAt ? new Date(String(row.renderedAt)).toISOString() : undefined,
+      } as RenderStatus)
     } else {
       const drizzleDb = this.db as DrizzleDatabase
       const rows = await this.buildRenderStatusSelect(
@@ -92,7 +99,13 @@ export class RenderDatabaseService extends BaseDatabaseService {
         episodeNumber,
         pageNumber,
       ).limit(1)
-      return (rows[0] as RenderStatus | undefined) ?? null
+      const row = rows[0] as Record<string, unknown> | undefined
+      if (!row) return null
+      return ({
+        ...(row as Record<string, unknown>),
+        createdAt: ensureCreatedAtString(row),
+        renderedAt: row.renderedAt ? new Date(String(row.renderedAt)).toISOString() : undefined,
+      } as RenderStatus)
     }
   }
 
@@ -103,12 +116,18 @@ export class RenderDatabaseService extends BaseDatabaseService {
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
 
-      return drizzleDb
+      const rows = drizzleDb
         .select()
         .from(renderStatus)
         .where(eq(renderStatus.jobId, jobId))
         .orderBy(desc(renderStatus.renderedAt))
-        .all() as RenderStatus[]
+        .all() as Record<string, unknown>[]
+
+      return rows.map((r) => ({
+        ...(r as Record<string, unknown>),
+        createdAt: ensureCreatedAtString(r),
+        renderedAt: r.renderedAt ? new Date(String(r.renderedAt)).toISOString() : undefined,
+      } as RenderStatus))
     } else {
       const drizzleDb = this.db as DrizzleDatabase
       const rows = await drizzleDb
@@ -117,7 +136,11 @@ export class RenderDatabaseService extends BaseDatabaseService {
         .where(eq(renderStatus.jobId, jobId))
         .orderBy(desc(renderStatus.renderedAt))
 
-      return rows as RenderStatus[]
+      return (rows as Record<string, unknown>[]).map((r) => ({
+        ...(r as Record<string, unknown>),
+        createdAt: ensureCreatedAtString(r),
+        renderedAt: r.renderedAt ? new Date(String(r.renderedAt)).toISOString() : undefined,
+      } as RenderStatus))
     }
   }
 
@@ -128,12 +151,18 @@ export class RenderDatabaseService extends BaseDatabaseService {
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
 
-      return drizzleDb
+      const rows = drizzleDb
         .select()
         .from(renderStatus)
         .where(and(eq(renderStatus.jobId, jobId), eq(renderStatus.episodeNumber, episodeNumber)))
         .orderBy(renderStatus.pageNumber)
-        .all() as RenderStatus[]
+        .all() as Record<string, unknown>[]
+
+      return rows.map((r) => ({
+        ...(r as Record<string, unknown>),
+        createdAt: ensureCreatedAtString(r),
+        renderedAt: r.renderedAt ? new Date(String(r.renderedAt)).toISOString() : undefined,
+      } as RenderStatus))
     } else {
       const drizzleDb = this.db as DrizzleDatabase
       const rows = await drizzleDb
@@ -142,7 +171,11 @@ export class RenderDatabaseService extends BaseDatabaseService {
         .where(and(eq(renderStatus.jobId, jobId), eq(renderStatus.episodeNumber, episodeNumber)))
         .orderBy(renderStatus.pageNumber)
 
-      return rows as RenderStatus[]
+      return (rows as Record<string, unknown>[]).map((r) => ({
+        ...(r as Record<string, unknown>),
+        createdAt: ensureCreatedAtString(r),
+        renderedAt: r.renderedAt ? new Date(String(r.renderedAt)).toISOString() : undefined,
+      } as RenderStatus))
     }
   }
 

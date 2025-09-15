@@ -28,8 +28,8 @@ export const EpisodeSchema = z.object({
   climaxPoint: z.number().optional(), // クライマックスのテキスト位置
   startIndex: z.number(),
   endIndex: z.number(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
 })
 
 // Panel content schema
@@ -67,8 +67,8 @@ export const MangaPageSchema = z.object({
   layoutFile: z.string(), // R2: novels/{novelId}/episodes/{episodeNumber}/pages/{pageNumber}/layout.yaml
   previewImageFile: z.string().optional(), // R2: novels/{novelId}/episodes/{episodeNumber}/pages/{pageNumber}/preview.png
   panels: z.array(PanelSchema),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
 })
 
 // Reading order mapping

@@ -12,8 +12,7 @@ interface Props {
 export default function MypageJobList({ jobs }: Props) {
   const router = useRouter()
   const [loadingId, setLoadingId] = useState<string | null>(null)
-  // Defensive: accept undefined/null or non-array values by normalizing to an array
-  const safeJobs = Array.isArray(jobs) ? jobs : []
+  // jobs is expected to be a proper array from the parent; keep types simple here
 
   const handleResume = async (jobId: string) => {
     setLoadingId(jobId)
@@ -36,8 +35,7 @@ export default function MypageJobList({ jobs }: Props) {
 
   return (
     <ul className="space-y-2">
-      {safeJobs.map((job) => {
-        const jobWithCreatedAt = job as MypageJobSummary & { createdAt?: string }
+      {jobs.map((job) => {
         return (
           <li key={job.id} className="border rounded p-3 bg-white shadow-sm">
             <div className="flex items-start justify-between gap-4">
@@ -50,8 +48,7 @@ export default function MypageJobList({ jobs }: Props) {
                     <div className="text-xs text-gray-500 mt-1">ジョブID: {job.id}</div>
                   </div>
                   <div className="text-right text-sm text-gray-600">
-                    {/* createdAt is not part of MypageJobSummary; show placeholder if missing */}
-                    <div>{jobWithCreatedAt.createdAt ?? ''}</div>
+                    <div>{job.createdAt}</div>
                     <div className="mt-1">{job.status}</div>
                   </div>
                 </div>
@@ -59,7 +56,9 @@ export default function MypageJobList({ jobs }: Props) {
                 <div className="mt-3 flex items-center gap-3">
                   {job.status === 'completed' && (
                     <Link
-                      href={`/results/${job.id}`}
+                      href={`/novel/${encodeURIComponent(job.novelId)}/results/${encodeURIComponent(
+                        job.id,
+                      )}`}
                       className="text-blue-600 hover:underline text-sm"
                       aria-label={`結果を見る ${job.novelTitle || job.id}`}
                     >
