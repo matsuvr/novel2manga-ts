@@ -19,4 +19,5 @@
 ## Email Notifications & MyPage
 
 - Job status updates to `completed` or `failed` now trigger email notifications via the unified notification service.
+- Notification logic is centralized through `updateJobStatusWithNotification`, removing direct notification calls from the database layer and preventing duplicates.
 - Unauthorized job access automatically redirects users to the dashboard, while unauthenticated users are sent to the login page with a callback to the requested job.

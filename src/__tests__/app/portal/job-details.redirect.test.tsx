@@ -33,11 +33,14 @@ describe('JobDetails redirects', () => {
   it('redirects to dashboard when job access is forbidden', async () => {
     ;(useSession as unknown as vi.Mock).mockReturnValue({ status: 'authenticated' })
     const originalFetch = global.fetch
-    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 403 }) as any
-    render(<JobDetails jobId="test-job" />)
-    await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith(routesConfig.portal.dashboard)
-    })
-    global.fetch = originalFetch
+    try {
+      global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 403 }) as any
+      render(<JobDetails jobId="test-job" />)
+      await waitFor(() => {
+        expect(replaceMock).toHaveBeenCalledWith(routesConfig.portal.dashboard)
+      })
+    } finally {
+      global.fetch = originalFetch
+    }
   })
 })
