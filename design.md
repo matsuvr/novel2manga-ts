@@ -16,8 +16,19 @@
 - Docker runtime now uses Node 20 LTS to align native module ABI with `better-sqlite3`.
 - Detection of native module errors now includes "Module did not self-register" messages, ensuring auto-rebuild covers more failure modes.
 
+
 ## Email Notifications & MyPage
 
 - Job status updates to `completed` or `failed` now trigger email notifications via the unified notification service.
 - Notification logic is centralized through `updateJobStatusWithNotification`, removing direct notification calls from the database layer and preventing duplicates.
 - Unauthorized job access automatically redirects users to the dashboard, while unauthenticated users are sent to the login page with a callback to the requested job.
+
+## Speech Bubble Placement
+
+- When a panel contains two dialogue or narration elements, the first bubble is positioned on the right and the second on the left to follow vertical Japanese reading order.
+
+## Page Break Estimation
+
+- Segmented estimator now carries over importance sums between segments, maintaining correct panel grouping and template selection across page boundaries.
+- Importance-based calculator exposes remaining importance even for empty scripts and clamps segment page offsets to avoid negative numbering.
+

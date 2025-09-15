@@ -10,7 +10,11 @@ export type TestDbHandle = {
 
 function isNativeModuleError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
-  return /NODE_MODULE_VERSION/i.test(message) || /ERR_DLOPEN_FAILED/i.test(message) || /did not self-register/i.test(message)
+  return (
+    /NODE_MODULE_VERSION/i.test(message) ||
+    /ERR_DLOPEN_FAILED/i.test(message) ||
+    /did not self-register/i.test(message)
+  )
 }
 
 function rebuildBetterSqlite3(): void {
