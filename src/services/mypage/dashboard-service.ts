@@ -5,7 +5,7 @@ import type { JobStatus, Novel } from '@/types'
 import type { MypageDashboardData, MypageJobSummary, RecentOutputSummary } from '@/types/mypage'
 import { ApiError } from '@/utils/api-error'
 
-export function getMypageDashboard(userId: string): Effect.Effect<MypageDashboardData, ApiError> {
+export function getMypageDashboard(userId: string): Effect.Effect<MypageDashboardData, ApiError, never> {
   return Effect.gen(function* () {
     const novels = (yield* Effect.tryPromise({
       try: () => db.novels().getAllNovels(userId),
