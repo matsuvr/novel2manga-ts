@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useState } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
 import { routesConfig } from '@/config/routes.config'
 import type { JobWithNovel } from '@/services/job/types'
 

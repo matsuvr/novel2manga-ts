@@ -1,8 +1,8 @@
 import { render, waitFor } from '@testing-library/react'
+import { useSession } from 'next-auth/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { JobDetails } from '@/app/portal/jobs/[jobId]/JobDetails'
 import { routesConfig } from '@/config/routes.config'
-import { useSession } from 'next-auth/react'
 
 const replaceMock = vi.fn()
 
