@@ -37,6 +37,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+raw-responses/
 
 # Local env files
 .env
@@ -97,4 +98,4 @@ logs/
 test-results/
 playwright-report/
 codex_auth.json
-data/
+data/scripts/output/*.png

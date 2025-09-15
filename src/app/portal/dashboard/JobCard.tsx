@@ -156,8 +156,11 @@ export function JobCard({ jobWithNovel, onJobUpdate }: JobCardProps) {
             <h3 className="text-lg font-medium text-gray-900 truncate">
               {job.jobName || novel?.title || `ジョブ ${job.id.slice(0, 8)}`}
             </h3>
-            {novel?.author && (
-              <p className="text-sm text-gray-500 truncate">著者: {novel.author}</p>
+            {/* Show novel preview instead of author/title metadata */}
+            {novel?.preview ? (
+              <p className="text-sm text-gray-500 truncate">{novel.preview}</p>
+            ) : (
+              <p className="text-sm text-gray-500 truncate">-</p>
             )}
           </div>
           <span
@@ -206,6 +209,17 @@ export function JobCard({ jobWithNovel, onJobUpdate }: JobCardProps) {
               <span>ページ数:</span>
               <span>
                 {job.renderedPages ?? 0} / {job.totalPages ?? 0}
+              </span>
+            </div>
+          )}
+          {/* Token usage summary (from service) */}
+          {jobWithNovel.tokenUsageSummary && (
+            <div className="flex justify-between">
+              <span>トークン (入力/出力/合計):</span>
+              <span>
+                {jobWithNovel.tokenUsageSummary.promptTokens.toLocaleString()} /{' '}
+                {jobWithNovel.tokenUsageSummary.completionTokens.toLocaleString()} /{' '}
+                {jobWithNovel.tokenUsageSummary.totalTokens.toLocaleString()}
               </span>
             </div>
           )}

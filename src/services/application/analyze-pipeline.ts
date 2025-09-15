@@ -263,7 +263,7 @@ export class AnalyzePipeline extends BasePipelineStep {
         episodeCount: episodesForDb.length,
       })
 
-      await episodeWriter.bulkUpsert(episodesForDb)
+      await episodeWriter.bulkReplaceByJobId(episodesForDb)
       try {
         const { db } = await import('@/services/database') // 動的にインポート
         const persisted = await db.episodes().getEpisodesByJobId(jobId)
@@ -519,7 +519,7 @@ export class AnalyzePipeline extends BasePipelineStep {
     } else {
       resumePoint = 'completed'
       logger.info('All steps completed, marking as completed', { jobId })
-      db.jobs().updateJobStatus(jobId, 'completed')
+      await this.updateJobStatus(jobId, 'completed', { logger })
       return { resumePoint }
     }
 

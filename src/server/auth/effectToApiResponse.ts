@@ -24,7 +24,14 @@ export function effectToApiResponse<T, E = unknown>(
 ): Promise<NextResponse> {
   return Effect.runPromise(
     effect.pipe(
-      Effect.map((data) => NextResponse.json({ data })),
+      Effect.map((result) => {
+        // If the handler already returned an object shaped like { data: ... }
+        // (many handlers return { data, metadata }), don't double-wrap it.
+        if (result && typeof result === 'object' && 'data' in (result as Record<string, unknown>)) {
+          return NextResponse.json(result as unknown)
+        }
+        return NextResponse.json({ data: result })
+      }),
       Effect.catchAll((error) => {
         console.error('API Effect Error:', error)
 

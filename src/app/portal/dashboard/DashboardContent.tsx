@@ -51,14 +51,27 @@ export function DashboardContent() {
         throw new Error('ジョブの取得に失敗しました')
       }
 
-      const data: JobsResponse = await response.json()
-      setJobs(data.data)
+      const parsed = (await response.json()) as unknown
+
+      // Defensive: ensure the response shape matches expected JobsResponse
+      if (
+        !parsed ||
+        typeof parsed !== 'object' ||
+        !('data' in (parsed as Record<string, unknown>)) ||
+        !Array.isArray((parsed as Record<string, unknown>).data)
+      ) {
+        console.error('Unexpected /api/jobs response shape', parsed)
+        throw new Error('サーバーから不正なジョブデータが返されました')
+      }
+
+      const jobsResponse = parsed as JobsResponse
+      setJobs(jobsResponse.data)
 
       // Note: API doesn't return total count yet, so we estimate based on results
       setTotalJobs(
-        data.data.length === filters.limit
+        jobsResponse.data.length === filters.limit
           ? filters.offset + filters.limit + 1
-          : filters.offset + data.data.length,
+          : filters.offset + jobsResponse.data.length,
       )
     } catch (err) {
       setError(err instanceof Error ? err.message : '予期しないエラーが発生しました')
