@@ -14,7 +14,7 @@ class MockCanvasRenderer {
   toBlob() {
     return new Blob(['x'], { type: 'image/png' })
   }
-  cleanup() { }
+  cleanup() {}
   setDialogueAssets(a: Record<string, any>) {
     this.dialogueAssets = a
   }

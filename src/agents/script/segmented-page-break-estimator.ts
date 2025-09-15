@@ -8,7 +8,6 @@
 import type { NewMangaScript, PageBreakV2 } from '../../types/script'
 import { buildPanelContentFromScript, parseDialogueAndNarration } from './dialogue-utils'
 import { calculateImportanceBasedPageBreaks } from './importance-based-page-break'
-import type { ScriptSegment } from './script-segmenter'
 import {
   DEFAULT_SCRIPT_SEGMENTATION_CONFIG,
   estimateSegmentJsonSize,
@@ -117,104 +116,41 @@ export async function estimatePageBreaksSegmented(
     throw new Error(`Script segmentation failed: ${validation.issues.join(', ')}`)
   }
 
-  const wasSegmented = segments.length > 1 || opts.forceSegmentation
+  const wasSegmented = segments.length > 1 || !!opts.forceSegmentation
   const jsonSizes = segments.map(estimateSegmentJsonSize)
 
-  // If not segmented, use original estimator logic
-  if (!wasSegmented) {
-    const pageBreaks = await estimateSingleSegmentPageBreaks(segments[0], opts)
-    return {
-      pageBreaks,
-      segmentationInfo: {
-        wasSegmented: false,
-        segmentCount: 1,
-        totalPanels: script.panels?.length || 0,
-        avgSegmentSize: script.panels?.length || 0,
-        maxJsonSize: jsonSizes[0] || 0,
-      },
-    }
-  }
-
-  // Process each segment
-  const segmentResults: PageBreakV2[] = []
+  // Process segments sequentially, carrying over importance sum
+  let importanceCarry = 0
+  let pageOffset = 0
+  const mergedPanels: PageBreakV2['panels'] = []
 
   for (const segment of segments) {
     try {
-      const segmentPageBreaks = await estimateSingleSegmentPageBreaks(segment, opts)
-      segmentResults.push(segmentPageBreaks)
+      const segmentResult = calculateImportanceBasedPageBreaks(segment.script, importanceCarry)
+      const adjustedPanels = segmentResult.pageBreaks.panels.map((p) => ({
+        ...p,
+        pageNumber: p.pageNumber + pageOffset,
+      }))
+      mergedPanels.push(...adjustedPanels)
+
+      importanceCarry = segmentResult.stats.remainingImportance
+      const maxPage = segmentResult.pageBreaks.panels.reduce((m, p) => Math.max(m, p.pageNumber), 0)
+      const completedPages = Math.max(0, maxPage - (importanceCarry > 0 ? 1 : 0))
+      pageOffset += completedPages
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       throw new Error(`Segment ${segment.segmentIndex} page break estimation failed: ${msg}`)
     }
   }
 
-  // Merge segments into final result
-  const mergedPageBreaks = mergeSegmentPageBreaks(segmentResults, segments)
-
   return {
-    pageBreaks: mergedPageBreaks,
+    pageBreaks: { panels: mergedPanels },
     segmentationInfo: {
-      wasSegmented: true,
+      wasSegmented,
       segmentCount: segments.length,
       totalPanels: script.panels?.length || 0,
       avgSegmentSize: Math.round((script.panels?.length || 0) / segments.length),
       maxJsonSize: Math.max(...jsonSizes),
     },
-  }
-}
-
-/**
- * Estimates page breaks for a single segment
- */
-async function estimateSingleSegmentPageBreaks(
-  segment: ScriptSegment,
-  _opts: SegmentedPageBreakOptions,
-): Promise<PageBreakV2> {
-  // Always use importance-based calculation (LLM estimation is deprecated)
-  const importanceResult = calculateImportanceBasedPageBreaks(segment.script)
-  return importanceResult.pageBreaks
-}
-
-/**
- * Merges multiple segment page break results into a final result
- */
-function mergeSegmentPageBreaks(
-  segmentResults: PageBreakV2[],
-  segments: ScriptSegment[],
-): PageBreakV2 {
-  if (segmentResults.length === 0) {
-    throw new Error('No segment results to merge')
-  }
-
-  if (segmentResults.length === 1) {
-    return segmentResults[0]
-  }
-
-  const mergedPanels = []
-  let currentPageOffset = 0
-
-  for (let i = 0; i < segmentResults.length; i++) {
-    const segmentResult = segmentResults[i]
-    const _segment = segments[i]
-
-    // Adjust page numbers to avoid conflicts
-    const adjustedPanels = segmentResult.panels.map((panel) => ({
-      ...panel,
-      pageNumber: panel.pageNumber + currentPageOffset,
-    }))
-
-    mergedPanels.push(...adjustedPanels)
-
-    // Update offset for next segment
-    const maxPageInSegment = Math.max(...adjustedPanels.map((p) => p.pageNumber))
-    currentPageOffset = maxPageInSegment
-
-    // Log segment merge info if needed by caller
-  }
-
-  // Log final merge result if needed by caller
-
-  return {
-    panels: mergedPanels,
   }
 }
