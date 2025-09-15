@@ -18,6 +18,7 @@ export * from './env'
 export * from './episode'
 // Extended Job Types (keeping custom types)
 export type { JobProgress, JobStatus } from './job'
+export type { MypageDashboardData, MypageJobSummary, RecentOutputSummary } from './mypage'
 
 // Manga Models Types
 export * from './manga-models'
