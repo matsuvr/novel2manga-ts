@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { estimatePageBreaksSegmented } from '@/agents/script/segmented-page-break-estimator'
 import type { NewMangaScript } from '@/types/script'
 
@@ -20,8 +20,7 @@ describe('segmented page break estimator', () => {
       ],
     }
 
-    const originalEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'development'
+    vi.stubEnv('NODE_ENV', 'development')
 
     const result = await estimatePageBreaksSegmented(script, {
       forceSegmentation: true,
@@ -34,7 +33,5 @@ describe('segmented page break estimator', () => {
 
     const pages = result.pageBreaks.panels.map((p) => p.pageNumber)
     expect(pages).toEqual([1, 1, 1, 2])
-
-    process.env.NODE_ENV = originalEnv
   })
 })
