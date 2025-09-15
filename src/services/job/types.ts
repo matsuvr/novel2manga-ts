@@ -5,7 +5,14 @@ import type { Job, Novel } from '@/db/schema'
 
 export interface JobWithNovel {
   job: Job
-  novel: Novel | null
+  // include preview (first ~100 chars) when available from service
+  novel: (Novel & { preview?: string }) | null
+  // aggregated token usage for the job (optional)
+  tokenUsageSummary?: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+  }
 }
 
 export interface JobQueryOptions {

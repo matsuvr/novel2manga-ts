@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useState } from 'react'
 import { routesConfig } from '@/config/routes.config'
@@ -12,6 +13,8 @@ interface JobDetailsProps {
 
 export function JobDetails({ jobId }: JobDetailsProps) {
   const { status } = useSession()
+  const router = useRouter()
+  const pathname = usePathname()
   const [jobWithNovel, setJobWithNovel] = useState<JobWithNovel | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -29,7 +32,8 @@ export function JobDetails({ jobId }: JobDetailsProps) {
           throw new Error('ジョブが見つかりません')
         }
         if (response.status === 403) {
-          throw new Error('このジョブにアクセスする権限がありません')
+          router.replace(routesConfig.portal.dashboard)
+          return
         }
         throw new Error('ジョブの詳細取得に失敗しました')
       }
@@ -41,13 +45,15 @@ export function JobDetails({ jobId }: JobDetailsProps) {
     } finally {
       setLoading(false)
     }
-  }, [jobId])
+  }, [jobId, router])
 
   useEffect(() => {
-    if (status === 'authenticated') {
+    if (status === 'unauthenticated') {
+      router.replace(`/portal/api/auth/login?callbackUrl=${encodeURIComponent(pathname)}`)
+    } else if (status === 'authenticated') {
       fetchJobDetails()
     }
-  }, [status, fetchJobDetails])
+  }, [status, fetchJobDetails, router, pathname])
 
   const handleResume = async () => {
     setResuming(true)
@@ -73,20 +79,6 @@ export function JobDetails({ jobId }: JobDetailsProps) {
 
   if (status === 'loading' || loading) {
     return <div className="text-center">読み込み中...</div>
-  }
-
-  if (status === 'unauthenticated') {
-    return (
-      <div className="text-center py-12">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">ログインが必要です</h2>
-        <Link
-          href="/portal/api/auth/login"
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-        >
-          ログイン
-        </Link>
-      </div>
-    )
   }
 
   if (error) {

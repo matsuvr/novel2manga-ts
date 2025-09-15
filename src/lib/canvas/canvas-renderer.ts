@@ -1,3 +1,5 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import type { AppCanvasConfig } from '@/types/canvas-config'
 import type { Dialogue, MangaLayout, Panel } from '@/types/panel-layout'
@@ -66,6 +68,7 @@ async function initializeCanvas(): Promise<void> {
         // Use a bundled font as a sensible default; allow override via
         // environment variable CANVAS_FONT_PATH if needed.
         try {
+
           const fontPath =
             process.env.CANVAS_FONT_PATH || `${__dirname}/../../fonts/NotoSansJP-Light.ttf`
           // @napi-rs/canvas exposes GlobalFonts.register in recent versions
@@ -73,12 +76,78 @@ async function initializeCanvas(): Promise<void> {
           interface CanvasModuleWithGlobalFonts {
             GlobalFonts?: {
               register: (path: string, opts?: { family?: string }) => void
+
+          // Resolve runtime directory in both CommonJS and ESM environments
+          const runtimeDir = ((): string => {
+            try {
+              // __dirname may be polyfilled on some runtimes. Check safely without
+              // calling Object.prototype.hasOwnProperty on the target.
+              if (typeof globalThis !== 'undefined') {
+                const maybeGlobal = globalThis as unknown as Record<string, unknown>
+                if ('__dirname' in maybeGlobal) {
+                  const val = maybeGlobal.__dirname
+                  if (typeof val === 'string' && val) return val
+                }
+              }
+            } catch (e) {
+              if (process.env.NODE_ENV !== 'production') {
+                // eslint-disable-next-line no-console
+                console.debug('Failed to read globalThis.__dirname', e)
+              }
             }
-          }
-          const maybeModule = canvasModule as unknown as CanvasModuleWithGlobalFonts
-          if (maybeModule?.GlobalFonts && typeof maybeModule.GlobalFonts.register === 'function') {
-            // Prefer the Noto Sans JP family supplied in the repository
-            maybeModule.GlobalFonts.register(fontPath, { family: 'NotoSansJP' })
+            try {
+              return path.dirname(fileURLToPath(import.meta.url))
+            } catch (_) {
+              // Fallback to process.cwd()
+              return process.cwd()
+            }
+          })()
+
+          const fontPath = process.env.CANVAS_FONT_PATH || `${runtimeDir}/../../fonts/NotoSansJP-Light.ttf`
+          // @napi-rs/canvas exposes different GlobalFonts APIs depending on version.
+          // Try registerFromPath (newer), fall back to register (older). Register under
+          // a human-friendly family name 'Noto Sans JP' and also an alias without spaces
+          // to maintain backwards compatibility with existing code.
+          const maybeModule = canvasModule as unknown as { GlobalFonts?: unknown }
+          const gf = maybeModule?.GlobalFonts
+          if (gf && typeof gf === 'object') {
+            // Narrow types for runtime checks
+            const gfo = gf as {
+              registerFromPath?: (path: string, family: string) => void
+              register?: (path: string, opts?: { family?: string } | string) => void
+            }
+            try {
+              if (typeof gfo.registerFromPath === 'function') {
+                // Newer API
+                gfo.registerFromPath(fontPath, 'Noto Sans JP')
+                // Also try an alias used elsewhere; ignore failures but log in dev
+                try {
+                  gfo.registerFromPath(fontPath, 'NotoSansJP')
+                } catch (regErr) {
+                  if (process.env.NODE_ENV !== 'production') {
+                    // eslint-disable-next-line no-console
+                    console.debug('Failed to register alias NotoSansJP via registerFromPath', regErr)
+                  }
+                }
+              } else if (typeof gfo.register === 'function') {
+                // Older API
+                gfo.register(fontPath, { family: 'Noto Sans JP' })
+                try {
+                  gfo.register(fontPath, { family: 'NotoSansJP' })
+                } catch (regErr) {
+                  if (process.env.NODE_ENV !== 'production') {
+                    // eslint-disable-next-line no-console
+                    console.debug('Failed to register alias NotoSansJP via register', regErr)
+                  }
+                }
+              }
+            } catch (err) {
+              if (process.env.NODE_ENV !== 'production') {
+                // eslint-disable-next-line no-console
+                console.warn('Canvas GlobalFonts registration failed', err)
+              }
+
+            }
           }
         } catch (fontErr) {
           // Non-fatal: proceed without registered font but log warning
@@ -226,7 +295,8 @@ export class CanvasRenderer {
     this.config = {
       backgroundColor: '#ffffff',
       // Prefer bundled Japanese-capable font when available; fall back to Arial
-      fontFamily: 'NotoSansJP, GenEiMGothic2, Arial, sans-serif',
+      // Include both 'Noto Sans JP' and 'NotoSansJP' aliases for compatibility
+      fontFamily: '"Noto Sans JP", NotoSansJP, GenEiMGothic2, Arial, sans-serif',
       fontSize: 16,
       lineColor: '#000000',
       lineWidth: 2,
