@@ -1,6 +1,18 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { useState } from 'react'
+import {
+  Container,
+  Card,
+  CardContent,
+  Typography,
+  TextField,
+  Button,
+  Box,
+  Alert,
+  CircularProgress,
+  Stack,
+} from '@mui/material'
 
 interface NovelResponse {
   preview: string
@@ -9,7 +21,6 @@ interface NovelResponse {
 }
 
 export default function NovelUploader() {
-  const textareaId = useId()
   const [novelText, setNovelText] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [response, setResponse] = useState<NovelResponse | null>(null)
@@ -44,60 +55,62 @@ export default function NovelUploader() {
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-6">
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-2xl font-bold mb-4">小説テキストアップロード</h2>
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      <Card>
+        <CardContent>
+          <Typography variant="h5" component="h2" gutterBottom>
+            小説テキストアップロード
+          </Typography>
 
-        <div className="mb-4">
-          <label htmlFor={textareaId} className="block text-sm font-medium text-gray-700 mb-2">
-            小説テキスト
-          </label>
-          <textarea
-            id={textareaId}
-            value={novelText}
-            onChange={(e) => setNovelText(e.target.value)}
-            placeholder="ここに長文の小説テキストを入力してください..."
-            className="w-full h-64 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            disabled={isSubmitting}
-          />
-          <div className="mt-2 text-sm text-gray-600">文字数: {novelText.length}</div>
-        </div>
+          <Box component="form" noValidate autoComplete="off" sx={{ mt: 2 }}>
+            <TextField
+              label="小説テキスト"
+              multiline
+              rows={10}
+              fullWidth
+              value={novelText}
+              onChange={(e) => setNovelText(e.target.value)}
+              placeholder="ここに長文の小説テキストを入力してください..."
+              disabled={isSubmitting}
+              helperText={`文字数: ${novelText.length}`}
+              variant="outlined"
+            />
 
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={isSubmitting || !novelText.trim()}
-          className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${
-            isSubmitting || !novelText.trim()
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-blue-600 text-white hover:bg-blue-700'
-          }`}
-        >
-          {isSubmitting ? '送信中...' : '送信'}
-        </button>
+            <Button
+              type="button"
+              variant="contained"
+              fullWidth
+              size="large"
+              onClick={handleSubmit}
+              disabled={isSubmitting || !novelText.trim()}
+              sx={{ mt: 2 }}
+              startIcon={isSubmitting && <CircularProgress size={20} color="inherit" />}
+            >
+              {isSubmitting ? '送信中...' : '送信'}
+            </Button>
+          </Box>
 
-        {error && (
-          <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-            エラー: {error}
-          </div>
-        )}
+          {error && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              エラー: {error}
+            </Alert>
+          )}
 
-        {response && (
-          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded">
-            <h3 className="font-semibold text-green-800 mb-2">{response.message}</h3>
-            <div className="space-y-2 text-sm">
-              <p>
-                <span className="font-medium">最初の50文字:</span>{' '}
-                <span className="text-gray-700">{response.preview}</span>
-              </p>
-              <p>
-                <span className="font-medium">元の文字数:</span>{' '}
-                <span className="text-gray-700">{response.originalLength}文字</span>
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+          {response && (
+            <Alert severity="success" sx={{ mt: 2 }}>
+              <Typography fontWeight="bold">{response.message}</Typography>
+              <Stack spacing={1} sx={{ mt: 1 }}>
+                <Typography variant="body2">
+                  <strong>最初の50文字:</strong> {response.preview}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>元の文字数:</strong> {response.originalLength.toLocaleString()}文字
+                </Typography>
+              </Stack>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+    </Container>
   )
 }
