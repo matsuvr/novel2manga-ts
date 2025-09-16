@@ -1,11 +1,107 @@
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
+import { appConfig } from '@/config/app.config'
 import type { Job } from '@/db'
 // テストのモックが `@/services/database` を対象にしているため
 // import パスをバレルに統一してモックが正しく適用されるようにする
 import { db } from '@/services/database'
 import { ApiError } from '@/utils/api-error'
 import { StorageFactory } from '@/utils/storage'
+
+// Minimum file size (bytes) to consider an image file valid. Keep as a small constant
+// to make intent clear and allow easy tuning.
+const MIN_IMAGE_FILE_SIZE_BYTES = 100
+
+// Validation cache to avoid hammering storage on frequent progress polls (SSE every ~500ms).
+// Cache is keyed by jobId and has a TTL. Background refresh is kicked off when stale but
+// callers are not awaited unless the job is completed (or explicitly requested).
+type ValidationMap = Record<
+  string,
+  { normalizedPages: number[]; pagesWithIssueCounts: Record<number, number>; issuesCount: number }
+>
+type ValidationCacheEntry = {
+  data: ValidationMap
+  updatedAt: number
+  inProgress?: Promise<void>
+}
+
+const VALIDATION_TTL_MS = (appConfig.processing?.cache?.validationTtlSec ?? 30) * 1000
+const validationCache = new Map<string, ValidationCacheEntry>()
+
+// Periodic cleanup of stale validation cache entries to avoid unbounded memory growth.
+// Runs every VALIDATION_TTL_MS interval.
+setInterval(() => {
+  const now = Date.now()
+  for (const [jobId, entry] of validationCache.entries()) {
+    if (now - entry.updatedAt > VALIDATION_TTL_MS * 5) {
+      validationCache.delete(jobId)
+    }
+  }
+}, VALIDATION_TTL_MS)
+
+async function getValidationCachedOrRefresh(
+  jobId: string,
+  perEpisode: PerEpisodeProgress,
+  awaitIfStale = false,
+): Promise<ValidationMap> {
+  const now = Date.now()
+  const entry = validationCache.get(jobId)
+
+  // If we have a fresh cache, return it
+  if (entry?.updatedAt && now - entry.updatedAt < VALIDATION_TTL_MS) return entry.data
+
+  // If an update is already in progress, either await it or return stale data
+  if (entry?.inProgress) {
+    if (awaitIfStale) {
+      try {
+        await entry.inProgress
+      } catch {
+        // ignore background errors
+      }
+      const after = validationCache.get(jobId)
+      return after?.data || {}
+    }
+    return entry.data || {}
+  }
+
+  // No entry or stale: start a background refresh
+  const p = (async () => {
+    try {
+      const map = await enrichPerEpisodeValidation(jobId, perEpisode)
+      validationCache.set(jobId, { data: map, updatedAt: Date.now() })
+    } catch (err) {
+      // don't let background failures crash callers; log for debug
+      try {
+        console.error('background enrichPerEpisodeValidation failed:', err)
+      } catch {
+        /* noop */
+      }
+    } finally {
+      const cur = validationCache.get(jobId)
+      if (cur) delete cur.inProgress
+    }
+  })()
+
+  // store a placeholder entry with inProgress while fetching
+  validationCache.set(jobId, {
+    data: entry?.data || {},
+    updatedAt: entry?.updatedAt || 0,
+    inProgress: p,
+  })
+
+  if (awaitIfStale) {
+    try {
+      await p
+      const after = validationCache.get(jobId)
+      return after?.data || {}
+    } catch {
+      return validationCache.get(jobId)?.data || {}
+    }
+  }
+
+  // Not awaiting: return stale data (or empty) immediately
+  return entry?.data || {}
+}
 
 export type ChunkRecord = {
   jobId: string
@@ -49,12 +145,25 @@ export async function getJobDetails(jobId: string): Promise<{ job: Job; chunks: 
     ]),
   ) as Record<
     string,
-    { planned: number; rendered: number; total?: number; validation: { normalizedPages: number[]; pagesWithIssueCounts: Record<number, number> | Record<string, number>; issuesCount: number } }
+    {
+      planned: number
+      rendered: number
+      total?: number
+      validation: {
+        normalizedPages: number[]
+        pagesWithIssueCounts: Record<number, number> | Record<string, number>
+        issuesCount: number
+      }
+    }
   >
 
-  // 実際の検証ロジックで validation を埋める（ストレージ/レンダー状態を参照）
+  // 検証は高コスト（ストレージ走査）なので頻繁に同期実行しない。
+  // - 通常のプログレスポーリングではキャッシュを返し、バックグラウンドで更新を起動する
+  // - ジョブが完了している場合のみ、最新の検証を待って同期的に反映する
   try {
-    const validationMap = await enrichPerEpisodeValidation(jobId, perEpisode)
+    const jobIsCompleted =
+      job.status === 'completed' || job.status === 'complete' || job.renderCompleted === true
+    const validationMap = await getValidationCachedOrRefresh(jobId, perEpisode, jobIsCompleted)
     for (const [ep, val] of Object.entries(validationMap)) {
       if (perEpisodePagesWithValidation[ep]) {
         perEpisodePagesWithValidation[ep].validation = val
@@ -64,7 +173,6 @@ export async function getJobDetails(jobId: string): Promise<{ job: Job; chunks: 
     }
   } catch (err) {
     // 検証で失敗しても致命的にしない（UIにはデフォルトが返る）
-    // ログは出したいがこのモジュールは軽量なためコンソールで出力
     try {
       console.error('enrichPerEpisodeValidation failed:', err)
     } catch {
@@ -233,22 +341,27 @@ async function loadChunkRecords(jobId: string): Promise<ChunkRecord[]> {
   return records
 }
 
-
 /**
  * Enrich per-episode aggregation with validation data.
  * For each episode, read render status rows and inspect storage for page files.
  * This implements a lightweight "render validation" that counts simple issues:
  * - missing image file
- * - file too small (< 100 bytes)
+ * - file too small (< MIN_IMAGE_FILE_SIZE_BYTES bytes)
  * - recorded width/height invalid (<= 0)
  */
 async function enrichPerEpisodeValidation(
   jobId: string,
   perEpisode: PerEpisodeProgress,
 ): Promise<
-  Record<string, { normalizedPages: number[]; pagesWithIssueCounts: Record<number, number>; issuesCount: number }>
+  Record<
+    string,
+    { normalizedPages: number[]; pagesWithIssueCounts: Record<number, number>; issuesCount: number }
+  >
 > {
-  const out: Record<string, { normalizedPages: number[]; pagesWithIssueCounts: Record<number, number>; issuesCount: number }> = {}
+  const out: Record<
+    string,
+    { normalizedPages: number[]; pagesWithIssueCounts: Record<number, number>; issuesCount: number }
+  > = {}
   const renderSvc = db.render() as unknown
   const storage = await StorageFactory.getRenderStorage()
 
@@ -261,10 +374,9 @@ async function enrichPerEpisodeValidation(
       typeof (renderSvc as Record<string, unknown>).getRenderStatusByEpisode === 'function'
     ) {
       try {
-        const rows = await (renderSvc as { getRenderStatusByEpisode: (jobId: string, ep: number) => unknown }).getRenderStatusByEpisode(
-          jobId,
-          ep,
-        )
+        const rows = await (
+          renderSvc as { getRenderStatusByEpisode: (jobId: string, ep: number) => unknown }
+        ).getRenderStatusByEpisode(jobId, ep)
         return Array.isArray(rows) ? (rows as Array<Record<string, unknown>>) : []
       } catch {
         return []
@@ -281,15 +393,27 @@ async function enrichPerEpisodeValidation(
 
     const statusRows = await getStatusRows(epNum)
     for (const row of statusRows) {
-      const pageNumber = Number((row as Record<string, unknown>).pageNumber ?? (row as Record<string, unknown>).page_number ?? NaN)
+      const pageNumber = Number(
+        (row as Record<string, unknown>).pageNumber ??
+        (row as Record<string, unknown>).page_number ??
+        NaN,
+      )
       if (!Number.isFinite(pageNumber)) continue
 
       // Consider pages that are marked rendered or have an imagePath as "normalized"
       const isRendered = Boolean((row as Record<string, unknown>).isRendered)
-      const imagePath = (row as Record<string, unknown>).imagePath ?? (row as Record<string, unknown>).image_path
-      const thumbnailPath = (row as Record<string, unknown>).thumbnailPath ?? (row as Record<string, unknown>).thumbnail_path
-      const width = Number((row as Record<string, unknown>).width ?? (row as Record<string, unknown>).w ?? 0) || 0
-      const height = Number((row as Record<string, unknown>).height ?? (row as Record<string, unknown>).h ?? 0) || 0
+      const imagePath =
+        (row as Record<string, unknown>).imagePath ?? (row as Record<string, unknown>).image_path
+      const thumbnailPath =
+        (row as Record<string, unknown>).thumbnailPath ??
+        (row as Record<string, unknown>).thumbnail_path
+      const width =
+        Number((row as Record<string, unknown>).width ?? (row as Record<string, unknown>).w ?? 0) ||
+        0
+      const height =
+        Number(
+          (row as Record<string, unknown>).height ?? (row as Record<string, unknown>).h ?? 0,
+        ) || 0
 
       if (isRendered || imagePath || thumbnailPath) normalizedPages.push(pageNumber)
 
@@ -303,23 +427,24 @@ async function enrichPerEpisodeValidation(
             const head = await storage.head(String(imagePath))
             if (!head) {
               pageIssues += 1
-            } else if (head.size !== undefined && head.size < 100) {
+            } else if (head.size !== undefined && head.size < MIN_IMAGE_FILE_SIZE_BYTES) {
               pageIssues += 1
             }
           } else {
             const g = await storage.get(String(imagePath))
             if (!g) pageIssues += 1
-            else if (g.text && g.text.length < 100) pageIssues += 1
+            else if (g.text && g.text.length < MIN_IMAGE_FILE_SIZE_BYTES) pageIssues += 1
           }
         } else if (typeof thumbnailPath === 'string' && thumbnailPath.length > 0) {
           if (typeof storage.head === 'function') {
             const head = await storage.head(String(thumbnailPath))
             if (!head) pageIssues += 1
-            else if (head.size !== undefined && head.size < 100) pageIssues += 1
+            else if (head.size !== undefined && head.size < MIN_IMAGE_FILE_SIZE_BYTES)
+              pageIssues += 1
           } else {
             const g = await storage.get(String(thumbnailPath))
             if (!g) pageIssues += 1
-            else if (g.text && g.text.length < 100) pageIssues += 1
+            else if (g.text && g.text.length < MIN_IMAGE_FILE_SIZE_BYTES) pageIssues += 1
           }
         } else {
           // No image info available → count as missing
@@ -344,7 +469,11 @@ async function enrichPerEpisodeValidation(
       for (let p = 0; p < planned; p++) normalizedPages.push(p)
     }
 
-    out[String(epNum)] = { normalizedPages: normalizedPages.sort((a, b) => a - b), pagesWithIssueCounts, issuesCount }
+    out[String(epNum)] = {
+      normalizedPages: normalizedPages.sort((a, b) => a - b),
+      pagesWithIssueCounts,
+      issuesCount,
+    }
   }
 
   return out
