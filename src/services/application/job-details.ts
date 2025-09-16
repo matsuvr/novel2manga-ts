@@ -32,21 +32,59 @@ export async function getJobDetails(jobId: string): Promise<{ job: Job; chunks: 
   )
 
   // UI が期待する progress ペイロードを付加（型は拡張可とする）
+  // perEpisodePages の各エントリに validation を含めて返す（互換性確保）
+  const perEpisodePagesWithValidation = Object.fromEntries(
+    Object.entries(perEpisode).map(([ep, v]) => [
+      String(ep),
+      {
+        planned: v.planned,
+        rendered: v.rendered,
+        ...(typeof v.total === 'number' ? { total: v.total } : {}),
+        validation: {
+          normalizedPages: [],
+          pagesWithIssueCounts: {},
+          issuesCount: 0,
+        },
+      },
+    ]),
+  ) as Record<
+    string,
+    { planned: number; rendered: number; total?: number; validation: { normalizedPages: number[]; pagesWithIssueCounts: Record<number, number> | Record<string, number>; issuesCount: number } }
+  >
+
+  // 実際の検証ロジックで validation を埋める（ストレージ/レンダー状態を参照）
+  try {
+    const validationMap = await enrichPerEpisodeValidation(jobId, perEpisode)
+    for (const [ep, val] of Object.entries(validationMap)) {
+      if (perEpisodePagesWithValidation[ep]) {
+        perEpisodePagesWithValidation[ep].validation = val
+      } else {
+        perEpisodePagesWithValidation[ep] = { planned: 0, rendered: 0, validation: val }
+      }
+    }
+  } catch (err) {
+    // 検証で失敗しても致命的にしない（UIにはデフォルトが返る）
+    // ログは出したいがこのモジュールは軽量なためコンソールで出力
+    try {
+      console.error('enrichPerEpisodeValidation failed:', err)
+    } catch {
+      /* noop */
+    }
+  }
+
   const jobWithProgress = {
     ...job,
     // DB値が0/未確定の際は、集計値で上書き提供（DB自体は別途更新ルートで整合化）
     totalPages: Math.max(Number(job.totalPages || 0), totals.total),
     renderedPages: Math.max(Number(job.renderedPages || 0), totals.rendered),
     progress: {
-      perEpisodePages: Object.fromEntries(
-        Object.entries(perEpisode).map(([ep, v]) => [String(ep), v]),
-      ),
+      perEpisodePages: perEpisodePagesWithValidation,
     },
   } as Job &
     Record<
       'progress',
       {
-        perEpisodePages: Record<string, { planned: number; rendered: number; total?: number }>
+        perEpisodePages: typeof perEpisodePagesWithValidation
       }
     >
 
@@ -193,4 +231,121 @@ async function loadChunkRecords(jobId: string): Promise<ChunkRecord[]> {
   }
 
   return records
+}
+
+
+/**
+ * Enrich per-episode aggregation with validation data.
+ * For each episode, read render status rows and inspect storage for page files.
+ * This implements a lightweight "render validation" that counts simple issues:
+ * - missing image file
+ * - file too small (< 100 bytes)
+ * - recorded width/height invalid (<= 0)
+ */
+async function enrichPerEpisodeValidation(
+  jobId: string,
+  perEpisode: PerEpisodeProgress,
+): Promise<
+  Record<string, { normalizedPages: number[]; pagesWithIssueCounts: Record<number, number>; issuesCount: number }>
+> {
+  const out: Record<string, { normalizedPages: number[]; pagesWithIssueCounts: Record<number, number>; issuesCount: number }> = {}
+  const renderSvc = db.render() as unknown
+  const storage = await StorageFactory.getRenderStorage()
+
+  // Helper: safe get of render status rows per episode
+  async function getStatusRows(ep: number) {
+    if (
+      renderSvc &&
+      typeof renderSvc === 'object' &&
+      (renderSvc as Record<string, unknown>)?.getRenderStatusByEpisode &&
+      typeof (renderSvc as Record<string, unknown>).getRenderStatusByEpisode === 'function'
+    ) {
+      try {
+        const rows = await (renderSvc as { getRenderStatusByEpisode: (jobId: string, ep: number) => unknown }).getRenderStatusByEpisode(
+          jobId,
+          ep,
+        )
+        return Array.isArray(rows) ? (rows as Array<Record<string, unknown>>) : []
+      } catch {
+        return []
+      }
+    }
+    return []
+  }
+
+  for (const [epKey, v] of Object.entries(perEpisode)) {
+    const epNum = Number(epKey)
+    const pagesWithIssueCounts: Record<number, number> = {}
+    const normalizedPages: number[] = []
+    let issuesCount = 0
+
+    const statusRows = await getStatusRows(epNum)
+    for (const row of statusRows) {
+      const pageNumber = Number((row as Record<string, unknown>).pageNumber ?? (row as Record<string, unknown>).page_number ?? NaN)
+      if (!Number.isFinite(pageNumber)) continue
+
+      // Consider pages that are marked rendered or have an imagePath as "normalized"
+      const isRendered = Boolean((row as Record<string, unknown>).isRendered)
+      const imagePath = (row as Record<string, unknown>).imagePath ?? (row as Record<string, unknown>).image_path
+      const thumbnailPath = (row as Record<string, unknown>).thumbnailPath ?? (row as Record<string, unknown>).thumbnail_path
+      const width = Number((row as Record<string, unknown>).width ?? (row as Record<string, unknown>).w ?? 0) || 0
+      const height = Number((row as Record<string, unknown>).height ?? (row as Record<string, unknown>).h ?? 0) || 0
+
+      if (isRendered || imagePath || thumbnailPath) normalizedPages.push(pageNumber)
+
+      // perform simple checks
+      let pageIssues = 0
+      // 1) existence / head check for image file
+      try {
+        if (typeof imagePath === 'string' && imagePath.length > 0) {
+          // Try head first if available
+          if (typeof storage.head === 'function') {
+            const head = await storage.head(String(imagePath))
+            if (!head) {
+              pageIssues += 1
+            } else if (head.size !== undefined && head.size < 100) {
+              pageIssues += 1
+            }
+          } else {
+            const g = await storage.get(String(imagePath))
+            if (!g) pageIssues += 1
+            else if (g.text && g.text.length < 100) pageIssues += 1
+          }
+        } else if (typeof thumbnailPath === 'string' && thumbnailPath.length > 0) {
+          if (typeof storage.head === 'function') {
+            const head = await storage.head(String(thumbnailPath))
+            if (!head) pageIssues += 1
+            else if (head.size !== undefined && head.size < 100) pageIssues += 1
+          } else {
+            const g = await storage.get(String(thumbnailPath))
+            if (!g) pageIssues += 1
+            else if (g.text && g.text.length < 100) pageIssues += 1
+          }
+        } else {
+          // No image info available → count as missing
+          pageIssues += 1
+        }
+      } catch {
+        pageIssues += 1
+      }
+
+      // 2) dimension sanity
+      if (width <= 0 || height <= 0) pageIssues += 1
+
+      if (pageIssues > 0) {
+        pagesWithIssueCounts[pageNumber] = pageIssues
+        issuesCount += pageIssues
+      }
+    }
+
+    // If no status rows were present, fall back to planned/rendered counts to populate normalizedPages
+    if (normalizedPages.length === 0) {
+      const planned = v.planned || 0
+      for (let p = 0; p < planned; p++) normalizedPages.push(p)
+    }
+
+    out[String(epNum)] = { normalizedPages: normalizedPages.sort((a, b) => a - b), pagesWithIssueCounts, issuesCount }
+  }
+
+  return out
 }

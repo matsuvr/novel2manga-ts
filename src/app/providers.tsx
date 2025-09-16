@@ -1,9 +1,9 @@
 'use client'
 
+import CssBaseline from '@mui/material/CssBaseline'
+import { ThemeProvider } from '@mui/material/styles'
 import type { Session } from 'next-auth'
 import { SessionProvider } from 'next-auth/react'
-import { ThemeProvider } from '@mui/material/styles'
-import CssBaseline from '@mui/material/CssBaseline'
 import { AppLayout } from '@/components/AppLayout'
 import theme from '@/theme'
 
