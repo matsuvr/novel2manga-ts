@@ -4,6 +4,15 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import type { MypageJobSummary } from '@/types/mypage'
+import {
+  List,
+  ListItem,
+  ListItemText,
+  Button,
+  CircularProgress,
+  Paper,
+  Typography,
+} from '@mui/material'
 
 interface Props {
   jobs: MypageJobSummary[]
@@ -32,28 +41,47 @@ export default function MypageJobList({ jobs }: Props) {
     }
   }
 
+  if (jobs.length === 0) {
+    return (
+      <Paper sx={{ p: 3, textAlign: 'center' }}>
+        <Typography color="text.secondary">ジョブ履歴はありません。</Typography>
+      </Paper>
+    )
+  }
+
   return (
-    <ul className="space-y-2">
+    <List component={Paper}>
       {jobs.map((job) => (
-        <li key={job.id} className="flex items-center justify-between border p-2 rounded">
-          <span className="font-medium">{job.novelTitle || job.novelId}</span>
-          {job.status === 'completed' && (
-            <Link href={`/results/${job.id}`} className="text-blue-600 hover:underline">
-              結果を見る
-            </Link>
-          )}
-          {job.status === 'failed' && (
-            <button
-              type="button"
-              onClick={() => handleResume(job.id)}
-              className="text-red-600 hover:underline disabled:opacity-50"
-              disabled={loadingId === job.id}
-            >
-              {loadingId === job.id ? '再開中...' : '再開'}
-            </button>
-          )}
-        </li>
+        <ListItem
+          key={job.id}
+          divider
+          secondaryAction={
+            <>
+              {job.status === 'completed' && (
+                <Button component={Link} href={`/results/${job.id}`} size="small">
+                  結果を見る
+                </Button>
+              )}
+              {job.status === 'failed' && (
+                <Button
+                  color="error"
+                  size="small"
+                  onClick={() => handleResume(job.id)}
+                  disabled={loadingId === job.id}
+                  startIcon={loadingId === job.id && <CircularProgress size={16} />}
+                >
+                  {loadingId === job.id ? '再開中...' : '再開'}
+                </Button>
+              )}
+            </>
+          }
+        >
+          <ListItemText
+            primary={job.novelTitle || job.novelId}
+            secondary={`Status: ${job.status}`}
+          />
+        </ListItem>
       ))}
-    </ul>
+    </List>
   )
 }

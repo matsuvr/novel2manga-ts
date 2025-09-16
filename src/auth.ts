@@ -8,14 +8,8 @@ import { getDatabaseServiceFactory } from '@/services/database'
 import { getMissingAuthEnv } from '@/utils/auth-env'
 
 // NextAuth.js v5 configuration
-// Initialize NextAuth and re-export the `auth` helper so server-side
-// code (e.g. `requireAuth`) can call `auth()` to obtain the current session.
-export const {
-  auth: nextAuth,
-  handlers,
-  signIn: nextSignIn,
-  signOut: nextSignOut,
-} = NextAuth({
+// Export the runtime helpers directly so imports receive callable functions.
+export const { auth, handlers, signIn, signOut } = NextAuth({
   // basePath: '/portal/api/auth', // Remove custom basePath to use default
   adapter: DrizzleAdapter(
     (() => {
@@ -53,12 +47,6 @@ export const {
   },
 })
 
-// Re-export the runtime `auth` function under the expected name.
-// Some modules (and tests) import `auth` from '@/auth' and expect it to be
-// a callable function that returns the current session. By exporting the
-// `nextAuth` value as `auth` we preserve that contract.
-export const auth = nextAuth
-
 // Validate required environment variables at module initialization time
 // to fail early if NextAuth is not configured. This mirrors the check in
 // the app route that mounts NextAuth handlers.
@@ -74,8 +62,3 @@ export const getAuthOptions = () => {
     'getAuthOptions is deprecated in NextAuth.js v5. Use the exported auth, handlers, signIn, signOut directly.',
   )
 }
-
-// Provide a signIn alias for compatibility with modules/tests that import `signIn` from '@/auth'
-export const signIn = nextSignIn
-// Provide a signOut alias for compatibility with modules/tests that import `signOut` from '@/auth'
-export const signOut = nextSignOut

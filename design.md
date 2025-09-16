@@ -17,6 +17,13 @@
 - Detection of native module errors now includes "Module did not self-register" messages, ensuring auto-rebuild covers more failure modes.
 
 
+## Authentication
+
+- Exported NextAuth helpers (`auth`, `signIn`, `signOut`) directly to ensure runtime consumers receive callable functions. This resolves "auth is not a function" failures observed during E2E startup.
+
+## E2E Testing
+
+- Docker image installs Playwright system libraries via `npx --yes playwright@1.44.0 install-deps` to prevent missing library errors during end-to-end 
 ## Email Notifications & MyPage
 
 - Job status updates to `completed` or `failed` now trigger email notifications via the unified notification service.
@@ -38,3 +45,4 @@
 - Dashboard data retrieval moved to `getMypageDashboard` service for reuse.
 - API `/api/mypage/dashboard` now returns job summaries including status and novel titles for client display.
 - New My Page route lists each job with links to finished results and resume actions for failed jobs.
+
