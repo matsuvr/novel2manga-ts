@@ -27,10 +27,8 @@ import {
   CheckCircle,
   Error,
   HourglassEmpty,
-  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material'
 import Check from '@mui/icons-material/Check'
-import { styled } from '@mui/material/styles'
 
 const _MAX_PAGES = appConfig.rendering.limits.maxPages
 
@@ -141,16 +139,6 @@ function calculateOverallProgress(job: Record<string, unknown>, completedCount: 
   return baseProgress
 }
 
-const ExpandMore = styled((props: { expand: boolean; [key: string]: any }) => {
-  const { expand, ...other } = props
-  return <IconButton {...other} />
-})(({ theme, expand }) => ({
-  transform: !expand ? 'rotate(0deg)' : 'rotate(180deg)',
-  marginLeft: 'auto',
-  transition: theme.transitions.create('transform', {
-    duration: theme.transitions.duration.shortest,
-  }),
-}))
 
 function ProcessingProgress({
   jobId,
@@ -555,16 +543,23 @@ function ProcessingProgress({
           <CardContent>
             <Typography variant="h6" gutterBottom>エピソード進捗</Typography>
             <Stack direction="row" flexWrap="wrap" gap={1}>
-              {episodeProgressCards.map(({ ep, planned, rendered, total, normalizedCount, isCompleted, isCurrent }) => (
-                <Tooltip key={ep} title={`EP${ep}: 計画${planned}, 描画${rendered}${total ? `, 全${total}`: ''}${normalizedCount > 0 ? `, 正規化${normalizedCount}` : ''}`}>
-                  <Chip
-                    label={`EP${ep}: ${rendered}/${total || planned}`}
-                    color={isCompleted ? "success" : isCurrent ? "primary" : "default"}
-                    variant={isCurrent ? "filled" : "outlined"}
-                    icon={normalizedCount > 0 ? <Check sx={{ fontSize: '1rem' }} /> : undefined}
-                  />
-                </Tooltip>
-              ))}
+              {episodeProgressCards.map(({ ep, planned, rendered, total, normalizedCount, isCompleted, isCurrent }) => {
+                const totalPages = total || planned || 1
+                const progress = totalPages > 0 ? Math.round((rendered / totalPages) * 100) : 0
+                return (
+                  <Card key={ep} variant="outlined" sx={{ flexBasis: '150px', flexGrow: 1, borderColor: isCurrent ? 'primary.main' : undefined }}>
+                    <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Typography variant="body2" fontWeight="bold">EP{ep}</Typography>
+                        {isCompleted && <CheckCircle color="success" sx={{ fontSize: '1rem' }} />}
+                        {normalizedCount > 0 && <Chip label={`N:${normalizedCount}`} size="small" color="warning" sx={{height: '16px', fontSize: '0.6rem'}} />}
+                      </Stack>
+                      <Typography variant="caption" color="text.secondary">{rendered} / {totalPages} ページ</Typography>
+                      <LinearProgress variant="determinate" value={progress} sx={{ mt: 0.5 }} color={isCompleted ? 'success' : 'primary'} />
+                    </CardContent>
+                  </Card>
+                )
+              })}
             </Stack>
           </CardContent>
         </Card>
