@@ -18,7 +18,6 @@ import {
   StepLabel,
   Stepper,
   Typography,
-  useTheme,
 } from '@mui/material'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
@@ -203,17 +202,12 @@ function ProcessingProgress({
     >
   >({})
   const [currentLayoutEpisode, setCurrentLayoutEpisode] = useState<number | null>(null)
-  const [_dbPageTotals, setDbPageTotals] = useState<{ totalPages: number; renderedPages: number }>({
-    totalPages: 0,
-    renderedPages: 0,
-  })
   const [completed, setCompleted] = useState(false)
   const [normalizationToastShown, setNormalizationToastShown] = useState(false)
   const [tokenPromptSum, setTokenPromptSum] = useState(0)
   const [tokenCompletionSum, setTokenCompletionSum] = useState(0)
   const isMountedRef = useRef(true)
   const lastJobRef = useRef<JobData['job'] | null>(null)
-  const _theme = useTheme()
 
   const inProgressWeight = useMemo(() => {
     const w =
@@ -256,23 +250,6 @@ function ProcessingProgress({
       if (timer) clearInterval(timer)
     }
   }, [jobId])
-
-  const EpisodePageDataSchema = useMemo(
-    () =>
-      z.object({
-        planned: z.number(),
-        rendered: z.number(),
-        total: z.number().optional(),
-        validation: z
-          .object({
-            normalizedPages: z.array(z.number()),
-            pagesWithIssueCounts: z.record(z.number()).optional(),
-            issuesCount: z.number().optional(),
-          })
-          .optional(),
-      }),
-    [],
-  )
 
   const describeStep = useCallback((stepId: string): string => {
     if (!stepId) return '状態更新'
@@ -361,10 +338,6 @@ function ProcessingProgress({
       }
 
       setLastJobData(jobDataString)
-      setDbPageTotals({
-        totalPages: Number(data.job.totalPages || 0),
-        renderedPages: Number(data.job.renderedPages || 0),
-      })
 
       if (
         !normalizationToastShown &&
@@ -653,15 +626,7 @@ function ProcessingProgress({
       const statusCompleted = data.job.status === 'completed' || data.job.status === 'complete'
       return statusCompleted || data.job.status === 'failed' ? 'stop' : 'continue'
     },
-    [
-      lastJobData,
-      addLog,
-      describeStep,
-      isDemoMode,
-      inProgressWeight,
-      EpisodePageDataSchema,
-      normalizationToastShown,
-    ],
+    [lastJobData, addLog, describeStep, isDemoMode, inProgressWeight, normalizationToastShown],
   )
 
   useEffect(() => {
