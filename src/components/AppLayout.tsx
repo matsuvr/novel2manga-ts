@@ -1,5 +1,6 @@
 'use client'
 
+import { Box } from '@mui/material'
 import { Navigation } from './Navigation'
 
 interface AppLayoutProps {
@@ -8,9 +9,9 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Box sx={{ minHeight: '100vh', bgcolor: 'grey.50' }}>
       <Navigation />
       <main>{children}</main>
-    </div>
+    </Box>
   )
 }

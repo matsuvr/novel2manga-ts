@@ -2,7 +2,10 @@
 
 import type { Session } from 'next-auth'
 import { SessionProvider } from 'next-auth/react'
+import { ThemeProvider } from '@mui/material/styles'
+import CssBaseline from '@mui/material/CssBaseline'
 import { AppLayout } from '@/components/AppLayout'
+import theme from '@/theme'
 
 interface ProvidersProps {
   children: React.ReactNode
@@ -23,7 +26,11 @@ export default function Providers({ children, session }: ProvidersProps) {
       refetchInterval={0}
       // basePath="/portal/api/auth" // Remove custom basePath to use default
     >
-      <AppLayout>{children}</AppLayout>
+      <ThemeProvider theme={theme}>
+        {/* CssBaseline kickstarts an elegant, consistent, and simple baseline to build upon. */}
+        <CssBaseline />
+        <AppLayout>{children}</AppLayout>
+      </ThemeProvider>
     </SessionProvider>
   )
 }
