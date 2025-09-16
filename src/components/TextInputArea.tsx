@@ -2,6 +2,22 @@
 
 import { type ChangeEvent, type DragEvent, useEffect, useRef, useState } from 'react'
 import { estimateTokenCount } from '@/utils/textExtraction'
+import {
+  Box,
+  Button,
+  TextField,
+  Typography,
+  Stack,
+  LinearProgress,
+  Tooltip,
+  CircularProgress,
+  Card,
+  CardContent,
+  CardActions,
+} from '@mui/material'
+import UploadFileIcon from '@mui/icons-material/UploadFile'
+import InfoIcon from '@mui/icons-material/Info'
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
 
 interface TextInputAreaProps {
   value: string
@@ -10,6 +26,22 @@ interface TextInputAreaProps {
   isProcessing: boolean
   maxLength?: number
 }
+
+const TokenTooltipContent = () => (
+  <Box>
+    <Typography variant="subtitle2" gutterBottom>
+      トークン見積りルール:
+    </Typography>
+    <Typography component="ul" sx={{ pl: 2, '& li': { pb: 0.5 } }}>
+      <li>日本語/中国語/韓国語: 1文字 ≒ 1トークン</li>
+      <li>英語: 4文字 ≒ 1トークン</li>
+      <li>混合テキスト: 上記を按分して計算</li>
+    </Typography>
+    <Typography variant="caption" color="warning.light" display="block" sx={{ mt: 1 }}>
+      ※ 確定値は送信後にAPIから取得されます
+    </Typography>
+  </Box>
+)
 
 export default function TextInputArea({
   value,
@@ -20,32 +52,28 @@ export default function TextInputArea({
 }: TextInputAreaProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [estimatedTokens, setEstimatedTokens] = useState(0)
-  const [showTooltip, setShowTooltip] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Update token estimation when value changes
   useEffect(() => {
     const tokens = estimateTokenCount(value)
     setEstimatedTokens(tokens)
   }, [value])
 
-  const handleDragOver = (e: DragEvent<HTMLTextAreaElement>) => {
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setIsDragging(true)
   }
 
-  const handleDragLeave = (e: DragEvent<HTMLTextAreaElement>) => {
+  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setIsDragging(false)
   }
 
-  const handleDrop = async (e: DragEvent<HTMLTextAreaElement>) => {
+  const handleDrop = async (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setIsDragging(false)
-
     const files = Array.from(e.dataTransfer.files)
     const textFile = files.find((file) => file.type === 'text/plain' || file.name.endsWith('.txt'))
-
     if (textFile) {
       const text = await textFile.text()
       onChange(text.slice(0, maxLength))
@@ -63,144 +91,116 @@ export default function TextInputArea({
   const characterCount = value.length
   const characterPercentage = (characterCount / maxLength) * 100
 
-  return (
-    <div className="h-full flex flex-col space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
-            小説テキスト入力
-          </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            テキストを貼り付けるか、ファイルをドラッグ＆ドロップしてください
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-200 rounded-2xl font-medium shadow-sm shadow-gray-500/10 transition-all duration-300 ease-out hover:bg-gray-50 hover:shadow-md hover:-translate-y-0.5 active:scale-95 text-sm"
-        >
-          📁 ファイルを選択
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".txt,text/plain"
-          onChange={handleFileSelect}
-          className="hidden"
-        />
-      </div>
+  const getProgressColor = () => {
+    if (characterPercentage > 90) return 'error'
+    if (characterPercentage > 70) return 'warning'
+    return 'primary'
+  }
 
-      {/* Text Area with Drag & Drop */}
-      <div
-        className={`flex-1 relative rounded-3xl transition-all duration-300 ${
-          isDragging ? 'scale-[1.02] shadow-2xl' : ''
-        }`}
-      >
-        <textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value.slice(0, maxLength))}
-          placeholder="ここに小説のテキストを入力してください..."
-          className={`w-full p-6 rounded-2xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 ease-out placeholder:text-gray-400 text-gray-800 resize-none shadow-inner h-full ${isDragging ? 'opacity-50' : ''}`}
-          disabled={isProcessing}
+  return (
+    <Card variant="outlined" sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Box>
+            <Typography variant="h6" component="h3" gutterBottom>
+              小説テキスト入力
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              テキストを貼り付けるか、ファイルをドラッグ＆ドロップしてください
+            </Typography>
+          </Box>
+          <Button
+            variant="outlined"
+            startIcon={<UploadFileIcon />}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            ファイルを選択
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".txt,text/plain"
+            onChange={handleFileSelect}
+            hidden
+          />
+        </Stack>
+        <Box
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-        />
-        {isDragging && (
-          <div className="absolute inset-0 flex items-center justify-center rounded-3xl bg-blue-500/10 border-2 border-dashed border-blue-500 pointer-events-none">
-            <div className="text-center">
-              <p className="text-2xl mb-2">📄</p>
-              <p className="text-lg font-medium text-blue-600">ファイルをドロップしてください</p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Footer with character count, token estimation and submit button */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <div className="text-sm text-gray-600">
-            <span className="font-medium">{characterCount.toLocaleString()}</span>
-            <span className="text-gray-400"> / {maxLength.toLocaleString()} 文字</span>
-          </div>
-          <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-            <div
-              className={`h-full transition-all duration-300 ${
-                characterPercentage > 90
-                  ? 'bg-gradient-to-r from-orange-400 to-red-500'
-                  : characterPercentage > 70
-                    ? 'bg-gradient-to-r from-yellow-400 to-orange-500'
-                    : 'bg-gradient-to-r from-blue-400 to-green-500'
-              }`}
-              style={{ width: `${Math.min(characterPercentage, 100)}%` }}
-            />
-          </div>
-          {/* Token Estimation Display */}
-          <div className="relative">
-            <button
-              type="button"
-              className="text-sm text-blue-600 font-medium cursor-help flex items-center space-x-1 bg-transparent border-none p-0"
-              onMouseEnter={() => setShowTooltip(true)}
-              onMouseLeave={() => setShowTooltip(false)}
-            >
-              <span>🔢 入力トークン見積り: {estimatedTokens.toLocaleString()}</span>
-              <span className="text-xs">ℹ️</span>
-            </button>
-            {/* Tooltip */}
-            {showTooltip && (
-              <div className="absolute bottom-full left-0 mb-2 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg z-10 max-w-xs">
-                <div className="font-medium mb-1">トークン見積りルール:</div>
-                <ul className="space-y-1 text-gray-300">
-                  <li>• 日本語/中国語/韓国語: 1文字 ≒ 1トークン</li>
-                  <li>• 英語: 4文字 ≒ 1トークン</li>
-                  <li>• 混合テキスト: 上記を按分して計算</li>
-                </ul>
-                <div className="mt-2 text-yellow-400 text-xs">
-                  ※ 確定値は送信後にAPIから取得されます
-                </div>
-                {/* Arrow */}
-                <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-              </div>
-            )}
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={(_e) => {
-            onSubmit()
+          sx={{
+            flex: 1,
+            position: 'relative',
+            borderRadius: 1,
+            border: isDragging ? (theme) => `2px dashed ${theme.palette.primary.main}`: (theme) => `1px solid ${theme.palette.divider}`,
+            bgcolor: isDragging ? 'primary.lighter' : 'action.hover',
           }}
-          disabled={isProcessing || !value.trim()}
-          className={`px-8 py-4 rounded-2xl font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 shadow-lg shadow-blue-500/25 transition-all duration-300 ease-out hover:shadow-xl hover:shadow-blue-500/40 hover:-translate-y-0.5 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none ${isProcessing ? 'animate-pulse' : ''}`}
         >
-          {isProcessing ? (
-            <span className="flex items-center space-x-2">
-              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                  fill="none"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-              <span>処理中...</span>
-            </span>
-          ) : (
-            <span className="flex items-center space-x-2">
-              <span>✨</span>
-              <span>マンガに変換</span>
-            </span>
+          <TextField
+            multiline
+            fullWidth
+            value={value}
+            onChange={(e) => onChange(e.target.value.slice(0, maxLength))}
+            placeholder="ここに小説のテキストを入力してください..."
+            disabled={isProcessing}
+            variant="standard"
+            sx={{
+              height: '100%',
+              p: 2,
+              '& .MuiInput-underline:before, & .MuiInput-underline:after': {
+                borderBottom: 'none',
+              },
+              '& .MuiInputBase-root': {
+                height: '100%',
+              },
+              '& .MuiInputBase-input': {
+                height: '100% !important',
+                resize: 'none',
+              },
+            }}
+          />
+          {isDragging && (
+            <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+              <Stack spacing={1} alignItems="center">
+                <Typography variant="h3">📄</Typography>
+                <Typography variant="h6" color="primary.dark">
+                  ファイルをドロップ
+                </Typography>
+              </Stack>
+            </Box>
           )}
-        </button>
-      </div>
-    </div>
+        </Box>
+      </CardContent>
+      <CardActions sx={{ justifyContent: 'space-between', p: 2 }}>
+        <Stack direction="row" alignItems="center" spacing={2} sx={{ flex: 1 }}>
+            <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+              {characterCount.toLocaleString()} / {maxLength.toLocaleString()} 文字
+            </Typography>
+            <LinearProgress
+              variant="determinate"
+              value={Math.min(characterPercentage, 100)}
+              color={getProgressColor()}
+              sx={{ width: '100px', flexShrink: 0 }}
+            />
+            <Tooltip title={<TokenTooltipContent />} placement="top" arrow>
+              <Stack direction="row" alignItems="center" spacing={0.5} sx={{ cursor: 'help' }}>
+                <Typography variant="body2" color="primary">
+                  🔢 見積り: {estimatedTokens.toLocaleString()} トークン
+                </Typography>
+                <InfoIcon fontSize="small" color="primary" sx={{ fontSize: '1rem' }} />
+              </Stack>
+            </Tooltip>
+        </Stack>
+        <Button
+          variant="contained"
+          size="large"
+          onClick={onSubmit}
+          disabled={isProcessing || !value.trim()}
+          startIcon={isProcessing ? <CircularProgress size={24} color="inherit" /> : <AutoFixHighIcon />}
+        >
+          {isProcessing ? '処理中...' : 'マンガに変換'}
+        </Button>
+      </CardActions>
+    </Card>
   )
 }
