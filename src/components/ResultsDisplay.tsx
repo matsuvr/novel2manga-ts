@@ -1,21 +1,21 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Episode } from '@/types/database-models'
-import { groupByProviderModel } from '@/utils/token-usage'
+import DownloadIcon from '@mui/icons-material/Download'
+import PreviewIcon from '@mui/icons-material/Preview'
 import {
+  Alert,
   Box,
+  Button,
   Card,
   CardContent,
-  Typography,
-  Button,
-  Grid,
+  Chip,
   CircularProgress,
-  Alert,
-  Select,
-  MenuItem,
   FormControl,
   InputLabel,
+  MenuItem,
+  Paper,
+  Select,
+  type SelectChangeEvent,
   Stack,
   Table,
   TableBody,
@@ -23,12 +23,11 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
-  Chip,
-  SelectChangeEvent,
+  Typography,
 } from '@mui/material'
-import DownloadIcon from '@mui/icons-material/Download'
-import PreviewIcon from '@mui/icons-material/Preview'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { Episode } from '@/types/database-models'
+import { groupByProviderModel } from '@/utils/token-usage'
 
 interface TokenUsage {
   agentName: string
@@ -81,13 +80,23 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
     }
   }, [jobId])
 
-  const { totalTokens, totalCost, totalPromptTokens, totalCompletionTokens, totalCachedTokens, totalThoughtsTokens } = useMemo(
+  const {
+    totalTokens,
+    totalCost,
+    totalPromptTokens,
+    totalCompletionTokens,
+    totalCachedTokens,
+    totalThoughtsTokens,
+  } = useMemo(
     () => ({
       totalTokens: tokenUsage.reduce((sum, usage) => sum + usage.totalTokens, 0),
       totalCost: tokenUsage.reduce((sum, usage) => sum + (usage.cost || 0), 0),
       totalPromptTokens: tokenUsage.reduce((sum, usage) => sum + usage.promptTokens, 0),
       totalCompletionTokens: tokenUsage.reduce((sum, usage) => sum + usage.completionTokens, 0),
-      totalCachedTokens: tokenUsage.reduce((sum, usage) => sum + (usage.cachedContentTokens || 0), 0),
+      totalCachedTokens: tokenUsage.reduce(
+        (sum, usage) => sum + (usage.cachedContentTokens || 0),
+        0,
+      ),
       totalThoughtsTokens: tokenUsage.reduce((sum, usage) => sum + (usage.thoughtsTokens || 0), 0),
     }),
     [tokenUsage],
@@ -118,7 +127,9 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
         body: JSON.stringify({
           jobId,
           format: exportFormat,
-          episodeNumbers: selectedEpisode ? [selectedEpisode.episodeNumber] : episodes.map((ep) => ep.episodeNumber),
+          episodeNumbers: selectedEpisode
+            ? [selectedEpisode.episodeNumber]
+            : episodes.map((ep) => ep.episodeNumber),
         }),
       })
       if (!response.ok) throw new Error('Export failed')
@@ -159,7 +170,9 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
               <Select
                 value={exportFormat}
                 label="フォーマット"
-                onChange={(e: SelectChangeEvent<'pdf' | 'images_zip'>) => setExportFormat(e.target.value as 'pdf' | 'images_zip')}
+                onChange={(e: SelectChangeEvent<'pdf' | 'images_zip'>) =>
+                  setExportFormat(e.target.value as 'pdf' | 'images_zip')
+                }
               >
                 <MenuItem value="pdf">PDF</MenuItem>
                 <MenuItem value="images_zip">画像ZIP</MenuItem>
@@ -171,7 +184,9 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
               disabled={isExporting}
               startIcon={isExporting ? <CircularProgress size={20} /> : <DownloadIcon />}
             >
-              {isExporting ? 'エクスポート中...' : `エクスポート (${selectedEpisode ? '選択中のEP' : '全EP'})`}
+              {isExporting
+                ? 'エクスポート中...'
+                : `エクスポート (${selectedEpisode ? '選択中のEP' : '全EP'})`}
             </Button>
           </Stack>
         </CardContent>
@@ -189,19 +204,20 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
               </Typography>
               <Stack spacing={2}>
                 <Alert severity="info">
-                  合計: {totalTokens.toLocaleString()} トークン (入力: {totalPromptTokens.toLocaleString()}, 出力:{' '}
+                  合計: {totalTokens.toLocaleString()} トークン (入力:{' '}
+                  {totalPromptTokens.toLocaleString()}, 出力:{' '}
                   {totalCompletionTokens.toLocaleString()})
                   {totalCost > 0 && ` | 概算コスト: $${totalCost.toFixed(4)}`}
                 </Alert>
                 {totalCachedTokens > 0 && (
-                    <Alert severity="success">
-                        キャッシュ: {totalCachedTokens.toLocaleString()} トークン
-                    </Alert>
+                  <Alert severity="success">
+                    キャッシュ: {totalCachedTokens.toLocaleString()} トークン
+                  </Alert>
                 )}
                 {totalThoughtsTokens > 0 && (
-                    <Alert severity="warning">
-                        思考: {totalThoughtsTokens.toLocaleString()} トークン
-                    </Alert>
+                  <Alert severity="warning">
+                    思考: {totalThoughtsTokens.toLocaleString()} トークン
+                  </Alert>
                 )}
                 <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
@@ -221,7 +237,9 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
                           </TableCell>
                           <TableCell align="right">{stats.prompt.toLocaleString()}</TableCell>
                           <TableCell align="right">{stats.completion.toLocaleString()}</TableCell>
-                          <TableCell align="right">{(stats.prompt + stats.completion).toLocaleString()}</TableCell>
+                          <TableCell align="right">
+                            {(stats.prompt + stats.completion).toLocaleString()}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -239,9 +257,15 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
           <Typography variant="h6" gutterBottom>
             エピソード一覧
           </Typography>
-          <Grid container spacing={2}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
+              gap: 2,
+            }}
+          >
             {episodes.map((episode) => (
-              <Grid item xs={12} sm={6} md={4} key={episode.id}>
+              <Box key={episode.id}>
                 <Card
                   variant="outlined"
                   sx={{
@@ -257,7 +281,12 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
                     <Typography color="text.secondary" gutterBottom>
                       {episode.title}
                     </Typography>
-                    <Chip label="レイアウト生成済み" size="small" color="success" variant="outlined" />
+                    <Chip
+                      label="レイアウト生成済み"
+                      size="small"
+                      color="success"
+                      variant="outlined"
+                    />
                     <Box sx={{ mt: 2 }}>
                       <Button
                         size="small"
@@ -272,9 +301,9 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
                     </Box>
                   </CardContent>
                 </Card>
-              </Grid>
+              </Box>
             ))}
-          </Grid>
+          </Box>
         </CardContent>
       </Card>
 
@@ -285,24 +314,44 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
             <Typography variant="h6" gutterBottom>
               {selectedEpisode.title || `エピソード ${selectedEpisode.episodeNumber}`} の詳細
             </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
-                <Typography variant="caption" color="text.secondary">開始位置</Typography>
-                <Typography>チャンク {selectedEpisode.startChunk} (文字位置: {selectedEpisode.startCharIndex})</Typography>
-              </Grid>
-              <Grid item xs={6}>
-                <Typography variant="caption" color="text.secondary">終了位置</Typography>
-                <Typography>チャンク {selectedEpisode.endChunk} (文字位置: {selectedEpisode.endCharIndex})</Typography>
-              </Grid>
-              <Grid item xs={6}>
-                <Typography variant="caption" color="text.secondary">信頼度</Typography>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                gap: 2,
+              }}
+            >
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  開始位置
+                </Typography>
+                <Typography>
+                  チャンク {selectedEpisode.startChunk} (文字位置: {selectedEpisode.startCharIndex})
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  終了位置
+                </Typography>
+                <Typography>
+                  チャンク {selectedEpisode.endChunk} (文字位置: {selectedEpisode.endCharIndex})
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  信頼度
+                </Typography>
                 <Typography>{Math.round(selectedEpisode.confidence * 100)}%</Typography>
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
             {selectedEpisode.summary && (
               <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>あらすじ</Typography>
-                <Typography variant="body2" color="text.secondary">{selectedEpisode.summary}</Typography>
+                <Typography variant="subtitle2" gutterBottom>
+                  あらすじ
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {selectedEpisode.summary}
+                </Typography>
               </Box>
             )}
           </CardContent>
