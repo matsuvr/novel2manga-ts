@@ -1,23 +1,23 @@
 'use client'
 
-import { type ChangeEvent, type DragEvent, useEffect, useRef, useState } from 'react'
-import { estimateTokenCount } from '@/utils/textExtraction'
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
+import InfoIcon from '@mui/icons-material/Info'
+import UploadFileIcon from '@mui/icons-material/UploadFile'
 import {
   Box,
   Button,
-  TextField,
-  Typography,
-  Stack,
-  LinearProgress,
-  Tooltip,
-  CircularProgress,
   Card,
-  CardContent,
   CardActions,
+  CardContent,
+  CircularProgress,
+  LinearProgress,
+  Stack,
+  TextField,
+  Tooltip,
+  Typography,
 } from '@mui/material'
-import UploadFileIcon from '@mui/icons-material/UploadFile'
-import InfoIcon from '@mui/icons-material/Info'
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
+import { type ChangeEvent, type DragEvent, useEffect, useRef, useState } from 'react'
+import { estimateTokenCount } from '@/utils/textExtraction'
 
 interface TextInputAreaProps {
   value: string

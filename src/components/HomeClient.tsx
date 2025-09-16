@@ -1,5 +1,23 @@
 'use client'
 
+import ErrorIcon from '@mui/icons-material/Error'
+import ReplayIcon from '@mui/icons-material/Replay'
+// MUI Imports
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  CircularProgress,
+  Container,
+  Link as MuiLink,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+  useTheme,
+} from '@mui/material'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import React, { useCallback, useState } from 'react'
@@ -9,28 +27,6 @@ import TextInputArea from '@/components/TextInputArea'
 import { appConfig } from '@/config/app.config'
 import type { Episode } from '@/types/database-models'
 import { isRenderCompletelyDone } from '@/utils/completion'
-
-// MUI Imports
-import {
-  Box,
-  Button,
-  Container,
-  Typography,
-  CircularProgress,
-  Alert,
-  Card,
-  CardContent,
-  Stack,
-  TextField,
-  Link as MuiLink,
-  Paper,
-  Chip,
-  useTheme,
-} from '@mui/material'
-import ArticleIcon from '@mui/icons-material/Article'
-import ReplayIcon from '@mui/icons-material/Replay'
-import ErrorIcon from '@mui/icons-material/Error'
-import InfoIcon from '@mui/icons-material/Info'
 
 type ViewMode = 'input' | 'processing' | 'progress' | 'results' | 'redirecting'
 
@@ -72,7 +68,7 @@ function SampleButton({
 }
 
 function RedirectingView({ pendingRedirect }: { pendingRedirect: string }) {
-  const router = useRouter()
+  const _router = useRouter()
 
   React.useEffect(() => {
     const fallbackTimer = setTimeout(() => {
@@ -82,13 +78,15 @@ function RedirectingView({ pendingRedirect }: { pendingRedirect: string }) {
     }, 3000)
 
     return () => clearTimeout(fallbackTimer)
-  }, [pendingRedirect, router])
+  }, [pendingRedirect])
 
   return (
     <Container maxWidth="sm">
       <Paper elevation={3} sx={{ p: 4, textAlign: 'center' }}>
         <Stack spacing={2} alignItems="center">
-          <Typography variant="h2" component="span">➡️</Typography>
+          <Typography variant="h2" component="span">
+            ➡️
+          </Typography>
           <Typography variant="h5" component="h3">
             結果ページへ移動します…
           </Typography>
@@ -99,7 +97,12 @@ function RedirectingView({ pendingRedirect }: { pendingRedirect: string }) {
             </MuiLink>
             してください。
           </Typography>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2, color: 'text.secondary' }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="center"
+            sx={{ mt: 2, color: 'text.secondary' }}
+          >
             <CircularProgress size={16} />
             <Typography variant="body2">3秒後に自動的に移動します</Typography>
           </Stack>
@@ -112,7 +115,7 @@ function RedirectingView({ pendingRedirect }: { pendingRedirect: string }) {
 export default function HomeClient() {
   const router = useRouter()
   const theme = useTheme()
-  const { data: session, status } = useSession()
+  const { status } = useSession()
   const [viewMode, setViewMode] = useState<ViewMode>('input')
   const [novelText, setNovelText] = useState('')
   const [jobId, setJobId] = useState<string | null>(null)
@@ -172,7 +175,11 @@ export default function HomeClient() {
         const errorData = (await analyzeResponse.json().catch(() => ({}))) as { error?: string }
         throw new Error(errorData.error || '分析の開始に失敗しました')
       }
-      const analyzeData = (await analyzeResponse.json().catch(() => ({}))) as { id?: string; data?: { jobId?: string }; jobId?: string }
+      const analyzeData = (await analyzeResponse.json().catch(() => ({}))) as {
+        id?: string
+        data?: { jobId?: string }
+        jobId?: string
+      }
       const newJobId = analyzeData.id || analyzeData.data?.jobId || analyzeData.jobId
       if (!newJobId) throw new Error('jobId を取得できませんでした')
       setJobId(newJobId)
@@ -209,10 +216,14 @@ export default function HomeClient() {
       setPendingRedirect(url)
       setViewMode('redirecting')
       setTimeout(() => {
-        router.push(url).catch((error) => {
-            console.error('自動遷移に失敗しました:', error);
-            setIsProcessing(false);
-        })
+        ;(async () => {
+          try {
+            await router.push(url)
+          } catch (error: unknown) {
+            console.error('自動遷移に失敗しました:', error)
+            setIsProcessing(false)
+          }
+        })()
       }, 1000)
       return
     }
@@ -242,7 +253,9 @@ export default function HomeClient() {
   }
 
   const handleResume = async (resumeNovelId: string) => {
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(resumeNovelId)) {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(resumeNovelId)
+    ) {
       setError('無効なnovelId形式です。有効なUUIDを入力してください。')
       return
     }
@@ -260,13 +273,19 @@ export default function HomeClient() {
         const errorData = (await resumeResponse.json().catch(() => ({}))) as { error?: string }
         throw new Error(errorData.error || '再開の開始に失敗しました')
       }
-      const resumeData = (await resumeResponse.json().catch(() => ({}))) as { jobId?: string; novelId?: string; status?: string }
+      const resumeData = (await resumeResponse.json().catch(() => ({}))) as {
+        jobId?: string
+        novelId?: string
+        status?: string
+      }
       if (!resumeData.jobId) throw new Error('jobId を取得できませんでした')
       setJobId(resumeData.jobId)
       setNovelIdState(resumeData.novelId || resumeNovelId)
       const targetNovelId = resumeData.novelId || resumeNovelId
       if (resumeData.status === 'completed') {
-        await router.push(`/novel/${encodeURIComponent(targetNovelId)}/results/${encodeURIComponent(resumeData.jobId)}`)
+        await router.push(
+          `/novel/${encodeURIComponent(targetNovelId)}/results/${encodeURIComponent(resumeData.jobId)}`,
+        )
       } else {
         await router.push(`/novel/${encodeURIComponent(targetNovelId)}/progress`)
       }
@@ -281,18 +300,36 @@ export default function HomeClient() {
   const [pendingRedirect, setPendingRedirect] = useState<string | null>(null)
 
   return (
-    <Box sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', py: 4 }}>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        py: 4,
+      }}
+    >
       <Container maxWidth="lg">
         <Box sx={{ textAlign: 'center', mb: 4, color: 'white' }}>
-          <Stack direction="row" spacing={2} justifyContent="center" alignItems="center" sx={{ mb: 2 }}>
-            <Typography variant="h2" component="span">📚</Typography>
+          <Stack
+            direction="row"
+            spacing={2}
+            justifyContent="center"
+            alignItems="center"
+            sx={{ mb: 2 }}
+          >
+            <Typography variant="h2" component="span">
+              📚
+            </Typography>
             <Box sx={{ textAlign: 'left' }}>
-              <Typography variant="h4" component="h1" sx={{
+              <Typography
+                variant="h4"
+                component="h1"
+                sx={{
                   fontWeight: 'bold',
                   background: `linear-gradient(45deg, ${theme.palette.secondary.light} 30%, ${theme.palette.primary.light} 90%)`,
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
-              }}>
+                }}
+              >
                 Novel to Manga Converter
               </Typography>
               <Typography sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
@@ -302,7 +339,15 @@ export default function HomeClient() {
             {status === 'loading' && <CircularProgress color="inherit" size={24} />}
           </Stack>
           {viewMode !== 'input' && (
-            <Button variant="contained" onClick={handleReset} startIcon={<ReplayIcon />} sx={{ bgcolor: 'rgba(255, 255, 255, 0.2)', '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.3)' } }}>
+            <Button
+              variant="contained"
+              onClick={handleReset}
+              startIcon={<ReplayIcon />}
+              sx={{
+                bgcolor: 'rgba(255, 255, 255, 0.2)',
+                '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.3)' },
+              }}
+            >
               最初から
             </Button>
           )}
@@ -320,31 +365,79 @@ export default function HomeClient() {
               <Card>
                 <CardContent>
                   <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                    <Typography variant="h4" component="span">🔄</Typography>
+                    <Typography variant="h4" component="span">
+                      🔄
+                    </Typography>
                     <Typography variant="h6">処理の再開</Typography>
                   </Stack>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                     以前に処理を開始したnovelIdを入力して、処理を再開できます
                   </Typography>
-                  <Stack direction={{xs: 'column', sm: 'row'}} spacing={1}>
-                    <TextField fullWidth variant="outlined" placeholder="novelId (UUID形式)" value={resumeNovelId} onChange={(e) => setResumeNovelId(e.target.value)} size="small" />
-                    <Button variant="contained" color="success" onClick={() => resumeNovelId && handleResume(resumeNovelId)} disabled={!resumeNovelId.trim() || isProcessing}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                    <TextField
+                      fullWidth
+                      variant="outlined"
+                      placeholder="novelId (UUID形式)"
+                      value={resumeNovelId}
+                      onChange={(e) => setResumeNovelId(e.target.value)}
+                      size="small"
+                    />
+                    <Button
+                      variant="contained"
+                      color="success"
+                      onClick={() => resumeNovelId && handleResume(resumeNovelId)}
+                      disabled={!resumeNovelId.trim() || isProcessing}
+                    >
                       再開
                     </Button>
                   </Stack>
                 </CardContent>
               </Card>
 
-              <TextInputArea value={novelText} onChange={setNovelText} onSubmit={handleSubmit} isProcessing={isProcessing} maxLength={2000000} />
+              <TextInputArea
+                value={novelText}
+                onChange={setNovelText}
+                onSubmit={handleSubmit}
+                isProcessing={isProcessing}
+                maxLength={2000000}
+              />
 
               <Box sx={{ textAlign: 'center' }}>
-                <Typography variant="subtitle2" sx={{ mb: 2 }}>またはサンプルテキストを試す:</Typography>
-                <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap" useFlexGap>
-                  <SampleButton label="空き家の冒険" path="/docs/空き家の冒険.txt" onLoad={setNovelText} />
-                  <SampleButton label="怪人二十面相" path="/docs/怪人二十面相.txt" onLoad={setNovelText} />
-                  <SampleButton label="モルグ街の殺人事件" path="/docs/モルグ街の殺人事件.txt" onLoad={setNovelText} />
-                  <SampleButton label="宮本武蔵 地の巻" path="/docs/宮本武蔵地の巻.txt" onLoad={setNovelText} />
-                  <SampleButton label="最後の一葉" path="/docs/最後の一葉.txt" onLoad={setNovelText} />
+                <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                  またはサンプルテキストを試す:
+                </Typography>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  justifyContent="center"
+                  flexWrap="wrap"
+                  useFlexGap
+                >
+                  <SampleButton
+                    label="空き家の冒険"
+                    path="/docs/空き家の冒険.txt"
+                    onLoad={setNovelText}
+                  />
+                  <SampleButton
+                    label="怪人二十面相"
+                    path="/docs/怪人二十面相.txt"
+                    onLoad={setNovelText}
+                  />
+                  <SampleButton
+                    label="モルグ街の殺人事件"
+                    path="/docs/モルグ街の殺人事件.txt"
+                    onLoad={setNovelText}
+                  />
+                  <SampleButton
+                    label="宮本武蔵 地の巻"
+                    path="/docs/宮本武蔵地の巻.txt"
+                    onLoad={setNovelText}
+                  />
+                  <SampleButton
+                    label="最後の一葉"
+                    path="/docs/最後の一葉.txt"
+                    onLoad={setNovelText}
+                  />
                 </Stack>
               </Box>
             </Stack>
@@ -352,11 +445,18 @@ export default function HomeClient() {
 
           {(viewMode === 'processing' || viewMode === 'progress') && (
             <Container maxWidth="md">
-              <ProcessingProgress jobId={jobId} onComplete={handleProcessComplete} modeHint={isDemo ? '...' : undefined} isDemoMode={isDemo} />
+              <ProcessingProgress
+                jobId={jobId}
+                onComplete={handleProcessComplete}
+                modeHint={isDemo ? '...' : undefined}
+                isDemoMode={isDemo}
+              />
             </Container>
           )}
 
-          {viewMode === 'redirecting' && pendingRedirect && <RedirectingView pendingRedirect={pendingRedirect} />}
+          {viewMode === 'redirecting' && pendingRedirect && (
+            <RedirectingView pendingRedirect={pendingRedirect} />
+          )}
 
           {viewMode === 'results' && jobId && <ResultsDisplay jobId={jobId} episodes={episodes} />}
         </Paper>

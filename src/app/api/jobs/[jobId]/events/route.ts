@@ -98,8 +98,10 @@ export async function GET(
           // initial snapshot
           try {
             const detail = await getJobDetails(jobId)
-            lastSnapshot = JSON.stringify(detail)
-            send('init', detail)
+            // Normalize payload: only send job and chunks with the known shape
+            const payload = { job: detail.job, chunks: detail.chunks }
+            lastSnapshot = JSON.stringify(payload)
+            send('init', payload)
           } catch (e) {
             console.error('SSE init error', jobId, e)
             send('error', { error: '初期データ取得に失敗しました' })
@@ -114,17 +116,18 @@ export async function GET(
           // クライアント側のポーリングは廃止し、サーバ側で軽量チェックの上で差分をpush
           while (!stopped && !request.signal.aborted) {
             try {
-              const { job, chunks } = await getJobDetails(jobId)
-              const snapshot = JSON.stringify({ job, chunks })
+              const detail = await getJobDetails(jobId)
+              const payload = { job: detail.job, chunks: detail.chunks }
+              const snapshot = JSON.stringify(payload)
               if (snapshot !== lastSnapshot) {
                 lastSnapshot = snapshot
-                send(null, { job, chunks })
+                send(null, payload)
 
                 // 終了条件: 完了 or 失敗でクローズ
-                const status = job.status
+                const status = detail.job.status
                 if (status === 'completed' || status === 'complete' || status === 'failed') {
                   // 明示イベントで最終状態を通知
-                  send('final', { job, chunks })
+                  send('final', payload)
                   break
                 }
               }
