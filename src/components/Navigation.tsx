@@ -1,32 +1,33 @@
 'use client'
 
-import Link from 'next/link'
-import { signIn, signOut, useSession } from 'next-auth/react'
-import React, { useState } from 'react'
-import { routesConfig } from '@/config/routes.config'
+import AccountCircle from '@mui/icons-material/AccountCircle'
+import MenuIcon from '@mui/icons-material/Menu'
 import {
   AppBar,
-  Toolbar,
-  Typography,
-  Button,
-  IconButton,
   Avatar,
-  Menu,
-  MenuItem,
   Box,
-  Container,
+  Button,
   CircularProgress,
-  useTheme,
-  useMediaQuery,
+  Container,
+  Divider,
   Drawer,
+  IconButton,
   List,
   ListItem,
   ListItemButton,
   ListItemText,
-  Divider,
+  Menu,
+  MenuItem,
+  Toolbar,
+  Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material'
-import MenuIcon from '@mui/icons-material/Menu'
-import AccountCircle from '@mui/icons-material/AccountCircle'
+import Link from 'next/link'
+import { signIn, signOut, useSession } from 'next-auth/react'
+import type React from 'react'
+import { useState } from 'react'
+import { routesConfig } from '@/config/routes.config'
 
 export function Navigation() {
   const { data: session, status } = useSession()
@@ -56,11 +57,9 @@ export function Navigation() {
         ホーム
       </Button>
       {session && (
-        <>
-          <Button color="inherit" component={Link} href={routesConfig.portal.dashboard}>
+        <Button color="inherit" component={Link} href={routesConfig.portal.dashboard}>
             マイページ
           </Button>
-        </>
       )}
     </Box>
   )
@@ -78,45 +77,49 @@ export function Navigation() {
           </ListItemButton>
         </ListItem>
         {session && (
-            <ListItem disablePadding>
-              <ListItemButton component={Link} href={routesConfig.portal.dashboard}>
-                <ListItemText primary="マイページ" />
-              </ListItemButton>
-            </ListItem>
+          <ListItem disablePadding>
+            <ListItemButton component={Link} href={routesConfig.portal.dashboard}>
+              <ListItemText primary="マイページ" />
+            </ListItemButton>
+          </ListItem>
         )}
       </List>
       <Divider />
-        {session ? (
-            <List>
-                <ListItem>
-                    <ListItemText primary={session.user?.name || 'User'} secondary={session.user?.email} />
-                </ListItem>
-                <ListItem disablePadding>
-                    <ListItemButton component={Link} href={routesConfig.portal.settings}>
-                        <ListItemText primary="設定" />
-                    </ListItemButton>
-                </ListItem>
-                <ListItem disablePadding>
-                    <ListItemButton onClick={handleSignOut}>
-                        <ListItemText primary="ログアウト" />
-                    </ListItemButton>
-                </ListItem>
-            </List>
-        ) : (
-            <List>
-                <ListItem disablePadding>
-                    <ListItemButton onClick={handleSignIn}>
-                        <ListItemText primary="ログイン" />
-                    </ListItemButton>
-                </ListItem>
-            </List>
-        )}
+      {session ? (
+        <List>
+          <ListItem>
+            <ListItemText primary={session.user?.name || 'User'} secondary={session.user?.email} />
+          </ListItem>
+          <ListItem disablePadding>
+            <ListItemButton component={Link} href={routesConfig.portal.settings}>
+              <ListItemText primary="設定" />
+            </ListItemButton>
+          </ListItem>
+          <ListItem disablePadding>
+            <ListItemButton onClick={handleSignOut}>
+              <ListItemText primary="ログアウト" />
+            </ListItemButton>
+          </ListItem>
+        </List>
+      ) : (
+        <List>
+          <ListItem disablePadding>
+            <ListItemButton onClick={handleSignIn}>
+              <ListItemText primary="ログイン" />
+            </ListItemButton>
+          </ListItem>
+        </List>
+      )}
     </Box>
   )
 
   return (
     <>
-      <AppBar position="static" sx={{ bgcolor: 'background.paper', color: 'text.primary' }} elevation={1}>
+      <AppBar
+        position="static"
+        sx={{ bgcolor: 'background.paper', color: 'text.primary' }}
+        elevation={1}
+      >
         <Container maxWidth="lg">
           <Toolbar>
             <Typography
@@ -134,13 +137,14 @@ export function Navigation() {
 
             {!isMobile && navLinks}
 
-              {session && (
-                <Link
-                  href={routesConfig.portal.dashboard}
-                  className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
-                >
-                  マイページ
-                </Link>
+            {session && (
+              <Link
+                href={routesConfig.portal.dashboard}
+                className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+              >
+                マイページ
+              </Link>
+            )}
             <Box sx={{ flexGrow: 0, ml: 2, display: { xs: 'none', sm: 'block' } }}>
               {status === 'loading' ? (
                 <CircularProgress size={24} color="inherit" />
@@ -158,10 +162,29 @@ export function Navigation() {
                     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                     transformOrigin={{ vertical: 'top', horizontal: 'right' }}
                   >
-                    <MenuItem component={Link} href={routesConfig.portal.dashboard} onClick={handleClose}>マイページ</MenuItem>
-                    <MenuItem component={Link} href={routesConfig.portal.settings} onClick={handleClose}>設定</MenuItem>
+                    <MenuItem
+                      component={Link}
+                      href={routesConfig.portal.dashboard}
+                      onClick={handleClose}
+                    >
+                      マイページ
+                    </MenuItem>
+                    <MenuItem
+                      component={Link}
+                      href={routesConfig.portal.settings}
+                      onClick={handleClose}
+                    >
+                      設定
+                    </MenuItem>
                     <Divider />
-                    <MenuItem onClick={() => { handleClose(); handleSignOut(); }}>ログアウト</MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        handleClose()
+                        handleSignOut()
+                      }}
+                    >
+                      ログアウト
+                    </MenuItem>
                   </Menu>
                 </>
               ) : (
@@ -177,52 +200,6 @@ export function Navigation() {
                 edge="end"
                 onClick={handleDrawerToggle}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              </svg>
-              <svg
-                className={`${isMenuOpen ? 'block' : 'hidden'} h-6 w-6`}
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile menu */}
-      {isMenuOpen && (
-        <div className="sm:hidden">
-          <div className="pt-2 pb-3 space-y-1">
-            <Link
-              href={routesConfig.home}
-              className="border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              ホーム
-            </Link>
-
-            {session && (
-              <Link
-                href={routesConfig.portal.dashboard}
-                className="border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                マイページ
-              </Link>
                 <MenuIcon />
               </IconButton>
             )}

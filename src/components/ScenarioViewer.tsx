@@ -1,22 +1,21 @@
 'use client'
-import { useCallback, useMemo, useState } from 'react'
-import { z } from 'zod'
-import { createNovelToMangaScenario } from '@/agents/scenarios/novel-to-manga'
 import {
+  Alert,
+  Box,
+  Button,
   Card,
   CardContent,
-  Typography,
+  CircularProgress,
+  Divider,
   List,
   ListItem,
   ListItemText,
-  Button,
-  CircularProgress,
-  Alert,
   Stack,
-  Divider,
-  Box,
-  Grid,
+  Typography,
 } from '@mui/material'
+import { useCallback, useMemo, useState } from 'react'
+import { z } from 'zod'
+import { createNovelToMangaScenario } from '@/agents/scenarios/novel-to-manga'
 
 type RunSummary = {
   ingest?: unknown
@@ -82,8 +81,8 @@ export function ScenarioViewer() {
           <Typography variant="h5" component="h2">
             Novel → Manga Scenario (Dev Tool)
           </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+            <Box>
               <Typography variant="h6">Steps</Typography>
               <List dense>
                 {scenario.steps.map((s) => (
@@ -92,18 +91,18 @@ export function ScenarioViewer() {
                   </ListItem>
                 ))}
               </List>
-            </Grid>
-            <Grid item xs={12} md={6}>
+            </Box>
+            <Box>
               <Typography variant="h6">Edges</Typography>
               <List dense>
                 {scenario.edges.map((e, i) => (
                   <ListItem key={`${e.from}-${e.to}-${i}`}>
-                    <ListItemText primary={`${e.from} → ${e.to} (${e.fanIn})`} />
+                    <ListItemText primary={`${e.from} \u2192 ${e.to} (${e.fanIn})`} />
                   </ListItem>
                 ))}
               </List>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
 
           <Divider />
 

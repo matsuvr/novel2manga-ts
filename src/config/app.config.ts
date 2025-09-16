@@ -581,6 +581,8 @@ export const appConfig = {
       ttl: 24 * 60 * 60, // デフォルトTTL（秒）
       // 最小TTL（秒）: マジックナンバー禁止に基づき設定化
       minTtlSec: 60,
+      // Validation TTL (seconds) used by render validation caching
+      validationTtlSec: 30,
       // 推奨TTL（秒）: 種別ごとの下限
       recommended: {
         analysisSec: 60 * 60, // 1時間
@@ -704,8 +706,8 @@ export type AppConfig = typeof appConfig
 // 環境変数オーバーライド用の変更可能な型
 type MutableAppConfig = {
   [K in keyof AppConfig]: AppConfig[K] extends Record<string, unknown>
-    ? { [P in keyof AppConfig[K]]: AppConfig[K][P] }
-    : AppConfig[K]
+  ? { [P in keyof AppConfig[K]]: AppConfig[K][P] }
+  : AppConfig[K]
 }
 
 // 環境変数オーバーライド機能
