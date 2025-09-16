@@ -191,7 +191,9 @@ export default function HomeClient() {
       const res = await fetch(`/api/jobs/${jobId}/status`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`status ${res.status}`)
       const data = (await res.json().catch(() => ({}))) as { job?: unknown }
-      const strictlyDone = isRenderCompletelyDone(data?.job as any)
+      const strictlyDone = isRenderCompletelyDone(
+        (data?.job ?? null) as Parameters<typeof isRenderCompletelyDone>[0],
+      )
       if (!strictlyDone) {
         setError('処理が完了していないため、結果ページへは移動しません。')
         setIsProcessing(false)
@@ -206,7 +208,12 @@ export default function HomeClient() {
       const url = `/novel/${encodeURIComponent(novelIdState)}/results/${encodeURIComponent(jobId)}`
       setPendingRedirect(url)
       setViewMode('redirecting')
-      setTimeout(() => router.push(url).catch(console.error), 1000)
+      setTimeout(() => {
+        router.push(url).catch((error) => {
+            console.error('自動遷移に失敗しました:', error);
+            setIsProcessing(false);
+        })
+      }, 1000)
       return
     }
     try {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Episode } from '@/types/database-models'
 import { groupByProviderModel } from '@/utils/token-usage'
 import {
@@ -81,12 +81,14 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
     }
   }, [jobId])
 
-  const { totalTokens, totalCost, totalPromptTokens, totalCompletionTokens } = useMemo(
+  const { totalTokens, totalCost, totalPromptTokens, totalCompletionTokens, totalCachedTokens, totalThoughtsTokens } = useMemo(
     () => ({
       totalTokens: tokenUsage.reduce((sum, usage) => sum + usage.totalTokens, 0),
       totalCost: tokenUsage.reduce((sum, usage) => sum + (usage.cost || 0), 0),
       totalPromptTokens: tokenUsage.reduce((sum, usage) => sum + usage.promptTokens, 0),
       totalCompletionTokens: tokenUsage.reduce((sum, usage) => sum + usage.completionTokens, 0),
+      totalCachedTokens: tokenUsage.reduce((sum, usage) => sum + (usage.cachedContentTokens || 0), 0),
+      totalThoughtsTokens: tokenUsage.reduce((sum, usage) => sum + (usage.thoughtsTokens || 0), 0),
     }),
     [tokenUsage],
   )
@@ -191,6 +193,16 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
                   {totalCompletionTokens.toLocaleString()})
                   {totalCost > 0 && ` | 概算コスト: $${totalCost.toFixed(4)}`}
                 </Alert>
+                {totalCachedTokens > 0 && (
+                    <Alert severity="success">
+                        キャッシュ: {totalCachedTokens.toLocaleString()} トークン
+                    </Alert>
+                )}
+                {totalThoughtsTokens > 0 && (
+                    <Alert severity="warning">
+                        思考: {totalThoughtsTokens.toLocaleString()} トークン
+                    </Alert>
+                )}
                 <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
                     <TableHead>
