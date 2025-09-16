@@ -2,6 +2,21 @@
 import { useCallback, useMemo, useState } from 'react'
 import { z } from 'zod'
 import { createNovelToMangaScenario } from '@/agents/scenarios/novel-to-manga'
+import {
+  Card,
+  CardContent,
+  Typography,
+  List,
+  ListItem,
+  ListItemText,
+  Button,
+  CircularProgress,
+  Alert,
+  Stack,
+  Divider,
+  Box,
+  Grid,
+} from '@mui/material'
 
 type RunSummary = {
   ingest?: unknown
@@ -61,45 +76,65 @@ export function ScenarioViewer() {
   }, [])
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-semibold">Novel → Manga Scenario</h2>
-      <div>
-        <h3 className="font-medium">Steps</h3>
-        <ul className="list-disc pl-6 text-sm">
-          {scenario.steps.map((s) => (
-            <li key={s.id}>{s.id}</li>
-          ))}
-        </ul>
-      </div>
-      <div>
-        <h3 className="font-medium">Edges</h3>
-        <ul className="list-disc pl-6 text-sm">
-          {scenario.edges.map((e, i) => (
-            <li key={`${e.from}-${e.to}-${i}`}>
-              {e.from} → {e.to} ({e.fanIn})
-            </li>
-          ))}
-        </ul>
-      </div>
-      <button
-        type="button"
-        disabled={loading}
-        onClick={onRun}
-        className="rounded bg-blue-600 px-3 py-1.5 text-white disabled:opacity-50"
-      >
-        {loading ? 'Running…' : 'Run (dev)'}
-      </button>
-      {error && <p className="text-red-600 text-sm">Error: {error}</p>}
-      {summary && (
-        <div className="text-sm">
-          <div>Analyze windows: {summary.analyzeCount}</div>
-          <div>Scenes: {summary.scenes}</div>
-          <div>Panels: {summary.panels}</div>
-          <div>Images: {summary.images}</div>
-          <div>Pages: {summary.pages}</div>
-          <div>Elapsed: {summary.elapsedMs} ms</div>
-        </div>
-      )}
-    </div>
+    <Card>
+      <CardContent>
+        <Stack spacing={2}>
+          <Typography variant="h5" component="h2">
+            Novel → Manga Scenario (Dev Tool)
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="h6">Steps</Typography>
+              <List dense>
+                {scenario.steps.map((s) => (
+                  <ListItem key={s.id}>
+                    <ListItemText primary={s.id} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="h6">Edges</Typography>
+              <List dense>
+                {scenario.edges.map((e, i) => (
+                  <ListItem key={`${e.from}-${e.to}-${i}`}>
+                    <ListItemText primary={`${e.from} → ${e.to} (${e.fanIn})`} />
+                  </ListItem>
+                ))}
+              </List>
+            </Grid>
+          </Grid>
+
+          <Divider />
+
+          <Box>
+            <Button
+              variant="contained"
+              disabled={loading}
+              onClick={onRun}
+              startIcon={loading && <CircularProgress size={20} />}
+            >
+              {loading ? 'Running…' : 'Run Scenario'}
+            </Button>
+          </Box>
+
+          {error && <Alert severity="error">Error: {error}</Alert>}
+
+          {summary && (
+            <Alert severity="success">
+              <Typography variant="h6">Run Summary</Typography>
+              <List dense>
+                <ListItemText primary={`Analyze windows: ${summary.analyzeCount}`} />
+                <ListItemText primary={`Scenes: ${summary.scenes}`} />
+                <ListItemText primary={`Panels: ${summary.panels}`} />
+                <ListItemText primary={`Images: ${summary.images}`} />
+                <ListItemText primary={`Pages: ${summary.pages}`} />
+                <ListItemText primary={`Elapsed: ${summary.elapsedMs} ms`} />
+              </List>
+            </Alert>
+          )}
+        </Stack>
+      </CardContent>
+    </Card>
   )
 }
