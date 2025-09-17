@@ -2,6 +2,7 @@
  * Character Memory Persistence via Repository Layer
  */
 
+import { getLogger } from '@/infrastructure/logging/logger'
 import type {
   AliasIndex,
   CharacterId,
@@ -118,18 +119,25 @@ export async function loadCharacterMemory(
           const memory = jsonToMemory(validation.data)
           memoryIndex.set(memory.id, memory)
         } else {
-          console.error(
-            'Validation error for character memory:',
-            formatValidationErrors(validation.error),
-          )
+          getLogger()
+            .withContext({ service: 'character-persistence' })
+            .warn('character_memory_validation_failed', {
+              errors: formatValidationErrors(validation.error),
+            })
         }
       }
     } else {
-      console.error('Invalid memory file format: expected array', { jobId })
+      getLogger()
+        .withContext({ service: 'character-persistence' })
+        .error('invalid_character_memory_file_format', { jobId })
       throw new Error('Invalid character memory format')
     }
   } catch (error) {
-    console.error('Failed to load character memory:', error)
+    getLogger()
+      .withContext({ service: 'character-persistence' })
+      .error('load_character_memory_failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
     throw error
   }
   return { memoryIndex, aliasIndex: rebuildAliasIndex(memoryIndex) }
@@ -192,12 +200,18 @@ export async function loadPromptMemory(jobId: string): Promise<CharacterMemoryPr
         if (validation.success) valid.push(validation.data)
       }
     } else {
-      console.error('Invalid prompt memory file format: expected array', { jobId })
+      getLogger()
+        .withContext({ service: 'character-persistence' })
+        .error('invalid_prompt_memory_file_format', { jobId })
       throw new Error('Invalid prompt memory format')
     }
     return valid
   } catch (error) {
-    console.error('Failed to load prompt memory:', error)
+    getLogger()
+      .withContext({ service: 'character-persistence' })
+      .error('load_prompt_memory_failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
     throw error
   }
 }
@@ -257,7 +271,12 @@ export async function loadChunkCache(
     const cache: ChunkCache = JSON.parse(content)
     return cache.extraction
   } catch (error) {
-    console.error(`Failed to load cache for chunk ${chunkIndex}:`, error)
+    getLogger()
+      .withContext({ service: 'character-persistence' })
+      .error('load_chunk_cache_failed', {
+        chunkIndex,
+        error: error instanceof Error ? error.message : String(error),
+      })
     return null
   }
 }

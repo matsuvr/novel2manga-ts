@@ -1,27 +1,24 @@
+// ---------------------------------------------------------------------------
+// Pure Logger Implementation (import = zero side-effects)
+// Requirements:
+//  - Import時にファイル生成/console出力を一切行わない
+//  - build phase (Next.js production build) 中に getLogger() しても No-Op
+//  - ランタイムで初めて getLogger() が呼ばれた時のみ初期化
+//  - 環境変数は最小限: LOG_LEVEL, ENABLE_FILE_LOG (任意)。
+// ---------------------------------------------------------------------------
+
 import { AsyncLocalStorage } from 'node:async_hooks'
 import fs from 'node:fs'
 import path from 'node:path'
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
-function levelPriority(level: LogLevel): number {
-  switch (level) {
-    case 'debug':
-      return 10
-    case 'info':
-      return 20
-    case 'warn':
-      return 30
-    case 'error':
-      return 40
-  }
-}
+const levelOrder: LogLevel[] = ['debug', 'info', 'warn', 'error']
+const isBuildPhase = () => process.env.NEXT_PHASE === 'phase-production-build'
 
-function parseConsoleLevel(envValue: unknown): LogLevel {
-  const v = String(envValue || '').toLowerCase()
-  if (v === 'debug' || v === 'info' || v === 'warn' || v === 'error') return v
-  // 既定は info: サーバー処理は見えるが、SSEは個別に抑制可能にする。
-  return 'info'
+function normalizeLevel(raw: unknown): LogLevel {
+  const v = String(raw || '').toLowerCase()
+  return (levelOrder.includes(v as LogLevel) ? v : 'info') as LogLevel
 }
 
 export interface LoggerPort {
@@ -32,222 +29,98 @@ export interface LoggerPort {
   withContext(ctx: Record<string, unknown>): LoggerPort
 }
 
-type LogContext = {
-  muteConsole?: boolean
-  consoleMinLevel?: LogLevel
-} & Record<string, unknown>
-
-// リクエスト毎のロギングコンテキスト
-const logContextStorage = new AsyncLocalStorage<LogContext>()
-
+type LogContext = Record<string, unknown>
+const ctxStore = new AsyncLocalStorage<LogContext>()
 export function runWithLogContext<T>(ctx: LogContext, fn: () => T): T {
-  return logContextStorage.run(ctx, fn)
+  return ctxStore.run(ctx, fn)
 }
-
 export function getLogContext(): LogContext | undefined {
-  return logContextStorage.getStore()
+  return ctxStore.getStore()
 }
 
-class ConsoleLogger implements LoggerPort {
-  constructor(
-    private readonly base: Record<string, unknown> = {},
-    private readonly minLevel: LogLevel = 'info',
-  ) { }
-
-  private fmt(level: LogLevel, msg: string, meta?: Record<string, unknown>) {
-    // レベルフィルタ（コンソールのみ）。ファイル出力は全レベル維持。
-    const ctx = getLogContext()
-    const effMin = (ctx?.consoleMinLevel as LogLevel | undefined) ?? this.minLevel
-    if (levelPriority(level) < levelPriority(effMin)) return
-    // きめ細かいサプレッション: DatabaseService.getJob の "getJob result" はコンソール抑止
-    // （SSE等で高頻度に出て可読性を損なうため）。ファイルログには残る。
-    const baseService = (this.base?.service as string | undefined) || ''
-    const baseMethod = (this.base?.method as string | undefined) || ''
-    if (baseService === 'DatabaseService' && baseMethod === 'getJob' && msg === 'getJob result') {
-      return
-    }
-    const payload = { ts: new Date().toISOString(), level, msg, ...this.base, ...(meta || {}) }
-    const line = JSON.stringify(payload)
-    const mute = ctx?.muteConsole === true
-    switch (level) {
-      case 'debug':
-        // eslint-disable-next-line no-console
-        if (!mute) console.debug(line)
-        break
-      case 'info':
-        // eslint-disable-next-line no-console
-        if (!mute) console.info(line)
-        break
-      case 'warn':
-        // eslint-disable-next-line no-console
-        if (!mute) console.warn(line)
-        break
-      case 'error':
-        // eslint-disable-next-line no-console
-        if (!mute) console.error(line)
-        break
-    }
-  }
-
-  debug(msg: string, meta?: Record<string, unknown>): void {
-    this.fmt('debug', msg, meta)
-  }
-  info(msg: string, meta?: Record<string, unknown>): void {
-    this.fmt('info', msg, meta)
-  }
-  warn(msg: string, meta?: Record<string, unknown>): void {
-    this.fmt('warn', msg, meta)
-  }
-  error(msg: string, meta?: Record<string, unknown>): void {
-    this.fmt('error', msg, meta)
-  }
-  withContext(ctx: Record<string, unknown>): LoggerPort {
-    return new ConsoleLogger({ ...this.base, ...ctx }, this.minLevel)
-  }
+class NoopLogger implements LoggerPort {
+  debug(): void { void 0 }
+  info(): void { void 0 }
+  warn(): void { void 0 }
+  error(): void { void 0 }
+  withContext(): LoggerPort { return this }
 }
 
-class FileLogger implements LoggerPort {
+class BasicConsoleLogger implements LoggerPort {
+  constructor(private readonly base: Record<string, unknown> = {}, private readonly min: LogLevel = 'info') {}
+  private allow(level: LogLevel) { return levelOrder.indexOf(level) >= levelOrder.indexOf(this.min) }
+  private line(level: LogLevel, msg: string, meta?: Record<string, unknown>) {
+    if (!this.allow(level)) return
+    const merged = { ts: new Date().toISOString(), level, msg, ...this.base, ...(getLogContext()||{}), ...(meta||{}) }
+    const str = JSON.stringify(merged)
+  // eslint-disable-next-line no-console
+  const method: 'debug' | 'info' | 'warn' | 'error' = level === 'debug' ? 'debug' : level
+  console[method](str)
+  }
+  debug(m: string, meta?: Record<string, unknown>) { this.line('debug', m, meta) }
+  info(m: string, meta?: Record<string, unknown>) { this.line('info', m, meta) }
+  warn(m: string, meta?: Record<string, unknown>) { this.line('warn', m, meta) }
+  error(m: string, meta?: Record<string, unknown>) { this.line('error', m, meta) }
+  withContext(ctx: Record<string, unknown>): LoggerPort { return new BasicConsoleLogger({ ...this.base, ...ctx }, this.min) }
+}
+
+class LazyFileLogger implements LoggerPort {
   private stream: fs.WriteStream | null = null
-  constructor(
-    private readonly filePath: string,
-    private readonly base: Record<string, unknown> = {},
-  ) {
+  constructor(private readonly filePath: string, private readonly base: Record<string, unknown> = {}, private readonly min: LogLevel = 'debug') {}
+  private ensure() {
+    if (this.stream) return
     try {
-      const dir = path.dirname(filePath)
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-      this.stream = fs.createWriteStream(filePath, { flags: 'a', encoding: 'utf8' })
+      fs.mkdirSync(path.dirname(this.filePath), { recursive: true })
+      this.stream = fs.createWriteStream(this.filePath, { flags: 'a', encoding: 'utf8' })
     } catch {
       this.stream = null
     }
   }
-
   private write(level: LogLevel, msg: string, meta?: Record<string, unknown>) {
+    if (levelOrder.indexOf(level) < levelOrder.indexOf(this.min)) return
+    this.ensure()
     if (!this.stream) return
-    const payload = { ts: new Date().toISOString(), level, msg, ...this.base, ...(meta || {}) }
-    this.stream.write(`${JSON.stringify(payload)}\n`)
+    const rec = { ts: new Date().toISOString(), level, msg, ...this.base, ...(getLogContext()||{}), ...(meta||{}) }
+    this.stream.write(`${JSON.stringify(rec)}
+`)
   }
-
-  debug(msg: string, meta?: Record<string, unknown>): void {
-    this.write('debug', msg, meta)
-  }
-  info(msg: string, meta?: Record<string, unknown>): void {
-    this.write('info', msg, meta)
-  }
-  warn(msg: string, meta?: Record<string, unknown>): void {
-    this.write('warn', msg, meta)
-  }
-  error(msg: string, meta?: Record<string, unknown>): void {
-    this.write('error', msg, meta)
-  }
-  withContext(ctx: Record<string, unknown>): LoggerPort {
-    return new FileLogger(this.filePath, { ...this.base, ...ctx })
-  }
+  debug(m: string, meta?: Record<string, unknown>) { this.write('debug', m, meta) }
+  info(m: string, meta?: Record<string, unknown>) { this.write('info', m, meta) }
+  warn(m: string, meta?: Record<string, unknown>) { this.write('warn', m, meta) }
+  error(m: string, meta?: Record<string, unknown>) { this.write('error', m, meta) }
+  withContext(ctx: Record<string, unknown>): LoggerPort { return new LazyFileLogger(this.filePath, { ...this.base, ...ctx }, this.min) }
+  getFilePath() { return this.filePath }
 }
 
-class MultiLogger implements LoggerPort {
-  constructor(private readonly loggers: LoggerPort[]) { }
-  debug(msg: string, meta?: Record<string, unknown>): void {
-    for (const l of this.loggers) {
-      l.debug(msg, meta)
-    }
-  }
-  info(msg: string, meta?: Record<string, unknown>): void {
-    for (const l of this.loggers) {
-      l.info(msg, meta)
-    }
-  }
-  warn(msg: string, meta?: Record<string, unknown>): void {
-    for (const l of this.loggers) {
-      l.warn(msg, meta)
-    }
-  }
-  error(msg: string, meta?: Record<string, unknown>): void {
-    for (const l of this.loggers) {
-      l.error(msg, meta)
-    }
-  }
-  withContext(ctx: Record<string, unknown>): LoggerPort {
-    return new MultiLogger(this.loggers.map((l) => l.withContext(ctx)))
-  }
+class Combined implements LoggerPort {
+  constructor(private readonly parts: LoggerPort[]) {}
+  debug(m: string, meta?: Record<string, unknown>) { for (const p of this.parts) p.debug(m, meta) }
+  info(m: string, meta?: Record<string, unknown>) { for (const p of this.parts) p.info(m, meta) }
+  warn(m: string, meta?: Record<string, unknown>) { for (const p of this.parts) p.warn(m, meta) }
+  error(m: string, meta?: Record<string, unknown>) { for (const p of this.parts) p.error(m, meta) }
+  withContext(ctx: Record<string, unknown>): LoggerPort { return new Combined(this.parts.map(p => p.withContext(ctx))) }
 }
 
-let defaultLogger: LoggerPort | null = null
+let singleton: LoggerPort | null = null
 
 export function getLogger(): LoggerPort {
-  if (!defaultLogger) {
-    // Allow disabling logging via environment variables for CI/build environments
-    // - DISABLE_LOGGING=1 -> completely disable all logging (noop logger)
-    // - DISABLE_FILE_LOGGER=1 -> disable file logger (console only)
-
-    if (String(process.env.DISABLE_LOGGING || '').trim() === '1') {
-      class NoopLogger implements LoggerPort {
-        debug(): void {
-          void 0
-        }
-        info(): void {
-          void 0
-        }
-        warn(): void {
-          void 0
-        }
-        error(): void {
-          void 0
-        }
-        withContext(): LoggerPort {
-          return this
-        }
-      }
-      defaultLogger = new NoopLogger()
-      return defaultLogger
-    }
-
-    const consoleMinLevel = parseConsoleLevel(process.env.LOG_CONSOLE_LEVEL)
-    const consoleLogger = new ConsoleLogger({}, consoleMinLevel)
-
-    if (String(process.env.DISABLE_FILE_LOGGER || '').trim() === '1') {
-      // Only console logger is used; file writes are suppressed to avoid permission issues in CI/build
-      defaultLogger = new MultiLogger([consoleLogger])
-    } else {
-      // By default keep file logger for local development
-      const devLogPath = path.resolve(process.cwd(), 'dev.log')
-      const fileLogger = new FileLogger(devLogPath)
-      defaultLogger = new MultiLogger([consoleLogger, fileLogger])
-    }
+  if (singleton) return singleton
+  // Build phase: 常に no-op （ビルド純化）。
+  if (isBuildPhase()) {
+    singleton = new NoopLogger()
+    return singleton
   }
-  return defaultLogger
+  const level = normalizeLevel(process.env.LOG_LEVEL)
+  const consoleLogger = new BasicConsoleLogger({}, level)
+  const enableFile = process.env.ENABLE_FILE_LOG === '1'
+  singleton = enableFile
+    ? new Combined([
+        consoleLogger,
+        new LazyFileLogger(
+          path.resolve(process.cwd(), 'logs', `app-${new Date().toISOString().split('T')[0]}.log`),
+        ),
+      ])
+    : consoleLogger
+  return singleton
 }
-
-// --- Backwards-compatible fileLogger singleton for places that previously imported
-// `fileLogger` from `src/utils/logger.mjs`. We expose a minimal API used by
-// `next.config.js` and any scripts: getLogFilePath() and getInstance-like access.
-
-class BackwardsFileLogger {
-  private static instance: BackwardsFileLogger | null = null
-  private logFilePath = ''
-
-  private ensurePath() {
-    // keep in sync with existing behaviour: dev log file under project root
-    // Use the already-imported `path` module instead of require
-    this.logFilePath = path.resolve(process.cwd(), 'logs', `dev-${new Date().toISOString().split('T')[0]}.log`)
-  }
-
-  public static getInstance() {
-    if (!BackwardsFileLogger.instance) BackwardsFileLogger.instance = new BackwardsFileLogger()
-    return BackwardsFileLogger.instance
-  }
-
-  public getLogFilePath() {
-    try {
-      this.ensurePath()
-      return this.logFilePath
-    } catch (_error) {
-      // capture the error for easier debugging when necessary; return empty string as fallback
-      // eslint-disable-next-line no-console
-      console.debug('BackwardsFileLogger.getLogFilePath error:', _error)
-      return ''
-    }
-  }
-}
-
-// Export a compatible variable name for imports that used `fileLogger` from the old .mjs
-export const fileLogger = BackwardsFileLogger.getInstance()
+// fileLogger 後方互換 API は撤廃しました。

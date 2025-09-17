@@ -9,6 +9,7 @@ import path from 'node:path'
 import { generateCastList } from '@/character/finalize'
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import { storageBaseDirs } from '@/config/storage-paths.config'
+import { getLogger } from '@/infrastructure/logging/logger'
 import type { CharacterCastEntry, CharacterMemoryIndex } from '@/types/extractionV2'
 
 /**
@@ -67,9 +68,12 @@ export async function saveCharacterSnapshot(
   const snapshotPath = path.join(snapshotDir, `snapshot_chunk_${chunkIndex}.json`)
   await writeFile(snapshotPath, JSON.stringify(snapshot, null, 2), 'utf-8')
 
-  console.log(
-    `Saved character snapshot for chunk ${chunkIndex} with ${availableCharacters.length} characters`,
-  )
+  getLogger()
+    .withContext({ service: 'character-snapshot' })
+    .info('character_snapshot_saved', {
+      chunkIndex,
+      characters: availableCharacters.length,
+    })
 }
 
 /**
@@ -95,7 +99,12 @@ export async function loadCharacterSnapshot(
 
     return snapshot
   } catch (error) {
-    console.error(`Failed to load character snapshot for chunk ${chunkIndex}:`, error)
+    getLogger()
+      .withContext({ service: 'character-snapshot' })
+      .error('load_character_snapshot_failed', {
+        chunkIndex,
+        error: error instanceof Error ? error.message : String(error),
+      })
     return null
   }
 }
@@ -167,5 +176,7 @@ export async function clearCharacterSnapshots(dataDir?: string): Promise<void> {
     }
   }
 
-  console.log('Cleared all character snapshots')
+  getLogger()
+    .withContext({ service: 'character-snapshot' })
+    .info('character_snapshots_cleared')
 }

@@ -111,11 +111,24 @@ export type NotificationService = typeof notificationService
 // DEBUG: expose prototype keys during test to diagnose missing method issue
 // eslint-disable-next-line no-console
 if (process.env.VITEST) {
-  // eslint-disable-next-line no-console
-  // eslint-disable-next-line no-console
   const metaUrl =
     (typeof import.meta !== 'undefined' && (import.meta as unknown as { url?: string }).url) ||
     'unknown'
-  // eslint-disable-next-line no-console
-  console.log('[notification/service] module url:', metaUrl)
+  // Some test setups provide a lightweight logger mock that may not expose
+  // `debug`. Guard the call to avoid TypeErrors in the test environment.
+  try {
+    const ctx = getLogger().withContext({ service: 'notification-service' }) as unknown
+    // Narrow to an object with optional methods safely without using `any`.
+    if (ctx && typeof ctx === 'object') {
+      const maybeLogger = ctx as { debug?: (...args: unknown[]) => unknown; info?: (...args: unknown[]) => unknown }
+      if (typeof maybeLogger.debug === 'function') {
+        maybeLogger.debug('module_loaded', { moduleUrl: metaUrl })
+      } else if (typeof maybeLogger.info === 'function') {
+        // Fallback to info for test diagnostics if debug is unavailable
+        maybeLogger.info('module_loaded', { moduleUrl: metaUrl })
+      }
+    }
+  } catch {
+    // swallow errors during test-time diagnostics - not critical
+  }
 }

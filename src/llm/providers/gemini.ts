@@ -119,8 +119,8 @@ export class GeminiClient implements LlmClient {
         })
       } catch (e) {
         // no-op: logging must not break generation, but log the failure itself for diagnostics.
-        // eslint-disable-next-line no-console
-        console.warn('[llm-gemini] Failed to log outgoing payload', {
+        const logger = getLogger().withContext({ service: 'llm-gemini' })
+        logger.warn('outgoing_payload_logging_failed', {
           error: e instanceof Error ? e.message : String(e),
         })
       }
