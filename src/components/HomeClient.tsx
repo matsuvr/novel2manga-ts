@@ -104,7 +104,6 @@ function RedirectingView({ pendingRedirect }: { pendingRedirect: string }) {
 
 export default function HomeClient() {
   const router = useRouter()
-  const theme = { palette: { primary: { light: '#60a5fa' }, secondary: { light: '#f472b6' } } }
   const { status } = useSession()
   const [viewMode, setViewMode] = useState<ViewMode>('input')
   const [novelText, setNovelText] = useState('')
@@ -296,12 +295,7 @@ export default function HomeClient() {
           <div className="mb-2 flex items-center justify-center gap-2">
             <div className="text-4xl">📚</div>
             <div className="text-left">
-              <h1
-                className="bg-gradient-to-r from-pink-300 to-blue-300 bg-clip-text text-2xl font-bold text-transparent"
-                style={{
-                  backgroundImage: `linear-gradient(45deg, ${theme.palette.secondary.light} 30%, ${theme.palette.primary.light} 90%)`,
-                }}
-              >
+              <h1 className="bg-gradient-to-r from-pink-300 to-sky-300 bg-clip-text text-2xl font-bold text-transparent">
                 Novel to Manga Converter
               </h1>
               <p className="text-sm opacity-80">小説をマンガの絵コンテに自動変換</p>

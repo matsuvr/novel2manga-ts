@@ -13,6 +13,8 @@ interface Params {
 
 // 外部サービスからのHTMLエラー本文などが入った場合に、概要を整形して表示する
 import NovelJobResultsClient from '@/components/NovelJobResultsClient'
+import type { JobDto } from '@/types/dto'
+import { mapJobToDto } from '@/types/dto'
 
 function summarizeErrorMessage(msg: string): { summary: string; details?: string } {
   const trimmed = msg.trim()
@@ -127,30 +129,8 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
       .values(),
   )
 
-  // Prepare lightweight job shape for client consumption and normalize dates/nullable fields.
-  type ClientJob = {
-    id: string
-    status: string
-    jobName?: string | null
-    createdAt: Date
-    updatedAt: Date
-    startedAt?: Date
-    completedAt?: Date
-    [key: string]: unknown
-  }
-
-  const createdAtStr = (job as unknown as { createdAt?: string }).createdAt
-  const updatedAtStr = (job as unknown as { updatedAt?: string }).updatedAt
-  const startedAtStr = (job as unknown as { startedAt?: string }).startedAt
-  const completedAtStr = (job as unknown as { completedAt?: string }).completedAt
-
-  const normalizedJob: ClientJob = {
-    ...job,
-    createdAt: new Date(createdAtStr ?? Date.now()),
-    updatedAt: new Date(updatedAtStr ?? Date.now()),
-    startedAt: startedAtStr ? new Date(startedAtStr) : undefined,
-    completedAt: completedAtStr ? new Date(completedAtStr) : undefined,
-  }
+  // Convert DB job to a client-safe DTO (strings for dates, predictable shapes).
+  const normalizedJob: JobDto = mapJobToDto(job)
 
   const normalizedEpisodes: Episode[] = uniqueEpisodes.map((e) => ({
     ...e,

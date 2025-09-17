@@ -6,17 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 
 import type { Episode } from '@/types/database-models'
+import type { JobDto } from '@/types/dto'
 
-type ClientJob = {
-  id: string
-  status: string
-  jobName?: string | null
-  createdAt: Date | string
-  updatedAt: Date | string
-  startedAt?: Date | string | null
-  completedAt?: Date | string | null
-  [key: string]: unknown
-}
+type ClientJob = JobDto
 
 interface Props {
   novelId: string
@@ -57,20 +49,8 @@ export default function NovelJobResultsClient({
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="space-y-1 text-sm">
               <div>ステータス: {job.status}</div>
-              <div>
-                作成日時:{' '}
-                {typeof job.createdAt === 'string'
-                  ? job.createdAt
-                  : new Date(job.createdAt as Date).toISOString()}
-              </div>
-              {job.completedAt && (
-                <div>
-                  完了日時:{' '}
-                  {typeof job.completedAt === 'string'
-                    ? job.completedAt
-                    : new Date(job.completedAt as Date).toISOString()}
-                </div>
-              )}
+              <div>作成日時: {new Date(job.createdAt).toISOString()}</div>
+              {job.completedAt && <div>完了日時: {new Date(job.completedAt).toISOString()}</div>}
               {processingTimeMs !== null && (
                 <div>処理時間: {(processingTimeMs / 1000).toFixed(1)} 秒</div>
               )}
