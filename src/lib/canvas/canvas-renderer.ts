@@ -27,6 +27,12 @@ const SINGLE_BUBBLE_MIN_HEIGHT = 60
 const MIN_BUBBLE_HEIGHT = 30
 /** バブル配置時に利用可能な垂直方向の最小マージン（px単位）。2pxはバブル同士が重ならないようにするための値。 */
 const AVAILABLE_VERTICAL_MARGIN = 2
+/** 話者ラベルのフォント倍率（ベースフォントに対する比率）。 */
+const SPEAKER_LABEL_FONT_RATIO = 1.4
+/** 話者ラベルの内側パディング（px）。 */
+const SPEAKER_LABEL_PADDING = 8
+/** 話者ラベルの角丸半径（px）。 */
+const SPEAKER_LABEL_BORDER_RADIUS = 6
 
 // Node.js 向け canvas 実装の型定義
 interface NodeCanvasImpl {
@@ -254,14 +260,14 @@ export class CanvasRenderer {
       },
       speakerLabel: {
         enabled: true,
-        fontSize: 0.7,
-        padding: 4,
+        fontSize: SPEAKER_LABEL_FONT_RATIO,
+        padding: SPEAKER_LABEL_PADDING,
         backgroundColor: '#ffffff',
         borderColor: '#333333',
         textColor: '#333333',
         offsetX: 0.3,
         offsetY: 0.7,
-        borderRadius: 3,
+        borderRadius: SPEAKER_LABEL_BORDER_RADIUS,
       },
       contentText: {
         enabled: true,
@@ -417,14 +423,15 @@ export class CanvasRenderer {
       dialogue.speaker.trim() !== ''
     if (shouldShowLabel) {
       const baseFontSize = this.config.fontSize || 16
-      const fontSize = Math.max(10, baseFontSize * (speakerLabelCfg.fontSize || 0.7))
-      const paddingLabel = speakerLabelCfg.padding ?? 4
+      const fontRatio = speakerLabelCfg.fontSize ?? SPEAKER_LABEL_FONT_RATIO
+      const fontSize = Math.max(10, baseFontSize * fontRatio)
+      const paddingLabel = speakerLabelCfg.padding ?? SPEAKER_LABEL_PADDING
       const bg = speakerLabelCfg.backgroundColor ?? '#ffffff'
       const border = speakerLabelCfg.borderColor ?? '#333333'
       const textColor = speakerLabelCfg.textColor ?? '#333333'
       const offsetXRatio = labelOffsetXRatio ?? speakerLabelCfg.offsetX ?? 0.3
       const offsetYRatio = labelOffsetYRatio ?? speakerLabelCfg.offsetY ?? 0.7
-      const borderRadius = speakerLabelCfg.borderRadius ?? 3
+      const borderRadius = speakerLabelCfg.borderRadius ?? SPEAKER_LABEL_BORDER_RADIUS
       this.drawSpeakerLabel(dialogue.speaker, bx + bubbleW, by, {
         fontSize,
         padding: paddingLabel,
@@ -496,7 +503,8 @@ export class CanvasRenderer {
             const bubbleW = (drawW + BUBBLE_PADDING * 2) * Math.sqrt(2)
             const bubbleH = (drawH + BUBBLE_PADDING * 2) * Math.sqrt(2)
 
-            const slotX = x + width * PANEL_MARGIN_RATIO + slotWidth * i
+            const slotIndex = panel.dialogues.length === 2 ? panel.dialogues.length - 1 - i : i
+            const slotX = x + width * PANEL_MARGIN_RATIO + slotWidth * slotIndex
             const bx = slotX + (slotWidth - bubbleW) / 2
             const by = bubbleY
             const slotBounds = { x: slotX, y, width: slotWidth, height }
@@ -623,14 +631,20 @@ export class CanvasRenderer {
         if (placement) {
           this.ctx.save()
           // 背景ボックス
+          const textPadding = contentCfg.padding
+          const backgroundX = placement.x - textPadding
+          const backgroundY = placement.y - textPadding
+          const backgroundWidth = Math.max(0, placement.width + textPadding * 2)
+          const backgroundHeight = Math.max(0, placement.height + textPadding * 2)
+
           this.ctx.fillStyle = contentCfg.background.color
           this.ctx.strokeStyle = contentCfg.background.borderColor
           this.ctx.lineWidth = contentCfg.background.borderWidth
           this.drawRoundedRect(
-            placement.x - contentCfg.padding / 2,
-            placement.y - contentCfg.padding / 2,
-            placement.width + contentCfg.padding,
-            placement.height + contentCfg.padding,
+            backgroundX,
+            backgroundY,
+            backgroundWidth,
+            backgroundHeight,
             contentCfg.background.borderRadius,
           )
           this.ctx.fill()
@@ -649,10 +663,10 @@ export class CanvasRenderer {
           this.ctx.restore()
 
           this.layoutCoordinator.registerContentArea({
-            x: placement.x,
-            y: placement.y,
-            width: placement.width,
-            height: placement.height,
+            x: backgroundX,
+            y: backgroundY,
+            width: backgroundWidth,
+            height: backgroundHeight,
           })
         }
       }
