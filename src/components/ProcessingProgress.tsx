@@ -194,7 +194,20 @@ function ProcessingProgress({
   const [tokenPromptSum, setTokenPromptSum] = useState(0)
   const [tokenCompletionSum, setTokenCompletionSum] = useState(0)
   const [sseConnected, setSseConnected] = useState(true)
-  const isMountedRef = useRef(true)
+  const isMountedRef = useRef(false)
+
+  // Track mount state reliably so fallback polling and reconnect logic
+  // can check `isMountedRef.current`. Previously this ref was
+  // initialized to `true` and then set to `false` on unmount which
+  // caused it to remain false if the component was remounted; that
+  // produced a silent regression where polling/reconnects did not run
+  // and the UI stopped receiving updates (appeared to roll back).
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
   const lastJobRef = useRef<JobData['job'] | null>(null)
 
   const inProgressWeight = useMemo(() => {
@@ -626,13 +639,46 @@ function ProcessingProgress({
     )
     setOverallProgress(Math.round(STEP_PERCENT))
     setActiveStep(1)
-    addLog('info', `処理を開始しました。Job ID: ${jobId}`)
-    const es = new EventSource(`/api/jobs/${jobId}/events`)
-    let reconnectTimer: NodeJS.Timeout | null = null
-    let reconnectAttempts = 0
-    const maxReconnectAttempts = 5
-    let fallbackPollingTimer: NodeJS.Timeout | null = null
-    let sseConnected = true
+  addLog('info', `処理を開始しました。Job ID: ${jobId}`);
+    // Preflight the API to detect authentication/permission errors quickly and
+    // provide clearer UI feedback. Some platforms may reject EventSource for
+    // auth reasons; check the job endpoint first. Wrap in an async IIFE because
+    // useEffect callbacks cannot be async directly.
+  (async () => {
+      try {
+        const pre = await fetch(`/api/jobs/${jobId}`, { cache: 'no-store', credentials: 'include' })
+        if (!pre.ok) {
+          const status = pre.status
+          if (status === 401 || status === 403) {
+            addLog('error', `SSE preflight failed with status ${status} (認証/権限エラー)`)
+            setSseConnected(false)
+            // Show an error to the user via logs and abort SSE setup
+            setLogs((l) => [
+              ...l,
+              { id: logCounterRef.current++, timestamp: new Date().toLocaleTimeString(), level: 'error', message: `SSE接続に失敗しました: サーバが認証/権限を要求しています（${status}）`, data: { status } },
+            ])
+            return
+          }
+          // For other non-OK statuses, continue but log a warning
+          addLog('warning', `SSE preflight returned non-OK status ${status}`)
+        }
+      } catch (e) {
+        addLog('warning', `SSE preflight fetch failed: ${(e as Error).message}`)
+        // Continue to EventSource attempt; sometimes fetch may fail due to CORS while
+        // EventSource would still succeed (rare), so don't block entirely.
+      }
+    })()
+
+  const es = new EventSource(`/api/jobs/${jobId}/events`)
+  let reconnectTimer: NodeJS.Timeout | null = null
+  let reconnectAttempts = 0
+  const maxReconnectAttempts = 5
+  let fallbackPollingTimer: NodeJS.Timeout | null = null
+  // local flag to track whether server-sent events are considered alive
+  // Do NOT shadow the state variable `sseConnected` above. Use a different
+  // local name so the logic that checks `!sseAlive` for fallback polling
+  // works reliably.
+  let sseAlive = true
 
     const handlePayload = (raw: string) => {
       try {
@@ -665,7 +711,7 @@ function ProcessingProgress({
 
     // フォールバックポーリング関数
     const fallbackPolling = async () => {
-      if (!sseConnected && isMountedRef.current) {
+      if (!sseAlive && isMountedRef.current) {
         try {
           const res = await fetch(`/api/jobs/${jobId}`)
           if (res.ok) {
@@ -706,7 +752,7 @@ function ProcessingProgress({
           'error',
           'SSE接続の再接続が最大回数に達しました。フォールバックポーリングを開始します。',
         )
-        sseConnected = false
+        sseAlive = false
         // SSEが完全に失敗した場合、30秒ごとにポーリング
         fallbackPollingTimer = setInterval(fallbackPolling, 30000)
         return
@@ -744,8 +790,16 @@ function ProcessingProgress({
         })
 
         // 古いEventSourceを閉じて新しいものに置き換え
-        es.close()
-        Object.assign(es, newEs)
+        try {
+          es.close()
+        } catch (e) {
+          // ignore errors when closing EventSource - best effort cleanup
+          void e
+        }
+        // Note: we don't attempt to mutate the original `es` reference
+        // here; the new `EventSource` will operate and the old one is
+        // closed. If needed later we could hold the reference in a
+        // mutable ref to support replacement.
       }, delay)
     }
 

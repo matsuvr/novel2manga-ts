@@ -5,6 +5,7 @@
 
 import type { Effect } from 'effect'
 import { type NextRequest, NextResponse } from 'next/server'
+import { getLogger } from '@/infrastructure/logging/logger'
 import { ApiError } from '@/server/auth/effectToApiResponse'
 import {
   parseJsonBody,
@@ -66,8 +67,8 @@ export function addRateLimitHeaders<T = unknown>(
     response.headers.set('X-RateLimit-Remaining', status.remaining.toString())
     response.headers.set('X-RateLimit-Reset', status.resetTime)
   } catch (error) {
-    // Don't fail the request if rate limit headers can't be added
-    console.warn('Failed to add rate limit headers:', error)
+    // Non-fatal logging
+    getLogger().warn('add_rate_limit_headers_failed', { error })
   }
   return response
 }
@@ -156,9 +157,9 @@ export function withSecurity(config: SecurityConfig = {}) {
 
       return response
     } catch (error) {
-      console.error('Security middleware error:', error)
+      getLogger().error('security_middleware_error', { error })
 
-      if (error instanceof ApiError) {
+  if (error instanceof ApiError) {
         let response: NextResponse<unknown> = NextResponse.json(
           {
             error: {

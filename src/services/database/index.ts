@@ -32,11 +32,72 @@ export { ChunkDatabaseService } from './chunk-database-service'
 export {
   cleanup,
   DatabaseServiceFactory,
-  db,
   getDatabaseServiceFactory,
   initializeDatabaseServiceFactory,
   isFactoryInitialized,
 } from './database-service-factory'
+
+// Provide a safe `db` wrapper that ensures the DatabaseServiceFactory is
+// initialized before delegating. This avoids runtime errors when server
+// components call `db.*()` before the app-level initialization has run.
+import { getDatabase } from '@/db'
+import * as factory from './database-service-factory'
+
+function ensureFactoryInitialized(): void {
+  if (!factory.isFactoryInitialized()) {
+    // Calling getDatabase() triggers initialization (it calls
+    // initializeDatabaseServiceFactory during first DB creation).
+    // We ignore the returned DB instance here; the side-effect is desired.
+    void getDatabase()
+  }
+}
+
+export const db = {
+  episodes: () => {
+    ensureFactoryInitialized()
+    return factory.db.episodes()
+  },
+  jobs: () => {
+    ensureFactoryInitialized()
+    return factory.db.jobs()
+  },
+  novels: () => {
+    ensureFactoryInitialized()
+    return factory.db.novels()
+  },
+  chunks: () => {
+    ensureFactoryInitialized()
+    return factory.db.chunks()
+  },
+  outputs: () => {
+    ensureFactoryInitialized()
+    return factory.db.outputs()
+  },
+  render: () => {
+    ensureFactoryInitialized()
+    return factory.db.render()
+  },
+  layout: () => {
+    ensureFactoryInitialized()
+    return factory.db.layout()
+  },
+  tokenUsage: () => {
+    ensureFactoryInitialized()
+    return factory.db.tokenUsage()
+  },
+  transactions: () => {
+    ensureFactoryInitialized()
+    return factory.db.transactions()
+  },
+  executeAcrossDomains: async (operation: Parameters<typeof factory.DatabaseServiceFactory.prototype.executeAcrossDomains>[0]) => {
+    ensureFactoryInitialized()
+    return factory.db.executeAcrossDomains(operation)
+  },
+  isSync: () => {
+    ensureFactoryInitialized()
+    return factory.db.isSync()
+  },
+}
 // Domain-specific services
 export { EpisodeDatabaseService } from './episode-database-service'
 export type { JobProgress, JobWithProgress } from './job-database-service'
@@ -49,6 +110,7 @@ export type { AsyncTransactionOperation, SyncTransactionOperation } from './tran
 export { TransactionService } from './transaction-service'
 
 import type { NewEpisode, NewNovel, RenderStatus } from '@/db'
+import { getLogger } from '@/infrastructure/logging/logger'
 
 // Legacy-compatible wrapper used by existing tests. New code should use `db.*()` directly.
 export class DatabaseService {
@@ -85,11 +147,7 @@ export class DatabaseService {
       // performing DB work. This keeps legacy tests stable while integration
       // tests will perform real DB operations via the initialized factory.
       // Log at debug level so CI output isn't noisy.
-      try {
-        console.debug('DatabaseService.createJob fallback (factory missing):', err)
-      } catch {
-        // noop
-      }
+      try { getLogger().debug('db_legacy_createJob_fallback', { error: err instanceof Error ? err.message : String(err) }) } catch { /* noop */ }
       return id
     }
   }
@@ -107,11 +165,7 @@ export class DatabaseService {
       const svc = await import('@/services/database/database-service-factory')
       return await svc.db.chunks().createChunk(payload)
     } catch (err) {
-      try {
-        console.debug('DatabaseService.createChunk fallback (factory missing):', err)
-      } catch {
-        /* noop */
-      }
+      try { getLogger().debug('db_legacy_createChunk_fallback', { error: err instanceof Error ? err.message : String(err) }) } catch { /* noop */ }
       // Return a fake id so callers still receive a string in unit tests
       return crypto.randomUUID()
     }
@@ -122,11 +176,7 @@ export class DatabaseService {
       const svc = await import('@/services/database/database-service-factory')
       return await svc.db.jobs().getJob(id)
     } catch (err) {
-      try {
-        console.debug('DatabaseService.getJob fallback (factory missing):', err)
-      } catch {
-        /* noop */
-      }
+      try { getLogger().debug('db_legacy_getJob_fallback', { error: err instanceof Error ? err.message : String(err) }) } catch { /* noop */ }
       return null
     }
   }
@@ -136,11 +186,7 @@ export class DatabaseService {
       const svc = await import('@/services/database/database-service-factory')
       await svc.db.jobs().updateJobStatus(id, status, error)
     } catch (err) {
-      try {
-        console.debug('DatabaseService.updateJobStatus fallback (factory missing):', err)
-      } catch {
-        /* noop */
-      }
+      try { getLogger().debug('db_legacy_updateJobStatus_fallback', { error: err instanceof Error ? err.message : String(err) }) } catch { /* noop */ }
       // no-op in unit/test environments
     }
   }
@@ -211,11 +257,7 @@ export class DatabaseService {
       const result = await svc.db.novels().createNovel(novel)
       return result.id
     } catch (err) {
-      try {
-        console.debug('DatabaseService.createNovel fallback (factory missing):', err)
-      } catch {
-        /* noop */
-      }
+      try { getLogger().debug('db_legacy_createNovel_fallback', { error: err instanceof Error ? err.message : String(err) }) } catch { /* noop */ }
       return crypto.randomUUID()
     }
   }
@@ -225,11 +267,7 @@ export class DatabaseService {
       const svc = await import('@/services/database/database-service-factory')
       return await svc.db.episodes().getEpisodesByJobId(jobId)
     } catch (err) {
-      try {
-        console.debug('DatabaseService.getEpisodesByJobId fallback (factory missing):', err)
-      } catch {
-        /* noop */
-      }
+      try { getLogger().debug('db_legacy_getEpisodesByJobId_fallback', { error: err instanceof Error ? err.message : String(err) }) } catch { /* noop */ }
       return []
     }
   }
@@ -239,11 +277,7 @@ export class DatabaseService {
       const svc = await import('@/services/database/database-service-factory')
       return await svc.db.jobs().getJobWithProgress(id)
     } catch (err) {
-      try {
-        console.debug('DatabaseService.getJobWithProgress fallback (factory missing):', err)
-      } catch {
-        /* noop */
-      }
+      try { getLogger().debug('db_legacy_getJobWithProgress_fallback', { error: err instanceof Error ? err.message : String(err) }) } catch { /* noop */ }
       return null
     }
   }
@@ -263,11 +297,7 @@ export class DatabaseService {
       const svc = await import('@/services/database/database-service-factory')
       await svc.db.render().upsertRenderStatus(jobId, episodeNumber, pageNumber, status)
     } catch (err) {
-      try {
-        console.debug('DatabaseService.updateRenderStatus fallback (factory missing):', err)
-      } catch {
-        /* noop */
-      }
+      try { getLogger().debug('db_legacy_updateRenderStatus_fallback', { error: err instanceof Error ? err.message : String(err) }) } catch { /* noop */ }
       // noop
     }
   }
@@ -280,11 +310,7 @@ export class DatabaseService {
       const svc = await import('@/services/database/database-service-factory')
       await svc.db.jobs().updateProcessingPosition(jobId, params)
     } catch (err) {
-      try {
-        console.debug('DatabaseService.updateProcessingPosition fallback (factory missing):', err)
-      } catch {
-        /* noop */
-      }
+      try { getLogger().debug('db_legacy_updateProcessingPosition_fallback', { error: err instanceof Error ? err.message : String(err) }) } catch { /* noop */ }
       // noop
     }
   }
@@ -294,11 +320,7 @@ export class DatabaseService {
       const svc = await import('@/services/database/database-service-factory')
       await svc.db.episodes().createEpisodes(episodes)
     } catch (err) {
-      try {
-        console.debug('DatabaseService.createEpisodes fallback (factory missing):', err)
-      } catch {
-        /* noop */
-      }
+      try { getLogger().debug('db_legacy_createEpisodes_fallback', { error: err instanceof Error ? err.message : String(err) }) } catch { /* noop */ }
       // noop in unit tests
     }
   }

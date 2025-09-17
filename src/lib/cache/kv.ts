@@ -1,4 +1,5 @@
 import { getAppConfig } from '@/config'
+import { getLogger } from '@/infrastructure/logging/logger'
 
 // ローカルキャッシュの型定義（KV互換インターフェースの最小実装）
 interface LocalCachePutOptions {
@@ -138,14 +139,14 @@ export async function getCachedData<T>(
       try {
         return JSON.parse(data) as T
       } catch (parseError) {
-        console.error(`Failed to parse cached JSON for key: ${key}`, parseError)
+  getLogger().error('cache_parse_json_failed', { key, error: parseError })
         return null
       }
     }
 
     return data as T
   } catch (error) {
-    console.error(`Failed to get cached data for key ${key}:`, error)
+    getLogger().error('cache_get_failed', { key, error })
     throw error
   }
 }
@@ -165,15 +166,17 @@ export async function setCachedData<T>(key: string, data: T, ttl?: number): Prom
     const sizeInMB = new Blob([serialized]).size / (1024 * 1024)
     const maxItemSizeMB = getAppConfig().processing.cache.maxItemSizeMB
     if (sizeInMB > maxItemSizeMB) {
-      console.error(
-        `Data size (${sizeInMB.toFixed(2)}MB) exceeds local cache limit of ${maxItemSizeMB}MB for key: ${key}`,
-      )
+      getLogger().error('cache_set_exceeds_limit', {
+        key,
+        sizeMB: Number(sizeInMB.toFixed(2)),
+        limitMB: maxItemSizeMB,
+      })
       return
     }
 
     await cache.put(key, serialized, options)
   } catch (error) {
-    console.error(`Failed to set cached data for key ${key}:`, error)
+    getLogger().error('cache_set_failed', { key, error })
     throw error
   }
 }
@@ -184,7 +187,7 @@ export async function deleteCachedData(key: string): Promise<void> {
   try {
     await cache.delete(key)
   } catch (error) {
-    console.error(`Failed to delete cached data for key ${key}:`, error)
+    getLogger().error('cache_delete_failed', { key, error })
     throw error
   }
 }
@@ -198,7 +201,7 @@ export async function deleteCachedDataByPrefix(prefix: string): Promise<void> {
       await cache.delete(key.name)
     }
   } catch (error) {
-    console.error(`Failed to delete cached data with prefix ${prefix}:`, error)
+    getLogger().error('cache_delete_prefix_failed', { prefix, error })
     throw error
   }
 }

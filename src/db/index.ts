@@ -6,6 +6,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { getDatabaseConfig } from '@/config'
 import { createDatabaseConnection } from '@/infrastructure/database/connection'
+import { getLogger } from '@/infrastructure/logging/logger'
 import {
   cleanup,
   initializeDatabaseServiceFactory,
@@ -126,18 +127,15 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
         if (!hasDrizzleMeta && hasUserTables) {
           // DBは既にアプリのテーブルを持つが、マイグレーション管理テーブルが無い状態。
           // この場合は自動migrateをスキップし、明確なメッセージを出す。
-          console.warn(
-            '[Database:migrate] 既存テーブルを検出しましたが __drizzle_migrations が存在しません。マイグレーションをスキップします。',
-            {
-              dbPath,
-              action:
-                '開発用途: そのまま継続可能です。厳密整合が必要な場合はDBを初期化するか、手動でメタを整合させてください。',
-              options: [
-                '安全: database/novel2manga.db を一旦削除して起動時にクリーン作成（データ消去に注意）',
-                '上級: drizzle/meta/_journal.json の内容に合わせて __drizzle_migrations を手動作成・同期',
-              ],
-            },
-          )
+          getLogger().warn('database_migrate_meta_missing', {
+            dbPath,
+            action:
+              '開発用途: そのまま継続可能です。厳密整合が必要な場合はDBを初期化するか、手動でメタを整合させてください。',
+            options: [
+              '安全: database/novel2manga.db を一旦削除して起動時にクリーン作成（データ消去に注意）',
+              '上級: drizzle/meta/_journal.json の内容に合わせて __drizzle_migrations を手動作成・同期',
+            ],
+          })
         } else {
           try {
             migrate(drizzleDb, { migrationsFolder: path.join(process.cwd(), 'drizzle') })
@@ -145,17 +143,14 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
             // フォールバック禁止方針: マイグレーション失敗は重大事として明示し、起動を停止する
             const message =
               migrateError instanceof Error ? migrateError.message : String(migrateError)
-            console.error(
-              '[Database:migrate] マイグレーションに失敗しました。アプリ起動を停止します。',
-              {
-                message,
-                guidance: [
-                  '1) 開発用途: database/novel2manga.db を削除して再作成 (データ消去に注意)',
-                  '2) 既存DB維持: drizzle/meta/_journal.json と __drizzle_migrations の整合を取り、重複カラム/テーブルを手動修正',
-                  '3) 競合例: 既に存在するカラムに対する ALTER TABLE 追加 (drizzle/000x_*.sql) など',
-                ],
-              },
-            )
+            getLogger().error('database_migrate_failed', {
+              message,
+              guidance: [
+                '1) 開発用途: database/novel2manga.db を削除して再作成 (データ消去に注意)',
+                '2) 既存DB維持: drizzle/meta/_journal.json と __drizzle_migrations の整合を取り、重複カラム/テーブルを手動修正',
+                '3) 競合例: 既に存在するカラムに対する ALTER TABLE 追加 (drizzle/000x_*.sql) など',
+              ],
+            })
             throw migrateError
           }
         }
@@ -171,44 +166,34 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
       const msg = error instanceof Error ? error.message : String(error)
       if (!isNativeModuleError(error) || rebuildAttempted) {
         if (isNativeModuleError(error)) {
-          console.error(
-            '[Database:init] better-sqlite3 のネイティブモジュール読み込みに失敗しました (自動再ビルド後)',
-            {
-              message: msg,
-              hint: '自動再ビルド後も失敗しました。手動での対応が必要です。',
-              steps: [
-                'npm rebuild better-sqlite3',
-                'rm -rf node_modules package-lock.json',
-                'npm ci',
-              ],
-              nodeVersion: process.version,
-              cwd: process.cwd(),
-            },
-          )
+          getLogger().error('database_init_native_module_failed_after_rebuild', {
+            message: msg,
+            hint: '自動再ビルド後も失敗しました。手動での対応が必要です。',
+            steps: [
+              'npm rebuild better-sqlite3',
+              'rm -rf node_modules package-lock.json',
+              'npm ci',
+            ],
+            nodeVersion: process.version,
+            cwd: process.cwd(),
+          })
         } else {
-          console.error('[Database:init] 予期しない初期化エラー', msg)
+          getLogger().error('database_init_unexpected_error', { message: msg })
         }
         throw error
       }
 
       // First-time ABI mismatch detected; attempt automatic rebuild
       rebuildAttempted = true
-      console.info(
-        '[Database:init] better-sqlite3 ABI mismatch detected. Attempting to rebuild...',
-        {
-          message: msg,
-        },
-      )
+      getLogger().info('database_init_abi_mismatch_rebuild', { message: msg })
       try {
         rebuildBetterSqlite3()
         const Driver = loadBetterSqlite3(true)
         db = initialize(Driver)
-        console.info('[Database:init] Successfully rebuilt and initialized better-sqlite3.')
+        getLogger().info('database_init_rebuild_success', {})
       } catch (rebuildError) {
         const innerMsg = rebuildError instanceof Error ? rebuildError.message : String(rebuildError)
-        console.error('[Database:init] Failed to automatically rebuild better-sqlite3.', {
-          message: innerMsg,
-        })
+        getLogger().error('database_init_rebuild_failed', { message: innerMsg })
         throw rebuildError
       }
     }

@@ -762,6 +762,9 @@ export function getAppConfigWithOverrides(): AppConfig {
       // Warn about malformed environment variable to aid debugging/misconfiguration
       // console is acceptable here because this runs at startup/config time
       // and should be visible to operators.
+      // NOTE: This file is imported in both server & client bundles. Avoid importing the logger
+      // (which uses Node core modules) to keep client build clean. Raw console.warn is allowed
+      // here as a documented configuration-parse exception.
       // eslint-disable-next-line no-console
       console.warn(
         `[CONFIG] Invalid format for APP_NON_NARRATIVE_DEFAULT_EXPLAINER_COUNT: "${process.env.APP_NON_NARRATIVE_DEFAULT_EXPLAINER_COUNT}". Expected two comma-separated numbers. Using default.`,

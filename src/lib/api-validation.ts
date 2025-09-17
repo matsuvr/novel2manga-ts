@@ -4,6 +4,7 @@
  */
 
 import type { NextRequest } from 'next/server'
+import { getLogger } from '@/infrastructure/logging/logger'
 import { ApiError } from '@/server/auth/effectToApiResponse'
 
 /**
@@ -71,8 +72,9 @@ export function logSecurityViolation(
     details,
   }
 
-  // Log to console (in production, this should go to a security monitoring system)
-  console.warn('Security Violation:', JSON.stringify(violation, null, 2))
+  // Structured logging (security category)
+  const logger = getLogger()
+  logger.warn('security_violation', { violation })
 
   // TODO: In production, send to security monitoring service
   // await sendToSecurityMonitoring(violation)
