@@ -28,7 +28,7 @@ RUN npm ci
 # Preserve a copy of installed node_modules in the image so containers can
 # populate a writable volume at runtime (avoids Next.js auto-installing
 # devDependencies when the named volume is empty).
-RUN mkdir -p /node_modules_image && cp -a node_modules /node_modules_image || true
+RUN mkdir -p /node_modules_image && cp -a node_modules/. /node_modules_image/ || true
 
 # Development image
 FROM deps AS dev
