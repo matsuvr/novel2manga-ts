@@ -227,8 +227,8 @@ class BackwardsFileLogger {
 
   private ensurePath() {
     // keep in sync with existing behaviour: dev log file under project root
-    const p = require('node:path')
-    this.logFilePath = p.resolve(process.cwd(), 'logs', `dev-${new Date().toISOString().split('T')[0]}.log`)
+    // Use the already-imported `path` module instead of require
+    this.logFilePath = path.resolve(process.cwd(), 'logs', `dev-${new Date().toISOString().split('T')[0]}.log`)
   }
 
   public static getInstance() {
@@ -240,7 +240,10 @@ class BackwardsFileLogger {
     try {
       this.ensurePath()
       return this.logFilePath
-    } catch {
+    } catch (_error) {
+      // capture the error for easier debugging when necessary; return empty string as fallback
+      // eslint-disable-next-line no-console
+      console.debug('BackwardsFileLogger.getLogFilePath error:', _error)
       return ''
     }
   }
