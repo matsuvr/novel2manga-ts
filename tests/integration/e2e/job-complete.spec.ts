@@ -29,9 +29,16 @@ test.describe('Job completion and results page', () => {
     expect(typeof novelId).toBe('string')
 
     // 2) Create a job via API (use existing create job endpoint if present)
-    const createJobRes = await apiCtx.post(`${baseURL}/api/job`, {
+    // The application exposes /api/jobs (plural). Try that first, then fallback to legacy /api/job if present.
+    let createJobRes = await apiCtx.post(`${baseURL}/api/jobs`, {
       data: { novelId },
     })
+    if (!createJobRes.ok()) {
+      // Fallback to legacy singular endpoint if the environment has it
+      createJobRes = await apiCtx.post(`${baseURL}/api/job`, {
+        data: { novelId },
+      })
+    }
     expect(createJobRes.ok()).toBeTruthy()
     const jobBody = await createJobRes.json()
     const jobId = jobBody?.data?.id
@@ -39,14 +46,14 @@ test.describe('Job completion and results page', () => {
 
     // 3) Immediately mark job as completed via the job status API or DB helper
     // Try an existing update endpoint if present
-    const completeRes = await apiCtx.post(`${baseURL}/api/job/${jobId}/complete`)
-
-    // If we don't have a helper endpoint, attempt to call the render completion API
+    // Mark job as completed using the supported /api/jobs/[jobId]/status endpoint
+    let completeRes = await apiCtx.post(`${baseURL}/api/jobs/${jobId}/status`, { data: { status: 'completed' } })
     if (!completeRes.ok()) {
-      // Fallback: call the admin-friendly endpoint if available or update via generic route
-      await apiCtx.post(`${baseURL}/api/job/${jobId}/status`, { data: { status: 'completed' } })
-    } else {
-      expect(completeRes.ok()).toBeTruthy()
+      // Fallback: try legacy /api/job/{id}/complete then /api/job/{id}/status
+      completeRes = await apiCtx.post(`${baseURL}/api/job/${jobId}/complete`)
+      if (!completeRes.ok()) {
+        await apiCtx.post(`${baseURL}/api/job/${jobId}/status`, { data: { status: 'completed' } })
+      }
     }
 
     // 4) Visit the progress page, which will call /api/resume and mount the ProcessingProgress
