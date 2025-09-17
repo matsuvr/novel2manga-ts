@@ -9,6 +9,11 @@
 - `recordStorageFile` and `recordStorageFileSync` skip tracking when the database service is unavailable or invalid.
 - These functions log info-level messages via `logError` and return early instead of throwing, preventing noisy test failures.
 
+## Token Usage Tracking
+
+- Vertex AI / Gemini structured generations now extract `usageMetadata` and persist token counts through `db.tokenUsage().record` when telemetry is supplied.
+- Missing token metadata is logged as an error, making gaps in provider responses visible during diagnostics.
+
 ## Database Initialization
 
 - `getDatabase` automatically triggers `npm rebuild better-sqlite3` when an ABI mismatch is detected and retries initialization.

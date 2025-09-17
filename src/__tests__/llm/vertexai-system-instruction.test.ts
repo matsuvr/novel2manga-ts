@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
+const { recordSpy, tokenUsageFactoryMock } = vi.hoisted(() => {
+  const innerRecordSpy = vi.fn(async (_params: unknown) => {})
+  const factory = vi.fn(() => ({
+    record: innerRecordSpy,
+  }))
+  return { recordSpy: innerRecordSpy, tokenUsageFactoryMock: factory }
+})
+
 // Capture the last request sent to GoogleGenAI mock
 let lastRequest: unknown = undefined
 
@@ -13,7 +21,11 @@ vi.mock('@google/genai', () => {
         lastRequest = req
         return {
           text: '{"ok":true}',
-          usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 20 },
+          usageMetadata: {
+            promptTokenCount: 10,
+            candidatesTokenCount: 20,
+            totalTokenCount: 30,
+          },
         }
       }),
     }
@@ -21,15 +33,24 @@ vi.mock('@google/genai', () => {
   return { GoogleGenAI: GoogleGenAIMock }
 })
 
+vi.mock('@/services/database', () => ({
+  db: {
+    tokenUsage: tokenUsageFactoryMock,
+  },
+}))
+
 import { VertexAIClient } from '@/agents/llm/vertexai'
 
 describe('VertexAIClient systemInstruction handling', () => {
   beforeEach(() => {
     lastRequest = undefined
+    recordSpy.mockClear()
+    tokenUsageFactoryMock.mockClear()
   })
 
   it('puts system prompt into systemInstruction and excludes system role in contents', async () => {
     const client = new VertexAIClient({
+      provider: 'gemini',
       model: 'gemini-2.5-pro',
       project: 'p',
       location: 'us-central1',
@@ -42,6 +63,12 @@ describe('VertexAIClient systemInstruction handling', () => {
       userPrompt: 'Return {"ok": true}',
       spec,
       options: { maxTokens: 128 },
+      telemetry: {
+        jobId: 'job-1',
+        agentName: 'vertex-test',
+        stepName: 'test-step',
+        chunkIndex: 4,
+      },
     })
 
     // Ensure parsing success
@@ -63,5 +90,19 @@ describe('VertexAIClient systemInstruction handling', () => {
     expect(contents.find((c) => c.role === 'system')).toBeUndefined()
     // One user message expected
     expect(contents.find((c) => c.role === 'user')).toBeTruthy()
+
+    expect(tokenUsageFactoryMock).toHaveBeenCalledTimes(1)
+    expect(recordSpy).toHaveBeenCalledWith({
+      jobId: 'job-1',
+      agentName: 'vertex-test',
+      stepName: 'test-step',
+      chunkIndex: 4,
+      episodeNumber: undefined,
+      provider: 'gemini',
+      model: 'gemini-2.5-pro',
+      promptTokens: 10,
+      completionTokens: 20,
+      totalTokens: 30,
+    })
   })
 })

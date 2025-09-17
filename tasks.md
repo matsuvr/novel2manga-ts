@@ -6,6 +6,8 @@
 - [x] Auto rebuild better-sqlite3 on Node ABI mismatch during database initialization.
 - [x] Detect "Module did not self-register" errors to trigger automatic rebuild of `better-sqlite3`.
 - [ ] Upgrade Docker base Node image when `better-sqlite3` adds support for newer versions.
+- [x] Persist Vertex AI / Gemini token usage metrics via `db.tokenUsage().record` when telemetry is available.
+- [ ] Surface cached/thought tokens in dashboards once backend schema supports them.
 
 - [x] Export NextAuth helpers directly to prevent "auth is not a function" during E2E startup.
 - [x] Install Playwright system libraries for E2E tests.
