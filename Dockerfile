@@ -25,12 +25,20 @@ FROM base AS deps
 COPY package.json package-lock.json ./
 RUN npm ci
 
+# Preserve a copy of installed node_modules in the image so containers can
+# populate a writable volume at runtime (avoids Next.js auto-installing
+# devDependencies when the named volume is empty).
+RUN mkdir -p /node_modules_image && cp -a node_modules/. /node_modules_image/ || true
+
 # Development image
 FROM deps AS dev
 ENV NODE_ENV=development
 COPY . .
+# Copy helper script to ensure node_modules volume is seeded from the image
+COPY scripts/docker/ensure-node-modules.sh /usr/local/bin/ensure-node-modules.sh
+RUN chmod +x /usr/local/bin/ensure-node-modules.sh
 EXPOSE 3000
-CMD ["npm", "run", "dev"]
+CMD ["/usr/local/bin/ensure-node-modules.sh", "npm", "run", "dev"]
 
 # Production build
 FROM deps AS build

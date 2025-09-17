@@ -1,15 +1,14 @@
-/* Globals can be kept minimal, relying on Material-UI's CssBaseline and Theme. */
-:root {
-  --background: 255 255 255;
-  --foreground: 17 24 39;
-}
+/* Tailwind CSS v3 directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
+/* Minimal additional globals (keep very small) */
 html,
 body {
   height: 100%;
 }
-
 body {
-  color: rgb(var(--foreground));
-  background-color: rgb(var(--background));
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
 }

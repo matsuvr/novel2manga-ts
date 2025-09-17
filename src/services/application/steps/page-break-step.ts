@@ -214,6 +214,56 @@ export class PageBreakStep implements PipelineStep {
         totalEpisodes: bundledEpisodes.episodes.length,
       })
 
+      // Persist bundled episode boundaries to DB so UI and downstream steps
+      // always observe the post-bundling episode layout (fixes stale pre-bundle episodes)
+      try {
+        const jobRow = await db.jobs().getJob(jobId)
+        if (jobRow) {
+          const totalChunks = jobRow.totalChunks ?? 0
+          const { buildPanelToChunkMapping, getChunkForPanel } = await import(
+            '@/services/application/panel-to-chunk-mapping',
+          )
+
+          const panelToChunkMapping = await buildPanelToChunkMapping(jobId, totalChunks, logger)
+
+          const { EpisodeWriteService } = await import('@/services/application/episode-write')
+          const episodeWriter = new EpisodeWriteService()
+
+          const episodesForDb = bundledEpisodes.episodes.map((ep) => {
+            const startChunk = getChunkForPanel(panelToChunkMapping, ep.startPanelIndex)
+            const endChunk = getChunkForPanel(panelToChunkMapping, ep.endPanelIndex)
+            return {
+              novelId: jobRow.novelId,
+              jobId,
+              episodeNumber: ep.episodeNumber,
+              title: ep.title,
+              summary: undefined,
+              startChunk,
+              startCharIndex: 0,
+              endChunk,
+              endCharIndex: 0,
+              confidence: 1,
+            }
+          })
+
+          // Replace DB episodes for this job with the bundled set
+          await episodeWriter.bulkReplaceByJobId(episodesForDb)
+          logger.info('Persisted bundled episodes to DB', {
+            jobId,
+            persisted: episodesForDb.length,
+          })
+        } else {
+          logger.warn('Job row not found; skipping episode persistence for bundled episodes', {
+            jobId,
+          })
+        }
+      } catch (persistErr) {
+        logger.warn('Failed to persist bundled episodes to DB', {
+          jobId,
+          error: persistErr instanceof Error ? persistErr.message : String(persistErr),
+        })
+      }
+
       // Log upsert summary
       logger.info('Layout status upsert summary', {
         jobId,

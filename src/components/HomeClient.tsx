@@ -1,29 +1,16 @@
 'use client'
 
-import ErrorIcon from '@mui/icons-material/Error'
-import ReplayIcon from '@mui/icons-material/Replay'
-// MUI Imports
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  CircularProgress,
-  Container,
-  Link as MuiLink,
-  Paper,
-  Stack,
-  TextField,
-  Typography,
-  useTheme,
-} from '@mui/material'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import React, { useCallback, useState } from 'react'
+import { RotateCcw, TriangleAlert } from '@/components/icons'
 import ProcessingProgress from '@/components/ProcessingProgress'
 import ResultsDisplay from '@/components/ResultsDisplay'
 import TextInputArea from '@/components/TextInputArea'
+import { Alert } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { appConfig } from '@/config/app.config'
 import type { Episode } from '@/types/database-models'
 import { isRenderCompletelyDone } from '@/utils/completion'
@@ -50,8 +37,8 @@ function SampleButton({
 }) {
   return (
     <Button
-      variant="outlined"
-      size="small"
+      variant="outline"
+      size="sm"
       onClick={async () => {
         try {
           const text = await loadSample(path)
@@ -81,40 +68,42 @@ function RedirectingView({ pendingRedirect }: { pendingRedirect: string }) {
   }, [pendingRedirect])
 
   return (
-    <Container maxWidth="sm">
-      <Paper elevation={3} sx={{ p: 4, textAlign: 'center' }}>
-        <Stack spacing={2} alignItems="center">
-          <Typography variant="h2" component="span">
-            ➡️
-          </Typography>
-          <Typography variant="h5" component="h3">
-            結果ページへ移動します…
-          </Typography>
-          <Typography color="text.secondary">
-            自動的に移動しない場合は
-            <MuiLink href={pendingRedirect} sx={{ ml: 1 }}>
-              こちらをクリック
-            </MuiLink>
-            してください。
-          </Typography>
-          <Stack
-            direction="row"
-            spacing={1}
-            alignItems="center"
-            sx={{ mt: 2, color: 'text.secondary' }}
-          >
-            <CircularProgress size={16} />
-            <Typography variant="body2">3秒後に自動的に移動します</Typography>
-          </Stack>
-        </Stack>
-      </Paper>
-    </Container>
+    <div className="mx-auto max-w-md p-6 text-center">
+      <div className="rounded-xl border bg-white p-6 shadow">
+        <div className="mb-2 text-5xl">➡️</div>
+        <h3 className="mb-1 text-xl font-semibold">結果ページへ移動します…</h3>
+        <p className="text-sm text-muted-foreground">
+          自動的に移動しない場合は
+          <a className="mx-1 underline" href={pendingRedirect}>
+            こちらをクリック
+          </a>
+          してください。
+        </p>
+        <div className="mt-3 inline-flex items-center gap-2 text-muted-foreground">
+          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            ></circle>
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+            ></path>
+          </svg>
+          <span className="text-xs">3秒後に自動的に移動します</span>
+        </div>
+      </div>
+    </div>
   )
 }
 
 export default function HomeClient() {
   const router = useRouter()
-  const theme = useTheme()
   const { status } = useSession()
   const [viewMode, setViewMode] = useState<ViewMode>('input')
   const [novelText, setNovelText] = useState('')
@@ -300,97 +289,74 @@ export default function HomeClient() {
   const [pendingRedirect, setPendingRedirect] = useState<string | null>(null)
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        py: 4,
-      }}
-    >
-      <Container maxWidth="lg">
-        <Box sx={{ textAlign: 'center', mb: 4, color: 'white' }}>
-          <Stack
-            direction="row"
-            spacing={2}
-            justifyContent="center"
-            alignItems="center"
-            sx={{ mb: 2 }}
-          >
-            <Typography variant="h2" component="span">
-              📚
-            </Typography>
-            <Box sx={{ textAlign: 'left' }}>
-              <Typography
-                variant="h4"
-                component="h1"
-                sx={{
-                  fontWeight: 'bold',
-                  background: `linear-gradient(45deg, ${theme.palette.secondary.light} 30%, ${theme.palette.primary.light} 90%)`,
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                }}
-              >
+    <div className="min-h-[100vh] bg-gradient-to-br from-indigo-500 to-purple-700 py-4">
+      <div className="container mx-auto max-w-5xl">
+        <div className="mb-4 text-center text-white">
+          <div className="mb-2 flex items-center justify-center gap-2">
+            <div className="text-4xl">📚</div>
+            <div className="text-left">
+              <h1 className="bg-gradient-to-r from-pink-300 to-sky-300 bg-clip-text text-2xl font-bold text-transparent">
                 Novel to Manga Converter
-              </Typography>
-              <Typography sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
-                小説をマンガの絵コンテに自動変換
-              </Typography>
-            </Box>
-            {status === 'loading' && <CircularProgress color="inherit" size={24} />}
-          </Stack>
+              </h1>
+              <p className="text-sm opacity-80">小説をマンガの絵コンテに自動変換</p>
+            </div>
+            {status === 'loading' && (
+              <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24">
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                ></path>
+              </svg>
+            )}
+          </div>
           {viewMode !== 'input' && (
-            <Button
-              variant="contained"
-              onClick={handleReset}
-              startIcon={<ReplayIcon />}
-              sx={{
-                bgcolor: 'rgba(255, 255, 255, 0.2)',
-                '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.3)' },
-              }}
-            >
-              最初から
+            <Button onClick={handleReset}>
+              <RotateCcw className="mr-2 h-4 w-4" /> 最初から
             </Button>
           )}
-        </Box>
+        </div>
 
-        <Paper elevation={4} sx={{ p: { xs: 2, sm: 4 }, borderRadius: 4 }}>
+        <div className="rounded-2xl bg-white/95 p-4 shadow-lg">
           {error && (
-            <Alert severity="error" icon={<ErrorIcon />} sx={{ mb: 3 }}>
+            <Alert variant="destructive" className="mb-3">
+              <TriangleAlert className="mr-2 inline h-4 w-4" />
               {error}
             </Alert>
           )}
 
           {viewMode === 'input' && (
-            <Stack spacing={4}>
+            <div className="space-y-4">
               <Card>
                 <CardContent>
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                    <Typography variant="h4" component="span">
-                      🔄
-                    </Typography>
-                    <Typography variant="h6">処理の再開</Typography>
-                  </Stack>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="text-2xl">🔄</span>
+                    <div className="text-lg font-semibold">処理の再開</div>
+                  </div>
+                  <p className="mb-2 text-sm text-muted-foreground">
                     以前に処理を開始したnovelIdを入力して、処理を再開できます
-                  </Typography>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                    <TextField
-                      fullWidth
-                      variant="outlined"
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
                       placeholder="novelId (UUID形式)"
                       value={resumeNovelId}
                       onChange={(e) => setResumeNovelId(e.target.value)}
-                      size="small"
                     />
                     <Button
-                      variant="contained"
-                      color="success"
                       onClick={() => resumeNovelId && handleResume(resumeNovelId)}
                       disabled={!resumeNovelId.trim() || isProcessing}
                     >
                       再開
                     </Button>
-                  </Stack>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -402,17 +368,11 @@ export default function HomeClient() {
                 maxLength={2000000}
               />
 
-              <Box sx={{ textAlign: 'center' }}>
-                <Typography variant="subtitle2" sx={{ mb: 2 }}>
+              <div className="text-center">
+                <div className="mb-2 text-xs text-muted-foreground">
                   またはサンプルテキストを試す:
-                </Typography>
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  justifyContent="center"
-                  flexWrap="wrap"
-                  useFlexGap
-                >
+                </div>
+                <div className="flex flex-wrap justify-center gap-2">
                   <SampleButton
                     label="空き家の冒険"
                     path="/docs/空き家の冒険.txt"
@@ -438,20 +398,20 @@ export default function HomeClient() {
                     path="/docs/最後の一葉.txt"
                     onLoad={setNovelText}
                   />
-                </Stack>
-              </Box>
-            </Stack>
+                </div>
+              </div>
+            </div>
           )}
 
           {(viewMode === 'processing' || viewMode === 'progress') && (
-            <Container maxWidth="md">
+            <div className="mx-auto max-w-3xl">
               <ProcessingProgress
                 jobId={jobId}
                 onComplete={handleProcessComplete}
                 modeHint={isDemo ? '...' : undefined}
                 isDemoMode={isDemo}
               />
-            </Container>
+            </div>
           )}
 
           {viewMode === 'redirecting' && pendingRedirect && (
@@ -459,8 +419,8 @@ export default function HomeClient() {
           )}
 
           {viewMode === 'results' && jobId && <ResultsDisplay jobId={jobId} episodes={episodes} />}
-        </Paper>
-      </Container>
-    </Box>
+        </div>
+      </div>
+    </div>
   )
 }
