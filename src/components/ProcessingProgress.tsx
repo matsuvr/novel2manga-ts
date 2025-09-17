@@ -627,12 +627,14 @@ function ProcessingProgress({
     setOverallProgress(Math.round(STEP_PERCENT))
     setActiveStep(1)
     addLog('info', `処理を開始しました。Job ID: ${jobId}`)
-    const es = new EventSource(`/api/jobs/${jobId}/events`)
-    let reconnectTimer: NodeJS.Timeout | null = null
-    let reconnectAttempts = 0
-    const maxReconnectAttempts = 5
-    let fallbackPollingTimer: NodeJS.Timeout | null = null
-    let sseConnected = true
+  // Keep current EventSource instance in a ref so that reconnect replacements
+  // are retained and not garbage-collected. (Codex review P1 fix)
+  const esRef = { current: new EventSource(`/api/jobs/${jobId}/events`) }
+  let reconnectTimer: NodeJS.Timeout | null = null
+  let reconnectAttempts = 0
+  const maxReconnectAttempts = 5
+  let fallbackPollingTimer: NodeJS.Timeout | null = null
+  let sseConnected = true
 
     const handlePayload = (raw: string) => {
       try {
@@ -699,6 +701,30 @@ function ProcessingProgress({
       }
     }
 
+    const attachEventHandlers = (target: EventSource) => {
+      target.addEventListener('init', (ev) => {
+        setSseConnected(true)
+        console.log('[SSE] Connected and received init data')
+        handlePayload((ev as MessageEvent).data)
+      })
+      target.addEventListener('message', (ev) => {
+        setSseConnected(true)
+        console.log('[SSE] Received message')
+        handlePayload((ev as MessageEvent).data)
+      })
+      target.addEventListener('final', (ev) => {
+        setSseConnected(true)
+        console.log('[SSE] Received final message - job completed')
+        handlePayload((ev as MessageEvent).data)
+      })
+      target.addEventListener('error', (ev) => {
+        setSseConnected(false)
+        console.warn('[SSE] Connection error:', ev)
+        addLog('warning', 'SSE接続に問題が発生しました。再接続を試行します。', ev)
+        handleReconnect()
+      })
+    }
+
     const handleReconnect = () => {
       if (reconnectAttempts >= maxReconnectAttempts) {
         setSseConnected(false)
@@ -722,60 +748,30 @@ function ProcessingProgress({
       const delay = Math.min(1000 * 2 ** (reconnectAttempts - 1), 30000)
       reconnectTimer = setTimeout(() => {
         if (!isMountedRef.current) return
-
-        // 新しいEventSourceを作成
-        const newEs = new EventSource(`/api/jobs/${jobId}/events`)
-        newEs.addEventListener('init', (ev) => {
-          setSseConnected(true)
-          handlePayload((ev as MessageEvent).data)
-        })
-        newEs.addEventListener('message', (ev) => {
-          setSseConnected(true)
-          handlePayload((ev as MessageEvent).data)
-        })
-        newEs.addEventListener('final', (ev) => {
-          setSseConnected(true)
-          handlePayload((ev as MessageEvent).data)
-        })
-        newEs.addEventListener('error', (ev) => {
-          setSseConnected(false)
-          addLog('warning', 'SSE接続に問題が発生しました。再接続を試行します。', ev)
-          handleReconnect()
-        })
-
-        // 古いEventSourceを閉じて新しいものに置き換え
-        es.close()
-        Object.assign(es, newEs)
+        // Close old instance
+        try {
+          esRef.current.close()
+        } catch {
+          /* noop */
+        }
+        // Create and attach new instance, keeping reference
+        const replacement = new EventSource(`/api/jobs/${jobId}/events`)
+        esRef.current = replacement
+        attachEventHandlers(replacement)
       }, delay)
     }
-
-    es.addEventListener('init', (ev) => {
-      setSseConnected(true)
-      console.log('[SSE] Connected and received init data')
-      handlePayload((ev as MessageEvent).data)
-    })
-    es.addEventListener('message', (ev) => {
-      setSseConnected(true)
-      console.log('[SSE] Received message')
-      handlePayload((ev as MessageEvent).data)
-    })
-    es.addEventListener('final', (ev) => {
-      setSseConnected(true)
-      console.log('[SSE] Received final message - job completed')
-      handlePayload((ev as MessageEvent).data)
-    })
-    es.addEventListener('error', (ev) => {
-      setSseConnected(false)
-      console.warn('[SSE] Connection error:', ev)
-      addLog('warning', 'SSE接続に問題が発生しました。再接続を試行します。', ev)
-      handleReconnect()
-    })
+    // Attach handlers to initial instance
+    attachEventHandlers(esRef.current)
 
     return () => {
       isMountedRef.current = false
       if (reconnectTimer) clearTimeout(reconnectTimer)
       if (fallbackPollingTimer) clearInterval(fallbackPollingTimer)
-      es.close()
+      try {
+        esRef.current.close()
+      } catch {
+        /* ignore */
+      }
     }
   }, [jobId, addLog, updateStepsFromJobData])
 
