@@ -5,6 +5,7 @@ import path from 'node:path'
 import { GoogleGenAI } from '@google/genai'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import { getLogger } from '@/infrastructure/logging/logger'
+import { db } from '@/services/database'
 import {
   dropUnionCombinators,
   enforceJsonSchemaConstraintsForStructuredOutputs,
@@ -89,6 +90,7 @@ export class VertexAIClient implements LlmClient {
     userPrompt,
     spec,
     options,
+    telemetry,
   }: GenerateStructuredParams<T>): Promise<T> {
     if (!options || typeof options.maxTokens !== 'number') {
       throw new Error(`${this.provider}: missing generation options (maxTokens) from config`)
@@ -273,6 +275,37 @@ export class VertexAIClient implements LlmClient {
         throw new Error(`${this.provider}: no JSON chunk found in response: ${msg}`)
       }
 
+      if (telemetry?.jobId && telemetry?.agentName) {
+        const usage = extractUsageMetadata(lastResponse)
+        if (!usage) {
+          logger.error('Token usage metadata missing from Vertex AI response', {
+            jobId: telemetry.jobId,
+            agent: telemetry.agentName,
+          })
+        } else {
+          try {
+            await db.tokenUsage().record({
+              jobId: telemetry.jobId,
+              agentName: telemetry.agentName,
+              stepName: telemetry.stepName,
+              chunkIndex: telemetry.chunkIndex,
+              episodeNumber: telemetry.episodeNumber,
+              provider: this.provider,
+              model: this.model,
+              promptTokens: usage.promptTokens,
+              completionTokens: usage.completionTokens,
+              totalTokens: usage.totalTokens,
+            })
+          } catch (recordError) {
+            logger.error('Failed to record Vertex AI token usage', {
+              error: recordError instanceof Error ? recordError.message : String(recordError),
+              jobId: telemetry.jobId,
+              agent: telemetry.agentName,
+            })
+          }
+        }
+      }
+
       // Parse JSON
       let parsed: unknown
       try {
@@ -424,5 +457,47 @@ function safeObjectPreview(obj: unknown): string {
     return `{keys:${keys.length}, sampleKeys:${keys.slice(0, 10).join(',')}}`
   } catch {
     return '[unavailable]'
+  }
+}
+
+type UsageMetadataSummary = {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  cachedContentTokens?: number
+  thoughtsTokens?: number
+}
+
+function extractUsageMetadata(response: unknown): UsageMetadataSummary | null {
+  if (!response || typeof response !== 'object') {
+    return null
+  }
+
+  const metadata = (response as { usageMetadata?: unknown }).usageMetadata
+  if (!metadata || typeof metadata !== 'object') {
+    return null
+  }
+
+  const toNumber = (value: unknown): number | null => {
+    const numeric = Number(value)
+    return Number.isFinite(numeric) ? numeric : null
+  }
+
+  const prompt = toNumber((metadata as Record<string, unknown>).promptTokenCount)
+  const completion = toNumber((metadata as Record<string, unknown>).candidatesTokenCount)
+  const total = toNumber((metadata as Record<string, unknown>).totalTokenCount)
+  const cached = toNumber((metadata as Record<string, unknown>).cachedContentTokenCount)
+  const thoughts = toNumber((metadata as Record<string, unknown>).thoughtsTokenCount)
+
+  if (prompt === null && completion === null && total === null) {
+    return null
+  }
+
+  return {
+    promptTokens: prompt ?? 0,
+    completionTokens: completion ?? 0,
+    totalTokens: total ?? (prompt ?? 0) + (completion ?? 0),
+    cachedContentTokens: cached ?? undefined,
+    thoughtsTokens: thoughts ?? undefined,
   }
 }
