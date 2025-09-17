@@ -84,6 +84,7 @@ export class MangaPageRenderer {
       height: this.config.pageHeight,
       font: this.config.defaultFont,
       defaultFontSize: this.config.fontSize,
+      fontFamily: 'Noto Sans JP', // Use Japanese-capable Light font for narration & base text
     })
   }
 
@@ -128,25 +129,21 @@ export class MangaPageRenderer {
     pageIndex: number,
   ): Promise<Panel[]> {
     // --- DEBUG LOG ---
-    console.log(
-      `[MangaPageRenderer] Creating panels for page ${pageIndex}. Received ${chunks.length} chunks.`,
-    )
+    getLogger()
+      .withContext({ service: 'manga-page-renderer' })
+      .debug('creating_panels_for_page', { pageIndex, chunks: chunks.length })
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i]
-      console.log(
-        `Chunk ${i}:`,
-        JSON.stringify(
-          {
+      getLogger()
+        .withContext({ service: 'manga-page-renderer' })
+        .debug('chunk_debug', {
+          pageIndex,
             chunkIndex: chunk.chunkIndex,
             dialoguesCount: (chunk.dialogues || []).length,
             situationsCount: (chunk.situations || []).length,
             highlightsCount: (chunk.highlights || []).length,
             scenesCount: (chunk.scenes || []).length,
-          },
-          null,
-          2,
-        ),
-      )
+        })
     }
     // --- END DEBUG LOG ---
 

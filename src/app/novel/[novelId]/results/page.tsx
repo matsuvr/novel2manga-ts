@@ -14,6 +14,7 @@ interface Params {
  * - HomeClient.tsx → /novel/[novelId]/results/[jobId] を直接使用
  * - ProgressPageClient.tsx → /novel/[novelId]/results/[jobId] を直接使用
  *
+ * Pendingページと /api/jobs/[jobId]/ready は 2025-09 廃止済み。
  * TODO: 2025年10月頃にこのファイルを完全削除予定
  */
 export default async function NovelResultsPage({ params }: { params: Promise<Params> }) {
