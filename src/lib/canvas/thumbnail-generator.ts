@@ -83,7 +83,13 @@ async function generateServerSideThumbnail(
     ).toBuffer(`image/${format}`, { quality })
     return new Blob([new Uint8Array(outputBuffer)], { type: `image/${format}` })
   } catch (error) {
-    console.error('Server-side thumbnail generation failed:', error)
+    // Use structured logger (falls back to noop during build phase)
+    const { getLogger } = await import('@/infrastructure/logging/logger')
+    getLogger()
+      .withContext({ service: 'thumbnail-generator' })
+      .error('server_side_thumbnail_generation_failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
     throw new Error('サムネイル生成に失敗しました')
   }
 }

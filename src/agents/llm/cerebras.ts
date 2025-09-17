@@ -1,5 +1,6 @@
 import Cerebras from '@cerebras/cerebras_cloud_sdk'
 import { zodToJsonSchema } from 'zod-to-json-schema'
+import { getLogger } from '@/infrastructure/logging/logger'
 import {
   type JsonSchemaNode,
   transformForCerebrasCompatibility,
@@ -89,15 +90,9 @@ export class CerebrasClient implements LlmClient {
           /BadRequest|HTTP\s*400/.test(msg)
         ) {
           // UI方針: フォールバックは必ず明示。ここではログで通知し、上位のUI連携は別チケットで追加する。
-          console.warn(
-            JSON.stringify({
-              ts: new Date().toISOString(),
-              level: 'warn',
-              service: 'llm-cerebras',
-              msg: 'Structured output failed; falling back to json_object mode',
-              error: msg,
-            }),
-          )
+          getLogger()
+            .withContext({ service: 'llm-cerebras' })
+            .warn('structured_output_fallback_to_json_object', { error: msg })
           const jsonMode = await this.client.chat.completions.create({
             model: this.model,
             messages,
@@ -138,19 +133,13 @@ export class CerebrasClient implements LlmClient {
       } catch (jsonError) {
         // JSON パースエラー時に詳細なエラー情報をログ出力
         const errorMsg = jsonError instanceof Error ? jsonError.message : String(jsonError)
-        console.error(
-          JSON.stringify({
-            ts: new Date().toISOString(),
-            level: 'error',
-            service: 'llm-cerebras',
-            operation: 'JSON.parse',
-            msg: 'JSONパースエラーが発生しました。LLMレスポンスの形式を確認してください。',
+        getLogger()
+          .withContext({ service: 'llm-cerebras', operation: 'JSON.parse', model: this.model })
+          .error('json_parse_error', {
             error: errorMsg,
-            rawContent: truncate(content, 500),
+            rawContentPreview: truncate(content, 500),
             contentLength: content.length,
-            model: this.model,
-          }),
-        )
+          })
         throw new Error(
           `cerebras: JSON parse failed: ${errorMsg}. Content preview: ${truncate(content, 200)}`,
         )

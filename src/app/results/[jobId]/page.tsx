@@ -1,45 +1,10 @@
-import { notFound, redirect } from 'next/navigation'
-import { auth } from '@/auth'
-import ResultsDisplay from '@/components/ResultsDisplay'
-import { db } from '@/services/database/index'
-import { isRenderCompletelyDone } from '@/utils/completion'
+import { notFound } from 'next/navigation'
 
-export const dynamic = 'force-dynamic'
-
-interface Params {
-  jobId: string
-}
-
-export default async function JobResultsPage({ params }: { params: Promise<Params> }) {
-  const { jobId } = await params
-  const session = await auth()
-  function hasUser(obj: unknown): obj is { user?: { id?: string } } {
-    return !!obj && typeof obj === 'object' && 'user' in (obj as Record<string, unknown>)
-  }
-
-  const userId = hasUser(session) ? session.user?.id : undefined
-  if (!userId) {
-    redirect('/portal/api/auth/login')
-  }
-  const job = await db.jobs().getJob(jobId)
-  if (!job) return notFound()
-  if (!isRenderCompletelyDone(job as unknown as Parameters<typeof isRenderCompletelyDone>[0])) {
-    return notFound()
-  }
-  const episodes = await db.episodes().getEpisodesByJobId(jobId)
-
-  // Convert string dates to Date objects and handle nulls to match component expectations
-  const formattedEpisodes = episodes.map((ep) => ({
-    ...ep,
-    createdAt: ep.createdAt ? new Date(ep.createdAt) : new Date(),
-    title: ep.title || undefined, // Convert null to undefined
-    summary: ep.summary || undefined, // Convert null to undefined
-  }))
-
-  return (
-    <main className="max-w-6xl mx-auto p-6 space-y-6">
-      <h1 className="text-2xl font-bold">変換結果</h1>
-      <ResultsDisplay jobId={jobId} episodes={formattedEpisodes} />
-    </main>
-  )
+/**
+ * 古い /results/:jobId ルートは廃止されました。
+ * すべてのアクセスは 404 を返します（後方互換性なし）。
+ */
+export default async function DeprecatedJobResultsPage() {
+  // 即座に 404 を返す
+  return notFound()
 }

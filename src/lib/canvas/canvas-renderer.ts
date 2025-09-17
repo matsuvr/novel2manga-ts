@@ -1,17 +1,13 @@
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+// Server-only: we now rely exclusively on @napi-rs/canvas
+import { createCanvas, GlobalFonts, loadImage as loadImageFn } from '@napi-rs/canvas'
 import { getAppConfigWithOverrides } from '@/config/app.config'
+import { getLogger } from '@/infrastructure/logging/logger'
 import type { AppCanvasConfig } from '@/types/canvas-config'
 import type { Dialogue, MangaLayout, Panel } from '@/types/panel-layout'
 import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
 import { PanelLayoutCoordinator } from './panel-layout-coordinator'
 import { type SfxPlacement, SfxPlacer } from './sfx-placer'
-
-// Canvas実装の互換性のため、ブラウザとNode.js両方で動作するようにする
-const isServer = typeof window === 'undefined'
-type CanvasModule = typeof import('@napi-rs/canvas')
-let createCanvas: CanvasModule['createCanvas'] | undefined
-let loadImageFn: CanvasModule['loadImage'] | undefined
 
 /** パネル全幅に対する水平スロット領域の割合。0.9はパネル幅の90%をスロット領域として確保するための値。 */
 const HORIZONTAL_SLOT_COVERAGE = 0.9
@@ -48,76 +44,34 @@ interface NodeCanvasImpl {
 
 export type NodeCanvas = NodeCanvasImpl
 
-// Canvas module loading - async initialization needed for ES modules
-let canvasInitialized = false
-let canvasInitPromise: Promise<void> | null = null
-
-async function initializeCanvas(): Promise<void> {
-  if (canvasInitialized) return
-  if (canvasInitPromise) return canvasInitPromise
-
-  canvasInitPromise = (async () => {
-    if (isServer) {
-      // サーバーサイドでは @napi-rs/canvas を使用
-      try {
-        const canvasModule = await import('@napi-rs/canvas')
-        createCanvas = canvasModule.createCanvas
-        loadImageFn = canvasModule.loadImage
-        // Register Japanese-capable font for server-side rendering.
+// Register fonts synchronously at module load (server-only environment)
+(() => {
+  try {
+    const projectRoot = process.cwd()
+    const fontsDir = process.env.CANVAS_FONTS_DIR || path.join(projectRoot, 'fonts')
+    const lightFontPath = process.env.CANVAS_FONT_PATH || path.join(fontsDir, 'NotoSansJP-Light.ttf')
+    const semiBoldFontPath = process.env.CANVAS_FONT_PATH_SEMIBOLD || path.join(fontsDir, 'NotoSansJP-SemiBold.ttf')
+    const registerPair = (fp: string, familyVariants: string[]) => {
+      for (const fam of familyVariants) {
         try {
-          // Resolve runtime directory in both CommonJS and ESM environments
-          const runtimeDir = ((): string => {
-            try {
-              if (typeof globalThis !== 'undefined') {
-                const maybeGlobal = globalThis as unknown as Record<string, unknown>
-                if ('__dirname' in maybeGlobal) {
-                  const val = maybeGlobal.__dirname
-                  if (typeof val === 'string' && val) return val
-                }
-              }
-            } catch (e) {
-              if (process.env.NODE_ENV !== 'production') {
-                console.debug('Failed to read globalThis.__dirname', e)
-              }
-            }
-            try {
-              return path.dirname(fileURLToPath(import.meta.url))
-            } catch (_) {
-              return process.cwd()
-            }
-          })()
-
-          const fontPath = process.env.CANVAS_FONT_PATH || path.join(runtimeDir, '..', '..', 'fonts', 'NotoSansJP-Light.ttf')
-
-          const maybeModule = canvasModule as unknown as { GlobalFonts?: unknown }
-          const gf = maybeModule?.GlobalFonts
-          if (gf && typeof gf === 'object') {
-            const gfo = gf as {
-              registerFromPath?: (path: string, family: string) => void
-              register?: (path: string, opts?: { family?: string } | string) => void
-            }
-            if (typeof gfo.registerFromPath === 'function') {
-              gfo.registerFromPath(fontPath, 'Noto Sans JP')
-              gfo.registerFromPath(fontPath, 'NotoSansJP')
-            } else if (typeof gfo.register === 'function') {
-              gfo.register(fontPath, { family: 'Noto Sans JP' })
-              gfo.register(fontPath, { family: 'NotoSansJP' })
-            }
+          if (typeof (GlobalFonts as unknown as { registerFromPath?: unknown }).registerFromPath === 'function') {
+            ;(GlobalFonts as unknown as { registerFromPath: (p: string, f: string) => void }).registerFromPath(fp, fam)
+          } else if (typeof (GlobalFonts as unknown as { register?: unknown }).register === 'function') {
+            ;(GlobalFonts as unknown as { register: (p: string, opts?: { family?: string }) => void }).register(fp, { family: fam })
           }
-        } catch (fontErr) {
-          console.warn('Failed to register server-side canvas font', fontErr)
+        } catch {
+          // ignore individual font registration errors
         }
-        canvasInitialized = true
-      } catch (error) {
-        console.warn('@napi-rs/canvas not available, Canvas functionality will be limited', error)
       }
-    } else {
-      canvasInitialized = true
     }
-  })()
-
-  return canvasInitPromise
-}
+    registerPair(lightFontPath, ['Noto Sans JP', 'NotoSansJP'])
+    registerPair(semiBoldFontPath, ['Noto Sans JP SemiBold', 'NotoSansJP-SemiBold'])
+  } catch (e) {
+    getLogger()
+      .withContext({ service: 'canvas-renderer', phase: 'font_register_sync' })
+      .warn('font_registration_failed', { error: e instanceof Error ? e.message : String(e) })
+  }
+})()
 
 export interface DialogueAsset {
   image: CanvasImageSource
@@ -162,9 +116,8 @@ export class CanvasRenderer {
   public sfxPlacer: SfxPlacer
   private layoutCoordinator: PanelLayoutCoordinator
 
-  // Async factory method for proper initialization
+  // Factory kept async for backward compatibility with call sites
   static async create(config: CanvasConfig): Promise<CanvasRenderer> {
-    await initializeCanvas()
     return new CanvasRenderer(config)
   }
 
@@ -260,16 +213,8 @@ export class CanvasRenderer {
       ...config,
     }
 
-    // サーバーサイドとクライアントサイドの両方で動作するようにCanvas作成
-    if (isServer && createCanvas) {
-      this.canvas = createCanvas(this.config.width, this.config.height) as NodeCanvas
-    } else if (typeof document !== 'undefined') {
-      this.canvas = document.createElement('canvas')
-      this.canvas.width = this.config.width
-      this.canvas.height = this.config.height
-    } else {
-      throw new Error('Canvas is not available in this environment')
-    }
+    // Server-only canvas creation
+    this.canvas = createCanvas(this.config.width, this.config.height) as NodeCanvas
 
     const ctx = this.canvas.getContext('2d')
     if (!ctx) {
@@ -388,7 +333,7 @@ export class CanvasRenderer {
     }
 
     // デフォルト設定
-    this.ctx.font = `${this.config.fontSize || 16}px ${this.config.fontFamily || 'Arial, sans-serif'}`
+  this.ctx.font = `${this.config.fontSize || 16}px ${this.config.fontFamily || '"Noto Sans JP", NotoSansJP, sans-serif'}`
     this.ctx.strokeStyle = this.config.lineColor || '#000000'
     this.ctx.lineWidth = this.config.lineWidth || 2
   }
@@ -403,9 +348,6 @@ export class CanvasRenderer {
 
   /** Create an Image from a PNG buffer (server only). */
   static async createImageFromBuffer(buffer: Buffer): Promise<DialogueAsset> {
-    if (!isServer || !loadImageFn) {
-      throw new Error('createImageFromBuffer is only available on server with @napi-rs/canvas')
-    }
     const img = await loadImageFn(buffer)
     const width = img.width
     const height = img.height
@@ -695,7 +637,7 @@ export class CanvasRenderer {
           this.ctx.stroke()
 
           // テキスト
-          this.ctx.font = `${placement.fontSize}px ${this.config.fontFamily || 'Arial, sans-serif'}`
+          this.ctx.font = `${placement.fontSize}px ${this.config.fontFamily || '"Noto Sans JP", NotoSansJP, sans-serif'}`
           this.ctx.fillStyle = contentCfg.textColor
           this.ctx.textAlign = 'left'
           this.ctx.textBaseline = 'top'
@@ -725,7 +667,7 @@ export class CanvasRenderer {
   ): void {
     const {
       maxWidth,
-      font = `${this.config.fontSize || 16}px ${this.config.fontFamily || 'Arial, sans-serif'}`,
+  font = `${this.config.fontSize || 16}px ${this.config.fontFamily || '"Noto Sans JP", NotoSansJP, sans-serif'}`,
       color = this.config.textColor || '#000000',
     } = options || {}
 
@@ -821,8 +763,10 @@ export class CanvasRenderer {
     }
 
     // メインSFX
-    const weightMain = cfg.mainTextStyle?.fontWeight === 'bold' ? 'bold' : 'normal'
-    this.ctx.font = `${weightMain} ${placement.fontSize}px ${this.config.fontFamily || 'Arial, sans-serif'}`
+  // Use dedicated SemiBold family registered as 'Noto Sans JP SemiBold' for SFX main text
+  const weightMain = cfg.mainTextStyle?.fontWeight === 'bold' ? 'bold' : 'normal'
+  const sfxFamily = 'Noto Sans JP SemiBold'
+  this.ctx.font = `${weightMain} ${placement.fontSize}px ${sfxFamily}, ${this.config.fontFamily || 'Noto Sans JP'}, sans-serif`
     this.ctx.fillStyle = cfg.mainTextStyle?.fillStyle || '#000000'
     this.ctx.strokeStyle = cfg.mainTextStyle?.strokeStyle || '#ffffff'
     this.ctx.lineWidth = cfg.mainTextStyle?.lineWidth ?? 4
@@ -836,8 +780,8 @@ export class CanvasRenderer {
       const ratio = cfg.supplementFontSize?.scaleFactor ?? 0.35
       const minSup = cfg.supplementFontSize?.min ?? 10
       const supSize = Math.max(minSup, placement.fontSize * ratio)
-      const weightSup = cfg.supplementTextStyle?.fontWeight === 'bold' ? 'bold' : 'normal'
-      this.ctx.font = `${weightSup} ${supSize}px ${this.config.fontFamily || 'Arial, sans-serif'}`
+  const weightSup = cfg.supplementTextStyle?.fontWeight === 'bold' ? 'bold' : 'normal'
+  this.ctx.font = `${weightSup} ${supSize}px ${sfxFamily}, ${this.config.fontFamily || 'Noto Sans JP'}, sans-serif`
       this.ctx.fillStyle = cfg.supplementTextStyle?.fillStyle || '#666666'
       this.ctx.strokeStyle = cfg.supplementTextStyle?.strokeStyle || '#ffffff'
       this.ctx.lineWidth = cfg.supplementTextStyle?.lineWidth ?? 2
@@ -1044,7 +988,7 @@ export class CanvasRenderer {
     const lines = linesRaw.length > 0 ? linesRaw : [speaker]
 
     // 動的スケーリング（パネル内に収める）
-    const family = this.config.fontFamily || 'Arial, sans-serif'
+  const family = this.config.fontFamily || '"Noto Sans JP", NotoSansJP, sans-serif'
     const minFontSize = 8
     let fs = Math.max(minFontSize, fontSize)
     let lhRatio = 1.2
@@ -1166,7 +1110,7 @@ export class CanvasRenderer {
 
     // テキストを描画
     this.ctx.fillStyle = '#000000'
-    this.ctx.font = `${fontSize}px ${this.config.fontFamily || 'Arial, sans-serif'}`
+  this.ctx.font = `${fontSize}px ${this.config.fontFamily || '"Noto Sans JP", NotoSansJP, sans-serif'}`
     let textY = y + 15
     for (const line of lines) {
       this.ctx.fillText(line, x + 10, textY)
@@ -1193,13 +1137,10 @@ export class CanvasRenderer {
   }
 
   async toBlob(type: string = 'image/png', quality?: number): Promise<Blob> {
-    if (isServer) {
-      // サーバー側の canvas 実装
-      const nodeCanvas = this.canvas as NodeCanvas
-
-      // toDataURL を優先的に使用（より安定している）
-      try {
-        console.log('Using toDataURL method for server-side rendering')
+    // Server-only implementation
+    const nodeCanvas = this.canvas as NodeCanvas
+    try {
+  getLogger().withContext({ service: 'canvas-renderer' }).debug('server_to_data_url_attempt')
         const dataUrl = nodeCanvas.toDataURL(type, quality)
 
         if (!dataUrl || dataUrl === 'data:,' || !dataUrl.includes(',')) {
@@ -1213,41 +1154,59 @@ export class CanvasRenderer {
         }
 
         const binaryBuffer = Buffer.from(base64Data, 'base64')
-        console.log('Buffer created from dataURL:', binaryBuffer.length, 'bytes')
+        getLogger()
+          .withContext({ service: 'canvas-renderer' })
+          .debug('buffer_created_from_data_url', { bytes: binaryBuffer.length })
 
         // PNG署名を確認
         const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
         const hasPngSignature = binaryBuffer.subarray(0, 8).equals(pngSignature)
-        console.log('PNG signature valid:', hasPngSignature)
+        getLogger()
+          .withContext({ service: 'canvas-renderer' })
+          .debug('png_signature_valid', { valid: hasPngSignature })
 
         const binaryAb = binaryBuffer.buffer.slice(
           binaryBuffer.byteOffset,
           binaryBuffer.byteOffset + binaryBuffer.byteLength,
         ) as ArrayBuffer
         const blob = new Blob([binaryAb], { type })
-        console.log('Blob created successfully:', blob.size, 'bytes')
+        getLogger()
+          .withContext({ service: 'canvas-renderer' })
+          .debug('blob_created_successfully', { bytes: blob.size })
         return blob
-      } catch (dataUrlError) {
-        console.error(
-          'toDataURL failed:',
-          dataUrlError instanceof Error ? dataUrlError.message : String(dataUrlError),
-        )
+    } catch (dataUrlError) {
+        getLogger()
+          .withContext({ service: 'canvas-renderer' })
+          .error('to_data_url_failed', {
+            error:
+              dataUrlError instanceof Error ? dataUrlError.message : String(dataUrlError),
+          })
 
         // フォールバック: toBuffer を試行
-        return new Promise<Blob>((resolve, reject) => {
+      return new Promise<Blob>((resolve, reject) => {
           try {
             if ('toBuffer' in nodeCanvas && typeof nodeCanvas.toBuffer === 'function') {
-              console.log('Falling back to toBuffer method')
+              getLogger()
+                .withContext({ service: 'canvas-renderer' })
+                .debug('fallback_to_buffer_method')
               nodeCanvas.toBuffer(
                 (err: Error | null, buffer: Buffer) => {
                   if (err) {
-                    console.error('toBuffer callback error:', err)
+                    getLogger()
+                      .withContext({ service: 'canvas-renderer' })
+                      .error('to_buffer_callback_error', {
+                        error: err instanceof Error ? err.message : String(err),
+                      })
                     reject(err)
                   } else if (!buffer) {
-                    console.error('toBuffer returned null/undefined buffer')
+                    getLogger()
+                      .withContext({ service: 'canvas-renderer' })
+                      .error('to_buffer_returned_empty')
                     reject(new Error('Buffer is null or undefined'))
                   } else {
-                    console.log('Buffer created via toBuffer callback:', buffer.length, 'bytes')
+                    getLogger()
+                      .withContext({ service: 'canvas-renderer' })
+                      .debug('buffer_created_via_callback', { bytes: buffer.length })
                     const ab = buffer.buffer.slice(
                       buffer.byteOffset,
                       buffer.byteOffset + buffer.byteLength,
@@ -1263,39 +1222,13 @@ export class CanvasRenderer {
               reject(new Error('Neither toDataURL nor toBuffer are working'))
             }
           } catch (bufferError) {
-            console.error('toBuffer setup failed:', bufferError)
+            getLogger()
+              .withContext({ service: 'canvas-renderer' })
+              .error('to_buffer_setup_failed', {
+                error: bufferError instanceof Error ? bufferError.message : String(bufferError),
+              })
             reject(bufferError)
           }
-        })
-      }
-    } else {
-      // ブラウザの場合
-      const htmlCanvas = this.canvas as HTMLCanvasElement
-      return new Promise<Blob>((resolve, reject) => {
-        if ('toBlob' in htmlCanvas && typeof htmlCanvas.toBlob === 'function') {
-          htmlCanvas.toBlob(
-            (blob: Blob | null) => {
-              if (blob) {
-                resolve(blob)
-              } else {
-                reject(new Error('Failed to create blob'))
-              }
-            },
-            type,
-            quality,
-          )
-        } else {
-          // toBlob未サポートの場合はtoDataURLから変換
-          try {
-            const dataUrl = htmlCanvas.toDataURL(type, quality)
-            fetch(dataUrl)
-              .then((res) => res.blob())
-              .then(resolve)
-              .catch(reject)
-          } catch (err) {
-            reject(new Error(`Failed to create blob from dataURL: ${err}`))
-          }
-        }
       })
     }
   }
@@ -1305,22 +1238,16 @@ export class CanvasRenderer {
    */
   cleanup(): void {
     try {
-      // Clear the canvas
       this.ctx.clearRect(0, 0, this.config.width, this.config.height)
-
-      // Reset canvas state
-      this.ctx.restore()
-      this.ctx.resetTransform()
-
-      // For Node.js canvas, manually clear if possible
-      if (isServer && this.canvas) {
-        const nodeCanvas = this.canvas as NodeCanvas
-        // Set canvas dimensions to 0 to release memory
-        nodeCanvas.width = 0
-        nodeCanvas.height = 0
-      }
+      const nodeCanvas = this.canvas as NodeCanvas
+      nodeCanvas.width = 0
+      nodeCanvas.height = 0
     } catch (error) {
-      console.warn('Failed to cleanup canvas resources:', error)
+      getLogger()
+        .withContext({ service: 'canvas-renderer' })
+        .warn('canvas_cleanup_failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
     }
   }
 }

@@ -2,6 +2,8 @@
  * Integration utilities for job notification system
  * Provides easy-to-use functions for integrating notifications with existing job processing
  */
+
+import { getLogger } from '@/infrastructure/logging/logger'
 import { notificationService } from './service'
 
 /**
@@ -17,8 +19,13 @@ export const sendJobNotification = async (
   try {
     await notificationService.sendJobCompletionNotification(jobId, status, errorMessage)
   } catch (error) {
-    // Log but swallow
-    console.error('Failed to send job notification:', error)
+    getLogger()
+      .withContext({ service: 'notification-integration' })
+      .error('send_job_notification_failed', {
+        jobId,
+        status,
+        error: error instanceof Error ? error.message : String(error),
+      })
   }
 }
 

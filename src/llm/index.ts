@@ -1,4 +1,5 @@
 import { getLLMProviderConfig } from '@/config/llm.config'
+import { getLogger } from '@/infrastructure/logging/logger'
 import type { LlmClient } from './client'
 import { FakeLlmClient } from './fake'
 import { CerebrasClient, type CerebrasConfig } from './providers/cerebras'
@@ -137,7 +138,11 @@ export async function createLlmClientWithFallback(
       })
       return client
     } catch (error) {
-      console.warn(`Failed to initialize ${provider} client:`, error)
+      getLogger()
+        .withContext({ service: 'llm-factory', provider })
+        .warn('llm_provider_init_failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
     }
   }
 
