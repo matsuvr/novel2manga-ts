@@ -47,7 +47,17 @@ class FileLogger {
     try {
       fs.appendFileSync(this.logFilePath, message, 'utf8')
     } catch (error) {
-      console.error('Failed to write to log file:', error)
+      // ここで console.error を呼ぶとパッチ後は再帰するので元のエラー出力に直接書く
+      try {
+        if (typeof originalConsoleError === 'function') {
+          originalConsoleError('Failed to write to log file:', error)
+        } else {
+          // 最低限標準エラー出力
+          process.stderr.write(`Failed to write to log file: ${String(error)}\n`)
+        }
+      } catch {
+        // ここでさらに失敗しても握りつぶす（無限ループ防止）
+      }
     }
   }
 
@@ -77,56 +87,71 @@ class FileLogger {
   }
 }
 
-// Respect environment variables to disable file logging in CI/build environments
+// ========= Logging activation guards =========
+// ビルドや本番 (NODE_ENV !== 'development') ではファイルロギングと console モンキーパッチを無効化
+// DISABLE_LOGGING=1 または DISABLE_FILE_LOGGER=1 も尊重
 const disableLogging = String(process.env.DISABLE_LOGGING || '').trim() === '1'
-const disableFileLogger =
-  disableLogging || String(process.env.DISABLE_FILE_LOGGER || '').trim() === '1'
+const disableFileLoggerEnv = String(process.env.DISABLE_FILE_LOGGER || '').trim() === '1'
+const isDevelopmentRuntime = process.env.NODE_ENV === 'development'
+const enableFilePatch = isDevelopmentRuntime && !disableLogging && !disableFileLoggerEnv
+
+// 元の console 参照をキャプチャし再帰回避用に外に出す
+// eslint-disable-next-line no-var
+var originalConsoleError = console.error.bind(console)
+const originalConsoleLog = console.log.bind(console)
+const originalConsoleWarn = console.warn.bind(console)
+const originalConsoleInfo = console.info.bind(console)
 
 let fileLogger = null
-if (!disableFileLogger) {
-  // グローバルなコンソール出力をインターセプトしてファイルにも出力
+if (enableFilePatch) {
   fileLogger = FileLogger.getInstance()
 
-  const originalConsoleLog = console.log
-  const originalConsoleError = console.error
-  const originalConsoleWarn = console.warn
-  const originalConsoleInfo = console.info
-
   console.log = (...args) => {
-    const message = args
-      .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
-      .join(' ')
-
     originalConsoleLog(...args)
-    fileLogger.log(`LOG: ${message}`)
+    try {
+      const message = args
+        .map((a) => (typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)))
+        .join(' ')
+      fileLogger?.log(`LOG: ${message}`)
+    } catch {
+      /* noop */
+    }
   }
-
   console.error = (...args) => {
-    const message = args
-      .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
-      .join(' ')
-
     originalConsoleError(...args)
-    fileLogger.log(`ERROR: ${message}`)
+    try {
+      const message = args
+        .map((a) => (typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)))
+        .join(' ')
+      fileLogger?.log(`ERROR: ${message}`)
+    } catch {
+      /* noop */
+    }
   }
-
   console.warn = (...args) => {
-    const message = args
-      .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
-      .join(' ')
-
     originalConsoleWarn(...args)
-    fileLogger.log(`WARN: ${message}`)
+    try {
+      const message = args
+        .map((a) => (typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)))
+        .join(' ')
+      fileLogger?.log(`WARN: ${message}`)
+    } catch {
+      /* noop */
+    }
   }
-
   console.info = (...args) => {
-    const message = args
-      .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
-      .join(' ')
-
     originalConsoleInfo(...args)
-    fileLogger.log(`INFO: ${message}`)
+    try {
+      const message = args
+        .map((a) => (typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)))
+        .join(' ')
+      fileLogger?.log(`INFO: ${message}`)
+    } catch {
+      /* noop */
+    }
   }
 }
+
+// build/production/test では副作用無し: ファイル出力無しでエラー無しを保証
 
 export { FileLogger, fileLogger }
