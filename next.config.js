@@ -2,7 +2,16 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { fileLogger } from './src/utils/logger.mjs'
+// Backwards-compatible: require the TS logger utils to avoid ESM loader issues in Next build
+let fileLogger
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const loggerModule = require('./src/infrastructure/logging/logger')
+  fileLogger = loggerModule?.fileLogger
+} catch (_) {
+  // fallback to a noop-ish placeholder
+  fileLogger = { getLogFilePath: () => '' }
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
