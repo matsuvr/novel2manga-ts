@@ -33,17 +33,11 @@ const nextConfig = {
   },
   // Fast Refreshの最適化とパフォーマンス改善
   webpack: (config, { dev, isServer }) => {
+    // NOTE: Removed custom optimization overrides to avoid interfering with CSS/PostCSS pipeline.
     if (dev && !isServer) {
       config.watchOptions = {
         poll: 1000,
         aggregateTimeout: 300,
-      }
-      // 開発環境でのビルド最適化
-      config.optimization = {
-        ...config.optimization,
-        removeAvailableModules: false,
-        removeEmptyChunks: false,
-        splitChunks: false,
       }
     }
     // Path alias for '@/*' used throughout the project

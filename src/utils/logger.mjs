@@ -77,48 +77,56 @@ class FileLogger {
   }
 }
 
-// グローバルなコンソール出力をインターセプトしてファイルにも出力
-const fileLogger = FileLogger.getInstance()
+// Respect environment variables to disable file logging in CI/build environments
+const disableLogging = String(process.env.DISABLE_LOGGING || '').trim() === '1'
+const disableFileLogger =
+  disableLogging || String(process.env.DISABLE_FILE_LOGGER || '').trim() === '1'
 
-const originalConsoleLog = console.log
-const originalConsoleError = console.error
-const originalConsoleWarn = console.warn
-const originalConsoleInfo = console.info
+let fileLogger = null
+if (!disableFileLogger) {
+  // グローバルなコンソール出力をインターセプトしてファイルにも出力
+  fileLogger = FileLogger.getInstance()
 
-console.log = (...args) => {
-  const message = args
-    .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
-    .join(' ')
+  const originalConsoleLog = console.log
+  const originalConsoleError = console.error
+  const originalConsoleWarn = console.warn
+  const originalConsoleInfo = console.info
 
-  originalConsoleLog(...args)
-  fileLogger.log(`LOG: ${message}`)
-}
+  console.log = (...args) => {
+    const message = args
+      .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
+      .join(' ')
 
-console.error = (...args) => {
-  const message = args
-    .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
-    .join(' ')
+    originalConsoleLog(...args)
+    fileLogger.log(`LOG: ${message}`)
+  }
 
-  originalConsoleError(...args)
-  fileLogger.log(`ERROR: ${message}`)
-}
+  console.error = (...args) => {
+    const message = args
+      .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
+      .join(' ')
 
-console.warn = (...args) => {
-  const message = args
-    .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
-    .join(' ')
+    originalConsoleError(...args)
+    fileLogger.log(`ERROR: ${message}`)
+  }
 
-  originalConsoleWarn(...args)
-  fileLogger.log(`WARN: ${message}`)
-}
+  console.warn = (...args) => {
+    const message = args
+      .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
+      .join(' ')
 
-console.info = (...args) => {
-  const message = args
-    .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
-    .join(' ')
+    originalConsoleWarn(...args)
+    fileLogger.log(`WARN: ${message}`)
+  }
 
-  originalConsoleInfo(...args)
-  fileLogger.log(`INFO: ${message}`)
+  console.info = (...args) => {
+    const message = args
+      .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
+      .join(' ')
+
+    originalConsoleInfo(...args)
+    fileLogger.log(`INFO: ${message}`)
+  }
 }
 
 export { FileLogger, fileLogger }

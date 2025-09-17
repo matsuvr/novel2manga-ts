@@ -1,22 +1,10 @@
 'use client'
-
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
-import InfoIcon from '@mui/icons-material/Info'
-import UploadFileIcon from '@mui/icons-material/UploadFile'
-import {
-  Box,
-  Button,
-  Card,
-  CardActions,
-  CardContent,
-  CircularProgress,
-  LinearProgress,
-  Stack,
-  TextField,
-  Tooltip,
-  Typography,
-} from '@mui/material'
 import { type ChangeEvent, type DragEvent, useEffect, useRef, useState } from 'react'
+import { Upload, Wand2 } from '@/components/icons'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Progress } from '@/components/ui/progress'
+import { Textarea } from '@/components/ui/textarea'
 import { estimateTokenCount } from '@/utils/textExtraction'
 
 interface TextInputAreaProps {
@@ -28,19 +16,15 @@ interface TextInputAreaProps {
 }
 
 const TokenTooltipContent = () => (
-  <Box>
-    <Typography variant="subtitle2" gutterBottom>
-      トークン見積りルール:
-    </Typography>
-    <Typography component="ul" sx={{ pl: 2, '& li': { pb: 0.5 } }}>
+  <div className="text-sm">
+    <div className="font-semibold mb-1">トークン見積りルール:</div>
+    <ul className="list-disc pl-5 space-y-1">
       <li>日本語/中国語/韓国語: 1文字 ≒ 1トークン</li>
       <li>英語: 4文字 ≒ 1トークン</li>
       <li>混合テキスト: 上記を按分して計算</li>
-    </Typography>
-    <Typography variant="caption" color="warning.light" display="block" sx={{ mt: 1 }}>
-      ※ 確定値は送信後にAPIから取得されます
-    </Typography>
-  </Box>
+    </ul>
+    <div className="text-xs text-amber-600 mt-2">※ 確定値は送信後にAPIから取得されます</div>
+  </div>
 )
 
 export default function TextInputArea({
@@ -92,115 +76,109 @@ export default function TextInputArea({
   const characterPercentage = (characterCount / maxLength) * 100
 
   const getProgressColor = () => {
-    if (characterPercentage > 90) return 'error'
-    if (characterPercentage > 70) return 'warning'
-    return 'primary'
+    if (characterPercentage > 90) return 'bg-red-500'
+    if (characterPercentage > 70) return 'bg-amber-500'
+    return 'bg-primary'
   }
 
   return (
-    <Card variant="outlined" sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Box>
-            <Typography variant="h6" component="h3" gutterBottom>
-              小説テキスト入力
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              テキストを貼り付けるか、ファイルをドラッグ＆ドロップしてください
-            </Typography>
-          </Box>
-          <Button
-            variant="outlined"
-            startIcon={<UploadFileIcon />}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            ファイルを選択
+    <Card className="flex h-full flex-col">
+      <CardHeader className="flex-row items-center justify-between space-y-0">
+        <div>
+          <CardTitle className="text-lg">小説テキスト入力</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            テキストを貼り付けるか、ファイルをドラッグ＆ドロップしてください
+          </p>
+        </div>
+        <div className="shrink-0">
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+            <Upload className="mr-2 h-4 w-4" /> ファイルを選択
           </Button>
           <input
             ref={fileInputRef}
             type="file"
             accept=".txt,text/plain"
             onChange={handleFileSelect}
-            hidden
+            className="hidden"
           />
-        </Stack>
-        <Box
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-1 flex-col gap-2">
+        <section
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          sx={{
-            flex: 1,
-            position: 'relative',
-            borderRadius: 1,
-            border: isDragging ? (theme) => `2px dashed ${theme.palette.primary.main}`: (theme) => `1px solid ${theme.palette.divider}`,
-            bgcolor: isDragging ? 'primary.lighter' : 'action.hover',
-          }}
+          aria-label="テキスト入力ドロップ領域"
+          className={
+            'relative flex-1 rounded-md border bg-muted/40 p-2 transition-colors ' +
+            (isDragging ? 'border-primary border-dashed bg-primary/10' : '')
+          }
         >
-          <TextField
-            multiline
-            fullWidth
+          <Textarea
             value={value}
             onChange={(e) => onChange(e.target.value.slice(0, maxLength))}
             placeholder="ここに小説のテキストを入力してください..."
             disabled={isProcessing}
-            variant="standard"
-            sx={{
-              height: '100%',
-              p: 2,
-              '& .MuiInput-underline:before, & .MuiInput-underline:after': {
-                borderBottom: 'none',
-              },
-              '& .MuiInputBase-root': {
-                height: '100%',
-              },
-              '& .MuiInputBase-input': {
-                height: '100% !important',
-                resize: 'none',
-              },
-            }}
+            className="h-full resize-none border-0 bg-transparent p-0 focus-visible:ring-0"
           />
           {isDragging && (
-            <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-              <Stack spacing={1} alignItems="center">
-                <Typography variant="h3">📄</Typography>
-                <Typography variant="h6" color="primary.dark">
-                  ファイルをドロップ
-                </Typography>
-              </Stack>
-            </Box>
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-1">
+                <div className="text-3xl">📄</div>
+                <div className="text-primary">ファイルをドロップ</div>
+              </div>
+            </div>
           )}
-        </Box>
+        </section>
       </CardContent>
-      <CardActions sx={{ justifyContent: 'space-between', p: 2 }}>
-        <Stack direction="row" alignItems="center" spacing={2} sx={{ flex: 1 }}>
-            <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
-              {characterCount.toLocaleString()} / {maxLength.toLocaleString()} 文字
-            </Typography>
-            <LinearProgress
-              variant="determinate"
-              value={Math.min(characterPercentage, 100)}
-              color={getProgressColor()}
-              sx={{ width: '100px', flexShrink: 0 }}
-            />
-            <Tooltip title={<TokenTooltipContent />} placement="top" arrow>
-              <Stack direction="row" alignItems="center" spacing={0.5} sx={{ cursor: 'help' }}>
-                <Typography variant="body2" color="primary">
-                  🔢 見積り: {estimatedTokens.toLocaleString()} トークン
-                </Typography>
-                <InfoIcon fontSize="small" color="primary" sx={{ fontSize: '1rem' }} />
-              </Stack>
-            </Tooltip>
-        </Stack>
-        <Button
-          variant="contained"
-          size="large"
-          onClick={onSubmit}
-          disabled={isProcessing || !value.trim()}
-          startIcon={isProcessing ? <CircularProgress size={24} color="inherit" /> : <AutoFixHighIcon />}
-        >
-          {isProcessing ? '処理中...' : 'マンガに変換'}
+      <CardFooter className="justify-between gap-2">
+        <div className="flex flex-1 items-center gap-3">
+          <div className="text-sm whitespace-nowrap">
+            {characterCount.toLocaleString()} / {maxLength.toLocaleString()} 文字
+          </div>
+          <div className="w-[120px]">
+            <div className="relative">
+              <Progress value={Math.min(characterPercentage, 100)} />
+              <div
+                className={`absolute inset-0 rounded-full ${getProgressColor()}`}
+                style={{ width: `${Math.min(characterPercentage, 100)}%` }}
+              />
+            </div>
+          </div>
+          <div className="group relative cursor-help select-none text-sm text-primary">
+            🔢 見積り: {estimatedTokens.toLocaleString()} トークン
+            <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 hidden w-72 rounded-md border bg-popover p-3 text-popover-foreground shadow-md group-hover:block">
+              <TokenTooltipContent />
+            </div>
+          </div>
+        </div>
+        <Button onClick={onSubmit} disabled={isProcessing || !value.trim()}>
+          {isProcessing ? (
+            <>
+              <svg className="mr-2 h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                ></path>
+              </svg>
+              処理中...
+            </>
+          ) : (
+            <>
+              <Wand2 className="mr-2 h-4 w-4" /> マンガに変換
+            </>
+          )}
         </Button>
-      </CardActions>
+      </CardFooter>
     </Card>
   )
 }

@@ -7,15 +7,20 @@ services:
       - '3000:3000'
     volumes:
       - ./:/app # ソースコードのみマウント
-      # - node_modules:/app/node_modules  # これをコメントアウト or 削除
-      - /app/node_modules # 追加: コンテナ内専用のnode_modulesパス（匿名volume相当）
+      # Mount source code but keep the container-built node_modules by
+      # mapping the named volume `node_modules` into the container path.
+      - node_modules:/app/node_modules
+      # Persist Next.js cache between restarts to avoid full recompiles on the
+      # first request after container restart.
+      - next_cache:/app/.next
     env_file:
       - .env
       - .env.local
     environment:
       NODE_ENV: development
       VERTICAL_TEXT_GENERATOR_URL: http://vertical-text-generator:8000
-    command: npm run dev
+    # Ensure node_modules volume is seeded from image-installed modules
+    command: ['/usr/local/bin/ensure-node-modules.sh', 'npm', 'run', 'dev']
     depends_on:
       - vertical-text-generator
 
@@ -42,4 +47,5 @@ services:
 
 volumes:
   node_modules:
+  next_cache:
   database:

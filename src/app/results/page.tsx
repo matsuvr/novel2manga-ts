@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { auth } from '@/auth'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { db } from '@/services/database/index'
 
 export const dynamic = 'force-dynamic'
@@ -20,34 +22,37 @@ export default async function ResultsPage() {
   const jobIds = jobs.map((job) => job.id)
   const tokenTotals = await db.tokenUsage().getTotalsByJobIds(jobIds)
   return (
-    <main className="max-w-3xl mx-auto p-6 space-y-4">
-      <h1 className="text-2xl font-bold">変換結果一覧</h1>
-      <ul className="space-y-2">
-        {jobs.map((job) => {
-          const totals = tokenTotals[job.id] ?? {
-            promptTokens: 0,
-            completionTokens: 0,
-            totalTokens: 0,
-          }
-          return (
-            <li key={job.id} className="apple-card p-4 flex items-center justify-between">
-              <div>
-                <div className="font-semibold">{job.jobName ?? '無題'}</div>
-                <div className="text-sm text-gray-600">{job.createdAt}</div>
-                <div className="text-xs text-gray-600 mt-1">
-                  入力 {totals.promptTokens.toLocaleString()}t / 出力{' '}
-                  {totals.completionTokens.toLocaleString()}t
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <Link className="btn-secondary text-sm" href={`/results/${job.id}`}>
-                  詳細
-                </Link>
-              </div>
-            </li>
-          )
-        })}
-      </ul>
-    </main>
+    <div className="container mx-auto max-w-5xl py-6">
+      <h1 className="mb-4 text-2xl font-semibold">変換結果一覧</h1>
+
+      <Card>
+        <CardContent>
+          <ul className="divide-y">
+            {jobs.map((job) => {
+              const totals = tokenTotals[job.id] ?? {
+                promptTokens: 0,
+                completionTokens: 0,
+                totalTokens: 0,
+              }
+              return (
+                <li key={job.id} className="flex items-center justify-between py-3">
+                  <div>
+                    <div className="font-medium">{job.jobName ?? '無題'}</div>
+                    <div className="text-xs text-muted-foreground">{job.createdAt}</div>
+                    <div className="text-xs text-muted-foreground">
+                      入力 {totals.promptTokens.toLocaleString()}t / 出力{' '}
+                      {totals.completionTokens.toLocaleString()}t
+                    </div>
+                  </div>
+                  <Button asChild variant="outline" className="ml-4">
+                    <Link href={`/results/${job.id}`}>詳細</Link>
+                  </Button>
+                </li>
+              )
+            })}
+          </ul>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

@@ -1,17 +1,9 @@
 'use client'
 
-import {
-  Button,
-  CircularProgress,
-  List,
-  ListItem,
-  ListItemText,
-  Paper,
-  Typography,
-} from '@mui/material'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { Button } from '@/components/ui/button'
 import type { MypageJobSummary } from '@/types/mypage'
 
 interface Props {
@@ -43,45 +35,63 @@ export default function MypageJobList({ jobs }: Props) {
 
   if (jobs.length === 0) {
     return (
-      <Paper sx={{ p: 3, textAlign: 'center' }}>
-        <Typography color="text.secondary">ジョブ履歴はありません。</Typography>
-      </Paper>
+      <div className="rounded-md border bg-white p-4 text-center text-sm text-muted-foreground">
+        ジョブ履歴はありません。
+      </div>
     )
   }
 
   return (
-    <List component={Paper}>
-      {jobs.map((job) => (
-        <ListItem
+    <div className="overflow-hidden rounded-md border bg-white">
+      {jobs.map((job, idx) => (
+        <div
           key={job.id}
-          divider
-          secondaryAction={
-            <>
-              {job.status === 'completed' && (
-                <Button component={Link} href={`/results/${job.id}`} size="small">
-                  結果を見る
-                </Button>
-              )}
-              {job.status === 'failed' && (
-                <Button
-                  color="error"
-                  size="small"
-                  onClick={() => handleResume(job.id)}
-                  disabled={loadingId === job.id}
-                  startIcon={loadingId === job.id && <CircularProgress size={16} />}
-                >
-                  {loadingId === job.id ? '再開中...' : '再開'}
-                </Button>
-              )}
-            </>
-          }
+          className={`flex items-center justify-between gap-3 px-4 py-3 ${idx !== jobs.length - 1 ? 'border-b' : ''}`}
         >
-          <ListItemText
-            primary={job.novelTitle || job.novelId}
-            secondary={`Status: ${job.status}`}
-          />
-        </ListItem>
+          <div>
+            <div className="text-sm font-medium">{job.novelTitle || job.novelId}</div>
+            <div className="text-xs text-muted-foreground">Status: {job.status}</div>
+          </div>
+          <div className="flex items-center gap-2">
+            {job.status === 'completed' && (
+              <Button asChild size="sm">
+                <Link href={`/results/${job.id}`}>結果を見る</Link>
+              </Button>
+            )}
+            {job.status === 'failed' && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => handleResume(job.id)}
+                disabled={loadingId === job.id}
+              >
+                {loadingId === job.id ? (
+                  <span className="inline-flex items-center gap-2">
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                      ></path>
+                    </svg>
+                    再開中...
+                  </span>
+                ) : (
+                  '再開'
+                )}
+              </Button>
+            )}
+          </div>
+        </div>
       ))}
-    </List>
+    </div>
   )
 }

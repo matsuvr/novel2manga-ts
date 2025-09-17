@@ -1,21 +1,10 @@
 'use client'
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  CircularProgress,
-  Divider,
-  List,
-  ListItem,
-  ListItemText,
-  Stack,
-  Typography,
-} from '@mui/material'
 import { useCallback, useMemo, useState } from 'react'
 import { z } from 'zod'
 import { createNovelToMangaScenario } from '@/agents/scenarios/novel-to-manga'
+import { Alert } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 
 type RunSummary = {
   ingest?: unknown
@@ -77,62 +66,74 @@ export function ScenarioViewer() {
   return (
     <Card>
       <CardContent>
-        <Stack spacing={2}>
-          <Typography variant="h5" component="h2">
-            Novel → Manga Scenario (Dev Tool)
-          </Typography>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
-            <Box>
-              <Typography variant="h6">Steps</Typography>
-              <List dense>
+        <div className="space-y-3">
+          <h2 className="text-xl font-semibold">Novel → Manga Scenario (Dev Tool)</h2>
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+            <div>
+              <h3 className="mb-1 text-sm font-semibold">Steps</h3>
+              <ul className="space-y-1 text-sm">
                 {scenario.steps.map((s) => (
-                  <ListItem key={s.id}>
-                    <ListItemText primary={s.id} />
-                  </ListItem>
+                  <li key={s.id} className="rounded border px-2 py-1">
+                    {s.id}
+                  </li>
                 ))}
-              </List>
-            </Box>
-            <Box>
-              <Typography variant="h6">Edges</Typography>
-              <List dense>
+              </ul>
+            </div>
+            <div>
+              <h3 className="mb-1 text-sm font-semibold">Edges</h3>
+              <ul className="space-y-1 text-sm">
                 {scenario.edges.map((e, i) => (
-                  <ListItem key={`${e.from}-${e.to}-${i}`}>
-                    <ListItemText primary={`${e.from} \u2192 ${e.to} (${e.fanIn})`} />
-                  </ListItem>
+                  <li key={`${e.from}-${e.to}-${i}`} className="rounded border px-2 py-1">
+                    {e.from} → {e.to} ({e.fanIn})
+                  </li>
                 ))}
-              </List>
-            </Box>
-          </Box>
+              </ul>
+            </div>
+          </div>
 
-          <Divider />
-
-          <Box>
-            <Button
-              variant="contained"
-              disabled={loading}
-              onClick={onRun}
-              startIcon={loading && <CircularProgress size={20} />}
-            >
-              {loading ? 'Running…' : 'Run Scenario'}
+          <div>
+            <Button disabled={loading} onClick={onRun}>
+              {loading ? (
+                <span className="inline-flex items-center gap-2">
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                    ></path>
+                  </svg>
+                  Running…
+                </span>
+              ) : (
+                'Run Scenario'
+              )}
             </Button>
-          </Box>
+          </div>
 
-          {error && <Alert severity="error">Error: {error}</Alert>}
+          {error && <Alert variant="destructive">Error: {error}</Alert>}
 
           {summary && (
-            <Alert severity="success">
-              <Typography variant="h6">Run Summary</Typography>
-              <List dense>
-                <ListItemText primary={`Analyze windows: ${summary.analyzeCount}`} />
-                <ListItemText primary={`Scenes: ${summary.scenes}`} />
-                <ListItemText primary={`Panels: ${summary.panels}`} />
-                <ListItemText primary={`Images: ${summary.images}`} />
-                <ListItemText primary={`Pages: ${summary.pages}`} />
-                <ListItemText primary={`Elapsed: ${summary.elapsedMs} ms`} />
-              </List>
+            <Alert>
+              <div className="mb-1 font-semibold">Run Summary</div>
+              <ul className="space-y-0.5 text-sm">
+                <li>Analyze windows: {summary.analyzeCount}</li>
+                <li>Scenes: {summary.scenes}</li>
+                <li>Panels: {summary.panels}</li>
+                <li>Images: {summary.images}</li>
+                <li>Pages: {summary.pages}</li>
+                <li>Elapsed: {summary.elapsedMs} ms</li>
+              </ul>
             </Alert>
           )}
-        </Stack>
+        </div>
       </CardContent>
     </Card>
   )
