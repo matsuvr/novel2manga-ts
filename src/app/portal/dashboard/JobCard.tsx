@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { JobWithNovel } from '@/services/job/types'
 
 interface JobCardProps {
@@ -12,6 +12,7 @@ interface JobCardProps {
 export function JobCard({ jobWithNovel, onJobUpdate }: JobCardProps) {
   const { job, novel } = jobWithNovel
   const [resuming, setResuming] = useState(false)
+  const [clientPreview, setClientPreview] = useState<string | null | undefined>(novel?.preview)
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -135,6 +136,22 @@ export function JobCard({ jobWithNovel, onJobUpdate }: JobCardProps) {
     }
   }
 
+  useEffect(() => {
+    // If preview is not provided by the service, fetch it from the server-side helper
+    if (!clientPreview && novel?.id) {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/novels/${novel.id}/preview`)
+          if (!res.ok) return
+          const data = await res.json()
+          if (data && typeof data.preview === 'string') setClientPreview(data.preview)
+        } catch {
+          // ignore
+        }
+      })()
+    }
+  }, [clientPreview, novel?.id])
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '-'
     return new Date(dateString).toLocaleDateString('ja-JP', {
@@ -147,21 +164,29 @@ export function JobCard({ jobWithNovel, onJobUpdate }: JobCardProps) {
   }
 
   const progress = calculateProgress()
+  const effectivePreview = clientPreview ?? novel?.preview
 
   return (
     <div className="bg-white overflow-hidden shadow rounded-lg">
       <div className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-medium text-gray-900 truncate">
-              {job.jobName || novel?.title || `ジョブ ${job.id.slice(0, 8)}`}
-            </h3>
-            {/* Show novel preview instead of author/title metadata */}
-            {novel?.preview ? (
-              <p className="text-sm text-gray-500 truncate">{novel.preview}</p>
-            ) : (
-              <p className="text-sm text-gray-500 truncate">-</p>
-            )}
+            {/* Show novel lead (first ~100 chars) as normal body text instead of a bold heading */}
+            <div className="min-w-0">
+              <p
+                className="text-sm text-gray-900 truncate"
+                title={novel?.preview ?? job.jobName ?? novel?.title ?? `ジョブ ${job.id.slice(0, 8)}`}
+              >
+                {(() => {
+                  const preview = effectivePreview
+                  if (preview && preview.length > 0) {
+                    return preview.length > 100 ? `${preview.slice(0, 100)}…` : preview
+                  }
+                  // fallback to jobName / title / short job id
+                  return job.jobName || novel?.title || `ジョブ ${job.id.slice(0, 8)}`
+                })()}
+              </p>
+            </div>
           </div>
           <span
             className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
@@ -241,12 +266,16 @@ export function JobCard({ jobWithNovel, onJobUpdate }: JobCardProps) {
 
         {/* Action Buttons */}
         <div className="flex space-x-2">
-          <Link
-            href={`/portal/jobs/${job.id}`}
-            className="flex-1 bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 text-center"
-          >
-            詳細を見る
-          </Link>
+          {novel?.id ? (
+            <Link
+              href={`/novel/${novel.id}/results/${job.id}`}
+              className="flex-1 bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 text-center"
+            >
+              結果を見る
+            </Link>
+          ) : (
+            <div className="flex-1 py-2 px-3 border border-gray-200 rounded-md text-sm leading-4 text-gray-400 text-center">結果を見る</div>
+          )}
 
           {(job.status === 'failed' || job.status === 'paused') && (
             <button

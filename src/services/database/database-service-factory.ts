@@ -3,6 +3,7 @@ import type * as schema from '@/db/schema'
 import type { DatabaseAdapter } from '@/infrastructure/database/adapters/base-adapter'
 import { SqliteAdapter } from '@/infrastructure/database/adapters/sqlite-adapter'
 import type { DatabaseConnection } from '@/infrastructure/database/connection'
+import { getLogger } from '@/infrastructure/logging/logger'
 import { ChunkDatabaseService } from './chunk-database-service'
 import { EpisodeDatabaseService } from './episode-database-service'
 import { JobDatabaseService } from './job-database-service'
@@ -199,9 +200,7 @@ export function initializeDatabaseServiceFactory(
     // suites' connections and cause "The database connection is not open"
     // errors. Instead, drop our reference and allow the test harness (which
     // manages TestDatabase lifecycles) to close DBs explicitly.
-    console.warn(
-      'initializeDatabaseServiceFactory: replacing existing globalFactory without closing raw DB (test-safe)',
-    )
+    getLogger().warn('initializeDatabaseServiceFactory: replacing existing globalFactory without closing raw DB (test-safe)')
     globalFactory = null
   }
 
@@ -254,7 +253,7 @@ export function initializeDatabaseServiceFactory(
     })()
     // Use console.info so test output surfaces during CI runs
     // Keep message compact to avoid huge logs
-    console.info('DB factory init shape:', JSON.stringify(shapeSummary))
+    getLogger().debug('DB factory init shape', { shape: shapeSummary })
   } catch (_e) {
     // best-effort logging only
   }
@@ -300,10 +299,7 @@ export function initializeDatabaseServiceFactory(
                 ;(conn as unknown as Record<string, unknown>).db = wrapped
               } catch (wrapErr) {
                 // If wrapping fails, fall back to leaving conn.db untouched
-                console.warn(
-                  'initializeDatabaseServiceFactory: failed to create wrapped dripzzle instance, leaving conn.db as-is',
-                  wrapErr,
-                )
+                getLogger().warn('initializeDatabaseServiceFactory: failed to create wrapped drizzle instance, leaving conn.db as-is', { error: String(wrapErr) })
               }
             } else {
               // No raw handle available: safest course is to leave conn.db as-is
@@ -313,7 +309,7 @@ export function initializeDatabaseServiceFactory(
           }
         }
         globalFactory = new DatabaseServiceFactory(conn)
-        console.info('DB factory: using conn.db as-is')
+        getLogger().debug('DB factory: using conn.db as-is')
         // final runtime assertion happens below
         // return after assignment
         // but do not return here; fall through to final assertion block
@@ -344,12 +340,12 @@ export function initializeDatabaseServiceFactory(
             // ignore
           }
           globalFactory = new DatabaseServiceFactory(fixedConn)
-          console.info('DB factory: using adapter.db')
+          getLogger().debug('DB factory: using adapter.db')
         } else if (conn.db) {
           // conn.db exists but isn't drizzle-like. We avoid trying to re-wrap
           // arbitrary conn.db here because type/signature mismatches can occur.
           // Prefer adapter.db or other normalization strategies above.
-          console.info('DB factory: conn.db present but not drizzle-like; skipping unsafe wrap')
+          getLogger().debug('DB factory: conn.db present but not drizzle-like; skipping unsafe wrap')
         }
       }
 
@@ -397,10 +393,7 @@ export function initializeDatabaseServiceFactory(
           typeof (asObj as unknown as Record<string, unknown>).transaction === 'function'
         summary.hasSchema = 'schema' in asObj
       }
-      console.error(
-        'initializeDatabaseServiceFactory cannot normalize connection. shape:',
-        JSON.stringify(summary),
-      )
+      getLogger().error('initializeDatabaseServiceFactory cannot normalize connection shape', { summary })
     } catch (_e) {
       // ignore
     }
@@ -433,7 +426,7 @@ export function initializeDatabaseServiceFactory(
     try {
       cleanup()
     } catch (cleanupErr) {
-      console.warn('cleanup after failed DB init also failed:', cleanupErr)
+      getLogger().warn('cleanup after failed DB init also failed', { error: String(cleanupErr) })
     }
     throw err
   }
@@ -467,9 +460,7 @@ export function cleanup(): void {
     try {
       // In test environments, TestDatabaseManager is responsible for closing sqlite handles.
       if (process.env.NODE_ENV === 'test') {
-        console.info(
-          'cleanup(): skipping raw DB close in test environment (delegated to TestDatabaseManager)',
-        )
+        getLogger().debug('cleanup(): skipping raw DB close in test environment (delegated to TestDatabaseManager)')
       } else {
         // Extra guard: if the raw handle carries a test-suite ownership marker,
         // avoid closing it even in non-test envs to be conservative. This protects
@@ -480,9 +471,7 @@ export function cleanup(): void {
               ? (raw as unknown as Record<string, unknown>).__testSuiteName
               : undefined
           if (ownerMarker) {
-            console.warn(
-              `cleanup(): raw DB appears to be owned by test suite (${String(ownerMarker)}); skipping close for safety`,
-            )
+            getLogger().debug('cleanup(): raw DB appears to be owned by test suite; skipping close for safety', { ownerMarker: String(ownerMarker) })
           } else if (
             raw &&
             typeof raw === 'object' &&
@@ -503,20 +492,14 @@ export function cleanup(): void {
               ;(raw as { close: () => void }).close()
             }
           } catch (_e) {
-            console.warn(
-              'database-service-factory.cleanup: failed to close raw DB after introspection error',
-              _e,
-            )
+            getLogger().warn('database-service-factory.cleanup: failed to close raw DB after introspection error', { error: String(_e) })
           }
         }
       }
     } catch (err) {
       // best-effort: log and continue to clear factory reference
       // eslint-disable-next-line no-console
-      console.warn(
-        'database-service-factory.cleanup: failed to close raw DB, continuing to clear factory',
-        err,
-      )
+      getLogger().warn('database-service-factory.cleanup: failed to close raw DB, continuing to clear factory', { error: String(err) })
     }
     globalFactory = null
   }

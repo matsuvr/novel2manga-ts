@@ -135,6 +135,7 @@ export function getRandomPanelLayout(panelCount: number): PanelLayout {
   const valid = list.filter(isValidPanelLayout)
   if (valid.length === 0) {
     // すべて不正なら、最初の一つを返す（上位で正規化フォールバックがかかる）
+    // This module may load in client; avoid importing logger (Node APIs). Allow raw warn.
     // eslint-disable-next-line no-console
     console.warn('[panel-layout-samples] All templates invalid for count', panelCount)
     const idx = Math.floor(Math.random() * list.length)

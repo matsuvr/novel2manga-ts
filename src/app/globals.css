@@ -12,3 +12,34 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Design tokens (fallbacks) to ensure classes like bg-background, text-foreground,
+   text-muted-foreground work even if Tailwind theme wasn't extended. These provide
+   sensible defaults and avoid completely broken UI when CSS variables are missing. */
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --muted-foreground: #6b7280;
+  --input: #e5e7eb;
+  --card: #ffffff;
+  --primary: #0ea5e9;
+  --destructive: #ef4444;
+  --accent: #f3f4f6;
+  --accent-foreground: #111827;
+  --border: #e5e7eb;
+}
+
+/* Small set of utility classes mapped to the token names used throughout the app.
+   These are intentionally simple and non-invasive. They will be overridden when
+   a more specific theme is present, but they prevent a completely unstyled UI.
+ */
+.bg-background { background-color: var(--background) !important; }
+.text-foreground { color: var(--foreground) !important; }
+.text-muted-foreground { color: var(--muted-foreground) !important; }
+.border-input { border-color: var(--input) !important; }
+.bg-card { background-color: var(--card) !important; }
+.text-primary { color: var(--primary) !important; }
+.bg-accent { background-color: var(--accent) !important; }
+.text-accent-foreground { color: var(--accent-foreground) !important; }
+.border-default { border-color: var(--border) !important; }
+

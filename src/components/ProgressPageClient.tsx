@@ -6,6 +6,8 @@ import ProcessingProgress from '@/components/ProcessingProgress'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 
+// Use the ProcessingProgress card; avoid additional outer Card to prevent double borders
+
 type Props = {
   novelId: string
 }
@@ -55,39 +57,44 @@ export default function ProgressPageClient({ novelId }: Props) {
 
   const handleComplete = React.useCallback(async () => {
     if (!jobId) return
-    router.replace(`/novel/${encodeURIComponent(novelId)}/results/${encodeURIComponent(jobId)}`)
+    // 以前の /ready ポーリングと pending ページは廃止。
+    // ジョブ完了通知(onComplete)を受けたら即結果ページへ遷移。
+    router.replace(`/novel/${novelId}/results/${jobId}`)
   }, [jobId, novelId, router])
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-6">
+    <div className="mx-auto max-w-5xl px-6 py-8">
       <div className="mb-4">
         <h2 className="mb-1 bg-gradient-to-r from-sky-500 to-cyan-400 bg-clip-text text-3xl font-bold text-transparent">
           進捗表示
         </h2>
-        <p className="text-sm text-muted-foreground">小説ID: {novelId}</p>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="text-sm text-white/90">小説ID: {novelId}</p>
+        <p className="mt-1 text-xs text-white/80">
           このページはURLにnovelIdを含むため、途中で離れても再訪可能です。
         </p>
       </div>
 
+      {/* error/message states and spinner are shown above the processing card */}
       {error && (
-        <Alert variant="destructive" className="mb-3">
-          <div className="font-medium">{error}</div>
-          <p className="mt-1 text-xs opacity-90">
-            novelIdが正しいかをご確認ください。必要に応じて最初からやり直せます。
-          </p>
-          <div className="mt-2">
-            <a href="/" className="underline">
-              トップへ戻る
-            </a>
-          </div>
-        </Alert>
+        <div className="mb-4">
+          <Alert variant="destructive">
+            <div className="font-medium">{error}</div>
+            <p className="mt-1 text-xs opacity-90">
+              novelIdが正しいかをご確認ください。必要に応じて最初からやり直せます。
+            </p>
+            <div className="mt-2">
+              <a href="/" className="underline">
+                トップへ戻る
+              </a>
+            </div>
+          </Alert>
+        </div>
       )}
 
-      {message && <Alert className="mb-3">{message}</Alert>}
+      {message && <div className="mb-4"><Alert>{message}</Alert></div>}
 
       {!error && !jobId && (
-        <div className="flex items-center justify-center rounded-lg border bg-white p-4 shadow-sm">
+        <div className="mb-4 flex items-center justify-center rounded-lg border bg-white p-4 shadow-sm">
           <svg className="mr-2 h-5 w-5 animate-spin" viewBox="0 0 24 24">
             <circle
               className="opacity-25"
@@ -107,7 +114,8 @@ export default function ProgressPageClient({ novelId }: Props) {
         </div>
       )}
 
-      {jobId && <ProcessingProgress jobId={jobId} onComplete={handleComplete} />}
+      {/* Use ProcessingProgress which renders its own Card; keep a consistent gap */}
+      {jobId && <div className="mb-4"><ProcessingProgress jobId={jobId} onComplete={handleComplete} /></div>}
 
       <div className="mt-6 text-center">
         <Button asChild>
