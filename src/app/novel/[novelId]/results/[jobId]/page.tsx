@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { Alert } from '@/components/ui/alert'
 import { Card, CardContent } from '@/components/ui/card'
 import { db } from '@/services/database/index'
@@ -33,6 +33,11 @@ function summarizeErrorMessage(msg: string): { summary: string; details?: string
     details: trimmed,
   }
 }
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+// Pendingページ/readyポーリングは廃止。未完了なら progress ページへ遷移させる。
 
 export default async function NovelJobResultsPage({ params }: { params: Promise<Params> }) {
   const { novelId, jobId } = await params
@@ -73,28 +78,47 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
     )
   }
 
-  if (!isRenderCompletelyDone(job as unknown as Parameters<typeof isRenderCompletelyDone>[0])) {
-    return notFound()
-  }
+  const renderDone = isRenderCompletelyDone(job as unknown as Parameters<typeof isRenderCompletelyDone>[0])
 
   const layoutStorage = await StorageFactory.getLayoutStorage()
   const fullPagesKey = JsonStorageKeys.fullPages(job.id)
   const fullPages = await layoutStorage.get(fullPagesKey)
+  // Prefer showing stored fullPages when available. Only redirect or show
+  // the "results not yet available" fallback when fullPages is missing.
+  // This avoids hiding results when the DB job status/reporting lags behind
+  // the actual layout persistence (renderDone may be false briefly).
+  const jobCompleted = job.status === 'completed' || job.status === 'complete'
+
   if (!fullPages) {
-    return (
-      <div className="mx-auto max-w-5xl px-4 py-6">
-        <h1 className="mb-3 text-2xl font-semibold">処理結果の表示に失敗しました</h1>
-        <Card>
-          <CardContent>
-            <div className="text-sm text-muted-foreground">Job: {job.id}</div>
-            <Alert className="mt-2" variant="destructive">
-              結果ファイル (full_pages.json) が見つかりませんでした。Storage Key:{' '}
-              {JsonStorageKeys.fullPages(job.id)}
-            </Alert>
-          </CardContent>
-        </Card>
-      </div>
-    )
+    if (jobCompleted) {
+      // Job marked completed but layout data missing — show a helpful
+      // fallback UI instead of redirecting which can create loops.
+      return (
+        <div className="mx-auto max-w-5xl px-4 py-6">
+          <h1 className="mb-3 text-2xl font-semibold">処理は完了していますが結果がまだ利用できません</h1>
+          <Card>
+            <CardContent>
+              <div className="text-sm text-muted-foreground">ジョブは完了していますが、表示に必要なページデータがまだ生成されていません。</div>
+              <div className="mt-2 text-sm">しばらく待ってからページを更新するか、進捗ページから再開してください。</div>
+              <div className="mt-4">
+                <a href={`/novel/${novelId}/progress`} className="underline">進捗ページへ（手動で再開）</a>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )
+    }
+
+    // Not completed yet — redirect to progress for live updates
+    redirect(`/novel/${novelId}/progress`)
+  }
+
+  // If fullPages exists but renderDone is false, it's safe to proceed and
+  // render the result page using the persisted layout. Emit a server-side
+  // warning to help diagnose timing/race issues.
+  if (!renderDone) {
+    // eslint-disable-next-line no-console
+    console.warn(`Job ${jobId}: render not strictly marked complete but fullPages present — proceeding to show results.`)
   }
 
   // レイアウトステータスを取得してページ数情報を含める（責務をLayoutDatabaseServiceへ委譲）
@@ -116,17 +140,33 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
   }
 
   const episodes = await db.episodes().getEpisodesByJobId(job.id)
-  // エピソードの結合を考慮して、重複するエピソードをフィルタリング
-  const uniqueEpisodes = Array.from(
-    episodes
-      .reduce((map, episode) => {
-        const key = `${episode.startChunk}-${episode.endChunk}`
-        if (!map.has(key)) {
-          map.set(key, episode)
-        }
-        return map
-      }, new Map<string, (typeof episodes)[0]>())
-      .values(),
+  // エピソードの結合や重複登録に備え、まず episodeNumber 単位で正規化する。
+  // 同じ episodeNumber が複数存在する場合は、タイトルがある方／confidence が高い方を優先する。
+  const episodeByNumber = episodes.reduce((acc, ep) => {
+    const num = Number(ep.episodeNumber) || 0
+    const existing = acc.get(num)
+    if (!existing) {
+      acc.set(num, ep)
+      return acc
+    }
+    // Prefer episode with title
+    const existingHasTitle = !!existing.title
+    const newHasTitle = !!ep.title
+    if (newHasTitle && !existingHasTitle) {
+      acc.set(num, ep)
+      return acc
+    }
+    // Otherwise prefer higher confidence
+    const existingConfidence = typeof existing.confidence === 'number' ? existing.confidence : 0
+    const newConfidence = typeof ep.confidence === 'number' ? ep.confidence : 0
+    if (newConfidence > existingConfidence) {
+      acc.set(num, ep)
+    }
+    return acc
+  }, new Map<number, (typeof episodes)[0]>())
+
+  const uniqueEpisodes = Array.from(episodeByNumber.values()).sort(
+    (a, b) => Number(a.episodeNumber) - Number(b.episodeNumber),
   )
 
   // Convert DB job to a client-safe DTO (strings for dates, predictable shapes).

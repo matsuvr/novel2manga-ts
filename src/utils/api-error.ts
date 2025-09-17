@@ -2,6 +2,7 @@
 import { ZodError } from 'zod'
 import { isRateLimitError } from '@/errors/rate-limit-error'
 import { isRetryableError } from '@/errors/retryable-error'
+import { getLogger } from '@/infrastructure/logging/logger'
 // HttpError 系は段階的移行を完了したため依存を排除
 
 // ========================================
@@ -389,7 +390,7 @@ export function toLegacyErrorResponse(
 
     const details = error.message
     if (env !== 'production') {
-      console.error('[api] Unhandled error:', error)
+  getLogger().error('api_unhandled_error', { error })
       return json({ error: fallbackMessage, details }, { status: 500 })
     }
     return json({ error: fallbackMessage }, { status: 500 })
@@ -491,11 +492,17 @@ export function logError(
   }
 
   // 開発環境では詳細ログを出力
-  if (process.env.NODE_ENV === 'development') {
-    console.error(`[${level.toUpperCase()}] ${message}`, logEntry)
-  } else {
-    // 本番環境では構造化ログを出力
-    console.log(JSON.stringify(logEntry))
+  const logger = getLogger()
+  const payload: Record<string, unknown> = { ...logEntry }
+  switch (level) {
+    case 'warn':
+      logger.warn(message, payload)
+      break
+    case 'info':
+      logger.info(message, payload)
+      break
+    default:
+      logger.error(message, payload)
   }
 }
 
@@ -511,7 +518,7 @@ export function reportError(error: unknown, context?: Record<string, unknown>): 
 
   // 開発環境では詳細出力
   if (process.env.NODE_ENV === 'development') {
-    console.error('Error Report:', {
+    getLogger().error('error_report_detail', {
       error,
       context,
       stack: error instanceof Error ? error.stack : undefined,

@@ -45,7 +45,7 @@ export default async function ResultsPage() {
                     </div>
                   </div>
                   <Button asChild variant="outline" className="ml-4">
-                    <Link href={`/results/${job.id}`}>詳細</Link>
+                    <Link href={`/novel/${job.novelId}/results/${job.id}`}>詳細</Link>
                   </Button>
                 </li>
               )

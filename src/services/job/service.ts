@@ -2,7 +2,7 @@
  * Job Service Interface and Implementation using Effect TS
  */
 
-import { readFile } from 'node:fs/promises'
+// readFile no longer used here; storage factory used instead
 import { and, desc, eq } from 'drizzle-orm'
 import { Context, Effect, Layer } from 'effect'
 import { getDatabase } from '@/db'
@@ -142,8 +142,9 @@ export const JobServiceLive = Layer.succeed(JobService, {
           totals = {}
         }
 
-        // For each job row, attempt to read novel preview (first 100 chars) and attach token summary
-        // Limit concurrent file reads to avoid file descriptor exhaustion
+  // For each job row, attempt to read novel preview (first 100 chars) and attach token summary
+  // Use the StorageFactory to read novel content (originalTextPath is a storage key, not a filesystem path)
+  // Limit concurrent file reads to avoid file descriptor exhaustion
         const CONCURRENCY = 10
         const enhanced: JobWithNovel[] = []
 
@@ -155,8 +156,48 @@ export const JobServiceLive = Layer.succeed(JobService, {
               let novelPreview: string | undefined
               if (row.novelOriginalTextPath) {
                 try {
-                  const content = await readFile(row.novelOriginalTextPath, { encoding: 'utf-8' })
-                  novelPreview = content.slice(0, 100)
+                  const { getNovelStorage } = await import('@/utils/storage')
+                  const storage = await getNovelStorage()
+                  // originalTextPath is stored as a storage key (e.g. "<uuid>.json"). Use storage.get to read.
+                  const result = await storage.get(row.novelOriginalTextPath)
+                  if (result && typeof result.text === 'string') {
+                    // Storage content may be wrapped in several layers of JSON
+                    // e.g. '{"text":"{\\"text\\":\"actual text\"}"}'
+                    // Unwrap repeatedly up to a safe depth.
+                    const unwrap = (raw: string, depth = 5): string => {
+                      let cur: unknown = raw
+                      for (let i = 0; i < depth; i++) {
+                        if (typeof cur !== 'string') break
+                        try {
+                          const parsed = JSON.parse(cur)
+                          if (parsed && typeof parsed === 'object') {
+                            // prefer common property names
+                            if ('content' in (parsed as Record<string, unknown>) && typeof (parsed as Record<string, unknown>).content === 'string') {
+                              cur = (parsed as Record<string, unknown>).content
+                              continue
+                            }
+                            if ('text' in (parsed as Record<string, unknown>) && typeof (parsed as Record<string, unknown>).text === 'string') {
+                              cur = (parsed as Record<string, unknown>).text
+                              continue
+                            }
+                            // If parsed is object but doesn't have known keys, stop
+                            break
+                          }
+                          // parsed is primitive (string/number); use its string form
+                          cur = String(parsed)
+                        } catch {
+                          // not JSON - stop
+                          break
+                        }
+                      }
+                      return typeof cur === 'string' ? cur : String(cur)
+                    }
+
+                    const unwrapped = unwrap(result.text)
+                    novelPreview = unwrapped.slice(0, 100)
+                  } else {
+                    novelPreview = undefined
+                  }
                 } catch (error) {
                   // log for debugging, but don't fail the whole request
                   getLogger().withContext({ service: 'JobService', method: 'getUserJobs', jobId: row.id }).error(

@@ -53,11 +53,14 @@ export default function MypageJobList({ jobs }: Props) {
             <div className="text-xs text-muted-foreground">Status: {job.status}</div>
           </div>
           <div className="flex items-center gap-2">
-            {job.status === 'completed' && (
-              <Button asChild size="sm">
-                <Link href={`/results/${job.id}`}>結果を見る</Link>
-              </Button>
-            )}
+            {job.status === 'completed' &&
+              (job.novelId ? (
+                <Button asChild size="sm">
+                  <Link href={`/novel/${job.novelId}/results/${job.id}`}>結果を見る</Link>
+                </Button>
+              ) : (
+                <div className="text-xs text-muted-foreground">結果を見る</div>
+              ))}
             {job.status === 'failed' && (
               <Button
                 variant="destructive"

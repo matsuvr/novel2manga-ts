@@ -1,36 +1,11 @@
 /** @type {import('next').NextConfig} */
 
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// Backwards-compatible: require the TS logger utils to avoid ESM loader issues in Next build
-let fileLogger
-try {
-  // In ESM contexts, `require` is not available; use createRequire to load the legacy module
-  const requireFromCwd = createRequire(import.meta.url)
-  // Attempt to load the compiled JS/TS output or the source module if available
-  const loggerModule = requireFromCwd('./src/infrastructure/logging/logger')
-  fileLogger = loggerModule?.fileLogger
-} catch (err) {
-  // fallback to a noop-ish placeholder but keep the error visible for debugging
-  // eslint-disable-next-line no-console
-  console.debug('next.config.js: failed to load logger module, falling back to noop fileLogger', err)
-  fileLogger = { getLogFilePath: () => '' }
-}
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// 開発環境でのログ機能を初期化
-if (process.env.NODE_ENV === 'development') {
-  console.log('🚀 Initializing file logging for development server...')
-  try {
-    console.log(`📝 Log file: ${fileLogger.getLogFilePath()}`)
-    console.log('✅ File logging initialized successfully')
-  } catch (error) {
-    console.error('❌ Failed to initialize file logging:', error)
-  }
-}
+// Pure config: no logger import / side effects.
 
 const nextConfig = {
   reactStrictMode: true,
