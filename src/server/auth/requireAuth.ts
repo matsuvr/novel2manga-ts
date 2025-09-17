@@ -24,7 +24,11 @@ export const requireAuth = Effect.gen(function* () {
     // (set by tests with vi.mock) is applied reliably for both static and
     // dynamic mock scenarios. Support both named export `auth` and default
     // export shapes used across the codebase/tests.
-    const authModule = yield* Effect.promise(() => import('@/auth'))
+    // Use a cached promise so the expensive module initialization (DB,
+    // DrizzleAdapter, migrations) only runs once and can be pre-warmed at
+    // startup. This prevents the first incoming request from paying the
+    // full initialization latency.
+    const authModule = yield* Effect.promise(() => getAuthModule())
     const authModuleUnknown = authModule as unknown
     const maybeAuth =
       (authModuleUnknown && typeof authModuleUnknown === 'object' && 'auth' in authModuleUnknown
@@ -38,9 +42,9 @@ export const requireAuth = Effect.gen(function* () {
       typeof maybeAuth === 'function'
         ? (maybeAuth as () => Promise<unknown>)
         : maybeAuth &&
-            typeof maybeAuth === 'object' &&
-            'auth' in maybeAuth &&
-            typeof (maybeAuth as { auth: unknown }).auth === 'function'
+          typeof maybeAuth === 'object' &&
+          'auth' in maybeAuth &&
+          typeof (maybeAuth as { auth: unknown }).auth === 'function'
           ? () => (maybeAuth as { auth: () => Promise<unknown> }).auth()
           : () => Promise.reject(new Error('Auth function not found'))
 
@@ -121,6 +125,30 @@ export const requireAuth = Effect.gen(function* () {
     return yield* Effect.fail(new AuthenticationError(normalized))
   }
 })
+
+// Cache and optional pre-warm of the auth module. The auth module currently
+// performs database/adapter initialization at import time which can be
+// expensive on the first request. We keep a singleton promise so the import
+// only happens once and can be triggered early (e.g. during server startup).
+let cachedAuthModulePromise: Promise<unknown> | null = null
+
+function getAuthModule(): Promise<unknown> {
+  if (!cachedAuthModulePromise) {
+    cachedAuthModulePromise = import('@/auth')
+  }
+  return cachedAuthModulePromise
+}
+
+// In development, start pre-warming the auth module immediately so the
+// expensive initialization happens during server boot instead of the first
+// HTTP request. Do not pre-warm in production to avoid surprising startup
+// side-effects.
+if (process.env.NODE_ENV === 'development') {
+  void getAuthModule().catch((err) => {
+    // eslint-disable-next-line no-console
+    console.warn('[requireAuth] pre-warm of auth module failed:', err)
+  })
+}
 
 /**
  * Development bypass functionality (controlled by environment)

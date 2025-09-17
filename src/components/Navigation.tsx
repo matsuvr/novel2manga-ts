@@ -1,48 +1,14 @@
 'use client'
-
-import AccountCircle from '@mui/icons-material/AccountCircle'
-import MenuIcon from '@mui/icons-material/Menu'
-import {
-  AppBar,
-  Avatar,
-  Box,
-  Button,
-  CircularProgress,
-  Container,
-  Divider,
-  Drawer,
-  IconButton,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemText,
-  Menu,
-  MenuItem,
-  Toolbar,
-  Typography,
-  useMediaQuery,
-  useTheme,
-} from '@mui/material'
 import Link from 'next/link'
 import { signIn, signOut, useSession } from 'next-auth/react'
-import type React from 'react'
 import { useState } from 'react'
+import { Menu, User } from '@/components/icons'
+import { Button } from '@/components/ui/button'
 import { routesConfig } from '@/config/routes.config'
 
 export function Navigation() {
   const { data: session, status } = useSession()
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
-  const theme = useTheme()
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
-
-  const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget)
-  }
-
-  const handleClose = () => {
-    setAnchorEl(null)
-  }
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen)
@@ -51,178 +17,97 @@ export function Navigation() {
   const handleSignIn = () => signIn('google')
   const handleSignOut = () => signOut({ callbackUrl: routesConfig.home })
 
-  const navLinks = (
-    <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
-      <Button color="inherit" component={Link} href={routesConfig.home}>
-        ホーム
-      </Button>
-      {session && (
-        <Button color="inherit" component={Link} href={routesConfig.portal.dashboard}>
-            マイページ
-          </Button>
-      )}
-    </Box>
-  )
-
-  const mobileNavLinks = (
-    <Box onClick={handleDrawerToggle} sx={{ textAlign: 'center', width: 240 }}>
-      <Typography variant="h6" sx={{ my: 2 }}>
-        Novel2Manga
-      </Typography>
-      <Divider />
-      <List>
-        <ListItem disablePadding>
-          <ListItemButton component={Link} href={routesConfig.home}>
-            <ListItemText primary="ホーム" />
-          </ListItemButton>
-        </ListItem>
-        {session && (
-          <ListItem disablePadding>
-            <ListItemButton component={Link} href={routesConfig.portal.dashboard}>
-              <ListItemText primary="マイページ" />
-            </ListItemButton>
-          </ListItem>
-        )}
-      </List>
-      <Divider />
-      {session ? (
-        <List>
-          <ListItem>
-            <ListItemText primary={session.user?.name || 'User'} secondary={session.user?.email} />
-          </ListItem>
-          <ListItem disablePadding>
-            <ListItemButton component={Link} href={routesConfig.portal.settings}>
-              <ListItemText primary="設定" />
-            </ListItemButton>
-          </ListItem>
-          <ListItem disablePadding>
-            <ListItemButton onClick={handleSignOut}>
-              <ListItemText primary="ログアウト" />
-            </ListItemButton>
-          </ListItem>
-        </List>
-      ) : (
-        <List>
-          <ListItem disablePadding>
-            <ListItemButton onClick={handleSignIn}>
-              <ListItemText primary="ログイン" />
-            </ListItemButton>
-          </ListItem>
-        </List>
-      )}
-    </Box>
-  )
-
   return (
-    <>
-      <AppBar
-        position="static"
-        sx={{ bgcolor: 'background.paper', color: 'text.primary' }}
-        elevation={1}
-      >
-        <Container maxWidth="lg">
-          <Toolbar>
-            <Typography
-              variant="h6"
-              component={Link}
-              href={routesConfig.home}
-              sx={{
-                flexGrow: 1,
-                textDecoration: 'none',
-                color: 'inherit',
-              }}
+    <header className="sticky top-0 z-40 border-b bg-white/80 backdrop-blur">
+      <div className="container mx-auto flex h-14 items-center justify-between px-4">
+        <Link href={routesConfig.home} className="font-semibold tracking-tight">
+          Novel2Manga
+        </Link>
+        <nav className="hidden gap-4 sm:flex">
+          <Link
+            href={routesConfig.home}
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            ホーム
+          </Link>
+          {session && (
+            <Link
+              href={routesConfig.portal.dashboard}
+              className="text-sm text-muted-foreground hover:text-foreground"
             >
-              Novel2Manga
-            </Typography>
-
-            {!isMobile && navLinks}
-
+              マイページ
+            </Link>
+          )}
+        </nav>
+        <div className="flex items-center gap-2">
+          {status === 'loading' ? (
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
+          ) : session ? (
+            <>
+              <Link
+                href={routesConfig.portal.dashboard}
+                className="hidden sm:inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+              >
+                <User className="h-4 w-4" />
+                {session.user?.name ?? 'ユーザー'}
+              </Link>
+              <Button variant="outline" onClick={handleSignOut}>
+                ログアウト
+              </Button>
+            </>
+          ) : (
+            <Button variant="outline" onClick={handleSignIn}>
+              ログイン
+            </Button>
+          )}
+          <button
+            className="sm:hidden inline-flex h-9 w-9 items-center justify-center rounded-md border"
+            type="button"
+            onClick={handleDrawerToggle}
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+      {mobileOpen && (
+        <div className="sm:hidden border-t bg-white">
+          <div className="container mx-auto px-4 py-2 flex flex-col gap-2">
+            <Link href={routesConfig.home} className="py-2" onClick={handleDrawerToggle}>
+              ホーム
+            </Link>
             {session && (
               <Link
                 href={routesConfig.portal.dashboard}
-                className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                className="py-2"
+                onClick={handleDrawerToggle}
               >
                 マイページ
               </Link>
             )}
-            <Box sx={{ flexGrow: 0, ml: 2, display: { xs: 'none', sm: 'block' } }}>
-              {status === 'loading' ? (
-                <CircularProgress size={24} color="inherit" />
-              ) : session ? (
-                <>
-                  <IconButton onClick={handleMenu} sx={{ p: 0 }}>
-                    <Avatar alt={session.user?.name || ''} src={session.user?.image || undefined}>
-                      {!session.user?.image && <AccountCircle />}
-                    </Avatar>
-                  </IconButton>
-                  <Menu
-                    anchorEl={anchorEl}
-                    open={Boolean(anchorEl)}
-                    onClose={handleClose}
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                    transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                  >
-                    <MenuItem
-                      component={Link}
-                      href={routesConfig.portal.dashboard}
-                      onClick={handleClose}
-                    >
-                      マイページ
-                    </MenuItem>
-                    <MenuItem
-                      component={Link}
-                      href={routesConfig.portal.settings}
-                      onClick={handleClose}
-                    >
-                      設定
-                    </MenuItem>
-                    <Divider />
-                    <MenuItem
-                      onClick={() => {
-                        handleClose()
-                        handleSignOut()
-                      }}
-                    >
-                      ログアウト
-                    </MenuItem>
-                  </Menu>
-                </>
-              ) : (
-                <Button color="inherit" variant="outlined" onClick={handleSignIn}>
-                  ログイン
-                </Button>
-              )}
-            </Box>
-            {isMobile && (
-              <IconButton
-                color="inherit"
-                aria-label="open drawer"
-                edge="end"
-                onClick={handleDrawerToggle}
+            {session ? (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  handleDrawerToggle()
+                  handleSignOut()
+                }}
               >
-                <MenuIcon />
-              </IconButton>
+                ログアウト
+              </Button>
+            ) : (
+              <Button
+                variant="default"
+                onClick={() => {
+                  handleDrawerToggle()
+                  handleSignIn()
+                }}
+              >
+                ログイン
+              </Button>
             )}
-          </Toolbar>
-        </Container>
-      </AppBar>
-      <nav>
-        <Drawer
-          anchor="right"
-          variant="temporary"
-          open={mobileOpen}
-          onClose={handleDrawerToggle}
-          ModalProps={{
-            keepMounted: true,
-          }}
-          sx={{
-            display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: 240 },
-          }}
-        >
-          {mobileNavLinks}
-        </Drawer>
-      </nav>
-    </>
+          </div>
+        </div>
+      )}
+    </header>
   )
 }

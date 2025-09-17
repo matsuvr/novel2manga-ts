@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import type { Session } from 'next-auth'
-import { auth } from '@/auth'
 import { authConfig } from '@/config/auth.config'
 import { getMissingAuthEnv } from '@/utils/auth-env'
 import Providers from './providers'
@@ -27,13 +26,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     )
   }
 
-  // Start auth but do not swallow its errors — we only want to fallback on *timeout*.
-  // If auth later fails with a fatal initialization error (missing env, migration failure),
-  // we must not hide it; detect and escalate.
-  // Treat `auth` as the runtime function returning Promise<Session | null>.
-  // NextAuth's exported `auth` has overloads (including middleware), so cast
-  // to the expected runtime signature to avoid mixing middleware types.
-  const authPromise = (auth as unknown as () => Promise<Session | null>)()
+  // Dynamically import the auth helper at runtime so the root layout module
+  // doesn't pull in NextAuth/DB initialization during the dev server's
+  // compilation. This reduces first-request compile latency. We still race
+  // against a timeout to avoid blocking rendering.
+  const { auth: authFn } = await import('@/auth')
+  const authPromise = (authFn as unknown as () => Promise<Session | null>)()
 
   const timeoutMarker = { timeout: true } as const
   const timeoutPromise = new Promise<typeof timeoutMarker>((resolve) =>
@@ -88,7 +86,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="ja">
-      <body className="antialiased">
+      <body className="min-h-dvh bg-background text-foreground antialiased">
         <Providers session={session ?? undefined}>{children}</Providers>
       </body>
     </html>

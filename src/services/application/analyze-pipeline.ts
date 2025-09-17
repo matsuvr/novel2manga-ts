@@ -229,17 +229,18 @@ export class AnalyzePipeline extends BasePipelineStep {
       const job = await db.jobs().getJob(jobId)
       if (!job) throw new Error(`Job not found for episode persistence: ${jobId}`)
 
-      // パネル→チャンクマッピングを作成
-      const panelToChunkMapping = await this.buildPanelToChunkMapping(jobId, totalChunks, {
-        logger,
-      })
+      // パネル→チャンクマッピングを作成 (共通ユーティリティを使用)
+      const { buildPanelToChunkMapping, getChunkForPanel } = await import(
+        '@/services/application/panel-to-chunk-mapping'
+      )
+      const panelToChunkMapping = await buildPanelToChunkMapping(jobId, totalChunks, logger)
 
       const { EpisodeWriteService } = await import('@/services/application/episode-write')
       const episodeWriter = new EpisodeWriteService()
       const episodesForDb = episodeRes.data.episodeBreaks.episodes.map((ep) => {
         // パネル範囲からチャンク範囲を計算
-        const startChunk = this.getChunkForPanel(panelToChunkMapping, ep.startPanelIndex)
-        const endChunk = this.getChunkForPanel(panelToChunkMapping, ep.endPanelIndex)
+        const startChunk = getChunkForPanel(panelToChunkMapping, ep.startPanelIndex)
+        const endChunk = getChunkForPanel(panelToChunkMapping, ep.endPanelIndex)
 
         return {
           novelId: job.novelId,
@@ -303,7 +304,22 @@ export class AnalyzePipeline extends BasePipelineStep {
       // レイアウト段階の進捗開始（ここからはレイアウト処理）
       await this.updateJobStep(jobId, 'layout', { logger }, totalChunks, totalChunks)
     } catch (persistEpisodesError) {
-      await this.updateJobStatus(jobId, 'failed', { logger }, String(persistEpisodesError))
+      logger.error('Failed to persist episodes during episode step', {
+        jobId,
+        error:
+          persistEpisodesError instanceof Error
+            ? persistEpisodesError.message
+            : String(persistEpisodesError),
+      })
+      // Mark job as failed to surface the error in job status
+      try {
+        await this.updateJobStatus(jobId, 'failed', { logger }, String(persistEpisodesError))
+      } catch (e) {
+        logger.warn('Failed to update job status after episode persistence error', {
+          jobId,
+          error: e instanceof Error ? e.message : String(e),
+        })
+      }
       throw persistEpisodesError
     }
 
@@ -536,71 +552,5 @@ export class AnalyzePipeline extends BasePipelineStep {
     })
 
     return { resumePoint }
-  }
-
-  /**
-   * パネル→チャンクマッピングを作成
-   * 各チャンクのパネル数を元に、パネルインデックス範囲を計算
-   */
-  private async buildPanelToChunkMapping(
-    jobId: string,
-    totalChunks: number,
-    context: { logger: ReturnType<typeof import('@/infrastructure/logging/logger').getLogger> },
-  ): Promise<Array<{ chunkIndex: number; startPanel: number; endPanel: number }>> {
-    const { logger } = context
-    const mapping: Array<{ chunkIndex: number; startPanel: number; endPanel: number }> = []
-    let currentPanelIndex = 1 // パネルは1から始まる
-
-    const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
-    const storage = await StorageFactory.getAnalysisStorage()
-
-    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-      const key = JsonStorageKeys.scriptChunk(jobId, chunkIndex)
-      const obj = await storage.get(key)
-
-      if (!obj) {
-        logger.warn('Missing script chunk for panel mapping', { jobId, chunkIndex })
-        continue
-      }
-
-      let panelCount = 0
-      try {
-        const scriptObj = JSON.parse(obj.text)
-        panelCount = Array.isArray(scriptObj.panels) ? scriptObj.panels.length : 0
-      } catch (_parseError) {
-        logger.warn('Failed to parse script chunk for panel mapping', { jobId, chunkIndex })
-        continue
-      }
-
-      if (panelCount > 0) {
-        const startPanel = currentPanelIndex
-        const endPanel = currentPanelIndex + panelCount - 1
-        mapping.push({
-          chunkIndex,
-          startPanel,
-          endPanel,
-        })
-        currentPanelIndex = endPanel + 1
-      }
-    }
-
-    logger.info('Built panel to chunk mapping', {
-      jobId,
-      totalMappings: mapping.length,
-      totalPanels: currentPanelIndex - 1,
-    })
-
-    return mapping
-  }
-
-  /**
-   * パネルインデックスに対応するチャンクインデックスを取得
-   */
-  private getChunkForPanel(
-    mapping: Array<{ chunkIndex: number; startPanel: number; endPanel: number }>,
-    panelIndex: number,
-  ): number {
-    const chunk = mapping.find((m) => panelIndex >= m.startPanel && panelIndex <= m.endPanel)
-    return chunk ? chunk.chunkIndex : 0 // フォールバック値として0を返す
   }
 }

@@ -1,26 +1,12 @@
 'use client'
-
-import { CheckCircle, HourglassEmpty } from '@mui/icons-material'
-import ErrorIcon from '@mui/icons-material/Error'
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Collapse,
-  LinearProgress,
-  Paper,
-  Stack,
-  Step,
-  StepContent,
-  StepLabel,
-  Stepper,
-  Typography,
-} from '@mui/material'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
+import { CheckCircle2, Hourglass, XCircle } from '@/components/icons'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Progress } from '@/components/ui/progress'
 import { appConfig } from '@/config/app.config'
 
 const _MAX_PAGES = appConfig.rendering.limits.maxPages
@@ -90,12 +76,12 @@ interface LogEntry {
   level: 'info' | 'error' | 'warning'
   message: string
   data?: unknown
+  id: number
 }
 
 const DEFAULT_CURRENT_EPISODE_PROGRESS_WEIGHT =
   appConfig.ui.progress.currentEpisodeProgressWeight ?? 0.5
 const MAX_LOG_ENTRIES = appConfig.ui.logs.maxEntries
-const MAX_VISIBLE_LOG_HEIGHT = appConfig.ui.logs.maxVisibleLogHeightVh
 const DEFAULT_EPISODE_NUMBER = appConfig.ui.progress.defaultEpisodeNumber
 
 const INITIAL_STEPS: ProcessStep[] = [
@@ -184,6 +170,7 @@ function ProcessingProgress({
     process.env.NEXT_PUBLIC_SHOW_PROGRESS_LOGS === '1' || process.env.NODE_ENV === 'development'
   const [showLogs, setShowLogs] = useState(showLogsFlag)
   const [lastJobData, setLastJobData] = useState<string>('')
+  const logCounterRef = useRef(0)
   type HintStep = 'split' | 'analyze' | 'layout' | 'render'
   const [runtimeHints, setRuntimeHints] = useState<Partial<Record<HintStep, string>>>({})
   const [perEpisodePages, setPerEpisodePages] = useState<
@@ -206,6 +193,7 @@ function ProcessingProgress({
   const [normalizationToastShown, setNormalizationToastShown] = useState(false)
   const [tokenPromptSum, setTokenPromptSum] = useState(0)
   const [tokenCompletionSum, setTokenCompletionSum] = useState(0)
+  const [sseConnected, setSseConnected] = useState(true)
   const isMountedRef = useRef(true)
   const lastJobRef = useRef<JobData['job'] | null>(null)
 
@@ -272,7 +260,9 @@ function ProcessingProgress({
 
   const addLog = useCallback(
     (level: 'info' | 'error' | 'warning', message: string, data?: unknown) => {
+      const id = logCounterRef.current++
       const logEntry: LogEntry = {
+        id,
         timestamp: new Date().toLocaleTimeString(),
         level,
         message,
@@ -638,6 +628,12 @@ function ProcessingProgress({
     setActiveStep(1)
     addLog('info', `処理を開始しました。Job ID: ${jobId}`)
     const es = new EventSource(`/api/jobs/${jobId}/events`)
+    let reconnectTimer: NodeJS.Timeout | null = null
+    let reconnectAttempts = 0
+    const maxReconnectAttempts = 5
+    let fallbackPollingTimer: NodeJS.Timeout | null = null
+    let sseConnected = true
+
     const handlePayload = (raw: string) => {
       try {
         const data = JSON.parse(raw) as JobData
@@ -646,11 +642,13 @@ function ProcessingProgress({
         if (result === 'stop') {
           const completed = data.job.status === 'completed' || data.job.status === 'complete'
           if (completed || data.job.renderCompleted === true) {
+            console.log('[SSE] Job completed, transitioning to results page')
             addLog('info', '処理が完了しました。上部のエクスポートからダウンロードできます。')
             setCompleted(true)
           } else if (data.job.status === 'failed') {
             const errorStep = data.job.lastErrorStep || data.job.currentStep || '不明'
             const errorMessage = data.job.lastError || 'エラーの詳細が不明です'
+            console.error('[SSE] Job failed:', { errorStep, errorMessage })
             addLog('error', `処理が失敗しました - ${errorStep}: ${errorMessage}`)
           }
         }
@@ -664,20 +662,131 @@ function ProcessingProgress({
         addLog('error', `SSEデータの解析に失敗: ${errMsg}`)
       }
     }
-    es.addEventListener('init', (ev) => handlePayload((ev as MessageEvent).data))
-    es.addEventListener('message', (ev) => handlePayload((ev as MessageEvent).data))
-    es.addEventListener('final', (ev) => handlePayload((ev as MessageEvent).data))
-    es.addEventListener('error', (ev) =>
-      addLog('warning', 'SSE接続に問題が発生しました。再接続を試行します。', ev),
-    )
+
+    // フォールバックポーリング関数
+    const fallbackPolling = async () => {
+      if (!sseConnected && isMountedRef.current) {
+        try {
+          const res = await fetch(`/api/jobs/${jobId}`)
+          if (res.ok) {
+            const data = await res.json()
+            const jobData = data as JobData
+            lastJobRef.current = jobData.job
+            const result = updateStepsFromJobData(jobData)
+            if (result === 'stop') {
+              const completed =
+                jobData.job.status === 'completed' || jobData.job.status === 'complete'
+              if (completed || jobData.job.renderCompleted === true) {
+                console.log('[Fallback] Job completed via polling, transitioning to results page')
+                addLog(
+                  'info',
+                  '処理が完了しました（フォールバックポーリングにより検知）。上部のエクスポートからダウンロードできます。',
+                )
+                setCompleted(true)
+              } else if (jobData.job.status === 'failed') {
+                const errorStep = jobData.job.lastErrorStep || jobData.job.currentStep || '不明'
+                const errorMessage = jobData.job.lastError || 'エラーの詳細が不明です'
+                console.error('[Fallback] Job failed:', { errorStep, errorMessage })
+                addLog('error', `処理が失敗しました - ${errorStep}: ${errorMessage}`)
+              }
+            }
+          }
+        } catch (e) {
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn('Fallback polling failed:', e)
+          }
+        }
+      }
+    }
+
+    const handleReconnect = () => {
+      if (reconnectAttempts >= maxReconnectAttempts) {
+        setSseConnected(false)
+        addLog(
+          'error',
+          'SSE接続の再接続が最大回数に達しました。フォールバックポーリングを開始します。',
+        )
+        sseConnected = false
+        // SSEが完全に失敗した場合、30秒ごとにポーリング
+        fallbackPollingTimer = setInterval(fallbackPolling, 30000)
+        return
+      }
+
+      reconnectAttempts++
+      addLog(
+        'warning',
+        `SSE接続が切断されました。再接続を試行します... (${reconnectAttempts}/${maxReconnectAttempts})`,
+      )
+
+      // 指数バックオフで再接続
+      const delay = Math.min(1000 * 2 ** (reconnectAttempts - 1), 30000)
+      reconnectTimer = setTimeout(() => {
+        if (!isMountedRef.current) return
+
+        // 新しいEventSourceを作成
+        const newEs = new EventSource(`/api/jobs/${jobId}/events`)
+        newEs.addEventListener('init', (ev) => {
+          setSseConnected(true)
+          handlePayload((ev as MessageEvent).data)
+        })
+        newEs.addEventListener('message', (ev) => {
+          setSseConnected(true)
+          handlePayload((ev as MessageEvent).data)
+        })
+        newEs.addEventListener('final', (ev) => {
+          setSseConnected(true)
+          handlePayload((ev as MessageEvent).data)
+        })
+        newEs.addEventListener('error', (ev) => {
+          setSseConnected(false)
+          addLog('warning', 'SSE接続に問題が発生しました。再接続を試行します。', ev)
+          handleReconnect()
+        })
+
+        // 古いEventSourceを閉じて新しいものに置き換え
+        es.close()
+        Object.assign(es, newEs)
+      }, delay)
+    }
+
+    es.addEventListener('init', (ev) => {
+      setSseConnected(true)
+      console.log('[SSE] Connected and received init data')
+      handlePayload((ev as MessageEvent).data)
+    })
+    es.addEventListener('message', (ev) => {
+      setSseConnected(true)
+      console.log('[SSE] Received message')
+      handlePayload((ev as MessageEvent).data)
+    })
+    es.addEventListener('final', (ev) => {
+      setSseConnected(true)
+      console.log('[SSE] Received final message - job completed')
+      handlePayload((ev as MessageEvent).data)
+    })
+    es.addEventListener('error', (ev) => {
+      setSseConnected(false)
+      console.warn('[SSE] Connection error:', ev)
+      addLog('warning', 'SSE接続に問題が発生しました。再接続を試行します。', ev)
+      handleReconnect()
+    })
+
     return () => {
       isMountedRef.current = false
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      if (fallbackPollingTimer) clearInterval(fallbackPollingTimer)
       es.close()
     }
   }, [jobId, addLog, updateStepsFromJobData])
 
   useEffect(() => {
-    if (completed) onComplete?.()
+    if (completed) {
+      // ジョブ完了時に少し待ってから遷移（UIの更新を確実にするため）
+      const timer = setTimeout(() => {
+        onComplete?.()
+      }, 1000)
+      return () => clearTimeout(timer)
+    }
   }, [completed, onComplete])
 
   useEffect(() => {
@@ -740,128 +849,111 @@ function ProcessingProgress({
   const failedStep = steps.find((step) => step.status === 'error')
 
   return (
-    <Stack spacing={3}>
+    <div className="space-y-3">
       {normalizationToastShown && (
-        <Alert severity="warning" sx={{ position: 'fixed', top: 80, right: 20, zIndex: 1400 }}>
+        <Alert variant="warning" className="fixed right-5 top-20 z-[1400]">
           安全装置: ページ番号の正規化を適用しました（上限 {_MAX_PAGES} ページ）
         </Alert>
       )}
       {hasFailedStep && failedStep && (
-        <Alert severity="error" icon={<ErrorIcon />} sx={{ mb: 2 }}>
-          {' '}
-          <Typography fontWeight="bold">{failedStep.name}でエラーが発生しました。</Typography>{' '}
-          {failedStep.error && <Typography variant="body2">{failedStep.error}</Typography>}{' '}
+        <Alert variant="destructive" className="mb-2">
+          <AlertDescription>
+            <p className="font-semibold">{failedStep.name}でエラーが発生しました。</p>
+            {failedStep.error && <p className="text-sm">{failedStep.error}</p>}
+          </AlertDescription>
         </Alert>
       )}
 
       <Card>
         <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-            <Typography variant="h6">処理進捗</Typography>
+          <div className="mb-2 flex items-center justify-between">
+            <div className="font-semibold">処理進捗</div>
             {showLogsFlag && (
-              <Button size="small" onClick={() => setShowLogs(!showLogs)}>
+              <Button variant="outline" size="sm" onClick={() => setShowLogs(!showLogs)}>
                 {showLogs ? 'ログを隠す' : 'ログを表示'}
               </Button>
             )}
-          </Stack>
+          </div>
 
-          {modeHint && (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              {modeHint}
-            </Alert>
-          )}
+          {modeHint && <Alert className="mb-2">{modeHint}</Alert>}
 
-          <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
-            <LinearProgress variant="determinate" value={overallProgress} sx={{ flexGrow: 1 }} />
-            <Typography
-              variant="body2"
-              color="text.secondary"
-            >{`${Math.round(overallProgress)}%`}</Typography>
-          </Stack>
+          <div className="mb-2 flex items-center gap-2">
+            <div className="w-full">
+              <Progress value={overallProgress} />
+            </div>
+            <div className="text-xs text-muted-foreground">{Math.round(overallProgress)}%</div>
+          </div>
 
           {jobId && (
-            <Paper
-              variant="outlined"
-              sx={{
-                p: 1.5,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <Typography variant="body2">
+            <div className="flex items-center justify-between rounded-md border p-2">
+              <div className="text-sm">
                 トークン使用量 (入力/出力): {tokenPromptSum.toLocaleString()} /{' '}
                 {tokenCompletionSum.toLocaleString()}
-              </Typography>
-              <Chip
-                label={completed ? '確定' : '暫定'}
-                color={completed ? 'success' : 'warning'}
-                size="small"
-              />
-            </Paper>
+              </div>
+              <div className="flex items-center gap-1">
+                <Badge variant={completed ? 'success' : 'warning'}>
+                  {completed ? '確定' : '暫定'}
+                </Badge>
+                {process.env.NODE_ENV === 'development' && (
+                  <Badge variant={sseConnected ? 'success' : 'warning'}>
+                    {sseConnected ? 'SSE接続中' : 'ポーリング中'}
+                  </Badge>
+                )}
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      <Stepper activeStep={activeStep} orientation="vertical">
-        {steps.map((step, index) => (
-          <Step key={step.id}>
-            <StepLabel
-              StepIconComponent={(props) => {
-                const { active, completed, error } = props
-                if (error) return <ErrorIcon color="error" />
-                if (completed) return <CheckCircle color="success" />
-                if (active) return <HourglassEmpty color="primary" className="animate-spin" />
-                return (
-                  <Box
-                    sx={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: '50%',
-                      bgcolor: 'grey.300',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Typography sx={{ color: 'white', fontSize: '0.8rem' }}>{index + 1}</Typography>
-                  </Box>
-                )
-              }}
-            >
-              <Typography>{step.name}</Typography>
-            </StepLabel>
-            <StepContent>
-              <Typography variant="body2" color="text.secondary">
-                {step.description}
-              </Typography>
-              {runtimeHints[step.id as HintStep] && (
-                <Typography variant="caption" color="primary">
-                  {runtimeHints[step.id as HintStep]}
-                </Typography>
-              )}
-              {step.status === 'processing' && step.progress !== undefined && (
-                <Box sx={{ mt: 1 }}>
-                  <LinearProgress variant="determinate" value={step.progress} />
-                </Box>
-              )}
-              {step.status === 'error' && step.error && (
-                <Alert severity="error" sx={{ mt: 1 }}>
-                  {step.error}
-                </Alert>
-              )}
-            </StepContent>
-          </Step>
-        ))}
-      </Stepper>
+      <div className="relative">
+        <ol className="border-l pl-4">
+          {steps.map((step, index) => {
+            const isActive = index === activeStep
+            const isCompleted = step.status === 'completed'
+            const isError = step.status === 'error'
+            return (
+              <li key={step.id} className="mb-4">
+                <div className="mb-1 flex items-center gap-2">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full border bg-muted">
+                    {isError ? (
+                      <XCircle className="h-4 w-4 text-destructive" />
+                    ) : isCompleted ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    ) : isActive ? (
+                      <Hourglass className="h-4 w-4 text-primary" />
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground">{index + 1}</span>
+                    )}
+                  </div>
+                  <div className="font-medium">{step.name}</div>
+                </div>
+                <div className="ml-8 text-sm text-muted-foreground">
+                  <p>{step.description}</p>
+                  {runtimeHints[step.id as HintStep] && (
+                    <p className="text-primary">{runtimeHints[step.id as HintStep]}</p>
+                  )}
+                  {step.status === 'processing' && step.progress !== undefined && (
+                    <div className="mt-1">
+                      <Progress value={step.progress} />
+                    </div>
+                  )}
+                  {step.status === 'error' && step.error && (
+                    <Alert variant="destructive" className="mt-1">
+                      {step.error}
+                    </Alert>
+                  )}
+                </div>
+              </li>
+            )
+          })}
+        </ol>
+      </div>
 
       {Object.keys(perEpisodePages).length > 0 && (
         <Card>
           <CardContent>
-            <Typography variant="h6" gutterBottom>
-              エピソード進捗
-            </Typography>
-            <Stack direction="row" flexWrap="wrap" gap={1}>
+            <div className="mb-2 font-semibold">エピソード進捗</div>
+            <div className="flex flex-wrap gap-2">
               {episodeProgressCards.map(
                 ({ ep, planned, rendered, total, normalizedCount, isCompleted, isCurrent }) => {
                   const totalPages = total || planned || 1
@@ -869,84 +961,64 @@ function ProcessingProgress({
                   return (
                     <Card
                       key={ep}
-                      variant="outlined"
-                      sx={{
-                        flexBasis: '150px',
-                        flexGrow: 1,
-                        borderColor: isCurrent ? 'primary.main' : undefined,
-                      }}
+                      className={`flex-1 min-w-[150px] ${isCurrent ? 'border-primary' : ''}`}
                     >
-                      <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center">
-                          <Typography variant="body2" fontWeight="bold">
-                            EP{ep}
-                          </Typography>
-                          {isCompleted && <CheckCircle color="success" sx={{ fontSize: '1rem' }} />}
+                      <CardContent className="p-2">
+                        <div className="mb-1 flex items-center justify-between">
+                          <div className="text-sm font-semibold">EP{ep}</div>
+                          {isCompleted && <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />}
                           {normalizedCount > 0 && (
-                            <Chip
-                              label={`N:${normalizedCount}`}
-                              size="small"
-                              color="warning"
-                              sx={{ height: '16px', fontSize: '0.6rem' }}
-                            />
+                            <Badge variant="warning" className="h-4 px-1 text-[10px]">
+                              N:{normalizedCount}
+                            </Badge>
                           )}
-                        </Stack>
-                        <Typography variant="caption" color="text.secondary">
+                        </div>
+                        <div className="text-xs text-muted-foreground">
                           {rendered} / {totalPages} ページ
-                        </Typography>
-                        <LinearProgress
-                          variant="determinate"
-                          value={progress}
-                          sx={{ mt: 0.5 }}
-                          color={isCompleted ? 'success' : 'primary'}
-                        />
+                        </div>
+                        <div className="mt-1">
+                          <Progress value={progress} />
+                        </div>
                       </CardContent>
                     </Card>
                   )
                 },
               )}
-            </Stack>
+            </div>
           </CardContent>
         </Card>
       )}
 
       {showLogsFlag && (
-        <Collapse in={showLogs}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6">開発ログ</Typography>
-              <Paper
-                variant="outlined"
-                sx={{ mt: 1, p: 1, maxHeight: `${MAX_VISIBLE_LOG_HEIGHT}vh`, overflowY: 'auto' }}
-              >
-                {logs.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
-                    ログはまだありません
-                  </Typography>
-                ) : (
-                  logs.map((log) => {
-                    const key = `${log.timestamp}-${log.level}-${String(log.message).slice(0, 50)}`
-                    return (
-                      <Alert
-                        key={key}
-                        severity={log.level}
-                        variant="outlined"
-                        sx={{ mb: 1, fontSize: '0.8rem' }}
-                      >
-                        <Typography variant="caption" sx={{ mr: 1 }}>
-                          {log.timestamp}
-                        </Typography>
-                        {log.message}
-                      </Alert>
-                    )
-                  })
-                )}
-              </Paper>
-            </CardContent>
-          </Card>
-        </Collapse>
+        <Card>
+          <CardContent>
+            <div className="font-semibold">開発ログ</div>
+            <div className="mt-2 max-h-[50vh] overflow-y-auto rounded-md border p-2 text-sm">
+              {logs.length === 0 ? (
+                <div className="text-muted-foreground">ログはまだありません</div>
+              ) : (
+                logs.map((log) => (
+                  <Alert
+                    key={log.id}
+                    className="mb-2 text-[0.8rem]"
+                    variant={
+                      log.level === 'error'
+                        ? 'destructive'
+                        : log.level === 'warning'
+                          ? 'warning'
+                          : 'default'
+                    }
+                  >
+                    <span className="mr-2 text-xs opacity-70">{log.timestamp}</span>
+                    {log.message}
+                  </Alert>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
-    </Stack>
+    </div>
   )
 }
 
