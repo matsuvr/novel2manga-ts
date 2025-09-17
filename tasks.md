@@ -15,6 +15,7 @@
 - [x] Centralize job notification logic via `updateJobStatusWithNotification` to prevent duplicate emails.
 
 - [x] Place first dialogue bubble on the right and second on the left for two speech elements per panel
+- [x] Double speaker label dimensions and align narration background boxes with the rendered text bounds
 - [x] Fix segmented page break carry-over to ensure panel templates match accumulated importance.
 
 - [x] Harden page break estimation for empty scripts and negative page offsets.
