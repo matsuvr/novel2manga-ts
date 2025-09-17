@@ -1,31 +1,11 @@
 'use client'
 
-import DownloadIcon from '@mui/icons-material/Download'
-import PreviewIcon from '@mui/icons-material/Preview'
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  CircularProgress,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Paper,
-  Select,
-  type SelectChangeEvent,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-} from '@mui/material'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Download, Eye } from '@/components/icons'
+import { Alert } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import type { Episode } from '@/types/database-models'
 import { groupByProviderModel } from '@/utils/token-usage'
 
@@ -150,102 +130,112 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
 
   if (!episodes || episodes.length === 0) {
     return (
-      <Paper sx={{ p: 6, textAlign: 'center' }}>
-        <Typography color="text.secondary">エピソードが見つかりません</Typography>
-      </Paper>
+      <div className="rounded-lg border bg-white p-6 text-center text-sm text-muted-foreground">
+        エピソードが見つかりません
+      </div>
     )
   }
 
   return (
-    <Stack spacing={4}>
+    <div className="space-y-4">
       {/* Export Section */}
       <Card>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
-            エクスポート
-          </Typography>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
-            <FormControl sx={{ minWidth: 120 }}>
-              <InputLabel>フォーマット</InputLabel>
-              <Select
+          <h3 className="mb-2 text-lg font-semibold">エクスポート</h3>
+          <div className="flex flex-col items-center gap-2 sm:flex-row">
+            <div className="min-w-[120px]">
+              <label htmlFor="export-format" className="mb-1 block text-xs text-muted-foreground">
+                フォーマット
+              </label>
+              <select
+                id="export-format"
+                className="w-full rounded-md border bg-white px-3 py-2 text-sm shadow-sm focus:outline-none"
                 value={exportFormat}
-                label="フォーマット"
-                onChange={(e: SelectChangeEvent<'pdf' | 'images_zip'>) =>
-                  setExportFormat(e.target.value as 'pdf' | 'images_zip')
-                }
+                onChange={(e) => setExportFormat(e.target.value as 'pdf' | 'images_zip')}
               >
-                <MenuItem value="pdf">PDF</MenuItem>
-                <MenuItem value="images_zip">画像ZIP</MenuItem>
-              </Select>
-            </FormControl>
-            <Button
-              variant="contained"
-              onClick={handleExport}
-              disabled={isExporting}
-              startIcon={isExporting ? <CircularProgress size={20} /> : <DownloadIcon />}
-            >
+                <option value="pdf">PDF</option>
+                <option value="images_zip">画像ZIP</option>
+              </select>
+            </div>
+            <Button onClick={handleExport} disabled={isExporting}>
               {isExporting
                 ? 'エクスポート中...'
                 : `エクスポート (${selectedEpisode ? '選択中のEP' : '全EP'})`}
+              {!isExporting && <Download className="ml-2 h-4 w-4" />}
             </Button>
-          </Stack>
+          </div>
         </CardContent>
       </Card>
 
       {/* Token Usage Section */}
       {isLoadingTokenUsage ? (
-        <CircularProgress />
+        <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            ></circle>
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+            ></path>
+          </svg>
+          読み込み中...
+        </div>
       ) : (
         tokenUsage.length > 0 && (
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                トークン使用量
-              </Typography>
-              <Stack spacing={2}>
-                <Alert severity="info">
+              <h3 className="mb-2 text-lg font-semibold">トークン使用量</h3>
+              <div className="space-y-2">
+                <Alert>
                   合計: {totalTokens.toLocaleString()} トークン (入力:{' '}
                   {totalPromptTokens.toLocaleString()}, 出力:{' '}
                   {totalCompletionTokens.toLocaleString()})
                   {totalCost > 0 && ` | 概算コスト: $${totalCost.toFixed(4)}`}
                 </Alert>
                 {totalCachedTokens > 0 && (
-                  <Alert severity="success">
+                  <Alert className="border-green-200 bg-green-50 text-green-800">
                     キャッシュ: {totalCachedTokens.toLocaleString()} トークン
                   </Alert>
                 )}
                 {totalThoughtsTokens > 0 && (
-                  <Alert severity="warning">
+                  <Alert className="border-amber-200 bg-amber-50 text-amber-900">
                     思考: {totalThoughtsTokens.toLocaleString()} トークン
                   </Alert>
                 )}
-                <TableContainer component={Paper} variant="outlined">
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>モデル</TableCell>
-                        <TableCell align="right">入力トークン</TableCell>
-                        <TableCell align="right">出力トークン</TableCell>
-                        <TableCell align="right">合計</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
+                <div className="overflow-hidden rounded-md border">
+                  <table className="w-full border-collapse text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium">モデル</th>
+                        <th className="px-3 py-2 text-right font-medium">入力トークン</th>
+                        <th className="px-3 py-2 text-right font-medium">出力トークン</th>
+                        <th className="px-3 py-2 text-right font-medium">合計</th>
+                      </tr>
+                    </thead>
+                    <tbody>
                       {Object.entries(modelStats).map(([modelKey, stats]) => (
-                        <TableRow key={modelKey}>
-                          <TableCell component="th" scope="row">
-                            {modelKey}
-                          </TableCell>
-                          <TableCell align="right">{stats.prompt.toLocaleString()}</TableCell>
-                          <TableCell align="right">{stats.completion.toLocaleString()}</TableCell>
-                          <TableCell align="right">
+                        <tr key={modelKey} className="border-t">
+                          <td className="px-3 py-2">{modelKey}</td>
+                          <td className="px-3 py-2 text-right">{stats.prompt.toLocaleString()}</td>
+                          <td className="px-3 py-2 text-right">
+                            {stats.completion.toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2 text-right">
                             {(stats.prompt + stats.completion).toLocaleString()}
-                          </TableCell>
-                        </TableRow>
+                          </td>
+                        </tr>
                       ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Stack>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )
@@ -254,56 +244,39 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
       {/* Episode List */}
       <Card>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
-            エピソード一覧
-          </Typography>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
-              gap: 2,
-            }}
-          >
+          <h3 className="mb-2 text-lg font-semibold">エピソード一覧</h3>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
             {episodes.map((episode) => (
-              <Box key={episode.id}>
+              <div key={episode.id}>
                 <Card
-                  variant="outlined"
-                  sx={{
-                    cursor: 'pointer',
-                    borderColor: selectedEpisode?.id === episode.id ? 'primary.main' : undefined,
-                    borderWidth: selectedEpisode?.id === episode.id ? 2 : 1,
-                    height: '100%',
-                  }}
+                  className={`h-full cursor-pointer ${selectedEpisode?.id === episode.id ? 'border-primary' : ''}`}
                   onClick={() => setSelectedEpisode(episode)}
                 >
                   <CardContent>
-                    <Typography variant="h6">Episode {episode.episodeNumber}</Typography>
-                    <Typography color="text.secondary" gutterBottom>
-                      {episode.title}
-                    </Typography>
-                    <Chip
-                      label="レイアウト生成済み"
-                      size="small"
-                      color="success"
-                      variant="outlined"
-                    />
-                    <Box sx={{ mt: 2 }}>
+                    <div className="text-base font-semibold">Episode {episode.episodeNumber}</div>
+                    <div className="text-sm text-muted-foreground">{episode.title}</div>
+                    <div className="mt-2">
+                      <Badge variant="outline" className="text-green-700">
+                        レイアウト生成済み
+                      </Badge>
+                    </div>
+                    <div className="mt-2">
                       <Button
-                        size="small"
-                        startIcon={<PreviewIcon />}
+                        size="sm"
                         onClick={(e) => {
                           e.stopPropagation()
                           handleViewEpisode(episode.episodeNumber)
                         }}
                       >
                         プレビュー
+                        <Eye className="ml-2 h-4 w-4" />
                       </Button>
-                    </Box>
+                    </div>
                   </CardContent>
                 </Card>
-              </Box>
+              </div>
             ))}
-          </Box>
+          </div>
         </CardContent>
       </Card>
 
@@ -311,52 +284,36 @@ export default function ResultsDisplay({ jobId, episodes }: ResultsDisplayProps)
       {selectedEpisode && (
         <Card>
           <CardContent>
-            <Typography variant="h6" gutterBottom>
+            <h3 className="mb-2 text-lg font-semibold">
               {selectedEpisode.title || `エピソード ${selectedEpisode.episodeNumber}`} の詳細
-            </Typography>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
-                gap: 2,
-              }}
-            >
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  開始位置
-                </Typography>
-                <Typography>
+            </h3>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <div>
+                <div className="text-[11px] text-muted-foreground">開始位置</div>
+                <div className="text-sm">
                   チャンク {selectedEpisode.startChunk} (文字位置: {selectedEpisode.startCharIndex})
-                </Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  終了位置
-                </Typography>
-                <Typography>
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">終了位置</div>
+                <div className="text-sm">
                   チャンク {selectedEpisode.endChunk} (文字位置: {selectedEpisode.endCharIndex})
-                </Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  信頼度
-                </Typography>
-                <Typography>{Math.round(selectedEpisode.confidence * 100)}%</Typography>
-              </Box>
-            </Box>
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">信頼度</div>
+                <div className="text-sm">{Math.round(selectedEpisode.confidence * 100)}%</div>
+              </div>
+            </div>
             {selectedEpisode.summary && (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  あらすじ
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {selectedEpisode.summary}
-                </Typography>
-              </Box>
+              <div className="mt-2">
+                <div className="text-sm font-semibold">あらすじ</div>
+                <div className="text-sm text-muted-foreground">{selectedEpisode.summary}</div>
+              </div>
             )}
           </CardContent>
         </Card>
       )}
-    </Stack>
+    </div>
   )
 }

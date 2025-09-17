@@ -52,7 +52,7 @@ class ConsoleLogger implements LoggerPort {
   constructor(
     private readonly base: Record<string, unknown> = {},
     private readonly minLevel: LogLevel = 'info',
-  ) {}
+  ) { }
 
   private fmt(level: LogLevel, msg: string, meta?: Record<string, unknown>) {
     // レベルフィルタ（コンソールのみ）。ファイル出力は全レベル維持。
@@ -145,7 +145,7 @@ class FileLogger implements LoggerPort {
 }
 
 class MultiLogger implements LoggerPort {
-  constructor(private readonly loggers: LoggerPort[]) {}
+  constructor(private readonly loggers: LoggerPort[]) { }
   debug(msg: string, meta?: Record<string, unknown>): void {
     for (const l of this.loggers) {
       l.debug(msg, meta)
@@ -175,12 +175,44 @@ let defaultLogger: LoggerPort | null = null
 
 export function getLogger(): LoggerPort {
   if (!defaultLogger) {
+    // Allow disabling logging via environment variables for CI/build environments
+    // - DISABLE_LOGGING=1 -> completely disable all logging (noop logger)
+    // - DISABLE_FILE_LOGGER=1 -> disable file logger (console only)
+
+    if (String(process.env.DISABLE_LOGGING || '').trim() === '1') {
+      class NoopLogger implements LoggerPort {
+        debug(): void {
+          void 0
+        }
+        info(): void {
+          void 0
+        }
+        warn(): void {
+          void 0
+        }
+        error(): void {
+          void 0
+        }
+        withContext(): LoggerPort {
+          return this
+        }
+      }
+      defaultLogger = new NoopLogger()
+      return defaultLogger
+    }
+
     const consoleMinLevel = parseConsoleLevel(process.env.LOG_CONSOLE_LEVEL)
     const consoleLogger = new ConsoleLogger({}, consoleMinLevel)
-    // Always write dev logs to ./dev.log in development and tests; also allow in production for now
-    const devLogPath = path.resolve(process.cwd(), 'dev.log')
-    const fileLogger = new FileLogger(devLogPath)
-    defaultLogger = new MultiLogger([consoleLogger, fileLogger])
+
+    if (String(process.env.DISABLE_FILE_LOGGER || '').trim() === '1') {
+      // Only console logger is used; file writes are suppressed to avoid permission issues in CI/build
+      defaultLogger = new MultiLogger([consoleLogger])
+    } else {
+      // By default keep file logger for local development
+      const devLogPath = path.resolve(process.cwd(), 'dev.log')
+      const fileLogger = new FileLogger(devLogPath)
+      defaultLogger = new MultiLogger([consoleLogger, fileLogger])
+    }
   }
   return defaultLogger
 }
