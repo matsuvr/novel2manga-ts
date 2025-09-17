@@ -216,3 +216,38 @@ export function getLogger(): LoggerPort {
   }
   return defaultLogger
 }
+
+// --- Backwards-compatible fileLogger singleton for places that previously imported
+// `fileLogger` from `src/utils/logger.mjs`. We expose a minimal API used by
+// `next.config.js` and any scripts: getLogFilePath() and getInstance-like access.
+
+class BackwardsFileLogger {
+  private static instance: BackwardsFileLogger | null = null
+  private logFilePath = ''
+
+  private ensurePath() {
+    // keep in sync with existing behaviour: dev log file under project root
+    // Use the already-imported `path` module instead of require
+    this.logFilePath = path.resolve(process.cwd(), 'logs', `dev-${new Date().toISOString().split('T')[0]}.log`)
+  }
+
+  public static getInstance() {
+    if (!BackwardsFileLogger.instance) BackwardsFileLogger.instance = new BackwardsFileLogger()
+    return BackwardsFileLogger.instance
+  }
+
+  public getLogFilePath() {
+    try {
+      this.ensurePath()
+      return this.logFilePath
+    } catch (_error) {
+      // capture the error for easier debugging when necessary; return empty string as fallback
+      // eslint-disable-next-line no-console
+      console.debug('BackwardsFileLogger.getLogFilePath error:', _error)
+      return ''
+    }
+  }
+}
+
+// Export a compatible variable name for imports that used `fileLogger` from the old .mjs
+export const fileLogger = BackwardsFileLogger.getInstance()
