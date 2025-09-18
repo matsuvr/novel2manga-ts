@@ -72,43 +72,16 @@ function remapPanel(panel: Panel, templatePanels: LayoutTemplate['panels'], inde
 
   const templatePanel = templatePanels[index % templatePanels.length]
 
-  // Vertical-normalization: if the template panels occupy less than full height
-  // we can scale/stretch their y/height to fill the [0,1] vertical space while
-  // preserving relative band positions. This prevents large bottom whitespace
-  // when samples define top-aligned bands only.
+  // Simply map the panel to the template slot. Any vertical normalization
+  // across the entire page is handled by normalizePanelsVerticalCoverage.
   try {
-    // compute minY and maxY across templatePanels to find occupied vertical span
-    const ys = templatePanels.map((p) => ({ y: p.position.y, h: p.size.height }))
-    const minY = Math.min(...ys.map((v) => v.y))
-    const maxY = Math.max(...ys.map((v) => v.y + v.h))
-
-    // if span is nearly full, just use the template as-is
-    const span = maxY - minY
-    if (span >= 0.999999) {
-      return {
-        ...panel,
-        position: { ...templatePanel.position },
-        size: { ...templatePanel.size },
-      }
-    }
-
-    // Otherwise, scale y and height to fill [0,1]
-    const relY = (templatePanel.position.y - minY) / (span || 1)
-    const relH = templatePanel.size.height / (span || 1)
-    const newY = Number((relY * 1).toFixed(6))
-    const newH = Number((relH * 1).toFixed(6))
-
-    return {
-      ...panel,
-      position: { x: templatePanel.position.x, y: newY },
-      size: { width: templatePanel.size.width, height: newH },
-    }
-  } catch {
-    // On any unexpected issue, fall back to original mapping
     return {
       ...panel,
       position: { ...templatePanel.position },
       size: { ...templatePanel.size },
     }
+  } catch {
+    // fallback: return original panel unchanged
+    return panel
   }
 }

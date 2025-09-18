@@ -168,24 +168,9 @@ export default function NewHomeClient() {
             </h1>
             <p className="mx-auto mt-3 max-w-2xl text-sm/6 opacity-90 sm:text-base/7">
               小説テキストを貼り付けるだけ。AI
-              がプロットを分析し、読みやすい絵コンテに自動変換します。
+              が読みやすい絵コンテに自動変換します。
             </p>
-            <div className="mt-6 flex items-center justify-center gap-3">
-              <a href="#converter">
-                <Button size="lg" variant="default" className="shadow-lg shadow-black/20">
-                  いますぐ試す
-                </Button>
-              </a>
-              <a href="#how-it-works">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="bg-white/10 text-white hover:bg-white/20"
-                >
-                  仕組みを見る
-                </Button>
-              </a>
-            </div>
+            <div className="mt-6 flex items-center justify-center gap-3"></div>
           </div>
         </Section>
       </div>
