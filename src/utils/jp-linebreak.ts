@@ -1,10 +1,17 @@
-import { loadDefaultJapaneseParser } from 'budoux'
+import * as budoux from 'budoux'
 
-let cachedParser: ReturnType<typeof loadDefaultJapaneseParser> | null = null
-const getParser = () => {
+let cachedParser: { parse: (s: string) => string[] } | null = null
+const getParser = (): { parse: (s: string) => string[] } => {
   if (cachedParser === null) {
-    cachedParser = loadDefaultJapaneseParser()
+    // budoux exports a factory function; call it and store an object with parse()
+    const loader = (budoux as unknown) as { loadDefaultJapaneseParser?: () => { parse: (s: string) => string[] } }
+    const p = loader.loadDefaultJapaneseParser?.()
+    if (!p) {
+      throw new Error('Budoux parser unavailable')
+    }
+    cachedParser = p
   }
+  // At this point cachedParser is non-null
   return cachedParser
 }
 
