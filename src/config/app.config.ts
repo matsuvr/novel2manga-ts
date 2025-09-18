@@ -698,6 +698,16 @@ export const appConfig = {
       // ログ表示コンテナの最大高さ（vh単位）
       maxVisibleLogHeightVh: 60,
     },
+    sse: {
+      // SSE 再接続の最大試行回数
+      maxReconnectAttempts: 5,
+      // 再接続指数バックオフの最大遅延（ms）
+      maxReconnectDelayMs: 30000,
+      // フォールバックポーリング間隔（ms）
+      fallbackPollingIntervalMs: 30000,
+      // サーバ側 heartbeat 想定間隔（ms）（クライアント側での監視に利用可）
+      expectedHeartbeatMs: 20000,
+    },
   },
 }
 

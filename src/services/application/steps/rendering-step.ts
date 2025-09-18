@@ -21,7 +21,7 @@ export class RenderingStep implements PipelineStep {
   readonly stepName = 'rendering'
 
   /**
-   * Render pages for episodes or skip in demo/test environments
+   * Render pages for episodes. A singleページ失敗で全体が止まらないようにページ単位でエラーを握りつぶし続行する。
    */
   async renderEpisodes(
     episodeNumbers: number[],
@@ -31,36 +31,16 @@ export class RenderingStep implements PipelineStep {
     const { jobId, logger } = context
 
     try {
-      // デモモードでは重いレンダリングをスキップ
       const shouldRender = !options.isDemo
-      const _isLightweightMode = process.env.NODE_ENV === 'test'
-
       if (!shouldRender) {
-        logger.warn('Skipping render in demo mode', {
-          jobId,
-          episodeCount: episodeNumbers.length,
-          reason: 'Demo mode',
-        })
-        return {
-          success: true,
-          data: {
-            rendered: false,
-            skippedReason: 'Demo mode',
-          },
-        }
+        logger.warn('Skipping render in demo mode', { jobId, episodeCount: episodeNumbers.length, reason: 'Demo mode' })
+        return { success: true, data: { rendered: false, skippedReason: 'Demo mode' } }
       }
 
-      logger.info('Starting rendering for all episodes', {
-        jobId,
-        episodeCount: episodeNumbers.length,
-        episodes: episodeNumbers,
-      })
+      logger.info('Starting rendering for all episodes', { jobId, episodeCount: episodeNumbers.length, episodes: episodeNumbers })
 
       try {
-        // Render pages for each episode
         const ports = getStoragePorts()
-
-        // 進捗管理のためのヘルパー関数
         const { db } = await import('@/services/database')
         const jobDb = db.jobs()
         const renderDb = db.render()
@@ -68,80 +48,100 @@ export class RenderingStep implements PipelineStep {
         let totalPagesProcessed = 0
         let totalPagesExpected = 0
 
-        // 全エピソードの総ページ数を事前に計算（安全のためページ番号を正規化してから計算）
-
-        // 全エピソードの総ページ数を事前に計算
+        // 期待ページ数計算 (パース失敗はログしてスキップ)
         for (const ep of episodeNumbers) {
           const layoutText = await ports.layout.getEpisodeLayout(jobId, ep)
-          if (layoutText) {
+          if (!layoutText) continue
+          try {
             const parsed = JSON.parse(layoutText)
-            if (Array.isArray(parsed?.pages)) {
-              totalPagesExpected += parsed.pages.length
-            } else if (Array.isArray(parsed?.panels)) {
+            if (Array.isArray(parsed?.pages)) totalPagesExpected += parsed.pages.length
+            else if (Array.isArray(parsed?.panels)) {
               const panels = parsed.panels as Array<{ pageNumber?: number }>
-              const maxPage = getMaxNormalizedPage(panels)
-              totalPagesExpected += maxPage
+              totalPagesExpected += getMaxNormalizedPage(panels)
             }
+          } catch (e) {
+            logger.error('Failed to parse layout JSON (skipping episode for expected count)', { jobId, episode: ep, error: (e as Error).message })
           }
         }
 
-        logger.info('レンダリング開始', {
-          jobId,
-          episodeCount: episodeNumbers.length,
-          totalPagesExpected,
-        })
+        logger.info('レンダリング開始', { jobId, episodeCount: episodeNumbers.length, totalPagesExpected })
 
         for (const ep of episodeNumbers) {
-          // ここで「ストレージ（ファイル）からページ割り計画/YAMLレイアウトを読み込む」
           const layoutText = await ports.layout.getEpisodeLayout(jobId, ep)
-          if (layoutText) {
-            const parsed = JSON.parse(layoutText)
-            const hasPagesArray = Array.isArray(parsed?.pages)
-            const isEmptyPages = hasPagesArray && parsed.pages.length === 0
-            const isMangaLayout = hasPagesArray && parsed.pages[0]?.panels?.[0]?.position
+          if (!layoutText) continue
 
-            if (isEmptyPages) {
-              logger.warn('Skipping rendering for episode with 0 pages', { jobId, episode: ep })
-              continue
+            let parsed: unknown;
+            try {
+              parsed = JSON.parse(layoutText);
+            } catch (e) {
+              logger.error('Failed to parse layout JSON', { jobId, episode: ep, error: e instanceof Error ? e.message : String(e) });
+              continue;
             }
 
-            if (isMangaLayout) {
-              const { normalizeAndValidateLayout } = await import('@/utils/layout-normalizer')
-              const normalized = normalizeAndValidateLayout(parsed)
+          const parsedObj: Record<string, unknown> =
+            parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
+          const pagesVal = parsedObj.pages as unknown
+          const hasPagesArray = Array.isArray(pagesVal)
+          const isEmptyPages = hasPagesArray && (pagesVal as unknown[]).length === 0
+          const firstPageArray: unknown[] | undefined = hasPagesArray
+            ? (pagesVal as unknown[])
+            : undefined
+          const firstPage = firstPageArray ? firstPageArray[0] : undefined
+          const isMangaLayout =
+            hasPagesArray && firstPage && typeof firstPage === 'object' && 'panels' in firstPage
 
-              const { MangaPageRenderer } = await import('@/lib/canvas/manga-page-renderer')
-              const { appConfig } = await import('@/config/app.config')
-              const renderer = await MangaPageRenderer.create({
-                pageWidth: appConfig.rendering.defaultPageSize.width,
-                pageHeight: appConfig.rendering.defaultPageSize.height,
-                margin: 20,
-                panelSpacing: 10,
-                defaultFont: 'sans-serif',
-                fontSize: 14,
-              })
-              try {
-                for (const p of normalized.layout.pages) {
-                  // 現在処理中のページを更新
+          if (isEmptyPages) { logger.warn('Skipping rendering for episode with 0 pages', { jobId, episode: ep }); continue }
+
+          if (isMangaLayout) {
+            const { normalizeAndValidateLayout } = await import('@/utils/layout-normalizer')
+            let normalized: ReturnType<typeof normalizeAndValidateLayout>
+            try {
+              normalized = normalizeAndValidateLayout(parsed as Parameters<typeof normalizeAndValidateLayout>[0])
+            } catch (normError) {
+              logger.error('Layout normalization failed', { jobId, episode: ep, error: (normError as Error).message })
+              continue
+            }
+            const { MangaPageRenderer } = await import('@/lib/canvas/manga-page-renderer')
+            const { appConfig } = await import('@/config/app.config')
+            const renderer = await MangaPageRenderer.create({
+              pageWidth: appConfig.rendering.defaultPageSize.width,
+              pageHeight: appConfig.rendering.defaultPageSize.height,
+              margin: 20,
+              panelSpacing: 10,
+              defaultFont: 'sans-serif',
+              fontSize: 14,
+            })
+            try {
+              for (const p of normalized.layout.pages) {
+                try {
+                  // パネルの基本検証（ゼロサイズなど）
+                  const rawPanels: unknown[] = (p as { panels?: unknown[] }).panels || []
+                  const invalidPanels = rawPanels.filter((pl) => {
+                    if (!pl || typeof pl !== 'object') return true
+                    const size = (pl as { size?: { width?: unknown; height?: unknown } }).size
+                    if (!size || typeof size !== 'object') return true
+                    const { width, height } = size as { width?: unknown; height?: unknown }
+                    return (
+                      typeof width !== 'number' ||
+                      typeof height !== 'number' ||
+                      width <= 0 ||
+                      height <= 0
+                    )
+                  })
+                  if (invalidPanels.length > 0) {
+                    logger.error('Skipping page due to invalid panel size(s)', { jobId, episode: ep, page: p.page_number, invalidPanels: invalidPanels.length })
+                    totalPagesProcessed++
+                    continue
+                  }
+
                   jobDb.updateProcessingPosition(jobId, { episode: ep, page: p.page_number })
-
-                  const imageBlob = await renderer.renderToImage(
-                    normalized.layout,
-                    p.page_number,
-                    'png',
-                  )
+                  const imageBlob = await renderer.renderToImage(normalized.layout, p.page_number, 'png')
                   const imageBuffer = Buffer.from(await imageBlob.arrayBuffer())
                   await ports.render.putPageRender(jobId, ep, p.page_number, imageBuffer)
                   const { ThumbnailGenerator } = await import('@/lib/canvas/thumbnail-generator')
-                  const thumbBlob = await ThumbnailGenerator.generateThumbnail(imageBlob, {
-                    width: 200,
-                    height: 280,
-                    quality: 0.8,
-                    format: 'jpeg',
-                  })
+                  const thumbBlob = await ThumbnailGenerator.generateThumbnail(imageBlob, { width: 200, height: 280, quality: 0.8, format: 'jpeg' })
                   const thumbnailBuffer = Buffer.from(await thumbBlob.arrayBuffer())
                   await ports.render.putPageThumbnail(jobId, ep, p.page_number, thumbnailBuffer)
-
-                  // レンダリング状態をDBに記録（これによりrenderedPagesが自動的に増加）
                   await renderDb.upsertRenderStatus(jobId, ep, p.page_number, {
                     isRendered: true,
                     imagePath: `${jobId}/episode_${ep}/page_${p.page_number}.png`,
@@ -150,94 +150,53 @@ export class RenderingStep implements PipelineStep {
                     height: renderer.pageHeight,
                     fileSize: imageBuffer.length,
                   })
-
                   totalPagesProcessed++
-
-                  // 進捗ログ
-                  logger.info(`レンダリング進捗: EP${ep} ページ${p.page_number}完了`, {
-                    jobId,
-                    episode: ep,
-                    page: p.page_number,
-                    progress: `${totalPagesProcessed}/${totalPagesExpected}`,
-                    progressPercent: Math.round((totalPagesProcessed / totalPagesExpected) * 100),
-                  })
+                  logger.info(`レンダリング進捗: EP${ep} ページ${p.page_number}完了`, { jobId, episode: ep, page: p.page_number, progress: `${totalPagesProcessed}/${totalPagesExpected}`, progressPercent: totalPagesExpected ? Math.round((totalPagesProcessed / totalPagesExpected) * 100) : null })
+                } catch (pageError) {
+                  logger.error('Page rendering failed (continuing)', { jobId, episode: ep, page: p.page_number, error: (pageError as Error).message })
+                  totalPagesProcessed++
                 }
-              } finally {
-                renderer.cleanup()
               }
-            } else if (Array.isArray(parsed?.panels) && parsed.panels.length > 0) {
-              // Validate PageBreakV2 (hard invalid → stop with explicit error)
-              const validation = validatePageBreakV2(parsed, {
-                maxPages: appConfig.rendering.limits.maxPages,
-              })
-              if (!validation.valid) {
-                throw new Error(
-                  `Invalid PageBreakV2: ${validation.issues.slice(0, 5).join('; ')}${
-                    validation.issues.length > 5 ? ' ...' : ''
-                  }`,
-                )
-              }
-              // Normalize page numbers to a safe contiguous range before rendering
-              const rawPanels = parsed.panels as LoosePanel[]
-              const { normalized: normalizedPanels, report } = normalizePlanPanels(rawPanels)
-              if (validation.needsNormalization || report.wasNormalized) {
-                logger.warn('PageBreakV2 panels normalized due to out-of-range page numbers', {
-                  jobId,
-                  episode: ep,
-                  uniquePages: report.uniqueCount,
-                  limitedTo: report.limitedTo,
-                  maxCap: appConfig.rendering.limits.maxPages,
-                })
-              }
-              const panelsFull: PageBreakV2['panels'] = normalizedPanels.map((p) => ({
-                pageNumber: p.pageNumber,
-                panelIndex: p.panelIndex ?? 1,
-                content: p.content ?? '',
-                dialogue: p.dialogue ?? [],
-                sfx: p.sfx ?? [],
-              })) as PageBreakV2['panels']
-
-              const pageBreakPlan: PageBreakV2 = { panels: panelsFull }
-              const { renderFromPageBreakPlan } = await import('@/services/application/render')
-
-              // PageBreakPlan形式でのレンダリング（進捗更新付き）
-              const result = await renderFromPageBreakPlan(jobId, ep, pageBreakPlan, ports, {
-                skipExisting: false,
-                concurrency: 3,
-              })
-
-              totalPagesProcessed += result.renderedPages
-
-              logger.info(`レンダリング完了: EP${ep}`, {
-                jobId,
-                episode: ep,
-                renderedPages: result.renderedPages,
-                totalPages: result.totalPages,
-                progress: `${totalPagesProcessed}/${totalPagesExpected}`,
-              })
-            } else {
-              logger.warn('Layout JSON is neither MangaLayout nor valid PageBreakV2; skipping', {
-                jobId,
-                episode: ep,
-                keys: Object.keys(parsed || {}),
-              })
+            } finally {
+              try { renderer.cleanup() } catch { /* ignore */ }
             }
+          } else if (
+            parsedObj.panels &&
+            Array.isArray(parsedObj.panels) &&
+            (parsedObj.panels as unknown[]).length > 0
+          ) {
+            const validation = validatePageBreakV2(parsedObj as PageBreakV2, { maxPages: appConfig.rendering.limits.maxPages })
+            if (!validation.valid) {
+              logger.error('Invalid PageBreakV2 - skipping episode', { jobId, episode: ep, issues: validation.issues.slice(0, 5) })
+              continue
+            }
+            const rawPanels = parsedObj.panels as LoosePanel[]
+            const { normalized: normalizedPanels, report } = normalizePlanPanels(rawPanels)
+            if (validation.needsNormalization || report.wasNormalized) {
+              logger.warn('PageBreakV2 panels normalized due to out-of-range page numbers', { jobId, episode: ep, uniquePages: report.uniqueCount, limitedTo: report.limitedTo, maxCap: appConfig.rendering.limits.maxPages })
+            }
+            const panelsFull: PageBreakV2['panels'] = normalizedPanels.map((p) => ({
+              pageNumber: p.pageNumber,
+              panelIndex: p.panelIndex ?? 1,
+              content: p.content ?? '',
+              dialogue: p.dialogue ?? [],
+              sfx: p.sfx ?? [],
+            })) as PageBreakV2['panels']
+            const pageBreakPlan: PageBreakV2 = { panels: panelsFull }
+            const { renderFromPageBreakPlan } = await import('@/services/application/render')
+            const result = await renderFromPageBreakPlan(jobId, ep, pageBreakPlan, ports, { skipExisting: false, concurrency: 3 })
+            totalPagesProcessed += result.renderedPages
+            logger.info(`レンダリング完了: EP${ep}`, { jobId, episode: ep, renderedPages: result.renderedPages, totalPages: result.totalPages, progress: `${totalPagesProcessed}/${totalPagesExpected}` })
+          } else {
+            logger.warn('Layout JSON is neither MangaLayout nor valid PageBreakV2; skipping', { jobId, episode: ep, keys: Object.keys(parsed || {}) })
           }
         }
-        logger.info('PageBreakPlan rendering completed for all episodes', { jobId })
 
-        return {
-          success: true,
-          data: { rendered: true },
-        }
+        logger.info('PageBreakPlan rendering completed for all episodes', { jobId })
+        return { success: true, data: { rendered: true } }
       } catch (renderError) {
-        const errorMessage =
-          renderError instanceof Error ? renderError.message : String(renderError)
-        logger.error('PageBreakPlan rendering failed', {
-          jobId,
-          error: errorMessage,
-          stack: renderError instanceof Error ? renderError.stack : undefined,
-        })
+        const errorMessage = renderError instanceof Error ? renderError.message : String(renderError)
+        logger.error('PageBreakPlan rendering failed', { jobId, error: errorMessage, stack: renderError instanceof Error ? renderError.stack : undefined })
         return { success: false, error: errorMessage }
       }
     } catch (error) {
