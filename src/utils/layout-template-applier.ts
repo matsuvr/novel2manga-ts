@@ -1,4 +1,4 @@
-import type { MangaLayout, Panel } from '@/types/panel-layout'
+import type { LayoutTemplate, MangaLayout, Panel } from '@/types/panel-layout'
 import { selectLayoutTemplateByCountRandom } from '@/utils/layout-templates'
 
 /**
@@ -23,11 +23,12 @@ export function applyTemplatesByPanelCount(layout: MangaLayout): MangaLayout {
   return { ...layout, pages }
 }
 
-function remapPanel(panel: Panel, templatePanels: PanelTemplateShape, index: number): Panel {
-  const templatePanel = templatePanels[index] ?? templatePanels[templatePanels.length - 1]
-  if (!templatePanel) {
-    return panel
-  }
+function remapPanel(panel: Panel, templatePanels: LayoutTemplate['panels'], index: number): Panel {
+  // Cycle through template panels instead of always falling back to the last slot.
+  // This prevents overlapping geometry when pages have more panels than the template defines.
+  if (!templatePanels || templatePanels.length === 0) return panel
+
+  const templatePanel = templatePanels[index % templatePanels.length]
 
   return {
     ...panel,
@@ -35,5 +36,3 @@ function remapPanel(panel: Panel, templatePanels: PanelTemplateShape, index: num
     size: { ...templatePanel.size },
   }
 }
-
-type PanelTemplateShape = Array<{ position: Panel['position']; size: Panel['size'] }>
