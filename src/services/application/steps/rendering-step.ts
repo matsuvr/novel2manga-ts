@@ -28,7 +28,7 @@ export class RenderingStep implements PipelineStep {
     options: RenderingOptions,
     context: StepContext,
   ): Promise<StepExecutionResult<RenderingResult>> {
-    const { jobId, logger } = context
+    const { jobId, novelId, logger } = context
 
     try {
       const shouldRender = !options.isDemo
@@ -50,7 +50,7 @@ export class RenderingStep implements PipelineStep {
 
         // 期待ページ数計算 (パース失敗はログしてスキップ)
         for (const ep of episodeNumbers) {
-          const layoutText = await ports.layout.getEpisodeLayout(jobId, ep)
+          const layoutText = await ports.layout.getEpisodeLayout(novelId, jobId, ep)
           if (!layoutText) continue
           try {
             const parsed = JSON.parse(layoutText)
@@ -67,7 +67,7 @@ export class RenderingStep implements PipelineStep {
         logger.info('レンダリング開始', { jobId, episodeCount: episodeNumbers.length, totalPagesExpected })
 
         for (const ep of episodeNumbers) {
-          const layoutText = await ports.layout.getEpisodeLayout(jobId, ep)
+          const layoutText = await ports.layout.getEpisodeLayout(novelId, jobId, ep)
           if (!layoutText) continue
 
             let parsed: unknown;
@@ -137,15 +137,27 @@ export class RenderingStep implements PipelineStep {
                   jobDb.updateProcessingPosition(jobId, { episode: ep, page: p.page_number })
                   const imageBlob = await renderer.renderToImage(normalized.layout, p.page_number, 'png')
                   const imageBuffer = Buffer.from(await imageBlob.arrayBuffer())
-                  await ports.render.putPageRender(jobId, ep, p.page_number, imageBuffer)
+                  await ports.render.putPageRender(
+                    novelId,
+                    jobId,
+                    ep,
+                    p.page_number,
+                    imageBuffer,
+                  )
                   const { ThumbnailGenerator } = await import('@/lib/canvas/thumbnail-generator')
                   const thumbBlob = await ThumbnailGenerator.generateThumbnail(imageBlob, { width: 200, height: 280, quality: 0.8, format: 'jpeg' })
                   const thumbnailBuffer = Buffer.from(await thumbBlob.arrayBuffer())
-                  await ports.render.putPageThumbnail(jobId, ep, p.page_number, thumbnailBuffer)
+                  await ports.render.putPageThumbnail(
+                    novelId,
+                    jobId,
+                    ep,
+                    p.page_number,
+                    thumbnailBuffer,
+                  )
                   await renderDb.upsertRenderStatus(jobId, ep, p.page_number, {
                     isRendered: true,
-                    imagePath: `${jobId}/episode_${ep}/page_${p.page_number}.png`,
-                    thumbnailPath: `${jobId}/episode_${ep}/thumbnails/page_${p.page_number}_thumb.png`,
+                    imagePath: `${novelId}/jobs/${jobId}/renders/episode_${ep}/page_${p.page_number}.png`,
+                    thumbnailPath: `${novelId}/jobs/${jobId}/renders/episode_${ep}/thumbnails/page_${p.page_number}_thumb.png`,
                     width: renderer.pageWidth,
                     height: renderer.pageHeight,
                     fileSize: imageBuffer.length,

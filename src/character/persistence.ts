@@ -81,6 +81,7 @@ export interface PromptMemoryOptions {
 
 /** Save full character memory and update DB */
 export async function saveCharacterMemory(
+  novelId: string,
   jobId: string,
   memoryIndex: CharacterMemoryIndex,
 ): Promise<void> {
@@ -91,7 +92,7 @@ export async function saveCharacterMemory(
     fullMemoryArray.push(memoryToJson(memory))
   }
   const json = JSON.stringify(fullMemoryArray, null, 2)
-  const key = await ports.putFull(jobId, json)
+  const key = await ports.putFull(novelId, jobId, json)
   if (!key || typeof key !== 'string' || key.length === 0) {
     throw new Error('Failed to persist character memory (no key returned)')
   }
@@ -101,11 +102,12 @@ export async function saveCharacterMemory(
 
 /** Load character memory from storage */
 export async function loadCharacterMemory(
+  novelId: string,
   jobId: string,
 ): Promise<{ memoryIndex: CharacterMemoryIndex; aliasIndex: AliasIndex }> {
   const { getStoragePorts } = await import('@/infrastructure/storage/ports')
   const ports = getStoragePorts().characterMemory
-  const content = await ports.getFull(jobId)
+  const content = await ports.getFull(novelId, jobId)
   const memoryIndex = createCharacterMemoryIndex()
   if (!content) {
     return { memoryIndex, aliasIndex: rebuildAliasIndex(memoryIndex) }
@@ -145,6 +147,7 @@ export async function loadCharacterMemory(
 
 /** Generate and save prompt-optimized memory and update DB */
 export async function savePromptMemory(
+  novelId: string,
   jobId: string,
   memoryIndex: CharacterMemoryIndex,
   options: PromptMemoryOptions = {},
@@ -180,16 +183,19 @@ export async function savePromptMemory(
   const json = JSON.stringify(promptMemory, null, 2)
   const { getStoragePorts } = await import('@/infrastructure/storage/ports')
   const ports = getStoragePorts().characterMemory
-  const key = await ports.putPrompt(jobId, json)
+  const key = await ports.putPrompt(novelId, jobId, json)
   const { db } = await import('@/services/database')
   await db.jobs().updateCharacterMemoryPaths(jobId, { prompt: key })
 }
 
 /** Load prompt memory for inclusion in LLM prompt */
-export async function loadPromptMemory(jobId: string): Promise<CharacterMemoryPromptJson[]> {
+export async function loadPromptMemory(
+  novelId: string,
+  jobId: string,
+): Promise<CharacterMemoryPromptJson[]> {
   const { getStoragePorts } = await import('@/infrastructure/storage/ports')
   const ports = getStoragePorts().characterMemory
-  const content = await ports.getPrompt(jobId)
+  const content = await ports.getPrompt(novelId, jobId)
   if (!content) return []
   try {
     const data = JSON.parse(content)
@@ -217,9 +223,9 @@ export async function loadPromptMemory(jobId: string): Promise<CharacterMemoryPr
 }
 
 /** Clear all character memory */
-export async function clearCharacterMemory(jobId: string): Promise<void> {
-  await saveCharacterMemory(jobId, createCharacterMemoryIndex())
-  await savePromptMemory(jobId, createCharacterMemoryIndex())
+export async function clearCharacterMemory(novelId: string, jobId: string): Promise<void> {
+  await saveCharacterMemory(novelId, jobId, createCharacterMemoryIndex())
+  await savePromptMemory(novelId, jobId, createCharacterMemoryIndex())
 }
 
 /** Create memory snapshot for debugging/logging */

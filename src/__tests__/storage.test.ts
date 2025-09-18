@@ -19,14 +19,26 @@ describe('Storage', () => {
   describe('StorageKeys', () => {
     it('should generate correct storage keys', () => {
       expect(StorageKeys.novel('test-uuid')).toBe('test-uuid.json')
-      // chunk key signature changed to (jobId, index) and now stores .txt (without top-level dir prefix)
-      expect(StorageKeys.chunk('job-1', 3)).toBe('job-1/chunk_3.txt')
-      expect(StorageKeys.chunkAnalysis('job-1', 0)).toBe('job-1/chunk_0.json')
-      expect(StorageKeys.integratedAnalysis('job-1')).toBe('job-1/integrated.json')
-      expect(StorageKeys.episodeBoundaries('job-1')).toBe('job-1/episodes.json')
+      const scope = { novelId: 'novel-1', jobId: 'job-1' }
+      expect(StorageKeys.chunk({ ...scope, index: 3 })).toBe(
+        'novel-1/jobs/job-1/chunks/chunk_3.txt',
+      )
+      expect(StorageKeys.chunkAnalysis({ ...scope, index: 0 })).toBe(
+        'novel-1/jobs/job-1/analysis/chunk_0.json',
+      )
+      expect(StorageKeys.integratedAnalysis(scope)).toBe(
+        'novel-1/jobs/job-1/analysis/integrated.json',
+      )
+      expect(StorageKeys.episodeBoundaries(scope)).toBe(
+        'novel-1/jobs/job-1/analysis/episodes.json',
+      )
       // レイアウトはJSONに統一
-      expect(StorageKeys.episodeLayout('job-1', 1)).toBe('job-1/episode_1.json')
-      expect(StorageKeys.pageRender('job-1', 1, 1)).toBe('job-1/episode_1/page_1.png')
+      expect(StorageKeys.episodeLayout({ ...scope, episodeNumber: 1 })).toBe(
+        'novel-1/jobs/job-1/layouts/episode_1.json',
+      )
+      expect(
+        StorageKeys.pageRender({ ...scope, episodeNumber: 1, pageNumber: 1 }),
+      ).toBe('novel-1/jobs/job-1/renders/episode_1/page_1.png')
     })
   })
 
@@ -51,6 +63,14 @@ describe('Storage', () => {
       await novelStorage.put('test-key', 'test-value')
       const result = await novelStorage.get('test-key')
       expect(result?.text).toBe('test-value')
+    })
+
+    it('provides a functional storage implementation under Vitest regardless of STORAGE_MODE', async () => {
+      const { StorageFactory } = await import('@/utils/storage')
+      const storage = await StorageFactory.getNovelStorage()
+      await storage.put('sanity-check.txt', 'ok')
+      const loaded = await storage.get('sanity-check.txt')
+      expect(loaded?.text).toBe('ok')
     })
   })
 
@@ -97,6 +117,7 @@ describe('Storage', () => {
   describe('Layout saving as plain text', () => {
     it('saves layout text and reads back unchanged (stored as .json)', async () => {
       const jobId = 'testjob123'
+      const novelId = 'novel123'
       const episode = 1
       const yamlText = [
         'title: テストエピソード',
@@ -111,14 +132,14 @@ describe('Storage', () => {
 
       const { getStoragePorts } = await import('@/infrastructure/storage/ports')
       const layoutPorts = getStoragePorts().layout
-      const key = await layoutPorts.putEpisodeLayout(jobId, episode, yamlText)
+      const key = await layoutPorts.putEpisodeLayout(novelId, jobId, episode, yamlText)
 
       // インメモリストレージから直接取得して検証
-      const loaded = await layoutPorts.getEpisodeLayout(jobId, episode)
+      const loaded = await layoutPorts.getEpisodeLayout(novelId, jobId, episode)
       expect(loaded).toBe(yamlText)
 
       // キーの形式も確認（JSONファイルとして保存）
-      expect(key).toBe('testjob123/episode_1.json')
+      expect(key).toBe('novel123/jobs/testjob123/layouts/episode_1.json')
     })
   })
 })

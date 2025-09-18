@@ -55,7 +55,11 @@ export class TextChunkingStep implements PipelineStep {
         chunks = await Promise.all(
           existingChunks.map(async (c) => {
             try {
-              const stored = await ports.chunk.getChunk(jobId, (c as Chunk).chunkIndex)
+              const stored = await ports.chunk.getChunk(
+                novelId,
+                jobId,
+                (c as Chunk).chunkIndex,
+              )
               return stored?.text ?? ''
             } catch (e) {
               logger.warn(
@@ -178,7 +182,7 @@ export class TextChunkingStep implements PipelineStep {
       for (let i = 0; i < chunks.length; i++) {
         const content = chunks[i]
         // ここで「ストレージ（ファイル）にチャンク本文を書き込む」
-        const key = await ports.chunk.putChunk(jobId, i, content)
+        const key = await ports.chunk.putChunk(novelId, jobId, i, content)
         const startPos = currentPosition
         const endPos = currentPosition + content.length
 

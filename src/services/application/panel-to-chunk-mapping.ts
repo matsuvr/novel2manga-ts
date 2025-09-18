@@ -3,6 +3,7 @@
  * Returns array of { chunkIndex, startPanel, endPanel } where panels are 1-based indices.
  */
 export async function buildPanelToChunkMapping(
+  novelId: string,
   jobId: string,
   totalChunks: number,
   logger?: {
@@ -17,7 +18,7 @@ export async function buildPanelToChunkMapping(
   const storage = await StorageFactory.getAnalysisStorage()
 
   for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-    const key = JsonStorageKeys.scriptChunk(jobId, chunkIndex)
+    const key = JsonStorageKeys.scriptChunk({ novelId, jobId, index: chunkIndex })
     const obj = await storage.get(key)
 
     if (!obj) {

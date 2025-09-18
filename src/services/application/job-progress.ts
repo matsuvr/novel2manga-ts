@@ -135,9 +135,12 @@ export class JobProgressService {
         // Process episodes in parallel for better performance
         const perEpisodePagesPromises = episodes.map(async (episode) => {
           const episodeNumber = episode.episodeNumber
-          // Get actual pages from layout progress
+          // Get actual pages from layout progress using canonical StoragePorts signature
           const layoutProgress = await this.safeOperation(
-            () => layout.getEpisodeLayoutProgress(id, episodeNumber),
+            async () =>
+              (layout as unknown as {
+                getEpisodeLayoutProgress(novelId: string, jobId: string, episodeNumber: number): Promise<string | null>
+              }).getEpisodeLayoutProgress(episode.novelId, id, episodeNumber),
             'getEpisodeLayoutProgress',
             { jobId: id, episodeNumber },
           )

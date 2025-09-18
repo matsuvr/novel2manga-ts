@@ -70,12 +70,14 @@ describe('ChunkScriptStep - Analysis Integration', () => {
     const storageModule = await import('@/utils/storage')
     vi.mocked(storageModule.StorageFactory.getAnalysisStorage).mockResolvedValue(mockStorage as any)
     vi.mocked(storageModule.JsonStorageKeys.scriptChunk).mockReturnValue(
-      'job-1/script_chunk_0.json',
+      'novel-1/jobs/job-1/analysis/script_chunk_0.json',
     )
-    vi.mocked(storageModule.StorageKeys.chunkAnalysis).mockReturnValue('job-1/chunk_0.json')
+    vi.mocked(storageModule.StorageKeys.chunkAnalysis).mockReturnValue(
+      'novel-1/jobs/job-1/analysis/chunk_0.json',
+    )
 
     // Setup script converter mock
-    vi.mocked(convertChunkToMangaScript).mockResolvedValue({
+      vi.mocked(convertChunkToMangaScript).mockResolvedValue({
       style_tone: 'テスト用トーン',
       style_art: 'テスト用アート',
       style_sfx: 'テスト用効果音',
@@ -101,6 +103,7 @@ describe('ChunkScriptStep - Analysis Integration', () => {
           no: 1,
           cut: 'テストシーン説明',
           camera: 'medium',
+          importance: 1,
           dialogue: [],
         },
       ],
@@ -281,7 +284,7 @@ describe('ChunkScriptStep - Analysis Integration', () => {
       { jobId, isDemo: undefined },
     )
 
-    // Ensure storage loader was used
-    expect((mockPorts.chunk as any).getChunk).toHaveBeenCalledWith(jobId, 0)
+  // Ensure storage loader was used (novelId-first canonical signature)
+  expect((mockPorts.chunk as any).getChunk).toHaveBeenCalledWith('n1', jobId, 0)
   })
 })

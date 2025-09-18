@@ -112,7 +112,7 @@ export type ChunkRecord = {
 export async function getJobDetails(jobId: string): Promise<{ job: Job; chunks: ChunkRecord[] }> {
   // DatabaseService を直接利用することで、テストでの DatabaseService モックが有効に働く
   const job = await db.jobs().getJob(jobId)
-  if (!job) throw new ApiError('ジョブが見つかりません', 404, 'NOT_FOUND')
+  if (!job) throw new ApiError('Job not found', 404, 'NOT_FOUND')
 
   // 軽量なDB集計でエピソード別のレンダリング進捗を取得（UIへ即時反映させる）
   // ストレージ走査は行わないため低負荷

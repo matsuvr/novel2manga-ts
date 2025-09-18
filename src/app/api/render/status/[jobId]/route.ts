@@ -65,7 +65,8 @@ export const GET = withAuth(
           if (episodes.length === 0) {
             try {
               const storage = await StorageFactory.getLayoutStorage()
-              const keys = (await storage.list?.(params.jobId)) || []
+              const keys =
+                (await storage.list?.(`${job.novelId}/jobs/${params.jobId}`)) || []
               const epNums = Array.from(
                 new Set(
                   keys
@@ -80,7 +81,7 @@ export const GET = withAuth(
                 (n) =>
                   ({
                     id: `${params.jobId}-${n}`,
-                    novelId: 'unknown',
+                    novelId: job.novelId,
                     jobId: params.jobId,
                     episodeNumber: n,
                     title: `エピソード${n}`,
@@ -125,7 +126,11 @@ export const GET = withAuth(
 
             // Get actual pages from layout data
             const storage = await getLayoutStorage()
-            const layoutKey = StorageKeys.episodeLayout(params.jobId, episode.episodeNumber)
+            const layoutKey = StorageKeys.episodeLayout({
+              novelId: job.novelId,
+              jobId: params.jobId,
+              episodeNumber: episode.episodeNumber,
+            })
 
             let totalPages: number
             try {
@@ -163,16 +168,18 @@ export const GET = withAuth(
                 continue
               }
 
-              const renderKey = StorageKeys.pageRender(
-                params.jobId,
-                episode.episodeNumber,
+              const renderKey = StorageKeys.pageRender({
+                novelId: job.novelId,
+                jobId: params.jobId,
+                episodeNumber: episode.episodeNumber,
                 pageNumber,
-              )
-              const thumbnailKey = StorageKeys.pageThumbnail(
-                params.jobId,
-                episode.episodeNumber,
+              })
+              const thumbnailKey = StorageKeys.pageThumbnail({
+                novelId: job.novelId,
+                jobId: params.jobId,
+                episodeNumber: episode.episodeNumber,
                 pageNumber,
-              )
+              })
 
               try {
                 // headメソッドが利用可能かチェック

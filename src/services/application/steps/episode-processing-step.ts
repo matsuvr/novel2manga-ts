@@ -97,7 +97,7 @@ export class EpisodeProcessingStep implements PipelineStep {
     chunksMetadata: Chunk[],
     context: StepContext,
   ): Promise<StepExecutionResult<{ episodeText: string }>> {
-    const { jobId, logger, ports } = context
+    const { jobId, novelId, logger, ports } = context
 
     // Validate episode boundaries
     if (episode.startChunk < 0 || episode.endChunk < 0 || episode.startChunk > episode.endChunk) {
@@ -159,7 +159,7 @@ export class EpisodeProcessingStep implements PipelineStep {
       if (chunk.chunkIndex >= adjStartChunk && chunk.chunkIndex <= adjEndChunk) {
         // Get actual chunk text from storage
         // ここで「ストレージ（ファイル）から対象チャンク本文を読み込む」
-        const chunkContent = await ports.chunk.getChunk(jobId, chunk.chunkIndex)
+        const chunkContent = await ports.chunk.getChunk(novelId, jobId, chunk.chunkIndex)
         if (!chunkContent?.text) {
           return {
             success: false,
@@ -243,7 +243,7 @@ export class EpisodeProcessingStep implements PipelineStep {
     episodeNumber: number,
     context: StepContext,
   ): Promise<void> {
-    const { jobId, logger } = context
+    const { novelId, jobId, logger } = context
 
     const storageModule = await import('@/utils/storage')
     const storage = await storageModule.StorageFactory.getAnalysisStorage()
@@ -252,10 +252,14 @@ export class EpisodeProcessingStep implements PipelineStep {
       'function'
         ? (
             storageModule.StorageKeys as unknown as {
-              episodeText: (jobId: string, ep: number) => string
+              episodeText: (params: {
+                novelId: string
+                jobId: string
+                episodeNumber: number
+              }) => string
             }
-          ).episodeText(jobId, episodeNumber)
-        : `${jobId}/episode_${episodeNumber}.txt`
+          ).episodeText({ novelId, jobId, episodeNumber })
+        : `${novelId}/jobs/${jobId}/analysis/episode_${episodeNumber}.txt`
 
     const { executeStorageWithDbOperation } = await import(
       '@/services/application/transaction-manager'
@@ -269,6 +273,7 @@ export class EpisodeProcessingStep implements PipelineStep {
       metadata: {
         contentType: 'text/plain; charset=utf-8',
         jobId,
+        novelId,
         episode: String(episodeNumber),
       },
       dbOperation: async () => {
@@ -279,7 +284,7 @@ export class EpisodeProcessingStep implements PipelineStep {
         filePath: key,
         fileCategory: 'episode',
         fileType: 'txt',
-        novelId: undefined,
+        novelId,
         jobId,
         mimeType: 'text/plain; charset=utf-8',
       },

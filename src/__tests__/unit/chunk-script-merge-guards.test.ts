@@ -44,7 +44,7 @@ describe('ChunkScriptStep and ScriptMergeStep guards', () => {
 
     // Assert: failure and no script_chunk saved
     expect(res.success).toBe(false)
-    const key = JsonStorageKeys.scriptChunk(jobId, 0)
+    const key = JsonStorageKeys.scriptChunk({ novelId: context.novelId, jobId, index: 0 })
     expect(await analysisStorage.exists(key)).toBe(false)
   })
 
@@ -53,31 +53,39 @@ describe('ChunkScriptStep and ScriptMergeStep guards', () => {
     const { JsonStorageKeys, StorageFactory } = await import('@/utils/storage')
 
     const jobId = 'job-merge-empty'
+    const novelId = 'novel-1'
     const analysis = await StorageFactory.getAnalysisStorage()
-    // Prepare two empty chunk scripts
-    await analysis.put(JsonStorageKeys.scriptChunk(jobId, 0), JSON.stringify({ scenes: [] }), {
-      contentType: 'application/json; charset=utf-8',
-      jobId,
-      chunk: '0',
-    })
-    await analysis.put(JsonStorageKeys.scriptChunk(jobId, 1), JSON.stringify({ scenes: [] }), {
-      contentType: 'application/json; charset=utf-8',
-      jobId,
-      chunk: '1',
-    })
-
     const context = {
       jobId,
-      novelId: 'novel-1',
+      novelId,
       logger: getLogger().withContext({ test: 'merge-guard' }),
       ports: getStoragePorts(),
     }
+    // Prepare two empty chunk scripts
+    await analysis.put(
+      JsonStorageKeys.scriptChunk({ novelId, jobId, index: 0 }),
+      JSON.stringify({ scenes: [] }),
+      {
+        contentType: 'application/json; charset=utf-8',
+        jobId,
+        chunk: '0',
+      },
+    )
+    await analysis.put(
+      JsonStorageKeys.scriptChunk({ novelId, jobId, index: 1 }),
+      JSON.stringify({ scenes: [] }),
+      {
+        contentType: 'application/json; charset=utf-8',
+        jobId,
+        chunk: '1',
+      },
+    )
 
     const step = new ScriptMergeStep()
     const res = await step.mergeChunkScripts(2, context)
 
     expect(res.success).toBe(false)
-    const combinedKey = JsonStorageKeys.scriptCombined(jobId)
+    const combinedKey = JsonStorageKeys.scriptCombined({ novelId, jobId })
     expect(await analysis.exists(combinedKey)).toBe(false)
   })
 })

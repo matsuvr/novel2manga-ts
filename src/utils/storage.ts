@@ -463,7 +463,8 @@ async function resolveStorage(localDir: string, errorMessage: string): Promise<S
   // we error out with a clear message to avoid accidental reliance on
   // removed platform bindings.
   const base = getStorageBase()
-  if (isDevelopment() || process.env.STORAGE_MODE === 'local' || process.env.VITEST) {
+  const isTestRuntime = Boolean(process.env.VITEST) && process.env.NODE_ENV !== 'production'
+  if (isDevelopment() || process.env.STORAGE_MODE === 'local' || isTestRuntime) {
     getLogger()
       .withContext({ service: 'StorageFactory', method: 'resolveStorage' })
       .info('[storage] Using LocalFileStorage (dev/local)', { base, localDir })
@@ -542,11 +543,12 @@ export function clearStorageCache(): void {
 // Database access is provided via Drizzle in src/db. No DB factory here.
 
 export async function getChunkData(
+  novelId: string,
   jobId: string,
   chunkIndex: number,
 ): Promise<{ text: string } | null> {
   const storage = await getChunkStorage()
-  const key = StorageKeys.chunk(jobId, chunkIndex)
+  const key = StorageKeys.chunk({ novelId, jobId, index: chunkIndex })
   const result = await storage.get(key)
   return result ? { text: result.text } : null
 }
@@ -560,6 +562,12 @@ export async function getChunkData(
 // - パストラバーサル防止のため ID を検証（英数とハイフン/アンダースコアのみ許可）
 // - レビュー指摘: 「path traversal guard」対応
 // ========================================
+
+function ensureNonNegativeInteger(value: number, label: string): void {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`StorageKeys: ${label} must be a non-negative integer`)
+  }
+}
 
 function validateId(id: string, label: string): void {
   if (typeof id !== 'string' || id.length === 0) {
@@ -583,47 +591,93 @@ function validateId(id: string, label: string): void {
   }
 }
 
+interface JobScopedKeyInput {
+  novelId: string
+  jobId: string
+}
+
+interface ChunkKeyInput extends JobScopedKeyInput {
+  index: number
+}
+
+interface EpisodeKeyInput extends JobScopedKeyInput {
+  episodeNumber: number
+}
+
+interface RenderKeyInput extends EpisodeKeyInput {
+  pageNumber: number
+}
+
+function buildNovelJobScopedPath(
+  novelId: string,
+  jobId: string,
+  ...segments: string[]
+): string {
+  validateId(novelId, 'novelId')
+  validateId(jobId, 'jobId')
+  const filteredSegments = segments.filter((seg): seg is string => typeof seg === 'string' && seg.length > 0)
+  return [novelId, 'jobs', jobId, ...filteredSegments].join('/')
+}
+
 export const StorageKeys = {
-  novel: (uuid: string) => {
-    validateId(uuid, 'uuid')
+  novel: (novelId: string) => {
+    validateId(novelId, 'novelId')
     // Fixed: Remove duplicate 'novels/' prefix since getNovelStorage() already provides baseDir = novels
-    return `${uuid}.json`
+    return `${novelId}.json`
   },
-  chunk: (jobId: string, index: number) => {
-    validateId(jobId, 'jobId')
-    return `${jobId}/chunk_${index}.txt`
+  chunk: ({ novelId, jobId, index }: ChunkKeyInput) => {
+    ensureNonNegativeInteger(index, 'chunk index')
+    return buildNovelJobScopedPath(novelId, jobId, 'chunks', `chunk_${index}.txt`)
   },
-  chunkAnalysis: (jobId: string, index: number) => {
-    validateId(jobId, 'jobId')
-    return `${jobId}/chunk_${index}.json`
+  chunkAnalysis: ({ novelId, jobId, index }: ChunkKeyInput) => {
+    ensureNonNegativeInteger(index, 'chunk index')
+    return buildNovelJobScopedPath(novelId, jobId, 'analysis', `chunk_${index}.json`)
   },
-  integratedAnalysis: (jobId: string) => {
-    validateId(jobId, 'jobId')
-    return `${jobId}/integrated.json`
+  integratedAnalysis: ({ novelId, jobId }: JobScopedKeyInput) => {
+    return buildNovelJobScopedPath(novelId, jobId, 'analysis', 'integrated.json')
   },
-  episodeBoundaries: (jobId: string) => {
-    validateId(jobId, 'jobId')
-    return `${jobId}/episodes.json`
+  episodeBoundaries: ({ novelId, jobId }: JobScopedKeyInput) => {
+    return buildNovelJobScopedPath(novelId, jobId, 'analysis', 'episodes.json')
   },
-  episodeLayout: (jobId: string, episodeNumber: number) => {
-    validateId(jobId, 'jobId')
-    return `${jobId}/episode_${episodeNumber}.json`
+  episodeLayout: ({ novelId, jobId, episodeNumber }: EpisodeKeyInput) => {
+    ensureNonNegativeInteger(episodeNumber, 'episode number')
+    return buildNovelJobScopedPath(novelId, jobId, 'layouts', `episode_${episodeNumber}.json`)
   },
-  episodeLayoutProgress: (jobId: string, episodeNumber: number) => {
-    validateId(jobId, 'jobId')
-    return `${jobId}/episode_${episodeNumber}.progress.json`
+  episodeLayoutProgress: ({ novelId, jobId, episodeNumber }: EpisodeKeyInput) => {
+    ensureNonNegativeInteger(episodeNumber, 'episode number')
+    return buildNovelJobScopedPath(
+      novelId,
+      jobId,
+      'layouts',
+      `episode_${episodeNumber}.progress.json`,
+    )
   },
-  episodeText: (jobId: string, episodeNumber: number) => {
-    validateId(jobId, 'jobId')
-    return `${jobId}/episode_${episodeNumber}.txt`
+  episodeText: ({ novelId, jobId, episodeNumber }: EpisodeKeyInput) => {
+    ensureNonNegativeInteger(episodeNumber, 'episode number')
+    return buildNovelJobScopedPath(novelId, jobId, 'analysis', `episode_${episodeNumber}.txt`)
   },
-  pageRender: (jobId: string, episodeNumber: number, pageNumber: number) => {
-    validateId(jobId, 'jobId')
-    return `${jobId}/episode_${episodeNumber}/page_${pageNumber}.png`
+  pageRender: ({ novelId, jobId, episodeNumber, pageNumber }: RenderKeyInput) => {
+    ensureNonNegativeInteger(episodeNumber, 'episode number')
+    ensureNonNegativeInteger(pageNumber, 'page number')
+    return buildNovelJobScopedPath(
+      novelId,
+      jobId,
+      'renders',
+      `episode_${episodeNumber}`,
+      `page_${pageNumber}.png`,
+    )
   },
-  pageThumbnail: (jobId: string, episodeNumber: number, pageNumber: number) => {
-    validateId(jobId, 'jobId')
-    return `${jobId}/episode_${episodeNumber}/thumbnails/page_${pageNumber}_thumb.png`
+  pageThumbnail: ({ novelId, jobId, episodeNumber, pageNumber }: RenderKeyInput) => {
+    ensureNonNegativeInteger(episodeNumber, 'episode number')
+    ensureNonNegativeInteger(pageNumber, 'page number')
+    return buildNovelJobScopedPath(
+      novelId,
+      jobId,
+      'renders',
+      `episode_${episodeNumber}`,
+      'thumbnails',
+      `page_${pageNumber}_thumb.png`,
+    )
   },
   exportOutput: (userId: string, jobId: string, format: string) => {
     validateId(userId, 'userId')
@@ -633,37 +687,40 @@ export const StorageKeys = {
     }
     return `results/${userId}/${jobId}.${format}`
   },
-  renderStatus: (jobId: string, episodeNumber: number, pageNumber: number) => {
-    validateId(jobId, 'jobId')
-    return `${jobId}/episode_${episodeNumber}/page_${pageNumber}.json`
+  renderStatus: ({ novelId, jobId, episodeNumber, pageNumber }: RenderKeyInput) => {
+    ensureNonNegativeInteger(episodeNumber, 'episode number')
+    ensureNonNegativeInteger(pageNumber, 'page number')
+    return buildNovelJobScopedPath(
+      novelId,
+      jobId,
+      'renders',
+      `episode_${episodeNumber}`,
+      `page_${pageNumber}.json`,
+    )
   },
 } as const
 
 // Additional JSON-first keys for new pipeline artifacts
 export const JsonStorageKeys = {
-  scriptChunk: (jobId: string, index: number) => {
-    validateId(jobId, 'jobId')
-    return `${jobId}/script_chunk_${index}.json`
+  scriptChunk: ({ novelId, jobId, index }: ChunkKeyInput) => {
+    ensureNonNegativeInteger(index, 'chunk index')
+    return buildNovelJobScopedPath(novelId, jobId, 'analysis', `script_chunk_${index}.json`)
   },
-  scriptCombined: (jobId: string) => {
-    validateId(jobId, 'jobId')
-    return `${jobId}/script_combined.json`
+  scriptCombined: ({ novelId, jobId }: JobScopedKeyInput) => {
+    return buildNovelJobScopedPath(novelId, jobId, 'analysis', 'script_combined.json')
   },
-  fullPages: (jobId: string) => {
-    validateId(jobId, 'jobId')
-    return `${jobId}/full_pages.json`
+  fullPages: ({ novelId, jobId }: JobScopedKeyInput) => {
+    return buildNovelJobScopedPath(novelId, jobId, 'layouts', 'full_pages.json')
   },
-  characterMemoryFull: (jobId: string) => {
-    validateId(jobId, 'jobId')
-    return `${jobId}/character_memory.full.json`
+  characterMemoryFull: ({ novelId, jobId }: JobScopedKeyInput) => {
+    return buildNovelJobScopedPath(novelId, jobId, 'analysis', 'character_memory.full.json')
   },
-  characterMemoryPrompt: (jobId: string) => {
-    validateId(jobId, 'jobId')
-    return `${jobId}/character_memory.prompt.json`
+  characterMemoryPrompt: ({ novelId, jobId }: JobScopedKeyInput) => {
+    return buildNovelJobScopedPath(novelId, jobId, 'analysis', 'character_memory.prompt.json')
   },
-  chunkSummary: (jobId: string, index: number) => {
-    validateId(jobId, 'jobId')
-    return `${jobId}/chunk_${index}.summary.json`
+  chunkSummary: ({ novelId, jobId, index }: ChunkKeyInput) => {
+    ensureNonNegativeInteger(index, 'chunk index')
+    return buildNovelJobScopedPath(novelId, jobId, 'analysis', `chunk_${index}.summary.json`)
   },
   // episodeBundling removed - replaced with episode break estimation
 } as const
@@ -685,8 +742,6 @@ export async function saveEpisodeBoundaries(
   // 強整合性を保証したストレージ+DB操作
   const { executeStorageDbTransaction } = await import('@/services/application/transaction-manager')
   const storage = await getAnalysisStorage()
-  const key = StorageKeys.episodeBoundaries(jobId)
-
   // Get job info for novelId before the transaction
   const { JobProgressService } = await import('@/services/application/job-progress')
   const jobService = new JobProgressService()
@@ -694,6 +749,7 @@ export async function saveEpisodeBoundaries(
   if (!job) {
     throw new Error(`Job not found: ${jobId}`)
   }
+  const key = StorageKeys.episodeBoundaries({ novelId: job.novelId, jobId })
   const data = {
     episodes,
     metadata: {
@@ -744,6 +800,7 @@ export async function saveEpisodeBoundaries(
 
 // チャンク分析取得関数
 export async function getChunkAnalysis(
+  novelId: string,
   jobId: string,
   chunkIndex: number,
 ): Promise<{
@@ -760,7 +817,7 @@ export async function getChunkAnalysis(
   }[]
 } | null> {
   const storage = await getAnalysisStorage()
-  const key = StorageKeys.chunkAnalysis(jobId, chunkIndex)
+  const key = StorageKeys.chunkAnalysis({ novelId, jobId, index: chunkIndex })
   const result = await storage.get(key)
   return result ? JSON.parse(result.text) : null
 }

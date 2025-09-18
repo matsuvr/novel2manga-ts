@@ -67,7 +67,7 @@ export class TextAnalysisStep implements PipelineStep {
     existingJob: Job | null,
     context: StepContext,
   ): Promise<StepExecutionResult<AnalysisResult>> {
-    const { jobId, logger, ports } = context
+    const { jobId, novelId, logger, ports } = context
 
     try {
       // Skip analysis if already completed for resumed jobs
@@ -78,12 +78,12 @@ export class TextAnalysisStep implements PipelineStep {
 
       // Pre-generate summaries to avoid race conditions and redundant LLM calls
       for (let i = 0; i < chunks.length; i++) {
-        await loadOrGenerateSummary(jobId, i, chunks[i])
+        await loadOrGenerateSummary(novelId, jobId, i, chunks[i])
       }
 
       // Analyze chunks with limited concurrency
       const maxConcurrent = Math.max(1, Math.min(3, chunks.length))
-      await this.analyzeConcurrently(chunks, maxConcurrent, { jobId, logger, ports })
+      await this.analyzeConcurrently(chunks, maxConcurrent, { novelId, jobId, logger, ports })
 
       return { success: true, data: { completed: true } }
     } catch (error) {
@@ -96,9 +96,9 @@ export class TextAnalysisStep implements PipelineStep {
   private async analyzeConcurrently(
     chunks: string[],
     maxConcurrent: number,
-    context: Pick<StepContext, 'jobId' | 'logger' | 'ports'>,
+    context: Pick<StepContext, 'novelId' | 'jobId' | 'logger' | 'ports'>,
   ): Promise<void> {
-    const { jobId, logger, ports } = context
+    const { novelId, jobId, logger, ports } = context
     const jobDb = db.jobs()
 
     const runOne = async (i: number) => {
@@ -109,9 +109,10 @@ export class TextAnalysisStep implements PipelineStep {
       if (!config?.userPromptTemplate) {
         throw new Error('Text analysis config is invalid: userPromptTemplate is missing')
       }
-      const prevSummary = i > 0 ? ((await getStoredSummary(jobId, i - 1)) ?? '') : ''
+      const prevSummary =
+        i > 0 ? (await getStoredSummary(novelId, jobId, i - 1)) ?? '' : ''
       const nextSummary =
-        i + 1 < chunks.length ? ((await getStoredSummary(jobId, i + 1)) ?? '') : ''
+        i + 1 < chunks.length ? (await getStoredSummary(novelId, jobId, i + 1)) ?? '' : ''
       // ここで「LLM に渡すユーザープロンプトを生成」
       const prompt = config.userPromptTemplate
         .replace('{{chunkIndex}}', i.toString())
@@ -172,7 +173,12 @@ export class TextAnalysisStep implements PipelineStep {
         analyzedAt: new Date().toISOString(),
       }
       // ここで「ストレージ（ファイル）に分析結果を書き込む」
-      await ports.analysis.putAnalysis(jobId, i, JSON.stringify(analysisData, null, 2))
+      await ports.analysis.putAnalysis(
+        novelId,
+        jobId,
+        i,
+        JSON.stringify(analysisData, null, 2),
+      )
       jobDb.updateJobStep(jobId, `analyze_chunk_${i}_done`)
       return true as const
     }

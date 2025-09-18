@@ -36,7 +36,7 @@ export class TextAnalysisStep implements PipelineStep {
     existingJob: Job | null,
     context: StepContext,
   ): Promise<StepExecutionResult<AnalysisResult>> {
-    const { jobId, logger, ports } = context
+    const { jobId, novelId, logger, ports } = context
 
     try {
       // Skip analysis if already completed for resumed jobs
@@ -46,7 +46,7 @@ export class TextAnalysisStep implements PipelineStep {
       }
 
       // Initialize character memory
-      const { memoryIndex, aliasIndex } = await loadCharacterMemory(jobId)
+      const { memoryIndex, aliasIndex } = await loadCharacterMemory(novelId, jobId)
       let nextIdCounter = 1
 
       // Find the highest existing character ID
@@ -60,7 +60,7 @@ export class TextAnalysisStep implements PipelineStep {
       // V2は人物状態を維持するため逐次処理を行う
       await this.analyzeConcurrentlyV2(
         chunks,
-        { jobId, logger, ports },
+        { novelId, jobId, logger, ports },
         { memoryIndex, aliasIndex, nextIdCounter },
       )
 
@@ -74,14 +74,14 @@ export class TextAnalysisStep implements PipelineStep {
 
   private async analyzeConcurrentlyV2(
     chunks: string[],
-    context: Pick<StepContext, 'jobId' | 'logger' | 'ports'>,
+    context: Pick<StepContext, 'novelId' | 'jobId' | 'logger' | 'ports'>,
     memoryContext: {
       memoryIndex: CharacterMemoryIndex
       aliasIndex: AliasIndex
       nextIdCounter: number
     },
   ): Promise<void> {
-    const { jobId, logger, ports } = context
+    const { novelId, jobId, logger, ports } = context
     const { memoryIndex, aliasIndex } = memoryContext
     const jobDb = db.jobs()
 
@@ -92,16 +92,18 @@ export class TextAnalysisStep implements PipelineStep {
       const chunkText = chunks[i]
 
       // Load current prompt memory
-      const promptMemory = await loadPromptMemory(jobId)
+      const promptMemory = await loadPromptMemory(novelId, jobId)
 
       // Ensure summaries for current and adjacent chunks (tolerate storage/LLM failures in unit tests)
       let prevSummary = ''
       let nextSummary = ''
       try {
-        await loadOrGenerateSummary(jobId, i, chunkText)
-        prevSummary = i > 0 ? (await getStoredSummary(jobId, i - 1)) || '' : ''
+        await loadOrGenerateSummary(novelId, jobId, i, chunkText)
+        prevSummary = i > 0 ? (await getStoredSummary(novelId, jobId, i - 1)) || '' : ''
         nextSummary =
-          i + 1 < chunks.length ? await loadOrGenerateSummary(jobId, i + 1, chunks[i + 1]) : ''
+          i + 1 < chunks.length
+            ? await loadOrGenerateSummary(novelId, jobId, i + 1, chunks[i + 1])
+            : ''
       } catch (summaryError) {
         logger.warn('Summary generation unavailable; continuing with empty summaries', {
           jobId,
@@ -216,8 +218,8 @@ export class TextAnalysisStep implements PipelineStep {
       result.dialogues = rewrittenDialogues
 
       // Save updated character memory
-      await saveCharacterMemory(jobId, memoryIndex)
-      await savePromptMemory(jobId, memoryIndex, {
+      await saveCharacterMemory(novelId, jobId, memoryIndex)
+      await savePromptMemory(novelId, jobId, memoryIndex, {
         currentChunk: i,
       })
 
@@ -229,7 +231,12 @@ export class TextAnalysisStep implements PipelineStep {
       }
 
       // Save analysis result
-      await ports.analysis.putAnalysis(jobId, i, JSON.stringify(analysisData, null, 2))
+      await ports.analysis.putAnalysis(
+        novelId,
+        jobId,
+        i,
+        JSON.stringify(analysisData, null, 2),
+      )
       jobDb.updateJobStep(jobId, `analyze_chunk_${i}_done`)
 
       logger.info(
