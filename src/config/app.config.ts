@@ -490,12 +490,7 @@ export const appConfig = {
         },
         padding: 8,
         lineHeight: 1.4,
-        background: {
-          color: 'rgba(255, 255, 255, 0.85)',
-          borderColor: '#cccccc',
-          borderWidth: 1,
-          borderRadius: 4,
-        },
+        // background box removed: keep padding to reserve layout area for content text
         textColor: '#333333',
         placement: {
           strategy: 'auto',
