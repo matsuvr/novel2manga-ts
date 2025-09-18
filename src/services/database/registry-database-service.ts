@@ -1,18 +1,18 @@
-import { desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import {
-  aliasFts,
-  characterRegistry,
-  chunkState,
-  sceneRegistry,
   type AliasFts,
+  aliasFts,
   type CharacterRegistry,
   type ChunkState,
+  characterRegistry,
+  chunkState,
   type NewAliasFts,
   type NewCharacterRegistry,
   type NewChunkState,
   type SceneRegistry,
+  sceneRegistry,
 } from '@/db/schema'
 import { BaseDatabaseService } from './base-database-service'
 
@@ -144,7 +144,7 @@ export class RegistryDatabaseService extends BaseDatabaseService {
     const query = drizzleDb
       .select()
       .from(characterRegistry)
-      .where(sql`${characterRegistry.status} = 'active' AND ${characterRegistry.confidenceScore} >= ${minConfidence}`)
+      .where(and(eq(characterRegistry.status, 'active'), gte(characterRegistry.confidenceScore, minConfidence)))
       .orderBy(desc(characterRegistry.lastSeenChunk))
       .limit(limit)
 
@@ -163,7 +163,8 @@ export class RegistryDatabaseService extends BaseDatabaseService {
       .select({
         character: characterRegistry,
         alias: aliasFts,
-        score: sql<number>`bm25(alias_fts)` as unknown as number,
+  // bm25() returns a numeric score; cast through unknown to a numeric type without using `any`
+  score: sql`bm25(alias_fts)` as unknown as number,
       })
       .from(aliasFts)
       .innerJoin(characterRegistry, eq(aliasFts.charId, characterRegistry.id))
@@ -171,11 +172,11 @@ export class RegistryDatabaseService extends BaseDatabaseService {
       .limit(limit)
 
     if (this.isSync()) {
-      return statement.all() as AliasMatchRow[]
+      return statement.all() as unknown as AliasMatchRow[]
     }
 
-    const rows = await statement
-    return rows as AliasMatchRow[]
+    const rows = (await statement) as unknown as AliasMatchRow[]
+    return rows
   }
 
   async saveChunkState(row: ChunkStateUpsertRow): Promise<void> {
@@ -214,7 +215,7 @@ export class RegistryDatabaseService extends BaseDatabaseService {
     const query = drizzleDb
       .select()
       .from(chunkState)
-      .where(sql`${chunkState.jobId} = ${jobId} AND ${chunkState.chunkIndex} = ${chunkIndex}`)
+      .where(and(eq(chunkState.jobId, jobId), eq(chunkState.chunkIndex, chunkIndex)))
       .limit(1)
 
     if (this.isSync()) {

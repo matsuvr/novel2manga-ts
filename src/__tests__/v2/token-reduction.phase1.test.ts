@@ -1,13 +1,13 @@
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
-import { describe, expect, it } from 'vitest'
 import { Effect } from 'effect'
+import { describe, expect, it } from 'vitest'
 import * as schema from '@/db/schema'
 import { createDatabaseConnection } from '@/infrastructure/database/connection'
 import { DatabaseServiceFactory } from '@/services/database/database-service-factory'
-import { SQLiteRegistry } from '@/v2/registry'
-import { EntityExtractor, IdResolver, TextNormalizer } from '@/v2/preprocessing'
 import type { ChunkContext, ExtractedEntities, NormalizedText } from '@/v2/preprocessing'
+import { EntityExtractor, IdResolver, TextNormalizer } from '@/v2/preprocessing'
+import { SQLiteRegistry } from '@/v2/registry'
 
 function createTestRegistry() {
   const sqlite = new Database(':memory:')

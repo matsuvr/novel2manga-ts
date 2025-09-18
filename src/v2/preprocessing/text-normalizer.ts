@@ -31,14 +31,20 @@ export class TextNormalizer {
         const ch = normalizedSource[i] ?? ''
 
         if (this.bracketMap.has(ch)) {
-          stack.push({ open: ch, close: this.bracketMap.get(ch)!, startIndex: output.length })
+          const close = this.bracketMap.get(ch)
+          if (typeof close === 'string') {
+            stack.push({ open: ch, close, startIndex: output.length })
+          } else {
+            // Shouldn't happen because we checked has(), but guard defensively
+            stack.push({ open: ch, close: ch, startIndex: output.length })
+          }
           output.push(ch)
           pendingSpace = false
           newlineRun = 0
           continue
         }
 
-        const currentFrame = stack.at(-1)
+  const currentFrame = stack.length > 0 ? stack[stack.length - 1] : undefined
         if (currentFrame && ch === currentFrame.close) {
           output.push(ch)
           const segmentText = output.slice(currentFrame.startIndex, output.length).join('')

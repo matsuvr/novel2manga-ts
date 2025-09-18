@@ -28,6 +28,7 @@ export const tokenReductionConfig = {
     aliasWeight: 0.6,
     recencyWeight: 0.25,
     confidenceWeight: 0.15,
+    manualHintBoost: 0.5,
     ambiguityDelta: 0.15,
     minAliasScore: 0.05,
   },
