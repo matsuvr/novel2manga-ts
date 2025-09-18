@@ -174,6 +174,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
 
       // fast equality check to avoid repeated UI work
       const jobDataString = JSON.stringify({
+        id: job.id,
         status: job.status,
         currentStep: job.currentStep,
         splitCompleted: job.splitCompleted,
@@ -389,13 +390,43 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
     [addLog, describeStep, inProgressWeight, lastJobData, normalizationToastShown, isDemoMode],
   )
 
-  // token usage polling (separate effect)
+  const updateStepsRef = useRef(updateStepsFromJobData)
+  useEffect(() => {
+    updateStepsRef.current = updateStepsFromJobData
+  }, [updateStepsFromJobData])
+
+  // initialize state when jobId becomes available
   useEffect(() => {
     if (!jobId) return
-    // 初期ステップをアップロード完了状態に設定し、全体進捗を 1 ステップ分に。
-    setSteps((prev) => prev.map((step, index) => (index === 0 ? { ...step, status: 'completed' as const } : step)))
+
+    try {
+      esRef.current?.close()
+    } catch {
+      /* noop */
+    }
+
+    setLastJobData('')
+    setLogs([])
+    setPerEpisodePages({})
+    setRuntimeHints({})
+    setCurrentLayoutEpisode(null)
+    setCompleted(false)
+    setNormalizationToastShown(false)
+    setTokenPromptSum(0)
+    setTokenCompletionSum(0)
+    setSseConnected(true)
+
+    setSteps(() =>
+      INITIAL_STEPS.map((step, index) => ({
+        ...step,
+        status: index === 0 ? 'completed' : 'pending',
+        progress: undefined,
+        error: undefined,
+      })),
+    )
     setOverallProgress(Math.round(STEP_PERCENT))
     setActiveStep(1)
+    addLog('info', '準備中: アップロードを開始しています')
     addLog('info', `処理を開始しました。Job ID: ${jobId}`)
   }, [jobId, addLog])
 
@@ -433,17 +464,18 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
 
     let reconnectTimer: NodeJS.Timeout | null = null
     let reconnectAttempts = 0
-  const maxReconnectAttempts = appConfig.ui.sse.maxReconnectAttempts
+    const maxReconnectAttempts = appConfig.ui.sse.maxReconnectAttempts
     let fallbackPollingTimer: NodeJS.Timeout | null = null
     let alive = true
 
     const handlePayload = (raw: string) => {
       try {
-      const parsed = parseJobSSEPayload(raw)
-      // Narrow to internal JobData shape for existing updater
-      const data: JobData = { job: parsed.job }
+        const parsed = parseJobSSEPayload(raw)
+        const data: JobData = { job: parsed.job }
         lastJobRef.current = data.job
-        const result = updateStepsFromJobData(data)
+        const updater = updateStepsRef.current
+        if (!updater) return
+        const result = updater(data)
         if (result === 'stop') {
           const done = data.job.status === 'completed' || data.job.status === 'complete' || data.job.renderCompleted === true
           if (done) {
@@ -466,17 +498,27 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
         try {
           const res = await fetch(`/api/jobs/${jobId}`)
           if (res.ok) {
-            const jobData = (await res.json()) as JobData
-            lastJobRef.current = jobData.job
-            const result = updateStepsFromJobData(jobData)
+            const json = (await res.json()) as
+              | JobData
+              | { data?: { job?: Job } }
+              | { job?: Job }
+            const jobPayload =
+              (json as JobData).job ??
+              (json as { job?: Job }).job ??
+              (json as { data?: { job?: Job } }).data?.job
+            if (!jobPayload) return
+            lastJobRef.current = jobPayload
+            const updater = updateStepsRef.current
+            if (!updater) return
+            const result = updater({ job: jobPayload })
             if (result === 'stop') {
-              const done = jobData.job.status === 'completed' || jobData.job.status === 'complete' || jobData.job.renderCompleted === true
+              const done = jobPayload.status === 'completed' || jobPayload.status === 'complete' || jobPayload.renderCompleted === true
               if (done) {
                 addLog('info', '処理が完了しました（フォールバックポーリングにより検知）。上部のエクスポートからダウンロードできます。')
                 setCompleted(true)
-              } else if (jobData.job.status === 'failed') {
-                const errStep = jobData.job.lastErrorStep || jobData.job.currentStep || '不明'
-                const errMsg = jobData.job.lastError || 'エラーの詳細が不明です'
+              } else if (jobPayload.status === 'failed') {
+                const errStep = jobPayload.lastErrorStep || jobPayload.currentStep || '不明'
+                const errMsg = jobPayload.lastError || 'エラーの詳細が不明です'
                 addLog('error', `処理が失敗しました - ${errStep}: ${errMsg}`)
               }
             }
@@ -542,9 +584,13 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
     return () => {
       if (reconnectTimer) clearTimeout(reconnectTimer)
       if (fallbackPollingTimer) clearInterval(fallbackPollingTimer)
-      try { esRef.current?.close() } catch {/* ignore */}
+      try {
+        esRef.current?.close()
+      } catch {
+        /* ignore */
+      }
     }
-  }, [jobId, addLog, updateStepsFromJobData])
+  }, [jobId, addLog])
 
   useEffect(() => {
     if (completed) {
@@ -552,19 +598,6 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
       return () => clearTimeout(timer)
     }
   }, [completed, onComplete])
-
-  useEffect(() => {
-    if (!jobId) return
-    try {
-      esRef.current?.close()
-    } catch (e) {
-      void e
-    }
-    setSteps((prev) => prev.map((s, i) => (i === 0 ? { ...s, status: 'processing' } : s)))
-    setActiveStep(0)
-    setOverallProgress(0)
-    addLog('info', '準備中: アップロードを開始しています')
-  }, [jobId, addLog])
 
   const episodeProgressCards = useMemo(() => {
     const cards = Object.entries(perEpisodePages).map(([epStr, v]) => {
@@ -637,47 +670,51 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
         </CardContent>
       </Card>
 
-      <div className="relative">
-        <ol className="border-l pl-4">
-          {steps.map((step, index) => {
-            const isActive = index === activeStep
-            const isCompleted = step.status === 'completed'
-            const isError = step.status === 'error'
-            return (
-              <li key={step.id} className="mb-4">
-                <div className="mb-1 flex items-center gap-2">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full border bg-muted">
-                    {isError ? (
-                      <XCircle className="h-4 w-4 text-destructive" />
-                    ) : isCompleted ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    ) : isActive ? (
-                      <Hourglass className="h-4 w-4 text-primary" />
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground">{index + 1}</span>
-                    )}
-                  </div>
-                  <div className="font-medium">{step.name}</div>
-                </div>
-                <div className="ml-8 text-sm text-muted-foreground">
-                  <p>{step.description}</p>
-                  {runtimeHints[step.id as HintStep] && <p className="text-primary">{runtimeHints[step.id as HintStep]}</p>}
-                  {step.status === 'processing' && step.progress !== undefined && (
-                    <div className="mt-1">
-                      <Progress value={step.progress} />
+      <Card>
+        <CardContent className="pt-6">
+          <div className="relative">
+            <ol className="border-l border-muted-foreground/20 pl-4">
+              {steps.map((step, index) => {
+                const isActive = index === activeStep
+                const isCompleted = step.status === 'completed'
+                const isError = step.status === 'error'
+                return (
+                  <li key={step.id} className="mb-4">
+                    <div className="mb-1 flex items-center gap-2">
+                      <div className="flex h-6 w-6 items-center justify-center rounded-full border bg-muted">
+                        {isError ? (
+                          <XCircle className="h-4 w-4 text-destructive" />
+                        ) : isCompleted ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        ) : isActive ? (
+                          <Hourglass className="h-4 w-4 text-primary" />
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">{index + 1}</span>
+                        )}
+                      </div>
+                      <div className="font-medium">{step.name}</div>
                     </div>
-                  )}
-                  {step.status === 'error' && step.error && (
-                    <Alert variant="destructive" className="mt-1">
-                      {step.error}
-                    </Alert>
-                  )}
-                </div>
-              </li>
-            )
-          })}
-        </ol>
-      </div>
+                    <div className="ml-8 text-sm text-muted-foreground">
+                      <p>{step.description}</p>
+                      {runtimeHints[step.id as HintStep] && <p className="text-primary">{runtimeHints[step.id as HintStep]}</p>}
+                      {step.status === 'processing' && step.progress !== undefined && (
+                        <div className="mt-1">
+                          <Progress value={step.progress} />
+                        </div>
+                      )}
+                      {step.status === 'error' && step.error && (
+                        <Alert variant="destructive" className="mt-1">
+                          {step.error}
+                        </Alert>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
+          </div>
+        </CardContent>
+      </Card>
 
       {episodeProgressCards.length > 0 && (
         <Card>
