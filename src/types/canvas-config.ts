@@ -7,12 +7,7 @@ export interface ContentTextConfig {
   }
   padding: number
   lineHeight: number
-  background: {
-    color: string
-    borderColor: string
-    borderWidth: number
-    borderRadius: number
-  }
+  // background box rendering was removed; keep padding and textColor to reserve layout space
   textColor: string
   placement: {
     strategy: string

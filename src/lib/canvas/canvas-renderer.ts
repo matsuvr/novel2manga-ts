@@ -502,12 +502,12 @@ export class CanvasRenderer {
           )
           if (placement) {
             this.ctx.save()
-            // 背景ボックス
             const textPadding = contentCfg.padding
-            let backgroundX = placement.x - textPadding
-            let backgroundY = placement.y - textPadding
-            let backgroundWidth = Math.max(0, placement.width + textPadding * 2)
-            let backgroundHeight = Math.max(0, placement.height + textPadding * 2)
+            // 背景の半透明ボックスは描画せず、パディング込みの領域だけを確保する
+            let contentAreaX = placement.x - textPadding
+            let contentAreaY = placement.y - textPadding
+            let contentAreaWidth = Math.max(0, placement.width + textPadding * 2)
+            let contentAreaHeight = Math.max(0, placement.height + textPadding * 2)
 
             // パネルの境界内に収めるようクリップ
             const panelX = panelBounds.x
@@ -515,26 +515,12 @@ export class CanvasRenderer {
             const panelRight = panelBounds.x + panelBounds.width
             const panelBottom = panelBounds.y + panelBounds.height
 
-            backgroundX = Math.max(panelX, backgroundX)
-            backgroundY = Math.max(panelY, backgroundY)
-            backgroundWidth = Math.min(panelRight - backgroundX, backgroundWidth)
-            backgroundHeight = Math.min(panelBottom - backgroundY, backgroundHeight)
+            contentAreaX = Math.max(panelX, contentAreaX)
+            contentAreaY = Math.max(panelY, contentAreaY)
+            contentAreaWidth = Math.min(panelRight - contentAreaX, contentAreaWidth)
+            contentAreaHeight = Math.min(panelBottom - contentAreaY, contentAreaHeight)
 
-            // 背景ボックスが有効なサイズであることを確認
-            if (backgroundWidth > 0 && backgroundHeight > 0) {
-              this.ctx.fillStyle = contentCfg.background.color
-              this.ctx.strokeStyle = contentCfg.background.borderColor
-              this.ctx.lineWidth = contentCfg.background.borderWidth
-              this.drawRoundedRect(
-                backgroundX,
-                backgroundY,
-                backgroundWidth,
-                backgroundHeight,
-                contentCfg.background.borderRadius,
-              )
-              this.ctx.fill()
-              this.ctx.stroke()
-            }
+            const hasContentArea = contentAreaWidth > 0 && contentAreaHeight > 0
 
             // テキスト描画位置もパネル境界内に収める
             this.ctx.font = `${placement.fontSize}px ${this.config.fontFamily || '"Noto Sans JP", NotoSansJP, sans-serif'}`
@@ -561,12 +547,14 @@ export class CanvasRenderer {
 
             this.ctx.restore()
 
-            this.layoutCoordinator.registerContentArea({
-              x: backgroundX,
-              y: backgroundY,
-              width: backgroundWidth,
-              height: backgroundHeight,
-            })
+            if (hasContentArea) {
+              this.layoutCoordinator.registerContentArea({
+                x: contentAreaX,
+                y: contentAreaY,
+                width: contentAreaWidth,
+                height: contentAreaHeight,
+              })
+            }
           }
         }
       }
