@@ -9,6 +9,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const nextConfig = {
   reactStrictMode: true,
+  // Enable typed route generation for safer navigation helpers in Next 15.5
+  typedRoutes: true,
   // SQLite3 をビルド時に含めるための設定
   serverExternalPackages: ['better-sqlite3', '@napi-rs/canvas'],
   // Next.js のビルド時 ESLint 実行を無効化（CI では独自に `npm run lint:check` を走らせる）
