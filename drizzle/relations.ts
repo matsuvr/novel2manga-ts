@@ -3,6 +3,7 @@ import {
   account,
   authenticators,
   chunkAnalysisStatus,
+  chunkState,
   chunks,
   episodes,
   jobStepHistory,
@@ -24,9 +25,17 @@ export const chunkAnalysisStatusRelations = relations(chunkAnalysisStatus, ({ on
   }),
 }))
 
+export const chunkStateRelations = relations(chunkState, ({ one }) => ({
+  job: one(jobs, {
+    fields: [chunkState.jobId],
+    references: [jobs.id],
+  }),
+}))
+
 export const jobsRelations = relations(jobs, ({ one, many }) => ({
   chunkAnalysisStatuses: many(chunkAnalysisStatus),
   chunks: many(chunks),
+  chunkStates: many(chunkState),
   episodes: many(episodes),
   jobStepHistories: many(jobStepHistory),
   layoutStatuses: many(layoutStatus),

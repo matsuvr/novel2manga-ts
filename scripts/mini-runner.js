@@ -1,5 +1,7 @@
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { createCanvas } from '@napi-rs/canvas'
-import fs from 'fs'
 
 function run() {
   const width = 800
@@ -48,8 +50,9 @@ function run() {
   }
 
   const out = canvas.toBuffer('image/png')
-  fs.writeFileSync('/tmp/test-panel-mini.png', out)
-  console.log('Wrote /tmp/test-panel-mini.png')
+  const outPath = path.join(os.tmpdir(), 'test-panel-mini.png')
+  fs.writeFileSync(outPath, out)
+  console.log(`Wrote ${outPath}`)
 }
 
 run()

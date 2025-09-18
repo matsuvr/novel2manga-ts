@@ -1,5 +1,6 @@
 /// <reference types="vitest" />
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { MangaLayout } from '@/types/panel-layout'
 
 const strokeRectSpy = vi.fn()
 
@@ -52,7 +53,7 @@ describe('CanvasRenderer.renderMangaLayout', () => {
       '3:0': { image: {} as CanvasImageSource, width: 100, height: 200 },
     })
 
-    const layout = {
+    const layout: MangaLayout = {
       title: 'Test',
       author: 'Tester',
       created_at: new Date().toISOString(),
@@ -101,9 +102,9 @@ describe('CanvasRenderer.renderMangaLayout', () => {
           ],
         },
       ],
-    }
+  }
 
-    renderer.renderMangaLayout(layout as any)
+  renderer.renderMangaLayout(layout)
 
     // Expect one call for page border plus one per panel
     expect(strokeRectSpy).toHaveBeenCalledTimes(4)

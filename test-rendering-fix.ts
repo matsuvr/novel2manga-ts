@@ -1,5 +1,5 @@
+import * as fs from 'node:fs';
 import { createCanvas } from '@napi-rs/canvas';
-import * as fs from 'fs';
 import { CanvasRenderer } from './src/lib/canvas/canvas-renderer.js';
 import { PanelLayoutCoordinator } from './src/lib/canvas/panel-layout-coordinator.js';
 

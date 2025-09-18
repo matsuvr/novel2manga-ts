@@ -423,6 +423,82 @@ export const tokenUsage = sqliteTable(
   }),
 )
 
+// =====================
+// novel2manga v2 registry
+// =====================
+
+export const characterRegistry = sqliteTable(
+  'character_registry',
+  {
+    id: text('id').primaryKey(),
+    canonicalName: text('canonical_name').notNull(),
+    aliases: text('aliases'),
+    summary: text('summary'),
+    voiceStyle: text('voice_style'),
+    relationships: text('relationships'),
+    firstChunk: integer('first_chunk').notNull(),
+    lastSeenChunk: integer('last_seen_chunk').notNull(),
+    confidenceScore: real('confidence_score').default(1),
+    status: text('status').default('active'),
+    metadata: text('metadata'),
+    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    lastSeenIdx: index('idx_char_last_seen').on(table.lastSeenChunk),
+    confidenceIdx: index('idx_char_confidence').on(table.confidenceScore),
+    statusIdx: index('idx_char_status').on(table.status),
+  }),
+)
+
+export const sceneRegistry = sqliteTable(
+  'scene_registry',
+  {
+    id: text('id').primaryKey(),
+    location: text('location').notNull(),
+    timeContext: text('time_context'),
+    summary: text('summary'),
+    anchorText: text('anchor_text'),
+    chunkRange: text('chunk_range'),
+    metadata: text('metadata'),
+    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    chunkRangeIdx: index('idx_scene_range').on(table.chunkRange),
+    locationIdx: index('idx_scene_location').on(table.location),
+  }),
+)
+
+export const chunkState = sqliteTable(
+  'chunk_state',
+  {
+    jobId: text('job_id')
+      .notNull()
+      .references(() => jobs.id, { onDelete: 'cascade' }),
+    chunkIndex: integer('chunk_index').notNull(),
+    maskedText: text('masked_text'),
+    extraction: text('extraction'),
+    confidence: real('confidence'),
+    tierUsed: integer('tier_used'),
+    tokensUsed: integer('tokens_used'),
+    processingTimeMs: integer('processing_time_ms'),
+    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.jobId, table.chunkIndex] }),
+    jobIdx: index('idx_chunk_job').on(table.jobId),
+    confidenceIdx: index('idx_chunk_confidence').on(table.confidence),
+    tierIdx: index('idx_chunk_tier').on(table.tierUsed),
+  }),
+)
+
+export const aliasFts = sqliteTable('alias_fts', {
+  charId: text('char_id'),
+  aliasText: text('alias_text'),
+  contextWords: text('context_words'),
+})
+
 // リレーション定義
 export const novelsRelations = relations(novels, ({ many, one }) => ({
   jobs: many(jobs),
@@ -447,6 +523,7 @@ export const jobsRelations = relations(jobs, ({ one, many }) => ({
   }),
   stepHistory: many(jobStepHistory),
   chunks: many(chunks),
+  chunkStates: many(chunkState),
   episodes: many(episodes),
   layoutStatus: many(layoutStatus),
   renderStatus: many(renderStatus),
@@ -506,6 +583,13 @@ export const chunksRelations = relations(chunks, ({ one }) => ({
 export const chunkAnalysisStatusRelations = relations(chunkAnalysisStatus, ({ one }) => ({
   job: one(jobs, {
     fields: [chunkAnalysisStatus.jobId],
+    references: [jobs.id],
+  }),
+}))
+
+export const chunkStateRelations = relations(chunkState, ({ one }) => ({
+  job: one(jobs, {
+    fields: [chunkState.jobId],
     references: [jobs.id],
   }),
 }))
@@ -591,6 +675,14 @@ export type StorageFile = typeof storageFiles.$inferSelect
 export type NewStorageFile = typeof storageFiles.$inferInsert
 export type TokenUsage = typeof tokenUsage.$inferSelect
 export type NewTokenUsage = typeof tokenUsage.$inferInsert
+export type CharacterRegistry = typeof characterRegistry.$inferSelect
+export type NewCharacterRegistry = typeof characterRegistry.$inferInsert
+export type SceneRegistry = typeof sceneRegistry.$inferSelect
+export type NewSceneRegistry = typeof sceneRegistry.$inferInsert
+export type ChunkState = typeof chunkState.$inferSelect
+export type NewChunkState = typeof chunkState.$inferInsert
+export type AliasFts = typeof aliasFts.$inferSelect
+export type NewAliasFts = typeof aliasFts.$inferInsert
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
 export type Account = typeof accounts.$inferSelect

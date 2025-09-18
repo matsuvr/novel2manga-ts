@@ -1168,6 +1168,13 @@ export const v2Config = {
 
 ---
 
+## 2025-09-18 Phase 1 実装状況メモ
+
+- レジストリ層 (`SQLiteRegistry` + `RegistryDatabaseService`) を実装し、`character_registry`/`scene_registry`/`chunk_state`/`alias_fts` のマイグレーションを追加。
+- 前処理パイプライン (`TextNormalizer`/`EntityExtractor`) を Effect ベースで構築。日本語向けパターンを `japanese-patterns.ts` に集約。
+- `IdResolver` のスコアリング重みを `tokenReductionConfig.resolver` に定義し、alias・recency・confidence を合成する方式を採用。
+- `src/__tests__/v2/token-reduction.phase1.test.ts` で Phase 1 の中心ロジックをユニットテスト化。精度・性能メトリクスの実測は次フェーズに持ち越し。
+
 ## まとめ
 
 この設計書に基づいてnovel2manga-ts v2.0を実装することで、トークン消費を75%削減しながら、処理速度を2倍に向上させ、かつ品質を維持することが可能になります。SQLiteとLLMの組み合わせにより、ベクトルデータベースなしでも高性能な一貫性保持システムを実現できます。
