@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { appConfig } from '@/config/app.config'
+import type { Job } from '@/types/job-sse'
+import { parseJobSSEPayload } from '@/types/job-sse'
 
 const _MAX_PAGES = appConfig.rendering.limits.maxPages
 
@@ -43,32 +45,7 @@ const EpisodePageDataSchema = z.object({
 
 type EpisodePageData = z.infer<typeof EpisodePageDataSchema>
 
-interface Job {
-  status?: string
-  currentStep?: string
-  lastError?: string
-  lastErrorStep?: string
-  splitCompleted?: boolean
-  analyzeCompleted?: boolean
-  episodeCompleted?: boolean
-  layoutCompleted?: boolean
-  renderCompleted?: boolean
-  processedChunks?: number
-  totalChunks?: number
-  processedEpisodes?: number
-  totalEpisodes?: number
-  renderedPages?: number
-  totalPages?: number
-  processingEpisode?: number
-  processingPage?: number
-  progress?: {
-    perEpisodePages?: Record<string, EpisodePageData>
-  }
-}
-
-interface JobData {
-  job: Job
-}
+interface JobData { job: Job }
 
 interface LogEntry {
   timestamp: string
@@ -415,30 +392,62 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
   // token usage polling (separate effect)
   useEffect(() => {
     if (!jobId) return
-    setSteps((prev) =>
-      prev.map((step, index) => (index === 0 ? { ...step, status: 'completed' as const } : step)),
-    )
+    // 初期ステップをアップロード完了状態に設定し、全体進捗を 1 ステップ分に。
+    setSteps((prev) => prev.map((step, index) => (index === 0 ? { ...step, status: 'completed' as const } : step)))
     setOverallProgress(Math.round(STEP_PERCENT))
     setActiveStep(1)
     addLog('info', `処理を開始しました。Job ID: ${jobId}`)
-  // Keep current EventSource instance in a ref so that reconnect replacements
-  // are retained and not garbage-collected. (Codex review P1 fix)
-  const esRef = { current: new EventSource(`/api/jobs/${jobId}/events`) }
-  let reconnectTimer: NodeJS.Timeout | null = null
-  let reconnectAttempts = 0
-  const maxReconnectAttempts = 5
-  let fallbackPollingTimer: NodeJS.Timeout | null = null
-  let sseConnected = true
+  }, [jobId, addLog])
+
+  // トークン使用量のポーリング（既存 token-usage API 利用）
+  useEffect(() => {
+    if (!jobId) return
+    let cancelled = false
+    const interval = appConfig.ui.progress.tokenUsagePollIntervalMs
+    const fetchTokens = async () => {
+      try {
+        const res = await fetch(`/api/jobs/${jobId}/token-usage`)
+        if (!res.ok) return
+        const data = (await res.json()) as { tokenUsage?: Array<{ promptTokens?: number; completionTokens?: number }> }
+        if (cancelled) return
+        if (Array.isArray(data.tokenUsage)) {
+          const prompt = data.tokenUsage.reduce((acc, r) => acc + (r.promptTokens ?? 0), 0)
+          const completion = data.tokenUsage.reduce((acc, r) => acc + (r.completionTokens ?? 0), 0)
+          setTokenPromptSum(prompt)
+          setTokenCompletionSum(completion)
+        }
+      } catch {
+        /* noop */
+      }
+    }
+    fetchTokens()
+    const timer = setInterval(fetchTokens, interval)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [jobId])
+
+  useEffect(() => {
+    if (!jobId) return
+
+    let reconnectTimer: NodeJS.Timeout | null = null
+    let reconnectAttempts = 0
+  const maxReconnectAttempts = appConfig.ui.sse.maxReconnectAttempts
+    let fallbackPollingTimer: NodeJS.Timeout | null = null
+    let alive = true
 
     const handlePayload = (raw: string) => {
       try {
-        const data = JSON.parse(raw) as JobData
+      const parsed = parseJobSSEPayload(raw)
+      // Narrow to internal JobData shape for existing updater
+      const data: JobData = { job: parsed.job }
         lastJobRef.current = data.job
         const result = updateStepsFromJobData(data)
         if (result === 'stop') {
-          const done = data.job.status === 'completed' || data.job.status === 'complete'
-          if (done || data.job.renderCompleted === true) {
-            addLog('info', '処理が完了しました。上部のエクスポートからダウンロードできます.')
+          const done = data.job.status === 'completed' || data.job.status === 'complete' || data.job.renderCompleted === true
+          if (done) {
+            addLog('info', '処理が完了しました。上部のエクスポートからダウンロードできます。')
             setCompleted(true)
           } else if (data.job.status === 'failed') {
             const errorStep = data.job.lastErrorStep || data.job.currentStep || '不明'
@@ -447,21 +456,10 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
           }
         }
       } catch (e: unknown) {
-        const errMsg = e instanceof Error ? e.message : String(e)
-        addLog('error', `SSEデータの解析に失敗: ${errMsg}`)
+      const errMsg = e instanceof Error ? e.message : String(e)
+        addLog('error', `SSEデータの解析/検証に失敗: ${errMsg}`)
       }
-    },
-    [addLog, updateStepsFromJobData],
-  )
-
-  useEffect(() => {
-    if (!jobId) return
-
-    let reconnectTimer: NodeJS.Timeout | null = null
-    let reconnectAttempts = 0
-    const maxReconnectAttempts = 5
-    let fallbackPollingTimer: NodeJS.Timeout | null = null
-    let alive = true
+    }
 
     const fallbackPolling = async () => {
       if (!alive && isMountedRef.current) {
@@ -472,8 +470,8 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
             lastJobRef.current = jobData.job
             const result = updateStepsFromJobData(jobData)
             if (result === 'stop') {
-              const done = jobData.job.status === 'completed' || jobData.job.status === 'complete'
-              if (done || jobData.job.renderCompleted === true) {
+              const done = jobData.job.status === 'completed' || jobData.job.status === 'complete' || jobData.job.renderCompleted === true
+              if (done) {
                 addLog('info', '処理が完了しました（フォールバックポーリングにより検知）。上部のエクスポートからダウンロードできます。')
                 setCompleted(true)
               } else if (jobData.job.status === 'failed') {
@@ -484,9 +482,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
             }
           }
         } catch (e) {
-          if (process.env.NODE_ENV !== 'production') {
-            console.warn('Fallback polling failed:', e)
-          }
+          if (process.env.NODE_ENV !== 'production') console.warn('Fallback polling failed:', e)
         }
       }
     }
@@ -494,22 +490,18 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
     const attachEventHandlers = (target: EventSource) => {
       target.addEventListener('init', (ev) => {
         setSseConnected(true)
-        console.log('[SSE] Connected and received init data')
         handlePayload((ev as MessageEvent).data)
       })
       target.addEventListener('message', (ev) => {
         setSseConnected(true)
-        console.log('[SSE] Received message')
         handlePayload((ev as MessageEvent).data)
       })
       target.addEventListener('final', (ev) => {
         setSseConnected(true)
-        console.log('[SSE] Received final message - job completed')
         handlePayload((ev as MessageEvent).data)
       })
       target.addEventListener('error', (ev) => {
         setSseConnected(false)
-        console.warn('[SSE] Connection error:', ev)
         addLog('warning', 'SSE接続に問題が発生しました。再接続を試行します。', ev)
         handleReconnect()
       })
@@ -521,37 +513,36 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
         alive = false
         setSseConnected(false)
         addLog('error', 'SSE接続の再接続が最大回数に達しました。フォールバックポーリングを開始します。')
-        fallbackPollingTimer = setInterval(fallbackPolling, 30000)
+        fallbackPollingTimer = setInterval(fallbackPolling, appConfig.ui.sse.fallbackPollingIntervalMs)
         return
       }
       setSseConnected(false)
       addLog('warning', `SSE接続が切断されました。再接続を試行します... (${reconnectAttempts}/${maxReconnectAttempts})`)
-      const delay = Math.min(1000 * 2 ** (reconnectAttempts - 1), 30000)
+      const delay = Math.min(1000 * 2 ** (reconnectAttempts - 1), appConfig.ui.sse.maxReconnectDelayMs)
       reconnectTimer = setTimeout(() => {
         if (!isMountedRef.current) return
-        // Close old instance
         try {
-          esRef.current.close()
+          esRef.current?.close()
         } catch {
           /* noop */
         }
-        // Create and attach new instance, keeping reference
         const replacement = new EventSource(`/api/jobs/${jobId}/events`)
         esRef.current = replacement
         attachEventHandlers(replacement)
       }, delay)
     }
-    // Attach handlers to initial instance
+
+    // 初期接続
+    try {
+      esRef.current?.close()
+    } catch {/* ignore */}
+    esRef.current = new EventSource(`/api/jobs/${jobId}/events`)
     attachEventHandlers(esRef.current)
 
     return () => {
       if (reconnectTimer) clearTimeout(reconnectTimer)
       if (fallbackPollingTimer) clearInterval(fallbackPollingTimer)
-      try {
-        esRef.current.close()
-      } catch {
-        /* ignore */
-      }
+      try { esRef.current?.close() } catch {/* ignore */}
     }
   }, [jobId, addLog, updateStepsFromJobData])
 
