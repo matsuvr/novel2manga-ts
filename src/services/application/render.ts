@@ -8,6 +8,7 @@ import { ThumbnailGenerator } from '@/lib/canvas/thumbnail-generator'
 import { db } from '@/services/database/index'
 import type { PageBreakV2 } from '@/types/script'
 import { normalizeAndValidateLayout } from '@/utils/layout-normalizer'
+import { applyTemplatesByPanelCount } from '@/utils/layout-template-applier'
 import { type LoosePanel, normalizePlanPanels } from '@/utils/page-normalizer'
 import { validatePageBreakV2 } from '@/utils/pagebreak-validator'
 // YAML依存を排除: 直接JSONのMangaLayoutを構築して使用する
@@ -60,8 +61,9 @@ export async function renderBatchFromJson(
 
   // layoutはJSONとして渡される前提
   const parsedLayout = mangaLayoutJson as Parameters<typeof normalizeAndValidateLayout>[0]
+  const templatedLayout = applyTemplatesByPanelCount(parsedLayout)
   // normalize and auto-fix overlaps/gaps using embedded references
-  const { layout: mangaLayout, pageIssues } = normalizeAndValidateLayout(parsedLayout)
+  const { layout: mangaLayout, pageIssues } = normalizeAndValidateLayout(templatedLayout)
   if (Object.values(pageIssues).some((issues) => issues.length > 0)) {
     logger.warn('Layout issues detected and normalized', { pageIssues })
   }
