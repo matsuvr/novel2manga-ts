@@ -208,3 +208,26 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
 
 export { schema }
 export * from './schema'
+
+/**
+ * Test helper: create an isolated in-memory BetterSQLite3 + Drizzle instance.
+ * Use this from tests to avoid importing `better-sqlite3` directly in test files
+ * and to ensure tests can create a fresh DB instance with provided DDL.
+ */
+export function createInMemoryDrizzleWithSql(initialSql?: string) {
+  const Driver = loadBetterSqlite3()
+  const sqliteRaw = new Driver(':memory:')
+  try {
+    // Enable foreign keys by default like tests expect
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    sqliteRaw.pragma('foreign_keys = ON')
+    if (initialSql && typeof initialSql === 'string') {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      sqliteRaw.exec(initialSql)
+    }
+  } catch {
+    // ignore any setup errors; caller tests will surface failures
+  }
+  const drizzleDb = drizzle(sqliteRaw, { schema })
+  return { sqlite: sqliteRaw as unknown as ReturnType<typeof Driver>, drizzle: drizzleDb }
+}
