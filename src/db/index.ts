@@ -225,8 +225,14 @@ export function createInMemoryDrizzleWithSql(initialSql?: string) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       sqliteRaw.exec(initialSql)
     }
-  } catch {
+  } catch (error) {
     // ignore any setup errors; caller tests will surface failures
+    try {
+      const message = error instanceof Error ? error.message : String(error)
+      getLogger().warn('createInMemoryDrizzleWithSql: setup failed', { message })
+    } catch {
+      // swallow logging errors to avoid masking original error
+    }
   }
   const drizzleDb = drizzle(sqliteRaw, { schema })
   return { sqlite: sqliteRaw as unknown as ReturnType<typeof Driver>, drizzle: drizzleDb }

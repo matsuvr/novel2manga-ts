@@ -6,6 +6,7 @@
 - **Effect TS migration in progress.**
   - New code must use Effect TS. See `docs/effect-ts-doc.txt`.
   - Do not rewrite working legacy code until scheduled.
+- テストがおかしいのに、本体に無理矢理手を入れるの絶対禁止。テストがおかしいならテストを見直すこと
 
 ## Project Layout
 

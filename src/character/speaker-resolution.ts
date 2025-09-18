@@ -117,7 +117,7 @@ export const SpeakerResolutionSchema = z.object({
     .array(
       z.object({
         name: z.string().trim().min(1),
-  type: z.enum(['person', 'location', 'organization', 'object', 'unknown']),
+        type: z.enum(['person', 'location', 'organization', 'object', 'unknown']),
       }),
     ),
 })
