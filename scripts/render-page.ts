@@ -8,7 +8,13 @@ import { getFontForDialogue } from '../src/types/vertical-text'
 import { applyTemplatesByPanelCount } from '../src/utils/layout-template-applier'
 
 async function main() {
-  const layoutPath = path.resolve(process.cwd(), '.local-storage/layouts/82fe3979-699c-4faa-99bd-7c3e6d9fa412/jobs/62df327b-d730-444d-bf6c-e78e594d1dd3/layouts/episode_1.json')
+  // Allow passing layout path as first CLI arg; otherwise fall back to known path
+  const defaultLayoutPath = path.resolve(
+    process.cwd(),
+    '.local-storage/layouts/82fe3979-699c-4faa-99bd-7c3e6d9fa412/jobs/62df327b-d730-444d-bf6c-e78e594d1dd3/layouts/episode_1.json'
+  )
+  const layoutPathArg = process.argv[2] || process.env.RENDER_LAYOUT_PATH
+  const layoutPath = layoutPathArg ? path.resolve(process.cwd(), layoutPathArg) : defaultLayoutPath
   if (!fs.existsSync(layoutPath)) {
     console.error('layout json not found:', layoutPath)
     process.exit(1)

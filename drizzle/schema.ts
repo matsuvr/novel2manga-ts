@@ -364,6 +364,81 @@ export const storageFiles = sqliteTable(
   ],
 )
 
+export const characterRegistry = sqliteTable(
+  'character_registry',
+  {
+    id: text().primaryKey().notNull(),
+    canonicalName: text('canonical_name').notNull(),
+    aliases: text(),
+    summary: text(),
+    voiceStyle: text('voice_style'),
+    relationships: text(),
+    firstChunk: integer('first_chunk').notNull(),
+    lastSeenChunk: integer('last_seen_chunk').notNull(),
+    confidenceScore: real('confidence_score').default(1),
+    status: text().default('active'),
+    metadata: text(),
+    createdAt: text('created_at').default('sql`(CURRENT_TIMESTAMP)`'),
+    updatedAt: text('updated_at').default('sql`(CURRENT_TIMESTAMP)`'),
+  },
+  (table) => [
+    index('idx_char_last_seen').on(table.lastSeenChunk),
+    index('idx_char_confidence').on(table.confidenceScore),
+    index('idx_char_status').on(table.status),
+  ],
+)
+
+export const sceneRegistry = sqliteTable(
+  'scene_registry',
+  {
+    id: text().primaryKey().notNull(),
+    location: text().notNull(),
+    timeContext: text('time_context'),
+    summary: text(),
+    anchorText: text('anchor_text'),
+    chunkRange: text('chunk_range'),
+    metadata: text(),
+    createdAt: text('created_at').default('sql`(CURRENT_TIMESTAMP)`'),
+    updatedAt: text('updated_at').default('sql`(CURRENT_TIMESTAMP)`'),
+  },
+  (table) => [
+    index('idx_scene_range').on(table.chunkRange),
+    index('idx_scene_location').on(table.location),
+  ],
+)
+
+export const chunkState = sqliteTable(
+  'chunk_state',
+  {
+    jobId: text('job_id')
+      .notNull()
+      .references(() => jobs.id, { onDelete: 'cascade' }),
+    chunkIndex: integer('chunk_index').notNull(),
+    maskedText: text('masked_text'),
+    extraction: text(),
+    confidence: real(),
+    tierUsed: integer('tier_used'),
+    tokensUsed: integer('tokens_used'),
+    processingTimeMs: integer('processing_time_ms'),
+    createdAt: text('created_at').default('sql`(CURRENT_TIMESTAMP)`'),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.jobId, table.chunkIndex],
+      name: 'chunk_state_job_id_chunk_index_pk',
+    }),
+    index('idx_chunk_job').on(table.jobId),
+    index('idx_chunk_confidence').on(table.confidence),
+    index('idx_chunk_tier').on(table.tierUsed),
+  ],
+)
+
+export const aliasFts = sqliteTable('alias_fts', {
+  charId: text('char_id'),
+  aliasText: text('alias_text'),
+  contextWords: text('context_words'),
+})
+
 export const authenticators = sqliteTable(
   'authenticators',
   {

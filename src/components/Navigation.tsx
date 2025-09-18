@@ -23,22 +23,7 @@ export function Navigation() {
         <Link href={routesConfig.home} className="font-semibold tracking-tight">
           Novel2Manga
         </Link>
-        <nav className="hidden gap-4 sm:flex">
-          <Link
-            href={routesConfig.home}
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            ホーム
-          </Link>
-          {session && (
-            <Link
-              href={routesConfig.portal.dashboard}
-              className="text-sm text-muted-foreground hover:text-foreground"
-            >
-              マイページ
-            </Link>
-          )}
-        </nav>
+        <nav className="hidden gap-4 sm:flex"></nav>
         <div className="flex items-center gap-2">
           {status === 'loading' ? (
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
