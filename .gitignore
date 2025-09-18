@@ -89,6 +89,8 @@ output.txt
 .local-storage/
 .test-storage/
 tmp_test/
+*tmp/
+tmp/
 
 # log files
 *.log

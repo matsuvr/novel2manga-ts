@@ -1,6 +1,7 @@
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import type { DatabaseAdapter } from '@/infrastructure/database/adapters/base-adapter'
+import { getLogger } from '@/infrastructure/logging/logger'
 import { type Database, type TransactionOperation, TransactionService } from './transaction-service'
 
 type DrizzleDatabase = BetterSQLite3Database<typeof schema>
@@ -25,7 +26,11 @@ export abstract class BaseDatabaseService {
    * Works with both sync and async adapters
    */
   protected async executeInTransaction<T>(operation: TransactionOperation<T>): Promise<T> {
-    return this.transaction.execute(operation)
+    const logger = getLogger()
+    logger.debug('base_executeInTransaction_enter')
+    const result = await this.transaction.execute(operation)
+    logger.debug('base_executeInTransaction_exit')
+    return result
   }
 
   /**

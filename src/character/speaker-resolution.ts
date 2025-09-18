@@ -97,7 +97,7 @@ export function getDefaultResolutionConfig(): ResolutionConfig {
   }
 }
 
-const SpeakerResolutionSchema = z.object({
+export const SpeakerResolutionSchema = z.object({
   dialogues: z
     .array(
       z.object({
@@ -108,22 +108,18 @@ const SpeakerResolutionSchema = z.object({
           .min(1)
           .nullable()
           .optional(),
-        speakerType: z
-          .enum(['person', 'group', 'organization', 'location', 'unknown'])
-          .default('unknown'),
+        speakerType: z.enum(['person', 'group', 'organization', 'location', 'unknown']),
         confidence: z.number().min(0).max(1).optional(),
         reasoning: z.string().optional(),
       }),
-    )
-    .default([]),
+    ),
   namedEntities: z
     .array(
       z.object({
         name: z.string().trim().min(1),
-        type: z.enum(['person', 'location', 'organization', 'object', 'unknown']).default('unknown'),
+        type: z.enum(['person', 'location', 'organization', 'object', 'unknown']),
       }),
-    )
-    .default([]),
+    ),
 })
 
 type SpeakerResolutionPayload = z.infer<typeof SpeakerResolutionSchema>
@@ -133,7 +129,27 @@ type SpeakerEntityType = LlmDialogueResolution['speakerType']
 
 export class SpeakerResolutionError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options)
+    // Avoid passing options to Error super to keep compatibility with targets
+    // where Error constructor doesn't accept a second argument. Assign cause manually.
+    super(message)
+    if (options && 'cause' in options) {
+      // Prefer non-enumerable property assignment when supported to mimic native Error.cause
+      try {
+        if (typeof Object.defineProperty === 'function') {
+          Object.defineProperty(this, 'cause', {
+            value: options.cause,
+            enumerable: false,
+            configurable: true,
+            writable: false,
+          })
+        } else {
+          ;(this as unknown as { cause?: unknown }).cause = options.cause
+        }
+      } catch {
+        // fallback to direct assignment if defineProperty fails for some reason
+        ;(this as unknown as { cause?: unknown }).cause = options.cause
+      }
+    }
     this.name = 'SpeakerResolutionError'
   }
 }

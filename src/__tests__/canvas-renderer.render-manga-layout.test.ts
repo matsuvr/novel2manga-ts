@@ -1,40 +1,22 @@
 /// <reference types="vitest" />
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MangaLayout } from '@/types/panel-layout'
+import { createCanvas2DMock, createCanvasElementMock } from '../../tests/helpers/createCanvas2DMock'
 
 const strokeRectSpy = vi.fn()
 
 vi.mock('@napi-rs/canvas', () => {
-  const ctx = {
-    fillStyle: '#ffffff',
-    strokeStyle: '#000000',
-    lineWidth: 1,
-    font: '16px sans-serif',
-    beginPath: vi.fn(),
-    rect: vi.fn(),
-    clip: vi.fn(),
-    save: vi.fn(),
-    restore: vi.fn(),
-    fillRect: vi.fn(),
-    strokeRect: strokeRectSpy,
-    drawImage: vi.fn(),
-    strokeText: vi.fn(),
-    fillText: vi.fn(),
-    measureText: vi.fn().mockReturnValue({ width: 100 }),
-    ellipse: vi.fn(),
-  }
+  const ctx = createCanvas2DMock({ strokeRect: strokeRectSpy })
   const canvas = {
     width: 1200,
     height: 1684,
-    getContext: (id: string) => (id === '2d' ? (ctx as unknown as CanvasRenderingContext2D) : null),
+    getContext: (id: string) => (id === '2d' ? ctx : null),
     toDataURL: vi.fn().mockReturnValue('data:image/png;base64,iVBORw0KGgo='),
     toBuffer: vi.fn().mockReturnValue(Buffer.from('iVBORw0KGgo=', 'base64')),
   }
   return {
     createCanvas: () => canvas as unknown as HTMLCanvasElement,
-    GlobalFonts: {
-      register: vi.fn(),
-    },
+    GlobalFonts: { register: vi.fn() },
     loadImage: vi.fn().mockResolvedValue({ width: 100, height: 200 }),
   }
 })
