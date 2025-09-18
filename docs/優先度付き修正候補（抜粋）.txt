@@ -1,0 +1,50 @@
+優先度付き修正候補（抜粋）
+注：ファイルパスはプロジェクト相対。まず「安全かつ自動で修正できるもの」を挙げます。
+
+高（自動修正可・安全）
+
+ProcessingProgress.tsx
+既に修正済み：冗長な as Job、(e as Error) の削除／置換を適用済。
+rendering-step.ts
+既に修正済み：一行 try/catch → ブロック化、(e as Error) を安全な分岐に。
+kv.ts
+try/catch で JSON.parse の失敗を扱う箇所がある。catch 内で parseError をそのまま扱っているので parseError instanceof Error ? parseError.message : String(parseError) の形式に統一。
+enhanced-logger.ts
+catch (error) ブロック多数。エラーメッセージ取得を instanceof Error で行うよう統一可能。
+api-validation.ts / api-security.ts 等
+as const 等は問題ないが、明らかに不要な as があれば削除候補。
+中（自動修正可だが注意）
+
+src/lib/canvas/*.ts (canvas-renderer, manga-page-renderer 等)
+as unknown as CanvasRenderingContext2D 等が散見される。多くはネイティブ Canvas ライブラリやテストの差分対応のためで、削除は慎重に。自動的に削ると型エラーが発生する可能性あり。代替策はユーティリティ型ガードや小さな型定義ファイルを用意して置き換えること。
+低（手動レビュー推奨）
+
+テストファイル（__tests__配下）
+多くは as unknown as をモックやテスト支援で使用しているため、変更はテスト動作に影響する。レビュー優先度は低だが、不要な as があれば後でルールとしてコーディングガイドに追加する。
+自動修正（codemod）提案（短く安全なもの）
+Replace (e as Error).message occurrences inside catch blocks with e instanceof Error ? e.message : String(e)
+
+安全で単純な正規表現置換が可能。
+除外: catch (e: unknown) のように既に unknown 型が宣言されているケースはそのままでも OK。ただし一様化のために同変換は適用可能。
+Expand one-line try/catch blocks into multi-line blocks
+
+自動でソース整形するのは難しい（一行ブロックの中の式の分割やセミコロン位置の判断が必要）。「検出して一覧化」→ 手動で展開する方が安全。
+代替: ESLint rule（formatting rule）を導入して検出を CI で強制する。
+Remove redundant as Job where RHS already typed (requires type analysis)
+
+単純なテキスト置換は危険。安全策は、まず TS コンパイラで「その as を削った状態で tsc が通るか」を自動で試行する小さなスクリプトを作ること（codemod が git apply 用のパッチを生成して、npm run check で検証）。
+そのため、この修正は「自動化 + 型チェックのループ」が必要。
+私からの次ステップ提案（短く）
+今すぐ安全に自動適用できる修正を小さな patch として用意します：
+(e as Error).message → e instanceof Error ? e.message : String(e) を src に限定して一括適用し、npm run check / npm test を実行して問題がないことを確認します。
+一行 try/catch は一覧（今回スキャンで見つけた src の候補）を PR 説明に載せ、手動で展開するか、あるいは私が安全なテンプレートに従って複数ファイルを段階的に変換するパッチを作ります（要承認）。
+冗長な as（as Job など）は個別に試して tsc を通す形で段階的に削除します（自動で全削除は危険）。
+要求事項のマッピング（coverage）
+「同様の冗長キャストや一行 try/catch を走らせて結果を出す」: Done — スクリプトを実行して scan-results.json を生成し、src 配下の候補を抽出・トリアージしました。
+「修正してほしい/説明してほしい」: 既に最初の 3 箇所は修正済み（ProcessingProgress.tsx と rendering-step.ts）。さらに安全に自動適用できる修正（catch の error 取り扱い）については、続けて自動パッチを作り実行できます（以下で実行するか確認ください）。
+どこを自動で適用するか（提案）
+優先して自動で適用する変換（安全・低リスク）：
+
+ファイル集合： src/**/*.{ts,tsx,js,jsx}（ただし src/__tests__/**/* は除外するオプションを推奨）
+変換1： catch 節内の (e as Error).message や error as Error を e instanceof Error ? e.message : String(e) に変換
+変換2（慎重に）: const foo = bar as SomeType のうち、明らかに SomeType が as unknown as のようなテスト向けケース以外で冗長なものは candidate としてリストに上げる（自動削除はまず試験的に 1-2 ファイルで実行して npm run check を実行）
