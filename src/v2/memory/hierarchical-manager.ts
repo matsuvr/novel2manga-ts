@@ -45,7 +45,10 @@ const SEARCH_ORDER: Record<CacheRequestLevel, ReadonlyArray<CacheLevel>> = {
   auto: ['hot', 'warm', 'cold'],
   hot: ['hot', 'warm', 'cold'],
   warm: ['hot', 'warm', 'cold'],
-  cold: ['cold', 'warm', 'hot'],
+  // When requesting `cold` explicitly we should only consult the cold tier
+  // so the manager will fall through to loading from the registry instead
+  // of returning warmer cached copies.
+  cold: ['cold'],
 }
 
 export class HierarchicalMemoryManager {
@@ -189,15 +192,11 @@ export class HierarchicalMemoryManager {
       const record = yield* self.fetchRecord(id)
       const importance = self.extractImportance(record)
       self.strategy.updateImportance(id, importance)
-      const ensuredUsage = {
-        ...self.strategy.ensureUsage(id, record.lastSeenChunk, importance),
-        importance: usage.importance,
-        accessCount: usage.accessCount,
-        averageAccessGap: usage.averageAccessGap,
-        lastAccessAt: usage.lastAccessAt,
-        lastAccessChunk: usage.lastAccessChunk,
-      }
-      const hotEntry = self.buildHotEntry(record, ensuredUsage)
+      // The warm-tier usage object already contains the latest access
+      // statistics. Use it directly but ensure the importance reflects
+      // the freshly extracted value from the record.
+      const mergedUsage = { ...usage, importance }
+      const hotEntry = self.buildHotEntry(record, mergedUsage)
       self.warm.delete(id, { silent: true })
       self.hot.set(id, hotEntry)
       self.placements.set(id, 'hot')
@@ -278,15 +277,9 @@ export class HierarchicalMemoryManager {
         const record = yield* self.fetchRecord(id)
         const importance = self.extractImportance(record)
         self.strategy.updateImportance(id, importance)
-        const ensuredUsage = self.strategy.ensureUsage(id, record.lastSeenChunk, importance)
-        const mergedUsage: CharacterUsageStats = {
-          ...ensuredUsage,
-          accessCount: usage.accessCount,
-          averageAccessGap: usage.averageAccessGap,
-          lastAccessAt: usage.lastAccessAt,
-          lastAccessChunk: usage.lastAccessChunk,
-          importance: usage.importance,
-        }
+        // Use the provided usage stats (from the strategy) and ensure
+        // importance is updated from the freshly fetched record.
+        const mergedUsage: CharacterUsageStats = { ...usage, importance }
         const entry = self.buildWarmEntry(record, mergedUsage)
         self.warm.set(id, entry)
         self.placements.set(id, 'warm')
@@ -381,8 +374,10 @@ export class HierarchicalMemoryManager {
 
   private estimateTokensForRecord(record: CharacterRecord): number {
     const summaryLength = record.summary?.length ?? 0
-    const relationshipsLength = record.relationships.length * 12
-    return Math.ceil((record.canonicalName.length + summaryLength + relationshipsLength) * 0.5)
+    const relationshipsLength = record.relationships.length * this.config.tokenEstimation.relationshipsTokenMultiplier
+    return Math.ceil(
+      (record.canonicalName.length + summaryLength + relationshipsLength) * this.config.compression.tokenCostPerCharacter,
+    )
   }
 
   private bytes(value: string): number {

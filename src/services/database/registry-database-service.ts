@@ -164,7 +164,9 @@ export class RegistryDatabaseService extends BaseDatabaseService {
         character: characterRegistry,
         alias: aliasFts,
   // bm25() returns a numeric score; cast through unknown to a numeric type without using `any`
-  score: sql`bm25(alias_fts)` as unknown as number,
+  // Drizzle's sql<> generic lets us type the expression as a numeric SQL value.
+  // Keep the SQL expression (typed with sql<number>) so Drizzle accepts it as a selectable field.
+  score: sql<number>`bm25(alias_fts)`,
       })
       .from(aliasFts)
       .innerJoin(characterRegistry, eq(aliasFts.charId, characterRegistry.id))
