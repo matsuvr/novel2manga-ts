@@ -136,7 +136,7 @@ graph TB
 
 1. **入力段階**
    - テキスト正規化
-   - エンティティ抽出（非LLM）
+   - エンティティ抽出（ルールベース）
    - ID候補の特定
 
 2. **処理段階**
@@ -148,6 +148,7 @@ graph TB
    - Tier1: 基本抽出（70%完結）
    - Tier2: 曖昧解決（25%）
    - Tier3: 品質保証（5%）
+   - 軽量LLM話者割当: Gemini Flash Lite優先、失敗時にGPT-5 Nanoで補完
 
 4. **出力段階**
    - 構造化データ保存
@@ -431,6 +432,7 @@ export class HierarchicalMemoryManager {
   // === データ取得 ===
   async getCharacterData(id: CharId, level?: CacheLevel): Promise<CharacterData>
   async getRelevantContext(chunk: ChunkId, text: string): Promise<OptimalContext>
+  async getIndexSnapshot(): Promise<CharacterMemoryIndex>
 
   // === キャッシュ管理 ===
   promote(id: string, data: any): void
@@ -450,6 +452,12 @@ export class HierarchicalMemoryManager {
   getCacheHitRate(): number
 }
 ```
+
+> **実装アップデート (2025-02-17)**
+> - `HierarchicalMemoryManager` は Effect TS ベースで実装し、`getCharacterData` および `updateAccessPattern` は `Effect.Effect` を返す非同期ファサードに置き換えた。これにより SQLite レジストリ呼び出しや昇格/降格処理を宣言的に連結可能。
+> - キャッシュ設定は新設した `memory.config.ts` に集約し、ホット/ウォーム階層の最大件数・総メモリ重量・TTL、圧縮長、優先度計算の重みを一元管理している。
+> - `LRUCache` は TTL・総重量・サイレント削除（階層移動時のメトリクス重複記録防止）をサポートし、`CacheStrategy` はアクセス頻度・経過チャンク数・重要度メタデータから目標階層と圧縮レベルを判定する。
+> - `getMemoryStats` / `getCacheMetrics` によりキャッシュヒット率、メモリ削減率（1GiB基準→約75%削減）、昇格・降格・追い出し件数を即時把握でき、統合テストで 3 層キャッシュの連携を検証済み。
 
 #### 4.2.3 CascadeLLMController
 
@@ -483,6 +491,36 @@ export class CascadeLLMController {
   trackUsage(tier: number, tokens: number): void
 }
 ```
+
+> **実装アップデート (2025-09-18)**
+> - 会話の話者推定は `speaker-resolution.ts` に移譲し、Effect TS と LLMルーターによる宣言的な処理チェーンに統一した。
+> - 優先プロバイダーは `gemini-2.5-flash-lite`（超低コスト・低レイテンシ）で、失敗時・信頼度不足時のみ `gpt-5-nano` へフォールバックする。`NODE_ENV === 'test'` ではフェイククライアントを使用して決定論を維持する。
+> - LLMレスポンスは Zod スキーマで検証し、既存の `ResolutionResult` 形式（`dialogueIndex`, `resolvedSpeaker`, `confidence`, `method`）にマッピングして後続処理との互換性を確保した。
+
+#### 4.2.4 SpeakerResolutionモジュール
+
+```typescript
+export function resolveSpeakersEffect(
+  context: SpeakerResolutionContext,
+  config: ResolutionConfig = getDefaultResolutionConfig()
+): Effect.Effect<ResolutionResult[], SpeakerResolutionError> {
+  return Effect.gen(function* () {
+    validateConfig(config)
+    const prompts = buildSpeakerAnalysisPrompt(context)
+    const llmResult = yield* runSpeakerResolutionLlmEffect(context, prompts, config)
+    return mapLlmResultToResolutions(context, llmResult, config)
+  })
+}
+
+export async function resolveSpeakers(
+  context: SpeakerResolutionContext,
+  config: ResolutionConfig = getDefaultResolutionConfig()
+): Promise<ResolutionResult[]> {
+  return Effect.runPromise(resolveSpeakersEffect(context, config))
+}
+```
+
+`SpeakerResolutionモジュール` は Effect TS ベースで LLM の初期化・プロンプト生成・Zod検証・結果マッピングを一括管理する。`applyResolutions` で `ExtractionV2` 構造へ反映することで、チャンク内ダイアログの話者ID・信頼度・メソッドフラグは従来どおりの形式で保持される。
 
 ---
 
@@ -655,7 +693,7 @@ export class V2ProcessingPipeline {
       // Step 1: テキスト正規化
       const normalized = this.normalizer.normalize(chunk)
 
-      // Step 2: エンティティ抽出（非LLM）
+      // Step 2: エンティティ抽出（ルールベース）
       const entities = this.extractor.extract(normalized)
 
       // Step 3: ID解決
@@ -671,21 +709,31 @@ export class V2ProcessingPipeline {
       const extraction = await cascade.process({
         chunkIndex: index,
         maskedText: masked,
-        context: context,
+        context,
         previousResult: results[index - 1]
       })
 
-      // Step 7: 結果の保存と更新
-      await registry.upsertCharacters(extraction.characters)
-      await memory.updateAccessPattern(index, extraction.activeIds)
-      results.push(extraction)
+      // Step 7: 軽量LLMによる話者割当の確定
+      const resolutions = await this.speakerResolver.resolve({
+        text: normalized,
+        dialogues: extraction.dialogues,
+        characterEvents: extraction.characterEvents,
+        memoryIndex: await memory.getIndexSnapshot(),
+        chunkIndex: index
+      })
+      const extractionWithSpeakers = applyResolutions(extraction, resolutions)
 
-      // Step 8: メトリクス記録
+      // Step 8: 結果の保存と更新
+      await registry.upsertCharacters(extractionWithSpeakers.characters)
+      await memory.updateAccessPattern(index, extractionWithSpeakers.activeIds)
+      results.push(extractionWithSpeakers)
+
+      // Step 9: メトリクス記録
       this.metrics.record({
         chunkIndex: index,
-        tokensUsed: extraction.tokensUsed,
-        tierUsed: extraction.tierUsed,
-        confidence: extraction.confidence
+        tokensUsed: extractionWithSpeakers.tokensUsed,
+        tierUsed: extractionWithSpeakers.tierUsed,
+        confidence: extractionWithSpeakers.confidence
       })
     }
 

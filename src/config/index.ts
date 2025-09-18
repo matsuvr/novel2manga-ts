@@ -3,6 +3,7 @@
 // アプリケーション固有設定（プロンプト等）
 export { type AppConfig, appConfig, getAppConfigWithOverrides } from './app.config'
 export { getChunkSummaryConfig } from './chunk-summary.config'
+export { type MemoryConfig, memoryConfig } from './memory.config'
 export { type MypageConfig, mypageConfig } from './mypage.config'
 
 // 旧config-loader依存は廃止（DRYに基づきapp.config/llm.configへ集約）
