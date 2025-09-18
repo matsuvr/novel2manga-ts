@@ -1,4 +1,4 @@
-import type { LayoutTemplate, MangaLayout, Panel } from '@/types/panel-layout'
+import type { LayoutTemplate, MangaLayout, Page, Panel } from '@/types/panel-layout'
 import { selectLayoutTemplateByCountRandom } from '@/utils/layout-templates'
 
 /**
@@ -8,7 +8,7 @@ import { selectLayoutTemplateByCountRandom } from '@/utils/layout-templates'
  * selectLayoutTemplateByCountRandom provides a deterministic grid layout.
  */
 export function applyTemplatesByPanelCount(layout: MangaLayout): MangaLayout {
-  const pages = layout.pages.map((page) => {
+  const pages: Page[] = layout.pages.map((page) => {
     const panelCount = page.panels?.length ?? 0
     if (!panelCount) return page
 
@@ -17,10 +17,52 @@ export function applyTemplatesByPanelCount(layout: MangaLayout): MangaLayout {
     if (templatePanels.length === 0) return page
 
     const remappedPanels = page.panels.map((panel, index) => remapPanel(panel, templatePanels, index))
-    return { ...page, panels: remappedPanels }
+
+    // ページ全体の垂直占有率をチェックし、十分でなければ一括正規化
+    const verticallyNormalized = normalizePanelsVerticalCoverage(remappedPanels)
+    return { ...page, panels: verticallyNormalized }
   })
 
   return { ...layout, pages }
+}
+
+/**
+ * ページ内パネル群の垂直方向占有率を 0..1 に拡張する共通処理。
+ * - 現在の最小 y (minY) と最大 (y+height) (maxY) を測定
+ * - span = maxY - minY が 1 に極めて近い (>=0.999) 場合はそのまま
+ * - それ未満なら (y-minY)/span を新 y、height/span を新 height に変換
+ * - 負値や 1 超過が出ないよう 0〜1 に clamp（丸めは 1e-6 単位）
+ * - 面積比率を保ちながら余白を吸収
+ */
+export function normalizePanelsVerticalCoverage(panels: Panel[]): Panel[] {
+  if (panels.length === 0) return panels
+  const ys = panels.map((p) => ({ y: p.position.y, h: p.size.height }))
+  const minY = Math.min(...ys.map((v) => v.y))
+  const maxY = Math.max(...ys.map((v) => v.y + v.h))
+  const span = maxY - minY
+  if (!(span > 0) || span >= 0.999) return panels
+
+  const scale = 1 / span
+  return panels.map((p) => {
+    const newYRaw = (p.position.y - minY) * scale
+    const newHRaw = p.size.height * scale
+    const newY = clamp01(round6(newYRaw))
+    const newH = clamp01(round6(newHRaw))
+    return {
+      ...p,
+      position: { ...p.position, y: newY },
+      size: { ...p.size, height: newH },
+    }
+  })
+}
+
+function clamp01(v: number): number {
+  if (v < 0) return 0
+  if (v > 1) return 1
+  return v
+}
+function round6(v: number): number {
+  return Number(v.toFixed(6))
 }
 
 function remapPanel(panel: Panel, templatePanels: LayoutTemplate['panels'], index: number): Panel {
@@ -30,9 +72,43 @@ function remapPanel(panel: Panel, templatePanels: LayoutTemplate['panels'], inde
 
   const templatePanel = templatePanels[index % templatePanels.length]
 
-  return {
-    ...panel,
-    position: { ...templatePanel.position },
-    size: { ...templatePanel.size },
+  // Vertical-normalization: if the template panels occupy less than full height
+  // we can scale/stretch their y/height to fill the [0,1] vertical space while
+  // preserving relative band positions. This prevents large bottom whitespace
+  // when samples define top-aligned bands only.
+  try {
+    // compute minY and maxY across templatePanels to find occupied vertical span
+    const ys = templatePanels.map((p) => ({ y: p.position.y, h: p.size.height }))
+    const minY = Math.min(...ys.map((v) => v.y))
+    const maxY = Math.max(...ys.map((v) => v.y + v.h))
+
+    // if span is nearly full, just use the template as-is
+    const span = maxY - minY
+    if (span >= 0.999999) {
+      return {
+        ...panel,
+        position: { ...templatePanel.position },
+        size: { ...templatePanel.size },
+      }
+    }
+
+    // Otherwise, scale y and height to fill [0,1]
+    const relY = (templatePanel.position.y - minY) / (span || 1)
+    const relH = templatePanel.size.height / (span || 1)
+    const newY = Number((relY * 1).toFixed(6))
+    const newH = Number((relH * 1).toFixed(6))
+
+    return {
+      ...panel,
+      position: { x: templatePanel.position.x, y: newY },
+      size: { width: templatePanel.size.width, height: newH },
+    }
+  } catch {
+    // On any unexpected issue, fall back to original mapping
+    return {
+      ...panel,
+      position: { ...templatePanel.position },
+      size: { ...templatePanel.size },
+    }
   }
 }
