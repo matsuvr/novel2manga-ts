@@ -47,6 +47,14 @@
 - Importance-based calculator exposes remaining importance even for empty scripts and clamps segment page offsets to avoid negative numbering.
 
 
+## Speaker Resolution
+
+- Dialogue speaker attribution no longer relies on regex heuristics. An Effect-based pipeline now calls lightweight LLMs (Gemini 2.5 Flash Lite with fallback to GPT-5 Nano) to extract speaker candidates and other named entities from each chunk.
+- The LLM response is validated against a strict Zod schema before being mapped to existing character memories, ensuring downstream consumers continue receiving the same `ResolutionResult` format.
+- Configuration is centralized: provider preferences, token limits, and continuation heuristics live in `speaker-resolution.ts` and can be overridden per environment (tests automatically use the fake provider).
+- Named entities returned by the model are logged for observability, and unresolved lines still fall back to the previous-speaker heuristic when narration gaps are short.
+
+
 ## My Page Dashboard
 
 - Dashboard data retrieval moved to `getMypageDashboard` service for reuse.

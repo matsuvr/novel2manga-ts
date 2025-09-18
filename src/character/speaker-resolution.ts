@@ -1,11 +1,19 @@
 /**
  * Dialogue Speaker Resolution
- * Heuristic resolution for unknown speakers in dialogues
+ * LLM-assisted resolution for unknown speakers in dialogues
  */
 
-import { COMMON_JAPANESE_WORDS } from '@/character/character.config'
+import { Effect } from 'effect'
+import { z } from 'zod'
+import { defaultBaseUrl } from '@/agents/llm/base-url'
+import { createLlmClient, type ProviderConfig as LlmProviderConfig } from '@/agents/llm/router'
+import type { LlmClient } from '@/agents/llm/types'
+import { JAPANESE_HONORIFICS } from '@/character/character.config'
+import { getLLMProviderConfig } from '@/config/llm.config'
+import { getLogger } from '@/infrastructure/logging/logger'
 import {
   type CharacterId,
+  type CharacterMemory,
   type CharacterMemoryIndex,
   type DialogueV2,
   type ExtractionV2,
@@ -35,264 +43,124 @@ export interface ResolutionResult {
   method: 'explicit' | 'proximity' | 'verb_pattern' | 'context' | 'last_speaker' | 'unresolved'
 }
 
-/**
- * Configuration for speaker resolution
- */
+export interface LlmProviderPreference {
+  provider: 'gemini' | 'openai' | 'fake'
+  model?: string
+}
+
 export interface ResolutionConfig {
-  proximityWindow: number // Characters to look before/after for speaker hints
-  enableVerbPatterns: boolean
-  enableLastSpeaker: boolean
   minConfidenceThreshold: number
-}
-
-const DEFAULT_CONFIG: ResolutionConfig = {
-  proximityWindow: 100,
-  enableVerbPatterns: true,
-  enableLastSpeaker: true,
-  minConfidenceThreshold: 0.6,
-}
-
-/**
- * Japanese verb patterns that indicate speech
- */
-const SPEECH_VERB_PATTERNS = [
-  // Direct speech patterns
-  { pattern: /(.{1,20})[がは]言った/, group: 1, confidence: 0.9 },
-  { pattern: /(.{1,20})[がは]答えた/, group: 1, confidence: 0.9 },
-  { pattern: /(.{1,20})[がは]尋ねた/, group: 1, confidence: 0.9 },
-  { pattern: /(.{1,20})[がは]聞いた/, group: 1, confidence: 0.85 },
-  { pattern: /(.{1,20})[がは]叫んだ/, group: 1, confidence: 0.9 },
-  { pattern: /(.{1,20})[がは]囁いた/, group: 1, confidence: 0.9 },
-  { pattern: /(.{1,20})[がは]つぶやいた/, group: 1, confidence: 0.9 },
-  { pattern: /(.{1,20})[がは]返した/, group: 1, confidence: 0.85 },
-  { pattern: /(.{1,20})[がは]続けた/, group: 1, confidence: 0.8 },
-  { pattern: /(.{1,20})[がは]語った/, group: 1, confidence: 0.85 },
-  { pattern: /(.{1,20})[がは]説明した/, group: 1, confidence: 0.85 },
-  { pattern: /(.{1,20})[がは]訴えた/, group: 1, confidence: 0.85 },
-
-  // Patterns with と
-  { pattern: /「.+」と(.{1,20})[がは]/, group: 1, confidence: 0.85 },
-  { pattern: /(.{1,20})は「/, group: 1, confidence: 0.8 },
-  { pattern: /(.{1,20})が「/, group: 1, confidence: 0.8 },
-
-  // Contextual patterns
-  { pattern: /(.{1,20})の声[がで]/, group: 1, confidence: 0.85 },
-  { pattern: /(.{1,20})の言葉/, group: 1, confidence: 0.8 },
-  { pattern: /(.{1,20})からの返事/, group: 1, confidence: 0.85 },
-]
-
-/**
- * Extract potential speaker from text around dialogue
- */
-function extractSpeakerFromProximity(
-  text: string,
-  dialogueIndex: number,
-  window: number,
-): { speaker: string | null; confidence: number; method: 'proximity' | 'verb_pattern' } {
-  // Get text around the dialogue position
-  const start = Math.max(0, dialogueIndex - window)
-  const end = Math.min(text.length, dialogueIndex + window)
-  const contextText = text.substring(start, end)
-
-  // Try verb patterns first
-  for (const { pattern, group, confidence } of SPEECH_VERB_PATTERNS) {
-    const match = contextText.match(pattern)
-    if (match?.[group]) {
-      const speaker = match[group].trim()
-      // Filter out non-character names (particles, common words, etc.)
-      if (speaker && !isCommonWord(speaker) && speaker.length >= 2) {
-        return { speaker, confidence, method: 'verb_pattern' }
-      }
-    }
+  llm: {
+    maxTokens: number
+    providerPreferences: LlmProviderPreference[]
   }
-
-  // Try proximity-based extraction (find nearest proper noun)
-  const properNounPattern = /([一-龯ァ-ヶー]{2,10})(?:[さん様君ちゃん殿氏先生])?/g
-  const matches = Array.from(contextText.matchAll(properNounPattern))
-
-  if (matches.length > 0) {
-    // Find the closest match to the dialogue position
-    let closestMatch = matches[0]
-    let minDistance = Math.abs((matches[0].index ?? window) - window)
-
-    for (const match of matches) {
-      const distance = Math.abs((match.index ?? window) - window)
-      if (distance < minDistance && !isCommonWord(match[1])) {
-        closestMatch = match
-        minDistance = distance
-      }
-    }
-
-    if (closestMatch[1] && !isCommonWord(closestMatch[1])) {
-      // Confidence decreases with distance
-      const confidence = Math.max(0.4, 0.8 - (minDistance / window) * 0.4)
-      return { speaker: closestMatch[1], confidence, method: 'proximity' }
-    }
+  continuation: {
+    maxCharacterGap: number
+    forbidSentenceDelimiters: readonly string[]
+    confidence: number
   }
-
-  return { speaker: null, confidence: 0, method: 'proximity' }
 }
 
+const DEFAULT_MIN_CONFIDENCE_THRESHOLD = 0.6
+const DEFAULT_LLM_CONFIDENCE = 0.4
+const SPEAKER_ANALYSIS_MAX_TOKENS = 1_200
+const CONTINUATION_SENTENCE_DELIMITERS = ['。', '？', '！'] as const
+const CONTINUATION_MAX_GAP = 50
+const CONTINUATION_CONFIDENCE = 0.5
+const KNOWN_CHARACTER_LIMIT = 12
+
+const DEFAULT_PROVIDER_PREFERENCES: readonly LlmProviderPreference[] = [
+  { provider: 'gemini', model: 'gemini-2.5-flash-lite' },
+  { provider: 'openai', model: 'gpt-5-nano' },
+] as const
+
 /**
- * Check if a word is a common word that shouldn't be treated as a character name
+ * Default configuration factory (creates fresh instances to avoid mutation leaks)
  */
-function isCommonWord(word: string): boolean {
-  return COMMON_JAPANESE_WORDS.includes(word)
+export function getDefaultResolutionConfig(): ResolutionConfig {
+  const providerPreferences =
+    process.env.NODE_ENV === 'test'
+      ? ([{ provider: 'fake' }] satisfies LlmProviderPreference[])
+      : DEFAULT_PROVIDER_PREFERENCES.map((preference) => ({ ...preference }))
+
+  return {
+    minConfidenceThreshold: DEFAULT_MIN_CONFIDENCE_THRESHOLD,
+    llm: {
+      maxTokens: SPEAKER_ANALYSIS_MAX_TOKENS,
+      providerPreferences,
+    },
+    continuation: {
+      maxCharacterGap: CONTINUATION_MAX_GAP,
+      forbidSentenceDelimiters: [...CONTINUATION_SENTENCE_DELIMITERS],
+      confidence: CONTINUATION_CONFIDENCE,
+    },
+  }
 }
 
-/**
- * Find character ID by name
- */
-function findCharacterByName(name: string, memoryIndex: CharacterMemoryIndex): CharacterId | null {
-  // Normalize the name for comparison
-  const normalizedName = name.toLowerCase().trim()
-
-  for (const [id, memory] of memoryIndex) {
-    for (const memName of memory.names) {
-      if (
-        memName.toLowerCase().includes(normalizedName) ||
-        normalizedName.includes(memName.toLowerCase())
-      ) {
-        return id
-      }
-    }
-  }
-
-  return null
-}
-
-/**
- * Resolve unknown speakers using context
- */
-function resolveByContext(
-  dialogue: DialogueV2,
-  _dialogueIndex: number,
-  context: SpeakerResolutionContext,
-): { speaker: CharacterId | TempCharacterId | null; confidence: number } {
-  // Check recent character events for context
-  const recentEvents = context.characterEvents.filter((event) => {
-    // Events near this dialogue
-    return Math.abs(event.index - dialogue.index) < 200
-  })
-
-  // If only one character is active nearby, likely them
-  if (recentEvents.length === 1 && recentEvents[0].characterId !== '不明') {
-    return { speaker: recentEvents[0].characterId, confidence: 0.7 }
-  }
-
-  // Check for emotion/action correlation
-  if (dialogue.emotion && dialogue.emotion !== '不明') {
-    for (const event of recentEvents) {
-      if (
-        event.action.includes(dialogue.emotion) ||
-        (dialogue.emotion === '怒り' && event.action.includes('怒')) ||
-        (dialogue.emotion === '悲しみ' && event.action.includes('泣')) ||
-        (dialogue.emotion === '喜び' && event.action.includes('笑'))
-      ) {
-        if (!isUnknownSpeaker(event.characterId)) {
-          return { speaker: event.characterId, confidence: 0.65 }
-        }
-      }
-    }
-  }
-
-  return { speaker: null, confidence: 0 }
-}
-
-/**
- * Main speaker resolution function
- */
-export function resolveSpeakers(
-  context: SpeakerResolutionContext,
-  config: ResolutionConfig = DEFAULT_CONFIG,
-): ResolutionResult[] {
-  const results: ResolutionResult[] = []
-  let lastResolvedSpeaker: CharacterId | TempCharacterId | null = null
-
-  for (let i = 0; i < context.dialogues.length; i++) {
-    const dialogue = context.dialogues[i]
-
-    // Skip if already resolved
-    if (!isUnknownSpeaker(dialogue.speakerId)) {
-      results.push({
-        dialogueIndex: i,
-        originalSpeaker: dialogue.speakerId,
-        resolvedSpeaker: dialogue.speakerId,
-        confidence: 1.0,
-        method: 'explicit',
-      })
-      lastResolvedSpeaker = dialogue.speakerId
-      continue
-    }
-
-    // Try verb pattern and proximity resolution
-    const proximityResult = extractSpeakerFromProximity(
-      context.text,
-      dialogue.index,
-      config.proximityWindow,
+const SpeakerResolutionSchema = z.object({
+  dialogues: z
+    .array(
+      z.object({
+        dialogueIndex: z.number().int().min(0),
+        speakerName: z
+          .string()
+          .trim()
+          .min(1)
+          .nullable()
+          .optional(),
+        speakerType: z
+          .enum(['person', 'group', 'organization', 'location', 'unknown'])
+          .default('unknown'),
+        confidence: z.number().min(0).max(1).optional(),
+        reasoning: z.string().optional(),
+      }),
     )
+    .default([]),
+  namedEntities: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1),
+        type: z.enum(['person', 'location', 'organization', 'object', 'unknown']).default('unknown'),
+      }),
+    )
+    .default([]),
+})
 
-    if (proximityResult.speaker && proximityResult.confidence >= config.minConfidenceThreshold) {
-      // Try to match with known character
-      const characterId = findCharacterByName(proximityResult.speaker, context.memoryIndex)
+type SpeakerResolutionPayload = z.infer<typeof SpeakerResolutionSchema>
+type LlmDialogueResolution = SpeakerResolutionPayload['dialogues'][number]
 
-      if (characterId) {
-        results.push({
-          dialogueIndex: i,
-          originalSpeaker: dialogue.speakerId,
-          resolvedSpeaker: characterId,
-          confidence: proximityResult.confidence,
-          method: proximityResult.method,
-        })
-        lastResolvedSpeaker = characterId
-        continue
-      }
-    }
+type SpeakerEntityType = LlmDialogueResolution['speakerType']
 
-    // Try context-based resolution
-    const contextResult = resolveByContext(dialogue, i, context)
-    if (contextResult.speaker && contextResult.confidence >= config.minConfidenceThreshold) {
-      results.push({
-        dialogueIndex: i,
-        originalSpeaker: dialogue.speakerId,
-        resolvedSpeaker: contextResult.speaker,
-        confidence: contextResult.confidence,
-        method: 'context',
-      })
-      lastResolvedSpeaker = contextResult.speaker
-      continue
-    }
-
-    // Try last speaker heuristic (for continuous dialogue)
-    if (config.enableLastSpeaker && lastResolvedSpeaker && i > 0) {
-      // Check if this seems like continuous dialogue
-      const prevDialogue = context.dialogues[i - 1]
-      const textBetween = context.text.substring(prevDialogue.index, dialogue.index)
-
-      // If there's minimal narration between dialogues, might be same speaker
-      if (textBetween.length < 50 && !textBetween.includes('。')) {
-        results.push({
-          dialogueIndex: i,
-          originalSpeaker: dialogue.speakerId,
-          resolvedSpeaker: lastResolvedSpeaker,
-          confidence: 0.5,
-          method: 'last_speaker',
-        })
-        continue
-      }
-    }
-
-    // Unable to resolve
-    results.push({
-      dialogueIndex: i,
-      originalSpeaker: dialogue.speakerId,
-      resolvedSpeaker: '不明',
-      confidence: 0,
-      method: 'unresolved',
-    })
+export class SpeakerResolutionError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options)
+    this.name = 'SpeakerResolutionError'
   }
+}
 
-  return results
+/**
+ * Main speaker resolution function (Effect-based)
+ */
+export function resolveSpeakersEffect(
+  context: SpeakerResolutionContext,
+  config: ResolutionConfig = getDefaultResolutionConfig(),
+): Effect.Effect<ResolutionResult[], SpeakerResolutionError> {
+  return Effect.gen(function* () {
+    validateConfig(config)
+    const prompts = buildSpeakerAnalysisPrompt(context)
+    const llmResult = yield* runSpeakerResolutionLlmEffect(context, prompts, config)
+    return mapLlmResultToResolutions(context, llmResult, config)
+  })
+}
+
+/**
+ * Promise wrapper around the Effect-based implementation
+ */
+export async function resolveSpeakers(
+  context: SpeakerResolutionContext,
+  config: ResolutionConfig = getDefaultResolutionConfig(),
+): Promise<ResolutionResult[]> {
+  return Effect.runPromise(resolveSpeakersEffect(context, config))
 }
 
 /**
@@ -301,7 +169,7 @@ export function resolveSpeakers(
 export function applyResolutions(
   extraction: ExtractionV2,
   resolutions: ResolutionResult[],
-  minConfidence = 0.6,
+  minConfidence = DEFAULT_MIN_CONFIDENCE_THRESHOLD,
 ): ExtractionV2 {
   const resolvedDialogues = extraction.dialogues.map((dialogue, index) => {
     const resolution = resolutions.find((r) => r.dialogueIndex === index)
@@ -360,4 +228,360 @@ export function getResolutionStats(resolutions: ResolutionResult[]): {
   stats.averageConfidence = stats.total > 0 ? totalConfidence / stats.total : 0
 
   return stats
+}
+
+interface SpeakerAnalysisPrompt {
+  systemPrompt: string
+  userPrompt: string
+}
+
+function buildSpeakerAnalysisPrompt(context: SpeakerResolutionContext): SpeakerAnalysisPrompt {
+  const knownCharacters = formatKnownCharacters(context.memoryIndex)
+  const dialogueLines = context.dialogues
+    .map(
+      (dialogue, index) =>
+        `- index: ${index}\n  offset: ${dialogue.index}\n  text: ${dialogue.text.replace(/\n/g, ' ')}`,
+    )
+    .join('\n')
+
+  const systemPrompt = [
+    'あなたは日本語の小説テキストから固有名詞を抽出し、会話の話者を推論する専門家です。',
+    '出力は必ず指定された JSON スキーマに従ってください。',
+    '会話で発話している人物が誰なのか、場所名や組織名などの固有名詞も合わせて整理します。',
+  ].join('\n')
+
+  const userPromptSections = [
+    '## 本文',
+    context.text.trim(),
+    '',
+    '## 既知の登場人物候補 (ID: 名前・別名)',
+    knownCharacters || 'なし',
+    '',
+    '## 会話一覧',
+    dialogueLines || '会話は存在しません',
+    '',
+    '## 指示',
+    [
+      '1. 会話ごとに最も自然な話者名を推定し、人物以外の場合は種類を明示してください。',
+      '2. 特定できない場合は speakerName を null にし、confidence は 0.0 にしてください。',
+      '3. namedEntities には本文から抽出した登場人物名・場所名・組織名を重複なく列挙してください。',
+      '4. confidence は 0.0 から 1.0 の範囲で、判断根拠の確からしさを示してください。',
+      '5. speakerName に敬称が含まれる場合でも、そのまま記載してください。',
+    ].join('\n'),
+  ]
+
+  return {
+    systemPrompt,
+    userPrompt: userPromptSections.join('\n'),
+  }
+}
+
+function formatKnownCharacters(memoryIndex: CharacterMemoryIndex): string {
+  const entries: CharacterMemory[] = Array.from(memoryIndex.values())
+  if (entries.length === 0) return ''
+
+  const sorted = entries
+    .slice()
+    .sort((a, b) => b.lastSeenChunk - a.lastSeenChunk)
+    .slice(0, KNOWN_CHARACTER_LIMIT)
+
+  return sorted
+    .map((memory) => {
+      const names = Array.from(memory.names)
+      const primaryName = names[0] ?? memory.id
+      const aliases = names.slice(1).join(' / ')
+      return aliases ? `${memory.id}: ${primaryName} / ${aliases}` : `${memory.id}: ${primaryName}`
+    })
+    .join('\n')
+}
+
+function runSpeakerResolutionLlmEffect(
+  context: SpeakerResolutionContext,
+  prompts: SpeakerAnalysisPrompt,
+  config: ResolutionConfig,
+): Effect.Effect<SpeakerResolutionPayload, SpeakerResolutionError> {
+  const logger = getLogger().withContext({
+    service: 'speaker-resolution',
+    chunkIndex: context.chunkIndex,
+  })
+
+  return Effect.gen(function* () {
+    if (config.llm.providerPreferences.length === 0) {
+      throw new SpeakerResolutionError('No LLM providers configured for speaker resolution')
+    }
+
+    let lastError: SpeakerResolutionError | null = null
+
+    for (const preference of config.llm.providerPreferences) {
+      try {
+        const client = yield* instantiateClientEffect(preference)
+        logger.info('Attempting speaker resolution via LLM', {
+          provider: client.provider,
+          model: preference.model,
+        })
+
+        const raw = yield* Effect.tryPromise({
+          try: () =>
+            client.generateStructured<SpeakerResolutionPayload>({
+              systemPrompt: prompts.systemPrompt,
+              userPrompt: prompts.userPrompt,
+              spec: {
+                schema: SpeakerResolutionSchema,
+                schemaName: 'SpeakerResolutionResult',
+              },
+              options: { maxTokens: config.llm.maxTokens },
+              telemetry: {
+                agentName: 'speaker-resolution',
+                chunkIndex: context.chunkIndex,
+              },
+            }),
+          catch: (error) =>
+            new SpeakerResolutionError(
+              `LLM generation failed for provider ${client.provider}`,
+              { cause: error },
+            ),
+        })
+
+        const parsed = SpeakerResolutionSchema.safeParse(raw)
+        if (!parsed.success) {
+          throw new SpeakerResolutionError(
+            `LLM response schema mismatch for provider ${client.provider}`,
+            { cause: parsed.error },
+          )
+        }
+
+        if (parsed.data.namedEntities.length > 0) {
+          logger.debug('Named entities extracted', {
+            entities: parsed.data.namedEntities.map((entity) => ({
+              name: entity.name,
+              type: entity.type,
+            })),
+          })
+        }
+
+        return parsed.data
+      } catch (error) {
+        const resolutionError =
+          error instanceof SpeakerResolutionError
+            ? error
+            : new SpeakerResolutionError('Unexpected error during speaker resolution', {
+                cause: error,
+              })
+        lastError = resolutionError
+        logger.warn('Speaker resolution provider attempt failed', {
+          provider: preference.provider,
+          model: preference.model,
+          error: resolutionError.message,
+        })
+      }
+    }
+
+    throw lastError ??
+      new SpeakerResolutionError('All configured LLM providers failed for speaker resolution')
+  })
+}
+
+function instantiateClientEffect(
+  preference: LlmProviderPreference,
+): Effect.Effect<LlmClient, SpeakerResolutionError> {
+  return Effect.try({
+    try: () => instantiateClient(preference),
+    catch: (error) =>
+      new SpeakerResolutionError(
+        `Failed to initialize client for provider ${preference.provider}`,
+        { cause: error },
+      ),
+  })
+}
+
+function instantiateClient(preference: LlmProviderPreference): LlmClient {
+  if (preference.provider === 'fake') {
+    return createLlmClient({ provider: 'fake' })
+  }
+
+  if (preference.provider === 'gemini') {
+    const cfg = getLLMProviderConfig('gemini')
+    if (!cfg.vertexai) {
+      throw new Error('Gemini provider requires Vertex AI configuration')
+    }
+    const { project, location, serviceAccountPath } = cfg.vertexai
+    if (!project || !location) {
+      throw new Error('Vertex AI configuration must include project and location')
+    }
+    const clientConfig: LlmProviderConfig = {
+      provider: 'gemini',
+      model: preference.model ?? cfg.model,
+      project,
+      location,
+      serviceAccountPath,
+    }
+    return createLlmClient(clientConfig)
+  }
+
+  if (preference.provider === 'openai') {
+    const cfg = getLLMProviderConfig('openai')
+    if (!cfg.apiKey) {
+      throw new Error('OpenAI provider requires an API key for speaker resolution')
+    }
+    const model = preference.model ?? cfg.model
+    const clientConfig: LlmProviderConfig = {
+      provider: 'openai',
+      apiKey: cfg.apiKey,
+      model,
+      baseUrl: cfg.baseUrl ?? defaultBaseUrl('openai'),
+      useChatCompletions: !/^gpt-5/i.test(model),
+    }
+    return createLlmClient(clientConfig)
+  }
+
+  throw new Error(`Unsupported provider preference: ${preference.provider}`)
+}
+
+function mapLlmResultToResolutions(
+  context: SpeakerResolutionContext,
+  llmResult: SpeakerResolutionPayload,
+  config: ResolutionConfig,
+): ResolutionResult[] {
+  const dialogueMap = new Map<number, LlmDialogueResolution>()
+  for (const item of llmResult.dialogues) {
+    if (Number.isInteger(item.dialogueIndex) && item.dialogueIndex >= 0) {
+      dialogueMap.set(item.dialogueIndex, item)
+    }
+  }
+
+  const results: ResolutionResult[] = []
+  let lastResolvedSpeaker: CharacterId | TempCharacterId | null = null
+
+  for (let i = 0; i < context.dialogues.length; i++) {
+    const dialogue = context.dialogues[i]
+
+    if (!isUnknownSpeaker(dialogue.speakerId)) {
+      results.push({
+        dialogueIndex: i,
+        originalSpeaker: dialogue.speakerId,
+        resolvedSpeaker: dialogue.speakerId,
+        confidence: 1,
+        method: 'explicit',
+      })
+      lastResolvedSpeaker = dialogue.speakerId
+      continue
+    }
+
+    const llmCandidate = dialogueMap.get(i)
+    const candidateSpeakerName = normalizeCandidateName(llmCandidate?.speakerName)
+    const candidateType = llmCandidate?.speakerType ?? 'unknown'
+    const candidateConfidence = clampConfidence(llmCandidate?.confidence)
+
+    if (candidateSpeakerName && isResolvableSpeakerType(candidateType)) {
+      const matchedId = findCharacterByName(candidateSpeakerName, context.memoryIndex)
+      if (matchedId && candidateConfidence >= config.minConfidenceThreshold) {
+        results.push({
+          dialogueIndex: i,
+          originalSpeaker: dialogue.speakerId,
+          resolvedSpeaker: matchedId,
+          confidence: candidateConfidence,
+          method: 'context',
+        })
+        lastResolvedSpeaker = matchedId
+        continue
+      }
+    }
+
+    if (
+      lastResolvedSpeaker &&
+      shouldInheritLastSpeaker(context, i, config.continuation)
+    ) {
+      results.push({
+        dialogueIndex: i,
+        originalSpeaker: dialogue.speakerId,
+        resolvedSpeaker: lastResolvedSpeaker,
+        confidence: config.continuation.confidence,
+        method: 'last_speaker',
+      })
+      continue
+    }
+
+    results.push({
+      dialogueIndex: i,
+      originalSpeaker: dialogue.speakerId,
+      resolvedSpeaker: '不明',
+      confidence: 0,
+      method: 'unresolved',
+    })
+  }
+
+  return results
+}
+
+function shouldInheritLastSpeaker(
+  context: SpeakerResolutionContext,
+  index: number,
+  continuation: ResolutionConfig['continuation'],
+): boolean {
+  if (index === 0) return false
+  const prevDialogue = context.dialogues[index - 1]
+  const currentDialogue = context.dialogues[index]
+  const gapText = context.text.substring(prevDialogue.index, currentDialogue.index)
+  if (gapText.length > continuation.maxCharacterGap) {
+    return false
+  }
+  return !continuation.forbidSentenceDelimiters.some((delimiter) => gapText.includes(delimiter))
+}
+
+function normalizeCandidateName(name: string | null | undefined): string | null {
+  if (!name) return null
+  let normalized = name.trim()
+  for (const honorific of JAPANESE_HONORIFICS) {
+    if (normalized.endsWith(honorific)) {
+      normalized = normalized.slice(0, -honorific.length)
+      break
+    }
+  }
+  return normalized.trim() || null
+}
+
+function clampConfidence(confidence: number | undefined): number {
+  if (typeof confidence !== 'number' || Number.isNaN(confidence)) {
+    return DEFAULT_LLM_CONFIDENCE
+  }
+  return Math.min(1, Math.max(0, confidence))
+}
+
+function isResolvableSpeakerType(type: SpeakerEntityType): boolean {
+  return type === 'person' || type === 'group' || type === 'organization'
+}
+
+function findCharacterByName(
+  name: string,
+  memoryIndex: CharacterMemoryIndex,
+): CharacterId | null {
+  const normalizedName = name.toLowerCase().trim()
+  if (!normalizedName) return null
+
+  for (const [id, memory] of memoryIndex) {
+    for (const memName of memory.names) {
+      const normalizedMemoryName = memName.toLowerCase().trim()
+      if (
+        normalizedMemoryName &&
+        (normalizedMemoryName.includes(normalizedName) ||
+          normalizedName.includes(normalizedMemoryName))
+      ) {
+        return id
+      }
+    }
+  }
+
+  return null
+}
+
+function validateConfig(config: ResolutionConfig): void {
+  if (config.llm.maxTokens <= 0) {
+    throw new SpeakerResolutionError('llm.maxTokens must be a positive number')
+  }
+  if (config.llm.providerPreferences.length === 0) {
+    throw new SpeakerResolutionError('At least one LLM provider must be configured')
+  }
+  if (config.continuation.maxCharacterGap < 0) {
+    throw new SpeakerResolutionError('continuation.maxCharacterGap must be non-negative')
+  }
 }
