@@ -38,6 +38,8 @@
 ## Speech Bubble Placement
 
 - When a panel contains two dialogue or narration elements, the first bubble is positioned on the right and the second on the left to follow vertical Japanese reading order.
+- Speaker labels rendered on the bubble's top-right corner now use a 2× font ratio and expanded padding/radius so the rounded rectangle matches the larger text footprint.
+- Situation captions reuse the placement padding when drawing their rounded background, ensuring the box hugs the measured multiline text without clipping.
 
 ## Page Break Estimation
 
