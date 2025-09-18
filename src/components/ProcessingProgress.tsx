@@ -504,7 +504,6 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
               | { job?: Job }
             const jobPayload =
               (json as JobData).job ??
-              (json as { job?: Job }).job ??
               (json as { data?: { job?: Job } }).data?.job
             if (!jobPayload) return
             lastJobRef.current = jobPayload
