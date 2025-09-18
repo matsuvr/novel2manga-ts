@@ -49,6 +49,12 @@ class SQLiteRegistry {
 - `sqlite-adapter.test.ts` (300行)
 - `schema.sql` (150行)
 
+#### 実装メモ (2025-09-18)
+- `src/v2/registry/sqlite-adapter.ts` と `RegistryDatabaseService` を Effect ベースで実装し、Drizzle 経由で upsert / 検索 / chunk state 更新を共通化。
+- `src/db/schema.ts` と `drizzle/0015_token_reduction_phase1.sql` に Phase 1 向けテーブル (`character_registry`, `scene_registry`, `chunk_state`, `alias_fts`) を追加。
+- ユニットテスト `src/__tests__/v2/token-reduction.phase1.test.ts` で upsert, FTS 検索, chunk state 永続化を検証。
+- パフォーマンステスト (1000キャラ・100ms 目標) は次フェーズでベンチ環境を構築予定。
+
 ---
 
 ### Task 1.2: テキスト前処理パイプライン
@@ -92,6 +98,11 @@ class EntityExtractor {
 - `japanese-patterns.ts` (150行)
 - テストスイート (400行)
 
+#### 実装メモ (2025-09-18)
+- `TextNormalizer` が NFKC 正規化・空白圧縮・括弧保護を提供。設定は `tokenReductionConfig.preprocessing` に集約。
+- `EntityExtractor` が人名/敬称/代名詞/所在地を抽出。パターン定義を `japanese-patterns.ts` に分離し再利用可能化。
+- 正規化・抽出の基礎ケースを `token-reduction.phase1.test.ts` でテスト。精度 80% 評価とベンチ計測は次フェーズ課題。
+
 ---
 
 ### Task 1.3: ID解決システム
@@ -133,6 +144,11 @@ class IdResolver {
 - `id-resolver.ts` (250行)
 - `scoring-algorithm.ts` (150行)
 - `id-resolver.test.ts` (200行)
+
+#### 実装メモ (2025-09-18)
+- `IdResolver` を Effect コンポーネントとして作成し、`SQLiteRegistry` の FTS 結果に対して alias / recency / confidence の重み付きスコアリングを実装。
+- 閾値・重みは `tokenReductionConfig.resolver` に定義し、運用時の調整を容易化。
+- ユニットテストで最近参照と手動ヒントがスコアに反映されることを検証。精度 85% 以上のオフライン評価は今後の TODO。
 
 ---
 
@@ -922,4 +938,3 @@ canary:
    - サポート体制確立 ✓
 
 ---
-

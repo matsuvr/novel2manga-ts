@@ -11,6 +11,7 @@ import { LayoutDatabaseService } from './layout-database-service'
 import { NovelDatabaseService } from './novel-database-service'
 import { OutputDatabaseService } from './output-database-service'
 import { RenderDatabaseService } from './render-database-service'
+import { RegistryDatabaseService } from './registry-database-service'
 import { TokenUsageDatabaseService } from './token-usage-database-service'
 import { type Database, TransactionService } from './transaction-service'
 
@@ -30,6 +31,7 @@ export class DatabaseServiceFactory {
   private readonly renderService: RenderDatabaseService
   private readonly layoutService: LayoutDatabaseService
   private readonly tokenUsageService: TokenUsageDatabaseService
+  private readonly registryService: RegistryDatabaseService
   private readonly transactionService: TransactionService
   private readonly db: Database
   private readonly adapter: DatabaseAdapter
@@ -47,6 +49,7 @@ export class DatabaseServiceFactory {
     this.renderService = new RenderDatabaseService(this.db, this.adapter)
     this.layoutService = new LayoutDatabaseService(this.db, this.adapter)
     this.tokenUsageService = new TokenUsageDatabaseService(this.db, this.adapter)
+    this.registryService = new RegistryDatabaseService(this.db, this.adapter)
     this.transactionService = new TransactionService(this.db, this.adapter)
   }
 
@@ -94,6 +97,13 @@ export class DatabaseServiceFactory {
   }
 
   /**
+   * Get registry-specific database operations for v2 token reduction architecture
+   */
+  registry(): RegistryDatabaseService {
+    return this.registryService
+  }
+
+  /**
    * Get render-specific database operations
    */
   render(): RenderDatabaseService {
@@ -135,6 +145,7 @@ export class DatabaseServiceFactory {
       render: RenderDatabaseService
       layout: LayoutDatabaseService
       tokenUsage: TokenUsageDatabaseService
+      registry: RegistryDatabaseService
       tx: TransactionService
     }) => T | Promise<T>,
   ): Promise<T> {
@@ -148,6 +159,7 @@ export class DatabaseServiceFactory {
       const render = new RenderDatabaseService(this.db, this.adapter)
       const layout = new LayoutDatabaseService(this.db, this.adapter)
       const tokenUsage = new TokenUsageDatabaseService(this.db, this.adapter)
+      const registry = new RegistryDatabaseService(this.db, this.adapter)
 
       return operation({
         episodes,
@@ -157,8 +169,9 @@ export class DatabaseServiceFactory {
         outputs,
         render,
         layout,
-        tx: this.transactionService,
         tokenUsage,
+        registry,
+        tx: this.transactionService,
       })
     })
   }
