@@ -3,9 +3,8 @@
  * 複数のサービス層の協調動作をテスト
  */
 
-import { vi } from 'vitest'
-
 // Import for mocking
+// Note: 'vi' and 'describe' are imported later; avoid duplicate imports here
 import { convertEpisodeTextToScript } from '@/agents/script/script-converter'
 
 // LLM structured generator モック - エラーの根本原因を解決
@@ -186,7 +185,7 @@ vi.mock('@/config', () => ({
 }))
 
 import crypto from 'node:crypto'
-import { afterEach, describe as baseDescribe, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe as baseDescribe, beforeEach, expect, it, vi } from 'vitest'
 import { users as schemaUsers } from '@/db/schema'
 // AnalyzePipeline は下のモック適用後に動的import
 import {
