@@ -173,6 +173,7 @@ async function resolveEpisodeData(
  */
 async function buildChunkData(
   episode: {
+    novelId: string
     episodeNumber: number
     jobId: string
     startChunk: number
@@ -238,12 +239,12 @@ async function buildChunkData(
       const analysisStorage = await StorageFactory.getAnalysisStorage()
 
       for (let i = ensured.startChunk; i <= ensured.endChunk; i++) {
-        const chunkContent = await ports.chunk.getChunk(ensured.jobId, i)
+        const chunkContent = await ports.chunk.getChunk(ensured.novelId, ensured.jobId, i)
         if (!chunkContent) {
           logger.error('Chunk not found', { chunkIndex: i })
           throw new Error(`Chunk ${i} not found for job ${ensured.jobId}`)
         }
-        const obj = await ports.analysis.getAnalysis(ensured.jobId, i)
+        const obj = await ports.analysis.getAnalysis(ensured.novelId, ensured.jobId, i)
         if (!obj) {
           logger.error('Analysis not found', { chunkIndex: i })
           throw new Error(`Analysis not found for chunk ${i}`)
@@ -265,7 +266,11 @@ async function buildChunkData(
 
         // Retrieve SFX data from script conversion
         const sfxData: string[] = []
-        const scriptKey = JsonStorageKeys.scriptChunk(ensured.jobId, i)
+        const scriptKey = JsonStorageKeys.scriptChunk({
+          novelId: ensured.novelId,
+          jobId: ensured.jobId,
+          index: i,
+        })
         const scriptObj = await analysisStorage.get(scriptKey)
         if (scriptObj) {
           const scriptParsed = JSON.parse(scriptObj.text) as {
@@ -316,6 +321,7 @@ async function buildChunkData(
  * Restore layout progress from previous generation attempts
  */
 async function _restoreLayoutProgress(
+  novelId: string,
   jobId: string,
   episodeNumber: number,
   ports: StoragePorts,
@@ -327,7 +333,11 @@ async function _restoreLayoutProgress(
   }> = []
   let lastPlannedPage = 0
 
-  const progressRaw = await ports.layout.getEpisodeLayoutProgress(jobId, episodeNumber)
+  const progressRaw = await ports.layout.getEpisodeLayoutProgress(
+    novelId,
+    jobId,
+    episodeNumber,
+  )
   if (progressRaw) {
     try {
       const progress = JSON.parse(progressRaw)
@@ -682,8 +692,9 @@ async function generateEpisodeLayoutInternal(
 
       // Atomic write operations - must both succeed or both fail
       await Promise.all([
-        ports.layout.putEpisodeLayout(jobId, episodeNumber, jsonContent),
+        ports.layout.putEpisodeLayout(episode.novelId, jobId, episodeNumber, jsonContent),
         ports.layout.putEpisodeLayoutProgress(
+          episode.novelId,
           jobId,
           episodeNumber,
           JSON.stringify({
@@ -730,7 +741,11 @@ async function generateEpisodeLayoutInternal(
           episodeNumber,
           totalPages: totalPagesEp,
           totalPanels: totalPanelsEp,
-          layoutPath: StorageKeys.episodeLayout(jobId, episodeNumber),
+          layoutPath: StorageKeys.episodeLayout({
+            novelId: episode.novelId,
+            jobId,
+            episodeNumber,
+          }),
         })
         // Update job total pages conservatively
         dbFactory.jobs().updateJobTotalPages(jobId, totalPagesEp)
@@ -750,7 +765,11 @@ async function generateEpisodeLayoutInternal(
       })
     }
 
-    const storageKey = StorageKeys.episodeLayout(jobId, episodeNumber)
+    const storageKey = StorageKeys.episodeLayout({
+      novelId: episode.novelId,
+      jobId,
+      episodeNumber,
+    })
     if (!normalized || !normalized.layout || !Array.isArray(normalized.layout.pages)) {
       throw new Error('Layout building failed to generate any pages')
     }

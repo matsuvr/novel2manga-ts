@@ -7,6 +7,10 @@ import {
 import { POST } from '@/app/api/analyze/chunk/route'
 import { StorageFactory } from '@/utils/storage'
 
+vi.mock('@/utils/job', () => ({
+  getNovelIdForJob: vi.fn(),
+}))
+
 // モック設定
 vi.mock('@/agents/chunk-analyzer', () => {
   const mockAnalysisResult = {
@@ -87,6 +91,11 @@ vi.mock('@/config', () => ({
 
 describe('/api/analyze/chunk', () => {
   let testJobId: string
+  const testNovelId = 'test-novel'
+  const chunkPath = (jobId: string, index: number) =>
+    `${testNovelId}/jobs/${jobId}/chunks/chunk_${index}.txt`
+  const analysisPath = (jobId: string, index: number) =>
+    `${testNovelId}/jobs/${jobId}/analysis/chunk_${index}.json`
 
   beforeEach(async () => {
     vi.clearAllMocks()
@@ -95,17 +104,17 @@ describe('/api/analyze/chunk', () => {
     // StorageKeys 仕様変更: 各ストレージの baseDir で種別ディレクトリを提供し、キー自体には prefix を含めない
     const mockChunkStorage = {
       get: vi.fn().mockImplementation((path: string) => {
-        if (path === `${testJobId}/chunk_0.txt`) {
+        if (path === chunkPath(testJobId, 0)) {
           return {
             text: 'これはテスト用のチャンクテキストです。分析対象のサンプルテキストです。',
           }
         }
-        if (path === `${testJobId}/chunk_1.txt`) {
+        if (path === chunkPath(testJobId, 1)) {
           return {
             text: '2番目のチャンクテキストです。継続する物語の内容です。',
           }
         }
-        if (path === `${testJobId}/chunk_999.txt`) {
+        if (path === chunkPath(testJobId, 999)) {
           return null // 存在しないファイル
         }
         return null
@@ -113,13 +122,13 @@ describe('/api/analyze/chunk', () => {
       put: vi.fn(),
       delete: vi.fn(),
       exists: vi.fn().mockImplementation((path: string) => {
-        return path !== `${testJobId}/chunk_999.txt` && !path.startsWith('nonexistent-job')
+        return path !== chunkPath(testJobId, 999) && !path.includes('nonexistent-job')
       }),
     }
 
     const mockAnalysisStorage = {
       get: vi.fn().mockImplementation((path: string) => {
-        if (path === `${testJobId}/chunk_1.json`) {
+        if (path === analysisPath(testJobId, 1)) {
           // キャッシュテスト用：chunk_1は既に分析済み
           return {
             text: JSON.stringify({
@@ -142,7 +151,7 @@ describe('/api/analyze/chunk', () => {
       put: vi.fn(),
       delete: vi.fn(),
       exists: vi.fn().mockImplementation((path: string) => {
-        return path === `${testJobId}/chunk_1.json`
+        return path === analysisPath(testJobId, 1)
       }),
     }
 
@@ -150,6 +159,8 @@ describe('/api/analyze/chunk', () => {
     vi.mocked(StorageFactory.getAnalysisStorage).mockResolvedValue(mockAnalysisStorage)
 
     testJobId = 'test-chunk-job'
+    const { getNovelIdForJob } = await import('@/utils/job')
+    vi.mocked(getNovelIdForJob).mockResolvedValue(testNovelId)
   })
 
   afterEach(async () => {

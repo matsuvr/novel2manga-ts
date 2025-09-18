@@ -46,7 +46,7 @@ describe('storage_files compatibility', () => {
   it('records analysis JSON via storage and can be read from storage_files', async () => {
     const { db } = testDb
     const analysisStorage = await StorageFactory.getAnalysisStorage()
-    const key = StorageKeys.episodeBoundaries(jobId)
+    const key = StorageKeys.episodeBoundaries({ novelId, jobId })
 
     const payload = JSON.stringify({
       episodes: [],
@@ -87,7 +87,7 @@ describe('storage_files compatibility', () => {
   it('records render image path and can be listed by category', async () => {
     const { db } = testDb
     const renderStorage = await StorageFactory.getRenderStorage()
-    const imgKey = StorageKeys.pageRender(jobId, 1, 1)
+    const imgKey = StorageKeys.pageRender({ novelId, jobId, episodeNumber: 1, pageNumber: 1 })
     const pngBytes = Buffer.from([137, 80, 78, 71])
 
     // ストレージに保存（put メソッドを使用）

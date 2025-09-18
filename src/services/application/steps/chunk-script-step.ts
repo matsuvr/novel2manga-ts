@@ -17,7 +17,7 @@ export class ChunkScriptStep implements PipelineStep {
     chunks: string[],
     context: StepContext,
   ): Promise<StepExecutionResult<ChunkScriptResult>> {
-    const { jobId, logger, ports } = context
+    const { jobId, novelId, logger, ports } = context
     const jobDb = isFactoryInitialized()
       ? db.jobs()
       : ({
@@ -47,7 +47,11 @@ export class ChunkScriptStep implements PipelineStep {
       }> => {
         try {
           const { StorageKeys } = await import('@/utils/storage')
-          const analysisKey = StorageKeys.chunkAnalysis(jobId, chunkIndex)
+          const analysisKey = StorageKeys.chunkAnalysis({
+            novelId,
+            jobId,
+            index: chunkIndex,
+          })
           const analysisData = await storage.get(analysisKey)
 
           if (!analysisData) {
@@ -83,9 +87,8 @@ export class ChunkScriptStep implements PipelineStep {
         const inMemory = chunks[index]
         if (typeof inMemory === 'string' && inMemory.trim().length > 0) return inMemory
         try {
-          const fromStorage = await ports.chunk.getChunk(jobId, index)
-          const text = fromStorage?.text ?? ''
-          return text
+          const stored = await ports.chunk.getChunk(novelId, jobId, index)
+          return stored?.text ?? ''
         } catch (e) {
           logger.warn('Failed to load chunk text from storage', {
             jobId,
@@ -106,8 +109,8 @@ export class ChunkScriptStep implements PipelineStep {
           // Read analysis data for this chunk
           const analysisData = await readChunkAnalysis(i)
 
-          const previousSummary = await getStoredSummary(jobId, i - 1)
-          const nextSummary = await getStoredSummary(jobId, i + 1)
+          const previousSummary = await getStoredSummary(novelId, jobId, i - 1)
+          const nextSummary = await getStoredSummary(novelId, jobId, i + 1)
           logger.info('Converting chunk to manga script', {
             jobId,
             chunkIndex: i,
@@ -166,8 +169,12 @@ export class ChunkScriptStep implements PipelineStep {
                 },
               } as const
 
+              const scriptKey = JsonStorageKeys.scriptChunk({ novelId, jobId, index: i })
+              const errorKey = scriptKey.endsWith('.json')
+                ? scriptKey.replace(/\.json$/, '.error.json')
+                : `${scriptKey}.error.json`
               await storage.put(
-                `${jobId}/script_chunk_${i}.error.json`,
+                errorKey,
                 JSON.stringify(errorInfo, null, 2),
                 { contentType: 'application/json; charset=utf-8', jobId, chunk: String(i) },
               )
@@ -306,7 +313,7 @@ export class ChunkScriptStep implements PipelineStep {
               error: e instanceof Error ? e.message : String(e),
             })
           }
-          const key = JsonStorageKeys.scriptChunk(jobId, i)
+          const key = JsonStorageKeys.scriptChunk({ novelId, jobId, index: i })
           await storage.put(key, JSON.stringify(script, null, 2), {
             contentType: 'application/json; charset=utf-8',
             jobId,

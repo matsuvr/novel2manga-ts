@@ -31,7 +31,8 @@
     "fix:staged": "lint-staged",
     "check": "npm run lint",
     "check:ci": "npm run check",
-    "typecheck": "tsc --noEmit",
+    "typegen:routes": "next typegen",
+    "typecheck": "npm run typegen:routes && tsc --noEmit",
     "verify:prepush": "npm run -s typecheck && npm run -s lint && npm run -s test && npm run -s test:integration",
     "validate:templates": "tsx ./scripts/validate-panel-templates.ts",
     "normalize:templates": "tsx ./scripts/normalize-templates-fill-horizontally.ts && npm run -s validate:templates",
@@ -70,8 +71,8 @@
     "@napi-rs/canvas": "^0.1.80",
     "@types/js-yaml": "^4.0.9",
     "@types/pdfkit": "^0.17.2",
-    "@types/react": "^19.1.8",
-    "@types/react-dom": "^19.1.6",
+    "@types/react": "19.1.13",
+    "@types/react-dom": "19.1.9",
     "autoprefixer": "^10.4.21",
     "budoux": "^0.7.0",
     "clsx": "^2.1.1",
@@ -82,14 +83,14 @@
     "js-yaml": "^4.1.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.469.0",
-    "next": "15.3.3",
+    "next": "15.5.3",
     "next-auth": "^5.0.0-beta.29",
     "nodemailer": "^6.10.1",
     "openai": "^5.12.2",
     "pdfkit": "^0.17.1",
     "postcss": "^8.5.6",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
     "rebuild": "^0.1.2",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
@@ -116,7 +117,7 @@
     "cross-env": "^10.0.0",
     "dotenv-cli": "^7.4.3",
     "eslint": "^9.0.0",
-    "eslint-config-next": "^15.4.4",
+    "eslint-config-next": "15.5.3",
     "happy-dom": "^18.0.1",
     "husky": "^9.1.7",
     "jscodeshift": "^0.14.0",
@@ -135,5 +136,9 @@
   },
   "volta": {
     "node": "20.19.4"
+  },
+  "overrides": {
+    "@types/react": "19.1.13",
+    "@types/react-dom": "19.1.9"
   }
 }

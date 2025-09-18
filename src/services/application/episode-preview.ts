@@ -21,6 +21,7 @@ export interface EpisodePreviewData {
  * - レンダー画像(バイナリ)をBase64で取得
  */
 export async function loadEpisodePreview(
+  novelId: string,
   jobId: string,
   episodeNumber: number,
 ): Promise<EpisodePreviewData> {
@@ -29,7 +30,9 @@ export async function loadEpisodePreview(
 
   // ページ番号の取得
   let pageNumbers: number[] = []
-  const layoutObj = await layoutStorage.get(StorageKeys.episodeLayout(jobId, episodeNumber))
+  const layoutObj = await layoutStorage.get(
+    StorageKeys.episodeLayout({ novelId, jobId, episodeNumber }),
+  )
   if (layoutObj?.text) {
     try {
       const parsed = JSON.parse(layoutObj.text) as {
@@ -53,7 +56,7 @@ export async function loadEpisodePreview(
   // Fallback: レンダーキー列挙（常にマージして冗長性を確保）
   if (typeof renderStorage.list === 'function') {
     try {
-      const prefix = `${jobId}/episode_${episodeNumber}/`
+      const prefix = `${novelId}/jobs/${jobId}/renders/episode_${episodeNumber}/`
       const keys = await renderStorage.list(prefix)
       // Windows/UNIXのパス区切り差異に対応（\\/ のいずれも許容）
       const fromRenders = keys
@@ -78,7 +81,7 @@ export async function loadEpisodePreview(
   let normalizedPages: number[] = []
   let pagesWithIssueCounts: Record<number, number> = {}
   const progressObj = await layoutStorage.get(
-    StorageKeys.episodeLayoutProgress(jobId, episodeNumber),
+    StorageKeys.episodeLayoutProgress({ novelId, jobId, episodeNumber }),
   )
   if (progressObj?.text) {
     try {
@@ -120,7 +123,7 @@ export async function loadEpisodePreview(
 
   for (const p of pageNumbers) {
     const pageNum = Number(p)
-    const key = StorageKeys.pageRender(jobId, episodeNumber, p)
+    const key = StorageKeys.pageRender({ novelId, jobId, episodeNumber, pageNumber: p })
     const file = await renderStorage.get(key)
     // ファイルが存在しない場合でも、ページ情報は返す（UI側で欠落を検知表示できるようにする）
     let base64 = ''

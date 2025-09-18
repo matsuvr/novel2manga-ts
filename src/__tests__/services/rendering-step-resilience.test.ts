@@ -6,28 +6,41 @@ import { RenderingStep } from '@/services/application/steps/rendering-step'
 // Simple in-memory store for render outputs
 const renderImages = new Map<string, Buffer>()
 const layoutJsonByEpisode = new Map<string, string>()
+const TEST_NOVEL_ID = 'novel-test'
 
 vi.mock('@/infrastructure/storage/ports', () => ({
   getStoragePorts: () => ({
     layout: {
-      getEpisodeLayout: async (jobId: string, ep: number) =>
-        layoutJsonByEpisode.get(`${jobId}:${ep}`) || null,
+      getEpisodeLayout: async (novelId: string, jobId: string, ep: number) =>
+        layoutJsonByEpisode.get(`${novelId}:${jobId}:${ep}`) || null,
       // unused in this test
       getEpisodeLayoutProgress: async () => null,
     },
     render: {
-      putPageRender: async (jobId: string, ep: number, page: number, buf: Buffer) => {
-        const k = `${jobId}:${ep}:${page}`
+      putPageRender: async (
+        novelId: string,
+        jobId: string,
+        ep: number,
+        page: number,
+        buf: Buffer,
+      ) => {
+        const k = `${novelId}:${jobId}:${ep}:${page}`
         renderImages.set(k, buf)
         return k
       },
-      putPageThumbnail: async (jobId: string, ep: number, page: number, buf: Buffer) => {
-        const k = `${jobId}:${ep}:thumb:${page}`
+      putPageThumbnail: async (
+        novelId: string,
+        jobId: string,
+        ep: number,
+        page: number,
+        buf: Buffer,
+      ) => {
+        const k = `${novelId}:${jobId}:${ep}:thumb:${page}`
         renderImages.set(k, buf)
         return k
       },
-      getPageRender: async (jobId: string, ep: number, page: number) => {
-        const k = `${jobId}:${ep}:${page}`
+      getPageRender: async (novelId: string, jobId: string, ep: number, page: number) => {
+        const k = `${novelId}:${jobId}:${ep}:${page}`
         const v = renderImages.get(k)
         return v ? { text: v.toString('base64') } : null
       },
@@ -41,6 +54,7 @@ vi.mock('@/services/database', async () => {
     ...actual,
     db: {
       jobs: () => ({
+        getJob: vi.fn().mockResolvedValue({ id: 'job-test', novelId: TEST_NOVEL_ID }),
         updateProcessingPosition: vi.fn(),
       }),
       render: () => ({
@@ -119,7 +133,7 @@ describe('RenderingStep resilience', () => {
 
     // Inject layout JSON directly
     layoutJsonByEpisode.set(
-      `${jobId}:${episodeNumber}`,
+      `${TEST_NOVEL_ID}:${jobId}:${episodeNumber}`,
       JSON.stringify({
         title: 'Test',
         created_at: new Date().toISOString(),
@@ -131,6 +145,7 @@ describe('RenderingStep resilience', () => {
     const step = new RenderingStep()
     const result = await step.renderEpisodes([episodeNumber], { isDemo: false }, {
       jobId,
+      novelId: TEST_NOVEL_ID,
       logger: {
         info: () => {},
         warn: () => {},
@@ -142,9 +157,9 @@ describe('RenderingStep resilience', () => {
     expect(result.success).toBe(true)
     // Renderer called for valid pages (1 and 3) but not for skipped invalid 2
     const ports = getStoragePorts()
-  const page1 = await ports.render.getPageRender(jobId, episodeNumber, 1)
-  const page2 = await ports.render.getPageRender(jobId, episodeNumber, 2)
-  const page3 = await ports.render.getPageRender(jobId, episodeNumber, 3)
+  const page1 = await ports.render.getPageRender(TEST_NOVEL_ID, jobId, episodeNumber, 1)
+  const page2 = await ports.render.getPageRender(TEST_NOVEL_ID, jobId, episodeNumber, 2)
+  const page3 = await ports.render.getPageRender(TEST_NOVEL_ID, jobId, episodeNumber, 3)
 
     expect(page1).not.toBeNull()
     expect(page2).toBeNull() // skipped

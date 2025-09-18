@@ -4,10 +4,11 @@ import { getJobDetails } from '@/services/application/job-details'
 import { db } from '@/services/database'
 import { withAuth } from '@/utils/api-auth'
 import {
+  ApiError,
   createErrorResponse,
   createSuccessResponse,
+  ERROR_CODES,
   ForbiddenError,
-  NotFoundError,
   ValidationError,
 } from '@/utils/api-error'
 
@@ -28,8 +29,9 @@ export const GET = withAuth(
         // ユーザー所有権チェック
         const job = await db.jobs().getJob(jobId)
         if (!job) {
-          // Use generic resource name so NotFoundError formats message as 'ジョブが見つかりません'
-          return createErrorResponse(new NotFoundError('ジョブ'))
+          return createErrorResponse(
+            new ApiError('Job not found', 404, ERROR_CODES.NOT_FOUND, { jobId }),
+          )
         }
         if (job.userId && job.userId !== user.id) {
           return createErrorResponse(new ForbiddenError('アクセス権限がありません'))
@@ -44,7 +46,15 @@ export const GET = withAuth(
         // 成功レスポンスは { success: true, ... } のフラット形
         return createSuccessResponse({ job: jobDetails, chunks }, 200)
       } catch (error) {
-        return createErrorResponse(error, 'ジョブステータスの取得に失敗しました')
+        if (error instanceof ApiError) {
+          return createErrorResponse(error, 'Failed to fetch job status')
+        }
+
+        const details = error instanceof Error ? error.message : String(error)
+        return createErrorResponse(
+          new ApiError('Failed to fetch job status', 500, ERROR_CODES.INTERNAL_ERROR, details),
+          'Failed to fetch job status',
+        )
       }
     })
   },
