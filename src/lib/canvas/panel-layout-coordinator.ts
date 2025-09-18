@@ -124,12 +124,20 @@ export class PanelLayoutCoordinator {
   ): { x: number; y: number; width: number; height: number } {
     const maxW = config.maxWidthRatio ? panelBounds.width * config.maxWidthRatio : area.width
     const maxH = config.maxHeightRatio ? panelBounds.height * config.maxHeightRatio : area.height
-    return {
-      x: area.x,
-      y: area.y,
-      width: Math.min(area.width, maxW),
-      height: Math.min(area.height, maxH),
+
+    // パネル境界内に収める
+    const boundedArea = {
+      x: Math.max(panelBounds.x, area.x),
+      y: Math.max(panelBounds.y, area.y),
+      width: Math.min(panelBounds.x + panelBounds.width - area.x, Math.min(area.width, maxW)),
+      height: Math.min(panelBounds.y + panelBounds.height - area.y, Math.min(area.height, maxH)),
     }
+
+    // 負の値にならないようにする
+    boundedArea.width = Math.max(0, boundedArea.width)
+    boundedArea.height = Math.max(0, boundedArea.height)
+
+    return boundedArea
   }
 
   /** 左側の空き領域を計算 */
@@ -145,6 +153,11 @@ export class PanelLayoutCoordinator {
       y: panelBounds.y + padding,
       width: Math.max(0, panelBounds.width * 0.4 - padding),
       height: Math.max(0, panelBounds.height - padding * 2),
+    }
+
+    // パネル境界内に収まることを確認
+    if (leftBounds.width <= 0 || leftBounds.height <= 0) {
+      return null
     }
 
     const rect = this.getLargestEmptyRect(leftBounds, this.occupiedAreas, padding)
@@ -247,8 +260,13 @@ export class PanelLayoutCoordinator {
     }
     maxY = Math.min(maxY, topMostOccupied - 10)
 
-    if (maxX > minX && maxY > minY)
-      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+    if (maxX > minX && maxY > minY) {
+      const area = { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+      // パネル境界内に収まることを確認
+      if (area.width > 0 && area.height > 0) {
+        return area
+      }
+    }
     return null
   }
 
@@ -270,8 +288,13 @@ export class PanelLayoutCoordinator {
     }
     minY = Math.max(minY, bottomMostOccupied + 10)
 
-    if (maxX > minX && maxY > minY)
-      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+    if (maxX > minX && maxY > minY) {
+      const area = { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+      // パネル境界内に収まることを確認
+      if (area.width > 0 && area.height > 0) {
+        return area
+      }
+    }
     return null
   }
 
@@ -295,7 +318,14 @@ export class PanelLayoutCoordinator {
             ) - gx
           const gy = a.y + a.height + 10
           const gh = b.y - (a.y + a.height) - 20
-          if (gw > minSize && gh > minSize) gaps.push({ x: gx, y: gy, width: gw, height: gh })
+          const gap = { x: gx, y: gy, width: gw, height: gh }
+          // パネル境界内に収まり、有効なサイズであることを確認
+          if (gap.width >= minSize && gap.height >= minSize &&
+              gap.x >= panelBounds.x && gap.y >= panelBounds.y &&
+              gap.x + gap.width <= panelBounds.x + panelBounds.width &&
+              gap.y + gap.height <= panelBounds.y + panelBounds.height) {
+            gaps.push(gap)
+          }
         }
       }
     }
@@ -309,11 +339,16 @@ export class PanelLayoutCoordinator {
     ctx: CanvasRenderingContext2D,
     config: { minFontSize: number; maxFontSize: number; padding: number; lineHeight: number },
   ): ContentTextPlacement | null {
+    // 領域が有効でない場合は配置できない
+    if (area.width <= 0 || area.height <= 0) {
+      return null
+    }
+
     for (let fontSize = config.maxFontSize; fontSize >= config.minFontSize; fontSize -= 2) {
       ctx.font = `${fontSize}px sans-serif`
       const lines = this.wrapText(content, area.width - config.padding * 2, ctx)
       const totalHeight = lines.length * fontSize * config.lineHeight
-      if (totalHeight <= area.height - config.padding * 2) {
+      if (totalHeight <= area.height - config.padding * 2 && lines.length > 0) {
         return {
           text: content,
           x: area.x + config.padding,
@@ -345,12 +380,23 @@ export class PanelLayoutCoordinator {
     const fontSize = config.minFontSize
     ctx.font = `${fontSize}px sans-serif`
 
+    // パネル境界内に収まる最大領域を計算
+    const maxWidth = Math.min(
+      panelBounds.width * (config.maxWidthRatio ?? 0.8),
+      panelBounds.width - config.padding * 2
+    )
+    const maxHeight = Math.min(
+      panelBounds.height * (config.maxHeightRatio ?? 0.3),
+      panelBounds.height - config.padding * 2
+    )
+
     const area = {
-      x: panelBounds.x + 10,
-      y: panelBounds.y + 10,
-      width: Math.min(200, panelBounds.width * (config.maxWidthRatio ?? 0.4) || 200),
-      height: Math.min(100, panelBounds.height * (config.maxHeightRatio ?? 0.3) || 100),
+      x: panelBounds.x + config.padding,
+      y: panelBounds.y + config.padding,
+      width: Math.max(0, maxWidth),
+      height: Math.max(0, maxHeight),
     }
+
     const lines = this.wrapText(content, area.width, ctx)
     const maxLines = Math.max(1, Math.floor(area.height / (fontSize * config.lineHeight)))
     if (lines.length > maxLines) {

@@ -1,0 +1,67 @@
+title: 肺炎氏の訪れ
+created_at: '2025-09-18'
+episodeNumber: 1
+episodeTitle: 肺炎氏の訪れ
+pages:
+  - page_number: 1
+    panels:
+      - id: 1
+        position:
+          x: 0
+          'y': 0.08
+        size:
+          width: 1
+          height: 0.28
+        content: |-
+          【大ゴマ】1900年代初頭、ニューヨーク、ワシントン・スクエア西の街並み。道が複雑に入り組んでいる様子を俯瞰で描く。
+          ハイアングルからの俯瞰（フィックス）
+        dialogues:
+          - speaker: ナレーション
+            text: ワシントン・スクエア西にある小地区は、道が狂ったように入り組んでいた。
+            type: narration
+          - speaker: ナレーション
+            text: 「プレース」と呼ばれるその区域は、不可思議な角度と曲線を描き、時に道が自分自身と交差するほどだった。
+            type: narration
+        sfx: []
+        sourceChunkIndex: 0
+        importance: 6
+      - id: 2
+        position:
+          x: 0.5
+          'y': 0.38
+        size:
+          width: 0.5
+          height: 0.25
+        content: |-
+          同じ道を、請求書の束を持った取り立て屋が混乱した表情でぐるぐる歩き回り、首をかしげている。
+          少し引いた視点（フィックス）
+        dialogues:
+          - speaker: ナレーション
+            text: かつてある画家は、この道に奇妙な可能性を見出した。
+            type: narration
+          - speaker: ナレーション
+            text: 請求書を手にした取り立て屋も、この道では一セントも取れずに迷い帰るに違いない、と。
+            type: narration
+        sfx:
+          - ウロウロ
+        sourceChunkIndex: 0
+        importance: 6
+      - id: 3
+        position:
+          x: 0
+          'y': 0.38
+        size:
+          width: 0.5
+          height: 0.25
+        content: |-
+          場面転換。グリニッチ・ヴィレッジ。北向きの窓や趣のある屋根裏部屋を持つ建物が並ぶ。若い芸術家たちが画材を抱えて歩いている。
+          アイレベル（フィックス）
+        dialogues:
+          - speaker: ナレーション
+            text: やがて芸術家たちは、この奇妙で古いグリニッチ・ヴィレッジに安い賃貸料を求めて集い、「コロニー」を形成した。
+            type: narration
+        sfx:
+          - ざわ…
+          - ざわ…
+        sourceChunkIndex: 0
+        importance: 6
