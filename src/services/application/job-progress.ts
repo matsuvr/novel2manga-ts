@@ -136,11 +136,10 @@ export class JobProgressService {
         const perEpisodePagesPromises = episodes.map(async (episode) => {
           const episodeNumber = episode.episodeNumber
           // Get actual pages from layout progress using canonical StoragePorts signature
+          // Call layout.getEpisodeLayoutProgress using the StoragePorts-provided type
+          // layout is typed as LayoutStoragePort from getStoragePorts(), so call directly.
           const layoutProgress = await this.safeOperation(
-            async () =>
-              (layout as unknown as {
-                getEpisodeLayoutProgress(novelId: string, jobId: string, episodeNumber: number): Promise<string | null>
-              }).getEpisodeLayoutProgress(episode.novelId, id, episodeNumber),
+            async () => layout.getEpisodeLayoutProgress(episode.novelId, id, episodeNumber),
             'getEpisodeLayoutProgress',
             { jobId: id, episodeNumber },
           )

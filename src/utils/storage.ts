@@ -260,7 +260,45 @@ export class LocalFileStorage implements Storage {
         return { text: content, metadata }
       }
     } catch (error) {
+      // If file not found, attempt fallback to legacy job-scoped path
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        try {
+          const legacyMatch = key.match(/^([^/]+)\/jobs\/([^/]+)\/(.+)$/)
+          if (legacyMatch) {
+            const jobId = legacyMatch[2]
+            const rest = legacyMatch[3]
+            const legacyKey = `${jobId}/${rest}`
+            const legacyFilePath = joinSafe(this.baseDir, legacyKey)
+            try {
+              const legacyContent = await fs.readFile(legacyFilePath, 'utf-8')
+              // Found legacy file — log and return using same parsing logic
+              getLogger()
+                .withContext({ service: 'LocalFileStorage', method: 'get' })
+                .info('Falling back to legacy storage key for read', { key, legacyKey })
+
+              // Re-run parsing logic used above to derive metadata/text
+              try {
+                const data = JSON.parse(legacyContent)
+                if (typeof data === 'object' && data && 'content' in data) {
+                  return {
+                    text: (data as { content: string }).content,
+                    metadata: (data as { metadata?: Record<string, string> }).metadata,
+                  }
+                }
+              } catch {
+                // ignore JSON parse errors — treat as plain text
+              }
+              return { text: legacyContent }
+            } catch (legacyErr) {
+              if ((legacyErr as NodeJS.ErrnoException).code === 'ENOENT') {
+                return null
+              }
+              throw legacyErr
+            }
+          }
+        } catch {
+          // ignore fallback errors and return null
+        }
         return null
       }
       throw error
@@ -304,6 +342,27 @@ export class LocalFileStorage implements Storage {
       await fs.access(filePath)
       return true
     } catch {
+      // Try legacy fallback for reads
+      try {
+        const legacyMatch = key.match(/^([^/]+)\/jobs\/([^/]+)\/(.+)$/)
+        if (legacyMatch) {
+          const jobId = legacyMatch[2]
+          const rest = legacyMatch[3]
+          const legacyKey = `${jobId}/${rest}`
+          const legacyPath = joinSafe(this.baseDir, legacyKey)
+          try {
+            await fs.access(legacyPath)
+            getLogger()
+              .withContext({ service: 'LocalFileStorage', method: 'exists' })
+              .debug('exists: falling back to legacy key', { key, legacyKey })
+            return true
+          } catch {
+            return false
+          }
+        }
+      } catch {
+        return false
+      }
       return false
     }
   }
@@ -433,6 +492,28 @@ export class LocalFileStorage implements Storage {
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        // Try legacy fallback
+        try {
+          const legacyMatch = key.match(/^([^/]+)\/jobs\/([^/]+)\/(.+)$/)
+          if (legacyMatch) {
+            const jobId = legacyMatch[2]
+            const rest = legacyMatch[3]
+            const legacyKey = `${jobId}/${rest}`
+            const legacyPath = joinSafe(this.baseDir, legacyKey)
+            try {
+              const stats = await fs.stat(legacyPath)
+              // metadata may not exist for legacy files
+              return { size: stats.size, metadata: {} }
+            } catch (legacyErr) {
+              if ((legacyErr as NodeJS.ErrnoException).code === 'ENOENT') {
+                return null
+              }
+              throw legacyErr
+            }
+          }
+        } catch {
+          // ignore
+        }
         return null
       }
       throw error
