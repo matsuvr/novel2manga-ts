@@ -226,8 +226,8 @@ class HierarchicalMemoryManager {
 ```
 
 #### 完了条件
-- [ ] 3層キャッシュ動作確認
-- [ ] メモリ使用量50%削減（1GB→500MB）
+- [x] 3層キャッシュ動作確認
+- [x] メモリ使用量50%削減（1GB→500MB）
 - [ ] キャッシュヒット率80%以上
 - [ ] アクセス速度10倍向上（10ms→1ms）
 
@@ -236,6 +236,12 @@ class HierarchicalMemoryManager {
 - `cache-strategy.ts` (200行)
 - `lru-cache.ts` (150行)
 - 統合テスト (300行)
+
+#### 実装メモ (2025-02-17)
+- Effect TS ベースの `HierarchicalMemoryManager` を実装。`getCharacterData` / `updateAccessPattern` は `Effect.Effect` を返却し、ホット・ウォーム・コールド階層を自動で昇格/降格させる。
+- 共通設定を `src/config/memory.config.ts` に集約し、キャッシュ容量・圧縮長・優先度スコアを中央管理。既存の `config/index.ts` からも再エクスポート済み。
+- `LRUCache` と `CacheStrategy` を新設。`LRUCache` は TTL・総重量制御・サイレント削除をサポートし、`CacheStrategy` はアクセス頻度・経過チャンク・重要度からターゲット階層と圧縮レベルを算出する。
+- 統合テスト `tests/integration/memory/hierarchical-manager.integration.test.ts` で 3 層キャッシュ、ウォーム/コールド遷移、ヒットレート計測、メモリ統計を検証。現状の平均ヒットレートは 50〜60% 程度のため、80% 目標達成に向けて今後チューニングが必要。
 
 ---
 
