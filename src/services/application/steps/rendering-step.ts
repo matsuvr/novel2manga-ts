@@ -70,8 +70,13 @@ export class RenderingStep implements PipelineStep {
           const layoutText = await ports.layout.getEpisodeLayout(jobId, ep)
           if (!layoutText) continue
 
-            let parsed: unknown
-          try { parsed = JSON.parse(layoutText) } catch (e) { logger.error('Failed to parse layout JSON', { jobId, episode: ep, error: (e as Error).message }); continue }
+            let parsed: unknown;
+            try {
+              parsed = JSON.parse(layoutText);
+            } catch (e) {
+              logger.error('Failed to parse layout JSON', { jobId, episode: ep, error: e instanceof Error ? e.message : String(e) });
+              continue;
+            }
 
           const parsedObj: Record<string, unknown> =
             parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}

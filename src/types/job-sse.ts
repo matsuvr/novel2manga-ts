@@ -34,14 +34,15 @@ const JobBaseSchema = z.object({
   renderCompleted: z.boolean().optional(),
   processedChunks: z.number().optional(),
   totalChunks: z.number().optional(),
-  processedEpisodes: z.number().optional(),
-  totalEpisodes: z.number().optional(),
-  renderedPages: z.number().optional(),
-  totalPages: z.number().optional(),
-  processingEpisode: z.number().optional(),
-  processingPage: z.number().optional(),
-  lastError: z.string().optional(),
-  lastErrorStep: z.string().optional(),
+  // These fields come from DB rows which may be NULL. Accept nulls to avoid parse failures.
+  processedEpisodes: z.number().nullish(),
+  totalEpisodes: z.number().nullish(),
+  renderedPages: z.number().nullish(),
+  totalPages: z.number().nullish(),
+  processingEpisode: z.number().nullish(),
+  processingPage: z.number().nullish(),
+  lastError: z.string().nullish(),
+  lastErrorStep: z.string().nullish(),
   progress: z
     .object({
       perEpisodePages: z.record(JobPerEpisodePagesEntrySchema).optional(),

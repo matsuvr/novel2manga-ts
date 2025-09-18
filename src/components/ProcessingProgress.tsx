@@ -439,9 +439,9 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
 
     const handlePayload = (raw: string) => {
       try {
-        const parsed = parseJobSSEPayload(raw)
-        // Narrow to internal JobData shape for existing updater
-        const data: JobData = { job: parsed.job as Job }
+      const parsed = parseJobSSEPayload(raw)
+      // Narrow to internal JobData shape for existing updater
+      const data: JobData = { job: parsed.job }
         lastJobRef.current = data.job
         const result = updateStepsFromJobData(data)
         if (result === 'stop') {
@@ -456,7 +456,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
           }
         }
       } catch (e: unknown) {
-        const errMsg = e instanceof Error ? (e as Error).message : String(e)
+      const errMsg = e instanceof Error ? e.message : String(e)
         addLog('error', `SSEデータの解析/検証に失敗: ${errMsg}`)
       }
     }
