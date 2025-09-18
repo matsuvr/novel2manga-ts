@@ -1,7 +1,7 @@
 import path from 'node:path'
 // Server-only: we now rely exclusively on @napi-rs/canvas
 import { createCanvas, GlobalFonts, loadImage as loadImageFn } from '@napi-rs/canvas'
-import { getAppConfigWithOverrides } from '@/config/app.config'
+import { appConfig, getAppConfigWithOverrides } from '@/config/app.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import type { AppCanvasConfig } from '@/types/canvas-config'
 import type { Dialogue, MangaLayout, Panel } from '@/types/panel-layout'
@@ -27,6 +27,15 @@ const SINGLE_BUBBLE_MIN_HEIGHT = 60
 const MIN_BUBBLE_HEIGHT = 30
 /** バブル配置時に利用可能な垂直方向の最小マージン（px単位）。2pxはバブル同士が重ならないようにするための値。 */
 const AVAILABLE_VERTICAL_MARGIN = 2
+const DEFAULT_CANVAS_RENDERING_CONFIG = appConfig.rendering.canvas
+const DEFAULT_SPEAKER_LABEL_CONFIG = DEFAULT_CANVAS_RENDERING_CONFIG.speakerLabel
+
+/** 話者ラベルのフォント倍率（ベースフォントに対する比率）。 */
+const SPEAKER_LABEL_FONT_RATIO = DEFAULT_SPEAKER_LABEL_CONFIG.fontSize
+/** 話者ラベルの内側パディング（px）。 */
+const SPEAKER_LABEL_PADDING = DEFAULT_SPEAKER_LABEL_CONFIG.padding
+/** 話者ラベルの角丸半径（px）。 */
+const SPEAKER_LABEL_BORDER_RADIUS = DEFAULT_SPEAKER_LABEL_CONFIG.borderRadius
 
 // Node.js 向け canvas 実装の型定義
 interface NodeCanvasImpl {
@@ -124,80 +133,13 @@ export class CanvasRenderer {
   constructor(config: CanvasConfig) {
     try {
       this.appConfig = getAppConfigWithOverrides()
-    } catch {
-      // Minimal safe defaults to satisfy tests when app config is not fully wired
-      this.appConfig = {
-        rendering: {
-          canvas: {
-            bubble: {
-              fillStyle: '#ffffff',
-              strokeStyle: '#000000',
-              normalLineWidth: 2,
-              shoutLineWidth: 3,
-              thoughtShape: {
-                bumps: 12,
-                amplitudeRatio: 0.1,
-                randomness: 0.2,
-                minRadiusPx: 4,
-                prng: { seedScale: 0.01, sinScale: 12.9898, multiplier: 43758.5453 },
-              },
-              thoughtTail: {
-                enabled: true,
-                startRadiusRatio: 0.06,
-                gapRatio: 0.2,
-                angle: -Math.PI / 4,
-                count: 2,
-                decay: 0.8,
-              },
-            },
-            speakerLabel: {
-              enabled: true,
-              fontSize: 0.7,
-              padding: 4,
-              backgroundColor: '#ffffff',
-              borderColor: '#333333',
-              textColor: '#333333',
-              offsetX: 0.3,
-              offsetY: 0.7,
-              borderRadius: 3,
-            },
-            contentText: {
-              enabled: true,
-              fontSize: { min: 10, max: 18 },
-              padding: 4,
-              lineHeight: 1.2,
-              maxWidthRatio: 0.9,
-              maxHeightRatio: 0.35,
-              placement: { minAreaSize: 48 },
-              background: {
-                color: 'rgba(255,255,255,0.7)',
-                borderColor: '#333',
-                borderWidth: 1,
-                borderRadius: 4,
-              },
-              textColor: '#000',
-            },
-            sfx: {
-              enabled: true,
-              mainTextStyle: {
-                fillStyle: '#000',
-                strokeStyle: '#fff',
-                lineWidth: 4,
-                fontWeight: 'bold' as const,
-              },
-              supplementTextStyle: {
-                fillStyle: '#666',
-                strokeStyle: '#fff',
-                lineWidth: 2,
-                fontWeight: 'normal' as const,
-              },
-              supplementFontSize: { scaleFactor: 0.35, min: 10 },
-              rotation: { enabled: true, maxAngle: 0.15 },
-              placement: { avoidOverlap: true, preferredPositions: ['top-left', 'bottom-right'] },
-            },
-          },
-        },
-      } as unknown as ReturnType<typeof getAppConfigWithOverrides>
+    } catch (error) {
+      getLogger()
+        .withContext({ service: 'canvas-renderer', phase: 'config_load' })
+        .error('app_config_load_failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      this.appConfig = appConfig
     }
     this.config = {
       backgroundColor: '#ffffff',
@@ -230,74 +172,7 @@ export class CanvasRenderer {
   // Provide robust defaults in case app config is partially mocked in tests
   private getCanvasCfg() {
     const base = this.appConfig?.rendering?.canvas || {}
-    const fallback = {
-      bubble: {
-        fillStyle: '#ffffff',
-        strokeStyle: '#000000',
-        normalLineWidth: 2,
-        shoutLineWidth: 3,
-        thoughtShape: {
-          bumps: 12,
-          amplitudeRatio: 0.1,
-          randomness: 0.2,
-          minRadiusPx: 4,
-          prng: { seedScale: 0.01, sinScale: 12.9898, multiplier: 43758.5453 },
-        },
-        thoughtTail: {
-          enabled: true,
-          startRadiusRatio: 0.06,
-          gapRatio: 0.2,
-          angle: -Math.PI / 4,
-          count: 2,
-          decay: 0.8,
-        },
-      },
-      speakerLabel: {
-        enabled: true,
-        fontSize: 0.7,
-        padding: 4,
-        backgroundColor: '#ffffff',
-        borderColor: '#333333',
-        textColor: '#333333',
-        offsetX: 0.3,
-        offsetY: 0.7,
-        borderRadius: 3,
-      },
-      contentText: {
-        enabled: true,
-        fontSize: { min: 10, max: 18 },
-        padding: 4,
-        lineHeight: 1.2,
-        maxWidthRatio: 0.9,
-        maxHeightRatio: 0.35,
-        placement: { minAreaSize: 48 },
-        background: {
-          color: 'rgba(255,255,255,0.7)',
-          borderColor: '#333333',
-          borderWidth: 1,
-          borderRadius: 4,
-        },
-        textColor: '#000000',
-      },
-      sfx: {
-        enabled: true,
-        mainTextStyle: {
-          fillStyle: '#000000',
-          strokeStyle: '#ffffff',
-          lineWidth: 4,
-          fontWeight: 'bold' as const,
-        },
-        supplementTextStyle: {
-          fillStyle: '#666666',
-          strokeStyle: '#ffffff',
-          lineWidth: 2,
-          fontWeight: 'normal' as const,
-        },
-        supplementFontSize: { scaleFactor: 0.35, min: 10 },
-        rotation: { enabled: true, maxAngle: 0.15 },
-        placement: { avoidOverlap: true, preferredPositions: ['top-left', 'bottom-right'] },
-      },
-    }
+    const fallback = DEFAULT_CANVAS_RENDERING_CONFIG
     // shallow merge + deep for bubble.thoughtShape/prng
     const merged = {
       ...fallback,
@@ -417,14 +292,15 @@ export class CanvasRenderer {
       dialogue.speaker.trim() !== ''
     if (shouldShowLabel) {
       const baseFontSize = this.config.fontSize || 16
-      const fontSize = Math.max(10, baseFontSize * (speakerLabelCfg.fontSize || 0.7))
-      const paddingLabel = speakerLabelCfg.padding ?? 4
+      const fontRatio = speakerLabelCfg.fontSize ?? SPEAKER_LABEL_FONT_RATIO
+      const fontSize = Math.max(10, baseFontSize * fontRatio)
+      const paddingLabel = speakerLabelCfg.padding ?? SPEAKER_LABEL_PADDING
       const bg = speakerLabelCfg.backgroundColor ?? '#ffffff'
       const border = speakerLabelCfg.borderColor ?? '#333333'
       const textColor = speakerLabelCfg.textColor ?? '#333333'
       const offsetXRatio = labelOffsetXRatio ?? speakerLabelCfg.offsetX ?? 0.3
       const offsetYRatio = labelOffsetYRatio ?? speakerLabelCfg.offsetY ?? 0.7
-      const borderRadius = speakerLabelCfg.borderRadius ?? 3
+      const borderRadius = speakerLabelCfg.borderRadius ?? SPEAKER_LABEL_BORDER_RADIUS
       this.drawSpeakerLabel(dialogue.speaker, bx + bubbleW, by, {
         fontSize,
         padding: paddingLabel,
@@ -496,7 +372,8 @@ export class CanvasRenderer {
             const bubbleW = (drawW + BUBBLE_PADDING * 2) * Math.sqrt(2)
             const bubbleH = (drawH + BUBBLE_PADDING * 2) * Math.sqrt(2)
 
-            const slotX = x + width * PANEL_MARGIN_RATIO + slotWidth * i
+            const slotIndex = panel.dialogues.length === 2 ? panel.dialogues.length - 1 - i : i
+            const slotX = x + width * PANEL_MARGIN_RATIO + slotWidth * slotIndex
             const bx = slotX + (slotWidth - bubbleW) / 2
             const by = bubbleY
             const slotBounds = { x: slotX, y, width: slotWidth, height }
@@ -623,14 +500,20 @@ export class CanvasRenderer {
         if (placement) {
           this.ctx.save()
           // 背景ボックス
+          const textPadding = contentCfg.padding
+          const backgroundX = placement.x - textPadding
+          const backgroundY = placement.y - textPadding
+          const backgroundWidth = Math.max(0, placement.width + textPadding * 2)
+          const backgroundHeight = Math.max(0, placement.height + textPadding * 2)
+
           this.ctx.fillStyle = contentCfg.background.color
           this.ctx.strokeStyle = contentCfg.background.borderColor
           this.ctx.lineWidth = contentCfg.background.borderWidth
           this.drawRoundedRect(
-            placement.x - contentCfg.padding / 2,
-            placement.y - contentCfg.padding / 2,
-            placement.width + contentCfg.padding,
-            placement.height + contentCfg.padding,
+            backgroundX,
+            backgroundY,
+            backgroundWidth,
+            backgroundHeight,
             contentCfg.background.borderRadius,
           )
           this.ctx.fill()
@@ -649,10 +532,10 @@ export class CanvasRenderer {
           this.ctx.restore()
 
           this.layoutCoordinator.registerContentArea({
-            x: placement.x,
-            y: placement.y,
-            width: placement.width,
-            height: placement.height,
+            x: backgroundX,
+            y: backgroundY,
+            width: backgroundWidth,
+            height: backgroundHeight,
           })
         }
       }

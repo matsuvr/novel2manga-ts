@@ -463,16 +463,16 @@ export const appConfig = {
       // 話者ラベル描画設定（オプション）
       speakerLabel: {
         enabled: true,
-        // メインフォントサイズに対する比率
-        fontSize: 0.7,
-        padding: 4,
+        // メインフォントサイズに対する比率（縦横2倍の視認性を確保）
+        fontSize: 1.4,
+        padding: 8,
         backgroundColor: '#ffffff',
         borderColor: '#333333',
         textColor: '#333333',
         // ラベル幅・高さに対する外側オフセット比率
         offsetX: 0.3,
         offsetY: 0.7,
-        borderRadius: 3,
+        borderRadius: 6,
         // BudouXを用いた行分割の1行最大文字数（単語境界優先）
         // 狭いパネルでの可読性（過度なフォント縮小の回避）を優先するため
         // 以前の 8 から 5 に調整。横幅制約時は改行で収める設計。
