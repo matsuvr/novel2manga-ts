@@ -155,8 +155,8 @@ export class TokenUsageDatabaseService extends BaseDatabaseService {
     for (const row of rows) {
       const arr = result[row.jobId] ?? []
       arr.push({
-        provider: row.provider ?? '',
-        model: row.model ?? '',
+        provider: row.provider,
+        model: row.model,
         promptTokens: row.promptTokens ?? 0,
         completionTokens: row.completionTokens ?? 0,
         totalTokens: row.totalTokens ?? 0,

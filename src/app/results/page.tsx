@@ -42,7 +42,7 @@ export default async function ResultsPage() {
                       ) : (
                         <div className="space-y-1">
                           {totals.map((t) => (
-                            <div key={`${t.provider}-${t.model}`}>
+                            <div key={`${encodeURIComponent(t.provider)}:${encodeURIComponent(t.model)}`}>
                               <strong className="capitalize">{t.provider}</strong> / <span>{t.model}</span>： 入力 {t.promptTokens.toLocaleString()}t / 出力 {t.completionTokens.toLocaleString()}t
                             </div>
                           ))}
