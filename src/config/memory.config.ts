@@ -34,6 +34,10 @@ export const memoryConfig = {
     recencyHalfLifeChunks: 8,
     defaultImportance: 0.25,
   },
+  // token estimation related multipliers
+  tokenEstimation: {
+    relationshipsTokenMultiplier: 12,
+  },
 } as const
 
 export type MemoryConfig = typeof memoryConfig

@@ -70,7 +70,9 @@ export class CacheStrategy {
     const compression = this.computeCompression(score, profile)
     const usage: CharacterUsageStats = {
       accessCount: profile.accessCount,
-      averageAccessGap: profile.accessCount === 0 ? gap : profile.totalGap / profile.accessCount,
+      // average gap should be totalGap divided by the number of intervals
+      // between accesses. If accessCount <= 1 there are no intervals.
+      averageAccessGap: profile.accessCount <= 1 ? gap : profile.totalGap / Math.max(1, profile.accessCount - 1),
       lastAccessAt: profile.lastAccessAt,
       lastAccessChunk: profile.lastAccessChunk,
       importance: profile.importance,
@@ -86,7 +88,7 @@ export class CacheStrategy {
     }
   }
 
-  ensureUsage(id: CharId, fallbackChunk: number, importance = this.config.prediction.defaultImportance): CharacterUsageStats {
+  ensureUsage(id: CharId, fallbackChunk: number, importance: number = this.config.prediction.defaultImportance): CharacterUsageStats {
     const profile = this.ensureProfile(id)
     if (profile.accessCount === 0) {
       profile.lastAccessChunk = fallbackChunk
@@ -95,7 +97,9 @@ export class CacheStrategy {
 
     return {
       accessCount: profile.accessCount,
-      averageAccessGap: profile.accessCount > 0 ? profile.totalGap / profile.accessCount : fallbackChunk,
+      // For profiles with <=1 access there is no interval; use fallbackChunk
+      // so callers have a sensible value. Otherwise divide by intervals.
+      averageAccessGap: profile.accessCount <= 1 ? fallbackChunk : profile.totalGap / Math.max(1, profile.accessCount - 1),
       lastAccessAt: profile.lastAccessAt,
       lastAccessChunk: profile.lastAccessChunk,
       importance: profile.importance,
@@ -153,7 +157,7 @@ export class CacheStrategy {
     }
     return {
       accessCount: profile.accessCount,
-      averageAccessGap: profile.accessCount > 0 ? profile.totalGap / profile.accessCount : profile.totalGap,
+      averageAccessGap: profile.accessCount <= 1 ? profile.totalGap : profile.totalGap / Math.max(1, profile.accessCount - 1),
       lastAccessAt: profile.lastAccessAt,
       lastAccessChunk: profile.lastAccessChunk,
       importance: profile.importance,
@@ -179,7 +183,8 @@ export class CacheStrategy {
       return 0
     }
 
-    const gap = Math.max(1, profile.totalGap / profile.accessCount)
+    // compute average gap per interval
+    const gap = Math.max(1, profile.totalGap / Math.max(1, profile.accessCount - 1))
     const halfLife = this.config.prediction.recencyHalfLifeChunks
     const decay = 0.5 ** (gap / halfLife)
     return Math.min(1, decay)
