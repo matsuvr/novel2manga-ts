@@ -57,7 +57,12 @@ export const GET = withAuth(
 
       // 画像キーを構築してストレージから取得
       const renderStorage = await StorageFactory.getRenderStorage()
-      const renderKey = StorageKeys.pageRender(jobId, episodeNum, pageNum)
+      const renderKey = StorageKeys.pageRender({
+        novelId: job.novelId,
+        jobId,
+        episodeNumber: episodeNum,
+        pageNumber: pageNum,
+      })
       const file = await renderStorage.get(renderKey)
 
       if (!file) {

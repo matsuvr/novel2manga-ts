@@ -62,9 +62,9 @@ export class ScriptConversionStep implements PipelineStep {
     try {
       // Get previous and next summaries for context
       const previousSummary =
-        chunkIndex > 1 ? await getStoredSummary(jobId, chunkIndex - 2) : undefined
+        chunkIndex > 1 ? await getStoredSummary(context.novelId, jobId, chunkIndex - 2) : undefined
       const nextSummary =
-        chunkIndex < chunksNumber ? await getStoredSummary(jobId, chunkIndex) : undefined
+        chunkIndex < chunksNumber ? await getStoredSummary(context.novelId, jobId, chunkIndex) : undefined
 
       logger.info('Starting manga script conversion with character memory snapshot', {
         jobId,

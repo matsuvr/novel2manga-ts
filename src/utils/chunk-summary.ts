@@ -6,7 +6,8 @@ import { JsonStorageKeys, StorageFactory } from '@/utils/storage'
 
 // In-memory fallback store for test environments or when storage is unavailable
 const memoryCache = new Map<string, string>()
-const keyOf = (jobId: string, index: number) => `${jobId}::${index}`
+const keyOf = (novelId: string, jobId: string, index: number) =>
+  `${novelId}::${jobId}::${index}`
 
 const logger = getLogger().withContext({ util: 'chunk-summary' })
 
@@ -14,11 +15,12 @@ const logger = getLogger().withContext({ util: 'chunk-summary' })
  * Generate or load cached summary for a chunk.
  */
 export async function loadOrGenerateSummary(
+  novelId: string,
   jobId: string,
   index: number,
   text: string,
 ): Promise<string> {
-  const key = JsonStorageKeys.chunkSummary(jobId, index)
+  const key = JsonStorageKeys.chunkSummary({ novelId, jobId, index })
   try {
     const storage = await StorageFactory.getAnalysisStorage()
     const existing = await storage.get(key)
@@ -38,15 +40,16 @@ export async function loadOrGenerateSummary(
     await storage.put(key, JSON.stringify({ summary }, null, 2), {
       contentType: 'application/json; charset=utf-8',
       jobId,
+      novelId,
       chunk: String(index),
     })
     return summary
   } catch {
     // Storage unavailable → use in-memory fallback
-    const cached = memoryCache.get(keyOf(jobId, index))
+    const cached = memoryCache.get(keyOf(novelId, jobId, index))
     if (cached) return cached
     const summary = await summarize(text, { jobId, chunkIndex: index })
-    memoryCache.set(keyOf(jobId, index), summary)
+    memoryCache.set(keyOf(novelId, jobId, index), summary)
     return summary
   }
 }
@@ -54,10 +57,14 @@ export async function loadOrGenerateSummary(
 /**
  * Retrieve summary if already cached.
  */
-export async function getStoredSummary(jobId: string, index: number): Promise<string | undefined> {
+export async function getStoredSummary(
+  novelId: string,
+  jobId: string,
+  index: number,
+): Promise<string | undefined> {
   try {
     const storage = await StorageFactory.getAnalysisStorage()
-    const key = JsonStorageKeys.chunkSummary(jobId, index)
+    const key = JsonStorageKeys.chunkSummary({ novelId, jobId, index })
     const existing = await storage.get(key)
     if (!existing) return undefined
     try {
@@ -72,7 +79,7 @@ export async function getStoredSummary(jobId: string, index: number): Promise<st
     }
   } catch {
     // Fallback to in-memory cache
-    return memoryCache.get(keyOf(jobId, index))
+    return memoryCache.get(keyOf(novelId, jobId, index))
   }
 }
 

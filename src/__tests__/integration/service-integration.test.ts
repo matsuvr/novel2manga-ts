@@ -223,17 +223,52 @@ vi.mock('@/utils/storage', () => ({
     getOutputStorage: () => testStorageFactory.getOutputStorage(),
   },
   StorageKeys: {
-    chunk: (jobId: string, index: number) => `${jobId}/chunk_${index}.txt`,
-    chunkAnalysis: (jobId: string, index: number) => `${jobId}/chunk_${index}.json`,
-    episodeLayout: (jobId: string, episodeNumber: number) =>
-      `${jobId}/episode_${episodeNumber}.yaml`,
+    chunk: ({ novelId = 'mock-novel', jobId, index }: { novelId?: string; jobId: string; index: number }) =>
+      `${novelId}/jobs/${jobId}/chunks/chunk_${index}.txt`,
+    chunkAnalysis: ({
+      novelId = 'mock-novel',
+      jobId,
+      index,
+    }: {
+      novelId?: string
+      jobId: string
+      index: number
+    }) => `${novelId}/jobs/${jobId}/analysis/chunk_${index}.json`,
+    episodeLayout: ({
+      novelId = 'mock-novel',
+      jobId,
+      episodeNumber,
+    }: {
+      novelId?: string
+      jobId: string
+      episodeNumber: number
+    }) => `${novelId}/jobs/${jobId}/layouts/episode_${episodeNumber}.yaml`,
   },
   JsonStorageKeys: {
-    scriptChunk: (jobId: string, index: number) => `${jobId}/script_chunk_${index}.json`,
-    scriptCombined: (jobId: string) => `${jobId}/script_combined.json`,
-    fullPages: (jobId: string) => `${jobId}/full_pages.json`,
-    episodeBundling: (jobId: string) => `${jobId}/episode_bundling.json`,
-    chunkSummary: (jobId: string, index: number) => `${jobId}/chunk_${index}.summary.json`,
+    scriptChunk: ({
+      novelId = 'mock-novel',
+      jobId,
+      index,
+    }: {
+      novelId?: string
+      jobId: string
+      index: number
+    }) => `${novelId}/jobs/${jobId}/analysis/script_chunk_${index}.json`,
+    scriptCombined: ({ novelId = 'mock-novel', jobId }: { novelId?: string; jobId: string }) =>
+      `${novelId}/jobs/${jobId}/analysis/script_combined.json`,
+    fullPages: ({ novelId = 'mock-novel', jobId }: { novelId?: string; jobId: string }) =>
+      `${novelId}/jobs/${jobId}/layouts/full_pages.json`,
+    episodeBundling: ({ novelId = 'mock-novel', jobId }: { novelId?: string; jobId: string }) =>
+      `${novelId}/jobs/${jobId}/analysis/episode_bundling.json`,
+    chunkSummary: ({
+      novelId = 'mock-novel',
+      jobId,
+      index,
+    }: {
+      novelId?: string
+      jobId: string
+      index: number
+    }) => `${novelId}/jobs/${jobId}/analysis/chunk_${index}.summary.json`,
   },
   saveEpisodeBoundaries: vi.fn().mockImplementation(async (jobId: string, boundaries: any[]) => {
     // Mock implementation that saves episodes to test database
@@ -305,7 +340,7 @@ vi.mock('@/agents/layout-generator', () => ({
 // Episode bundling と Script merge を安定化させるモック
 vi.mock('@/services/application/steps/script-merge-step', () => ({
   ScriptMergeStep: class {
-    async mergeChunkScripts(total: number, ctx: { jobId: string }) {
+    async mergeChunkScripts(total: number, ctx: { jobId: string; novelId?: string }) {
       // 実装互換のため、analysisStorageに script_combined.json を出力
       try {
         const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
@@ -337,7 +372,10 @@ vi.mock('@/services/application/steps/script-merge-step', () => ({
             },
           ],
         }
-        await storage.put(JsonStorageKeys.scriptCombined(ctx.jobId), JSON.stringify(combined))
+        await storage.put(
+          JsonStorageKeys.scriptCombined({ novelId: ctx.novelId ?? 'mock-novel', jobId: ctx.jobId }),
+          JSON.stringify(combined),
+        )
       } catch {
         // 失敗してもテストは継続（呼び出し元で失敗させない）
       }
@@ -806,9 +844,11 @@ describe('Service Integration Tests', () => {
       expect(chunks[0].contentPath).toBeDefined()
       expect(chunks[0].wordCount).toBeGreaterThan(0)
 
-      // 検証: ストレージにチャンクが保存されている
-      const chunkStorage = await testStorageFactory.getChunkStorage()
-      expect(chunkStorage.has(`${result.jobId}/chunk_0.txt`)).toBe(true)
+  // 検証: ストレージにチャンクが保存されている (canonical StorageKeys)
+  const chunkStorage = await testStorageFactory.getChunkStorage()
+  const { StorageKeys } = await import('@/utils/storage')
+  const expectedChunkKey = StorageKeys.chunk({ novelId: novel.id, jobId: result.jobId, index: 0 })
+  expect(chunkStorage.has(expectedChunkKey)).toBe(true)
 
       // 検証: 分析結果 (isDemoモードではスキップされるため、チェックしない)
       // const analysisStorage = await testStorageFactory.getAnalysisStorage();
@@ -886,9 +926,11 @@ describe('Service Integration Tests', () => {
       expect(chunks.length).toBe(result.chunkCount)
       expect(chunks[0].contentPath).toBeDefined()
 
-      // ストレージにチャンクが保存されていることを確認
-      const chunkStorage = await testStorageFactory.getChunkStorage()
-      expect(chunkStorage.has(`${result.jobId}/chunk_0.txt`)).toBe(true)
+  // ストレージにチャンクが保存されていることを確認 (canonical StorageKeys)
+  const chunkStorage = await testStorageFactory.getChunkStorage()
+  const { StorageKeys: StorageKeys2 } = await import('@/utils/storage')
+  const expectedChunkKey2 = StorageKeys2.chunk({ novelId: novel.id, jobId: result.jobId, index: 0 })
+  expect(chunkStorage.has(expectedChunkKey2)).toBe(true)
 
       console.log(
         '✅ データ一貫性テスト: 完全なパイプライン実行でデータベースとストレージの一貫性が保たれている',

@@ -31,7 +31,7 @@ export class PageBreakStep implements PipelineStep {
     episodeBreaks: EpisodeBreakPlan,
     context: StepContext,
   ): Promise<StepExecutionResult<PageBreakResult>> {
-    const { jobId, logger } = context
+    const { jobId, novelId, logger } = context
 
     try {
       logger.info('Starting importance-based page break estimation', {
@@ -139,10 +139,15 @@ export class PageBreakStep implements PipelineStep {
 
         // Persist per-episode layout JSON to storage for downstream rendering/export
         try {
-          const key = StorageKeys.episodeLayout(jobId, episode.episodeNumber)
+          const key = StorageKeys.episodeLayout({
+            novelId,
+            jobId,
+            episodeNumber: episode.episodeNumber,
+          })
           await layoutStorage.put(key, JSON.stringify(episodeLayout, null, 2), {
             contentType: 'application/json; charset=utf-8',
             jobId,
+            novelId,
             episode: String(episode.episodeNumber),
           })
           // Upsert layout status per episode for accurate progress and export discovery
@@ -200,11 +205,12 @@ export class PageBreakStep implements PipelineStep {
       }
 
       await layoutStorage.put(
-        JsonStorageKeys.fullPages(jobId),
+        JsonStorageKeys.fullPages({ novelId, jobId }),
         JSON.stringify(fullPagesData, null, 2),
         {
           contentType: 'application/json; charset=utf-8',
           jobId,
+          novelId,
         },
       )
 
@@ -224,7 +230,12 @@ export class PageBreakStep implements PipelineStep {
             '@/services/application/panel-to-chunk-mapping',
           )
 
-          const panelToChunkMapping = await buildPanelToChunkMapping(jobId, totalChunks, logger)
+          const panelToChunkMapping = await buildPanelToChunkMapping(
+            context.novelId,
+            jobId,
+            totalChunks,
+            logger,
+          )
 
           const { EpisodeWriteService } = await import('@/services/application/episode-write')
           const episodeWriter = new EpisodeWriteService()

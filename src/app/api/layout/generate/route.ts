@@ -67,7 +67,8 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     try {
       if (!isDemo) {
         const ports = getStoragePorts()
-        const yamlContent = (await ports.layout.getEpisodeLayout(jobId, episodeNumber)) || ''
+        const yamlContent =
+          (await ports.layout.getEpisodeLayout(job.novelId, jobId, episodeNumber)) || ''
         await renderBatchFromYaml(jobId, episodeNumber, yamlContent, undefined, undefined, ports)
       }
     } catch (e) {

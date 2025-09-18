@@ -198,7 +198,9 @@ export class AnalyzePipeline extends BasePipelineStep {
     // 統合台本を読み出してページ割り
     const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
     const analysisStorage = await StorageFactory.getAnalysisStorage()
-    const combinedText = await analysisStorage.get(JsonStorageKeys.scriptCombined(jobId))
+    const combinedText = await analysisStorage.get(
+      JsonStorageKeys.scriptCombined({ novelId: context.novelId, jobId }),
+    )
     if (!combinedText) {
       throw new Error('Combined script not found')
     }
@@ -233,7 +235,12 @@ export class AnalyzePipeline extends BasePipelineStep {
       const { buildPanelToChunkMapping, getChunkForPanel } = await import(
         '@/services/application/panel-to-chunk-mapping'
       )
-      const panelToChunkMapping = await buildPanelToChunkMapping(jobId, totalChunks, logger)
+      const panelToChunkMapping = await buildPanelToChunkMapping(
+        context.novelId,
+        jobId,
+        totalChunks,
+        logger,
+      )
 
       const { EpisodeWriteService } = await import('@/services/application/episode-write')
       const episodeWriter = new EpisodeWriteService()
@@ -382,7 +389,11 @@ export class AnalyzePipeline extends BasePipelineStep {
           const { StorageFactory, StorageKeys } = await import('@/utils/storage')
           const storage = await StorageFactory.getLayoutStorage()
           for (const ep of episodes) {
-            const layoutKey = StorageKeys.episodeLayout(jobId, ep.episodeNumber)
+            const layoutKey = StorageKeys.episodeLayout({
+              novelId: ep.novelId,
+              jobId,
+              episodeNumber: ep.episodeNumber,
+            })
             const layoutExists = await storage.get(layoutKey)
             if (layoutExists?.text) {
               diagInfo.layoutFileCount++

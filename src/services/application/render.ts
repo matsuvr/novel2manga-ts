@@ -52,6 +52,11 @@ export async function renderBatchFromJson(
   const startTime = Date.now()
   const jobDb = db.jobs()
   const renderDb = db.render()
+  const jobRow = await jobDb.getJob(jobId)
+  if (!jobRow?.novelId) {
+    throw new Error(`Novel ID not found for job ${jobId}`)
+  }
+  const novelId = jobRow.novelId
 
   // layoutはJSONとして渡される前提
   const parsedLayout = mangaLayoutJson as Parameters<typeof normalizeAndValidateLayout>[0]
@@ -111,7 +116,13 @@ export async function renderBatchFromJson(
       const imageBlob = await renderer.renderToImage(mangaLayout, pageNumber, 'png')
       const imageBuffer = Buffer.from(await imageBlob.arrayBuffer())
 
-      const renderKey = await storage.putPageRender(jobId, episodeNumber, pageNumber, imageBuffer)
+      const renderKey = await storage.putPageRender(
+        novelId,
+        jobId,
+        episodeNumber,
+        pageNumber,
+        imageBuffer,
+      )
 
       const thumbBlob = await ThumbnailGenerator.generateThumbnail(imageBlob, {
         width: 200,
@@ -121,6 +132,7 @@ export async function renderBatchFromJson(
       })
       const thumbnailBuffer = Buffer.from(await thumbBlob.arrayBuffer())
       const thumbnailKey = await storage.putPageThumbnail(
+        novelId,
         jobId,
         episodeNumber,
         pageNumber,
@@ -221,6 +233,13 @@ export async function renderFromPageBreakPlan(
     episodeNumber,
   })
 
+  const jobDb = db.jobs()
+  const jobRow = await jobDb.getJob(jobId)
+  if (!jobRow?.novelId) {
+    throw new Error(`Novel ID not found for job ${jobId}`)
+  }
+  const novelId = jobRow.novelId
+
   const startTime = Date.now()
   const results: BatchResultItem[] = []
   let renderedCount = 0
@@ -310,8 +329,7 @@ export async function renderFromPageBreakPlan(
       const page = { pageNumber, panels, panelCount: panels.length }
       try {
         // 現在処理中のページを更新
-        const jobDb2 = db.jobs()
-        jobDb2.updateProcessingPosition(jobId, {
+        jobDb.updateProcessingPosition(jobId, {
           episode: episodeNumber,
           page: pageNumber,
         })
@@ -319,6 +337,7 @@ export async function renderFromPageBreakPlan(
         // Check if page already exists
         if (options.skipExisting) {
           const existingImage = await ports.render.getPageRender(
+            novelId,
             jobId,
             episodeNumber,
             page.pageNumber,
@@ -389,6 +408,7 @@ export async function renderFromPageBreakPlan(
 
         // Store the rendered images
         const renderKey = await ports.render.putPageRender(
+          novelId,
           jobId,
           episodeNumber,
           page.pageNumber,
@@ -396,6 +416,7 @@ export async function renderFromPageBreakPlan(
         )
 
         const thumbnailKey = await ports.render.putPageThumbnail(
+          novelId,
           jobId,
           episodeNumber,
           page.pageNumber,

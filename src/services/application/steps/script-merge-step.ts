@@ -23,7 +23,7 @@ export class ScriptMergeStep implements PipelineStep {
     totalChunks: number,
     context: StepContext,
   ): Promise<StepExecutionResult<ScriptMergeResult>> {
-    const { jobId, logger } = context
+    const { jobId, novelId, logger } = context
 
     // actualTotalChunksをtryブロックの外で宣言
     let actualTotalChunks = 0
@@ -36,7 +36,7 @@ export class ScriptMergeStep implements PipelineStep {
       const actualChunks: number[] = []
       let chunkIndex = 0
       while (true) {
-        const key = JsonStorageKeys.scriptChunk(jobId, chunkIndex)
+        const key = JsonStorageKeys.scriptChunk({ novelId, jobId, index: chunkIndex })
         const obj = await storage.get(key)
         if (!obj) break
         actualChunks.push(chunkIndex)
@@ -69,7 +69,7 @@ export class ScriptMergeStep implements PipelineStep {
       const failCoverageChunks: Array<{ index: number; ratio: number }> = []
 
       for (let i = 0; i < actualTotalChunks; i++) {
-        const key = JsonStorageKeys.scriptChunk(jobId, i)
+        const key = JsonStorageKeys.scriptChunk({ novelId, jobId, index: i })
         logger.info('Processing script chunk', { jobId, chunkIndex: i, key })
 
         const obj = await storage.get(key)
@@ -177,7 +177,7 @@ export class ScriptMergeStep implements PipelineStep {
             const chunkStorage = await StorageFactory.getChunkStorage()
             const previewItems: Array<{ chunkIndex: number; preview: string }> = []
             for (const c of failCoverageChunks.slice(0, 3)) {
-              const key = StorageKeys.chunk(jobId, c.index)
+              const key = StorageKeys.chunk({ novelId, jobId, index: c.index })
               const obj = await chunkStorage.get(key)
               const raw = obj?.text ?? ''
               const preview = (raw.slice(0, 200) || '').replace(/\n/g, '\\n')
@@ -235,9 +235,10 @@ export class ScriptMergeStep implements PipelineStep {
         combinedHasJapanese,
       })
 
-      await storage.put(JsonStorageKeys.scriptCombined(jobId), combinedJson, {
+      await storage.put(JsonStorageKeys.scriptCombined({ novelId, jobId }), combinedJson, {
         contentType: 'application/json; charset=utf-8',
         jobId,
+        novelId,
       })
 
       logger.info('Script merge successful', {

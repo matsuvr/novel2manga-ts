@@ -10,6 +10,7 @@ import {
   createSuccessResponse,
   ValidationError,
 } from '@/utils/api-error'
+import { getNovelIdForJob } from '@/utils/job'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
 
 // リクエストボディのバリデーションスキーマ
@@ -70,6 +71,7 @@ export const POST = withAuth(async (request: NextRequest, _user) => {
     // リクエストボディの取得とバリデーション
     const body = await request.json()
     const { jobId, chunkIndex } = analyzeChunkRequestSchema.parse(body)
+    const novelId = await getNovelIdForJob(jobId)
 
     logger.info('Analyzing chunk', { jobId, chunkIndex })
 
@@ -82,7 +84,7 @@ export const POST = withAuth(async (request: NextRequest, _user) => {
     const analysisStorage = await StorageFactory.getAnalysisStorage()
 
     // 既に分析済みかチェック
-    const analysisPath = StorageKeys.chunkAnalysis(jobId, chunkIndex)
+    const analysisPath = StorageKeys.chunkAnalysis({ novelId, jobId, index: chunkIndex })
     const existingAnalysis = await analysisStorage.get(analysisPath)
 
     if (existingAnalysis) {
@@ -95,7 +97,7 @@ export const POST = withAuth(async (request: NextRequest, _user) => {
     }
 
     // チャンクテキストを取得
-    const chunkPath = StorageKeys.chunk(jobId, chunkIndex)
+    const chunkPath = StorageKeys.chunk({ novelId, jobId, index: chunkIndex })
     const chunkFile = await chunkStorage.get(chunkPath)
 
     if (!chunkFile) {

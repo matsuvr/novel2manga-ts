@@ -81,7 +81,7 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
   const renderDone = isRenderCompletelyDone(job as unknown as Parameters<typeof isRenderCompletelyDone>[0])
 
   const layoutStorage = await StorageFactory.getLayoutStorage()
-  const fullPagesKey = JsonStorageKeys.fullPages(job.id)
+  const fullPagesKey = JsonStorageKeys.fullPages({ novelId, jobId: job.id })
   const fullPages = await layoutStorage.get(fullPagesKey)
   // Prefer showing stored fullPages when available. Only redirect or show
   // the "results not yet available" fallback when fullPages is missing.

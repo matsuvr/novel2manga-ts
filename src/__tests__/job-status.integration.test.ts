@@ -9,9 +9,9 @@ import type { JobProgress } from '@/types/job'
 vi.mock('@/services/database/index', () => ({
   db: {
     jobs: () => ({
-      getJobWithProgress: vi.fn((...args: any[]) =>
-        mockJobDbPort.getJobWithProgress(...(args as any)),
-      ),
+      getJobWithProgress: vi.fn(function (...args: any[]) {
+          return mockJobDbPort.getJobWithProgress.apply(mockJobDbPort, args as any)
+        }),
       updateJobStatus: vi.fn(),
       updateJobStep: vi.fn(),
       markJobStepCompleted: vi.fn(),
@@ -19,14 +19,14 @@ vi.mock('@/services/database/index', () => ({
       updateJobError: vi.fn(),
     }),
     episodes: () => ({
-      getEpisodesByJobId: vi.fn((...args: any[]) =>
-        mockDatabaseService.getEpisodesByJobId(...(args as any)),
-      ),
+      getEpisodesByJobId: vi.fn(function (...args: any[]) {
+          return mockDatabaseService.getEpisodesByJobId.apply(mockDatabaseService, args as any)
+        }),
     }),
     render: () => ({
-      getAllRenderStatusByJob: vi.fn((...args: any[]) =>
-        mockDatabaseService.getAllRenderStatusByJob(...(args as any)),
-      ),
+      getAllRenderStatusByJob: vi.fn(function (...args: any[]) {
+          return mockDatabaseService.getAllRenderStatusByJob.apply(mockDatabaseService, args as any)
+        }),
     }),
   },
 }))
@@ -98,6 +98,12 @@ describe('JobProgressService Integration Tests', () => {
         id: 'job-DEFAULT',
         novelId: 'novel-DEFAULT',
         jobName: null,
+        userId: 'test-user-bypass',
+        characterMemoryPath: null,
+        promptMemoryPath: null,
+        processingEpisode: null,
+  processingPage: null,
+  coverageWarnings: null,
         status: 'pending',
         currentStep: 'initialized',
         splitCompleted: false,
@@ -139,7 +145,7 @@ describe('JobProgressService Integration Tests', () => {
     }
     it('returns null when job does not exist', async () => {
       // Arrange
-      mockJobDbPort.getJobWithProgress.mockResolvedValue(null)
+  mockJobDbPort.getJobWithProgress.mockResolvedValue(null as any)
       const service = new JobProgressService()
 
       // Act
@@ -199,6 +205,7 @@ describe('JobProgressService Integration Tests', () => {
           endCharIndex: 1000,
           confidence: 0.9,
           createdAt: new Date().toISOString(),
+          episodeTextPath: null,
         },
         {
           id: 'ep2',
@@ -213,6 +220,7 @@ describe('JobProgressService Integration Tests', () => {
           endCharIndex: 2000,
           confidence: 0.85,
           createdAt: new Date().toISOString(),
+          episodeTextPath: null,
         },
       ]
 
@@ -292,10 +300,10 @@ describe('JobProgressService Integration Tests', () => {
       const result = await service.getJobWithProgress('job-1')
 
       // Assert
-      expect(result).toBeDefined()
-      expect(result?.progress?.perEpisodePages).toBeDefined()
+  expect(result).toBeDefined()
+  expect((result?.progress as any)?.perEpisodePages).toBeDefined()
 
-      const perEpisodePages = result!.progress!.perEpisodePages!
+  const perEpisodePages = (result!.progress as any).perEpisodePages!
 
       // Episode 1: actualPages=25, rendered=0 (validation may be present with defaults)
       expect(perEpisodePages[1]).toMatchObject({
@@ -317,8 +325,8 @@ describe('JobProgressService Integration Tests', () => {
 
       // Verify all mocks were called correctly
       expect(mockDatabaseService.getEpisodesByJobId).toHaveBeenCalledWith('job-1')
-      expect(mockLayoutStorage.getEpisodeLayoutProgress).toHaveBeenCalledWith('job-1', 1)
-      expect(mockLayoutStorage.getEpisodeLayoutProgress).toHaveBeenCalledWith('job-1', 2)
+  expect(mockLayoutStorage.getEpisodeLayoutProgress).toHaveBeenCalledWith('novel-1', 'job-1', 1)
+  expect(mockLayoutStorage.getEpisodeLayoutProgress).toHaveBeenCalledWith('novel-1', 'job-1', 2)
       expect(mockDatabaseService.getAllRenderStatusByJob).toHaveBeenCalledWith('job-1')
     })
 
@@ -347,6 +355,7 @@ describe('JobProgressService Integration Tests', () => {
           endCharIndex: 1000,
           confidence: 0.9,
           createdAt: new Date().toISOString(),
+          episodeTextPath: null,
         },
       ]
 
@@ -362,10 +371,10 @@ describe('JobProgressService Integration Tests', () => {
       const result = await service.getJobWithProgress('job-1')
 
       // Assert
-      expect(result).toBeDefined()
-      expect(result?.progress?.perEpisodePages).toBeDefined()
+  expect(result).toBeDefined()
+  expect((result?.progress as any)?.perEpisodePages).toBeDefined()
 
-      const perEpisodePages = result!.progress!.perEpisodePages!
+  const perEpisodePages = (result!.progress as any).perEpisodePages!
 
       // Should have actualPages=0 due to parsing error, but still include the episode
       expect(perEpisodePages[1]).toMatchObject({
@@ -399,8 +408,8 @@ describe('JobProgressService Integration Tests', () => {
 
       // Assert
       // Should return original job when enrichment fails
-      expect(result).toEqual(mockJob)
-      expect(result?.progress?.perEpisodePages).toBeUndefined()
+  expect(result).toEqual(mockJob)
+  expect((result?.progress as any)?.perEpisodePages).toBeUndefined()
     })
   })
 })

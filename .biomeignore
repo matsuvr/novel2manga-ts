@@ -27,6 +27,7 @@
 # ツール関連
 **/.claude/**
 biome-report.json
+scripts/scan-results.json
 
 # その他の除外ファイル
 .env*
