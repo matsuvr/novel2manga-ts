@@ -20,7 +20,8 @@ export default async function ResultsPage() {
   }
   const jobs = await db.jobs().getJobsByUser(userId)
   const jobIds = jobs.map((job) => job.id)
-  const tokenTotals = await db.tokenUsage().getTotalsByJobIds(jobIds)
+  // Get totals grouped by provider+model so we can show per-provider/model breakdowns
+  const tokenTotalsByModel = await db.tokenUsage().getTotalsByJobIdsGroupedByModel(jobIds)
   return (
     <div className="container mx-auto max-w-5xl py-6">
       <h1 className="mb-4 text-2xl font-semibold">変換結果一覧</h1>
@@ -29,19 +30,24 @@ export default async function ResultsPage() {
         <CardContent>
           <ul className="divide-y">
             {jobs.map((job) => {
-              const totals = tokenTotals[job.id] ?? {
-                promptTokens: 0,
-                completionTokens: 0,
-                totalTokens: 0,
-              }
+              const totals = tokenTotalsByModel[job.id] ?? []
               return (
                 <li key={job.id} className="flex items-center justify-between py-3">
                   <div>
                     <div className="font-medium">{job.jobName ?? '無題'}</div>
                     <div className="text-xs text-muted-foreground">{job.createdAt}</div>
                     <div className="text-xs text-muted-foreground">
-                      入力 {totals.promptTokens.toLocaleString()}t / 出力{' '}
-                      {totals.completionTokens.toLocaleString()}t
+                      {totals.length === 0 ? (
+                        <span>入力 0t / 出力 0t</span>
+                      ) : (
+                        <div className="space-y-1">
+                          {totals.map((t) => (
+                            <div key={`${t.provider}-${t.model}`}>
+                              <strong className="capitalize">{t.provider}</strong> / <span>{t.model}</span>： 入力 {t.promptTokens.toLocaleString()}t / 出力 {t.completionTokens.toLocaleString()}t
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <Button asChild variant="outline" className="ml-4">

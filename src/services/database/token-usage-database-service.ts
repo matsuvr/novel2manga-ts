@@ -13,11 +13,26 @@ interface AggregateRow {
   totalTokens: number
 }
 
+interface AggregateRowWithModel extends AggregateRow {
+  provider: string
+  model: string
+}
+
 export type JobTokenUsage = {
   promptTokens: number
   completionTokens: number
   totalTokens: number
 }
+
+export type ModelTokenUsage = {
+  provider: string
+  model: string
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+}
+
+export type JobTokenUsageByModel = Record<string, ModelTokenUsage[]>
 
 export interface RecordTokenUsageParams {
   jobId: string
@@ -112,5 +127,43 @@ export class TokenUsageDatabaseService extends BaseDatabaseService {
         },
       ]),
     )
+  }
+
+  /**
+   * Get aggregated token usage totals for multiple jobs grouped by provider+model
+   */
+  async getTotalsByJobIdsGroupedByModel(jobIds: readonly string[]): Promise<JobTokenUsageByModel> {
+    if (jobIds.length === 0) return {}
+
+    const db = this.db as DrizzleDatabase
+    const query = db
+      .select({
+        jobId: tokenUsage.jobId,
+        provider: tokenUsage.provider,
+        model: tokenUsage.model,
+        promptTokens: sql<number>`sum(${tokenUsage.promptTokens})`.mapWith(Number),
+        completionTokens: sql<number>`sum(${tokenUsage.completionTokens})`.mapWith(Number),
+        totalTokens: sql<number>`sum(${tokenUsage.totalTokens})`.mapWith(Number),
+      })
+      .from(tokenUsage)
+      .where(inArray(tokenUsage.jobId, jobIds))
+      .groupBy(tokenUsage.jobId, tokenUsage.provider, tokenUsage.model)
+
+  const rows = this.isSync() ? (query.all() as AggregateRowWithModel[]) : ((await query) as AggregateRowWithModel[])
+
+    const result: JobTokenUsageByModel = {}
+    for (const row of rows) {
+      const arr = result[row.jobId] ?? []
+      arr.push({
+        provider: row.provider ?? '',
+        model: row.model ?? '',
+        promptTokens: row.promptTokens ?? 0,
+        completionTokens: row.completionTokens ?? 0,
+        totalTokens: row.totalTokens ?? 0,
+      })
+      result[row.jobId] = arr
+    }
+
+    return result
   }
 }
