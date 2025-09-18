@@ -61,3 +61,8 @@
 - API `/api/mypage/dashboard` now returns job summaries including status and novel titles for client display.
 - New My Page route lists each job with links to finished results and resume actions for failed jobs.
 
+## Progress UI
+
+- The processing progress screen preserves the last known totals for chunks and episodes so runtime hints always display a
+  numeric "current / total" indicator instead of falling back to `?` when SSE payloads omit the totals.
+

@@ -26,3 +26,5 @@
 - [x] Harden page break estimation for empty scripts and negative page offsets.
 
 
+- [x] Ensure progress hints show accurate chunk/episode totals without `?` placeholders.
+

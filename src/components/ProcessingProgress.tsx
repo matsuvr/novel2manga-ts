@@ -71,6 +71,25 @@ const INITIAL_STEPS: ProcessStep[] = [
 
 const STEP_PERCENT = 100 / (INITIAL_STEPS.length || 1)
 
+type LastKnownTotals = {
+  chunks: number | null
+  episodes: number | null
+  pages: number | null
+}
+
+const isPositiveFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0
+
+const resolvePositiveTotal = (
+  reported: number | null | undefined,
+  lastKnown: number | null | undefined,
+  minimum: number,
+): number => {
+  if (isPositiveFiniteNumber(reported)) return reported
+  if (isPositiveFiniteNumber(lastKnown)) return lastKnown
+  return Math.max(1, minimum)
+}
+
 export function calculateRenderProgress(job: Job | Record<string, unknown>): number {
   const jr = job as Record<string, unknown>
   const totalPages = jr.totalPages
@@ -124,6 +143,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
   const isMountedRef = useRef(false)
   const lastJobRef = useRef<Job | null>(null)
   const esRef = useRef<EventSource | null>(null)
+  const lastKnownTotalsRef = useRef<LastKnownTotals>({ chunks: null, episodes: null, pages: null })
 
   const inProgressWeight = useMemo(() => {
     const w = typeof currentEpisodeProgressWeight === 'number' ? currentEpisodeProgressWeight : DEFAULT_CURRENT_EPISODE_PROGRESS_WEIGHT
@@ -171,6 +191,11 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
     (data: JobData) => {
       // lightweight diffing and ui updates — keep stable and purely functional
       const job = data.job
+
+      const totals = lastKnownTotalsRef.current
+      if (isPositiveFiniteNumber(job.totalChunks)) totals.chunks = job.totalChunks
+      if (isPositiveFiniteNumber(job.totalEpisodes)) totals.episodes = job.totalEpisodes
+      if (isPositiveFiniteNumber(job.totalPages)) totals.pages = job.totalPages
 
       // fast equality check to avoid repeated UI work
       const jobDataString = JSON.stringify({
@@ -354,15 +379,18 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
         const analyzeMatch = stepId.match(/^analyze_chunk_(\d+)(?:_(retry|done))?$/)
         if (analyzeMatch && !job.analyzeCompleted) {
           const idx = Number(analyzeMatch[1])
-          const total = job.totalChunks || 0
-          hints.analyze = `現在: チャンク ${Math.min(idx + 1, total || idx + 1)} / ${total || '?'} を分析中`
+          const chunkTotal = resolvePositiveTotal(job.totalChunks, lastKnownTotalsRef.current.chunks, idx + 1)
+          const currentChunkNumber = Math.min(idx + 1, chunkTotal)
+          hints.analyze = `現在: チャンク ${currentChunkNumber} / ${chunkTotal} を分析中`
         }
         const layoutMatch = stepId.match(/^layout_episode_(\d+)$/)
         if (layoutMatch && !job.layoutCompleted) {
           const ep = Number(layoutMatch[1])
           setCurrentLayoutEpisode(ep)
-          const totalEp = job.totalEpisodes || 0
-          hints.layout = `現在: エピソード ${Math.min(ep, totalEp || ep)} / ${totalEp || '?'} をレイアウト中`
+          const normalizedEpisode = ep > 0 ? ep : 1
+          const totalEp = resolvePositiveTotal(job.totalEpisodes, lastKnownTotalsRef.current.episodes, normalizedEpisode)
+          const currentEpisodeNumber = Math.min(normalizedEpisode, totalEp)
+          hints.layout = `現在: エピソード ${currentEpisodeNumber} / ${totalEp} をレイアウト中`
         }
         if ((stepId === 'render' || stepId.startsWith('render_')) && !job.renderCompleted) {
           const total = job.totalPages || 0
