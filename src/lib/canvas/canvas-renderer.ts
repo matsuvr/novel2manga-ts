@@ -331,213 +331,248 @@ export class CanvasRenderer {
 
     // クリップ（モック環境では未実装のことがある）
     const canClip = typeof (this.ctx as unknown as { clip?: unknown }).clip === 'function'
-    if (canClip && this.hasRect(this.ctx)) {
+    const shouldClipPanel = canClip && this.hasRect(this.ctx)
+    if (shouldClipPanel) {
+      this.ctx.save()
       this.ctx.beginPath()
       this.ctx.rect(x, y, width, height)
       ;(this.ctx as unknown as CanvasRenderingContext2D & { clip: () => void }).clip()
     }
 
-    // 吹き出しを描画し、占有領域を登録
-    if (panel.dialogues && panel.dialogues.length > 0) {
-      this.ctx.save()
-      this.ctx.beginPath()
-      if (canClip && this.hasRect(this.ctx)) {
-        this.ctx.rect(x, y, width, height)
-        this.ctx.clip()
-      } else {
-        // 一部のテストモックで rect が未実装のことがあるため、クリップをスキップ
-        // フレームは既に drawFrame 済みであるため視覚上の影響は小さい
-      }
-      try {
-        if (panel.dialogues.length > 1) {
-          const slotWidth = (width * HORIZONTAL_SLOT_COVERAGE) / panel.dialogues.length
-          const bubbleY = y + height * BUBBLE_TOP_OFFSET_RATIO
-          const maxAreaHeight = height * MAX_BUBBLE_AREA_HEIGHT_RATIO
+    try {
+      // 吹き出しを描画し、占有領域を登録
+      if (panel.dialogues && panel.dialogues.length > 0) {
+        this.ctx.save()
+        this.ctx.beginPath()
+        if (canClip && this.hasRect(this.ctx)) {
+          this.ctx.rect(x, y, width, height)
+          this.ctx.clip()
+        } else {
+          // 一部のテストモックで rect が未実装のことがあるため、クリップをスキップ
+          // フレームは既に drawFrame 済みであるため視覚上の影響は小さい
+        }
+        try {
+          if (panel.dialogues.length > 1) {
+            const slotWidth = (width * HORIZONTAL_SLOT_COVERAGE) / panel.dialogues.length
+            const bubbleY = y + height * BUBBLE_TOP_OFFSET_RATIO
+            const maxAreaHeight = height * MAX_BUBBLE_AREA_HEIGHT_RATIO
 
-          for (let i = 0; i < panel.dialogues.length; i++) {
-            const dialogue = panel.dialogues[i]
-            const key = `${panel.id}:${i}`
+            for (let i = 0; i < panel.dialogues.length; i++) {
+              const dialogue = panel.dialogues[i]
+              const key = `${panel.id}:${i}`
+              const asset = this.dialogueAssets?.[key]
+              if (!asset) throw new Error(`Dialogue asset missing for ${key}`)
+
+              const targetDrawWidth = slotWidth / Math.sqrt(2) - BUBBLE_PADDING * 2
+              const widthScale = targetDrawWidth > 0 ? targetDrawWidth / asset.width : 0
+              const targetDrawHeight = maxAreaHeight / Math.sqrt(2) - BUBBLE_PADDING * 2
+              const heightScale = targetDrawHeight > 0 ? targetDrawHeight / asset.height : 0
+              const scale = Math.min(widthScale, heightScale, 1)
+              if (scale <= 0) continue
+
+              const drawW = asset.width * scale
+              const drawH = asset.height * scale
+              const bubbleW = (drawW + BUBBLE_PADDING * 2) * Math.sqrt(2)
+              const bubbleH = (drawH + BUBBLE_PADDING * 2) * Math.sqrt(2)
+
+              const slotIndex = panel.dialogues.length === 2 ? panel.dialogues.length - 1 - i : i
+              const slotX = x + width * PANEL_MARGIN_RATIO + slotWidth * slotIndex
+              const bx = slotX + (slotWidth - bubbleW) / 2
+              const by = bubbleY
+              const slotBounds = { x: slotX, y, width: slotWidth, height }
+
+              this.drawDialogueBubble({
+                dialogue,
+                asset,
+                x: bx,
+                y: by,
+                bubbleWidth: bubbleW,
+                bubbleHeight: bubbleH,
+                imageWidth: drawW,
+                imageHeight: drawH,
+                bounds: slotBounds,
+                // 水平配置の場合、ラベル（セリフ）のX方向のオフセット比率は常に1（右端）に設定します。
+                // これは、バブルが横に並ぶため、ラベルをバブルの右側に寄せて配置するためです。
+                // 縦配置や他の配置ではこの値が異なる場合があります（例: 0.5で中央寄せなど）。
+                labelOffsetXRatio: 1,
+              })
+            }
+          } else if (panel.dialogues.length === 1) {
+            const dialogue = panel.dialogues[0]
+            const key = `${panel.id}:0`
             const asset = this.dialogueAssets?.[key]
             if (!asset) throw new Error(`Dialogue asset missing for ${key}`)
 
-            const targetDrawWidth = slotWidth / Math.sqrt(2) - BUBBLE_PADDING * 2
-            const widthScale = targetDrawWidth > 0 ? targetDrawWidth / asset.width : 0
-            const targetDrawHeight = maxAreaHeight / Math.sqrt(2) - BUBBLE_PADDING * 2
-            const heightScale = targetDrawHeight > 0 ? targetDrawHeight / asset.height : 0
-            const scale = Math.min(widthScale, heightScale, 1)
-            if (scale <= 0) continue
+            const bubbleY = y + height * BUBBLE_TOP_OFFSET_RATIO
+            const maxAreaWidth = width * SINGLE_BUBBLE_MAX_WIDTH_RATIO
+            const maxAreaHeightTotal = height * MAX_BUBBLE_AREA_HEIGHT_RATIO
+            const perBubbleMaxHeight = Math.max(SINGLE_BUBBLE_MIN_HEIGHT, maxAreaHeightTotal)
 
-            const drawW = asset.width * scale
-            const drawH = asset.height * scale
-            const bubbleW = (drawW + BUBBLE_PADDING * 2) * Math.sqrt(2)
-            const bubbleH = (drawH + BUBBLE_PADDING * 2) * Math.sqrt(2)
+            let scale = Math.min(maxAreaWidth / asset.width, perBubbleMaxHeight / asset.height, 1)
+            let drawW = asset.width * scale
+            let drawH = asset.height * scale
+            let bubbleW = (drawW + BUBBLE_PADDING * 2) * Math.sqrt(2)
+            let bubbleH = (drawH + BUBBLE_PADDING * 2) * Math.sqrt(2)
 
-            const slotIndex = panel.dialogues.length === 2 ? panel.dialogues.length - 1 - i : i
-            const slotX = x + width * PANEL_MARGIN_RATIO + slotWidth * slotIndex
-            const bx = slotX + (slotWidth - bubbleW) / 2
-            const by = bubbleY
-            const slotBounds = { x: slotX, y, width: slotWidth, height }
+            const availableVertical = y + height - bubbleY
+            const maxThisBubbleHeight = Math.max(
+              MIN_BUBBLE_HEIGHT,
+              Math.min(perBubbleMaxHeight, availableVertical - AVAILABLE_VERTICAL_MARGIN),
+            )
+            if (bubbleH > maxThisBubbleHeight) {
+              const targetDrawH = maxThisBubbleHeight / Math.sqrt(2) - BUBBLE_PADDING * 2
+              const newScale = targetDrawH > 0 ? targetDrawH / asset.height : 0
+              scale = Math.min(scale, newScale)
 
-            this.drawDialogueBubble({
-              dialogue,
-              asset,
-              x: bx,
-              y: by,
-              bubbleWidth: bubbleW,
-              bubbleHeight: bubbleH,
-              imageWidth: drawW,
-              imageHeight: drawH,
-              bounds: slotBounds,
-              // 水平配置の場合、ラベル（セリフ）のX方向のオフセット比率は常に1（右端）に設定します。
-              // これは、バブルが横に並ぶため、ラベルをバブルの右側に寄せて配置するためです。
-              // 縦配置や他の配置ではこの値が異なる場合があります（例: 0.5で中央寄せなど）。
-              labelOffsetXRatio: 1,
-            })
+              drawW = asset.width * scale
+              drawH = asset.height * scale
+              bubbleW = (drawW + BUBBLE_PADDING * 2) * Math.sqrt(2)
+              bubbleH = (drawH + BUBBLE_PADDING * 2) * Math.sqrt(2)
+            }
+
+            if (bubbleH > 0 && bubbleY + bubbleH <= y + height) {
+              const bx = x + width - bubbleW - width * PANEL_MARGIN_RATIO
+              const by = bubbleY
+
+              this.drawDialogueBubble({
+                dialogue,
+                asset,
+                x: bx,
+                y: by,
+                bubbleWidth: bubbleW,
+                bubbleHeight: bubbleH,
+                imageWidth: drawW,
+                imageHeight: drawH,
+                bounds: panelBounds,
+              })
+            }
           }
-        } else if (panel.dialogues.length === 1) {
-          const dialogue = panel.dialogues[0]
-          const key = `${panel.id}:0`
-          const asset = this.dialogueAssets?.[key]
-          if (!asset) throw new Error(`Dialogue asset missing for ${key}`)
-
-          const bubbleY = y + height * BUBBLE_TOP_OFFSET_RATIO
-          const maxAreaWidth = width * SINGLE_BUBBLE_MAX_WIDTH_RATIO
-          const maxAreaHeightTotal = height * MAX_BUBBLE_AREA_HEIGHT_RATIO
-          const perBubbleMaxHeight = Math.max(SINGLE_BUBBLE_MIN_HEIGHT, maxAreaHeightTotal)
-
-          let scale = Math.min(maxAreaWidth / asset.width, perBubbleMaxHeight / asset.height, 1)
-          let drawW = asset.width * scale
-          let drawH = asset.height * scale
-          let bubbleW = (drawW + BUBBLE_PADDING * 2) * Math.sqrt(2)
-          let bubbleH = (drawH + BUBBLE_PADDING * 2) * Math.sqrt(2)
-
-          const availableVertical = y + height - bubbleY
-          const maxThisBubbleHeight = Math.max(
-            MIN_BUBBLE_HEIGHT,
-            Math.min(perBubbleMaxHeight, availableVertical - AVAILABLE_VERTICAL_MARGIN),
-          )
-          if (bubbleH > maxThisBubbleHeight) {
-            const targetDrawH = maxThisBubbleHeight / Math.sqrt(2) - BUBBLE_PADDING * 2
-            const newScale = targetDrawH > 0 ? targetDrawH / asset.height : 0
-            scale = Math.min(scale, newScale)
-
-            drawW = asset.width * scale
-            drawH = asset.height * scale
-            bubbleW = (drawW + BUBBLE_PADDING * 2) * Math.sqrt(2)
-            bubbleH = (drawH + BUBBLE_PADDING * 2) * Math.sqrt(2)
-          }
-
-          if (bubbleH > 0 && bubbleY + bubbleH <= y + height) {
-            const bx = x + width - bubbleW - width * PANEL_MARGIN_RATIO
-            const by = bubbleY
-
-            this.drawDialogueBubble({
-              dialogue,
-              asset,
-              x: bx,
-              y: by,
-              bubbleWidth: bubbleW,
-              bubbleHeight: bubbleH,
-              imageWidth: drawW,
-              imageHeight: drawH,
-              bounds: panelBounds,
-            })
-          }
-        }
-      } finally {
-        this.ctx.restore()
-      }
-    }
-
-    // SFXを配置・描画し、占有領域を登録
-    if (panel.sfx && panel.sfx.length > 0) {
-      this.ctx.save()
-      this.ctx.beginPath()
-      if (canClip && this.hasRect(this.ctx)) {
-        this.ctx.rect(x, y, width, height)
-        this.ctx.clip()
-      }
-      try {
-        const preOccupied = this.layoutCoordinator.getOccupiedAreas().map((area) => ({
-          x: area.x,
-          y: area.y,
-          width: area.width,
-          height: area.height,
-        }))
-        const sfxPlacements = this.sfxPlacer.placeSfx(panel.sfx, panel, panelBounds, preOccupied)
-        for (const placement of sfxPlacements) {
-          this.drawSfxWithPlacement(placement)
-          const estBounds = {
-            width: Math.max(1, placement.text.length * placement.fontSize * 0.8),
-            height: placement.fontSize * (placement.supplement ? 1.8 : 1.2),
-          }
-          this.layoutCoordinator.registerSfxArea(placement, estBounds)
-        }
-      } finally {
-        this.ctx.restore()
-      }
-    }
-
-    // 説明テキストの最適配置と描画
-    if (panel.content && panel.content.trim() !== '') {
-      const contentCfg = this.getCanvasCfg().contentText as AppCanvasConfig['contentText']
-
-      if (contentCfg.enabled !== false) {
-        const placement = this.layoutCoordinator.calculateContentTextPlacement(
-          panel.content,
-          panelBounds,
-          this.ctx,
-          {
-            minFontSize: contentCfg.fontSize.min,
-            maxFontSize: contentCfg.fontSize.max,
-            padding: contentCfg.padding,
-            lineHeight: contentCfg.lineHeight,
-            maxWidthRatio: contentCfg.maxWidthRatio,
-            maxHeightRatio: contentCfg.maxHeightRatio,
-            minAreaSize: contentCfg.placement.minAreaSize,
-          },
-        )
-        if (placement) {
-          this.ctx.save()
-          // 背景ボックス
-          const textPadding = contentCfg.padding
-          const backgroundX = placement.x - textPadding
-          const backgroundY = placement.y - textPadding
-          const backgroundWidth = Math.max(0, placement.width + textPadding * 2)
-          const backgroundHeight = Math.max(0, placement.height + textPadding * 2)
-
-          this.ctx.fillStyle = contentCfg.background.color
-          this.ctx.strokeStyle = contentCfg.background.borderColor
-          this.ctx.lineWidth = contentCfg.background.borderWidth
-          this.drawRoundedRect(
-            backgroundX,
-            backgroundY,
-            backgroundWidth,
-            backgroundHeight,
-            contentCfg.background.borderRadius,
-          )
-          this.ctx.fill()
-          this.ctx.stroke()
-
-          // テキスト
-          this.ctx.font = `${placement.fontSize}px ${this.config.fontFamily || '"Noto Sans JP", NotoSansJP, sans-serif'}`
-          this.ctx.fillStyle = contentCfg.textColor
-          this.ctx.textAlign = 'left'
-          this.ctx.textBaseline = 'top'
-          let cy = placement.y
-          for (const line of placement.lines) {
-            this.ctx.fillText(line, placement.x, cy)
-            cy += placement.fontSize * contentCfg.lineHeight
-          }
+        } finally {
           this.ctx.restore()
-
-          this.layoutCoordinator.registerContentArea({
-            x: backgroundX,
-            y: backgroundY,
-            width: backgroundWidth,
-            height: backgroundHeight,
-          })
         }
+      }
+
+      // SFXを配置・描画し、占有領域を登録
+      if (panel.sfx && panel.sfx.length > 0) {
+        this.ctx.save()
+        this.ctx.beginPath()
+        if (canClip && this.hasRect(this.ctx)) {
+          this.ctx.rect(x, y, width, height)
+          this.ctx.clip()
+        }
+        try {
+          const preOccupied = this.layoutCoordinator.getOccupiedAreas().map((area) => ({
+            x: area.x,
+            y: area.y,
+            width: area.width,
+            height: area.height,
+          }))
+          const sfxPlacements = this.sfxPlacer.placeSfx(panel.sfx, panel, panelBounds, preOccupied)
+          for (const placement of sfxPlacements) {
+            this.drawSfxWithPlacement(placement)
+            const estBounds = {
+              width: Math.max(1, placement.text.length * placement.fontSize * 0.8),
+              height: placement.fontSize * (placement.supplement ? 1.8 : 1.2),
+            }
+            this.layoutCoordinator.registerSfxArea(placement, estBounds)
+          }
+        } finally {
+          this.ctx.restore()
+        }
+      }
+
+      // 説明テキストの最適配置と描画
+      if (panel.content && panel.content.trim() !== '') {
+        const contentCfg = this.getCanvasCfg().contentText as AppCanvasConfig['contentText']
+
+        if (contentCfg.enabled !== false) {
+          const placement = this.layoutCoordinator.calculateContentTextPlacement(
+            panel.content,
+            panelBounds,
+            this.ctx,
+            {
+              minFontSize: contentCfg.fontSize.min,
+              maxFontSize: contentCfg.fontSize.max,
+              padding: contentCfg.padding,
+              lineHeight: contentCfg.lineHeight,
+              maxWidthRatio: contentCfg.maxWidthRatio,
+              maxHeightRatio: contentCfg.maxHeightRatio,
+              minAreaSize: contentCfg.placement.minAreaSize,
+            },
+          )
+          if (placement) {
+            this.ctx.save()
+            // 背景ボックス
+            const textPadding = contentCfg.padding
+            let backgroundX = placement.x - textPadding
+            let backgroundY = placement.y - textPadding
+            let backgroundWidth = Math.max(0, placement.width + textPadding * 2)
+            let backgroundHeight = Math.max(0, placement.height + textPadding * 2)
+
+            // パネルの境界内に収めるようクリップ
+            const panelX = panelBounds.x
+            const panelY = panelBounds.y
+            const panelRight = panelBounds.x + panelBounds.width
+            const panelBottom = panelBounds.y + panelBounds.height
+
+            backgroundX = Math.max(panelX, backgroundX)
+            backgroundY = Math.max(panelY, backgroundY)
+            backgroundWidth = Math.min(panelRight - backgroundX, backgroundWidth)
+            backgroundHeight = Math.min(panelBottom - backgroundY, backgroundHeight)
+
+            // 背景ボックスが有効なサイズであることを確認
+            if (backgroundWidth > 0 && backgroundHeight > 0) {
+              this.ctx.fillStyle = contentCfg.background.color
+              this.ctx.strokeStyle = contentCfg.background.borderColor
+              this.ctx.lineWidth = contentCfg.background.borderWidth
+              this.drawRoundedRect(
+                backgroundX,
+                backgroundY,
+                backgroundWidth,
+                backgroundHeight,
+                contentCfg.background.borderRadius,
+              )
+              this.ctx.fill()
+              this.ctx.stroke()
+            }
+
+            // テキスト描画位置もパネル境界内に収める
+            this.ctx.font = `${placement.fontSize}px ${this.config.fontFamily || '"Noto Sans JP", NotoSansJP, sans-serif'}`
+            this.ctx.fillStyle = contentCfg.textColor
+            this.ctx.textAlign = 'left'
+            this.ctx.textBaseline = 'top'
+
+            // テキストの描画領域をクリップ
+            this.ctx.save()
+            this.ctx.beginPath()
+            this.ctx.rect(panelX, panelY, panelBounds.width, panelBounds.height)
+            if (this.hasRect(this.ctx)) {
+              this.ctx.clip()
+            }
+
+            let cy = Math.max(panelY, placement.y)
+            const maxCy = panelBottom - placement.fontSize
+            for (const line of placement.lines) {
+              if (cy > maxCy) break // パネル境界を超えないようにする
+              this.ctx.fillText(line, Math.max(panelX, placement.x), cy)
+              cy += placement.fontSize * contentCfg.lineHeight
+            }
+            this.ctx.restore()
+
+            this.ctx.restore()
+
+            this.layoutCoordinator.registerContentArea({
+              x: backgroundX,
+              y: backgroundY,
+              width: backgroundWidth,
+              height: backgroundHeight,
+            })
+          }
+        }
+      }
+    } finally {
+      if (shouldClipPanel) {
+        this.ctx.restore()
       }
     }
   }
