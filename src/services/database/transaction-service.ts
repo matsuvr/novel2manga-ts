@@ -1,6 +1,7 @@
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import type { DatabaseAdapter } from '@/infrastructure/database/adapters/base-adapter'
+import { getLogger } from '@/infrastructure/logging/logger'
 
 type DrizzleDatabase = BetterSQLite3Database<typeof schema>
 type Transaction = Parameters<Parameters<DrizzleDatabase['transaction']>[0]>[0]
@@ -30,7 +31,11 @@ export class TransactionService {
    * This method handles both sync (better-sqlite3) and async (D1) operations
    */
   async execute<T>(operation: TransactionOperation<T>): Promise<T> {
-    return this.adapter.transaction((tx: unknown) => operation(tx))
+    const logger = getLogger()
+    logger.debug('transaction_execute_enter', { isSync: this.adapter.isSync() })
+    const result = await this.adapter.transaction((tx: unknown) => operation(tx))
+    logger.debug('transaction_execute_exit')
+    return result
   }
 
   /**
@@ -46,8 +51,12 @@ export class TransactionService {
     }
 
     // For SQLite, we can directly use the Drizzle transaction
+    const logger = getLogger()
+    logger.debug('transaction_executeSync_enter')
     const drizzleDb = this.db as DrizzleDatabase
-    return drizzleDb.transaction(operation)
+    const result = drizzleDb.transaction(operation)
+    logger.debug('transaction_executeSync_exit')
+    return result
   }
 
   /**
@@ -55,7 +64,11 @@ export class TransactionService {
    * This method respects the UnitOfWork pattern
    */
   async executeWithUnitOfWork<T>(operation: () => Promise<T>): Promise<T> {
-    return this.adapter.transaction((_tx: unknown) => operation())
+    const logger = getLogger()
+    logger.debug('transaction_executeWithUnitOfWork_enter')
+    const result = await this.adapter.transaction((_tx: unknown) => operation())
+    logger.debug('transaction_executeWithUnitOfWork_exit')
+    return result
   }
 
   /**

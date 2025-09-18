@@ -6,6 +6,7 @@ import type {
   NewAliasFts,
   SceneRegistry as SceneRow,
 } from '@/db/schema'
+import { getLogger } from '@/infrastructure/logging/logger'
 import type { DatabaseServiceFactory } from '@/services/database/database-service-factory'
 import type { RegistryDatabaseService } from '@/services/database/registry-database-service'
 import type {
@@ -53,6 +54,8 @@ export class SQLiteRegistry {
   upsertCharacter(input: UpsertCharacterInput): Effect.Effect<CharacterRecord, RegistryPersistenceError | RegistryDecodeError> {
     const self = this
     return Effect.gen(function* () {
+      const logger = getLogger()
+      logger.debug('sqliteRegistry_upsertCharacter_enter', { id: input.id })
       const serialized = self.serializeCharacter(input)
       const aliases = self.buildAliasRows(input.id, serialized.aliasesForRegistry)
 
@@ -61,7 +64,9 @@ export class SQLiteRegistry {
         catch: (cause) => new RegistryPersistenceError({ cause }),
       })
 
-      return yield* self.decodeCharacterRow(persisted)
+      const decoded = yield* self.decodeCharacterRow(persisted)
+      logger.debug('sqliteRegistry_upsertCharacter_exit', { id: input.id })
+      return decoded
     })
   }
 
@@ -108,6 +113,8 @@ export class SQLiteRegistry {
   ): Effect.Effect<ReadonlyArray<AliasSearchResult>, RegistryQueryError | RegistryDecodeError> {
     const self = this
     return Effect.gen(function* () {
+      const logger = getLogger()
+      logger.debug('sqliteRegistry_searchByAlias_enter', { query: rawQuery })
       const query = rawQuery.trim()
       if (query.length === 0) {
         return []
@@ -140,6 +147,7 @@ export class SQLiteRegistry {
         { concurrency: 'unbounded' },
       )
 
+      logger.debug('sqliteRegistry_searchByAlias_exit', { query: rawQuery, count: results.length })
       return results
     })
   }
@@ -164,6 +172,8 @@ export class SQLiteRegistry {
   getChunkState(jobId: string, chunkIndex: number): Effect.Effect<Option.Option<ChunkStateRecord>, RegistryQueryError | RegistryDecodeError> {
     const self = this
     return Effect.gen(function* () {
+      const logger = getLogger()
+      logger.debug('sqliteRegistry_getChunkState_enter', { jobId, chunkIndex })
       const row = yield* Effect.tryPromise({
         try: () => self.service.getChunkState(jobId, chunkIndex),
         catch: (cause) => new RegistryQueryError({ cause }),
@@ -173,7 +183,9 @@ export class SQLiteRegistry {
         return Option.none()
       }
 
-      return Option.some(yield* self.decodeChunkState(row))
+      const decoded = yield* self.decodeChunkState(row)
+      logger.debug('sqliteRegistry_getChunkState_exit', { jobId, chunkIndex })
+      return Option.some(decoded)
     })
   }
 
