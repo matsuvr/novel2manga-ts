@@ -386,8 +386,9 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
         const layoutMatch = stepId.match(/^layout_episode_(\d+)$/)
         if (layoutMatch && !job.layoutCompleted) {
           const ep = Number(layoutMatch[1])
-          setCurrentLayoutEpisode(ep)
           const normalizedEpisode = ep > 0 ? ep : 1
+          // ensure the rest of the component sees a 1-based/normalized episode number
+          setCurrentLayoutEpisode(normalizedEpisode)
           const totalEp = resolvePositiveTotal(job.totalEpisodes, lastKnownTotalsRef.current.episodes, normalizedEpisode)
           const currentEpisodeNumber = Math.min(normalizedEpisode, totalEp)
           hints.layout = `現在: エピソード ${currentEpisodeNumber} / ${totalEp} をレイアウト中`
@@ -437,12 +438,14 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
     setLogs([])
     setPerEpisodePages({})
     setRuntimeHints({})
-    setCurrentLayoutEpisode(null)
+  setCurrentLayoutEpisode(null)
     setCompleted(false)
     setNormalizationToastShown(false)
     setTokenPromptSum(0)
     setTokenCompletionSum(0)
     setSseConnected(true)
+  // reset cached totals to avoid inheriting totals from a previous job when SSE payloads omit them
+  lastKnownTotalsRef.current = { chunks: null, episodes: null, pages: null }
 
     setSteps(() =>
       INITIAL_STEPS.map((step, index) => ({
