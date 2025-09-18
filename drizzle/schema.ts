@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import {
   index,
   integer,
@@ -20,8 +21,8 @@ export const chunkAnalysisStatus = sqliteTable(
     analysisPath: text('analysis_path'),
     analyzedAt: text('analyzed_at'),
     retryCount: integer('retry_count').default(0),
-    lastError: text('last_error'),
-    createdAt: text('created_at').default('sql`(CURRENT_TIMESTAMP)`'),
+  lastError: text('last_error'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index('unique_job_chunk_analysis').on(table.jobId, table.chunkIndex),
@@ -41,8 +42,8 @@ export const chunks = sqliteTable(
     contentPath: text('content_path').notNull(),
     startPosition: integer('start_position').notNull(),
     endPosition: integer('end_position').notNull(),
-    wordCount: integer('word_count'),
-    createdAt: text('created_at').default('sql`(CURRENT_TIMESTAMP)`'),
+  wordCount: integer('word_count'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index('unique_job_chunk').on(table.jobId, table.chunkIndex),
@@ -68,8 +69,8 @@ export const episodes = sqliteTable(
     startCharIndex: integer('start_char_index').notNull(),
     endChunk: integer('end_chunk').notNull(),
     endCharIndex: integer('end_char_index').notNull(),
-    confidence: real().notNull(),
-    createdAt: text('created_at').default('sql`(CURRENT_TIMESTAMP)`'),
+  confidence: real().notNull(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
     episodeTextPath: text('episode_text_path'),
   },
   (table) => [
@@ -94,8 +95,8 @@ export const jobStepHistory = sqliteTable(
     inputPath: text('input_path'),
     outputPath: text('output_path'),
     errorMessage: text('error_message'),
-    metadata: text(),
-    createdAt: text('created_at').default('sql`(CURRENT_TIMESTAMP)`'),
+  metadata: text(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [index('idx_job_step_history_job_id').on(table.jobId)],
 )
@@ -114,8 +115,8 @@ export const layoutStatus = sqliteTable(
     totalPanels: integer('total_panels'),
     generatedAt: text('generated_at'),
     retryCount: integer('retry_count').default(0),
-    lastError: text('last_error'),
-    createdAt: text('created_at').default('sql`(CURRENT_TIMESTAMP)`'),
+  lastError: text('last_error'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     uniqueIndex('unique_job_episode_layout').on(table.jobId, table.episodeNumber),
@@ -164,8 +165,8 @@ export const renderStatus = sqliteTable(
     fileSize: integer('file_size'),
     renderedAt: text('rendered_at'),
     retryCount: integer('retry_count').default(0),
-    lastError: text('last_error'),
-    createdAt: text('created_at').default('sql`(CURRENT_TIMESTAMP)`'),
+  lastError: text('last_error'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     uniqueIndex('unique_job_episode_page').on(table.jobId, table.episodeNumber, table.pageNumber),
@@ -190,7 +191,7 @@ export const tokenUsage = sqliteTable(
     stepName: text('step_name'),
     chunkIndex: integer('chunk_index'),
     episodeNumber: integer('episode_number'),
-    createdAt: text('created_at').default('sql`(CURRENT_TIMESTAMP)`'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index('idx_token_usage_created_at').on(table.createdAt),
@@ -269,8 +270,8 @@ export const novels = sqliteTable(
     userId: text('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    createdAt: text('created_at').default('sql`(CURRENT_TIMESTAMP)`'),
-    updatedAt: text('updated_at').default('sql`(CURRENT_TIMESTAMP)`'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index('idx_novels_created_at').on(table.createdAt),
@@ -325,7 +326,7 @@ export const jobs = sqliteTable(
     retryCount: integer('retry_count').default(0),
     resumeDataPath: text('resume_data_path'),
     coverageWarnings: text('coverage_warnings'),
-    createdAt: text('created_at').default('sql`(CURRENT_TIMESTAMP)`'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text('updated_at').default('sql`(CURRENT_TIMESTAMP)`'),
     startedAt: text('started_at'),
     completedAt: text('completed_at'),
@@ -355,7 +356,7 @@ export const storageFiles = sqliteTable(
     fileType: text('file_type').notNull(),
     mimeType: text('mime_type'),
     fileSize: integer('file_size'),
-    createdAt: text('created_at').default('sql`(CURRENT_TIMESTAMP)`'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index('idx_storage_files_user_id').on(table.userId),

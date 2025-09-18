@@ -36,9 +36,10 @@ export class EntityExtractor {
       const source = text.normalized
 
       const nameRegex = new RegExp(PERSON_NAME_PATTERN.source, PERSON_NAME_PATTERN.flags)
-      let match: RegExpExecArray | null
+  let match: RegExpExecArray | null
 
-      while ((match = nameRegex.exec(source)) !== null) {
+  match = nameRegex.exec(source)
+  while (match !== null) {
         const rawName = match[0]
         if (!rawName) continue
         const name = rawName.trim()
@@ -77,15 +78,17 @@ export class EntityExtractor {
         characters.set(name, accumulator)
       }
 
-      const pronounRegex = new RegExp(PRONOUN_PATTERN.source, PRONOUN_PATTERN.flags)
-      while ((match = pronounRegex.exec(source)) !== null) {
+  const pronounRegex = new RegExp(PRONOUN_PATTERN.source, PRONOUN_PATTERN.flags)
+  match = pronounRegex.exec(source)
+  while (match !== null) {
         const value = match[0]
         if (!value) continue
         pronounHits.push({ value, position: match.index ?? 0 })
       }
 
-      const locationRegex = new RegExp(LOCATION_PATTERN.source, LOCATION_PATTERN.flags)
-      while ((match = locationRegex.exec(source)) !== null) {
+  const locationRegex = new RegExp(LOCATION_PATTERN.source, LOCATION_PATTERN.flags)
+  match = locationRegex.exec(source)
+  while (match !== null) {
         const value = match[0]
         if (!value) continue
         locationHits.push({ value, position: match.index ?? 0 })

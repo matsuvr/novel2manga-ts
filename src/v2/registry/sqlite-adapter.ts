@@ -1,11 +1,11 @@
 import { Data, Effect, Option, pipe } from 'effect'
+import { tokenReductionConfig } from '@/config/token-reduction.config'
 import type {
   CharacterRegistry,
   ChunkState as ChunkStateRow,
   NewAliasFts,
   SceneRegistry as SceneRow,
 } from '@/db/schema'
-import { tokenReductionConfig } from '@/config/token-reduction.config'
 import type { DatabaseServiceFactory } from '@/services/database/database-service-factory'
 import type { RegistryDatabaseService } from '@/services/database/registry-database-service'
 import type {

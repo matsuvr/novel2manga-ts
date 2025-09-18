@@ -74,8 +74,9 @@ export class IdResolver {
     context: ChunkContext,
   ): Effect.Effect<ResolvedEntity | null, RegistryQueryError | RegistryDecodeError | RegistryPersistenceError> {
     const sanitizedAlias = alias.trim()
+    const self = this
 
-    return Effect.gen(function* (self: IdResolver) {
+    return Effect.gen(function* () {
       let candidates = yield* self.registry.searchByAlias(sanitizedAlias, {
         limit: tokenReductionConfig.resolver.maxCandidates,
       })
@@ -139,7 +140,7 @@ export class IdResolver {
     }
 
     if (context.chunk.manualHints?.some((hint) => hint === candidate.character.id || hint === candidate.character.canonicalName)) {
-      recencyComponent += this.weights.recencyWeight * 0.5
+      recencyComponent += this.weights.recencyWeight * (this.weights.manualHintBoost ?? 0.5)
     }
 
     const confidenceComponent = (candidate.character.confidenceScore ?? 0) * this.weights.confidenceWeight

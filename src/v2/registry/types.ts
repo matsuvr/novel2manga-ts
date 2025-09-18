@@ -19,9 +19,10 @@ export interface CharacterRelationship {
   readonly notes?: string
 }
 
-export interface CharacterMetadata extends JsonObject {
+export interface CharacterMetadata {
   readonly origin?: string
   readonly tags?: ReadonlyArray<string>
+  // Allow arbitrary JSON-valued keys; values may be undefined for optional known fields.
   readonly [key: string]: JsonValue | undefined
 }
 
