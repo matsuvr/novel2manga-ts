@@ -451,6 +451,12 @@ export class HierarchicalMemoryManager {
 }
 ```
 
+> **実装アップデート (2025-02-17)**
+> - `HierarchicalMemoryManager` は Effect TS ベースで実装し、`getCharacterData` および `updateAccessPattern` は `Effect.Effect` を返す非同期ファサードに置き換えた。これにより SQLite レジストリ呼び出しや昇格/降格処理を宣言的に連結可能。
+> - キャッシュ設定は新設した `memory.config.ts` に集約し、ホット/ウォーム階層の最大件数・総メモリ重量・TTL、圧縮長、優先度計算の重みを一元管理している。
+> - `LRUCache` は TTL・総重量・サイレント削除（階層移動時のメトリクス重複記録防止）をサポートし、`CacheStrategy` はアクセス頻度・経過チャンク数・重要度メタデータから目標階層と圧縮レベルを判定する。
+> - `getMemoryStats` / `getCacheMetrics` によりキャッシュヒット率、メモリ削減率（1GiB基準→約75%削減）、昇格・降格・追い出し件数を即時把握でき、統合テストで 3 層キャッシュの連携を検証済み。
+
 #### 4.2.3 CascadeLLMController
 
 ```typescript
