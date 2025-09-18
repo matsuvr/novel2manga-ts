@@ -49,12 +49,19 @@ export const POST = withAuth(async (request: NextRequest, user) => {
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII='
       const buffer = Buffer.from(base64Png, 'base64')
 
-      const renderKey = StorageKeys.pageRender(body.jobId, body.episodeNumber, body.pageNumber)
-      const thumbnailKey = StorageKeys.pageThumbnail(
-        body.jobId,
-        body.episodeNumber,
-        body.pageNumber,
-      )
+      const demoNovelId = `demo-${body.jobId}`
+      const renderKey = StorageKeys.pageRender({
+        novelId: demoNovelId,
+        jobId: body.jobId,
+        episodeNumber: body.episodeNumber,
+        pageNumber: body.pageNumber,
+      })
+      const thumbnailKey = StorageKeys.pageThumbnail({
+        novelId: demoNovelId,
+        jobId: body.jobId,
+        episodeNumber: body.episodeNumber,
+        pageNumber: body.pageNumber,
+      })
       const storage = await StorageFactory.getRenderStorage()
       await storage.put(renderKey, buffer, {
         'content-type': 'image/png',
@@ -92,17 +99,18 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       return createErrorResponse(new ValidationError('有効なpageNumberが必要です'))
     // layoutYaml が未指定ならストレージポートから取得
     let layoutYaml = body.layoutYaml
-    if (!layoutYaml) {
-      const ports = getStoragePorts()
-      const text = await ports.layout.getEpisodeLayout(body.jobId, body.episodeNumber)
-      if (!text) return createErrorResponse(new ValidationError('layoutYamlが必要です'))
-      layoutYaml = text
-    }
-
-    // DBチェック
+    // DBチェック（NovelIdを含む完全なジョブ情報を取得）
     const job = await db.jobs().getJob(body.jobId)
     // Treat unknown jobId as a client validation issue in this endpoint (legacy tests expect 400)
     if (!job) return createErrorResponse(new ValidationError('指定されたジョブが見つかりません'))
+    const novelId = job.novelId
+
+    if (!layoutYaml) {
+      const ports = getStoragePorts()
+      const text = await ports.layout.getEpisodeLayout(novelId, body.jobId, body.episodeNumber)
+      if (!text) return createErrorResponse(new ValidationError('layoutYamlが必要です'))
+      layoutYaml = text
+    }
 
     // ユーザー所有権チェック
     if (job.userId && job.userId !== user.id) {

@@ -92,7 +92,11 @@ export class OutputService {
         while (episodeNumber <= 50) {
           // Reasonable upper limit
           try {
-            const layoutData = await this.ports.layout.getEpisodeLayout(jobId, episodeNumber)
+            const layoutData = await this.ports.layout.getEpisodeLayout(
+              job.novelId,
+              jobId,
+              episodeNumber,
+            )
             if (layoutData) {
               episodeNumbers.push(episodeNumber)
               logger.debug('Found episode layout', { episodeNumber })
@@ -211,7 +215,11 @@ export class OutputService {
 
     let totalPages = 0
     for (const episode of episodes.sort((a, b) => a.episodeNumber - b.episodeNumber)) {
-      const layoutDataText = await this.ports.layout.getEpisodeLayout(jobId, episode.episodeNumber)
+      const layoutDataText = await this.ports.layout.getEpisodeLayout(
+        episode.novelId,
+        jobId,
+        episode.episodeNumber,
+      )
       if (!layoutDataText) continue
       const mangaLayout = JSON.parse(layoutDataText) as {
         pages?: Array<{ page_number: number }>
@@ -219,6 +227,7 @@ export class OutputService {
       if (mangaLayout.pages) {
         for (const page of mangaLayout.pages.sort((a, b) => a.page_number - b.page_number)) {
           const base64Image = await this.ports.render.getPageRender(
+            episode.novelId,
             jobId,
             episode.episodeNumber,
             page.page_number,
@@ -268,7 +277,11 @@ export class OutputService {
       )
       if (!episodeFolder) continue
 
-      const layoutText = await this.ports.layout.getEpisodeLayout(jobId, episode.episodeNumber)
+      const layoutText = await this.ports.layout.getEpisodeLayout(
+        episode.novelId,
+        jobId,
+        episode.episodeNumber,
+      )
       if (layoutText) {
         episodeFolder.file('layout.json', layoutText)
         try {
@@ -278,6 +291,7 @@ export class OutputService {
           if (mangaLayout.pages) {
             for (const page of mangaLayout.pages.sort((a, b) => a.page_number - b.page_number)) {
               const base64Image = await this.ports.render.getPageRender(
+                episode.novelId,
                 jobId,
                 episode.episodeNumber,
                 page.page_number,

@@ -44,6 +44,7 @@ describe('loadEpisodePreview', () => {
 
   it('レイアウトJSONからページを取得し、レンダー画像を読み込む', async () => {
     const jobId = 'job_test'
+    const novelId = 'novel_test'
     const episode = 1
     const layout = {
       pages: [{ page_number: 2 }, { page_number: 1 }],
@@ -51,13 +52,22 @@ describe('loadEpisodePreview', () => {
 
     const { getLayoutStorage, getRenderStorage, StorageKeys } = await import('@/utils/storage')
     const layoutStorage = await getLayoutStorage()
-    await layoutStorage.put(StorageKeys.episodeLayout(jobId, episode), JSON.stringify(layout))
+    await layoutStorage.put(
+      StorageKeys.episodeLayout({ novelId, jobId, episodeNumber: episode }),
+      JSON.stringify(layout),
+    )
 
     const renderStorage = await getRenderStorage()
-    await renderStorage.put(StorageKeys.pageRender(jobId, episode, 1), Buffer.from('image-1'))
-    await renderStorage.put(StorageKeys.pageRender(jobId, episode, 2), Buffer.from('image-2'))
+    await renderStorage.put(
+      StorageKeys.pageRender({ novelId, jobId, episodeNumber: episode, pageNumber: 1 }),
+      Buffer.from('image-1'),
+    )
+    await renderStorage.put(
+      StorageKeys.pageRender({ novelId, jobId, episodeNumber: episode, pageNumber: 2 }),
+      Buffer.from('image-2'),
+    )
 
-    const preview = await loadEpisodePreview(jobId, episode)
+    const preview = await loadEpisodePreview(novelId, jobId, episode)
     expect(preview.episodeNumber).toBe(1)
     expect(preview.totalPages).toBe(2)
     expect(preview.images.map((i) => i.page)).toEqual([1, 2])
@@ -67,6 +77,7 @@ describe('loadEpisodePreview', () => {
 
   it('進捗JSONのnormalized/issueCountを反映する', async () => {
     const jobId = 'job_test2'
+    const novelId = 'novel_test2'
     const episode = 2
     const layout = {
       pages: [{ page_number: 1 }, { page_number: 2 }],
@@ -80,17 +91,26 @@ describe('loadEpisodePreview', () => {
 
     const { getLayoutStorage, getRenderStorage, StorageKeys } = await import('@/utils/storage')
     const layoutStorage = await getLayoutStorage()
-    await layoutStorage.put(StorageKeys.episodeLayout(jobId, episode), JSON.stringify(layout))
     await layoutStorage.put(
-      StorageKeys.episodeLayoutProgress(jobId, episode),
+      StorageKeys.episodeLayout({ novelId, jobId, episodeNumber: episode }),
+      JSON.stringify(layout),
+    )
+    await layoutStorage.put(
+      StorageKeys.episodeLayoutProgress({ novelId, jobId, episodeNumber: episode }),
       JSON.stringify(progress),
     )
 
     const renderStorage = await getRenderStorage()
-    await renderStorage.put(StorageKeys.pageRender(jobId, episode, 1), Buffer.from('i1'))
-    await renderStorage.put(StorageKeys.pageRender(jobId, episode, 2), Buffer.from('i2'))
+    await renderStorage.put(
+      StorageKeys.pageRender({ novelId, jobId, episodeNumber: episode, pageNumber: 1 }),
+      Buffer.from('i1'),
+    )
+    await renderStorage.put(
+      StorageKeys.pageRender({ novelId, jobId, episodeNumber: episode, pageNumber: 2 }),
+      Buffer.from('i2'),
+    )
 
-    const preview = await loadEpisodePreview(jobId, episode)
+    const preview = await loadEpisodePreview(novelId, jobId, episode)
     const page2 = preview.images.find((p) => p.page === 2)
     expect(page2?.isNormalized).toBe(true)
     expect(page2?.issueCount).toBe(3)

@@ -2,6 +2,7 @@ import type { Chunk } from '@/db/schema'
 import type { LoggerPort } from '@/infrastructure/logging/logger'
 import { db } from '@/services/database/index'
 import type { JobStep } from '@/types/job'
+import { getNovelIdForJob } from '@/utils/job'
 
 /**
  * Interface for step-specific integrity verification
@@ -199,11 +200,12 @@ class AnalyzeStepVerifier implements StepIntegrityVerifier {
       // Verify chunk analysis artifacts exist in storage
       const { StorageFactory, StorageKeys } = await import('@/utils/storage')
       const analysisStorage = await StorageFactory.getAnalysisStorage()
+      const novelId = await getNovelIdForJob(jobId)
 
       let storageItemCount = 0
       const sampleSize = Math.min(5, dbChunks.length)
       for (let i = 0; i < sampleSize; i++) {
-        const analysisKey = StorageKeys.chunkAnalysis(jobId, i)
+        const analysisKey = StorageKeys.chunkAnalysis({ novelId, jobId, index: i })
         const obj = await analysisStorage.get(analysisKey)
         if (obj?.text) {
           storageItemCount++

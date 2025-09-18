@@ -21,10 +21,12 @@ export default async function EpisodePreviewPage({ params }: { params: Promise<P
   if (!target) {
     // Fallback: layout 存在で許可
     const layoutStorage = await StorageFactory.getLayoutStorage()
-    const exists = await layoutStorage.exists(StorageKeys.episodeLayout(jobId, epNum))
+    const exists = await layoutStorage.exists(
+      StorageKeys.episodeLayout({ novelId, jobId, episodeNumber: epNum }),
+    )
     if (!exists) return notFound()
   }
-  const preview = await loadEpisodePreview(jobId, epNum)
+  const preview = await loadEpisodePreview(novelId, jobId, epNum)
 
   const images: Array<{ page: number; src: string; normalized: boolean; issues: number }> =
     preview.images.map((img) => ({
