@@ -41,6 +41,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Generate typed routes
+        run: npm run typegen:routes
+
       - name: Typecheck
         run: npm run typecheck
 
