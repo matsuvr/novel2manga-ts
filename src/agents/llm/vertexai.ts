@@ -280,7 +280,7 @@ export class VertexAIClient implements LlmClient {
         if (!usage) {
           logger.error('Token usage metadata missing from Vertex AI response', {
             jobId: telemetry.jobId,
-            agent: telemetry.agentName,
+            agentName: telemetry.agentName,
           })
         } else {
           try {
@@ -300,7 +300,7 @@ export class VertexAIClient implements LlmClient {
             logger.error('Failed to record Vertex AI token usage', {
               error: recordError instanceof Error ? recordError.message : String(recordError),
               jobId: telemetry.jobId,
-              agent: telemetry.agentName,
+              agentName: telemetry.agentName,
             })
           }
         }
@@ -483,11 +483,13 @@ function extractUsageMetadata(response: unknown): UsageMetadataSummary | null {
     return Number.isFinite(numeric) ? numeric : null
   }
 
-  const prompt = toNumber((metadata as Record<string, unknown>).promptTokenCount)
-  const completion = toNumber((metadata as Record<string, unknown>).candidatesTokenCount)
-  const total = toNumber((metadata as Record<string, unknown>).totalTokenCount)
-  const cached = toNumber((metadata as Record<string, unknown>).cachedContentTokenCount)
-  const thoughts = toNumber((metadata as Record<string, unknown>).thoughtsTokenCount)
+  const usageData = metadata as Record<string, unknown>
+
+  const prompt = toNumber(usageData.promptTokenCount)
+  const completion = toNumber(usageData.candidatesTokenCount)
+  const total = toNumber(usageData.totalTokenCount)
+  const cached = toNumber(usageData.cachedContentTokenCount)
+  const thoughts = toNumber(usageData.thoughtsTokenCount)
 
   if (prompt === null && completion === null && total === null) {
     return null
