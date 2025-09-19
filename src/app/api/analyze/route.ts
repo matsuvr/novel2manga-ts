@@ -83,7 +83,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
             id: user.id,
             name: user.name ?? undefined,
             email: user.email ?? undefined,
-            image: user.image ?? undefined,
+            image: (user as { image?: string | null }).image ?? undefined,
           },
         },
       )

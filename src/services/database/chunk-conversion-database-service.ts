@@ -10,39 +10,29 @@ export type ChunkConversionStatusRecord = typeof chunkConversionStatus.$inferSel
 
 export class ChunkConversionDatabaseService extends BaseDatabaseService {
   async getStatusesByJob(jobId: string): Promise<ChunkConversionStatusRecord[]> {
-    if (this.isSync()) {
-      const drizzleDb = this.db as DrizzleDatabase
-      return drizzleDb
-        .select()
-        .from(chunkConversionStatus)
-        .where(eq(chunkConversionStatus.jobId, jobId))
-        .all()
+    if (!this.isSync()) {
+      // Async adapters not supported in this repo
+      throw new Error('Async adapters are not supported. Use the sync BetterSQLite3 adapter.')
     }
-
-    return this.adapter
+    const drizzleDb = this.db as DrizzleDatabase
+    return drizzleDb
       .select()
       .from(chunkConversionStatus)
       .where(eq(chunkConversionStatus.jobId, jobId))
+      .all()
   }
 
   async getStatus(jobId: string, chunkIndex: number): Promise<ChunkConversionStatusRecord | null> {
-    if (this.isSync()) {
-      const drizzleDb = this.db as DrizzleDatabase
-      const result = drizzleDb
-        .select()
-        .from(chunkConversionStatus)
-        .where(and(eq(chunkConversionStatus.jobId, jobId), eq(chunkConversionStatus.chunkIndex, chunkIndex)))
-        .limit(1)
-        .all()
-      return result.length > 0 ? result[0] : null
+    if (!this.isSync()) {
+      throw new Error('Async adapters are not supported. Use the sync BetterSQLite3 adapter.')
     }
-
-    const result = await this.adapter
+    const drizzleDb = this.db as DrizzleDatabase
+    const result = drizzleDb
       .select()
       .from(chunkConversionStatus)
       .where(and(eq(chunkConversionStatus.jobId, jobId), eq(chunkConversionStatus.chunkIndex, chunkIndex)))
       .limit(1)
-
+      .all()
     return result.length > 0 ? result[0] : null
   }
 
@@ -74,9 +64,7 @@ export class ChunkConversionDatabaseService extends BaseDatabaseService {
       return
     }
 
-    await this.adapter.transaction(async (tx: DrizzleDatabase) => {
-      await tx.insert(chunkConversionStatus).values(toInsert)
-    })
+    throw new Error('Async adapters are not supported. Use the sync BetterSQLite3 adapter.')
   }
 
   async markProcessing(jobId: string, chunkIndex: number): Promise<void> {
@@ -108,26 +96,7 @@ export class ChunkConversionDatabaseService extends BaseDatabaseService {
       return
     }
 
-    await this.adapter.transaction(async (tx: DrizzleDatabase) => {
-      await tx
-        .insert(chunkConversionStatus)
-        .values({
-          jobId,
-          chunkIndex,
-          status: 'processing',
-          startedAt: now,
-          updatedAt: now,
-        })
-        .onConflictDoUpdate({
-          target: [chunkConversionStatus.jobId, chunkConversionStatus.chunkIndex],
-          set: {
-            status: 'processing',
-            errorMessage: null,
-            startedAt: now,
-            updatedAt: now,
-          },
-        })
-    })
+    throw new Error('Async adapters are not supported. Use the sync BetterSQLite3 adapter.')
   }
 
   async markCompleted(jobId: string, chunkIndex: number, resultPath: string | null): Promise<void> {
@@ -151,18 +120,7 @@ export class ChunkConversionDatabaseService extends BaseDatabaseService {
       return
     }
 
-    await this.adapter.transaction(async (tx: DrizzleDatabase) => {
-      await tx
-        .update(chunkConversionStatus)
-        .set({
-          status: 'completed',
-          resultPath: resultPath ?? null,
-          errorMessage: null,
-          completedAt: now,
-          updatedAt: now,
-        })
-        .where(and(eq(chunkConversionStatus.jobId, jobId), eq(chunkConversionStatus.chunkIndex, chunkIndex)))
-    })
+    throw new Error('Async adapters are not supported. Use the sync BetterSQLite3 adapter.')
   }
 
   async markFailed(jobId: string, chunkIndex: number, errorMessage: string): Promise<void> {
@@ -185,16 +143,6 @@ export class ChunkConversionDatabaseService extends BaseDatabaseService {
       return
     }
 
-    await this.adapter.transaction(async (tx: DrizzleDatabase) => {
-      await tx
-        .update(chunkConversionStatus)
-        .set({
-          status: 'failed',
-          errorMessage,
-          retryCount: sql`${chunkConversionStatus.retryCount} + 1`,
-          updatedAt: now,
-        })
-        .where(and(eq(chunkConversionStatus.jobId, jobId), eq(chunkConversionStatus.chunkIndex, chunkIndex)))
-    })
+    throw new Error('Async adapters are not supported. Use the sync BetterSQLite3 adapter.')
   }
 }
