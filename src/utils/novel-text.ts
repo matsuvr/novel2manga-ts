@@ -3,29 +3,33 @@ import { StorageFactory } from '@/utils/storage'
 export function unwrapStoredText(raw: string, maxDepth = 5): string {
   let current: unknown = raw
   for (let depth = 0; depth < maxDepth; depth++) {
+    // Only attempt to parse when we currently have a string
     if (typeof current !== 'string') break
     try {
       const parsed = JSON.parse(current)
+      // If parsed is an object, try to unwrap known fields and continue
       if (parsed && typeof parsed === 'object') {
         const record = parsed as Record<string, unknown>
-        const content = record.content
-        if (typeof content === 'string') {
-          current = content
+        if (typeof record.content === 'string') {
+          current = record.content
           continue
         }
-        const text = record.text
-        if (typeof text === 'string') {
-          current = text
+        if (typeof record.text === 'string') {
+          current = record.text
           continue
         }
+        // Object doesn't contain known text fields — stop unwrapping
         break
       }
-      current = String(parsed)
+      // Parsed to a primitive (number/null/boolean). Treat as final value.
+      current = parsed
+      break
     } catch {
+      // Not valid JSON — assume current is the final text
       break
     }
   }
-  return typeof current === 'string' ? current : String(current)
+  return String(current)
 }
 
 export interface NovelPreviewOptions {
