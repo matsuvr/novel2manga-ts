@@ -64,9 +64,26 @@ export function getChunkConversionConfig() {
   }
 }
 
-// 互換API: 旧textAnalysis設定呼び出しはchunkConversionに委譲
+// 互換API: 旧 textAnalysis 設定呼び出し（後方互換）
+// textAnalysis は chunkConversion と異なるプロンプトスキーマを持つため
+// 正しく llm.textAnalysis を参照する
 export function getTextAnalysisConfig() {
-  return getChunkConversionConfig()
+  const prompts = getAppConfig().llm as unknown as Record<
+    string,
+    { systemPrompt?: string; userPromptTemplate?: string }
+  >
+  const ta = prompts.textAnalysis || { systemPrompt: '', userPromptTemplate: '' }
+  const provider = getProviderForUseCase('textAnalysis')
+  const providerConfig = getProviderConfig(provider as LLMProvider)
+  if (!ta.systemPrompt || !ta.userPromptTemplate) {
+    throw new Error('Text analysis prompts are missing in app.config.ts (llm.textAnalysis)')
+  }
+  return {
+    provider,
+    maxTokens: providerConfig.maxTokens,
+    systemPrompt: ta.systemPrompt as string,
+    userPromptTemplate: ta.userPromptTemplate as string,
+  }
 }
 
 // レイアウト生成設定を取得
