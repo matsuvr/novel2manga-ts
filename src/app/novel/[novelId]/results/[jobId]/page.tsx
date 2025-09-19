@@ -1,9 +1,12 @@
 import { notFound, redirect } from 'next/navigation'
 import { Alert } from '@/components/ui/alert'
 import { Card, CardContent } from '@/components/ui/card'
+import { getLogger } from '@/infrastructure/logging/logger'
 import { db } from '@/services/database/index'
+import type { ModelTokenUsage } from '@/services/database/token-usage-database-service'
 import type { Episode } from '@/types/database-models'
 import { isRenderCompletelyDone } from '@/utils/completion'
+import { loadNovelPreview } from '@/utils/novel-text'
 import { JsonStorageKeys, StorageFactory } from '@/utils/storage'
 
 interface Params {
@@ -79,6 +82,33 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
   }
 
   const renderDone = isRenderCompletelyDone(job as unknown as Parameters<typeof isRenderCompletelyDone>[0])
+
+  const [tokenUsageByJob, novel] = await Promise.all([
+    db.tokenUsage().getTotalsByJobIdsGroupedByModel([job.id]),
+    db.novels().getNovel(job.novelId),
+  ])
+
+  const modelTokenUsage: ModelTokenUsage[] = [...(tokenUsageByJob[job.id] ?? [])]
+  modelTokenUsage.sort((a, b) => {
+    const providerDiff = a.provider.localeCompare(b.provider)
+    if (providerDiff !== 0) return providerDiff
+    return a.model.localeCompare(b.model)
+  })
+
+  let novelPreview: string | undefined
+  if (novel?.originalTextPath) {
+    try {
+      novelPreview = await loadNovelPreview(novel.originalTextPath, { length: 100 })
+    } catch (error) {
+      getLogger()
+        .withContext({ page: 'NovelJobResultsPage', novelId, jobId })
+        .error('Failed to load novel preview for results page', {
+          path: novel.originalTextPath,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      novelPreview = undefined
+    }
+  }
 
   const layoutStorage = await StorageFactory.getLayoutStorage()
   const fullPagesKey = JsonStorageKeys.fullPages({ novelId, jobId: job.id })
@@ -187,6 +217,8 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
       layoutStatuses={layoutStatuses}
       coverageWarnings={coverageWarnings}
       uniqueEpisodes={normalizedEpisodes}
+      tokenUsageByModel={modelTokenUsage}
+      novelPreview={novelPreview}
     />
   )
 }

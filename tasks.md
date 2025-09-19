@@ -7,6 +7,7 @@
 - [x] Detect "Module did not self-register" errors to trigger automatic rebuild of `better-sqlite3`.
 - [ ] Upgrade Docker base Node image when `better-sqlite3` adds support for newer versions.
 - [x] Persist Vertex AI / Gemini token usage metrics via `db.tokenUsage().record` when telemetry is available.
+- [x] Surface per-model prompt/completion token totals and the novel preview on the results page UI.
 - [ ] Surface cached/thought tokens in dashboards once backend schema supports them.
 - [x] Gate script conversion coverage checks and downstream persistence behind `features.enableCoverageCheck` (default OFF) to avoid unnecessary LLM retries and database writes.
 
