@@ -35,11 +35,22 @@ export const mockChunkService = {
   getChunksByJobId: vi.fn().mockResolvedValue([]),
 }
 
+export const mockChunkConversionService = {
+  ...createMockService(),
+  getStatusesByJob: vi.fn().mockResolvedValue([]),
+  getStatus: vi.fn().mockResolvedValue(null),
+  ensureStatuses: vi.fn().mockResolvedValue(undefined),
+  markProcessing: vi.fn().mockResolvedValue(undefined),
+  markCompleted: vi.fn().mockResolvedValue(undefined),
+  markFailed: vi.fn().mockResolvedValue(undefined),
+}
+
 export const mockDatabase = {
   jobs: () => mockJobService,
   episodes: () => mockEpisodeService,
   novels: () => mockNovelService,
   chunks: () => mockChunkService,
+  chunkConversion: () => mockChunkConversionService,
   render: () => ({ upsertRenderStatus: vi.fn().mockResolvedValue(undefined) }),
 }
 
@@ -48,6 +59,7 @@ export const mockDatabaseServiceFactory = {
   episodes: () => mockEpisodeService,
   novels: () => mockNovelService,
   chunks: () => mockChunkService,
+  chunkConversion: () => mockChunkConversionService,
   render: () => ({ upsertRenderStatus: vi.fn().mockResolvedValue(undefined) }),
 }
 

@@ -313,6 +313,10 @@ vi.mock('@/config', async (importOriginal) => {
         enableCoverageCheck: false,
       },
       llm: {
+        chunkConversion: {
+          systemPrompt: 'mock chunk conversion system prompt',
+          userPromptTemplate: '{{chunkText}}',
+        },
         scriptConversion: {
           coverageThreshold: 0.8,
           enableCoverageRetry: true,
@@ -322,6 +326,12 @@ vi.mock('@/config', async (importOriginal) => {
     getTextAnalysisConfig: vi.fn().mockReturnValue({
       userPromptTemplate: '{{chunkIndex}}',
       systemPrompt: 'mock system prompt',
+    }),
+    getChunkConversionConfig: vi.fn().mockReturnValue({
+      provider: 'openai',
+      maxTokens: 1000,
+      systemPrompt: 'mock chunk conversion system prompt',
+      userPromptTemplate: '{{chunkText}}',
     }),
     getScriptConversionConfig: vi.fn().mockReturnValue({
       userPromptTemplate: '{{chunkIndex}}',

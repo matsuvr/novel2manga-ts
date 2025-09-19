@@ -55,6 +55,16 @@ export const mockChunkService = {
   createChunk: vi.fn().mockResolvedValue('mock-chunk-id'),
 }
 
+export const mockChunkConversionService = {
+  ...createMockService(),
+  getStatusesByJob: vi.fn().mockResolvedValue([]),
+  getStatus: vi.fn().mockResolvedValue(null),
+  ensureStatuses: vi.fn().mockResolvedValue(undefined),
+  markProcessing: vi.fn().mockResolvedValue(undefined),
+  markCompleted: vi.fn().mockResolvedValue(undefined),
+  markFailed: vi.fn().mockResolvedValue(undefined),
+}
+
 export const mockRenderService = {
   ...createMockService(),
   upsertRenderStatus: vi.fn().mockResolvedValue(undefined),
@@ -92,6 +102,7 @@ export const mockDatabaseServiceFactory = {
   jobs: vi.fn().mockReturnValue(mockJobService),
   novels: vi.fn().mockReturnValue(mockNovelService),
   chunks: vi.fn().mockReturnValue(mockChunkService),
+  chunkConversion: vi.fn().mockReturnValue(mockChunkConversionService),
   render: vi.fn().mockReturnValue(mockRenderService),
   layout: vi.fn().mockReturnValue(mockLayoutService),
   outputs: vi.fn().mockReturnValue(mockOutputService),
@@ -103,6 +114,7 @@ export const mockDatabaseServiceFactory = {
       jobs: mockJobService,
       novels: mockNovelService,
       chunks: mockChunkService,
+      chunkConversion: mockChunkConversionService,
       render: mockRenderService,
       layout: mockLayoutService,
       outputs: mockOutputService,
@@ -121,6 +133,7 @@ export const mockDatabase = {
   jobs: vi.fn().mockReturnValue(mockJobService),
   novels: vi.fn().mockReturnValue(mockNovelService),
   chunks: vi.fn().mockReturnValue(mockChunkService),
+  chunkConversion: vi.fn().mockReturnValue(mockChunkConversionService),
   render: vi.fn().mockReturnValue(mockRenderService),
   layout: vi.fn().mockReturnValue(mockLayoutService),
   outputs: vi.fn().mockReturnValue(mockOutputService),

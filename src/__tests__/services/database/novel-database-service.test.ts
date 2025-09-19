@@ -17,6 +17,12 @@ function makeFakeDb() {
   const tx = {
     insert: () => ({
       values: (v: unknown) => ({
+        onConflictDoUpdate: () => ({
+          run: () => {
+            calls.insert = [v]
+            return undefined
+          },
+        }),
         onConflictDoNothing: () => ({
           run: () => {
             calls.insert = [v]

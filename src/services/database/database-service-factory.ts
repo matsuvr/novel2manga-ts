@@ -4,6 +4,7 @@ import type { DatabaseAdapter } from '@/infrastructure/database/adapters/base-ad
 import { SqliteAdapter } from '@/infrastructure/database/adapters/sqlite-adapter'
 import type { DatabaseConnection } from '@/infrastructure/database/connection'
 import { getLogger } from '@/infrastructure/logging/logger'
+import { ChunkConversionDatabaseService } from './chunk-conversion-database-service'
 import { ChunkDatabaseService } from './chunk-database-service'
 import { EpisodeDatabaseService } from './episode-database-service'
 import { JobDatabaseService } from './job-database-service'
@@ -27,6 +28,7 @@ export class DatabaseServiceFactory {
   private readonly jobService: JobDatabaseService
   private readonly novelService: NovelDatabaseService
   private readonly chunkService: ChunkDatabaseService
+  private readonly chunkConversionService: ChunkConversionDatabaseService
   private readonly outputService: OutputDatabaseService
   private readonly renderService: RenderDatabaseService
   private readonly layoutService: LayoutDatabaseService
@@ -45,6 +47,7 @@ export class DatabaseServiceFactory {
     this.jobService = new JobDatabaseService(this.db, this.adapter)
     this.novelService = new NovelDatabaseService(this.db, this.adapter)
     this.chunkService = new ChunkDatabaseService(this.db, this.adapter)
+    this.chunkConversionService = new ChunkConversionDatabaseService(this.db, this.adapter)
     this.outputService = new OutputDatabaseService(this.db, this.adapter)
     this.renderService = new RenderDatabaseService(this.db, this.adapter)
     this.layoutService = new LayoutDatabaseService(this.db, this.adapter)
@@ -87,6 +90,13 @@ export class DatabaseServiceFactory {
    */
   chunks(): ChunkDatabaseService {
     return this.chunkService
+  }
+
+  /**
+   * Get chunk conversion status operations
+   */
+  chunkConversion(): ChunkConversionDatabaseService {
+    return this.chunkConversionService
   }
 
   /**
@@ -141,6 +151,7 @@ export class DatabaseServiceFactory {
       jobs: JobDatabaseService
       novels: NovelDatabaseService
       chunks: ChunkDatabaseService
+      chunkConversion: ChunkConversionDatabaseService
       outputs: OutputDatabaseService
       render: RenderDatabaseService
       layout: LayoutDatabaseService
@@ -155,6 +166,7 @@ export class DatabaseServiceFactory {
       const jobs = new JobDatabaseService(this.db, this.adapter)
       const novels = new NovelDatabaseService(this.db, this.adapter)
       const chunks = new ChunkDatabaseService(this.db, this.adapter)
+      const chunkConversion = new ChunkConversionDatabaseService(this.db, this.adapter)
       const outputs = new OutputDatabaseService(this.db, this.adapter)
       const render = new RenderDatabaseService(this.db, this.adapter)
       const layout = new LayoutDatabaseService(this.db, this.adapter)
@@ -166,6 +178,7 @@ export class DatabaseServiceFactory {
         jobs,
         novels,
         chunks,
+        chunkConversion,
         outputs,
         render,
         layout,
@@ -533,6 +546,7 @@ export const db = {
   jobs: () => getDatabaseServiceFactory().jobs(),
   novels: () => getDatabaseServiceFactory().novels(),
   chunks: () => getDatabaseServiceFactory().chunks(),
+  chunkConversion: () => getDatabaseServiceFactory().chunkConversion(),
   outputs: () => getDatabaseServiceFactory().outputs(),
   render: () => getDatabaseServiceFactory().render(),
   layout: () => getDatabaseServiceFactory().layout(),

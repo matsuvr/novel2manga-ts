@@ -137,6 +137,10 @@ vi.mock('@/config', () => ({
       enableParallelProcessing: true,
     },
     llm: {
+      chunkConversion: {
+        systemPrompt: 'Chunk conversion system prompt',
+        userPromptTemplate: 'チャンク変換: {{chunkText}}',
+      },
       textAnalysis: {
         systemPrompt: 'Test system prompt',
         userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
@@ -145,6 +149,12 @@ vi.mock('@/config', () => ({
   })),
   getTextAnalysisConfig: vi.fn(() => ({
     userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
+  })),
+  getChunkConversionConfig: vi.fn(() => ({
+    provider: 'openai',
+    maxTokens: 1000,
+    systemPrompt: 'Chunk conversion system prompt',
+    userPromptTemplate: 'チャンク変換: {{chunkText}}',
   })),
   getScriptConversionConfig: vi.fn(() => ({
     systemPrompt: 'script-system',
@@ -574,23 +584,33 @@ describe('Service Integration Tests', () => {
             maxCharsPerEpisode: 20000,
           },
         },
-        features: {
-          enableParallelProcessing: true,
-        },
-        llm: {
-          textAnalysis: {
-            systemPrompt: 'Test system prompt',
-            userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
-          },
-        },
-      })),
-      getTextAnalysisConfig: vi.fn(() => ({
+    features: {
+      enableParallelProcessing: true,
+    },
+    llm: {
+      chunkConversion: {
+        systemPrompt: 'Chunk conversion system prompt',
+        userPromptTemplate: 'チャンク変換: {{chunkText}}',
+      },
+      textAnalysis: {
+        systemPrompt: 'Test system prompt',
         userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
-      })),
-      getScriptConversionConfig: vi.fn(() => ({
-        systemPrompt: 'script-system',
-        userPromptTemplate: 'Episode: {{episodeText}}',
-      })),
+      },
+    },
+  })),
+  getTextAnalysisConfig: vi.fn(() => ({
+    userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
+  })),
+  getChunkConversionConfig: vi.fn(() => ({
+    provider: 'openai',
+    maxTokens: 1000,
+    systemPrompt: 'Chunk conversion system prompt',
+    userPromptTemplate: 'チャンク変換: {{chunkText}}',
+  })),
+  getScriptConversionConfig: vi.fn(() => ({
+    systemPrompt: 'script-system',
+    userPromptTemplate: 'Episode: {{episodeText}}',
+  })),
       getChunkingConfig: vi.fn(() => ({
         // テストでは短い本文でも4チャンク以上になるよう小さめに設定
         defaultChunkSize: 150,
