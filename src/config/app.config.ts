@@ -739,6 +739,10 @@ export function getAppConfigWithOverrides(): AppConfig {
     config.features.enableCaching = process.env.APP_ENABLE_CACHING === 'true'
   }
 
+  if (process.env.APP_ENABLE_COVERAGE_CHECK !== undefined) {
+    config.features.enableCoverageCheck = process.env.APP_ENABLE_COVERAGE_CHECK === 'true'
+  }
+
   if (process.env.APP_VALIDATION_MIN_INPUT_CHARS) {
     const v = parseInt(process.env.APP_VALIDATION_MIN_INPUT_CHARS, 10)
     if (!Number.isNaN(v) && v > 0) config.validation.minInputChars = v
