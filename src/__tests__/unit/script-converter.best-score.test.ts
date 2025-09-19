@@ -5,47 +5,50 @@ vi.mock('@/agents/structured-generator', async () => {
     private count = 0
     async generateObjectWithFallback<T>(): Promise<T> {
       this.count += 1
+      // Return a ChunkConversionResult-shaped object expected by the mapper
+      const makePanel = (no: number, cut: string) => ({
+        no,
+        cut,
+        camera: 'standard',
+        narration: [],
+        dialogue: [],
+        sfx: [],
+        importance: 1,
+      })
+
       if (this.count === 1) {
-        // 少ない行（低カバレッジ）
+        // low-coverage result
         return {
-          style_tone: 'テストトーン',
-          style_art: 'テストアート',
-          style_sfx: 'テスト効果音',
-          characters: [],
-          locations: [],
-          props: [],
-          panels: [
-            { no: 1, cut: '短い', camera: 'medium', dialogue: [] },
-            { no: 2, cut: 'もう一つのパネル', camera: 'close', dialogue: [] },
-          ],
-          continuity_checks: [],
-          // Add coverage stats for the first attempt too
-          coverageStats: { coverageRatio: 0.45 },
-          needsRetry: true,
+          version: '3',
+          memory: { characters: [], scenes: [] },
+          situations: [],
+          summary: '短い要約',
+          script: [makePanel(1, '短い'), makePanel(2, 'もう一つのパネル')],
         } as unknown as T
       }
-      // 多い行（高カバレッジ目標）
+
       const long = 'あ'.repeat(220)
       return {
-        style_tone: 'テストトーン',
-        style_art: 'テストアート',
-        style_sfx: 'テスト効果音',
-        characters: [],
-        locations: [],
-        props: [],
-        panels: [
-          { no: 1, cut: long.slice(0, 110), camera: 'medium', dialogue: [] },
-          { no: 2, cut: long.slice(110), camera: 'close', dialogue: [] },
-        ],
-        continuity_checks: [],
-        // Add expected metadata for coverage selection test
-        coverageStats: { coverageRatio: 0.85 },
-        needsRetry: false,
+        version: '3',
+        memory: { characters: [], scenes: [] },
+        situations: [],
+        summary: '詳細な要約',
+        script: [makePanel(1, long.slice(0, 110)), makePanel(2, long.slice(110))],
       } as unknown as T
     }
   }
   return {
     getLlmStructuredGenerator: () => new FakeGen(),
+    // Provide DefaultLlmStructuredGenerator used by chunk-conversion agent
+    DefaultLlmStructuredGenerator: class {
+      constructor(_providers: any) {}
+      async generateObjectWithFallback<T>(): Promise<T> {
+        // Delegate to same behaviour as getLlmStructuredGenerator
+        const inst = new FakeGen()
+        // @ts-ignore
+        return inst.generateObjectWithFallback<T>()
+      }
+    },
   }
 })
 
@@ -53,7 +56,9 @@ describe('convertEpisodeTextToScript - best coverage selection', () => {
   const originalEnv = { ...process.env }
   beforeEach(() => {
     // テスト環境のデモ分岐を回避
-    process.env.NODE_ENV = 'development'
+    Object.assign(process.env, { NODE_ENV: 'development' })
+    // Ensure chunkConversion uses fake provider to avoid Vertex env checks
+    Object.assign(process.env, { LLM_PROVIDER_CHUNKCONVERSION: 'fake' })
   })
   afterEach(() => {
     process.env = { ...originalEnv }

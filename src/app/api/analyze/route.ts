@@ -64,18 +64,29 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     // 最小限の Novel/Job をDBに作成して返す。
     if (isDemo) {
       const novelId = generateUUID()
-      await db.novels().ensureNovel(novelId, {
-        title: `Demo Novel ${novelId.slice(0, 8)}`,
-        author: 'Demo',
-        originalTextPath: `${novelId}.json`,
-        textLength:
-          (typeof (rawBody as { text?: string })?.text === 'string'
-            ? ((rawBody as { text?: string }).text as string).length
-            : 0) || 1,
-        language: 'ja',
-        metadataPath: null,
-        userId: user.id,
-      })
+      await db.novels().ensureNovel(
+        novelId,
+        {
+          title: `Demo Novel ${novelId.slice(0, 8)}`,
+          author: 'Demo',
+          originalTextPath: `${novelId}.json`,
+          textLength:
+            (typeof (rawBody as { text?: string })?.text === 'string'
+              ? ((rawBody as { text?: string }).text as string).length
+              : 0) || 1,
+          language: 'ja',
+          metadataPath: null,
+          userId: user.id,
+        },
+        {
+          user: {
+            id: user.id,
+            name: user.name ?? undefined,
+            email: user.email ?? undefined,
+            image: user.image ?? undefined,
+          },
+        },
+      )
 
       const jobId = generateUUID()
       db.jobs().createJobRecord({
@@ -120,15 +131,26 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     // - novelId のみの場合は存在確認を行い、無ければ 404 を返す
     if (novelText !== FETCH_FROM_STORAGE) {
       try {
-        await db.novels().ensureNovel(novelId as string, {
-          title: title || `Novel ${(novelId as string).slice(0, 8)}`,
-          author: 'Unknown',
-          originalTextPath: `${novelId}.json`,
-          textLength: typeof inputText === 'string' ? inputText.length : 0,
-          language: 'ja',
-          metadataPath: null,
-          userId: user.id,
-        })
+        await db.novels().ensureNovel(
+          novelId as string,
+          {
+            title: title || `Novel ${(novelId as string).slice(0, 8)}`,
+            author: 'Unknown',
+            originalTextPath: `${novelId}.json`,
+            textLength: typeof inputText === 'string' ? inputText.length : 0,
+            language: 'ja',
+            metadataPath: null,
+            userId: user.id,
+          },
+          {
+            user: {
+              id: user.id,
+              name: user.name ?? undefined,
+              email: user.email ?? undefined,
+              image: user.image ?? undefined,
+            },
+          },
+        )
       } catch (e) {
         return createErrorResponse(e, '小説の準備に失敗しました')
       }

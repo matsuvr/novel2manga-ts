@@ -261,6 +261,30 @@ export const chunkAnalysisStatus = sqliteTable(
   }),
 )
 
+// チャンク変換状態テーブル（chunkConversion用の進捗管理）
+export const chunkConversionStatus = sqliteTable(
+  'chunk_conversion_status',
+  {
+    jobId: text('job_id')
+      .notNull()
+      .references(() => jobs.id, { onDelete: 'cascade' }),
+    chunkIndex: integer('chunk_index').notNull(),
+    status: text('status').notNull().default('pending'),
+    resultPath: text('result_path'),
+    errorMessage: text('error_message'),
+    retryCount: integer('retry_count').default(0),
+    startedAt: text('started_at'),
+    completedAt: text('completed_at'),
+    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.jobId, table.chunkIndex] }),
+    jobIdx: index('idx_chunk_conversion_job').on(table.jobId),
+    statusIdx: index('idx_chunk_conversion_status').on(table.status),
+  }),
+)
+
 // エピソードテーブル
 export const episodes = sqliteTable(
   'episodes',
@@ -523,6 +547,8 @@ export const jobsRelations = relations(jobs, ({ one, many }) => ({
   }),
   stepHistory: many(jobStepHistory),
   chunks: many(chunks),
+  chunkAnalysisStatus: many(chunkAnalysisStatus),
+  chunkConversionStatus: many(chunkConversionStatus),
   chunkStates: many(chunkState),
   episodes: many(episodes),
   layoutStatus: many(layoutStatus),
@@ -583,6 +609,13 @@ export const chunksRelations = relations(chunks, ({ one }) => ({
 export const chunkAnalysisStatusRelations = relations(chunkAnalysisStatus, ({ one }) => ({
   job: one(jobs, {
     fields: [chunkAnalysisStatus.jobId],
+    references: [jobs.id],
+  }),
+}))
+
+export const chunkConversionStatusRelations = relations(chunkConversionStatus, ({ one }) => ({
+  job: one(jobs, {
+    fields: [chunkConversionStatus.jobId],
     references: [jobs.id],
   }),
 }))
@@ -663,6 +696,8 @@ export type Chunk = typeof chunks.$inferSelect
 export type NewChunk = typeof chunks.$inferInsert
 export type ChunkAnalysisStatus = typeof chunkAnalysisStatus.$inferSelect
 export type NewChunkAnalysisStatus = typeof chunkAnalysisStatus.$inferInsert
+export type ChunkConversionStatus = typeof chunkConversionStatus.$inferSelect
+export type NewChunkConversionStatus = typeof chunkConversionStatus.$inferInsert
 export type Episode = typeof episodes.$inferSelect
 export type NewEpisode = typeof episodes.$inferInsert
 export type LayoutStatus = typeof layoutStatus.$inferSelect
