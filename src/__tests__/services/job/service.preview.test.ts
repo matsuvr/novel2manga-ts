@@ -1,7 +1,6 @@
 import { Effect } from 'effect'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { JobService, JobServiceLive } from '@/services/job/service'
-import { StorageFactory } from '@/utils/storage'
 
 // Helper to create a fake DB row result shape matching JobService query
 function makeRow(overrides: Partial<Record<string, unknown>> = {}) {
@@ -98,11 +97,7 @@ describe('JobService preview unwrap', () => {
   })
 
   it('unwraps nested JSON from storage and sets novel.preview', async () => {
-    const doubleWrapped = JSON.stringify({ text: JSON.stringify({ text: 'こんにちは世界これはテストの本文です' }) })
-
-    const mockNovelStorage = {
-      get: vi.fn().mockResolvedValue({ text: doubleWrapped }),
-    }
+    const previewText = 'こんにちは世界これはテストの本文です'
 
     // Mock getDatabase to return a mock that yields our single row
     const { getDatabase } = await import('@/db')
@@ -126,8 +121,8 @@ describe('JobService preview unwrap', () => {
     // The service under test imports `getNovelStorage` as a named export via
     // dynamic import. Spy the actual module export so the call inside
     // `getUserJobs` picks up our mock.
-    const storageModule = await import('@/utils/storage')
-    vi.spyOn(storageModule, 'getNovelStorage').mockResolvedValue(mockNovelStorage as any)
+    const novelTextModule = await import('@/utils/novel-text')
+    const previewSpy = vi.spyOn(novelTextModule, 'loadNovelPreview').mockResolvedValue(previewText)
 
     // Provide the layer and obtain the service instance
     const jobService = await Effect.runPromise(
@@ -142,7 +137,7 @@ describe('JobService preview unwrap', () => {
     expect(result.length).toBeGreaterThan(0)
     const first = result[0]
     expect(first.novel).not.toBeNull()
-    expect(first.novel?.preview).toBe('こんにちは世界これはテストの本文です'.slice(0, 100))
-    expect(mockNovelStorage.get).toHaveBeenCalledWith('wrapped-key.json')
+    expect(first.novel?.preview).toBe(previewText.slice(0, 100))
+    expect(previewSpy).toHaveBeenCalledWith('wrapped-key.json', { length: 100 })
   })
 })
