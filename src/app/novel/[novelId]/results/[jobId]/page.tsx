@@ -88,8 +88,7 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
     db.novels().getNovel(job.novelId),
   ])
 
-  const modelTokenUsage: ModelTokenUsage[] = [...(tokenUsageByJob[job.id] ?? [])]
-  modelTokenUsage.sort((a, b) => {
+  const modelTokenUsage: ModelTokenUsage[] = [...(tokenUsageByJob[job.id] ?? [])].toSorted((a, b) => {
     const providerDiff = a.provider.localeCompare(b.provider)
     if (providerDiff !== 0) return providerDiff
     return a.model.localeCompare(b.model)
