@@ -1,3 +1,4 @@
+import { getAppConfigWithOverrides } from '@/config/app.config'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
 // repositories shim no longer used
@@ -190,8 +191,14 @@ export class AnalyzePipeline extends BasePipelineStep {
       throw new Error(mergeRes.error)
     }
 
-    // Store coverage warnings if any
-    if (mergeRes.data.coverageWarnings && mergeRes.data.coverageWarnings.length > 0) {
+    const { features } = getAppConfigWithOverrides()
+
+    // Store coverage warnings if any (flagged on to avoid unnecessary DB writes)
+    if (
+      features.enableCoverageCheck &&
+      mergeRes.data.coverageWarnings &&
+      mergeRes.data.coverageWarnings.length > 0
+    ) {
       await this.updateJobCoverageWarnings(jobId, mergeRes.data.coverageWarnings, { logger })
     }
 

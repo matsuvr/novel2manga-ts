@@ -14,6 +14,13 @@
 - Vertex AI / Gemini structured generations now extract `usageMetadata` and persist token counts through `db.tokenUsage().record` when telemetry is supplied.
 - Missing token metadata is logged as an error, making gaps in provider responses visible during diagnostics.
 
+## Script Coverage Verification
+
+- Script conversion coverage checks are now fully controlled by the `features.enableCoverageCheck` flag (default: `false`).
+- When disabled, the chunk script step skips the coverage judge LLM call and the merge step omits coverage-based retries/warnings, eliminating redundant generations.
+- Analyze pipeline orchestration also bypasses persistence of coverage warnings when the flag is off, preventing unnecessary database writes or lookups.
+- Operators can re-enable auditing by toggling the flag in `app.config.ts` or setting `APP_ENABLE_COVERAGE_CHECK=true` for targeted runs.
+
 ## Database Initialization
 
 - `getDatabase` automatically triggers `npm rebuild better-sqlite3` when an ABI mismatch is detected and retries initialization.
