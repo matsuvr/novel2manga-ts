@@ -21,6 +21,14 @@ interface Props {
     episodeNumbers?: number[]
   }>
   uniqueEpisodes: Episode[]
+  tokenUsageByModel: Array<{
+    provider: string
+    model: string
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+  }>
+  novelPreview?: string
 }
 
 export default function NovelJobResultsClient({
@@ -29,6 +37,8 @@ export default function NovelJobResultsClient({
   layoutStatuses,
   coverageWarnings,
   uniqueEpisodes,
+  tokenUsageByModel,
+  novelPreview,
 }: Props) {
   const layoutStatusMap = new Map(layoutStatuses.map((s) => [s.episodeNumber, s]))
   const processingTimeMs =
@@ -36,10 +46,18 @@ export default function NovelJobResultsClient({
       ? new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()
       : null
   const totalPageCount = layoutStatuses.reduce((sum, status) => sum + (status.totalPages || 0), 0)
+  const usageList = tokenUsageByModel ?? []
 
   return (
     <div className="container mx-auto max-w-5xl py-6">
-      <h1 className="mb-2 text-2xl font-semibold">解析結果（小説ID: {novelId} ）</h1>
+      <h1 className="mb-2 text-2xl font-semibold">
+        解析結果（小説ID: {novelId} ）
+        {novelPreview && (
+          <span className="mt-1 block text-base font-normal text-muted-foreground">
+            冒頭: {novelPreview}
+          </span>
+        )}
+      </h1>
       <p className="mb-4 text-sm text-muted-foreground">
         このページをブックマークすれば、後で直接アクセスできます。
       </p>
@@ -62,6 +80,29 @@ export default function NovelJobResultsClient({
                 </div>
               )}
               <div>ジョブID: {job.id}</div>
+              <div className="pt-2">
+                <div className="font-semibold">モデル別トークン消費</div>
+                {usageList.length > 0 ? (
+                  <ul className="mt-1 space-y-1">
+                    {usageList.map((usage) => (
+                      <li
+                        key={`${encodeURIComponent(usage.provider)}:${encodeURIComponent(usage.model)}`}
+                        className="flex flex-col"
+                      >
+                        <span className="font-medium capitalize">
+                          {usage.provider} / {usage.model}
+                        </span>
+                        <span className="text-muted-foreground">
+                          入力 {usage.promptTokens.toLocaleString()}t / 出力 {usage.completionTokens.toLocaleString()}t (計{' '}
+                          {usage.totalTokens.toLocaleString()}t)
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="mt-1 text-muted-foreground">記録されたトークン消費はありません。</div>
+                )}
+              </div>
             </div>
             <div>
               <Button asChild>

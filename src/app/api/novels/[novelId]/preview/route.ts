@@ -3,6 +3,8 @@ import { eq } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 import { getDatabase } from '@/db'
 import { novels } from '@/db/schema'
+import { getLogger } from '@/infrastructure/logging/logger'
+import { loadNovelPreview } from '@/utils/novel-text'
 
 export async function GET(_req: Request, { params }: { params: { novelId: string } }) {
   // `params` can be an async proxy in some Next.js runtimes — await the params object
@@ -24,41 +26,15 @@ export async function GET(_req: Request, { params }: { params: { novelId: string
   if (!path) return NextResponse.json({ preview: null })
 
   try {
-    const { getNovelStorage } = await import('@/utils/storage')
-    const storage = await getNovelStorage()
-    const result = await storage.get(path)
-    if (!result) return NextResponse.json({ preview: null })
-    // Unwrap nested JSON wrappers if present (same logic as JobService)
-    const unwrap = (raw: string, depth = 5): string => {
-      let cur: unknown = raw
-      for (let i = 0; i < depth; i++) {
-        if (typeof cur !== 'string') break
-        try {
-          const parsed = JSON.parse(cur)
-          if (parsed && typeof parsed === 'object') {
-            if ('content' in (parsed as Record<string, unknown>) && typeof (parsed as Record<string, unknown>).content === 'string') {
-              cur = (parsed as Record<string, unknown>).content
-              continue
-            }
-            if ('text' in (parsed as Record<string, unknown>) && typeof (parsed as Record<string, unknown>).text === 'string') {
-              cur = (parsed as Record<string, unknown>).text
-              continue
-            }
-            break
-          }
-          cur = String(parsed)
-        } catch {
-          break
-        }
-      }
-      return typeof cur === 'string' ? cur : String(cur)
-    }
-
-    const unwrapped = unwrap(result.text)
-    const preview = unwrapped.slice(0, 100)
-    return NextResponse.json({ preview })
-  } catch (_err) {
-    // If read fails, return null but don't throw
+    const preview = await loadNovelPreview(path, { length: 100 })
+    return NextResponse.json({ preview: preview ?? null })
+  } catch (error) {
+    getLogger()
+      .withContext({ route: 'api/novels/[novelId]/preview', method: 'GET', novelId })
+      .error('Failed to load novel preview', {
+        path,
+        error: error instanceof Error ? error.message : String(error),
+      })
     return NextResponse.json({ preview: null })
   }
 }

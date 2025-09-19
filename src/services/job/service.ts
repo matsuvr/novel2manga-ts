@@ -9,6 +9,7 @@ import { getDatabase } from '@/db'
 import { jobs, novels } from '@/db/schema'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { normalizeTimestamp } from '@/utils/format'
+import { loadNovelPreview } from '@/utils/novel-text'
 import {
   DatabaseError,
   JobAccessDeniedError,
@@ -156,48 +157,7 @@ export const JobServiceLive = Layer.succeed(JobService, {
               let novelPreview: string | undefined
               if (row.novelOriginalTextPath) {
                 try {
-                  const { getNovelStorage } = await import('@/utils/storage')
-                  const storage = await getNovelStorage()
-                  // originalTextPath is stored as a storage key (e.g. "<uuid>.json"). Use storage.get to read.
-                  const result = await storage.get(row.novelOriginalTextPath)
-                  if (result && typeof result.text === 'string') {
-                    // Storage content may be wrapped in several layers of JSON
-                    // e.g. '{"text":"{\\"text\\":\"actual text\"}"}'
-                    // Unwrap repeatedly up to a safe depth.
-                    const unwrap = (raw: string, depth = 5): string => {
-                      let cur: unknown = raw
-                      for (let i = 0; i < depth; i++) {
-                        if (typeof cur !== 'string') break
-                        try {
-                          const parsed = JSON.parse(cur)
-                          if (parsed && typeof parsed === 'object') {
-                            // prefer common property names
-                            if ('content' in (parsed as Record<string, unknown>) && typeof (parsed as Record<string, unknown>).content === 'string') {
-                              cur = (parsed as Record<string, unknown>).content
-                              continue
-                            }
-                            if ('text' in (parsed as Record<string, unknown>) && typeof (parsed as Record<string, unknown>).text === 'string') {
-                              cur = (parsed as Record<string, unknown>).text
-                              continue
-                            }
-                            // If parsed is object but doesn't have known keys, stop
-                            break
-                          }
-                          // parsed is primitive (string/number); use its string form
-                          cur = String(parsed)
-                        } catch {
-                          // not JSON - stop
-                          break
-                        }
-                      }
-                      return typeof cur === 'string' ? cur : String(cur)
-                    }
-
-                    const unwrapped = unwrap(result.text)
-                    novelPreview = unwrapped.slice(0, 100)
-                  } else {
-                    novelPreview = undefined
-                  }
+                  novelPreview = await loadNovelPreview(row.novelOriginalTextPath, { length: 100 })
                 } catch (error) {
                   // log for debugging, but don't fail the whole request
                   getLogger().withContext({ service: 'JobService', method: 'getUserJobs', jobId: row.id }).error(

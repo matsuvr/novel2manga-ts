@@ -13,6 +13,7 @@
 
 - Vertex AI / Gemini structured generations now extract `usageMetadata` and persist token counts through `db.tokenUsage().record` when telemetry is supplied.
 - Missing token metadata is logged as an error, making gaps in provider responses visible during diagnostics.
+- Job results view surfaces aggregated prompt/completion totals for each provider and model so operators can audit consumption directly from the UI.
 
 ## Script Coverage Verification
 
@@ -67,6 +68,11 @@
 - Dashboard data retrieval moved to `getMypageDashboard` service for reuse.
 - API `/api/mypage/dashboard` now returns job summaries including status and novel titles for client display.
 - New My Page route lists each job with links to finished results and resume actions for failed jobs.
+
+## Results Page UI
+
+- Results page header now embeds the first 100 characters of the source novel to provide immediate story context.
+- Model-by-model token usage breakdown is displayed alongside job metadata, combining prompt and completion totals for each provider/model pair.
 
 ## Progress UI
 
