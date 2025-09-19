@@ -819,6 +819,10 @@ async function selectMemoryForChunk(n: number): Promise<Context> {
 | 空配列省略 | 空の要素は出力しない | 5% |
 | **合計** | | **75%** |
 
+- スクリプト変換時のカバレッジ検証は `features.enableCoverageCheck` フラグで制御し、デフォルトOFFとしてLLMへの再問い合わせを発生させない。
+- 品質監査が必要なケースのみ `app.config.ts` または `APP_ENABLE_COVERAGE_CHECK=true` で明示的に有効化し、通常運用ではトークン消費を抑制する。
+- 分析パイプラインでもフラグがOFFの際はカバレッジ警告の永続化を行わず、DBアクセスとテレメトリ更新を完全に停止する。
+
 ### 7.2 処理速度最適化
 
 ```typescript

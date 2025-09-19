@@ -1,3 +1,4 @@
+import { getAppConfigWithOverrides } from '@/config/app.config'
 import { COVERAGE_MESSAGES } from '@/constants/messages'
 import { db } from '@/services/database'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
@@ -29,6 +30,7 @@ export class ScriptMergeStep implements PipelineStep {
     let actualTotalChunks = 0
 
     try {
+      const isCoverageCheckEnabled = getAppConfigWithOverrides().features.enableCoverageCheck
       const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
       const storage = await StorageFactory.getAnalysisStorage()
 
@@ -109,13 +111,18 @@ export class ScriptMergeStep implements PipelineStep {
         }
 
         // Coverage gate (warn/fail)
-        const ratio = Number(scriptObj.coverageStats?.coverageRatio ?? NaN)
-        if (Number.isFinite(ratio)) {
-          if (ratio < MIN_COVERAGE_FAIL) failCoverageChunks.push({ index: i, ratio })
-          else if (ratio < LOW_COVERAGE_WARN) lowCoverageChunks.push({ index: i, ratio })
-        } else {
-          // coverage情報が無い場合は警告のみ（マージは継続）
-          lowCoverageChunks.push({ index: i, ratio: 0 })
+        if (isCoverageCheckEnabled) {
+          const ratio = Number(scriptObj.coverageStats?.coverageRatio ?? NaN)
+          if (Number.isFinite(ratio)) {
+            if (ratio < MIN_COVERAGE_FAIL) {
+              failCoverageChunks.push({ index: i, ratio })
+            } else if (ratio < LOW_COVERAGE_WARN) {
+              lowCoverageChunks.push({ index: i, ratio })
+            }
+          } else {
+            // coverage情報が無い場合は警告のみ（マージは継続）
+            lowCoverageChunks.push({ index: i, ratio: 0 })
+          }
         }
 
         if (Array.isArray(scriptObj.panels)) {
@@ -131,81 +138,92 @@ export class ScriptMergeStep implements PipelineStep {
         }
       }
 
-      // Collect coverage warnings with episode information
-      const allLowCoverageChunks = [...failCoverageChunks, ...lowCoverageChunks]
+      let coverageWarnings: ScriptMergeResult['coverageWarnings'] | undefined
+      if (isCoverageCheckEnabled) {
+        const allLowCoverageChunks = [...failCoverageChunks, ...lowCoverageChunks]
 
-      // Get episode repository to map chunks to episodes (best-effort)
-      // DB の取得や参照に失敗してもマージ自体は継続し、エピソード番号の付与を省略する
-      let allEpisodes: Array<{ startChunk: number; endChunk: number; episodeNumber: number }> = []
-      try {
-        allEpisodes = await db.episodes().getEpisodesByJobId(jobId)
-      } catch (e) {
-        logger.warn('Failed to load episodes for coverage mapping (continuing without episodes)', {
-          jobId,
-          error: e instanceof Error ? e.message : String(e),
-        })
-      }
-
-      const coverageWarnings = allLowCoverageChunks.map((c) => {
-        const episodeNumbers = allEpisodes
-          .filter((episode) => c.index >= episode.startChunk && c.index <= episode.endChunk)
-          .map((episode) => episode.episodeNumber)
-          .sort((a, b) => a - b)
-
-        const coveragePercent = (c.ratio * 100).toFixed(1)
-
-        return {
-          chunkIndex: c.index,
-          coverageRatio: c.ratio,
-          message:
-            episodeNumbers.length > 0
-              ? COVERAGE_MESSAGES.LOW_COVERAGE_WARNING_EPISODES(episodeNumbers, coveragePercent)
-              : COVERAGE_MESSAGES.LOW_COVERAGE_WARNING(c.index, coveragePercent),
-          episodeNumbers,
-        }
-      })
-
-      if (failCoverageChunks.length > 0) {
-        const details = failCoverageChunks
-          .map((c) => `chunk=${c.index} ratio=${c.ratio.toFixed(3)}`)
-          .join(', ')
-
-        // SAFE preview (env-controlled) for troubleshooting
-        if (process.env.LOG_SAFE_PREVIEW === '1') {
+        if (allLowCoverageChunks.length > 0) {
+          // Get episode repository to map chunks to episodes (best-effort)
+          // DB の取得や参照に失敗してもマージ自体は継続し、エピソード番号の付与を省略する
+          let allEpisodes: Array<{ startChunk: number; endChunk: number; episodeNumber: number }> = []
           try {
-            const { StorageFactory, StorageKeys } = await import('@/utils/storage')
-            const chunkStorage = await StorageFactory.getChunkStorage()
-            const previewItems: Array<{ chunkIndex: number; preview: string }> = []
-            for (const c of failCoverageChunks.slice(0, 3)) {
-              const key = StorageKeys.chunk({ novelId, jobId, index: c.index })
-              const obj = await chunkStorage.get(key)
-              const raw = obj?.text ?? ''
-              const preview = (raw.slice(0, 200) || '').replace(/\n/g, '\\n')
-              previewItems.push({ chunkIndex: c.index, preview })
-            }
-            logger.error('Low coverage SAFE previews', { jobId, previews: previewItems })
+            allEpisodes = await db.episodes().getEpisodesByJobId(jobId)
           } catch (e) {
-            logger.warn('Failed to produce SAFE preview for low coverage chunks', {
+            logger.warn('Failed to load episodes for coverage mapping (continuing without episodes)', {
               jobId,
               error: e instanceof Error ? e.message : String(e),
             })
           }
+
+          coverageWarnings = allLowCoverageChunks.map((c) => {
+            const episodeNumbers = allEpisodes
+              .filter((episode) => c.index >= episode.startChunk && c.index <= episode.endChunk)
+              .map((episode) => episode.episodeNumber)
+              .sort((a, b) => a - b)
+
+            const coveragePercent = (c.ratio * 100).toFixed(1)
+
+            return {
+              chunkIndex: c.index,
+              coverageRatio: c.ratio,
+              message:
+                episodeNumbers.length > 0
+                  ? COVERAGE_MESSAGES.LOW_COVERAGE_WARNING_EPISODES(episodeNumbers, coveragePercent)
+                  : COVERAGE_MESSAGES.LOW_COVERAGE_WARNING(c.index, coveragePercent),
+              episodeNumbers,
+            }
+          })
         }
 
-        logger.warn('Script merge proceeding despite very low coverage in some chunks', {
-          jobId,
-          minCoverage: MIN_COVERAGE_FAIL,
-          details,
-          note: 'Content may be missing from final output',
-        })
-      }
+        if (failCoverageChunks.length > 0) {
+          const details = failCoverageChunks
+            .map((c) => `chunk=${c.index} ratio=${c.ratio.toFixed(3)}`)
+            .join(', ')
 
-      if (lowCoverageChunks.length > 0) {
-        logger.warn('Some chunks have low coverage (proceeding)', {
-          jobId,
-          warnThreshold: LOW_COVERAGE_WARN,
-          chunks: lowCoverageChunks.map((c) => ({ index: c.index, ratio: c.ratio })),
-        })
+          // SAFE preview (env-controlled) for troubleshooting
+          if (process.env.LOG_SAFE_PREVIEW === '1') {
+            try {
+              const { StorageFactory, StorageKeys } = await import('@/utils/storage')
+              const chunkStorage = await StorageFactory.getChunkStorage()
+              const previewItems: Array<{ chunkIndex: number; preview: string }> = []
+              for (const c of failCoverageChunks.slice(0, 3)) {
+                const key = StorageKeys.chunk({ novelId, jobId, index: c.index })
+                const obj = await chunkStorage.get(key)
+                const raw = obj?.text ?? ''
+                const preview = (raw.slice(0, 200) || '').replace(/\n/g, '\\n')
+                previewItems.push({ chunkIndex: c.index, preview })
+              }
+              logger.error('Low coverage SAFE previews', { jobId, previews: previewItems })
+            } catch (e) {
+              logger.warn('Failed to produce SAFE preview for low coverage chunks', {
+                jobId,
+                error: e instanceof Error ? e.message : String(e),
+              })
+            }
+          }
+
+          logger.warn('Script merge proceeding despite very low coverage in some chunks', {
+            jobId,
+            minCoverage: MIN_COVERAGE_FAIL,
+            details,
+            note: 'Content may be missing from final output',
+          })
+        }
+
+        if (lowCoverageChunks.length > 0) {
+          logger.warn('Some chunks have low coverage (proceeding)', {
+            jobId,
+            warnThreshold: LOW_COVERAGE_WARN,
+            chunks: lowCoverageChunks.map((c) => ({ index: c.index, ratio: c.ratio })),
+          })
+        }
+
+        if (coverageWarnings && coverageWarnings.length > 0) {
+          logger.info('Coverage warnings detected', {
+            jobId,
+            warnings: coverageWarnings.length,
+          })
+        }
       }
 
       logger.info('All chunks processed, combining panels', {
@@ -244,14 +262,14 @@ export class ScriptMergeStep implements PipelineStep {
       logger.info('Script merge successful', {
         jobId,
         panels: allPanels.length,
-        coverageWarnings: coverageWarnings.length > 0 ? coverageWarnings.length : undefined,
+        coverageWarnings: coverageWarnings?.length ?? undefined,
       })
       return {
         success: true,
         data: {
           merged: true,
           panels: allPanels.length,
-          ...(coverageWarnings.length > 0 && { coverageWarnings }),
+          ...(coverageWarnings && coverageWarnings.length > 0 && { coverageWarnings }),
         },
       }
     } catch (error) {
