@@ -150,8 +150,8 @@ export async function convertChunkToMangaScript(
 }
 
 function mapChunkConversionResult(result: ChunkConversionResult): NewMangaScript {
-  const characterNameMap = new Map(
-    (result.memory?.characters ?? []).map((character) => [character.id, character.name]),
+  const characterNameMap: Map<string, string | undefined> = new Map(
+    (result.memory?.characters ?? []).map((character) => [character.id, character.name as string | undefined]),
   )
 
   const characters = (result.memory?.characters ?? []).map((character, index) => ({
@@ -185,7 +185,7 @@ function mapChunkConversionResult(result: ChunkConversionResult): NewMangaScript
     camera: panel.camera,
     narration: panel.narration ?? [],
     dialogue: (panel.dialogue ?? []).map((line) => ({
-      type: line.type === 'thought' ? 'thought' : 'speech',
+      type: line.type,
       speaker: resolveSpeakerName(line.speaker),
       text: line.text,
     })),

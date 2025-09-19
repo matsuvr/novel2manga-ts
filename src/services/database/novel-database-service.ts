@@ -32,13 +32,13 @@ export class NovelDatabaseService extends BaseDatabaseService {
   ): Promise<Novel> {
     const id = novel.id ?? crypto.randomUUID()
     const now = new Date().toISOString()
-    const { userId, user } = this.resolveUserContext(novel.userId, options)
+  const { userId, user } = this.resolveUserContext(novel.userId, options)
 
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
 
       drizzleDb.transaction((tx) => {
-        this.ensureUserRecord(tx, userId, user)
+  this.ensureUserRecord(tx, userId, user)
 
         tx.insert(novels)
           .values({
@@ -84,13 +84,13 @@ export class NovelDatabaseService extends BaseDatabaseService {
     options?: EnsureNovelOptions,
   ): Promise<void> {
     const now = new Date().toISOString()
-    const { userId, user } = this.resolveUserContext(novel.userId, options)
+  const { userId, user } = this.resolveUserContext(novel.userId, options)
 
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
 
       drizzleDb.transaction((tx) => {
-        this.ensureUserRecord(tx, userId, user)
+  this.ensureUserRecord(tx, userId, user)
 
         tx.insert(novels)
           .values({
@@ -215,7 +215,7 @@ export class NovelDatabaseService extends BaseDatabaseService {
     tx: TransactionContext,
     userId: string,
     user?: {
-      id: string
+      id?: string
       name?: string | null
       email?: string | null
       image?: string | null
@@ -226,6 +226,8 @@ export class NovelDatabaseService extends BaseDatabaseService {
     }
 
     if (user) {
+      // normalize possibly-optional id
+      user.id = userId
       const updateSet: Record<string, string | null> = {}
       if (Object.hasOwn(user, 'name')) {
         updateSet.name = user.name ?? null

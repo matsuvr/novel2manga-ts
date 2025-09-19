@@ -130,16 +130,36 @@ export const chunkConversionEffect = (
         }),
     })
 
+    // Normalize to satisfy strict typing (ensure required arrays exist)
+    const normalized: ChunkConversionResult = {
+      ...result,
+      memory: {
+        characters: (result.memory?.characters ?? []).map((c) => ({
+          ...c,
+          aliases: c.aliases ?? [],
+          possibleMatchIds: c.possibleMatchIds ?? [],
+        })),
+        scenes: (result.memory?.scenes ?? []).map((s) => ({ ...s })),
+      },
+      situations: (result.situations ?? []).map((s) => ({ ...s })),
+      script: result.script.map((p) => ({
+        ...p,
+        dialogue: (p.dialogue ?? []).map((d) => ({ ...d })),
+        narration: p.narration ?? [],
+        sfx: p.sfx ?? [],
+      })),
+    }
+
     yield* Effect.sync(() =>
       logger.info('Chunk conversion completed', {
         chunkIndex: input.chunkIndex,
         provider: config.provider,
-        panelCount: result.script.length,
+        panelCount: normalized.script.length,
       }),
     )
 
     return {
-      result,
+      result: normalized,
       provider: config.provider,
     }
   })

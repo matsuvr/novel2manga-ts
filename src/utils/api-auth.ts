@@ -42,17 +42,18 @@ export const getAuthenticatedUser = (
  * Automatically handles authentication and passes the authenticated user to the handler
  */
 export function withAuth<A = unknown>(
-  handler: (
-    request: NextRequest,
-    user: { id: string; email?: string | null; name?: string | null },
-    ...args: A[]
-  ) => Promise<Response>,
+  handler: (request: NextRequest, user: AuthenticatedUser, ...args: A[]) => Promise<Response>,
 ) {
   return async (request: NextRequest, ...args: A[]): Promise<Response> => {
     try {
       // In unit tests, skip auth entirely to avoid noise
       if (process.env.NODE_ENV === 'test') {
-        const testUser = { id: 'test-user-bypass', email: 'test@example.com', name: 'Test User' }
+        const testUser: AuthenticatedUser = {
+          id: 'test-user-bypass',
+          email: 'test@example.com',
+          name: 'Test User',
+          image: null,
+        }
         return await handler(request, testUser, ...args)
       }
       const user = await Effect.runPromise(getAuthenticatedUser(request))
@@ -72,11 +73,7 @@ export function withAuth<A = unknown>(
  */
 export const runWithAuth = <E, A>(
   request: NextRequest,
-  effect: (user: {
-    id: string
-    email?: string | null
-    name?: string | null
-  }) => Effect.Effect<A, E>,
+  effect: (user: AuthenticatedUser) => Effect.Effect<A, E>,
 ): Promise<Response> => {
   return Effect.runPromise(
     getAuthenticatedUser(request).pipe(
