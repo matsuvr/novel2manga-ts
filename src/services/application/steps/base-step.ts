@@ -1,3 +1,4 @@
+import { getAppConfigWithOverrides } from '@/config/app.config'
 import type { LoggerPort } from '@/infrastructure/logging/logger'
 import type { StoragePorts } from '@/infrastructure/storage/ports'
 import { db } from '@/services/database'
@@ -205,6 +206,15 @@ export abstract class BasePipelineStep implements PipelineStep {
     }>,
     context: ExecutionContext,
   ): Promise<void> {
+    const { features } = getAppConfigWithOverrides()
+    if (!features.enableCoverageCheck) {
+      context.logger.info('Coverage check disabled, skipping coverage warnings persistence', {
+        jobId,
+        warningCount: warnings.length,
+      })
+      return
+    }
+
     try {
       db.jobs().updateJobCoverageWarnings?.(jobId, warnings)
       context.logger.info('Job coverage warnings updated', { jobId, warningCount: warnings.length })

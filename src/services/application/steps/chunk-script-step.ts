@@ -1,4 +1,5 @@
 import { convertChunkToMangaScript } from '@/agents/script/script-converter'
+import { getAppConfigWithOverrides } from '@/config/app.config'
 import { db } from '@/services/database'
 import { isFactoryInitialized } from '@/services/database/database-service-factory'
 import type { NewMangaScript } from '@/types/script'
@@ -31,6 +32,8 @@ export class ChunkScriptStep implements PipelineStep {
     try {
       const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
       const storage = await StorageFactory.getAnalysisStorage()
+
+      const isCoverageCheckEnabled = getAppConfigWithOverrides().features.enableCoverageCheck
 
       const maxConcurrent = Math.max(1, Math.min(3, chunks.length))
       const indices = Array.from({ length: chunks.length }, (_, i) => i)
@@ -206,10 +209,7 @@ export class ChunkScriptStep implements PipelineStep {
           }
 
           // LLM coverage judge: attach coverageStats when enabled. In unit tests we skip to avoid network.
-          const coverageEnabled = !(
-            process.env.NODE_ENV === 'test' && process.env.ENABLE_COVERAGE_JUDGE !== '1'
-          )
-          if (coverageEnabled) {
+          if (isCoverageCheckEnabled) {
             const runJudgeOnce = async () => {
               const { getLlmStructuredGenerator } = await import('@/agents/structured-generator')
               const gen = getLlmStructuredGenerator()
