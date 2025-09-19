@@ -30,6 +30,7 @@ export interface ProviderConfig {
 
 // Use-case aware provider selection (centralized, configurable)
 export type LLMUseCase =
+  | 'chunkConversion'
   | 'scriptConversion'
   | 'coverageJudge'
   | 'textAnalysis'
@@ -40,8 +41,8 @@ export type LLMUseCase =
 // Mapping for use-case specific provider preferences.
 // NOTE: Do not hardcode in application code; change preferences here.
 const useCaseProviders: Partial<Record<LLMUseCase, LLMProvider>> = {
-  // 指示: スクリプト変換に高性能なLLMを使用
-  scriptConversion: 'vertexai',
+  // 指示: チャンク変換・スクリプト変換には高性能なLLMを使用
+  chunkConversion: 'vertexai',
   // エピソード切れ目検出もVertex AI（Gemini）を使用
   episodeBreak: 'vertexai',
   // その他はデフォルト（groq）を使用
@@ -72,7 +73,7 @@ export function getDefaultProvider(): LLMProvider {
   if (process.env.NODE_ENV === 'test') {
     return 'fake'
   }
-  return 'gemini'
+  return 'vertexai'
 }
 
 // Provider fallback chain (first item is primary fallback)

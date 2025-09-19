@@ -46,15 +46,26 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     const { uuid, fileName, length, totalChunks, chunkSize, overlapSize } = parsed.data
 
     // 小説データを保存
-    await db.novels().ensureNovel(uuid as string, {
-      title: fileName as string,
-      author: '',
-      originalTextPath: fileName as string,
-      textLength: length,
-      language: 'ja',
-      metadataPath: null,
-      userId: user.id,
-    })
+    await db.novels().ensureNovel(
+      uuid as string,
+      {
+        title: fileName as string,
+        author: '',
+        originalTextPath: fileName as string,
+        textLength: length,
+        language: 'ja',
+        metadataPath: null,
+        userId: user.id,
+      },
+      {
+        user: {
+          id: user.id,
+          name: user.name ?? undefined,
+          email: user.email ?? undefined,
+          image: user.image ?? undefined,
+        },
+      },
+    )
 
     // 処理ジョブを作成
     const jobId = generateUUID()

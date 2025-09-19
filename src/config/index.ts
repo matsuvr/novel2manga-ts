@@ -14,6 +14,7 @@ import {
   getLLMDefaultProvider as getDefaultProvider,
   getLLMFallbackChain as getFallbackChain,
   getLLMProviderConfig as getProviderConfig,
+  getProviderForUseCase,
   type LLMProvider,
 } from './llm.config'
 import { storageBaseDirs } from './storage-paths.config'
@@ -47,16 +48,41 @@ export function getLLMConfig() {
   return getAppConfig().llm
 }
 
-// テキスト分析設定を取得
-export function getTextAnalysisConfig() {
-  const prompts = getAppConfig().llm.textAnalysis
-  const provider = getDefaultProvider()
+// チャンク変換（要素抽出＋台本化）設定を取得
+export function getChunkConversionConfig() {
+  const prompts = getAppConfig().llm.chunkConversion
+  if (!prompts?.systemPrompt || !prompts?.userPromptTemplate) {
+    throw new Error('Chunk conversion prompts are missing in app.config.ts (llm.chunkConversion)')
+  }
+  const provider = getProviderForUseCase('chunkConversion')
   const providerConfig = getProviderConfig(provider as LLMProvider)
   return {
-    provider: provider,
+    provider,
     maxTokens: providerConfig.maxTokens,
     systemPrompt: prompts.systemPrompt,
     userPromptTemplate: prompts.userPromptTemplate,
+  }
+}
+
+// 互換API: 旧 textAnalysis 設定呼び出し（後方互換）
+// textAnalysis は chunkConversion と異なるプロンプトスキーマを持つため
+// 正しく llm.textAnalysis を参照する
+export function getTextAnalysisConfig() {
+  const prompts = getAppConfig().llm as unknown as Record<
+    string,
+    { systemPrompt?: string; userPromptTemplate?: string }
+  >
+  const ta = prompts.textAnalysis || { systemPrompt: '', userPromptTemplate: '' }
+  const provider = getProviderForUseCase('textAnalysis')
+  const providerConfig = getProviderConfig(provider as LLMProvider)
+  if (!ta.systemPrompt || !ta.userPromptTemplate) {
+    throw new Error('Text analysis prompts are missing in app.config.ts (llm.textAnalysis)')
+  }
+  return {
+    provider,
+    maxTokens: providerConfig.maxTokens,
+    systemPrompt: ta.systemPrompt as string,
+    userPromptTemplate: ta.userPromptTemplate as string,
   }
 }
 

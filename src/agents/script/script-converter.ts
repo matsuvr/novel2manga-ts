@@ -1,10 +1,7 @@
-import type { z } from 'zod'
-import {
-  DefaultLlmStructuredGenerator,
-  getLlmStructuredGenerator,
-} from '@/agents/structured-generator'
+import { runChunkConversion } from '@/agents/chunk-conversion'
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import { getLogger } from '@/infrastructure/logging/logger'
+import type { ChunkConversionResult } from '@/types/chunk-conversion'
 import { type NewMangaScript, NewMangaScriptSchema } from '@/types/script'
 import { isTestEnv } from '@/utils/env'
 import { enforceDialogueBubbleLimit } from '@/utils/script-postprocess'
@@ -97,302 +94,126 @@ export async function convertChunkToMangaScript(
     }
   }
 
-  // Use-case specific provider selection (centralized in llm.config.ts)
-  // スクリプト変換のみ OpenAI を使用するため、ここでプロバイダを指定してインスタンス化
-  let generator: DefaultLlmStructuredGenerator
+  const zeroBasedIndex = input.chunkIndex > 0 ? input.chunkIndex - 1 : 0
+  let logger: ReturnType<typeof getLogger> | undefined
+
   try {
-    const { getProviderForUseCase } = await import('@/config/llm.config')
-    const provider = getProviderForUseCase('scriptConversion')
-    // 明示順序（単一プロバイダ）。フォールバックは使わない。
-    generator = new DefaultLlmStructuredGenerator([provider])
+    logger = getLogger().withContext({
+      service: 'script-converter',
+      jobId: options?.jobId,
+      chunkIndex: input.chunkIndex,
+    })
   } catch {
-    // 設定未整備時は既定順序のジェネレータを使用
-    generator = getLlmStructuredGenerator()
+    logger = undefined
   }
-  const appCfg = getAppConfigWithOverrides()
-  const sc = appCfg.llm.scriptConversion
-  const coverageEnabled = appCfg.features.enableCoverageCheck
-  if (!sc) {
-    throw new Error(
-      'Script conversion configuration is missing in app.config.ts. Please configure llm.scriptConversion.',
+
+  try {
+    const { result, provider } = await runChunkConversion(
+      {
+        chunkText: input.chunkText,
+        chunkIndex: zeroBasedIndex,
+        chunksNumber: input.chunksNumber,
+        previousChunkSummary: input.previousSummary,
+        nextChunkSummary: input.nextSummary,
+      },
+      { jobId: options?.jobId },
     )
-  }
-  if (!sc.systemPrompt) {
-    throw new Error(
-      'Script conversion systemPrompt is missing in app.config.ts. Please configure llm.scriptConversion.systemPrompt.',
-    )
-  }
-  if (!sc.userPromptTemplate) {
-    throw new Error(
-      'Script conversion userPromptTemplate is missing in app.config.ts. Please configure llm.scriptConversion.userPromptTemplate.',
-    )
-  }
 
-  const cfg = {
-    systemPrompt: sc.systemPrompt,
-    userPromptTemplate: sc.userPromptTemplate,
-  }
-
-  const basePrompt = cfg.userPromptTemplate
-    .replace('{{chunkText}}', input.chunkText)
-    .replace('{{chunkIndex}}', input.chunkIndex.toString())
-    .replace('{{chunksNumber}}', input.chunksNumber.toString())
-    .replace('{{previousSummary}}', input.previousSummary ?? '（本文の開始）')
-    .replace('{{nextSummary}}', input.nextSummary ?? '（本文終了）')
-    .replace('{{charactersList}}', input.charactersList ?? '')
-    .replace('{{scenesList}}', input.scenesList ?? '')
-    .replace('{{dialoguesList}}', input.dialoguesList ?? '')
-    .replace('{{highlightLists}}', input.highlightLists ?? '')
-    .replace('{{situations}}', input.situations ?? '')
-
-  const maxRetries = 2
-  let attempt = 0
-  let bestResult: NewMangaScript | null = null
-  let coverageRetryUsed = false
-
-  // カバレッジ設定の必須チェック（フラグが有効な場合のみ）
-  if (coverageEnabled) {
-    if (typeof sc.coverageThreshold !== 'number') {
-      throw new Error(
-        'Script conversion coverageThreshold must be a number in app.config.ts. Please configure llm.scriptConversion.coverageThreshold.',
-      )
-    }
-    if (typeof sc.enableCoverageRetry !== 'boolean') {
-      throw new Error(
-        'Script conversion enableCoverageRetry must be a boolean in app.config.ts. Please configure llm.scriptConversion.enableCoverageRetry.',
-      )
-    }
-  }
-
-  const coverageThreshold = coverageEnabled ? sc.coverageThreshold : 0
-  const enableCoverageRetry = coverageEnabled ? sc.enableCoverageRetry : false
-
-  while (attempt <= maxRetries) {
-    let prompt = basePrompt
-
-    // カバレッジリトライの場合は追加指示を含める
-    if (
-      coverageEnabled &&
-      attempt === 1 &&
-      !coverageRetryUsed &&
-      bestResult &&
-      enableCoverageRetry
-    ) {
-      const coverage = assessScriptCoverage(bestResult, input.chunkText)
-      if (coverage.coverageRatio < coverageThreshold) {
-        coverageRetryUsed = true
-
-        // 設定ファイルからリトライプロンプトテンプレートを取得
-        if (!sc.coverageRetryPromptTemplate) {
-          throw new Error(
-            'Script conversion coverageRetryPromptTemplate is missing in app.config.ts. Please configure llm.scriptConversion.coverageRetryPromptTemplate.',
-          )
-        }
-        const retryTemplate = sc.coverageRetryPromptTemplate
-
-        const coverageReasonsList = coverage.reasons.map((reason) => `- ${reason}`).join('\n')
-        const retryPrompt = retryTemplate
-          .replace('{{coveragePercentage}}', Math.round(coverage.coverageRatio * 100).toString())
-          .replace('{{coverageReasons}}', coverageReasonsList)
-
-        prompt = `${basePrompt}\n\n${retryPrompt}`
-
-        getLogger()
-          .withContext({ service: 'script-converter', jobId: options?.jobId })
-          .info('Retrying script generation due to low coverage', {
-            coverageRatio: coverage.coverageRatio,
-            reasons: coverage.reasons,
-          })
-      }
+    const mappedScript = mapChunkConversionResult(result)
+    const sanitized = sanitizeScript(mappedScript)
+    const parsed = NewMangaScriptSchema.safeParse(sanitized)
+    if (!parsed.success) {
+      const errorSummary = parsed.error.errors.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ')
+      throw new Error(`Chunk conversion result failed validation: ${errorSummary}`)
     }
 
-    try {
-      type GenArgs<T> = import('@/agents/structured-generator').GenerateArgs<T>
-      type MaybeFallbackGenerator =
-        | { generateObjectWithFallback<T>(args: GenArgs<T>): Promise<T> }
-        | { generateObject<T>(args: GenArgs<T>): Promise<T> }
-      const gen = generator as unknown as MaybeFallbackGenerator
-      let genFn: (<T>(args: GenArgs<T>) => Promise<T>) | undefined
-      if (
-        'generateObjectWithFallback' in gen &&
-        typeof gen.generateObjectWithFallback === 'function'
-      ) {
-        genFn = gen.generateObjectWithFallback.bind(gen)
-      } else if ('generateObject' in gen && typeof gen.generateObject === 'function') {
-        genFn = gen.generateObject.bind(gen)
-      }
-      if (!genFn) {
-        throw new Error('No suitable LLM generator method found')
-      }
-      const result = await genFn<NewMangaScript>({
-        name: 'manga-script-conversion',
-        systemPrompt: cfg.systemPrompt,
-        userPrompt: prompt,
-        schema: NewMangaScriptSchema as unknown as z.ZodTypeAny,
-        schemaName: 'NewMangaScript',
-        telemetry: {
-          jobId: options?.jobId,
-          chunkIndex: input.chunkIndex,
-          stepName: 'script',
-        },
+    const dialogueLimited = enforceDialogueBubbleLimit(parsed.data)
+    const importanceValidation = validateImportanceFields(dialogueLimited)
+    if (!importanceValidation.valid) {
+      logger?.warn?.('Importance validation issues detected (auto-corrected)', {
+        issues: importanceValidation.issues,
       })
-
-      if (result && typeof result === 'object') {
-        // Sanitize importance values before validation
-        const sanitizedResult = sanitizeScript(result as NewMangaScript)
-        const validatedResult = NewMangaScriptSchema.safeParse(sanitizedResult)
-        if (validatedResult.success) {
-          // 文字数上限・分割ポリシー（Script Conversion直後に適用）
-          const currentResult = enforceDialogueBubbleLimit(validatedResult.data)
-
-          // Log importance validation warnings if any
-          const importanceValidation = validateImportanceFields(currentResult)
-          if (!importanceValidation.valid && options?.jobId) {
-            try {
-              type LoggerLike = {
-                withContext?: (c: Record<string, unknown>) => {
-                  warn?: (m: string, meta?: Record<string, unknown>) => unknown
-                }
-              }
-              const lgUnknown: unknown = getLogger()
-              const lg =
-                lgUnknown && typeof lgUnknown === 'object' ? (lgUnknown as LoggerLike) : null
-              const ctx = lg?.withContext
-                ? lg.withContext({ service: 'script-converter', jobId: options.jobId })
-                : null
-              ctx?.warn?.('Importance validation issues found (but corrected)', {
-                issues: importanceValidation.issues,
-              })
-            } catch {
-              /* noop: logger not available in test env */
-            }
-          }
-
-          if (!coverageEnabled) {
-            bestResult = currentResult
-            try {
-              type LoggerLike = {
-                withContext?: (c: Record<string, unknown>) => {
-                  info?: (m: string, meta?: Record<string, unknown>) => unknown
-                }
-              }
-              const lg = getLogger() as unknown as LoggerLike
-              const ctx = lg?.withContext
-                ? lg.withContext({ service: 'script-converter', jobId: options?.jobId })
-                : null
-              ctx?.info?.('Script generation successful', {
-                panelCount: currentResult.panels.length,
-                attempt: attempt + 1,
-              })
-            } catch {
-              /* noop: logger not available in test env */
-            }
-            break
-          }
-
-          // カバレッジ評価
-          const coverage = assessScriptCoverage(currentResult, input.chunkText)
-
-          // ベストリザルトの更新判定
-          if (
-            !bestResult ||
-            (coverage.coverageRatio > coverageThreshold &&
-              coverage.coverageRatio >
-                assessScriptCoverage(bestResult, input.chunkText).coverageRatio)
-          ) {
-            bestResult = currentResult
-
-            try {
-              type LoggerLike = {
-                withContext?: (c: Record<string, unknown>) => {
-                  info?: (m: string, meta?: Record<string, unknown>) => unknown
-                }
-              }
-              const lg = getLogger() as unknown as LoggerLike
-              const ctx = lg?.withContext
-                ? lg.withContext({ service: 'script-converter', jobId: options?.jobId })
-                : null
-              ctx?.info?.('Script generation successful', {
-                coverageRatio: coverage.coverageRatio,
-                panelCount: currentResult.panels.length,
-                attempt: attempt + 1,
-                isRetry: coverageRetryUsed && attempt === 1,
-              })
-            } catch {
-              /* noop: logger not available in test env */
-            }
-
-            // カバレッジが十分な場合は即座に完了
-            if (coverage.coverageRatio >= coverageThreshold) {
-              break
-            }
-          }
-
-          // 最初の試行でカバレッジが不十分な場合、次の試行でリトライを実行
-          if (attempt === 0 && coverage.coverageRatio < coverageThreshold) {
-            // ベストリザルトは保持して次の試行へ
-            attempt++
-            continue
-          }
-
-          // 2回目の試行が完了したらループを抜ける
-          if (attempt > 0) {
-            break
-          }
-        } else {
-          try {
-            type LoggerLike = {
-              withContext?: (c: Record<string, unknown>) => {
-                warn?: (m: string, meta?: Record<string, unknown>) => unknown
-              }
-            }
-            const lg = getLogger() as unknown as LoggerLike
-            const ctx = lg?.withContext
-              ? lg.withContext({ service: 'script-converter', jobId: options?.jobId })
-              : null
-            ctx?.warn?.('Manga script validation failed', {
-              errors: validatedResult.error.errors,
-              attempt: attempt + 1,
-            })
-          } catch {
-            /* noop: logger not available in test env */
-          }
-        }
-      }
-    } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error)
-      try {
-        type LoggerLike = {
-          withContext?: (c: Record<string, unknown>) => {
-            error?: (m: string, meta?: Record<string, unknown>) => unknown
-          }
-        }
-        const lg = getLogger() as unknown as LoggerLike
-        const ctx = lg?.withContext
-          ? lg.withContext({ service: 'script-converter', jobId: options?.jobId })
-          : null
-        ctx?.error?.('Manga script generation failed', { error: errMsg, attempt: attempt + 1 })
-      } catch {
-        /* noop: logger not available in test env */
-      }
-      // フォールバック禁止原則: 途中で失敗した場合は直ちに停止
-      // （再試行はこのループで行うが、最大回数に達したらthrow）
-      if (attempt === maxRetries) {
-        throw new Error(
-          `Manga script generation failed after ${maxRetries + 1} attempt(s): ${errMsg}`,
-        )
-      }
     }
 
-    attempt++
+    logger?.info?.('Chunk conversion completed', {
+      provider,
+      panels: dialogueLimited.panels.length,
+      characters: dialogueLimited.characters.length,
+    })
+
+    return dialogueLimited
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    logger?.error?.('Chunk conversion failed', { error: message })
+    throw new Error(message)
+  }
+}
+
+function mapChunkConversionResult(result: ChunkConversionResult): NewMangaScript {
+  const characterNameMap: Map<string, string | undefined> = new Map(
+    (result.memory?.characters ?? []).map((character) => [character.id, character.name as string | undefined]),
+  )
+
+  const characters = (result.memory?.characters ?? []).map((character, index) => ({
+    id: character.id,
+    name_ja: character.name || `キャラクター${index + 1}`,
+    role: character.description || '登場人物',
+    speech_style: '未設定',
+    aliases: character.aliases ?? [],
+  }))
+
+  const resolveSpeakerName = (speakerId: string | undefined): string | undefined => {
+    if (!speakerId || speakerId === '不明') return undefined
+    const mapped = characterNameMap.get(speakerId)
+    if (mapped && mapped.trim().length > 0) {
+      return mapped
+    }
+    return speakerId
   }
 
-  if (!bestResult) {
-    // 到達しない想定（上でthrowする）が、安全側で明示停止
-    throw new Error('Manga script generation failed without result and no fallback is allowed')
+  const locations = (result.memory?.scenes ?? []).map((scene, index) => ({
+    id: `scene_${index + 1}`,
+    name_ja: scene.location,
+    notes: [scene.description, scene.time ?? '']
+      .filter((value) => Boolean(value && value.trim().length > 0))
+      .join(' / '),
+  }))
+
+  const panels = result.script.map((panel) => ({
+    no: panel.no,
+    cut: panel.cut,
+    camera: panel.camera,
+    narration: panel.narration ?? [],
+    dialogue: (panel.dialogue ?? []).map((line) => ({
+      type: line.type,
+      speaker: resolveSpeakerName(line.speaker),
+      text: line.text,
+    })),
+    sfx: panel.sfx ?? [],
+    importance: panel.importance,
+  }))
+
+  const continuityChecks: string[] = []
+  if (Array.isArray(result.situations)) {
+    for (const situation of result.situations) {
+      const label = situation.kind ? `${situation.kind}: ${situation.text}` : situation.text
+      if (label) continuityChecks.push(label)
+    }
+  }
+  if (result.summary) {
+    continuityChecks.push(`チャンク要約: ${result.summary}`)
   }
 
-  return bestResult
+  return {
+    style_tone: 'chunk-conversion',
+    style_art: 'chunk-conversion',
+    style_sfx: 'chunk-conversion',
+    characters,
+    locations,
+    props: [],
+    panels,
+    continuity_checks: continuityChecks,
+  }
 }
 
 export interface EpisodeScriptConversionInput {

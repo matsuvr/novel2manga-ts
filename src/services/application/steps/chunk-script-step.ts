@@ -28,7 +28,24 @@ export class ChunkScriptStep implements PipelineStep {
           updateJobStatus: (_jobId: string, _status: string, _err?: string) => {
             // Mock implementation for tests
           },
+          updateJobProgress: (_jobId: string, _processed: number) => {
+            // Mock implementation for tests
+          },
         } as unknown as ReturnType<typeof db.jobs>)
+
+    const conversionDb = isFactoryInitialized()
+      ? db.chunkConversion()
+      : ({
+          getStatusesByJob: async () => [] as Array<{
+            jobId: string
+            chunkIndex: number
+            status: string
+          }>,
+          ensureStatuses: async () => { /* no-op for tests */ },
+          markProcessing: async () => { /* no-op for tests */ },
+          markCompleted: async (_jobId: string, _chunkIndex: number, _resultPath: string | null) => { /* no-op for tests */ },
+          markFailed: async () => { /* no-op for tests */ },
+        } as unknown as ReturnType<typeof db.chunkConversion>)
     try {
       const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
       const storage = await StorageFactory.getAnalysisStorage()
@@ -37,6 +54,17 @@ export class ChunkScriptStep implements PipelineStep {
 
       const maxConcurrent = Math.max(1, Math.min(3, chunks.length))
       const indices = Array.from({ length: chunks.length }, (_, i) => i)
+
+      await conversionDb.ensureStatuses(jobId, [...indices])
+      const existingStatuses = await conversionDb.getStatusesByJob(jobId)
+      const statusMap = new Map<number, { status: string }>(
+        existingStatuses.map((status) => [status.chunkIndex, { status: status.status }]),
+      )
+
+      let processedCount = existingStatuses.filter((status) => status.status === 'completed').length
+      if (typeof jobDb.updateJobProgress === 'function') {
+        await jobDb.updateJobProgress(jobId, processedCount)
+      }
 
       // Helper function to read and format analysis data for new prompt format
       const readChunkAnalysis = async (
@@ -106,6 +134,15 @@ export class ChunkScriptStep implements PipelineStep {
         while (true) {
           const i = indices.shift()
           if (i === undefined) break
+          const status = statusMap.get(i)
+          if (status?.status === 'completed') {
+            logger.info('Skipping chunk conversion for already completed chunk', {
+              jobId,
+              chunkIndex: i,
+            })
+            continue
+          }
+
           jobDb.updateJobStep(jobId, `script_chunk_${i}`)
           const text = (await resolveChunkText(i)) ?? ''
 
@@ -132,6 +169,7 @@ export class ChunkScriptStep implements PipelineStep {
 
           let script: NewMangaScript
           try {
+            await conversionDb.markProcessing(jobId, i)
             script = await convertChunkToMangaScript(
               {
                 chunkText: text,
@@ -189,6 +227,11 @@ export class ChunkScriptStep implements PipelineStep {
               })
             }
             // エラーを再送出してパイプラインを停止
+            await conversionDb.markFailed(
+              jobId,
+              i,
+              e instanceof Error ? e.message : String(e),
+            )
             throw e
           }
 
@@ -197,6 +240,7 @@ export class ChunkScriptStep implements PipelineStep {
             const preview = text.substring(0, 120).replace(/\n/g, '\\n')
             const msg = `ChunkScriptStep: null/undefined script returned for chunk index=${i}. Aborting. textPreview=${preview}`
             logger.error(msg, { jobId, chunkIndex: i })
+            await conversionDb.markFailed(jobId, i, msg)
             throw new Error(msg)
           }
 
@@ -205,6 +249,7 @@ export class ChunkScriptStep implements PipelineStep {
             const preview = text.substring(0, 120).replace(/\n/g, '\\n')
             const msg = `ChunkScriptStep: empty manga script returned for chunk index=${i}. Aborting. textPreview=${preview}`
             logger.error(msg, { jobId, chunkIndex: i, script })
+            await conversionDb.markFailed(jobId, i, msg)
             throw new Error(msg)
           }
 
@@ -319,6 +364,12 @@ export class ChunkScriptStep implements PipelineStep {
             jobId,
             chunk: String(i),
           })
+          await conversionDb.markCompleted(jobId, i, key)
+          processedCount += 1
+          statusMap.set(i, { status: 'completed' })
+          if (typeof jobDb.updateJobProgress === 'function') {
+            await jobDb.updateJobProgress(jobId, processedCount)
+          }
           jobDb.updateJobStep(jobId, `script_chunk_${i}_done`)
         }
       }

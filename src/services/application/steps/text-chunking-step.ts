@@ -27,6 +27,21 @@ export class TextChunkingStep implements PipelineStep {
 
     try {
       let chunks: string[] = []
+      const persistChunkTotals = async (count: number) => {
+        if (count <= 0) return
+        const jobDb = db.jobs() as unknown as {
+          updateJobTotals?: (id: string, totals: { totalChunks: number }) => Promise<void>
+        }
+        if (typeof jobDb.updateJobTotals === 'function') {
+          await jobDb.updateJobTotals(jobId, { totalChunks: count })
+          logger.debug('Persisted total chunk count for job', { jobId, totalChunks: count })
+        } else {
+          logger.debug('Job database missing updateJobTotals; skipping chunk total persistence', {
+            jobId,
+            totalChunks: count,
+          })
+        }
+      }
 
       // Check if chunks already exist for resumed jobs
       if (existingJob?.splitCompleted) {
@@ -79,6 +94,8 @@ export class TextChunkingStep implements PipelineStep {
           jobId,
           chunkCount: chunks.length,
         })
+
+        await persistChunkTotals(chunks.length)
 
         return {
           success: true,
@@ -154,6 +171,8 @@ export class TextChunkingStep implements PipelineStep {
         // Persist chunks to storage and DB immediately for強整合性
         await this.persistChunks(chunks, { jobId, novelId, logger, ports })
       }
+
+      await persistChunkTotals(chunks.length)
 
       return {
         success: true,

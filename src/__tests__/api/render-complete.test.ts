@@ -37,6 +37,12 @@ vi.mock('@/services/db-factory', () => ({
 
 // 設定モック
 vi.mock('@/config', () => ({
+  getChunkConversionConfig: vi.fn(() => ({
+    provider: 'openai',
+    maxTokens: 1000,
+    systemPrompt: 'Chunk conversion system prompt',
+    userPromptTemplate: 'チャンク変換: {{chunkText}}',
+  })),
   getScriptConversionConfig: vi.fn(() => ({
     systemPrompt: 'script-system',
     userPromptTemplate: 'Episode: {{episodeText}}',

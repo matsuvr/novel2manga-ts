@@ -40,15 +40,26 @@ export const POST = withAuth(async (request: NextRequest, user) => {
 
     // DBに保存（ドメインサービス使用）
     try {
-      await db.novels().ensureNovel(data.uuid, {
-        title: `Novel ${data.uuid.slice(0, 8)}`,
-        author: 'Unknown',
-        originalTextPath: data.fileName,
-        textLength: data.length,
-        language: 'ja',
-        metadataPath: null,
-        userId: user.id,
-      })
+      await db.novels().ensureNovel(
+        data.uuid,
+        {
+          title: `Novel ${data.uuid.slice(0, 8)}`,
+          author: 'Unknown',
+          originalTextPath: data.fileName,
+          textLength: data.length,
+          language: 'ja',
+          metadataPath: null,
+          userId: user.id,
+        },
+        {
+          user: {
+            id: user.id,
+            name: user.name ?? undefined,
+            email: user.email ?? undefined,
+            image: user.image ?? undefined,
+          },
+        },
+      )
 
       logger.info('Novel successfully saved to database', {
         novelId: data.uuid,
