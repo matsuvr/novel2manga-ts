@@ -27,6 +27,15 @@ export class DatabaseServiceFactory {
       createChunk: async (_: any) => 'chunk-mock',
     }
   }
+  chunkConversion() {
+    return {
+      getStatusesByJob: async (_jobId: string) => [] as Array<{ jobId: string; chunkIndex: number; status: string }>,
+      ensureStatuses: async (_jobId: string, _indices: number[]) => undefined,
+      markProcessing: async (_jobId: string, _chunkIndex: number) => undefined,
+      markCompleted: async (_jobId: string, _chunkIndex: number, _resultPath: string | null) => undefined,
+      markFailed: async (_jobId: string, _chunkIndex: number, _err?: string) => undefined,
+    }
+  }
   outputs() {
     return {
       upsertRenderStatus: (_: any, __: any, ___: any, ____: any) => undefined,
@@ -83,6 +92,7 @@ export const db = {
   jobs: () => new DatabaseServiceFactory().jobs(),
   novels: () => new DatabaseServiceFactory().novels(),
   chunks: () => new DatabaseServiceFactory().chunks(),
+  chunkConversion: () => new DatabaseServiceFactory().chunkConversion(),
   outputs: () => new DatabaseServiceFactory().outputs(),
   render: () => new DatabaseServiceFactory().render(),
   layout: () => new DatabaseServiceFactory().layout(),

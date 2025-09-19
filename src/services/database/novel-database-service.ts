@@ -2,10 +2,21 @@ import { and, desc, eq, type SQL } from 'drizzle-orm'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import type { NewNovel, Novel } from '@/db/schema'
-import { novels } from '@/db/schema'
+import { novels, users } from '@/db/schema'
 import { BaseDatabaseService } from './base-database-service'
 
 type DrizzleDatabase = BetterSQLite3Database<typeof schema>
+
+type EnsureNovelOptions = {
+  user?: {
+    id?: string
+    name?: string | null
+    email?: string | null
+    image?: string | null
+  }
+}
+
+type TransactionContext = Parameters<Parameters<DrizzleDatabase['transaction']>[0]>[0]
 
 /**
  * Novel-specific database operations
@@ -17,24 +28,28 @@ export class NovelDatabaseService extends BaseDatabaseService {
    */
   async createNovel(
     novel: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'> & { id?: string },
+    options?: EnsureNovelOptions,
   ): Promise<Novel> {
     const id = novel.id ?? crypto.randomUUID()
     const now = new Date().toISOString()
+    const { userId, user } = this.resolveUserContext(novel.userId, options)
 
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
 
       drizzleDb.transaction((tx) => {
+        this.ensureUserRecord(tx, userId, user)
+
         tx.insert(novels)
           .values({
             id,
-            userId: novel.userId ?? 'anonymous',
+            userId,
             title: novel.title,
             author: novel.author,
             originalTextPath: novel.originalTextPath,
             textLength: novel.textLength,
             language: novel.language ?? 'ja',
-            metadataPath: novel.metadataPath,
+            metadataPath: novel.metadataPath ?? null,
             createdAt: now,
             updatedAt: now,
           })
@@ -48,13 +63,13 @@ export class NovelDatabaseService extends BaseDatabaseService {
 
     return {
       id,
-      userId: novel.userId ?? 'anonymous',
+      userId,
       title: novel.title,
       author: novel.author,
       originalTextPath: novel.originalTextPath,
       textLength: novel.textLength,
       language: novel.language ?? 'ja',
-      metadataPath: novel.metadataPath,
+      metadataPath: novel.metadataPath ?? null,
       createdAt: now,
       updatedAt: now,
     } as Novel
@@ -66,23 +81,27 @@ export class NovelDatabaseService extends BaseDatabaseService {
   async ensureNovel(
     id: string,
     novel: Omit<NewNovel, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: EnsureNovelOptions,
   ): Promise<void> {
     const now = new Date().toISOString()
+    const { userId, user } = this.resolveUserContext(novel.userId, options)
 
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
 
       drizzleDb.transaction((tx) => {
+        this.ensureUserRecord(tx, userId, user)
+
         tx.insert(novels)
           .values({
             id,
-            userId: novel.userId ?? 'anonymous',
+            userId,
             title: novel.title,
             author: novel.author,
             originalTextPath: novel.originalTextPath,
             textLength: novel.textLength,
             language: novel.language ?? 'ja',
-            metadataPath: novel.metadataPath,
+            metadataPath: novel.metadataPath ?? null,
             createdAt: now,
             updatedAt: now,
           })
@@ -169,5 +188,77 @@ export class NovelDatabaseService extends BaseDatabaseService {
     } else {
       throw new Error('Async D1 adapters are not supported. Use the sync BetterSQLite3 adapter.')
     }
+  }
+
+  private resolveUserContext(
+    requestedUserId: string | undefined,
+    options?: EnsureNovelOptions,
+  ): { userId: string; user?: NonNullable<EnsureNovelOptions['user']> } {
+    const resolvedId = options?.user?.id || requestedUserId || 'anonymous'
+    if (!resolvedId) {
+      throw new Error('User ID is required to persist a novel')
+    }
+
+    const normalizedUser = options?.user
+      ? {
+          id: resolvedId,
+          name: options.user.name ?? undefined,
+          email: options.user.email ?? undefined,
+          image: options.user.image ?? undefined,
+        }
+      : undefined
+
+    return { userId: resolvedId, user: normalizedUser }
+  }
+
+  private ensureUserRecord(
+    tx: TransactionContext,
+    userId: string,
+    user?: {
+      id: string
+      name?: string | null
+      email?: string | null
+      image?: string | null
+    },
+  ): void {
+    if (!userId) {
+      throw new Error('Cannot persist novel without a userId')
+    }
+
+    if (user) {
+      const updateSet: Record<string, string | null> = {}
+      if (Object.hasOwn(user, 'name')) {
+        updateSet.name = user.name ?? null
+      }
+      if (Object.hasOwn(user, 'email')) {
+        updateSet.email = user.email ?? null
+      }
+      if (Object.hasOwn(user, 'image')) {
+        updateSet.image = user.image ?? null
+      }
+
+      if (Object.keys(updateSet).length > 0) {
+        tx
+          .insert(users)
+          .values({
+            id: userId,
+            name: user.name ?? null,
+            email: user.email ?? null,
+            image: user.image ?? null,
+          })
+          .onConflictDoUpdate({
+            target: users.id,
+            set: updateSet,
+          })
+          .run()
+        return
+      }
+    }
+
+    tx
+      .insert(users)
+      .values({ id: userId })
+      .onConflictDoNothing({ target: users.id })
+      .run()
   }
 }

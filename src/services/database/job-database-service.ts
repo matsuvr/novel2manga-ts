@@ -305,6 +305,50 @@ export class JobDatabaseService extends BaseDatabaseService {
   }
 
   /**
+   * Update job totals (chunks / episodes / pages)
+   */
+  async updateJobTotals(
+    jobId: string,
+    totals: { totalChunks?: number | null; totalEpisodes?: number | null; totalPages?: number | null },
+  ): Promise<void> {
+    const updateData: Partial<Job> = { updatedAt: new Date().toISOString() }
+    let hasUpdate = false
+
+    if (totals.totalChunks !== undefined) {
+      updateData.totalChunks = totals.totalChunks ?? 0
+      hasUpdate = true
+    }
+    if (totals.totalEpisodes !== undefined) {
+      updateData.totalEpisodes = totals.totalEpisodes ?? 0
+      hasUpdate = true
+    }
+    if (totals.totalPages !== undefined) {
+      updateData.totalPages = totals.totalPages ?? 0
+      hasUpdate = true
+    }
+
+    if (!hasUpdate) return
+
+    if (this.isSync()) {
+      const drizzleDb = this.db as DrizzleDatabase
+
+      drizzleDb.transaction((tx) => {
+        tx.update(jobs)
+          .set(updateData)
+          .where(eq(jobs.id, jobId))
+          .run()
+      })
+    } else {
+      await this.adapter.transaction(async (tx: DrizzleDatabase) => {
+        await tx
+          .update(jobs)
+          .set(updateData)
+          .where(eq(jobs.id, jobId))
+      })
+    }
+  }
+
+  /**
    * Update current processing position (episode/page) for UX progress.
    */
   async updateProcessingPosition(

@@ -69,6 +69,10 @@ export const db = {
     ensureFactoryInitialized()
     return factory.db.chunks()
   },
+  chunkConversion: () => {
+    ensureFactoryInitialized()
+    return factory.db.chunkConversion()
+  },
   outputs: () => {
     ensureFactoryInitialized()
     return factory.db.outputs()

@@ -14,6 +14,7 @@ import {
   getLLMDefaultProvider as getDefaultProvider,
   getLLMFallbackChain as getFallbackChain,
   getLLMProviderConfig as getProviderConfig,
+  getProviderForUseCase,
   type LLMProvider,
 } from './llm.config'
 import { storageBaseDirs } from './storage-paths.config'
@@ -47,17 +48,25 @@ export function getLLMConfig() {
   return getAppConfig().llm
 }
 
-// テキスト分析設定を取得
-export function getTextAnalysisConfig() {
-  const prompts = getAppConfig().llm.textAnalysis
-  const provider = getDefaultProvider()
+// チャンク変換（要素抽出＋台本化）設定を取得
+export function getChunkConversionConfig() {
+  const prompts = getAppConfig().llm.chunkConversion
+  if (!prompts?.systemPrompt || !prompts?.userPromptTemplate) {
+    throw new Error('Chunk conversion prompts are missing in app.config.ts (llm.chunkConversion)')
+  }
+  const provider = getProviderForUseCase('chunkConversion')
   const providerConfig = getProviderConfig(provider as LLMProvider)
   return {
-    provider: provider,
+    provider,
     maxTokens: providerConfig.maxTokens,
     systemPrompt: prompts.systemPrompt,
     userPromptTemplate: prompts.userPromptTemplate,
   }
+}
+
+// 互換API: 旧textAnalysis設定呼び出しはchunkConversionに委譲
+export function getTextAnalysisConfig() {
+  return getChunkConversionConfig()
 }
 
 // レイアウト生成設定を取得
