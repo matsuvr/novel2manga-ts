@@ -564,6 +564,8 @@ export const db = {
   render: () => getDatabaseServiceFactory().render(),
   layout: () => getDatabaseServiceFactory().layout(),
   tokenUsage: () => getDatabaseServiceFactory().tokenUsage(),
+  registry: () => getDatabaseServiceFactory().registry(),
+  share: () => getDatabaseServiceFactory().share(),
   transactions: () => getDatabaseServiceFactory().transactions(),
   executeAcrossDomains: async (
     operation: Parameters<DatabaseServiceFactory['executeAcrossDomains']>[0],

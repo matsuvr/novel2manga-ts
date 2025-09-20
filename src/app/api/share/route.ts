@@ -26,6 +26,12 @@ interface ShareResponse {
   expiresAt: string
   message: string
   episodeNumbers?: number[]
+  share?: {
+    enabled: boolean
+    shareUrl: string
+    expiresAt: string
+    episodeNumbers?: number[]
+  }
 }
 
 export const POST = withAuth(async (request: NextRequest, user) => {
