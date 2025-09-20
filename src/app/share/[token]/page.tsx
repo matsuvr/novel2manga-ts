@@ -105,13 +105,29 @@ export default async function SharedJobResultsPage({ params }: { params: Promise
     console.warn(`Shared job ${job.id}: render not strictly marked complete but fullPages present — proceeding to show results.`)
   }
 
+  // If the share record restricts to specific episode numbers, filter the collections
+  let filteredEpisodes = normalizedEpisodes
+  let filteredLayoutStatuses = layoutStatuses
+  let filteredCoverageWarnings = coverageWarnings
+
+  if (shareRecord.episodeNumbers && shareRecord.episodeNumbers.length > 0) {
+    const allowed = new Set(shareRecord.episodeNumbers.map((n) => Number(n)))
+    filteredEpisodes = normalizedEpisodes.filter((ep) => allowed.has(Number(ep.episodeNumber)))
+    filteredLayoutStatuses = layoutStatuses.filter((ls) => allowed.has(Number(ls.episodeNumber)))
+    filteredCoverageWarnings = coverageWarnings.filter((cw) => {
+      if (!cw.episodeNumbers || cw.episodeNumbers.length === 0) return true
+      // keep warnings that reference at least one allowed episode
+      return cw.episodeNumbers.some((num) => allowed.has(Number(num)))
+    })
+  }
+
   return (
     <NovelJobResultsClient
       novelId={job.novelId}
       job={normalizedJob}
-      layoutStatuses={layoutStatuses}
-      coverageWarnings={coverageWarnings}
-      uniqueEpisodes={normalizedEpisodes}
+      layoutStatuses={filteredLayoutStatuses}
+      coverageWarnings={filteredCoverageWarnings}
+      uniqueEpisodes={filteredEpisodes}
       tokenUsageByModel={tokenUsageByModel}
       novelPreview={novelPreview}
       viewerRole="shared"
