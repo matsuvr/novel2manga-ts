@@ -1,7 +1,7 @@
 'use client'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
-import { CheckCircle2, Hourglass, XCircle } from '@/components/icons'
+import { CheckCircle2, XCircle } from '@/components/icons'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -68,6 +68,13 @@ const INITIAL_STEPS: ProcessStep[] = [
   { id: 'layout', name: 'レイアウト生成', description: 'マンガのコマ割りを作成中', status: 'pending' },
   { id: 'render', name: 'レンダリング', description: '絵コンテ画像を生成中', status: 'pending' },
 ]
+
+const ProcessingSpinner = memo(() => (
+  <span className="relative flex items-center justify-center" aria-hidden="true">
+    <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary/70 border-t-transparent" />
+  </span>
+))
+ProcessingSpinner.displayName = 'ProcessingSpinner'
 
 const STEP_PERCENT = 100 / (INITIAL_STEPS.length || 1)
 
@@ -717,7 +724,10 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
                         ) : isCompleted ? (
                           <CheckCircle2 className="h-4 w-4 text-green-600" />
                         ) : isActive ? (
-                          <Hourglass className="h-4 w-4 text-primary" />
+                          <>
+                            <ProcessingSpinner />
+                            <span className="sr-only">処理中</span>
+                          </>
                         ) : (
                           <span className="text-[10px] text-muted-foreground">{index + 1}</span>
                         )}

@@ -6,6 +6,7 @@ import {
 import { FakeLlmClient } from '../../llm/fake'
 import { defaultBaseUrl, type OpenAICompatProvider } from './base-url'
 import { CerebrasClient, type CerebrasClientConfig } from './cerebras'
+import { maybeWrapStructuredLogging } from './logging'
 import { OpenAICompatibleClient } from './openai-compatible'
 import type { LlmClient, LlmProvider, OpenAICompatibleConfig } from './types'
 import { VertexAIClient, type VertexAIClientConfig } from './vertexai'
@@ -25,15 +26,15 @@ export function createLlmClient(cfg: ProviderConfig): LlmClient {
     case 'groq':
     case 'grok':
     case 'openrouter':
-      return new OpenAICompatibleClient({ ...cfg, provider: cfg.provider })
+      return maybeWrapStructuredLogging(new OpenAICompatibleClient({ ...cfg, provider: cfg.provider }))
     case 'gemini':
-      return new VertexAIClient(cfg)
+      return maybeWrapStructuredLogging(new VertexAIClient(cfg))
     case 'cerebras':
-      return new CerebrasClient(cfg)
+      return maybeWrapStructuredLogging(new CerebrasClient(cfg))
     case 'vertexai':
-      return new VertexAIClient(cfg)
+      return maybeWrapStructuredLogging(new VertexAIClient(cfg))
     case 'fake':
-      return new FakeLlmClient()
+      return maybeWrapStructuredLogging(new FakeLlmClient())
     default:
       throw new Error(`Unsupported provider: ${(cfg as ProviderConfig).provider}`)
   }
