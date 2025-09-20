@@ -2,16 +2,20 @@ import { z } from 'zod'
 import { getLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getLayoutGenerationConfig } from '@/config'
 import { Page } from '@/domain/models/page'
+import type { PanelInit } from '@/domain/models/panel'
 import type { PageBatchPlan } from '@/types/page-splitting'
 import type {
   ChunkAnalysisResult,
-  Dialogue,
+  ChunkData,
   EpisodeData,
   LayoutGenerationConfig,
+  LayoutTemplate,
   MangaLayout,
   Panel,
 } from '@/types/panel-layout'
 import { selectLayoutTemplateByCountRandom } from '@/utils/layout-templates'
+import type { PanelImportanceLevel } from '@/utils/panel-importance'
+import { mapImportanceToPanelSize, normalizeImportanceDistribution } from '@/utils/panel-importance'
 
 // LLMへの入力スキーマは現在使用していないが、将来のバリデーション用に保持
 // const layoutGenerationInputSchema = z.object({
@@ -82,41 +86,26 @@ export class LayoutGeneratorAgent {
       },
     })
 
-    // LLMの出力（ページごとのコマ数）を実際のレイアウトに変換
-    const pages: { page_number: number; panels: Panel[] }[] = []
+    const pageCandidates: PageCandidate[] = []
 
-    // マッピング: LLMが返したコマ数に対して、エピソードのチャンク解析から
-    // 各パネルのcontentとdialoguesを生成する（テンプレートはバウンディングボックスのみ参照）
     for (const pageData of llmResponseObject.pages) {
       const panelCount = Math.max(1, pageData.panelCount)
       const template = selectLayoutTemplateByCountRandom(panelCount)
+      const slots: PanelSlotCandidate[] = []
 
-      const page = new Page(pageData.pageNumber)
-
-      // 簡易ルール: チャンクをページ内で巡回しながら割り当て
-      // 詳細な分割は plan ベースの generateMangaLayoutForPlan を使用
       for (let i = 0; i < panelCount; i++) {
         const chunk = pickChunkForIndex(episodeData, i)
-        const { content, dialogues, importance, suggestedSize } = buildPanelFromAnalysis(
-          chunk.analysis,
-          _config,
-        )
-
-        page.addPanel(
-          {
-            content,
-            dialogues: dialogues.map((d) => ({ speaker: d.speaker, text: d.text })),
-            sourceChunkIndex: chunk.chunkIndex,
-            importance,
-            suggestedSize,
-          },
-          template,
-        )
+        slots.push({ chunk })
       }
 
-      page.validateLayout()
-      pages.push({ page_number: page.pageNumber, panels: page.getPanels().map((p) => p.toJSON()) })
+      pageCandidates.push({
+        pageNumber: pageData.pageNumber,
+        template,
+        slots,
+      })
     }
+
+    const pages = assemblePagesFromCandidates(pageCandidates, _config)
 
     return {
       title: episodeData.episodeTitle || `エピソード${episodeData.episodeNumber}`,
@@ -178,53 +167,39 @@ function mapLayoutPanelCountToLayout(
   episodeData: EpisodeData,
   _plan: PageBatchPlan,
 ): MangaLayout {
-  const pages: { page_number: number; panels: Panel[] }[] = []
+  const fallbackConfig: LayoutGenerationConfig = {
+    panelsPerPage: { min: 1, max: 8, average: 3.5 },
+    dialogueDensity: 0.6,
+    visualComplexity: 0.7,
+    highlightPanelSizeMultiplier: 2.0,
+    readingDirection: 'right-to-left',
+  }
 
-  // ページごとに、plan.plannedPages の segments を優先して割り当て
+  const pageCandidates: PageCandidate[] = []
+
   for (const pageData of llmOutput.pages) {
     const planPage = _plan.plannedPages.find((p) => p.pageNumber === pageData.pageNumber)
     const panelCount = Math.max(1, pageData.panelCount)
     const template = selectLayoutTemplateByCountRandom(panelCount)
-    const page = new Page(pageData.pageNumber)
+    const slots: PanelSlotCandidate[] = []
 
     for (let i = 0; i < panelCount; i++) {
       const seg = planPage?.segments?.[i]
-      // セグメントに対応するチャンクを優先、なければインデックスでラウンドロビン
       const chunk = seg
         ? pickChunkByIndex(episodeData, seg.source.chunkIndex)
         : pickChunkForIndex(episodeData, i)
 
-      const { content, dialogues, importance, suggestedSize } = buildPanelFromAnalysis(
-        chunk.analysis,
-        // Use defaults if no external config provided in this helper
-        {
-          panelsPerPage: { min: 1, max: 8, average: 3.5 },
-          dialogueDensity: 0.6,
-          visualComplexity: 0.7,
-          highlightPanelSizeMultiplier: 2.0,
-          readingDirection: 'right-to-left',
-        },
-        // Stricter mapping: constrain to segment range within chunk text when available
-        seg?.source.startOffset,
-        seg?.source.endOffset,
-        chunk.text,
-      )
-
-      page.addPanel(
-        {
-          content,
-          dialogues: dialogues.map((d) => ({ speaker: d.speaker, text: d.text })),
-          sourceChunkIndex: chunk.chunkIndex,
-          importance,
-          suggestedSize,
-        },
-        template,
-      )
+      slots.push({
+        chunk,
+        segmentStart: seg?.source.startOffset,
+        segmentEnd: seg?.source.endOffset,
+      })
     }
 
-    page.validateLayout()
-    pages.push({ page_number: page.pageNumber, panels: page.getPanels().map((p) => p.toJSON()) })
+    pageCandidates.push({ pageNumber: pageData.pageNumber, template, slots })
   }
+
+  const pages = assemblePagesFromCandidates(pageCandidates, fallbackConfig)
 
   return {
     title: episodeData.episodeTitle || `エピソード${episodeData.episodeNumber}`,
@@ -264,6 +239,38 @@ export async function generateMangaLayoutForPlan(
 
 // ===== Helpers: Build content/dialogues from analysis without losing text =====
 
+type PanelDialogueInit = NonNullable<PanelInit['dialogues']>[number]
+
+interface PanelSlotCandidate {
+  readonly chunk: ChunkData
+  readonly segmentStart?: number
+  readonly segmentEnd?: number
+}
+
+interface PageCandidate {
+  readonly pageNumber: number
+  readonly template: LayoutTemplate
+  readonly slots: PanelSlotCandidate[]
+}
+
+interface PreparedPanelData {
+  readonly content: string
+  readonly dialogues: PanelDialogueInit[]
+  readonly rawImportance: number
+  readonly dialogueCharCount: number
+  readonly narrationCharCount: number
+  readonly contentLength: number
+}
+
+interface PreparedSlot {
+  readonly pageNumber: number
+  readonly template: LayoutTemplate
+  readonly slotIndex: number
+  readonly prepared: PreparedPanelData
+  readonly sourceChunkIndex: number
+  readonly globalIndex: number
+}
+
 function pickChunkForIndex(episodeData: EpisodeData, i: number) {
   const arr = episodeData.chunks
   if (arr.length === 0) {
@@ -292,18 +299,94 @@ function pickChunkByIndex(episodeData: EpisodeData, chunkIndex: number) {
   return found ?? pickChunkForIndex(episodeData, 0)
 }
 
-function buildPanelFromAnalysis(
+function assemblePagesFromCandidates(
+  candidates: PageCandidate[],
+  config: LayoutGenerationConfig,
+): { page_number: number; panels: Panel[] }[] {
+  const preparedSlots: PreparedSlot[] = []
+  const slotsByPage = new Map<number, PreparedSlot[]>()
+  let globalIndex = 0
+
+  for (const candidate of candidates) {
+    candidate.slots.forEach((slot, slotIndex) => {
+      const prepared = preparePanelFromAnalysis(
+        slot.chunk.analysis,
+        config,
+        slot.segmentStart,
+        slot.segmentEnd,
+        slot.chunk.text,
+      )
+
+      const preparedSlot: PreparedSlot = {
+        pageNumber: candidate.pageNumber,
+        template: candidate.template,
+        slotIndex,
+        prepared,
+        sourceChunkIndex: slot.chunk.chunkIndex,
+        globalIndex,
+      }
+
+      globalIndex += 1
+      preparedSlots.push(preparedSlot)
+
+      const existing = slotsByPage.get(candidate.pageNumber)
+      if (existing) existing.push(preparedSlot)
+      else slotsByPage.set(candidate.pageNumber, [preparedSlot])
+    })
+  }
+
+  const normalized = normalizeImportanceDistribution(
+    preparedSlots.map((slot) => ({
+      index: slot.globalIndex,
+      rawImportance: slot.prepared.rawImportance,
+      dialogueCharCount: slot.prepared.dialogueCharCount,
+      narrationCharCount: slot.prepared.narrationCharCount,
+      contentLength: slot.prepared.contentLength,
+    })),
+  )
+
+  const assignmentMap = new Map<number, PanelImportanceLevel>()
+  for (const assignment of normalized) {
+    assignmentMap.set(assignment.index, assignment.importance)
+  }
+
+  const pages: { page_number: number; panels: Panel[] }[] = []
+
+  for (const candidate of candidates) {
+    const page = new Page(candidate.pageNumber)
+    const slots = [...(slotsByPage.get(candidate.pageNumber) ?? [])].sort(
+      (a, b) => a.slotIndex - b.slotIndex,
+    )
+
+    for (const slot of slots) {
+      const finalImportance = assignmentMap.get(slot.globalIndex) ?? 1
+      const suggestedSize = mapImportanceToPanelSize(finalImportance)
+      page.addPanel(
+        {
+          content: slot.prepared.content,
+          dialogues: slot.prepared.dialogues,
+          sourceChunkIndex: slot.sourceChunkIndex,
+          importance: finalImportance,
+          suggestedSize,
+        },
+        candidate.template,
+      )
+    }
+
+    page.validateLayout()
+    pages.push({ page_number: page.pageNumber, panels: page.getPanels().map((p) => p.toJSON()) })
+  }
+
+  return pages
+}
+
+function preparePanelFromAnalysis(
   analysis: ChunkAnalysisResult,
   config: LayoutGenerationConfig,
   segmentStart?: number,
   segmentEnd?: number,
   chunkText?: string,
-): {
-  content: string
-  dialogues: Dialogue[]
-  importance: number
-  suggestedSize: 'small' | 'medium' | 'large' | 'extra-large'
-} {
+): PreparedPanelData {
   const parts: string[] = []
   const hasSegment =
     typeof segmentStart === 'number' &&
@@ -319,7 +402,6 @@ function buildPanelFromAnalysis(
   if (firstScene?.location) parts.push(`場所: ${firstScene.location}`)
   if (firstScene?.time) parts.push(`時間: ${firstScene.time}`)
   if (analysis.situations?.length) {
-    // Prefer a situation whose text appears within the segment
     const sit =
       hasSegment && segmentText
         ? analysis.situations.find((s) =>
@@ -329,15 +411,16 @@ function buildPanelFromAnalysis(
     if (sit) parts.push(sit.description)
   }
   if (analysis.highlights?.length) {
-    // Prefer a highlight whose text appears within the segment
     const hi =
       hasSegment && segmentText
         ? analysis.highlights.find((h) => (h.text ? segmentText.includes(h.text) : false)) ||
           analysis.highlights[0]
         : analysis.highlights[0]
-    const tag =
-      hi.type === 'action_sequence' ? 'アクション' : hi.type === 'emotional_peak' ? '感情' : '注目'
-    parts.push(`【${tag}】${hi.description}`)
+    if (hi) {
+      const tag =
+        hi.type === 'action_sequence' ? 'アクション' : hi.type === 'emotional_peak' ? '感情' : '注目'
+      parts.push(`【${tag}】${hi.description}`)
+    }
   }
   if (parts.length === 0) {
     if (hasSegment && segmentText && segmentText.trim().length > 0) {
@@ -348,16 +431,13 @@ function buildPanelFromAnalysis(
   }
   const content = parts.join('\n')
 
-  // dialogues density
   const maxDialogs = Math.max(1, Math.round((config.dialogueDensity || 0.6) * 3))
-  let dialogs = analysis.dialogues || []
+  let dialogs = analysis.dialogues ?? []
   if (hasSegment && safeText) {
-    // Filter dialogues whose text occurrence lies within [segmentStart, segmentEnd)
     const filtered: typeof dialogs = []
     for (const d of dialogs) {
       const text = d.text?.trim()
       if (!text) continue
-      // Try to find position in full chunk text
       const idx = safeText.indexOf(text)
       if (idx >= 0 && idx >= (segmentStart as number) && idx < (segmentEnd as number)) {
         filtered.push(d)
@@ -365,24 +445,44 @@ function buildPanelFromAnalysis(
     }
     dialogs = filtered
   }
-  const dialogues: Dialogue[] = dialogs
-    .slice(0, maxDialogs)
-    .map((d) => ({ speaker: d.speaker, text: d.text, emotion: d.emotion }))
 
-  // importance heuristic
-  const maxImp = analysis.highlights?.length
+  const selectedDialogs = dialogs.slice(0, maxDialogs)
+
+  let dialogueCharCount = 0
+  let narrationCharCount = 0
+  const dialogues: PanelDialogueInit[] = selectedDialogs.map((d) => {
+    const resolvedText = d.text ?? ''
+    const normalizedLength = resolvedText.trim().length
+    if (normalizedLength > 0) {
+      if (d.type === 'narration') narrationCharCount += normalizedLength
+      else dialogueCharCount += normalizedLength
+    }
+    return {
+      speaker: d.speaker,
+      text: resolvedText,
+      ...(d.type ? { type: d.type } : {}),
+    }
+  })
+
+  const highlightImportance = analysis.highlights?.length
     ? Math.max(...analysis.highlights.map((h) => h.importance || 5))
     : 5
-  let importance = Math.max(5, maxImp)
-  if ((analysis.dialogues?.length || 0) > 5) importance = Math.max(importance, 7)
-  importance = Math.min(importance, 10)
+  let rawImportance = Math.max(5, highlightImportance)
+  if ((analysis.dialogues?.length ?? 0) > 5) {
+    rawImportance = Math.max(rawImportance, 7)
+  }
+  rawImportance = Math.max(1, Math.min(rawImportance, 10))
 
-  let suggestedSize: 'small' | 'medium' | 'large' | 'extra-large' = 'medium'
-  if (importance >= 9) suggestedSize = 'extra-large'
-  else if (importance >= 7) suggestedSize = 'large'
-  else if (importance <= 3) suggestedSize = 'small'
+  const contentLength = content.replace(/\s+/g, '').length
 
-  return { content, dialogues, importance, suggestedSize }
+  return {
+    content,
+    dialogues,
+    rawImportance,
+    dialogueCharCount,
+    narrationCharCount,
+    contentLength,
+  }
 }
 
 function ellipsis(text: string, max: number): string {

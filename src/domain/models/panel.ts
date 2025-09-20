@@ -2,16 +2,22 @@ import type { Panel as PanelData, Position, Size } from '@/types/panel-layout'
 
 export interface PanelInit {
   content: string
-  dialogues?: { speaker: string; text: string }[]
+  dialogues?: { speaker: string; text: string; type?: 'speech' | 'thought' | 'narration' }[]
   sourceChunkIndex: number
   importance: number
   suggestedSize: 'small' | 'medium' | 'large' | 'extra-large'
 }
 
+interface PanelDialogue {
+  readonly speaker: string
+  readonly text: string
+  readonly type?: 'speech' | 'thought' | 'narration'
+}
+
 export class Panel {
   public readonly id: number
   public readonly content: string
-  public readonly dialogues?: { speaker: string; text: string }[]
+  public readonly dialogues?: PanelDialogue[]
   public readonly sourceChunkIndex: number
   public readonly importance: number
   private _position: Position = { x: 0, y: 0 }

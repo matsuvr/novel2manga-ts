@@ -120,6 +120,27 @@
 - [ ] E2E tests passing
 - [ ] Updated: `design.md`, `tasks.md`, `schema.ts` + migrations, `storage-structure.md`
 
----
+✅ Guidelines to Avoid Overusing as unknown as
+1. Always assign the correct type from the beginning
 
-Would you like me to **shrink this even further into a “bullet-only” version** (just rules, no prose) for maximum token savings, or keep it at this concise but descriptive level?
+Do not fall back to unknown when the type is unclear. Instead, define or import the proper type for:
+
+- function parameters
+- API responses
+- library return values
+
+2. Use type guards or user-defined type guards
+
+Narrow down unknown values safely by using built-in checks (typeof, in, etc.) or custom functions with the value is T syntax. This ensures type safety without casting.
+
+3. Prefer generics over unsafe casts
+
+When a function needs to be flexible with input and output types, use generics instead of casting through unknown. This allows type inference and safety to flow naturally.
+
+4. Validate external data with schemas
+
+For untrusted sources such as API responses or JSON data, validate at runtime using schema libraries (e.g., zod, io-ts) instead of unsafe casts. Parsing through a schema guarantees both runtime correctness and proper TypeScript typing.
+
+5. Favor type flow over casting
+
+as unknown as breaks and rebuilds the type system. Treat it as a last resort. Instead, design your types and functions so that type information flows naturally, eliminating the need for double casting.

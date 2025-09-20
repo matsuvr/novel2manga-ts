@@ -28,6 +28,8 @@ RUN npm ci
 # devDependencies when the named volume is empty).
 RUN mkdir -p /node_modules_image && cp -a node_modules/. /node_modules_image/ || true
 
+ENV LLM_LOGGING=1
+
 # Development image
 FROM deps AS dev
 ENV NODE_ENV=development
