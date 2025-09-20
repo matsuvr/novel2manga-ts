@@ -1,3 +1,4 @@
+import { createLogger, LogLevel } from '@/logging/enhanced-logger'
 import type { Dialogue } from '@/types/panel-layout'
 import type { SfxPlacement } from './sfx-placer'
 
@@ -105,6 +106,24 @@ export class PanelLayoutCoordinator {
       return []
     }
 
+    // NOTE: This implementation builds a grid from obstacle edges (xs, ys)
+    // and then checks all axis-aligned candidate rectangles. The runtime
+    // grows quickly with the number of obstacles because each obstacle
+    // contributes coordinates to the grid; the nested loops over x and y
+    // coordinates make the candidate generation roughly O(M^2 * N^2)
+    // in the worst case where M and N are the number of unique x and y
+    // coordinates respectively. Since M and N are both O(O) where O is
+    // the number of obstacles, the overall worst-case behavior approaches
+    // O(O^4) for candidate enumeration plus the obstacle overlap checks
+    // inside which can add an additional factor. In practice obstacles
+    // per panel are small, but if they grow this function can become a
+    // performance hotspot.
+    //
+    // To help detect regressions, warn when the number of occupied areas
+    // (after margin expansion) exceeds a defensive threshold.
+    const logger = createLogger(LogLevel.WARN)
+    const OBSTACLE_WARN_THRESHOLD = 20
+
     const safeMargin = Math.max(0, margin)
     const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
     const panelLeft = panelBounds.x
@@ -120,6 +139,14 @@ export class PanelLayoutCoordinator {
         y1: clamp(area.y + area.height + safeMargin, panelTop, panelBottom),
       }))
       .filter((area) => area.x0 < area.x1 && area.y0 < area.y1)
+
+    if (expandedObstacles.length > OBSTACLE_WARN_THRESHOLD) {
+      logger.warn(
+        'PanelLayoutCoordinator',
+        `findAvailableAreas: large number of obstacles (${expandedObstacles.length}) may impact performance`,
+        { threshold: OBSTACLE_WARN_THRESHOLD },
+      )
+    }
 
     const xs = new Set<number>([panelLeft, panelRight])
     const ys = new Set<number>([panelTop, panelBottom])
