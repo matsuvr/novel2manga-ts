@@ -89,6 +89,10 @@ export const db = {
     ensureFactoryInitialized()
     return factory.db.tokenUsage()
   },
+  share: () => {
+    ensureFactoryInitialized()
+    return factory.db.share()
+  },
   transactions: () => {
     ensureFactoryInitialized()
     return factory.db.transactions()
@@ -110,6 +114,7 @@ export { LayoutDatabaseService } from './layout-database-service'
 export { NovelDatabaseService } from './novel-database-service'
 export { OutputDatabaseService } from './output-database-service'
 export { RenderDatabaseService } from './render-database-service'
+export { ShareDatabaseService } from './share-database-service'
 export type { AsyncTransactionOperation, SyncTransactionOperation } from './transaction-service'
 export { TransactionService } from './transaction-service'
 

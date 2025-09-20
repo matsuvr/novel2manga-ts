@@ -190,6 +190,28 @@ export const jobs = sqliteTable(
   }),
 )
 
+export const jobShares = sqliteTable(
+  'job_shares',
+  {
+    id: text('id').primaryKey(),
+    jobId: text('job_id')
+      .notNull()
+      .references(() => jobs.id, { onDelete: 'cascade' }),
+    token: text('token').notNull(),
+    expiresAt: text('expires_at'),
+    isEnabled: integer('is_enabled', { mode: 'boolean' }).notNull().default(true),
+    episodeNumbers: text('episode_numbers'),
+    createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    disabledAt: text('disabled_at'),
+    lastAccessedAt: text('last_accessed_at'),
+  },
+  (table) => ({
+    jobIdIdx: index('idx_job_shares_job_id').on(table.jobId),
+    tokenIdx: index('idx_job_shares_token').on(table.token),
+  }),
+)
+
 // ジョブステップ履歴テーブル（各ステップの実行記録）
 export const jobStepHistory = sqliteTable(
   'job_step_history',
@@ -556,6 +578,10 @@ export const jobsRelations = relations(jobs, ({ one, many }) => ({
   outputs: many(outputs),
   storageFiles: many(storageFiles),
   tokenUsage: many(tokenUsage),
+  share: one(jobShares, {
+    fields: [jobs.id],
+    references: [jobShares.jobId],
+  }),
 }))
 
 export const jobStepHistoryRelations = relations(jobStepHistory, ({ one }) => ({
@@ -645,6 +671,13 @@ export const layoutStatusRelations = relations(layoutStatus, ({ one }) => ({
   }),
 }))
 
+export const jobSharesRelations = relations(jobShares, ({ one }) => ({
+  job: one(jobs, {
+    fields: [jobShares.jobId],
+    references: [jobs.id],
+  }),
+}))
+
 export const renderStatusRelations = relations(renderStatus, ({ one }) => ({
   job: one(jobs, {
     fields: [renderStatus.jobId],
@@ -690,6 +723,8 @@ export type Novel = typeof novels.$inferSelect
 export type NewNovel = typeof novels.$inferInsert
 export type Job = typeof jobs.$inferSelect
 export type NewJob = typeof jobs.$inferInsert
+export type JobShare = typeof jobShares.$inferSelect
+export type NewJobShare = typeof jobShares.$inferInsert
 export type JobStepHistory = typeof jobStepHistory.$inferSelect
 export type NewJobStepHistory = typeof jobStepHistory.$inferInsert
 export type Chunk = typeof chunks.$inferSelect
