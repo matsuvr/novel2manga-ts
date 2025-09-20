@@ -4,6 +4,7 @@
 import { Context, Effect, Layer } from 'effect'
 import type { Transporter } from 'nodemailer'
 import nodemailer from 'nodemailer'
+import { type EmailConfig, getEmailConfig } from '@/config/email.config'
 import { generateJobNotificationContent } from './templates'
 import {
   EmailConfigurationError,
@@ -31,32 +32,42 @@ export const EmailService = Context.GenericTag<EmailService>('EmailService')
 /**
  * Create nodemailer transporter with configuration validation
  */
-const createTransportEffect = (): Effect.Effect<Transporter, EmailConfigurationError> =>
+const createTransportEffect = (): Effect.Effect<
+  { transporter: Transporter; config: EmailConfig },
+  EmailConfigurationError
+> =>
   Effect.gen(function* () {
-    const smtpHost = process.env.SMTP_HOST
-    const smtpPort = process.env.SMTP_PORT
-    const smtpUser = process.env.SMTP_USER
-    const smtpPass = process.env.SMTP_PASS
+    const config = getEmailConfig()
 
-    if (!smtpHost || !smtpPort || !smtpUser || !smtpPass) {
+    if (!config.enabled) {
+      return yield* Effect.fail(
+        new EmailConfigurationError('Email notifications are disabled (EMAIL_ENABLED=false).'),
+      )
+    }
+
+    const { host, port, secure, auth } = config.smtp
+
+    if (!host || !port || !auth.user || !auth.pass) {
       return yield* Effect.fail(
         new EmailConfigurationError(
-          'Missing required SMTP configuration. Please set SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASS environment variables.',
+          'Missing required SMTP configuration. Verify SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and MAIL_FROM.',
         ),
       )
     }
 
     const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: parseInt(smtpPort, 10),
-      secure: parseInt(smtpPort, 10) === 465, // true for 465, false for other ports
+      host,
+      port,
+      secure,
       auth: {
-        user: smtpUser,
-        pass: smtpPass,
+        user: auth.user,
+        pass: auth.pass,
       },
+      logger: config.debug,
+      debug: config.debug,
     })
 
-    return transporter
+    return { transporter, config }
   })
 
 /**
@@ -65,18 +76,27 @@ const createTransportEffect = (): Effect.Effect<Transporter, EmailConfigurationE
 export const EmailServiceLive = Layer.effect(
   EmailService,
   Effect.gen(function* () {
-    const transporter = yield* createTransportEffect()
+    const { transporter, config } = yield* createTransportEffect()
+    const fromAddress = config.defaults.from
+    const replyToAddress = config.defaults.replyTo
+
+    if (!fromAddress) {
+      return yield* Effect.fail(
+        new EmailConfigurationError('MAIL_FROM must be configured when EMAIL_ENABLED=true.'),
+      )
+    }
 
     return {
       sendEmail: (options: EmailOptions) =>
         Effect.tryPromise({
           try: async () => {
             const mailOptions = {
-              from: process.env.MAIL_FROM || 'Novel2Manga <noreply@novel2manga.com>',
+              from: fromAddress,
               to: options.to,
               subject: options.subject,
               html: options.html,
               text: options.text,
+              ...(replyToAddress ? { replyTo: replyToAddress } : {}),
             }
 
             await transporter.sendMail(mailOptions)
@@ -91,11 +111,12 @@ export const EmailServiceLive = Layer.effect(
           yield* Effect.tryPromise({
             try: async () => {
               const mailOptions = {
-                from: process.env.MAIL_FROM || 'Novel2Manga <noreply@novel2manga.com>',
+                from: fromAddress,
                 to: email,
                 subject: content.subject,
                 html: content.html,
                 text: content.text,
+                ...(replyToAddress ? { replyTo: replyToAddress } : {}),
               }
 
               await transporter.sendMail(mailOptions)

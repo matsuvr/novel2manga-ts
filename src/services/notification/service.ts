@@ -3,10 +3,12 @@
  * Handles email notifications for job completion and failure events
  */
 import { eq } from 'drizzle-orm'
+import { Effect } from 'effect'
+import { type EmailConfig, getEmailConfig } from '@/config/email.config'
 import { getDatabase } from '@/db'
 import { jobs, users } from '@/db/schema'
 import { getLogger } from '@/infrastructure/logging/logger'
-import { generateJobNotificationContent } from '@/services/email/templates'
+import { EmailService, EmailServiceLive, type JobNotificationData } from '@/services/email'
 
 /**
  * Simple notification service that can be called directly
@@ -14,42 +16,13 @@ import { generateJobNotificationContent } from '@/services/email/templates'
  */
 const logger = getLogger().withContext({ service: 'notification-service' })
 
-let transporter: import('nodemailer').Transporter | undefined
-
-const getTransporter = async () => {
-  if (transporter) return transporter
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER) return undefined
-  const nodemailer = await import('nodemailer')
-  transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: parseInt(process.env.SMTP_PORT || '587', 10) === 465,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+const runEmailEffect = async (recipient: string, payload: JobNotificationData): Promise<void> => {
+  const program = Effect.gen(function* () {
+    const emailService = yield* EmailService
+    yield* emailService.sendJobNotification(recipient, payload)
   })
-  return transporter
-}
 
-async function sendEmail(
-  email: string,
-  jobId: string,
-  status: 'completed' | 'failed',
-  errorMessage?: string,
-) {
-  const transporter = await getTransporter()
-  if (!transporter) {
-    logger.info('SMTP not configured, skipping email notification', { jobId, email })
-    return
-  }
-
-  const content = generateJobNotificationContent({ jobId, status, errorMessage })
-
-  await transporter.sendMail({
-    from: process.env.MAIL_FROM || 'Novel2Manga <noreply@novel2manga.com>',
-    to: email,
-    subject: content.subject,
-    html: content.html,
-    text: content.text,
-  })
+  await Effect.runPromise(program.pipe(Effect.provide(EmailServiceLive)))
 }
 
 export const notificationService = {
@@ -59,6 +32,28 @@ export const notificationService = {
     errorMessage?: string,
   ): Promise<void> {
     try {
+      let emailConfig: EmailConfig
+
+      try {
+        emailConfig = getEmailConfig()
+      } catch (configError) {
+        logger.error('Invalid email configuration', {
+          jobId,
+          status,
+          error:
+            configError instanceof Error ? configError.message : String(configError),
+        })
+        return
+      }
+
+      if (!emailConfig.enabled) {
+        logger.info('Email notifications disabled, skipping job notification', {
+          jobId,
+          status,
+        })
+        return
+      }
+
       const db = getDatabase()
       const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId))
       if (!job) {
@@ -88,7 +83,9 @@ export const notificationService = {
         })
         return
       }
-      await sendEmail(user.email, jobId, status, errorMessage)
+
+      await runEmailEffect(user.email, { jobId, status, errorMessage })
+
       logger.info('Job notification sent successfully', {
         jobId,
         userId: job.userId,

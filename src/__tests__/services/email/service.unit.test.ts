@@ -5,6 +5,7 @@
 import { Effect } from 'effect'
 import nodemailer from 'nodemailer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetEmailConfigCache } from '@/config/email.config'
 import { routesConfig } from '@/config/routes.config'
 import { EmailService, EmailServiceLive } from '../../../services/email/service'
 
@@ -25,19 +26,25 @@ describe('Email Service Unit Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.unstubAllEnvs()
+    resetEmailConfigCache()
     vi.mocked(nodemailer.createTransport).mockReturnValue(mockTransporter as any)
 
     // Set up environment variables
+    vi.stubEnv('EMAIL_ENABLED', 'true')
+    vi.stubEnv('EMAIL_DEBUG', 'false')
     vi.stubEnv('SMTP_HOST', 'smtp.test.com')
     vi.stubEnv('SMTP_PORT', '587')
+    vi.stubEnv('SMTP_SECURE', 'false')
     vi.stubEnv('SMTP_USER', 'test@example.com')
     vi.stubEnv('SMTP_PASS', 'password')
     vi.stubEnv('MAIL_FROM', 'Novel2Manga <noreply@novel2manga.com>')
+    vi.stubEnv('MAIL_REPLY_TO', 'support@novel2manga.com')
     vi.stubEnv('NEXT_PUBLIC_URL', 'https://novel2manga.com')
   })
 
   afterEach(() => {
     vi.unstubAllEnvs()
+    resetEmailConfigCache()
   })
 
   describe('sendEmail', () => {
@@ -58,6 +65,7 @@ describe('Email Service Unit Tests', () => {
 
       expect(mockSendMail).toHaveBeenCalledWith({
         from: 'Novel2Manga <noreply@novel2manga.com>',
+        replyTo: 'support@novel2manga.com',
         to: 'user@example.com',
         subject: 'Test Subject',
         html: '<p>Test HTML content</p>',
