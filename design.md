@@ -55,6 +55,7 @@
 - Speaker labels rendered on the bubble's top-right corner now use a 2× font ratio and expanded padding/radius so the rounded rectangle matches the larger text footprint.
 - Situation captions render directly on top of the panel without drawing a frame or translucent background while still reserving the padded placement area to avoid overlap with other elements.
 - Situation captions now request safe bounding boxes after speech bubbles and SFX are registered, clipping text rendering to the remaining rectangle so captions never overlap other elements.
+- Caption layout derives an estimated BudouX line limit from the bounding-box width, wraps narration by phrase, and progressively scales the font size when the computed line stack exceeds the available height so that the full caption always fits without truncation.
 
 ## Page Break Estimation
 

@@ -1,5 +1,6 @@
 import { createLogger, LogLevel } from '@/logging/enhanced-logger'
 import type { Dialogue } from '@/types/panel-layout'
+import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
 import type { SfxPlacement } from './sfx-placer'
 
 export interface ElementBounds {
@@ -20,6 +21,21 @@ export interface ContentTextPlacement {
   lines: string[]
   boundingBox: { x: number; y: number; width: number; height: number }
 }
+
+const FULLWIDTH_SAMPLE_CHAR = '漢'
+const ASCII_SAMPLE_CHAR = 'M'
+// Allow 6% slack so BudouX-wrapped lines remain inside the measured width.
+const WIDTH_SAFETY_RATIO = 0.94
+// Permit a 2% tolerance to absorb floating point differences in measureText.
+const WIDTH_TOLERANCE = 1.02
+// Evaluate every integer font size between max and min for readability.
+const FONT_SIZE_STEP = 1
+// Fine-grained fallback step when we need to keep shrinking text.
+const FONT_SIZE_FINE_STEP = 0.5
+// Absolute guard so we never emit zero or negative font sizes.
+const MIN_FONT_SIZE_ABSOLUTE = 1
+// Cap iterative scaling to avoid runaway loops when bounds are extremely small.
+const MAX_FONT_ADJUSTMENT_ITERATIONS = 40
 
 /**
  * パネル内の全要素（吹き出し、SFX、説明文）の配置を調整
@@ -77,6 +93,7 @@ export class PanelLayoutCoordinator {
       maxWidthRatio?: number
       maxHeightRatio?: number
       minAreaSize?: number
+      fontFamily?: string
     },
   ): ContentTextPlacement | null {
     if (!content || content.trim() === '') return null
@@ -245,9 +262,14 @@ export class PanelLayoutCoordinator {
     content: string,
     area: { x: number; y: number; width: number; height: number },
     ctx: CanvasRenderingContext2D,
-    config: { minFontSize: number; maxFontSize: number; padding: number; lineHeight: number },
+    config: {
+      minFontSize: number
+      maxFontSize: number
+      padding: number
+      lineHeight: number
+      fontFamily?: string
+    },
   ): ContentTextPlacement | null {
-    // 領域が有効でない場合は配置できない
     if (area.width <= 0 || area.height <= 0) {
       return null
     }
@@ -258,24 +280,64 @@ export class PanelLayoutCoordinator {
       return null
     }
 
-    for (let fontSize = config.maxFontSize; fontSize >= config.minFontSize; fontSize -= 2) {
-      ctx.font = `${fontSize}px sans-serif`
-      const lines = this.wrapText(content, innerWidth, ctx)
-      const totalHeight = lines.length * fontSize * config.lineHeight
-      if (totalHeight <= innerHeight && lines.length > 0) {
+    const fontFamily = config.fontFamily ?? 'sans-serif'
+    let bestOverflow: { fontSize: number; totalHeight: number } | null = null
+
+    for (let fontSize = config.maxFontSize; fontSize >= config.minFontSize; fontSize -= FONT_SIZE_STEP) {
+      const normalizedFont = Math.max(MIN_FONT_SIZE_ABSOLUTE, fontSize)
+      ctx.font = `${normalizedFont}px ${fontFamily}`
+      const maxChars = this.estimateMaxCharsForWidth(innerWidth, ctx, normalizedFont)
+      const wrapped = this.wrapTextWithBudoux(content, ctx, innerWidth, maxChars)
+      if (wrapped.lines.length === 0) {
+        continue
+      }
+
+      const lineHeightPx = Math.ceil(normalizedFont * config.lineHeight)
+      const totalHeight = wrapped.lines.length * lineHeightPx
+
+      if (totalHeight <= innerHeight) {
         return {
           text: content,
           x: area.x + config.padding,
           y: area.y + config.padding,
           width: innerWidth,
           height: totalHeight,
-          fontSize,
-          lines,
+          fontSize: normalizedFont,
+          lines: wrapped.lines,
           boundingBox: { ...area },
         }
       }
+
+      if (bestOverflow === null || totalHeight < bestOverflow.totalHeight) {
+        bestOverflow = { fontSize: normalizedFont, totalHeight }
+      }
     }
-    return null
+
+    if (bestOverflow === null) {
+      const fallbackFont = Math.max(MIN_FONT_SIZE_ABSOLUTE, config.minFontSize)
+      ctx.font = `${fallbackFont}px ${fontFamily}`
+      const maxChars = this.estimateMaxCharsForWidth(innerWidth, ctx, fallbackFont)
+      const wrapped = this.wrapTextWithBudoux(content, ctx, innerWidth, maxChars)
+      const fallbackHeight = wrapped.lines.length * Math.ceil(fallbackFont * config.lineHeight)
+      bestOverflow = { fontSize: fallbackFont, totalHeight: fallbackHeight }
+    }
+
+    return this.scalePlacementToFit(
+      content,
+      area,
+      ctx,
+      {
+        padding: config.padding,
+        lineHeight: config.lineHeight,
+        fontFamily,
+      },
+      {
+        innerWidth,
+        innerHeight,
+        initialFontSize: bestOverflow.fontSize,
+        initialTotalHeight: bestOverflow.totalHeight,
+      },
+    )
   }
 
   /** 強制配置（最後の手段） */
@@ -290,10 +352,12 @@ export class PanelLayoutCoordinator {
       lineHeight: number
       maxWidthRatio?: number
       maxHeightRatio?: number
+      fontFamily?: string
     },
   ): ContentTextPlacement {
-    const fontSize = config.minFontSize
-    ctx.font = `${fontSize}px sans-serif`
+    const fontFamily = config.fontFamily ?? 'sans-serif'
+    const baseFontSize = Math.max(MIN_FONT_SIZE_ABSOLUTE, config.minFontSize)
+    ctx.font = `${baseFontSize}px ${fontFamily}`
 
     const availableWidth = Math.max(0, panelBounds.width - config.padding * 2)
     const availableHeight = Math.max(0, panelBounds.height - config.padding * 2)
@@ -316,50 +380,204 @@ export class PanelLayoutCoordinator {
 
     const innerWidth = Math.max(0, area.width - config.padding * 2)
     const innerHeight = Math.max(0, area.height - config.padding * 2)
-    const lines = this.wrapText(content, innerWidth, ctx)
-    const maxLines = Math.max(1, Math.floor(innerHeight / (fontSize * config.lineHeight)))
-    if (lines.length > maxLines) {
-      lines.splice(maxLines - 1)
-      if (lines.length > 0) {
-        const last = lines[lines.length - 1]
-        lines[lines.length - 1] = `${last.slice(0, Math.max(0, last.length - 3))}...`
+
+    if (innerWidth <= 0 || innerHeight <= 0) {
+      return {
+        text: content,
+        x: area.x + config.padding,
+        y: area.y + config.padding,
+        width: Math.max(0, innerWidth),
+        height: 0,
+        fontSize: baseFontSize,
+        lines: [],
+        boundingBox: { ...area },
       }
     }
+
+    const maxChars = this.estimateMaxCharsForWidth(innerWidth, ctx, baseFontSize)
+    const wrapped = this.wrapTextWithBudoux(content, ctx, innerWidth, maxChars)
+    const lineHeightPx = Math.ceil(baseFontSize * config.lineHeight)
+    const totalHeight = wrapped.lines.length * lineHeightPx
+
+    if (totalHeight <= innerHeight) {
+      return {
+        text: content,
+        x: area.x + config.padding,
+        y: area.y + config.padding,
+        width: innerWidth,
+        height: totalHeight,
+        fontSize: baseFontSize,
+        lines: wrapped.lines,
+        boundingBox: { ...area },
+      }
+    }
+
+    return this.scalePlacementToFit(
+      content,
+      area,
+      ctx,
+      {
+        padding: config.padding,
+        lineHeight: config.lineHeight,
+        fontFamily,
+      },
+      {
+        innerWidth,
+        innerHeight,
+        initialFontSize: baseFontSize,
+        initialTotalHeight: totalHeight,
+      },
+    )
+  }
+
+  private estimateMaxCharsForWidth(
+    availableWidth: number,
+    ctx: CanvasRenderingContext2D,
+    fontSize: number,
+  ): number {
+    if (availableWidth <= 0) {
+      return 1
+    }
+
+    const fullWidth = ctx.measureText(FULLWIDTH_SAMPLE_CHAR).width
+    const asciiWidth = ctx.measureText(ASCII_SAMPLE_CHAR).width
+
+    const baselineWidth = Number.isFinite(fullWidth) && fullWidth > 0
+      ? fullWidth
+      : Number.isFinite(asciiWidth) && asciiWidth > 0
+        ? asciiWidth
+        : fontSize
+
+    const safeWidth = Math.max(1, baselineWidth * WIDTH_SAFETY_RATIO)
+    return Math.max(1, Math.floor(availableWidth / safeWidth))
+  }
+
+  private wrapTextWithBudoux(
+    text: string,
+    ctx: CanvasRenderingContext2D,
+    maxWidth: number,
+    maxChars: number,
+  ): { lines: string[]; limitUsed: number } {
+    const normalizedLimit = Math.max(1, Math.floor(maxChars))
+    const paragraphs = text.split(/\r?\n/)
+    const segments = paragraphs.length > 0 ? paragraphs : [text]
+
+    for (let limit = normalizedLimit; limit >= 1; limit -= 1) {
+      const candidate: string[] = []
+      for (const segment of segments) {
+        if (segment.trim() === '') {
+          candidate.push('')
+          continue
+        }
+        const wrapped = wrapJapaneseByBudoux(segment, limit)
+        if (wrapped.length === 0) {
+          candidate.push('')
+        } else {
+          candidate.push(...wrapped)
+        }
+      }
+
+      const overflow = candidate.some(
+        (line) => ctx.measureText(line).width > maxWidth * WIDTH_TOLERANCE,
+      )
+      if (!overflow) {
+        return { lines: candidate, limitUsed: limit }
+      }
+    }
+
+    const fallbackLines: string[] = []
+    for (const segment of segments) {
+      if (segment.trim() === '') {
+        fallbackLines.push('')
+      } else {
+        fallbackLines.push(...wrapJapaneseByBudoux(segment, 1))
+      }
+    }
+    return { lines: fallbackLines, limitUsed: 1 }
+  }
+
+  private scalePlacementToFit(
+    content: string,
+    area: { x: number; y: number; width: number; height: number },
+    ctx: CanvasRenderingContext2D,
+    config: { padding: number; lineHeight: number; fontFamily: string },
+    dimensions: {
+      innerWidth: number
+      innerHeight: number
+      initialFontSize: number
+      initialTotalHeight: number
+    },
+  ): ContentTextPlacement {
+    const { innerWidth, innerHeight, initialFontSize, initialTotalHeight } = dimensions
+    const fontFamily = config.fontFamily
+
+    if (innerWidth <= 0 || innerHeight <= 0) {
+      return {
+        text: content,
+        x: area.x + config.padding,
+        y: area.y + config.padding,
+        width: Math.max(0, innerWidth),
+        height: 0,
+        fontSize: Math.max(MIN_FONT_SIZE_ABSOLUTE, initialFontSize),
+        lines: [],
+        boundingBox: { ...area },
+      }
+    }
+
+    let fontSize = Math.max(
+      MIN_FONT_SIZE_ABSOLUTE,
+      initialTotalHeight > 0
+        ? Math.min(initialFontSize, (innerHeight / initialTotalHeight) * initialFontSize)
+        : initialFontSize,
+    )
+
+    let lines: string[] = []
+    let totalHeight = Number.POSITIVE_INFINITY
+
+    for (let i = 0; i < MAX_FONT_ADJUSTMENT_ITERATIONS; i++) {
+      const normalizedFont = Math.max(MIN_FONT_SIZE_ABSOLUTE, fontSize)
+      ctx.font = `${normalizedFont}px ${fontFamily}`
+      const maxChars = this.estimateMaxCharsForWidth(innerWidth, ctx, normalizedFont)
+      const wrapped = this.wrapTextWithBudoux(content, ctx, innerWidth, maxChars)
+      lines = wrapped.lines
+
+      const lineHeightPx = Math.ceil(normalizedFont * config.lineHeight)
+      totalHeight = lines.length * lineHeightPx
+      if (totalHeight <= innerHeight) {
+        fontSize = normalizedFont
+        break
+      }
+
+      const scaledFont = totalHeight > 0 ? normalizedFont * (innerHeight / totalHeight) : normalizedFont
+      const nextFont =
+        Math.abs(scaledFont - normalizedFont) < FONT_SIZE_FINE_STEP
+          ? normalizedFont - FONT_SIZE_FINE_STEP
+          : scaledFont
+
+      const adjustedFont = Math.max(MIN_FONT_SIZE_ABSOLUTE, nextFont)
+      if (adjustedFont === normalizedFont) {
+        break
+      }
+      fontSize = adjustedFont
+    }
+
+    const finalFont = Math.max(MIN_FONT_SIZE_ABSOLUTE, fontSize)
+    ctx.font = `${finalFont}px ${fontFamily}`
+    const maxChars = this.estimateMaxCharsForWidth(innerWidth, ctx, finalFont)
+    const wrapped = this.wrapTextWithBudoux(content, ctx, innerWidth, maxChars)
+    lines = wrapped.lines
+    const lineHeightPx = Math.ceil(finalFont * config.lineHeight)
+    const finalHeight = Math.min(innerHeight, lines.length * lineHeightPx)
+
     return {
       text: content,
       x: area.x + config.padding,
       y: area.y + config.padding,
       width: innerWidth,
-      height: Math.min(innerHeight, lines.length * fontSize * config.lineHeight),
-      fontSize,
+      height: finalHeight,
+      fontSize: finalFont,
       lines,
       boundingBox: { ...area },
     }
-  }
-
-  /** テキストを指定幅で改行（日本語対応） */
-  public wrapText(text: string, maxWidth: number, ctx: CanvasRenderingContext2D): string[] {
-    const lines: string[] = []
-    const paragraphs = text.split('\n')
-    for (const paragraph of paragraphs) {
-      if (paragraph.trim() === '') {
-        lines.push('')
-        continue
-      }
-      let currentLine = ''
-      const chars = paragraph.split('')
-      for (const char of chars) {
-        const testLine = currentLine + char
-        const metrics = ctx.measureText(testLine)
-        if (metrics.width > maxWidth && currentLine !== '') {
-          lines.push(currentLine)
-          currentLine = char
-        } else {
-          currentLine = testLine
-        }
-      }
-      if (currentLine) lines.push(currentLine)
-    }
-    return lines
   }
 }

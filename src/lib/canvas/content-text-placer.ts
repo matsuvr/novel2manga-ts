@@ -28,6 +28,7 @@ export class ContentTextPlacer {
       maxWidthRatio?: number
       maxHeightRatio?: number
       minAreaSize?: number
+      fontFamily?: string
     },
   ): ContentTextPlacement | null {
     return this.coordinator.calculateContentTextPlacement(content, panelBounds, ctx, config)
