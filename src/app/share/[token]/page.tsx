@@ -131,7 +131,7 @@ export default async function SharedJobResultsPage({ params }: { params: Promise
       tokenUsageByModel={tokenUsageByModel}
       novelPreview={novelPreview}
       viewerRole="shared"
-      episodeLinkBuilder={(episodeNumber) => `/share/${token}/episode/${episodeNumber}`}
+      episodeLinkTemplate={`/share/${token}/episode/:episodeNumber`}
     />
   )
 }

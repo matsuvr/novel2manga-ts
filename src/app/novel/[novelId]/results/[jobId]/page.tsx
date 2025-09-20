@@ -138,7 +138,7 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
       tokenUsageByModel={tokenUsageByModel}
       novelPreview={novelPreview}
       viewerRole="owner"
-      episodeLinkBuilder={(episodeNumber) => `/novel/${novelId}/results/${job.id}/episode/${episodeNumber}`}
+      episodeLinkTemplate={`/novel/${novelId}/results/${job.id}/episode/:episodeNumber`}
       downloadUrl={`/api/export/zip/${job.id}`}
     />
   )
