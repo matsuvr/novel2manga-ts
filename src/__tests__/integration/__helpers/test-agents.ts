@@ -4,7 +4,7 @@
  */
 
 import { vi } from 'vitest'
-import { AgentCore, AgentCoreFactory } from '@/agents/core'
+import { AgentCore, createAgentCoreWithConfig } from '@/agents/core'
 import { ReActPolicy } from '@/agents/policies/react'
 import { SingleTurnPolicy } from '@/agents/policies/singleTurn'
 import { SimpleToolRegistry } from '@/agents/tools'
@@ -105,14 +105,13 @@ export function createMockChunkAnalyzer(): AgentCore {
     responses: [
       {
         content: JSON.stringify(TEST_CHUNK_ANALYSIS),
-        role: 'assistant',
       },
     ],
   })
 
-  return AgentCoreFactory.create({
-    llmClient: fakeClient,
-    policy: new SingleTurnPolicy(),
+  return createAgentCoreWithConfig({
+    client: fakeClient,
+    policy: new SingleTurnPolicy(fakeClient),
   })
 }
 
@@ -124,14 +123,13 @@ export function createMockNarrativeAnalyzer(): AgentCore {
     responses: [
       {
         content: JSON.stringify(TEST_EPISODE_BOUNDARIES),
-        role: 'assistant',
       },
     ],
   })
 
-  return AgentCoreFactory.create({
-    llmClient: fakeClient,
-    policy: new SingleTurnPolicy(),
+  return createAgentCoreWithConfig({
+    client: fakeClient,
+    policy: new SingleTurnPolicy(fakeClient),
   })
 }
 
@@ -162,14 +160,13 @@ export function createMockEpisodeGenerator(): AgentCore {
             },
           ],
         }),
-        role: 'assistant',
       },
     ],
   })
 
-  return AgentCoreFactory.create({
-    llmClient: fakeClient,
-    policy: new SingleTurnPolicy(),
+  return createAgentCoreWithConfig({
+    client: fakeClient,
+    policy: new SingleTurnPolicy(fakeClient),
   })
 }
 
@@ -226,14 +223,13 @@ export function createMockLayoutGenerator(): AgentCore {
             },
           ],
         }),
-        role: 'assistant',
       },
     ],
   })
 
-  return AgentCoreFactory.create({
-    llmClient: fakeClient,
-    policy: new SingleTurnPolicy(),
+  return createAgentCoreWithConfig({
+    client: fakeClient,
+    policy: new SingleTurnPolicy(fakeClient),
   })
 }
 
@@ -473,7 +469,7 @@ export function setupAgentMocks() {
     }),
     generateMangaLayoutForPlan: vi.fn().mockImplementation(async (episodeData, plan) => {
       // planに含まれるページに基づいて動的にレイアウトを生成
-      const pages = plan.plannedPages.map((plannedPage) => ({
+      const pages = plan.plannedPages.map((plannedPage: { pageNumber: number }) => ({
         page_number: plannedPage.pageNumber,
         panels: Array.from({ length: 4 }, (_, i) => ({
           position: { x: (i % 2) * 0.5, y: Math.floor(i / 2) * 0.5 },

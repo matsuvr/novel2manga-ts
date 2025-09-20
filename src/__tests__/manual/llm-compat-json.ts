@@ -223,7 +223,12 @@ async function runTextAnalysis(): Promise<NamedResult> {
       provider: cfg.provider,
       maxTokens: cfg.maxTokens,
     })
-    const obj = await agent.generateObject(TextAnalysisSchema, prompt)
+    const obj = await agent.generateObject({
+      systemPrompt: cfg.systemPrompt,
+      userPrompt: prompt,
+      schema: TextAnalysisSchema,
+      schemaName: 'TextAnalysis',
+    })
     return {
       name: 'textAnalysis',
       ok: true,
@@ -255,7 +260,12 @@ async function runScriptConversion(): Promise<NamedResult> {
       provider: cfg.provider,
       maxTokens: cfg.maxTokens,
     })
-    const obj = await agent.generateObject(ScriptSchema, prompt)
+    const obj = await agent.generateObject({
+      systemPrompt: cfg.systemPrompt,
+      userPrompt: prompt,
+      schema: ScriptSchema,
+      schemaName: 'Script',
+    })
     return {
       name: 'scriptConversion',
       ok: true,

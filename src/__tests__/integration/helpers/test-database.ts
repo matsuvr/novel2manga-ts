@@ -103,38 +103,38 @@ export function resetTestDatabase() {
   }
   // Auth-related tables (may not exist in all test runs depending on schema)
   try {
-    db.delete(schema.authenticator as any).run?.()
+    db.delete(schema.authenticators as any).run?.()
   } catch {
     try {
-      db.delete(schema.authenticator as any)
+      db.delete(schema.authenticators as any)
     } catch {}
   }
   try {
-    db.delete(schema.session as any).run?.()
+    db.delete(schema.sessions as any).run?.()
   } catch {
     try {
-      db.delete(schema.session as any)
+      db.delete(schema.sessions as any)
     } catch {}
   }
   try {
-    db.delete(schema.account as any).run?.()
+    db.delete(schema.accounts as any).run?.()
   } catch {
     try {
-      db.delete(schema.account as any)
+      db.delete(schema.accounts as any)
     } catch {}
   }
   try {
-    db.delete(schema.user as any).run?.()
+    db.delete(schema.users as any).run?.()
   } catch {
     try {
-      db.delete(schema.user as any)
+      db.delete(schema.users as any)
     } catch {}
   }
   try {
-    db.delete(schema.verificationToken as any).run?.()
+    db.delete(schema.verificationTokens as any).run?.()
   } catch {
     try {
-      db.delete(schema.verificationToken as any)
+      db.delete(schema.verificationTokens as any)
     } catch {}
   }
 }

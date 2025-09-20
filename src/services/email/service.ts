@@ -47,14 +47,6 @@ const createTransportEffect = (): Effect.Effect<
 
     const { host, port, secure, auth } = config.smtp
 
-    if (!host || !port || !auth.user || !auth.pass) {
-      return yield* Effect.fail(
-        new EmailConfigurationError(
-          'Missing required SMTP configuration. Verify SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and MAIL_FROM.',
-        ),
-      )
-    }
-
     const transporter = nodemailer.createTransport({
       host,
       port,
@@ -79,12 +71,6 @@ export const EmailServiceLive = Layer.effect(
     const { transporter, config } = yield* createTransportEffect()
     const fromAddress = config.defaults.from
     const replyToAddress = config.defaults.replyTo
-
-    if (!fromAddress) {
-      return yield* Effect.fail(
-        new EmailConfigurationError('MAIL_FROM must be configured when EMAIL_ENABLED=true.'),
-      )
-    }
 
     return {
       sendEmail: (options: EmailOptions) =>

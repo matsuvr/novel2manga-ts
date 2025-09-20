@@ -6,7 +6,7 @@ let globalTestDb: TestDbHandle | undefined
 
 beforeAll(async () => {
   // 統合テスト用の環境変数設定
-  process.env.NODE_ENV = 'test'
+  ;(process.env as Record<string, string | undefined>).NODE_ENV = 'test'
   process.env.DATABASE_URL = ':memory:'
   process.env.LOG_LEVEL = 'warn'
 

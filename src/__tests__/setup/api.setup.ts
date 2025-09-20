@@ -127,55 +127,14 @@ vi.mock('next-auth/providers/google', () => ({
 
 // Mock the database module for API tests
 vi.mock('@/db', async () => {
-  const {
-    mockDatabase,
-    users,
-    jobs,
-    novels,
-    episodes,
-    chunks,
-    outputs,
-    chunkAnalysisStatus,
-    layoutStatus,
-    renderStatus,
-    jobStepHistory,
-    tokenUsage,
-    storageFiles,
-    accounts,
-    sessions,
-    verificationTokens,
-    authenticators,
-    schema,
-    getDatabase,
-    shouldRunMigrations,
-  } = await import('../mocks/database.mock')
-
+  // This test tree only provides a default export from database.mock
+  const mod = await import('../mocks/database.mock')
   return {
-    // Export all table mocks
-    users,
-    jobs,
-    novels,
-    episodes,
-    chunks,
-    outputs,
-    chunkAnalysisStatus,
-    layoutStatus,
-    renderStatus,
-    jobStepHistory,
-    tokenUsage,
-    storageFiles,
-    accounts,
-    sessions,
-    verificationTokens,
-    authenticators,
-
-    // Export database functions
-    getDatabase,
-    shouldRunMigrations,
-    schema,
-
-    // Default export
-    default: mockDatabase,
+    default: mod.default,
+    // Provide minimal named exports used by API code under test if needed
+    getDatabase: vi.fn(() => ({})),
+    shouldRunMigrations: vi.fn(() => false),
+    schema: {},
   }
 })
 

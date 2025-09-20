@@ -47,7 +47,7 @@
 
 - Job status updates to `completed` or `failed` now trigger email notifications via the unified notification service.
 - Notification logic is centralized through `updateJobStatusWithNotification`, removing direct notification calls from the database layer and preventing duplicates.
-- SMTP credentials and sender metadata are validated through `email.config.ts`, which honours `EMAIL_ENABLED`, `EMAIL_DEBUG`, `MAIL_FROM`, and `MAIL_REPLY_TO` so workers only send when configuration is explicit.
+- SMTP credentials and sender metadata are validated by `email.config.ts`. This configuration module respects `EMAIL_ENABLED`, `EMAIL_DEBUG`, `MAIL_FROM`, and `MAIL_REPLY_TO` to ensure that workers only send emails when explicitly configured.
 - Unauthorized job access automatically redirects users to the dashboard, while unauthenticated users are sent to the login page with a callback to the requested job.
 
 ## Speech Bubble Placement

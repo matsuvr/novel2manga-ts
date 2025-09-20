@@ -2,56 +2,45 @@ import { z } from 'zod'
 
 /**
  * Email configuration derived from environment variables.
- * Validation lives here so that runtime services can assume the shape is safe.
+ * Use discriminatedUnion on `enabled` so that when enabled=true, required fields are enforced at the schema level.
  */
-const emailConfigSchema = z
-  .object({
-    enabled: z.boolean(),
-    debug: z.boolean(),
-    defaults: z.object({
-      from: z.string().trim().min(1).optional(),
-      replyTo: z.string().trim().email().optional(),
+const enabledSchema = z.object({
+  enabled: z.literal(true),
+  debug: z.boolean(),
+  defaults: z.object({
+    from: z.string().trim().min(1, { message: 'MAIL_FROM is required when email is enabled' }),
+    replyTo: z.string().trim().email().optional(),
+  }),
+  smtp: z.object({
+    host: z.string().trim().min(1, { message: 'SMTP_HOST is required when email is enabled' }),
+    port: z.number().int().positive({ message: 'SMTP_PORT must be a positive integer' }),
+    secure: z.boolean(),
+    auth: z.object({
+      user: z.string().trim().min(1, { message: 'SMTP_USER is required when email is enabled' }),
+      pass: z.string().trim().min(1, { message: 'SMTP_PASS is required when email is enabled' }),
     }),
-    smtp: z.object({
-      host: z.string().trim().min(1).optional(),
-      port: z.number().int().positive().optional(),
-      secure: z.boolean(),
-      auth: z.object({
-        user: z.string().trim().min(1).optional(),
-        pass: z.string().trim().min(1).optional(),
-      }),
+  }),
+})
+
+const disabledSchema = z.object({
+  enabled: z.literal(false),
+  debug: z.boolean(),
+  defaults: z.object({
+    from: z.string().trim().optional(),
+    replyTo: z.string().trim().email().optional(),
+  }),
+  smtp: z.object({
+    host: z.string().trim().optional(),
+    port: z.number().int().positive().optional(),
+    secure: z.boolean(),
+    auth: z.object({
+      user: z.string().trim().optional(),
+      pass: z.string().trim().optional(),
     }),
-  })
-  .superRefine((value, ctx) => {
-    if (!value.enabled) {
-      return
-    }
+  }),
+})
 
-    const missing: string[] = []
-
-    if (!value.smtp.host) {
-      missing.push('SMTP_HOST')
-    }
-    if (!value.smtp.port) {
-      missing.push('SMTP_PORT')
-    }
-    if (!value.smtp.auth.user) {
-      missing.push('SMTP_USER')
-    }
-    if (!value.smtp.auth.pass) {
-      missing.push('SMTP_PASS')
-    }
-    if (!value.defaults.from) {
-      missing.push('MAIL_FROM')
-    }
-
-    if (missing.length > 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Missing required email configuration values: ${missing.join(', ')}`,
-      })
-    }
-  })
+const emailConfigSchema = z.discriminatedUnion('enabled', [enabledSchema, disabledSchema])
 
 export type EmailConfig = z.infer<typeof emailConfigSchema>
 
@@ -75,7 +64,7 @@ export const getEmailConfig = (): EmailConfig => {
     return cachedEmailConfig
   }
 
-  const rawConfig: EmailConfig = {
+  const raw = {
     enabled: process.env.EMAIL_ENABLED === 'true',
     debug: process.env.EMAIL_DEBUG === 'true',
     defaults: {
@@ -93,10 +82,10 @@ export const getEmailConfig = (): EmailConfig => {
     },
   }
 
-  const result = emailConfigSchema.safeParse(rawConfig)
+  const result = emailConfigSchema.safeParse(raw)
 
   if (!result.success) {
-    const issues = result.error.issues.map((issue) => issue.message).join('; ')
+    const issues = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
     throw new Error(`Invalid email configuration: ${issues}`)
   }
 
