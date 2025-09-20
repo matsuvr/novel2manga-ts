@@ -316,7 +316,7 @@ export class PanelLayoutCoordinator {
       }
     }
 
-    // At this point, bestOverflow should always be set because the for-loop runs
+    // At this point, bestOverflow should usually be set because the for-loop runs
     // from maxFont down to minFont and wrapTextWithBudoux returns at least one
     // line for non-empty content. Keep a defensive fallback just in case.
     if (bestOverflow === null) {
@@ -326,6 +326,15 @@ export class PanelLayoutCoordinator {
       const wrapped = this.wrapTextWithBudoux(content, ctx, innerWidth, maxChars)
       const fallbackHeight = wrapped.lines.length * Math.ceil(fallbackFont * config.lineHeight)
       bestOverflow = { fontSize: fallbackFont, totalHeight: fallbackHeight }
+    }
+
+    // If even the smallest allowed font we tried (minFont) still produces a
+    // totalHeight larger than innerHeight, don't aggressively force shrinking
+    // here — return null so the caller can try other available areas. This
+    // preserves the previous behavior where tryPlaceText returns null when the
+    // area cannot contain readable text at the configured minimum size.
+    if (bestOverflow.fontSize <= minFont && bestOverflow.totalHeight > innerHeight) {
+      return null
     }
 
     return this.scalePlacementToFit(
