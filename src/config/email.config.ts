@@ -26,16 +26,16 @@ const disabledSchema = z.object({
   enabled: z.literal(false),
   debug: z.boolean(),
   defaults: z.object({
-    from: z.string().trim().min(1).optional(),
+    from: z.string().trim().optional(),
     replyTo: z.string().trim().email().optional(),
   }),
   smtp: z.object({
-    host: z.string().trim().min(1).optional(),
+    host: z.string().trim().optional(),
     port: z.number().int().positive().optional(),
     secure: z.boolean(),
     auth: z.object({
-      user: z.string().trim().min(1).optional(),
-      pass: z.string().trim().min(1).optional(),
+      user: z.string().trim().optional(),
+      pass: z.string().trim().optional(),
     }),
   }),
 })
@@ -85,7 +85,7 @@ export const getEmailConfig = (): EmailConfig => {
   const result = emailConfigSchema.safeParse(raw)
 
   if (!result.success) {
-    const issues = result.error.issues.map((i) => i.message || i.code).join('; ')
+    const issues = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
     throw new Error(`Invalid email configuration: ${issues}`)
   }
 

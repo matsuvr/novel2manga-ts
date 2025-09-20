@@ -3,33 +3,33 @@
  * インメモリストレージを提供し、実際のファイルI/Oをモック
  */
 
-import type { Storage } from '@/interfaces/storage'
+import type { Storage } from '@/utils/storage'
 
 /**
  * テスト用インメモリストレージの実装
  */
 export class TestMemoryStorage implements Storage {
-  private storage: Map<string, { text: string; metadata?: Record<string, unknown> }> = new Map()
+  private storage: Map<string, { text: string; metadata?: Record<string, string> }> = new Map()
 
-  async get(path: string): Promise<{ text: string; metadata?: Record<string, unknown> } | null> {
+  async get(path: string): Promise<{ text: string; metadata?: Record<string, string> } | null> {
     const value = this.storage.get(path)
     if (!value) return null
     return value
   }
 
-  async put(
-    path: string,
-    data: { text: string; metadata?: Record<string, unknown> } | string | Buffer,
-  ): Promise<void> {
+  async put(path: string, data: string | Buffer, metadata?: Record<string, string>): Promise<void> {
     if (typeof data === 'string') {
-      this.storage.set(path, { text: data })
+      this.storage.set(path, { text: data, metadata })
       return
     }
     if (data instanceof Buffer) {
-      this.storage.set(path, { text: data.toString('utf-8') })
+      this.storage.set(path, { text: data.toString('utf-8'), metadata })
       return
     }
-    this.storage.set(path, data)
+  }
+
+  async exists(path: string): Promise<boolean> {
+    return this.storage.has(path)
   }
 
   async delete(path: string): Promise<void> {
@@ -132,14 +132,16 @@ export class TestStorageDataFactory {
     metadata: Record<string, unknown> = {},
   ): Promise<void> {
     const storage = await this.storageFactory.getNovelStorage()
-    await storage.put(`${novelId}.json`, {
-      text: JSON.stringify({ text, metadata }),
-    })
+    const meta: Record<string, string> = Object.fromEntries(
+      Object.entries(metadata).map(([k, v]) => [k, String(v)]),
+    )
+    const payload = { text, metadata: meta }
+    await storage.put(`${novelId}.json`, JSON.stringify(payload))
   }
 
   async seedChunkText(jobId: string, chunkIndex: number, text: string): Promise<void> {
     const storage = await this.storageFactory.getChunkStorage()
-    await storage.put(`${jobId}/chunks/${chunkIndex}.txt`, { text })
+    await storage.put(`${jobId}/chunks/${chunkIndex}.txt`, text)
   }
 
   async seedChunkAnalysis(
@@ -148,8 +150,6 @@ export class TestStorageDataFactory {
     analysis: Record<string, unknown>,
   ): Promise<void> {
     const storage = await this.storageFactory.getAnalysisStorage()
-    await storage.put(`${jobId}/analysis/chunk-${chunkIndex}.json`, {
-      text: JSON.stringify(analysis),
-    })
+    await storage.put(`${jobId}/analysis/chunk-${chunkIndex}.json`, JSON.stringify(analysis))
   }
 }

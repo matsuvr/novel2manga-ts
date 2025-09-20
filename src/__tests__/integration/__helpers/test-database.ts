@@ -309,7 +309,7 @@ export class TestDataFactory {
       title: 'Test Novel',
       textLength: 1000,
       language: 'ja' as const,
-      userId: userId as const,
+      userId: userId,
       ...overrides,
     }
 

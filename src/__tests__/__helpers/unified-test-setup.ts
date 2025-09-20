@@ -2,8 +2,8 @@
  * 統合テスト環境セットアップ - すべてのストレージテストの根本的な問題を解決
  */
 import { vi } from 'vitest'
-import type { Database } from '@/types/database'
-import type { Storage } from '@/types/storage'
+import type { Database } from '@/services/database/transaction-service'
+import type { Storage } from '@/utils/storage'
 
 // Test-specific types to replace `any`
 interface MockJob {
