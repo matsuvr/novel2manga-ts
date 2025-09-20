@@ -157,12 +157,6 @@ describe('/api/share', () => {
 
   describe('POST /api/share', () => {
     it('有効なリクエストで共有リンクを生成する', async () => {
-      mockDbService.jobs.getJob.mockResolvedValue({
-        id: testJobId,
-        novelId: testNovelId,
-        status: 'completed',
-        userId: 'test-user-bypass',
-      })
       const requestBody = {
         jobId: testJobId,
         episodeNumbers: [1, 2],
@@ -177,12 +171,6 @@ describe('/api/share', () => {
     })
 
     it('デフォルトの有効期限（72時間）で共有リンクを生成する', async () => {
-      mockDbService.jobs.getJob.mockResolvedValue({
-        id: testJobId,
-        novelId: testNovelId,
-        status: 'completed',
-        userId: 'test-user-bypass',
-      })
       const requestBody = {
         jobId: testJobId,
       }
@@ -194,12 +182,6 @@ describe('/api/share', () => {
     })
 
     it('特定のエピソードのみを共有する', async () => {
-      mockDbService.jobs.getJob.mockResolvedValue({
-        id: testJobId,
-        novelId: testNovelId,
-        status: 'completed',
-        userId: 'test-user-bypass',
-      })
       const requestBody = {
         jobId: testJobId,
         episodeNumbers: [3],
@@ -212,12 +194,6 @@ describe('/api/share', () => {
     })
 
     it('jobIdが未指定の場合は400エラーを返す', async () => {
-      mockDbService.jobs.getJob.mockResolvedValue({
-        id: testJobId,
-        novelId: testNovelId,
-        status: 'completed',
-        userId: 'test-user-bypass',
-      })
       const requestBody = {
         expiresIn: 24,
       }
@@ -228,12 +204,6 @@ describe('/api/share', () => {
     })
 
     it('expiresInが範囲外（小さすぎる）の場合は400エラーを返す', async () => {
-      mockDbService.jobs.getJob.mockResolvedValue({
-        id: testJobId,
-        novelId: testNovelId,
-        status: 'completed',
-        userId: 'test-user-bypass',
-      })
       const requestBody = {
         jobId: testJobId,
         expiresIn: 0, // 1未満
@@ -245,12 +215,6 @@ describe('/api/share', () => {
     })
 
     it('expiresInが範囲外（大きすぎる）の場合は400エラーを返す', async () => {
-      mockDbService.jobs.getJob.mockResolvedValue({
-        id: testJobId,
-        novelId: testNovelId,
-        status: 'completed',
-        userId: 'test-user-bypass',
-      })
       const requestBody = {
         jobId: testJobId,
         expiresIn: 200, // 168（1週間）を超過
@@ -290,12 +254,6 @@ describe('/api/share', () => {
     })
 
     it('最大有効期限（168時間）でも正常に処理される', async () => {
-      mockDbService.jobs.getJob.mockResolvedValue({
-        id: testJobId,
-        novelId: testNovelId,
-        status: 'completed',
-        userId: 'test-user-bypass',
-      })
       const requestBody = {
         jobId: testJobId,
         expiresIn: 168, // 1週間
@@ -308,12 +266,6 @@ describe('/api/share', () => {
     })
 
     it('最小有効期限（1時間）でも正常に処理される', async () => {
-      mockDbService.jobs.getJob.mockResolvedValue({
-        id: testJobId,
-        novelId: testNovelId,
-        status: 'completed',
-        userId: 'test-user-bypass',
-      })
       const requestBody = {
         jobId: testJobId,
         expiresIn: 1, // 1時間
@@ -326,12 +278,6 @@ describe('/api/share', () => {
     })
 
     it('空のepisodeNumbers配列でも正常に処理される', async () => {
-      mockDbService.jobs.getJob.mockResolvedValue({
-        id: testJobId,
-        novelId: testNovelId,
-        status: 'completed',
-        userId: 'test-user-bypass',
-      })
       const requestBody = {
         jobId: testJobId,
         episodeNumbers: [],
