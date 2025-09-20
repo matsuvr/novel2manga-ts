@@ -161,15 +161,25 @@ export function buildLayoutFromPageBreaks(
       const shape = template.panels[idx % template.panels.length]
 
       const candidateIndex = importanceCandidates.length
+      // Named constants for highlight importance calculation
+      const RAW_IMPORTANCE_MIN = 3
+      const RAW_IMPORTANCE_MAX = 10
+      const DIALOGUE_COUNT_THRESHOLD = 2
+      const DIALOGUE_HEAVY_IMPORTANCE = 7
+      const CONTENT_LENGTH_THRESHOLD = 50
+      const CONTENT_HEAVY_IMPORTANCE = 6
+      const DEFAULT_RAW_IMPORTANCE = 5
+
       const highlightBasedImportance = Math.min(
-        10,
+        RAW_IMPORTANCE_MAX,
         Math.max(
-          3,
-          dialogues.filter((d) => d.type === 'speech' || d.type === 'thought').length >= 2
-            ? 7
-            : content.length >= 50
-              ? 6
-              : 5,
+          RAW_IMPORTANCE_MIN,
+          dialogues.filter((d) => d.type === 'speech' || d.type === 'thought').length >=
+            DIALOGUE_COUNT_THRESHOLD
+            ? DIALOGUE_HEAVY_IMPORTANCE
+            : content.length >= CONTENT_LENGTH_THRESHOLD
+              ? CONTENT_HEAVY_IMPORTANCE
+              : DEFAULT_RAW_IMPORTANCE,
         ),
       )
 
