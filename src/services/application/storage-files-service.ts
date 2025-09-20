@@ -59,6 +59,18 @@ export class StorageFilesService {
     return rows as unknown as StorageFileRecord[]
   }
 
+  async listByJob(jobId: string) {
+    const db = this.ensureDb()
+    const rows = await db.select().from(storageFiles).where(eq(storageFiles.jobId, jobId))
+    return rows as unknown as StorageFileRecord[]
+  }
+
+  async deleteByJob(jobId: string) {
+    const db = this.ensureDb()
+    // Use the drizzle DB instance to delete storage file records for the job
+    await db.delete(storageFiles).where(eq(storageFiles.jobId, jobId))
+  }
+
   async listByNovel(novelId: string) {
     const db = this.ensureDb()
     const rows = await db.select().from(storageFiles).where(eq(storageFiles.novelId, novelId))
