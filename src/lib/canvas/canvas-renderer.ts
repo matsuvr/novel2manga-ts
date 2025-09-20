@@ -486,6 +486,8 @@ export class CanvasRenderer {
         const contentCfg = this.getCanvasCfg().contentText as AppCanvasConfig['contentText']
 
         if (contentCfg.enabled !== false) {
+          const contentFontFamily =
+            this.config.fontFamily || '"Noto Sans JP", NotoSansJP, sans-serif'
           const placement = this.layoutCoordinator.calculateContentTextPlacement(
             panel.content,
             panelBounds,
@@ -498,6 +500,7 @@ export class CanvasRenderer {
               maxWidthRatio: contentCfg.maxWidthRatio,
               maxHeightRatio: contentCfg.maxHeightRatio,
               minAreaSize: contentCfg.placement.minAreaSize,
+              fontFamily: contentFontFamily,
             },
           )
           if (placement) {
@@ -531,9 +534,7 @@ export class CanvasRenderer {
             const hasContentArea = clampedBounding.width > 0 && clampedBounding.height > 0
 
             this.ctx.save()
-            this.ctx.font = `${placement.fontSize}px ${
-              this.config.fontFamily || '"Noto Sans JP", NotoSansJP, sans-serif'
-            }`
+            this.ctx.font = `${placement.fontSize}px ${contentFontFamily}`
             this.ctx.fillStyle = contentCfg.textColor
             this.ctx.textAlign = 'left'
             this.ctx.textBaseline = 'top'

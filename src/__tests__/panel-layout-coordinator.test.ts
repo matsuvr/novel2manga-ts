@@ -74,4 +74,36 @@ describe('PanelLayoutCoordinator', () => {
       panelBounds.y + panelBounds.height,
     )
   })
+
+  it('wraps narration text with BudouX and scales down when height is constrained', () => {
+    const coordinator = new PanelLayoutCoordinator()
+    const ctx = createCanvas2DMock()
+    vi.spyOn(ctx, 'measureText').mockImplementation(
+      (text: string) =>
+        ({ width: text.length * 20 } as ReturnType<CanvasRenderingContext2D['measureText']>),
+    )
+
+    const panelBounds = { x: 0, y: 0, width: 220, height: 140 }
+    const content = '長い状況説明がここに入ります。雨が強く降り続いています。'
+
+    const placement = coordinator.calculateContentTextPlacement(content, panelBounds, ctx, {
+      minFontSize: 18,
+      maxFontSize: 26,
+      padding: 8,
+      lineHeight: 1.4,
+      maxWidthRatio: 0.4,
+      maxHeightRatio: 0.35,
+      minAreaSize: 60,
+      fontFamily: 'Noto Sans JP',
+    })
+
+    expect(placement).not.toBeNull()
+    if (!placement) return
+
+    expect(placement.lines.length).toBeGreaterThan(0)
+    expect(placement.lines.join('')).toBe(content)
+    expect(placement.lines.some((line) => line.endsWith('...'))).toBe(false)
+    expect(Math.max(...placement.lines.map((line) => line.length))).toBeLessThanOrEqual(4)
+    expect(placement.fontSize).toBeLessThan(18)
+  })
 })
