@@ -18,6 +18,10 @@ function isLoggingEnabled(): boolean {
   return process.env.LLM_LOGGING === '1'
 }
 
+export function isLlmLoggingEnabled(): boolean {
+  return isLoggingEnabled()
+}
+
 function resolveLogFilePath(): string {
   const customPath = process.env.LLM_LOGGING_PATH
   if (customPath && customPath.trim().length > 0) {
