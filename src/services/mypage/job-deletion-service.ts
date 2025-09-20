@@ -68,7 +68,7 @@ export function deleteJobForUser(
 
     const storageFilesService = new StorageFilesService()
     const storageRecords = yield* Effect.tryPromise({
-      try: () => storageFilesService.listByNovel(job.novelId),
+      try: () => storageFilesService.listByJob(jobId),
       catch: (error) =>
         new ApiError('ストレージ参照情報の取得に失敗しました', 500, ERROR_CODES.DATABASE_ERROR, {
           jobId,
@@ -85,6 +85,7 @@ export function deleteJobForUser(
       novelId: job.novelId,
     })
 
+    // concurrency: use small parallelism for I/O-bound deletes. Tunable as needed.
     yield* Effect.forEach(
       storageRecords,
       (record) => {
@@ -135,13 +136,26 @@ export function deleteJobForUser(
             }),
         })
       },
-      { concurrency: 1 },
+      // limited parallelism improves throughput without overwhelming storage
+      { concurrency: 5 },
     )
 
+    // Remove storage records associated with this job
     yield* Effect.tryPromise({
-      try: () => db.novels().deleteNovel(job.novelId),
+      try: () => storageFilesService.deleteByJob(jobId),
       catch: (error) =>
-        new ApiError('小説の削除に失敗しました', 500, ERROR_CODES.DATABASE_ERROR, {
+        new ApiError('ストレージ参照情報の削除に失敗しました', 500, ERROR_CODES.DATABASE_ERROR, {
+          jobId,
+          novelId: job.novelId,
+          details: normalizeError(error),
+        }),
+    })
+
+    // Finally delete the job record itself (do not delete the novel)
+    yield* Effect.tryPromise({
+      try: () => db.jobs().deleteJob(jobId),
+      catch: (error) =>
+        new ApiError('ジョブの削除に失敗しました', 500, ERROR_CODES.DATABASE_ERROR, {
           jobId,
           novelId: job.novelId,
           details: normalizeError(error),

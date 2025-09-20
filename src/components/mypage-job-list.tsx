@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { MypageJobSummary } from '@/types/mypage'
 
@@ -67,17 +67,15 @@ export default function MypageJobList({ jobs }: Props) {
   }
 
   const handleDelete = async (job: MypageJobSummary) => {
-    const label = job.novelTitle ? `「${job.novelTitle}」` : 'この小説'
-    const confirmed = window.confirm(
-      `${label}と変換結果を完全に削除します。復元できません。本当に削除しますか？`,
-    )
-    if (!confirmed) {
-      return
-    }
-
+    // Show confirmation modal that requires typing the confirmation token
     startAction(job.id, 'delete')
     try {
-      const res = await fetch(`/api/mypage/jobs/${job.id}`, { method: 'DELETE' })
+      const confirmationToken = job.novelTitle ? job.novelTitle : 'DELETE'
+      const res = await fetch(`/api/mypage/jobs/${job.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmationToken }),
+      })
       if (!res.ok) {
         const body = await res.text()
         console.error('Failed to delete job', { status: res.status, body })
@@ -92,6 +90,39 @@ export default function MypageJobList({ jobs }: Props) {
       clearAction()
     }
   }
+
+  const [confirmInput, setConfirmInput] = useState('')
+  const [confirmingJobId, setConfirmingJobId] = useState<string | null>(null)
+  const [previousActiveElement, setPreviousActiveElement] = useState<HTMLElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  const openConfirm = (jobId: string) => {
+    setPreviousActiveElement(document.activeElement as HTMLElement | null)
+    setConfirmingJobId(jobId)
+    setConfirmInput('')
+    // prevent background scroll
+    document.body.style.overflow = 'hidden'
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
+  const closeConfirm = useCallback(() => {
+    setConfirmingJobId(null)
+    setConfirmInput('')
+    document.body.style.overflow = ''
+    // restore focus
+    setTimeout(() => previousActiveElement?.focus(), 0)
+  }, [previousActiveElement])
+
+  // handle Escape to close modal
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && confirmingJobId) {
+        closeConfirm()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [confirmingJobId, closeConfirm])
 
   if (jobs.length === 0) {
     return (
@@ -113,18 +144,69 @@ export default function MypageJobList({ jobs }: Props) {
             <div className="text-xs text-muted-foreground">Status: {job.status}</div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => handleDelete(job)}
-              disabled={pendingAction?.jobId === job.id}
-            >
-              {pendingAction?.jobId === job.id && pendingAction.type === 'delete' ? (
-                <LoadingIndicator label="削除中..." />
-              ) : (
-                '削除'
+            <div className="relative">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => openConfirm(job.id)}
+                disabled={pendingAction?.jobId === job.id}
+              >
+                {pendingAction?.jobId === job.id && pendingAction.type === 'delete' ? (
+                  <LoadingIndicator label="削除中..." />
+                ) : (
+                  '削除'
+                )}
+              </Button>
+              {confirmingJobId === job.id && (
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                >
+                  <button
+                    type="button"
+                    aria-label="モーダルを閉じる"
+                    className="absolute inset-0 bg-black/40"
+                    onClick={closeConfirm}
+                  />
+                  <div className="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
+                    <h3 className="text-lg font-semibold mb-2">削除の確認</h3>
+                    <p className="text-sm text-muted-foreground mb-4">復元できません。以下の確認テキストを入力してください。</p>
+                    <label htmlFor="confirm-input" className="block text-xs text-muted-foreground mb-1">確認テキスト</label>
+                    <input
+                      id="confirm-input"
+                      ref={inputRef}
+                      type="text"
+                      className="w-full rounded-md border px-3 py-2 mb-4 focus:outline-none focus:ring"
+                      placeholder={job.novelTitle || 'DELETE'}
+                      value={confirmInput}
+                      onChange={(e) => setConfirmInput(e.target.value)}
+                      aria-label="確認テキスト"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" variant="secondary" onClick={closeConfirm}>
+                        キャンセル
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => {
+                          const expected = job.novelTitle ? job.novelTitle : 'DELETE'
+                          if (confirmInput.trim() !== expected) {
+                            alert('確認テキストが一致しません')
+                            return
+                          }
+                          closeConfirm()
+                          void handleDelete(job)
+                        }}
+                      >
+                        確認して削除
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               )}
-            </Button>
+            </div>
             {job.status === 'completed' &&
               (job.novelId ? (
                 <Button asChild size="sm">
