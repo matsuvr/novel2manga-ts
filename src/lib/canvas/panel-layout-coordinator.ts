@@ -281,9 +281,12 @@ export class PanelLayoutCoordinator {
     }
 
     const fontFamily = config.fontFamily ?? 'sans-serif'
+    // normalize font size bounds so the loop runs at least once and respects absolute min
+    const minFont = Math.max(MIN_FONT_SIZE_ABSOLUTE, config.minFontSize)
+    const maxFont = Math.max(minFont, config.maxFontSize)
     let bestOverflow: { fontSize: number; totalHeight: number } | null = null
 
-    for (let fontSize = config.maxFontSize; fontSize >= config.minFontSize; fontSize -= FONT_SIZE_STEP) {
+    for (let fontSize = maxFont; fontSize >= minFont; fontSize -= FONT_SIZE_STEP) {
       const normalizedFont = Math.max(MIN_FONT_SIZE_ABSOLUTE, fontSize)
       ctx.font = `${normalizedFont}px ${fontFamily}`
       const maxChars = this.estimateMaxCharsForWidth(innerWidth, ctx, normalizedFont)
@@ -313,8 +316,11 @@ export class PanelLayoutCoordinator {
       }
     }
 
+    // At this point, bestOverflow should always be set because the for-loop runs
+    // from maxFont down to minFont and wrapTextWithBudoux returns at least one
+    // line for non-empty content. Keep a defensive fallback just in case.
     if (bestOverflow === null) {
-      const fallbackFont = Math.max(MIN_FONT_SIZE_ABSOLUTE, config.minFontSize)
+      const fallbackFont = minFont
       ctx.font = `${fallbackFont}px ${fontFamily}`
       const maxChars = this.estimateMaxCharsForWidth(innerWidth, ctx, fallbackFont)
       const wrapped = this.wrapTextWithBudoux(content, ctx, innerWidth, maxChars)
@@ -382,16 +388,7 @@ export class PanelLayoutCoordinator {
     const innerHeight = Math.max(0, area.height - config.padding * 2)
 
     if (innerWidth <= 0 || innerHeight <= 0) {
-      return {
-        text: content,
-        x: area.x + config.padding,
-        y: area.y + config.padding,
-        width: Math.max(0, innerWidth),
-        height: 0,
-        fontSize: baseFontSize,
-        lines: [],
-        boundingBox: { ...area },
-      }
+      return this.createEmptyPlacement(content, area, config.padding, innerWidth, baseFontSize)
     }
 
     const maxChars = this.estimateMaxCharsForWidth(innerWidth, ctx, baseFontSize)
@@ -496,6 +493,26 @@ export class PanelLayoutCoordinator {
     return { lines: fallbackLines, limitUsed: 1 }
   }
 
+  /** 内部幅が非正の場合の空の配置を生成するユーティリティ */
+  private createEmptyPlacement(
+    content: string,
+    area: { x: number; y: number; width: number; height: number },
+    padding: number,
+    innerWidth: number,
+    fontSize: number,
+  ): ContentTextPlacement {
+    return {
+      text: content,
+      x: area.x + padding,
+      y: area.y + padding,
+      width: Math.max(0, innerWidth),
+      height: 0,
+      fontSize: Math.max(MIN_FONT_SIZE_ABSOLUTE, fontSize),
+      lines: [],
+      boundingBox: { ...area },
+    }
+  }
+
   private scalePlacementToFit(
     content: string,
     area: { x: number; y: number; width: number; height: number },
@@ -512,16 +529,7 @@ export class PanelLayoutCoordinator {
     const fontFamily = config.fontFamily
 
     if (innerWidth <= 0 || innerHeight <= 0) {
-      return {
-        text: content,
-        x: area.x + config.padding,
-        y: area.y + config.padding,
-        width: Math.max(0, innerWidth),
-        height: 0,
-        fontSize: Math.max(MIN_FONT_SIZE_ABSOLUTE, initialFontSize),
-        lines: [],
-        boundingBox: { ...area },
-      }
+      return this.createEmptyPlacement(content, area, config.padding, innerWidth, initialFontSize)
     }
 
     let fontSize = Math.max(
