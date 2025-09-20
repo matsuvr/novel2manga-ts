@@ -70,6 +70,7 @@ async function testRendering() {
         maxWidthRatio: 0.8,
         maxHeightRatio: 0.3,
         minAreaSize: 80,
+        fontFamily: '"Noto Sans JP", NotoSansJP, sans-serif',
       },
     )
     console.log('テキスト配置結果:', placement);
