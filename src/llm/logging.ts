@@ -74,6 +74,8 @@ class LoggingLlmClient implements LlmClient {
     if (!this.ensurePathPromise) {
       this.ensurePathPromise = fs
         .mkdir(path.dirname(this.logFilePath), { recursive: true })
+        // ensurePathPromise is declared as Promise<void>, so map the result to undefined
+        .then(() => undefined)
         .catch((error) => {
           this.ensurePathPromise = null
           throw error
