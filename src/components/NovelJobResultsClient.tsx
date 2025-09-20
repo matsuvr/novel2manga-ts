@@ -40,7 +40,7 @@ interface Props {
   }>
   novelPreview?: string
   viewerRole: ViewerRole
-  episodeLinkBuilder: (episodeNumber: number) => string
+  episodeLinkTemplate: string
   downloadUrl?: string
 }
 
@@ -53,7 +53,7 @@ export default function NovelJobResultsClient({
   tokenUsageByModel,
   novelPreview,
   viewerRole,
-  episodeLinkBuilder,
+  episodeLinkTemplate,
   downloadUrl,
 }: Props) {
   const [shareInfo, setShareInfo] = useState<ShareInfo | null>(viewerRole === 'owner' ? null : { enabled: viewerRole === 'shared' })
@@ -174,6 +174,16 @@ export default function NovelJobResultsClient({
   }, [shareInfo])
 
   const effectiveShareInfo: ShareInfo = shareInfo ?? { enabled: false }
+
+  const buildEpisodeLink = useCallback(
+    (episodeNumber: number) => {
+      if (!episodeLinkTemplate.includes(':episodeNumber')) {
+        return `${episodeLinkTemplate}${episodeNumber}`
+      }
+      return episodeLinkTemplate.replace(':episodeNumber', String(episodeNumber))
+    },
+    [episodeLinkTemplate],
+  )
 
   return (
     <div className="container mx-auto max-w-5xl py-6">
@@ -336,7 +346,7 @@ export default function NovelJobResultsClient({
                 </div>
                 <div className="mt-2">
                   <Button asChild variant="outline" size="sm">
-                    <Link href={episodeLinkBuilder(e.episodeNumber)}>
+                    <Link href={buildEpisodeLink(e.episodeNumber)}>
                       プレビュー
                     </Link>
                   </Button>
