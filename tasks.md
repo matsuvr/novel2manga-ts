@@ -28,6 +28,7 @@
 
 - [x] Harden page break estimation for empty scripts and negative page offsets.
 - [x] Display My Page job list with result links and resume actions.
+- [x] Enable My Page users to delete novels and related jobs with full storage cleanup and irreversible warning.
 
 - [x] Harden page break estimation for empty scripts and negative page offsets.
 

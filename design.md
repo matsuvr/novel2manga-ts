@@ -76,6 +76,7 @@
 - Dashboard data retrieval moved to `getMypageDashboard` service for reuse.
 - API `/api/mypage/dashboard` now returns job summaries including status and novel titles for client display.
 - New My Page route lists each job with links to finished results and resume actions for failed jobs.
+- Users can now delete their own novels and associated jobs from My Page; the deletion API removes storage artifacts and warns that the operation is irreversible before execution.
 
 ## Results Page UI
 
