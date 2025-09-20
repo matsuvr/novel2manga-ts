@@ -13,6 +13,7 @@ import { NovelDatabaseService } from './novel-database-service'
 import { OutputDatabaseService } from './output-database-service'
 import { RegistryDatabaseService } from './registry-database-service'
 import { RenderDatabaseService } from './render-database-service'
+import { ShareDatabaseService } from './share-database-service'
 import { TokenUsageDatabaseService } from './token-usage-database-service'
 import { type Database, TransactionService } from './transaction-service'
 
@@ -34,6 +35,7 @@ export class DatabaseServiceFactory {
   private readonly layoutService: LayoutDatabaseService
   private readonly tokenUsageService: TokenUsageDatabaseService
   private readonly registryService: RegistryDatabaseService
+  private readonly shareService: ShareDatabaseService
   private readonly transactionService: TransactionService
   private readonly db: Database
   private readonly adapter: DatabaseAdapter
@@ -53,6 +55,7 @@ export class DatabaseServiceFactory {
     this.layoutService = new LayoutDatabaseService(this.db, this.adapter)
     this.tokenUsageService = new TokenUsageDatabaseService(this.db, this.adapter)
     this.registryService = new RegistryDatabaseService(this.db, this.adapter)
+    this.shareService = new ShareDatabaseService(this.db, this.adapter)
     this.transactionService = new TransactionService(this.db, this.adapter)
   }
 
@@ -135,6 +138,13 @@ export class DatabaseServiceFactory {
   }
 
   /**
+   * Get share-specific database operations
+   */
+  share(): ShareDatabaseService {
+    return this.shareService
+  }
+
+  /**
    * Get transaction service for complex operations
    */
   transactions(): TransactionService {
@@ -157,6 +167,7 @@ export class DatabaseServiceFactory {
       layout: LayoutDatabaseService
       tokenUsage: TokenUsageDatabaseService
       registry: RegistryDatabaseService
+      share: ShareDatabaseService
       tx: TransactionService
     }) => T | Promise<T>,
   ): Promise<T> {
@@ -172,6 +183,7 @@ export class DatabaseServiceFactory {
       const layout = new LayoutDatabaseService(this.db, this.adapter)
       const tokenUsage = new TokenUsageDatabaseService(this.db, this.adapter)
       const registry = new RegistryDatabaseService(this.db, this.adapter)
+      const share = new ShareDatabaseService(this.db, this.adapter)
 
       return operation({
         episodes,
@@ -184,6 +196,7 @@ export class DatabaseServiceFactory {
         layout,
         tokenUsage,
         registry,
+        share,
         tx: this.transactionService,
       })
     })
@@ -551,6 +564,8 @@ export const db = {
   render: () => getDatabaseServiceFactory().render(),
   layout: () => getDatabaseServiceFactory().layout(),
   tokenUsage: () => getDatabaseServiceFactory().tokenUsage(),
+  registry: () => getDatabaseServiceFactory().registry(),
+  share: () => getDatabaseServiceFactory().share(),
   transactions: () => getDatabaseServiceFactory().transactions(),
   executeAcrossDomains: async (
     operation: Parameters<DatabaseServiceFactory['executeAcrossDomains']>[0],

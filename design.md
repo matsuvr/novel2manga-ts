@@ -82,6 +82,13 @@
 - Results page header now embeds the first 100 characters of the source novel to provide immediate story context.
 - Model-by-model token usage breakdown is displayed alongside job metadata, combining prompt and completion totals for each provider/model pair.
 
+## Results Sharing
+
+- Completed job results can be shared via time-limited tokens generated from the results page.
+- Share links expose a public `/share/[token]` route that reuses the standard results view without requiring authentication.
+- Owners can revoke share links at any time; once disabled, unauthenticated access redirects viewers to the login page.
+- The share status API (`GET/DELETE /api/share/:jobId`) surfaces current share metadata for the UI without leaking inactive tokens.
+
 ## Progress UI
 
 - The processing progress screen preserves the last known totals for chunks and episodes so runtime hints always display a
