@@ -4,6 +4,12 @@
 
 - `createErrorResponse` now delegates to `logError` to produce structured logs and avoid raw `console.error` calls during tests.
 
+## LLM Interaction Logging
+
+- Setting `LLM_LOGGING=1` enables a dedicated wrapper around all LLM clients that records only the prompt/response text pairs for each chat call.
+- Logs are appended to `logs/llm-interactions.log` by default, and operators can override the location via `LLM_LOGGING_PATH` when needed for diagnostics or tests.
+- When disabled, the wrapper is a no-op and no log files are created, ensuring existing deployments remain unchanged.
+
 ## Storage Tracking
 
 - `recordStorageFile` and `recordStorageFileSync` skip tracking when the database service is unavailable or invalid.
@@ -48,6 +54,7 @@
 - When a panel contains two dialogue or narration elements, the first bubble is positioned on the right and the second on the left to follow vertical Japanese reading order.
 - Speaker labels rendered on the bubble's top-right corner now use a 2× font ratio and expanded padding/radius so the rounded rectangle matches the larger text footprint.
 - Situation captions render directly on top of the panel without drawing a frame or translucent background while still reserving the padded placement area to avoid overlap with other elements.
+- Situation captions now request safe bounding boxes after speech bubbles and SFX are registered, clipping text rendering to the remaining rectangle so captions never overlap other elements.
 
 ## Page Break Estimation
 

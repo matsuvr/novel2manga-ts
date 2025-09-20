@@ -501,59 +501,79 @@ export class CanvasRenderer {
             },
           )
           if (placement) {
-            this.ctx.save()
-            const textPadding = contentCfg.padding
-            // 背景の半透明ボックスは描画せず、パディング込みの領域だけを確保する
-            let contentAreaX = placement.x - textPadding
-            let contentAreaY = placement.y - textPadding
-            let contentAreaWidth = Math.max(0, placement.width + textPadding * 2)
-            let contentAreaHeight = Math.max(0, placement.height + textPadding * 2)
-
-            // パネルの境界内に収めるようクリップ
             const panelX = panelBounds.x
             const panelY = panelBounds.y
             const panelRight = panelBounds.x + panelBounds.width
             const panelBottom = panelBounds.y + panelBounds.height
 
-            contentAreaX = Math.max(panelX, contentAreaX)
-            contentAreaY = Math.max(panelY, contentAreaY)
-            contentAreaWidth = Math.min(panelRight - contentAreaX, contentAreaWidth)
-            contentAreaHeight = Math.min(panelBottom - contentAreaY, contentAreaHeight)
+            const bounding = placement.boundingBox ?? {
+              x: placement.x - contentCfg.padding,
+              y: placement.y - contentCfg.padding,
+              width: placement.width + contentCfg.padding * 2,
+              height: placement.height + contentCfg.padding * 2,
+            }
 
-            const hasContentArea = contentAreaWidth > 0 && contentAreaHeight > 0
+            const clampedBounding = {
+              x: Math.max(panelX, bounding.x),
+              y: Math.max(panelY, bounding.y),
+              width: 0,
+              height: 0,
+            }
+            clampedBounding.width = Math.max(
+              0,
+              Math.min(panelRight, bounding.x + bounding.width) - clampedBounding.x,
+            )
+            clampedBounding.height = Math.max(
+              0,
+              Math.min(panelBottom, bounding.y + bounding.height) - clampedBounding.y,
+            )
 
-            // テキスト描画位置もパネル境界内に収める
-            this.ctx.font = `${placement.fontSize}px ${this.config.fontFamily || '"Noto Sans JP", NotoSansJP, sans-serif'}`
+            const hasContentArea = clampedBounding.width > 0 && clampedBounding.height > 0
+
+            this.ctx.save()
+            this.ctx.font = `${placement.fontSize}px ${
+              this.config.fontFamily || '"Noto Sans JP", NotoSansJP, sans-serif'
+            }`
             this.ctx.fillStyle = contentCfg.textColor
             this.ctx.textAlign = 'left'
             this.ctx.textBaseline = 'top'
 
-            // テキストの描画領域をクリップ
-            this.ctx.save()
-            this.ctx.beginPath()
-            this.ctx.rect(panelX, panelY, panelBounds.width, panelBounds.height)
-            if (this.hasRect(this.ctx)) {
+            if (hasContentArea && this.hasRect(this.ctx)) {
+              this.ctx.save()
+              this.ctx.beginPath()
+              this.ctx.rect(
+                clampedBounding.x,
+                clampedBounding.y,
+                clampedBounding.width,
+                clampedBounding.height,
+              )
               this.ctx.clip()
-            }
 
-            let cy = Math.max(panelY, placement.y)
-            const maxCy = panelBottom - placement.fontSize
-            for (const line of placement.lines) {
-              if (cy > maxCy) break // パネル境界を超えないようにする
-              this.ctx.fillText(line, Math.max(panelX, placement.x), cy)
-              cy += placement.fontSize * contentCfg.lineHeight
+              let cy = Math.max(clampedBounding.y, placement.y)
+              const textStartX = Math.max(clampedBounding.x, placement.x)
+              const maxCy = clampedBounding.y + clampedBounding.height - placement.fontSize
+              for (const line of placement.lines) {
+                if (cy > maxCy) break
+                this.ctx.fillText(line, textStartX, cy)
+                cy += placement.fontSize * contentCfg.lineHeight
+              }
+
+              this.ctx.restore()
+            } else {
+              let cy = Math.max(panelY, placement.y)
+              const textStartX = Math.max(panelX, placement.x)
+              const maxCy = panelBottom - placement.fontSize
+              for (const line of placement.lines) {
+                if (cy > maxCy) break
+                this.ctx.fillText(line, textStartX, cy)
+                cy += placement.fontSize * contentCfg.lineHeight
+              }
             }
-            this.ctx.restore()
 
             this.ctx.restore()
 
             if (hasContentArea) {
-              this.layoutCoordinator.registerContentArea({
-                x: contentAreaX,
-                y: contentAreaY,
-                width: contentAreaWidth,
-                height: contentAreaHeight,
-              })
+              this.layoutCoordinator.registerContentArea(clampedBounding)
             }
           }
         }
