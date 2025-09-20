@@ -125,11 +125,9 @@
 
 Do not fall back to unknown when the type is unclear. Instead, define or import the proper type for:
 
-function parameters
-
-API responses
-
-library return values
+- function parameters
+- API responses
+- library return values
 
 2. Use type guards or user-defined type guards
 

@@ -51,7 +51,7 @@ describe('normalizeImportanceDistribution', () => {
     const normalized = normalizeImportanceDistribution(candidates)
     const byIndex = new Map(normalized.map((entry) => [entry.index, entry.importance]))
 
-    expect((byIndex.get(1) ?? 0) > (byIndex.get(0) ?? 0)).toBe(true)
+  expect(byIndex.get(1)).toBeGreaterThan(byIndex.get(0) ?? 0)
   })
 
   it('demotes earlier panels when every other signal is equal', () => {
