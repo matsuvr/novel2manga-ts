@@ -1,4 +1,5 @@
-import { promises as fs } from 'node:fs'
+import * as fsSync from 'node:fs'
+import { promises as fsPromises } from 'node:fs'
 import path from 'node:path'
 
 import { getLogger } from '@/infrastructure/logging/logger'
@@ -22,8 +23,42 @@ function resolveLogFilePath(): string {
   if (customPath && customPath.trim().length > 0) {
     return path.resolve(customPath)
   }
-  const logDir = path.resolve(process.cwd(), 'logs')
-  return path.join(logDir, 'llm-interactions.log')
+
+  const candidateDirectories: string[] = []
+  const seen = new Set<string>()
+
+  const addCandidate = (rawDir: string | undefined): void => {
+    if (!rawDir) {
+      return
+    }
+    const normalized = path.resolve(rawDir)
+    if (seen.has(normalized)) {
+      return
+    }
+    seen.add(normalized)
+    candidateDirectories.push(normalized)
+  }
+
+  const customDir = process.env.LLM_LOGGING_DIR
+  if (customDir && customDir.trim().length > 0) {
+    addCandidate(customDir)
+  }
+
+  if (fsSync.existsSync('/app/logs') || fsSync.existsSync('/app')) {
+    addCandidate(path.join('/app', 'logs'))
+  }
+
+  const baseCandidates = [process.env.NOVEL2MANGA_PROJECT_ROOT, process.env.INIT_CWD, process.env.PWD]
+  for (const base of baseCandidates) {
+    if (base && base.trim().length > 0) {
+      addCandidate(path.join(base, 'logs'))
+    }
+  }
+
+  addCandidate(path.join(process.cwd(), 'logs'))
+
+  const targetDirectory = candidateDirectories[0] ?? path.join(process.cwd(), 'logs')
+  return path.join(targetDirectory, 'llm-interactions.log')
 }
 
 function sanitizeMessages(messages: LlmMessage[]): SanitizedMessage[] {
@@ -72,7 +107,7 @@ class LoggingLlmClient implements LlmClient {
 
   private async ensureLogDestination(): Promise<void> {
     if (!this.ensurePathPromise) {
-      this.ensurePathPromise = fs
+      this.ensurePathPromise = fsPromises
         .mkdir(path.dirname(this.logFilePath), { recursive: true })
         // ensurePathPromise is declared as Promise<void>, so map the result to undefined
         .then(() => undefined)
@@ -87,7 +122,7 @@ class LoggingLlmClient implements LlmClient {
   private async appendRecord(record: LlmLogRecord): Promise<void> {
     try {
       await this.ensureLogDestination()
-      await fs.appendFile(this.logFilePath, `${JSON.stringify(record)}\n`, 'utf8')
+      await fsPromises.appendFile(this.logFilePath, `${JSON.stringify(record)}\n`, 'utf8')
     } catch (error) {
       getLogger().error('llm_log_write_failed', {
         error: error instanceof Error ? error.message : String(error),

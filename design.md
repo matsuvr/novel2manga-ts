@@ -7,7 +7,7 @@
 ## LLM Interaction Logging
 
 - Setting `LLM_LOGGING=1` enables a dedicated wrapper around all LLM clients that records only the prompt/response text pairs for each chat call.
-- Logs are appended to `logs/llm-interactions.log` by default, and operators can override the location via `LLM_LOGGING_PATH` when needed for diagnostics or tests.
+- Logs are appended to the first writable `logs/` directory discovered (preferring the Docker mount at `/app/logs` when available); operators can still override the directory with `LLM_LOGGING_DIR` or the full path via `LLM_LOGGING_PATH` for diagnostics or tests.
 - When disabled, the wrapper is a no-op and no log files are created, ensuring existing deployments remain unchanged.
 
 ## Storage Tracking
@@ -85,4 +85,3 @@
 
 - The processing progress screen preserves the last known totals for chunks and episodes so runtime hints always display a
   numeric "current / total" indicator instead of falling back to `?` when SSE payloads omit the totals.
-
