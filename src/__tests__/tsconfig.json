@@ -4,6 +4,8 @@
     "noEmit": true,
     "baseUrl": "../../",
     "moduleResolution": "node",
+    "typeRoots": ["../../node_modules/@types", "./types"],
+    "types": ["node"],
     "paths": {
       "@/*": ["src/*"]
     }
