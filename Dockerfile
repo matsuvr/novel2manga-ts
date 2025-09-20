@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # Base image with required build tools and system libraries
 FROM node:20-bookworm-slim AS base
 
