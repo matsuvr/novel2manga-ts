@@ -1,5 +1,5 @@
-import * as fsSync from 'node:fs'
-import { promises as fsPromises } from 'node:fs'
+import { existsSync } from 'node:fs'
+import { appendFile, mkdir } from 'node:fs/promises'
 import path from 'node:path'
 
 import { getLogger } from '@/infrastructure/logging/logger'
@@ -44,7 +44,7 @@ function resolveLogFilePath(): string {
     addCandidate(customDir)
   }
 
-  if (fsSync.existsSync('/app/logs') || fsSync.existsSync('/app')) {
+  if (existsSync('/app/logs') || existsSync('/app')) {
     addCandidate(path.join('/app', 'logs'))
   }
 
@@ -57,7 +57,7 @@ function resolveLogFilePath(): string {
 
   addCandidate(path.join(process.cwd(), 'logs'))
 
-  const targetDirectory = candidateDirectories[0] ?? path.join(process.cwd(), 'logs')
+  const targetDirectory = candidateDirectories[0]
   return path.join(targetDirectory, 'llm-interactions.log')
 }
 
@@ -107,8 +107,7 @@ class LoggingLlmClient implements LlmClient {
 
   private async ensureLogDestination(): Promise<void> {
     if (!this.ensurePathPromise) {
-      this.ensurePathPromise = fsPromises
-        .mkdir(path.dirname(this.logFilePath), { recursive: true })
+      this.ensurePathPromise = mkdir(path.dirname(this.logFilePath), { recursive: true })
         // ensurePathPromise is declared as Promise<void>, so map the result to undefined
         .then(() => undefined)
         .catch((error) => {
@@ -122,7 +121,7 @@ class LoggingLlmClient implements LlmClient {
   private async appendRecord(record: LlmLogRecord): Promise<void> {
     try {
       await this.ensureLogDestination()
-      await fsPromises.appendFile(this.logFilePath, `${JSON.stringify(record)}\n`, 'utf8')
+      await appendFile(this.logFilePath, `${JSON.stringify(record)}\n`, 'utf8')
     } catch (error) {
       getLogger().error('llm_log_write_failed', {
         error: error instanceof Error ? error.message : String(error),
