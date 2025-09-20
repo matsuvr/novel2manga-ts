@@ -1,5 +1,5 @@
 # Base image with required build tools and system libraries
-FROM node:20-bookworm-slim AS base
+FROM node:24-bookworm-slim AS base
 
 ENV PNPM_HOME=/root/.local/share/pnpm \
     NODE_ENV=production

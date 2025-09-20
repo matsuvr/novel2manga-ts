@@ -60,7 +60,7 @@
     "url": "git+https://github.com/matsuvrprojects/novel2manga-ts.git"
   },
   "engines": {
-    "node": ">=20 <21"
+    "node": ">=24 <25"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^0.8.0",
@@ -135,7 +135,7 @@
     "@rollup/rollup-linux-x64-gnu": "^4.0.0"
   },
   "volta": {
-    "node": "20.19.4"
+    "node": "24.8.0"
   },
   "overrides": {
     "@types/react": "19.1.13",
