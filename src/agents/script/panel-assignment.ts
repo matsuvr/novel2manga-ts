@@ -1,6 +1,10 @@
 import type { Dialogue, MangaLayout, Panel } from '@/types/panel-layout'
 import type { NewMangaScript, PageBreakV2, PanelAssignmentPlan } from '@/types/script'
 import { selectLayoutTemplateByCountRandom } from '@/utils/layout-templates'
+import {
+  type ImportanceCandidate,
+  normalizeImportanceDistribution,
+} from '@/utils/panel-importance'
 
 export async function assignPanels(
   _script: NewMangaScript,
@@ -86,10 +90,14 @@ export function buildLayoutFromPageBreaks(
     }
   }
 
-  const pages = Array.from(pageMap.entries()).map(([pageNumber, panelsInPage]) => {
+  const importanceCandidates: ImportanceCandidate[] = []
+  const panelIndexMatrix: number[][] = []
+
+  const rawPages = Array.from(pageMap.entries()).map(([pageNumber, panelsInPage]) => {
     const template = selectLayoutTemplateByCountRandom(Math.max(1, panelsInPage.length))
     let nextId = 1
     const usedContentInPage = new Set<string>()
+    const panelIndicesForPage: number[] = []
     const panels: Panel[] = panelsInPage.map((pp, idx) => {
       // 新しい形式からcontentとdialogueを直接取得
       let content = pp.content || ''
@@ -151,6 +159,47 @@ export function buildLayoutFromPageBreaks(
       const sfx = Array.isArray(pp.sfx) ? pp.sfx : []
 
       const shape = template.panels[idx % template.panels.length]
+
+      const candidateIndex = importanceCandidates.length
+      // Named constants for highlight importance calculation
+      const RAW_IMPORTANCE_MIN = 3
+      const RAW_IMPORTANCE_MAX = 10
+      const DIALOGUE_COUNT_THRESHOLD = 2
+      const DIALOGUE_HEAVY_IMPORTANCE = 7
+      const CONTENT_LENGTH_THRESHOLD = 50
+      const CONTENT_HEAVY_IMPORTANCE = 6
+      const DEFAULT_RAW_IMPORTANCE = 5
+
+      const highlightBasedImportance = Math.min(
+        RAW_IMPORTANCE_MAX,
+        Math.max(
+          RAW_IMPORTANCE_MIN,
+          dialogues.filter((d) => d.type === 'speech' || d.type === 'thought').length >=
+            DIALOGUE_COUNT_THRESHOLD
+            ? DIALOGUE_HEAVY_IMPORTANCE
+            : content.length >= CONTENT_LENGTH_THRESHOLD
+              ? CONTENT_HEAVY_IMPORTANCE
+              : DEFAULT_RAW_IMPORTANCE,
+        ),
+      )
+
+      const dialogueCharCount = dialogues
+        .filter((d) => d.type !== 'narration')
+        .reduce((acc, d) => acc + ((d.text ?? '').replace(/\s+/g, '').length || 0), 0)
+      const narrationCharCount = dialogues
+        .filter((d) => d.type === 'narration')
+        .reduce((acc, d) => acc + ((d.text ?? '').replace(/\s+/g, '').length || 0), 0)
+      const contentLength = content.replace(/\s+/g, '').length
+
+      importanceCandidates.push({
+        index: candidateIndex,
+        rawImportance: highlightBasedImportance,
+        dialogueCharCount,
+        narrationCharCount,
+        contentLength,
+      })
+      panelIndicesForPage.push(candidateIndex)
+
       return {
         id: nextId++,
         position: shape.position,
@@ -159,22 +208,24 @@ export function buildLayoutFromPageBreaks(
         dialogues,
         sfx, // Include SFX in the layout panel
         sourceChunkIndex: 0,
-        importance: Math.min(
-          10,
-          Math.max(
-            3,
-            // セリフ/心の声を高く評価、次点で長い状況説明
-            dialogues.filter((d) => d.type === 'speech' || d.type === 'thought').length >= 2
-              ? 7
-              : content.length >= 50
-                ? 6
-                : 5,
-          ),
-        ),
+        importance: highlightBasedImportance,
       }
     })
 
+    panelIndexMatrix.push(panelIndicesForPage)
     return { page_number: pageNumber, panels }
+  })
+
+  const normalizedAssignments = normalizeImportanceDistribution(importanceCandidates)
+  const assignmentMap = new Map(normalizedAssignments.map((entry) => [entry.index, entry.importance]))
+
+  const pages = rawPages.map((page, pageIdx) => {
+    const panelIndices = panelIndexMatrix[pageIdx] ?? []
+    const normalizedPanels = page.panels.map((panel, panelIdx) => ({
+      ...panel,
+      importance: assignmentMap.get(panelIndices[panelIdx]) ?? 1,
+    }))
+    return { page_number: page.page_number, panels: normalizedPanels }
   })
 
   return {

@@ -1,5 +1,3 @@
-import { z } from 'zod'
-import { getLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getChunkSummaryConfig } from '@/config/chunk-summary.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { JsonStorageKeys, StorageFactory } from '@/utils/storage'
@@ -88,25 +86,17 @@ async function summarize(
   telemetry?: { jobId?: string; chunkIndex?: number },
 ): Promise<string> {
   const config = getChunkSummaryConfig()
-  if (String(process.env.N2M_MOCK_LLM) === '1') {
-    return utf8Truncate(text, config.maxLength)
-  }
-  const generator = getLlmStructuredGenerator()
-  const schema = z.object({ summary: z.string().max(config.maxLength) })
-  const result = await generator.generateObjectWithFallback({
-    name: 'chunk-summarizer',
-    systemPrompt: config.systemPrompt,
-    userPrompt: text,
-    schema,
-    schemaName: 'ChunkSummary',
-    telemetry: { ...telemetry, stepName: 'summary' },
-  })
-  logger.info('Chunk summary generated', {
+  const normalized = text.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim()
+  const summary = utf8Truncate(normalized, config.maxLength)
+
+  logger.info('Chunk summary generated locally without LLM', {
     jobId: telemetry?.jobId,
     chunkIndex: telemetry?.chunkIndex,
-    length: result.summary.length,
+    sourceLength: text.length,
+    summaryLength: summary.length,
   })
-  return result.summary
+
+  return summary
 }
 
 function utf8Truncate(text: string, maxBytes: number): string {

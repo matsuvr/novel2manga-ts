@@ -3,10 +3,73 @@ import { and, desc, eq, sql } from 'drizzle-orm'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import type { RenderStatus } from '@/db/schema'
-import { jobs, outputs, renderStatus } from '@/db/schema'
+import { jobs, layoutStatus, outputs, renderStatus } from '@/db/schema'
 import { BaseDatabaseService } from './base-database-service'
 
 type DrizzleDatabase = BetterSQLite3Database<typeof schema>
+
+type RenderProgressAggregateRow = {
+  episodeNumber: number | null
+  rendered: number | null
+}
+
+type LayoutProgressAggregateRow = {
+  episodeNumber: number | null
+  total: number | null
+}
+
+const normalizeEpisodeNumber = (value: number | null): number | null => {
+  if (typeof value !== 'number') return null
+  if (!Number.isFinite(value)) return null
+  return value
+}
+
+const coerceNonNegative = (value: number | null): number => {
+  if (typeof value !== 'number') return 0
+  if (!Number.isFinite(value)) return 0
+  return value > 0 ? value : 0
+}
+
+export function mergePerEpisodeRenderProgress(
+  renderRows: ReadonlyArray<RenderProgressAggregateRow>,
+  layoutRows: ReadonlyArray<LayoutProgressAggregateRow>,
+): Record<number, { planned: number; rendered: number; total?: number }> {
+  const result: Record<number, { planned: number; rendered: number; total?: number }> = {}
+
+  for (const row of layoutRows) {
+    const episodeNumber = normalizeEpisodeNumber(row.episodeNumber)
+    if (episodeNumber === null) continue
+    const total = coerceNonNegative(row.total)
+    if (total > 0) {
+      result[episodeNumber] = {
+        planned: total,
+        rendered: 0,
+        total,
+      }
+    } else {
+      result[episodeNumber] = {
+        planned: 0,
+        rendered: 0,
+      }
+    }
+  }
+
+  for (const row of renderRows) {
+    const episodeNumber = normalizeEpisodeNumber(row.episodeNumber)
+    if (episodeNumber === null) continue
+    const rendered = coerceNonNegative(row.rendered)
+    const existing = result[episodeNumber]
+    const planned = existing && existing.planned > 0 ? existing.planned : rendered
+    const total = existing?.total ?? (planned > 0 ? planned : undefined)
+    result[episodeNumber] = {
+      planned,
+      rendered,
+      ...(typeof total === 'number' ? { total } : {}),
+    }
+  }
+
+  return result
+}
 
 /**
  * Render status database operations
@@ -379,44 +442,39 @@ export class RenderDatabaseService extends BaseDatabaseService {
         .from(renderStatus)
         .where(eq(renderStatus.jobId, jobId))
         .groupBy(renderStatus.episodeNumber)
-        .all() as Array<{ episodeNumber: number; rendered: number | null }>
+        .all() as Array<RenderProgressAggregateRow>
 
-      const result: Record<number, { planned: number; rendered: number; total?: number }> = {}
+      const layoutRows = drizzleDb
+        .select({
+          episodeNumber: layoutStatus.episodeNumber,
+          total: layoutStatus.totalPages,
+        })
+        .from(layoutStatus)
+        .where(eq(layoutStatus.jobId, jobId))
+        .all() as Array<LayoutProgressAggregateRow>
 
-      for (const row of renderRows) {
-        const ep = Number(row.episodeNumber)
-        const rendered = Math.max(0, Number(row.rendered || 0))
-        result[ep] = {
-          planned: rendered, // Default to rendered count if no layout info
-          rendered,
-        }
-      }
-
-      return result
+      return mergePerEpisodeRenderProgress(renderRows, layoutRows)
     } else {
       // Get rendered count per episode
       const drizzleDb = this.db as DrizzleDatabase
-      const renderRows = await drizzleDb
+      const renderRows = (await drizzleDb
         .select({
           episodeNumber: renderStatus.episodeNumber,
           rendered: sql<number>`sum(${renderStatus.isRendered})`,
         })
         .from(renderStatus)
         .where(eq(renderStatus.jobId, jobId))
-        .groupBy(renderStatus.episodeNumber)
+        .groupBy(renderStatus.episodeNumber)) as Array<RenderProgressAggregateRow>
 
-      const result: Record<number, { planned: number; rendered: number; total?: number }> = {}
+      const layoutRows = (await drizzleDb
+        .select({
+          episodeNumber: layoutStatus.episodeNumber,
+          total: layoutStatus.totalPages,
+        })
+        .from(layoutStatus)
+        .where(eq(layoutStatus.jobId, jobId))) as Array<LayoutProgressAggregateRow>
 
-      for (const row of renderRows) {
-        const ep = Number(row.episodeNumber)
-        const rendered = Math.max(0, Number(row.rendered || 0))
-        result[ep] = {
-          planned: rendered, // Default to rendered count if no layout info
-          rendered,
-        }
-      }
-
-      return result
+      return mergePerEpisodeRenderProgress(renderRows, layoutRows)
     }
   }
 
