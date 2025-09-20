@@ -11,6 +11,7 @@ import {
   ValidationError,
 } from '@/utils/api-error'
 import { validateJobId } from '@/utils/validators'
+import { resolveBaseUrl } from './share-utils'
 
 interface ShareRequest {
   jobId: string
@@ -72,7 +73,10 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       }
     }
 
-    // 共有トークンの生成
+    if (job.status !== 'completed' && job.status !== 'complete') {
+      throw new ValidationError('ジョブが完了してから共有を有効化してください')
+    }
+
     const shareToken = crypto.randomUUID()
 
     // 有効期限の計算
@@ -84,21 +88,18 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       expiresAt: expiresAt.toISOString(),
     })
 
-    // 共有情報をデータベースに保存
-    // TODO: 共有テーブル（shares）を作成して共有情報を保存
-    // await dbService.createShare({
-    //   token: shareToken,
-    //   jobId: body.jobId,
-    //   episodeNumbers: body.episodeNumbers,
-    //   expiresAt: expiresAt.toISOString(),
-    // })
+    const shareRecord = await db
+      .share()
+      .enableShare({
+        jobId: job.id,
+        token: shareToken,
+        expiresAt: expiresAt.toISOString(),
+        episodeNumbers: body.episodeNumbers,
+      })
 
     // 共有URLの生成
-    const baseUrl = request.headers.get('host')
-      ? `${request.headers.get('x-forwarded-proto') || 'http'}://${request.headers.get('host')}`
-      : 'http://localhost:3000'
-
-    const shareUrl = `${baseUrl}/share/${shareToken}`
+    const baseUrl = resolveBaseUrl(request)
+    const shareUrl = `${baseUrl}/share/${shareRecord.token}`
 
     getLogger().withContext({ route: 'api/share', method: 'POST' }).info('共有リンク作成完了', {
       url: shareUrl,
@@ -108,10 +109,16 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       {
         success: true,
         shareUrl,
-        token: shareToken,
-        expiresAt: expiresAt.toISOString(),
-        message: '共有機能は未実装です',
-        episodeNumbers: body.episodeNumbers,
+        token: shareRecord.token,
+        expiresAt: shareRecord.expiresAt ?? expiresAt.toISOString(),
+        message: '共有リンクを作成しました',
+        episodeNumbers: shareRecord.episodeNumbers,
+        share: {
+          enabled: true,
+          shareUrl,
+          expiresAt: shareRecord.expiresAt ?? expiresAt.toISOString(),
+          episodeNumbers: shareRecord.episodeNumbers,
+        },
       },
       201,
     )

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useCallback, useEffect, useState } from 'react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -9,6 +10,15 @@ import type { Episode } from '@/types/database-models'
 import type { JobDto } from '@/types/dto'
 
 type ClientJob = JobDto
+
+type ViewerRole = 'owner' | 'shared'
+
+interface ShareInfo {
+  enabled: boolean
+  shareUrl?: string
+  expiresAt?: string
+  episodeNumbers?: number[]
+}
 
 interface Props {
   novelId: string
@@ -29,6 +39,9 @@ interface Props {
     totalTokens: number
   }>
   novelPreview?: string
+  viewerRole: ViewerRole
+  episodeLinkBuilder: (episodeNumber: number) => string
+  downloadUrl?: string
 }
 
 export default function NovelJobResultsClient({
@@ -39,7 +52,15 @@ export default function NovelJobResultsClient({
   uniqueEpisodes,
   tokenUsageByModel,
   novelPreview,
+  viewerRole,
+  episodeLinkBuilder,
+  downloadUrl,
 }: Props) {
+  const [shareInfo, setShareInfo] = useState<ShareInfo | null>(viewerRole === 'owner' ? null : { enabled: viewerRole === 'shared' })
+  const [shareLoading, setShareLoading] = useState(viewerRole === 'owner')
+  const [shareError, setShareError] = useState<string | null>(null)
+  const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied'>('idle')
+
   const layoutStatusMap = new Map(layoutStatuses.map((s) => [s.episodeNumber, s]))
   const processingTimeMs =
     job.completedAt && job.createdAt
@@ -47,6 +68,112 @@ export default function NovelJobResultsClient({
       : null
   const totalPageCount = layoutStatuses.reduce((sum, status) => sum + (status.totalPages || 0), 0)
   const usageList = tokenUsageByModel ?? []
+
+  useEffect(() => {
+    if (viewerRole !== 'owner') {
+      setShareLoading(false)
+      return
+    }
+    let active = true
+    const loadShareStatus = async () => {
+      setShareLoading(true)
+      try {
+        const response = await fetch(`/api/share/${job.id}`, { method: 'GET', cache: 'no-store' })
+        const data = (await response.json().catch(() => ({}))) as {
+          success?: boolean
+          share?: ShareInfo
+          error?: string
+        }
+        if (!active) return
+        if (!response.ok || data.success === false) {
+          setShareError(data.error ?? '共有設定の取得に失敗しました')
+          setShareInfo({ enabled: false })
+          return
+        }
+        setShareInfo(data.share ?? { enabled: false })
+        setShareError(null)
+      } catch (_error) {
+        if (!active) return
+        setShareError('共有設定の取得に失敗しました')
+        setShareInfo({ enabled: false })
+      } finally {
+        if (active) {
+          setShareLoading(false)
+        }
+      }
+    }
+    void loadShareStatus()
+    return () => {
+      active = false
+    }
+  }, [job.id, viewerRole])
+
+  const handleShareEnable = useCallback(async () => {
+    setShareLoading(true)
+    setShareError(null)
+    try {
+      const response = await fetch('/api/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: job.id }),
+      })
+      const data = (await response.json().catch(() => ({}))) as {
+        success?: boolean
+        shareUrl?: string
+        expiresAt?: string
+        episodeNumbers?: number[]
+        error?: string
+      }
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error ?? '共有リンクの作成に失敗しました')
+      }
+      setShareInfo({
+        enabled: true,
+        shareUrl: data.shareUrl,
+        expiresAt: data.expiresAt,
+        episodeNumbers: data.episodeNumbers,
+      })
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : '共有リンクの作成に失敗しました')
+    } finally {
+      setShareLoading(false)
+    }
+  }, [job.id])
+
+  const handleShareDisable = useCallback(async () => {
+    setShareLoading(true)
+    setShareError(null)
+    try {
+      const response = await fetch(`/api/share/${job.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const data = (await response.json().catch(() => ({}))) as { success?: boolean; error?: string }
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error ?? '共有リンクの無効化に失敗しました')
+      }
+      setShareInfo({ enabled: false })
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : '共有リンクの無効化に失敗しました')
+    } finally {
+      setShareLoading(false)
+    }
+  }, [job.id])
+
+  const handleCopyShareUrl = useCallback(async () => {
+    if (!shareInfo?.shareUrl) return
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(shareInfo.shareUrl)
+        setCopyFeedback('copied')
+        setTimeout(() => setCopyFeedback('idle'), 2000)
+      }
+    } catch (_error) {
+      setShareError('共有リンクのコピーに失敗しました')
+    }
+  }, [shareInfo])
+
+  const effectiveShareInfo: ShareInfo = shareInfo ?? { enabled: false }
 
   return (
     <div className="container mx-auto max-w-5xl py-6">
@@ -105,13 +232,75 @@ export default function NovelJobResultsClient({
               </div>
             </div>
             <div>
-              <Button asChild>
-                <a href={`/api/export/zip/${job.id}`}>画像ZIPをダウンロード</a>
-              </Button>
+              {downloadUrl ? (
+                <Button asChild>
+                  <a href={downloadUrl}>画像ZIPをダウンロード</a>
+                </Button>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  共有ビューでは画像ZIPのダウンロードは利用できません。
+                </p>
+              )}
             </div>
           </div>
+          {viewerRole === 'owner' && (
+            <div className="mt-4 rounded-md border border-dashed p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-semibold">共有設定</div>
+                  {shareLoading && <div className="text-sm text-muted-foreground">共有設定を読み込み中です…</div>}
+                  {!shareLoading && effectiveShareInfo.enabled && (
+                    <div className="mt-2 space-y-1 text-sm">
+                      <div className="text-muted-foreground">共有リンクが有効です。</div>
+                      {effectiveShareInfo.shareUrl && (
+                        <div className="break-all rounded bg-muted px-2 py-1 text-xs text-muted-foreground">
+                          {effectiveShareInfo.shareUrl}
+                        </div>
+                      )}
+                      {effectiveShareInfo.expiresAt && (
+                        <div className="text-xs text-muted-foreground">
+                          有効期限: {new Date(effectiveShareInfo.expiresAt).toLocaleString()}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {!shareLoading && !effectiveShareInfo.enabled && (
+                    <div className="mt-2 text-sm text-muted-foreground">
+                      共有リンクは無効です。公開する場合は下のボタンから生成してください。
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  {effectiveShareInfo.enabled ? (
+                    <>
+                      <Button variant="outline" size="sm" onClick={handleCopyShareUrl} disabled={!effectiveShareInfo.shareUrl}>
+                        {copyFeedback === 'copied' ? 'コピーしました' : 'リンクをコピー'}
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={handleShareDisable} disabled={shareLoading}>
+                        共有を停止
+                      </Button>
+                    </>
+                  ) : (
+                    <Button size="sm" onClick={handleShareEnable} disabled={shareLoading}>
+                      共有リンクを作成
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {shareError && <p className="mt-2 text-sm text-destructive">{shareError}</p>}
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {viewerRole === 'shared' && (
+        <Alert className="mb-4">
+          <AlertTitle>共有リンクで閲覧中</AlertTitle>
+          <AlertDescription>
+            このページは共有リンク経由で表示されています。ダウンロードなど一部の操作は制限されています。
+          </AlertDescription>
+        </Alert>
+      )}
 
       {coverageWarnings.length > 0 && (
         <Alert variant="warning" className="mb-4">
@@ -147,7 +336,7 @@ export default function NovelJobResultsClient({
                 </div>
                 <div className="mt-2">
                   <Button asChild variant="outline" size="sm">
-                    <Link href={`/novel/${novelId}/results/${job.id}/episode/${e.episodeNumber}`}>
+                    <Link href={episodeLinkBuilder(e.episodeNumber)}>
                       プレビュー
                     </Link>
                   </Button>
