@@ -148,4 +148,43 @@ describe('page-breaks based layout constraints (light checks)', () => {
     expect(b.content).not.toBe('')
     expect(a.content).not.toBe(b.content)
   })
+
+  it('normalizes panel importance to configured distribution', () => {
+    const panels: PageBreakV2['panels'] = []
+    const totalPanels = 20
+    for (let idx = 0; idx < totalPanels; idx++) {
+      const pageNumber = Math.floor(idx / 5) + 1
+      const dialogueCount = (idx % 4) + 1
+      panels.push({
+        pageNumber,
+        panelIndex: idx + 1,
+        content: `Panel content ${idx} ${'x'.repeat((idx % 6) * 10 + 10)}`,
+        dialogue: Array.from({ length: dialogueCount }, (_, dIdx) => ({
+          speaker: `S${dIdx}`,
+          text: `セリフ${idx}-${dIdx} ${'あ'.repeat(dIdx + 1)}`,
+          type: dIdx === dialogueCount - 1 && idx % 5 === 0 ? 'narration' : 'speech',
+        })),
+      })
+    }
+
+    const layout = buildLayoutFromPageBreaks(
+      { panels },
+      { title: 'Episode 1', episodeNumber: 1 },
+    )
+
+    const importances = layout.pages.flatMap((p) => p.panels.map((panel) => panel.importance ?? 0))
+    expect(importances.every((importance) => importance >= 1 && importance <= 6)).toBe(true)
+
+    const counts = new Map<number, number>()
+    for (const importance of importances) {
+      counts.set(importance, (counts.get(importance) ?? 0) + 1)
+    }
+
+    expect(counts.get(1)).toBe(4)
+    expect(counts.get(2)).toBe(4)
+    expect(counts.get(3)).toBe(6)
+    expect(counts.get(4)).toBe(4)
+    expect(counts.get(5)).toBe(1)
+    expect(counts.get(6)).toBe(1)
+  })
 })
