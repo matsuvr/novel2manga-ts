@@ -129,7 +129,6 @@ export const normalizeImportanceDistribution = (
 export const mapImportanceToPanelSize = (
   importance: PanelImportanceLevel,
 ): 'small' | 'medium' | 'large' | 'extra-large' => {
-  if (importance >= 6) return 'extra-large'
   if (importance >= 5) return 'extra-large'
   if (importance >= 4) return 'large'
   if (importance >= 3) return 'medium'

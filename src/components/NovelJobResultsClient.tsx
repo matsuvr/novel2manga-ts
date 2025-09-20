@@ -177,10 +177,11 @@ export default function NovelJobResultsClient({
 
   const buildEpisodeLink = useCallback(
     (episodeNumber: number) => {
-      if (!episodeLinkTemplate.includes(':episodeNumber')) {
-        return `${episodeLinkTemplate}${episodeNumber}`
+      if (episodeLinkTemplate.includes(':episodeNumber')) {
+        return episodeLinkTemplate.replace(':episodeNumber', String(episodeNumber))
       }
-      return episodeLinkTemplate.replace(':episodeNumber', String(episodeNumber))
+      const basePath = episodeLinkTemplate.endsWith('/') ? episodeLinkTemplate : `${episodeLinkTemplate}/`
+      return `${basePath}${episodeNumber}`
     },
     [episodeLinkTemplate],
   )
