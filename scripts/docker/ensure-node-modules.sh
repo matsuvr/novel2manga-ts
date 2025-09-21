@@ -6,6 +6,7 @@ set -euo pipefail
 # devDependencies at runtime when tsconfig exists.
 TARGET_DIR=/app/node_modules
 IMAGE_COPY_DIR=/node_modules_image
+NEXT_CACHE_DIR=/app/.next
 
 # If target is not present or empty, try to copy from image copy
 if [ ! -d "$TARGET_DIR" ] || [ -z "$(ls -A "$TARGET_DIR" 2>/dev/null || true)" ]; then
@@ -18,6 +19,24 @@ if [ ! -d "$TARGET_DIR" ] || [ -z "$(ls -A "$TARGET_DIR" 2>/dev/null || true)" ]
   else
     echo "No image-provided node_modules available; continuing"
   fi
+fi
+
+# Ensure the Next.js cache directory is present and writable before starting
+# the dev server. Docker volumes created with root ownership cause Next.js to
+# crash when it tries to update its build manifest.
+if [ ! -d "$NEXT_CACHE_DIR" ]; then
+  mkdir -p "$NEXT_CACHE_DIR" 2>/dev/null || true
+fi
+
+if [ ! -w "$NEXT_CACHE_DIR" ]; then
+  cat >&2 <<'EOF'
+[ensure-node-modules] Error: /app/.next is not writable. The Next.js cache volume
+was likely created with root ownership. Remove the existing next_cache volume
+(e.g. `docker compose down -v` or `docker volume rm novel2manga-ts_next_cache`)
+and re-create the containers so the cache directory inherits the relaxed permissions
+baked into the image.
+EOF
+  exit 1
 fi
 
 # Execute the original command
