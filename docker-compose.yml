@@ -15,7 +15,6 @@ services:
       - next_cache:/app/.next
     env_file:
       - .env
-      - .env.local
     environment:
       NODE_ENV: development
       VERTICAL_TEXT_GENERATOR_URL: http://vertical-text-generator:8000
