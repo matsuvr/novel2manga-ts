@@ -85,9 +85,8 @@ export class LoggingLlmClientWrapper implements LlmClient {
   }
 
   // generateStructured は未対応クライアントをラップするケースは想定しないため必須
-  async generateStructured<T>(params: Parameters<LlmClient['generateStructured']>[0]): Promise<T> {
-    const r = await this.inner.generateStructured(params as never)
-    return r as T
+  async generateStructured<T>(params: import('@/agents/llm/types').GenerateStructuredParams<T>): Promise<T> {
+    return this.inner.generateStructured(params)
   }
 
   // LlmClient の chat 以外のメソッドは内部クライアントに委譲
@@ -116,7 +115,7 @@ export class StructuredLoggingLlmClientWrapper implements LlmClient {
     return this.inner.chat(messages, options)
   }
 
-  async generateStructured<T>(params: Parameters<LlmClient['generateStructured']>[0]): Promise<T> {
+  async generateStructured<T>(params: import('@/agents/llm/types').GenerateStructuredParams<T>): Promise<T> {
     const startTime = Date.now()
     let novelId: string | null = null
     let response: T | undefined
@@ -139,8 +138,8 @@ export class StructuredLoggingLlmClientWrapper implements LlmClient {
         }
       }
 
-  response = await this.inner.generateStructured(params as never)
-      return response as T
+    response = await this.inner.generateStructured(params)
+    return response
     } catch (e) {
       error = e instanceof Error ? e : new Error(String(e))
       throw error

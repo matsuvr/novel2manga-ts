@@ -17,6 +17,52 @@ export class OpenAICompatibleClient implements LlmClient {
   private readonly apiKey: string
   private readonly model: string
   private readonly useChatCompletions: boolean
+  // インスタンスプロパティ版 chat: プロトタイプ経由の定義がテスト環境で拾われない問題へのフォールバック
+  // （policies が client.chat を要求するため常に存在させる）
+  chat = async (
+    messages: Array<{
+      role: 'system' | 'user' | 'assistant' | 'tool'
+      content: string
+      name?: string
+      toolCallId?: string
+    }>,
+    options: { maxTokens?: number; temperature?: number; tools?: import('./types').LlmTool[]; responseFormat?: { type: 'json_object' | 'json_schema'; json_schema?: { name: string; strict?: boolean; schema: Record<string, unknown> } }; timeout?: number } = {},
+  ): Promise<import('./types').LlmResponse> => {
+    const maxTokens = options.maxTokens ?? 512
+    const chatMessages: ChatMessage[] = messages
+      .filter((m) => m.role === 'system' || m.role === 'user' || m.role === 'assistant')
+      .map((m) => ({
+        role: m.role === 'assistant' ? 'user' : (m.role as 'system' | 'user'),
+        content: m.content,
+      }))
+
+    const body = await this.buildChatCompletionsBody(chatMessages, { maxTokens })
+    const endpoint = '/chat/completions'
+    const controller = options.timeout ? new AbortController() : undefined
+    if (controller && options.timeout) {
+      setTimeout(() => controller.abort(), options.timeout)
+    }
+    const res = await fetch(`${this.baseUrl}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller?.signal,
+    })
+    if (!res.ok) {
+      const text = await safeReadText(res)
+      throw new Error(`${this.provider} chat HTTP ${res.status}: ${truncate(text, 300)}`)
+    }
+    const data: unknown = await res.json()
+    const content = extractTextFromResponse(data, true)
+    if (!content) {
+      throw new Error(`${this.provider}: empty chat response`)
+    }
+    const usage = extractUsageFromResponse(data, true) ?? undefined
+    return { content, usage }
+  }
 
   constructor(cfg: OpenAICompatibleConfig) {
     this.provider = cfg.provider
