@@ -1,5 +1,5 @@
 import { AgentError, AgentErrorType } from '@/agents/errors'
-import type { LlmClient, LlmMessage, LlmTool } from '@/llm/client'
+import type { LlmClient, LlmMessage, LlmTool } from '@/agents/llm/types'
 import type { AgentInput, AgentOptions, AgentPolicy, AgentResult, ToolRegistry } from '../types'
 
 /**
@@ -38,6 +38,13 @@ export class SingleTurnPolicy implements AgentPolicy {
 
     try {
       // LLM呼び出し
+      if (!this.client.chat) {
+        throw new AgentError(
+          AgentErrorType.API_ERROR,
+          'Chat method not supported by this LLM client',
+          'unknown',
+        )
+      }
       const response = await this.client.chat(messages, {
         temperature: options.temperature,
         maxTokens: options.maxTokens,

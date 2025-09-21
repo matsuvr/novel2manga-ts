@@ -1,4 +1,4 @@
-import type { LlmClient } from '@/llm/client'
+import type { LlmClient } from '@/agents/llm/types'
 import { ReActPolicy } from './policies/react'
 import { SingleTurnPolicy } from './policies/singleTurn'
 import { SimpleToolRegistry } from './tools'

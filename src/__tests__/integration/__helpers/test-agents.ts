@@ -4,11 +4,11 @@
  */
 
 import { vi } from 'vitest'
-import { AgentCore, AgentCoreFactory } from '@/agents/core'
+import { AgentCore } from '@/agents/core'
+import { FakeLlmClient } from '@/agents/llm/fake'
 import { ReActPolicy } from '@/agents/policies/react'
 import { SingleTurnPolicy } from '@/agents/policies/singleTurn'
 import { SimpleToolRegistry } from '@/agents/tools'
-import { FakeLlmClient } from '@/llm/fake'
 
 /**
  * テスト用のAgent応答データ
@@ -103,17 +103,10 @@ export const TEST_EPISODE_CONFIG = {
 export function createMockChunkAnalyzer(): AgentCore {
   const fakeClient = new FakeLlmClient({
     responses: [
-      {
-        content: JSON.stringify(TEST_CHUNK_ANALYSIS),
-        role: 'assistant',
-      },
+      { content: JSON.stringify(TEST_CHUNK_ANALYSIS), role: 'assistant' },
     ],
   })
-
-  return AgentCoreFactory.create({
-    llmClient: fakeClient,
-    policy: new SingleTurnPolicy(),
-  })
+  return new AgentCore({ client: fakeClient, policy: new SingleTurnPolicy(fakeClient) })
 }
 
 /**
@@ -122,17 +115,10 @@ export function createMockChunkAnalyzer(): AgentCore {
 export function createMockNarrativeAnalyzer(): AgentCore {
   const fakeClient = new FakeLlmClient({
     responses: [
-      {
-        content: JSON.stringify(TEST_EPISODE_BOUNDARIES),
-        role: 'assistant',
-      },
+      { content: JSON.stringify(TEST_EPISODE_BOUNDARIES), role: 'assistant' },
     ],
   })
-
-  return AgentCoreFactory.create({
-    llmClient: fakeClient,
-    policy: new SingleTurnPolicy(),
-  })
+  return new AgentCore({ client: fakeClient, policy: new SingleTurnPolicy(fakeClient) })
 }
 
 /**
@@ -144,33 +130,15 @@ export function createMockEpisodeGenerator(): AgentCore {
       {
         content: JSON.stringify({
           episodes: [
-            {
-              episodeNumber: 1,
-              title: 'テストエピソード1',
-              summary: 'テスト用エピソード1の要約',
-              startChunkIndex: 0,
-              endChunkIndex: 4,
-              estimatedPageCount: 8,
-            },
-            {
-              episodeNumber: 2,
-              title: 'テストエピソード2',
-              summary: 'テスト用エピソード2の要約',
-              startChunkIndex: 5,
-              endChunkIndex: 9,
-              estimatedPageCount: 10,
-            },
+            { episodeNumber: 1, title: 'テストエピソード1', summary: 'テスト用エピソード1の要約', startChunkIndex: 0, endChunkIndex: 4, estimatedPageCount: 8 },
+            { episodeNumber: 2, title: 'テストエピソード2', summary: 'テスト用エピソード2の要約', startChunkIndex: 5, endChunkIndex: 9, estimatedPageCount: 10 },
           ],
         }),
         role: 'assistant',
       },
     ],
   })
-
-  return AgentCoreFactory.create({
-    llmClient: fakeClient,
-    policy: new SingleTurnPolicy(),
-  })
+  return new AgentCore({ client: fakeClient, policy: new SingleTurnPolicy(fakeClient) })
 }
 
 /**
@@ -182,59 +150,27 @@ export function createMockLayoutGenerator(): AgentCore {
       {
         content: JSON.stringify({
           pages: [
-            {
-              pageNumber: 1,
-              panelCount: 4,
-              panels: [
-                {
-                  panelIndex: 1,
-                  content: 'テスト内容1',
-                  dialogue: [{ speaker: 'キャラクター1', text: 'こんにちは' }],
-                },
-                {
-                  panelIndex: 2,
-                  content: 'テスト内容2',
-                  dialogue: [{ speaker: 'キャラクター2', text: 'こんにちは' }],
-                },
-                { panelIndex: 3, content: 'テスト内容3', dialogue: [] },
-                {
-                  panelIndex: 4,
-                  content: 'テスト内容4',
-                  dialogue: [{ speaker: 'ナレーション', text: '場面が変わる' }],
-                },
-              ],
-            },
-            {
-              pageNumber: 2,
-              panelCount: 6,
-              panels: [
-                { panelIndex: 1, content: 'テスト内容5', dialogue: [] },
-                {
-                  panelIndex: 2,
-                  content: 'テスト内容6',
-                  dialogue: [{ speaker: 'キャラクター1', text: 'さようなら' }],
-                },
-                { panelIndex: 3, content: 'テスト内容7', dialogue: [] },
-                { panelIndex: 4, content: 'テスト内容8', dialogue: [] },
-                {
-                  panelIndex: 5,
-                  content: 'テスト内容9',
-                  dialogue: [{ speaker: 'キャラクター2', text: 'また明日' }],
-                },
-                { panelIndex: 6, content: 'テスト内容10', dialogue: [] },
-              ],
-            },
+            { pageNumber: 1, panelCount: 4, panels: [
+              { panelIndex: 1, content: 'テスト内容1', dialogue: [{ speaker: 'キャラクター1', text: 'こんにちは' }] },
+              { panelIndex: 2, content: 'テスト内容2', dialogue: [{ speaker: 'キャラクター2', text: 'こんにちは' }] },
+              { panelIndex: 3, content: 'テスト内容3', dialogue: [] },
+              { panelIndex: 4, content: 'テスト内容4', dialogue: [{ speaker: 'ナレーション', text: '場面が変わる' }] },
+            ] },
+            { pageNumber: 2, panelCount: 6, panels: [
+              { panelIndex: 1, content: 'テスト内容5', dialogue: [] },
+              { panelIndex: 2, content: 'テスト内容6', dialogue: [{ speaker: 'キャラクター1', text: 'さようなら' }] },
+              { panelIndex: 3, content: 'テスト内容7', dialogue: [] },
+              { panelIndex: 4, content: 'テスト内容8', dialogue: [] },
+              { panelIndex: 5, content: 'テスト内容9', dialogue: [{ speaker: 'キャラクター2', text: 'また明日' }] },
+              { panelIndex: 6, content: 'テスト内容10', dialogue: [] },
+            ] },
           ],
         }),
         role: 'assistant',
       },
     ],
   })
-
-  return AgentCoreFactory.create({
-    llmClient: fakeClient,
-    policy: new SingleTurnPolicy(),
-  })
+  return new AgentCore({ client: fakeClient, policy: new SingleTurnPolicy(fakeClient) })
 }
 
 /**
@@ -263,20 +199,7 @@ export function setupAgentMocks() {
       registerTool: vi.fn(),
       getTool: vi.fn(),
     })),
-    AgentCoreFactory: {
-      create: vi.fn(() => ({
-        run: vi.fn().mockResolvedValue({
-          messages: [
-            { role: 'user', content: 'test input' },
-            { role: 'assistant', content: JSON.stringify(TEST_CHUNK_ANALYSIS) },
-          ],
-          metadata: { provider: 'fake' },
-        }),
-        setPolicy: vi.fn(),
-        registerTool: vi.fn(),
-        getTool: vi.fn(),
-      })),
-    },
+    AgentCoreFactory: {},
   }))
 
   // 後方互換性のためのCompatAgentモック
@@ -473,7 +396,8 @@ export function setupAgentMocks() {
     }),
     generateMangaLayoutForPlan: vi.fn().mockImplementation(async (episodeData, plan) => {
       // planに含まれるページに基づいて動的にレイアウトを生成
-      const pages = plan.plannedPages.map((plannedPage) => ({
+      // 型安全化: PlannedPage 型を利用
+      const pages = plan.plannedPages.map((plannedPage: import('@/types/page-splitting').PlannedPage) => ({
         page_number: plannedPage.pageNumber,
         panels: Array.from({ length: 4 }, (_, i) => ({
           position: { x: (i % 2) * 0.5, y: Math.floor(i / 2) * 0.5 },
