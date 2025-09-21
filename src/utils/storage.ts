@@ -27,6 +27,10 @@ export interface Storage {
 
 // 開発環境用のローカルストレージパス
 const getStorageBase = () => {
+  // BASE_STORAGE_PATH環境変数が設定されていればそれを使用（テスト用）
+  if (process.env.BASE_STORAGE_PATH) {
+    return process.env.BASE_STORAGE_PATH
+  }
   // テスト環境では.test-storageを使用
   if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
     return path.join(process.cwd(), '.test-storage')
@@ -610,6 +614,14 @@ export async function getOutputStorage(): Promise<Storage> {
   return _outputStorage
 }
 
+// LLM Log Storage
+let _llmLogStorage: Promise<Storage> | null = null
+export async function getLlmLogStorage(): Promise<Storage> {
+  if (_llmLogStorage) return _llmLogStorage
+  _llmLogStorage = resolveStorage('llm_log', 'LLM log storage not configured')
+  return _llmLogStorage
+}
+
 // テスト用：ストレージキャッシュをクリア
 export function clearStorageCache(): void {
   _novelStorage = null
@@ -618,6 +630,7 @@ export function clearStorageCache(): void {
   _layoutStorage = null
   _renderStorage = null
   _outputStorage = null
+  _llmLogStorage = null
 }
 
 // Database
@@ -779,6 +792,13 @@ export const StorageKeys = {
       `page_${pageNumber}.json`,
     )
   },
+  llmLog: (novelId: string, timestamp: string) => {
+    validateId(novelId, 'novelId')
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$/.test(timestamp)) {
+      throw new Error('StorageKeys: invalid timestamp format (expected ISO format with hyphens)')
+    }
+    return `${novelId}/${timestamp}.json`
+  },
 } as const
 
 // Additional JSON-first keys for new pipeline artifacts
@@ -910,6 +930,7 @@ export const StorageFactory = {
   getLayoutStorage,
   getRenderStorage,
   getOutputStorage,
+  getLlmLogStorage,
   // 監査関数を型安全に提供
   auditKeys: auditStorageKeys,
 } as const

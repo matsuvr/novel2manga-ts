@@ -1,4 +1,4 @@
-import type { GenerateStructuredParams, LlmProvider } from '@/agents/llm/types'
+import type { LlmProvider } from '@/agents/llm/types'
 import type {
   LlmClient,
   LlmClientOptions,
@@ -65,12 +65,12 @@ export class FakeLlmClient implements LlmClient {
     return this.normalizeResponse(response)
   }
 
-  async generateStructured<T>({
-    systemPrompt,
-    userPrompt,
-    spec,
-    options: _options,
-  }: GenerateStructuredParams<T>): Promise<T> {
+  async generateStructured<T = unknown>(params: {
+    messages: LlmMessage[]
+    schema: Record<string, unknown>
+    schemaName?: string
+    options?: LlmClientOptions
+  }): Promise<T> {
     if (this.config.shouldThrow) {
       throw new ProviderError(
         this.config.errorMessage || 'Fake LLM generateStructured error',
@@ -82,12 +82,20 @@ export class FakeLlmClient implements LlmClient {
       await new Promise((resolve) => setTimeout(resolve, this.config.delay))
     }
 
+    // messagesから最後のユーザーメッセージを取得
+    const userMessage = params.messages.filter(m => m.role === 'user').pop()
+    const userPrompt = userMessage?.content || 'test prompt'
+
+    // システムメッセージを取得
+    const systemMessage = params.messages.find(m => m.role === 'system')
+    const systemPrompt = systemMessage?.content
+
     // テスト用の構造化レスポンス生成
     return this.generateTestStructuredResponse(
-      spec.schemaName,
+      params.schemaName || 'test',
       systemPrompt,
       userPrompt,
-      spec.schema,
+      params.schema,
     )
   }
 
