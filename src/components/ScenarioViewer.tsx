@@ -53,9 +53,12 @@ export function ScenarioViewer() {
         z.object({ ok: z.literal(true), summary: zRunSummary }),
         z.object({ ok: z.literal(false), error: z.string().optional() }),
       ])
-  const json = zResponse.parse(await res.json())
-  if (!json.ok) throw new Error((json as { error?: string }).error || 'Run failed')
-  setSummary(json.summary as RunSummary)
+      const json = zResponse.parse(await res.json())
+      if (json.ok) {
+        setSummary(json.summary)
+      } else {
+        throw new Error(json.error || 'Run failed')
+      }
     } catch (e) {
       setError((e as Error).message)
     } finally {

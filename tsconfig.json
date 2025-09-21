@@ -13,7 +13,7 @@
       "esnext"
     ],
     "allowJs": true,
-    "strict": false,
+  "strict": true,
     "noEmit": true,
     "module": "esnext",
     "esModuleInterop": true,
@@ -22,7 +22,8 @@
     // Resolve path aliases like '@/...'
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@test/*": ["src/__tests__/*"]
     },
     "resolveJsonModule": true,
     "isolatedModules": true,
