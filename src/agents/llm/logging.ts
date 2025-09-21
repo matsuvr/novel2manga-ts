@@ -16,6 +16,8 @@ interface StructuredPromptSnapshot {
     stepName?: string
     chunkIndex?: number
     episodeNumber?: number
+    retryAttempt?: number
+    cacheHit?: boolean
   }
 }
 
@@ -73,13 +75,15 @@ class StructuredLoggingLlmClient implements LlmClient {
 
     const telemetry = params.telemetry
     if (telemetry) {
-      const { jobId, agentName, stepName, chunkIndex, episodeNumber } = telemetry
+      const { jobId, agentName, stepName, chunkIndex, episodeNumber, retryAttempt, cacheHit } = telemetry
       if (
         jobId !== undefined ||
         agentName !== undefined ||
         stepName !== undefined ||
         chunkIndex !== undefined ||
-        episodeNumber !== undefined
+        episodeNumber !== undefined ||
+        retryAttempt !== undefined ||
+        cacheHit !== undefined
       ) {
         snapshot.telemetry = {
           jobId,
@@ -87,6 +91,8 @@ class StructuredLoggingLlmClient implements LlmClient {
           stepName,
           chunkIndex,
           episodeNumber,
+          retryAttempt,
+          cacheHit,
         }
       }
     }

@@ -31,7 +31,7 @@ export class InputValidationStep extends BasePipelineStep {
 
     try {
       const generator = getLlmStructuredGenerator()
-      const judge = await generator.generateObjectWithFallback({
+      const judge = await generator.generateObjectWithFallback<import('@/types/validation').NarrativeJudgeResult>({
         name: 'narrativity-judge',
         systemPrompt: NARRATIVITY_JUDGE_SYSTEM,
         userPrompt: buildNarrativityJudgeUser(text),

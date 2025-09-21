@@ -1,4 +1,4 @@
-// tailwind.config.js (v3形式)
+// tailwind.config.cjs (CommonJS)
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [

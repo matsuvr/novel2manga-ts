@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { z } from 'zod'
 import { createClientForProvider, selectProviderOrder } from '@/agents/llm/router'
 import type { LlmClient, LlmProvider } from '@/agents/llm/types'
@@ -11,6 +12,58 @@ import { getLogger } from '@/infrastructure/logging/logger'
 import { InvalidRequestError } from '@/llm/client'
 import { normalizeLLMResponse } from '@/utils/dialogue-normalizer'
 import { getLLMProviderConfig } from '../config/llm.config'
+
+const MAX_CACHE_ENTRIES = 200
+
+const responseCache = new Map<string, Promise<unknown>>()
+
+function normalizePromptValue(value: string | undefined): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function cloneResult<T>(value: T): T {
+  try {
+    return structuredClone(value)
+  } catch {
+    return JSON.parse(JSON.stringify(value)) as T
+  }
+}
+
+function trimCache(): void {
+  while (responseCache.size > MAX_CACHE_ENTRIES) {
+    const oldestKey = responseCache.keys().next().value as string | undefined
+    if (!oldestKey) break
+    responseCache.delete(oldestKey)
+  }
+}
+
+function reorderCache(key: string): void {
+  const existing = responseCache.get(key)
+  if (existing === undefined) return
+  responseCache.delete(key)
+  responseCache.set(key, existing)
+}
+
+function createCacheKey(
+  provider: LlmProvider,
+  schemaName: string,
+  systemPrompt: string,
+  userPrompt: string,
+  maxTokens: number,
+): string {
+  const hash = createHash('sha256')
+  hash.update(provider)
+  hash.update('\u241F')
+  hash.update(schemaName)
+  hash.update('\u241F')
+  hash.update(systemPrompt)
+  hash.update('\u241F')
+  hash.update(userPrompt)
+  hash.update('\u241F')
+  hash.update(String(maxTokens))
+
+  return hash.digest('hex')
+}
 
 export interface GenerateArgs<T> {
   name?: string
@@ -66,51 +119,82 @@ export class DefaultLlmStructuredGenerator {
       throw new Error(`Missing maxTokens in llm.config.ts for provider: ${prov}`)
     }
 
-    const maxRetries = 3
-    let lastError: unknown
+    const logger = getLogger().withContext({ service: 'llm-structured-generator', name })
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        // Guard: prevent sending empty user prompt which leads to provider SDK errors
-        const trimmedUserPrompt = typeof userPrompt === 'string' ? userPrompt.trim() : ''
-        if (!trimmedUserPrompt) {
-          getLogger()
-            .withContext({ service: 'llm-structured-generator', name })
-            .error('Empty userPrompt detected before LLM call - aborting request', {
-              reason: 'userPrompt is empty after trim',
-              telemetry: args.telemetry,
-            })
-          // throw structured invalid request error so callers can handle it
-          throw new InvalidRequestError('userPrompt is empty - aborting LLM request', 'userPrompt')
+    // Guard: prevent sending empty user prompt which leads to provider SDK errors
+    const trimmedUserPrompt = typeof userPrompt === 'string' ? userPrompt.trim() : ''
+    if (!trimmedUserPrompt) {
+      logger.error('Empty userPrompt detected before LLM call - aborting request', {
+        reason: 'userPrompt is empty after trim',
+        telemetry: args.telemetry,
+      })
+      // throw structured invalid request error so callers can handle it
+      throw new InvalidRequestError('userPrompt is empty - aborting LLM request', 'userPrompt')
+    }
+
+    const normalizedSystemPrompt = normalizePromptValue(systemPrompt)
+    const telemetryBase = args.telemetry
+      ? {
+          ...args.telemetry,
+          agentName: args.telemetry.agentName || args.name || 'llm-structured-generator',
         }
+      : args.name
+        ? { agentName: args.name }
+        : undefined
 
-        const result = await client.generateStructured<T>({
-          systemPrompt,
-          userPrompt: trimmedUserPrompt,
-          spec: { schema, schemaName },
-          options: { maxTokens },
-          telemetry: {
-            ...args.telemetry,
-            // 名前をエージェント名として渡す（渡されていなければこのnameを使う）
-            agentName: args.telemetry?.agentName || args.name || 'llm-structured-generator',
-          },
-        })
+    const cacheKey = createCacheKey(
+      prov,
+      schemaName,
+      normalizedSystemPrompt,
+      trimmedUserPrompt,
+      maxTokens,
+    )
 
-        // dialogue形式正規化処理を適用（該当する場合のみ）
-        const normalizedResult = this.normalizeResultIfNeeded(result)
-        return normalizedResult
-      } catch (error) {
-        lastError = error
-        const errorMessage = error instanceof Error ? error.message : String(error)
+    const cachedPromise = responseCache.get(cacheKey)
+    if (cachedPromise) {
+      reorderCache(cacheKey)
+      logger.info('Skipping LLM call due to cache hit', {
+        provider: prov,
+        schemaName,
+        jobId: telemetryBase?.jobId,
+        chunkIndex: telemetryBase?.chunkIndex,
+        cacheHit: true,
+      })
+      const cachedValue = await cachedPromise
+      return cloneResult(cachedValue as T)
+    }
 
-        // dialogue関連のスキーマエラーの場合、詳細ログを出力
-        if (
-          errorMessage.includes('schema validation failed') &&
-          errorMessage.includes('dialogue')
-        ) {
-          getLogger()
-            .withContext({ service: 'llm-structured-generator', name })
-            .error('Dialogue schema validation failed - invalid dialogue format', {
+    const generationPromise = (async (): Promise<T> => {
+      const maxRetries = 3
+      let lastError: unknown
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const telemetryForAttempt = telemetryBase
+            ? { ...telemetryBase, retryAttempt: attempt, cacheHit: false }
+            : { agentName: args.name || 'llm-structured-generator', retryAttempt: attempt, cacheHit: false }
+
+          const result = await client.generateStructured<T>({
+            systemPrompt: normalizedSystemPrompt,
+            userPrompt: trimmedUserPrompt,
+            spec: { schema, schemaName },
+            options: { maxTokens },
+            telemetry: telemetryForAttempt,
+          })
+
+          // dialogue形式正規化処理を適用（該当する場合のみ）
+          const normalizedResult = this.normalizeResultIfNeeded(result)
+          return normalizedResult
+        } catch (error) {
+          lastError = error
+          const errorMessage = error instanceof Error ? error.message : String(error)
+
+          // dialogue関連のスキーマエラーの場合、詳細ログを出力
+          if (
+            errorMessage.includes('schema validation failed') &&
+            errorMessage.includes('dialogue')
+          ) {
+            logger.error('Dialogue schema validation failed - invalid dialogue format', {
               provider: prov,
               attempt,
               error: errorMessage,
@@ -118,34 +202,45 @@ export class DefaultLlmStructuredGenerator {
                 ? errorMessage.split('Raw:')[1]?.slice(0, 500)
                 : 'No raw response available',
             })
-        }
+          }
 
-        // JSON生成関連のエラーのみリトライ対象とする
-        const isRetryableJsonError = this.isRetryableJsonError(errorMessage)
+          // JSON生成関連のエラーのみリトライ対象とする
+          const isRetryableJsonError = this.isRetryableJsonError(errorMessage)
 
-        if (!isRetryableJsonError || attempt === maxRetries) {
-          // リトライ対象外、または最大試行回数に達した場合は即座にエラーを投げる
-          throw error
-        }
+          if (!isRetryableJsonError || attempt === maxRetries) {
+            // リトライ対象外、または最大試行回数に達した場合は即座にエラーを投げる
+            throw error
+          }
 
-        // リトライ実行をログ出力
-        getLogger()
-          .withContext({ service: 'llm-structured-generator', name })
-          .warn('LLM JSON generation failed, retrying', {
+          // リトライ実行をログ出力
+          logger.warn('LLM JSON generation failed, retrying', {
             provider: prov,
             attempt,
             maxRetries,
             reason: truncate(errorMessage, 300),
           })
 
-        // 少し待ってからリトライ（指数バックオフ）
-        if (attempt < maxRetries) {
-          await new Promise((resolve) => setTimeout(resolve, 1000 * attempt))
+          // 少し待ってからリトライ（指数バックオフ）
+          if (attempt < maxRetries) {
+            await new Promise((resolve) => setTimeout(resolve, 1000 * attempt))
+          }
         }
       }
-    }
 
-    throw lastError instanceof Error ? lastError : new Error(String(lastError))
+      throw lastError instanceof Error ? lastError : new Error(String(lastError))
+    })()
+      .then((value) => cloneResult(value))
+
+    responseCache.set(cacheKey, generationPromise as Promise<unknown>)
+    trimCache()
+
+    try {
+      const resolved = await generationPromise
+      return cloneResult(resolved)
+    } catch (error) {
+      responseCache.delete(cacheKey)
+      throw error
+    }
   }
 
   private createClient(provider: LlmProvider): LlmClient {

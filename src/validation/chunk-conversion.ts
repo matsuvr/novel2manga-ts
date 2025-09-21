@@ -40,8 +40,14 @@ export const ChunkConversionSceneSchema = z
   })
   .strict()
 
-const ensureEndIndexGreaterThanStart = (value: { startIndex: number; endIndex: number }) =>
-  value.endIndex > value.startIndex
+const ensureEndIndexGreaterThanStart = (value: {
+  startIndex?: number
+  endIndex?: number
+}): boolean => {
+  const s = Number(value.startIndex ?? NaN)
+  const e = Number(value.endIndex ?? NaN)
+  return Number.isFinite(s) && Number.isFinite(e) && e > s
+}
 
 export const ChunkConversionSituationSchema = z
   .object({

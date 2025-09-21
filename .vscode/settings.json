@@ -4,13 +4,20 @@
   "scss.lint.unknownAtRules": "ignore",
   "less.lint.unknownAtRules": "ignore",
 
-  "tailwindCSS.includeLanguages": {
-    "html": "html",
-    "javascript": "html",
-    "javascriptreact": "html",
-    "typescript": "html",
-    "typescriptreact": "html"
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+
+  // ファイル監視から除外
+  "files.watcherExclude": {
+    "**/.next/**": true,
+    "**/node_modules/**": true,
+    "**/.git/**": true
+  },
+
+  // 検索から除外
+  "search.exclude": {
+    "**/.next": true,
+    "**/node_modules": true,
+    "**/build": true
   }
 }
-
-

@@ -5,20 +5,25 @@ import { selectRandomTemplateByCount } from '@/utils/panel-sample-loader'
 export const layoutRules = {
   forbidden: {
     // 均等なグリッド分割を検出
-    isEqualGrid: (_panels: Array<{ position: { x: number; y: number } }>) => {
+    isEqualGrid: (
+      _panels: Array<{ position?: { x?: number; y?: number } }>,
+    ) => {
       // 簡易実装: より詳細な実装は後で追加
       return false
     },
     // 統一された寸法を検出
-    hasUniformDimension: (_panels: Array<{ size: { width: number; height: number } }>) => {
+    hasUniformDimension: (
+      _panels: Array<{ size?: { width?: number; height?: number } }>,
+    ) => {
       // 簡易実装: より詳細な実装は後で追加
       return false
     },
   },
   recommended: {
     // サイズの変化が豊富かチェック
-    hasVariedSizes: (panels: Array<{ size: { width: number; height: number } }>) => {
-      const sizes = panels.map((p) => p.size.width * p.size.height)
+    hasVariedSizes: (panels: Array<{ size?: { width?: number; height?: number } }>) => {
+      const sizes = panels
+        .map((p) => (p.size?.width ?? 0) * (p.size?.height ?? 0))
       const uniqueSizes = new Set(sizes.map((s) => Math.round(s * 100)))
       return uniqueSizes.size > 1
     },

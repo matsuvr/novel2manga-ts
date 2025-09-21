@@ -5,7 +5,6 @@ export type LlmProvider =
   | 'groq'
   | 'grok'
   | 'openrouter'
-  | 'cerebras'
   | 'gemini'
   | 'vertexai'
   | 'fake'
@@ -28,6 +27,8 @@ export interface LlmTelemetryContext {
   stepName?: string
   chunkIndex?: number
   episodeNumber?: number
+  retryAttempt?: number
+  cacheHit?: boolean
 }
 
 export interface GenerateStructuredParams<T> {
@@ -51,8 +52,4 @@ export interface OpenAICompatibleConfig {
   useChatCompletions?: boolean
 }
 
-export interface CerebrasConfig {
-  baseUrl?: string
-  apiKey: string
-  model: string
-}
+// Cerebras provider removed

@@ -20,8 +20,12 @@ RUN apt-get update && \
 
 # Install dependencies only (leverage Docker layer cache)
 FROM base AS deps
+# Install dependencies with devDependencies included so the development image has
+# the modules required by Next.js (for example @tailwindcss/postcss).
+ENV NODE_ENV=development
 COPY package.json package-lock.json ./
 RUN npm ci
+ENV NODE_ENV=production
 
 # Preserve a copy of installed node_modules in the image so containers can
 # populate a writable volume at runtime (avoids Next.js auto-installing

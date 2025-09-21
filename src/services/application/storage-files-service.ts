@@ -71,6 +71,11 @@ export class StorageFilesService {
     await db.delete(storageFiles).where(eq(storageFiles.jobId, jobId))
   }
 
+  async deleteByNovel(novelId: string) {
+    const db = this.ensureDb()
+    await db.delete(storageFiles).where(eq(storageFiles.novelId, novelId))
+  }
+
   async listByNovel(novelId: string) {
     const db = this.ensureDb()
     const rows = await db.select().from(storageFiles).where(eq(storageFiles.novelId, novelId))
