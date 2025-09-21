@@ -2,7 +2,7 @@
  * Background Job Processing Worker
  * Implements configurable job queue processing with status updates
  */
-import { and, eq, lt, or } from 'drizzle-orm'
+import { and, eq, isNull, lt, or } from 'drizzle-orm'
 import { getDatabase } from '@/db'
 import { jobs } from '@/db/schema'
 import { getLogger } from '@/infrastructure/logging/logger'
@@ -128,7 +128,7 @@ export class JobWorker {
           and(
             eq(jobs.status, 'pending'),
             // not locked or lease expired
-            or(eq(jobs.lockedBy, null as unknown as string), lt(jobs.leaseExpiresAt, new Date().toISOString())),
+            or(isNull(jobs.lockedBy), lt(jobs.leaseExpiresAt, new Date().toISOString())),
           ),
         )
         .limit(this.config.batchSize)
@@ -167,8 +167,12 @@ export class JobWorker {
             this.logger.info('Job lease failed, skipping', { jobId: job.id })
             continue
           }
-        } catch {
-          // If lease API not available, proceed (best-effort)
+        } catch (e) {
+          this.logger.error('Failed to acquire lease, skipping job', {
+            jobId: job.id,
+            error: e instanceof Error ? e.message : String(e),
+          })
+          continue
         }
 
         await this.processJob(job)
