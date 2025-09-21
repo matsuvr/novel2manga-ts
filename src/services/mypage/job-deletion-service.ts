@@ -1,31 +1,11 @@
 import { Effect } from 'effect'
-import { getLogger } from '@/infrastructure/logging/logger'
-import { type StorageFileCategory, StorageFilesService } from '@/services/application/storage-files-service'
+import { StorageFilesService } from '@/services/application/storage-files-service'
 import { db } from '@/services/database/database-service-factory'
+import {
+  deleteStorageArtifacts,
+  normalizeDeletionError,
+} from '@/services/mypage/storage-cleanup'
 import { ApiError, ERROR_CODES } from '@/utils/api-error'
-import type { Storage } from '@/utils/storage'
-import { StorageFactory } from '@/utils/storage'
-
-const storageResolvers: Record<StorageFileCategory, () => Promise<Storage>> = {
-  original: StorageFactory.getNovelStorage,
-  chunk: StorageFactory.getChunkStorage,
-  analysis: StorageFactory.getAnalysisStorage,
-  episode: StorageFactory.getAnalysisStorage,
-  layout: StorageFactory.getLayoutStorage,
-  render: StorageFactory.getRenderStorage,
-  output: StorageFactory.getOutputStorage,
-  metadata: StorageFactory.getLayoutStorage,
-}
-
-function normalizeError(error: unknown) {
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      stack: error.stack,
-    }
-  }
-  return { error }
-}
 
 export function deleteJobForUser(
   userId: string,
@@ -37,7 +17,7 @@ export function deleteJobForUser(
       catch: (error) =>
         new ApiError('ジョブ情報の取得に失敗しました', 500, ERROR_CODES.DATABASE_ERROR, {
           jobId,
-          details: normalizeError(error),
+          details: normalizeDeletionError(error),
         }),
     })
 
@@ -53,7 +33,7 @@ export function deleteJobForUser(
         new ApiError('小説情報の取得に失敗しました', 500, ERROR_CODES.DATABASE_ERROR, {
           jobId,
           novelId: job.novelId,
-          details: normalizeError(error),
+          details: normalizeDeletionError(error),
         }),
     })
 
@@ -73,72 +53,14 @@ export function deleteJobForUser(
         new ApiError('ストレージ参照情報の取得に失敗しました', 500, ERROR_CODES.DATABASE_ERROR, {
           jobId,
           novelId: job.novelId,
-          details: normalizeError(error),
+          details: normalizeDeletionError(error),
         }),
     })
 
-    const seenFiles = new Set<string>()
-    const storageCache = new Map<StorageFileCategory, Promise<Storage>>()
-    const logger = getLogger().withContext({
-      service: 'MypageJobDeletionService',
+    yield* deleteStorageArtifacts(storageRecords, {
       jobId,
       novelId: job.novelId,
     })
-
-    // concurrency: use small parallelism for I/O-bound deletes. Tunable as needed.
-    yield* Effect.forEach(
-      storageRecords,
-      (record) => {
-        if (!record.filePath || seenFiles.has(record.filePath)) {
-          return Effect.succeed(undefined)
-        }
-        seenFiles.add(record.filePath)
-
-        const resolver = storageResolvers[record.fileCategory]
-        if (!resolver) {
-          logger.error('Unsupported storage category encountered during deletion', {
-            filePath: record.filePath,
-            fileCategory: record.fileCategory,
-          })
-          return Effect.fail(
-            new ApiError(
-              'サポートされていないストレージカテゴリです',
-              500,
-              ERROR_CODES.INVALID_STATE,
-              {
-                jobId,
-                novelId: job.novelId,
-                fileCategory: record.fileCategory,
-                filePath: record.filePath,
-              },
-            ),
-          )
-        }
-
-        return Effect.tryPromise({
-          try: async () => {
-            let storagePromise = storageCache.get(record.fileCategory)
-            if (!storagePromise) {
-              storagePromise = resolver()
-              storageCache.set(record.fileCategory, storagePromise)
-            }
-
-            const storage = await storagePromise
-            await storage.delete(record.filePath)
-          },
-          catch: (error) =>
-            new ApiError('ストレージファイルの削除に失敗しました', 500, ERROR_CODES.STORAGE_ERROR, {
-              jobId,
-              novelId: job.novelId,
-              fileCategory: record.fileCategory,
-              filePath: record.filePath,
-              details: normalizeError(error),
-            }),
-        })
-      },
-      // limited parallelism improves throughput without overwhelming storage
-      { concurrency: 5 },
-    )
 
     // Remove storage records associated with this job
     yield* Effect.tryPromise({
@@ -147,7 +69,7 @@ export function deleteJobForUser(
         new ApiError('ストレージ参照情報の削除に失敗しました', 500, ERROR_CODES.DATABASE_ERROR, {
           jobId,
           novelId: job.novelId,
-          details: normalizeError(error),
+          details: normalizeDeletionError(error),
         }),
     })
 
@@ -158,7 +80,7 @@ export function deleteJobForUser(
         new ApiError('ジョブの削除に失敗しました', 500, ERROR_CODES.DATABASE_ERROR, {
           jobId,
           novelId: job.novelId,
-          details: normalizeError(error),
+          details: normalizeDeletionError(error),
         }),
     })
   })
