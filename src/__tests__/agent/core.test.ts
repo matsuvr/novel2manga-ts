@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { AgentCore, createAgentCore, createAgentCoreWithConfig } from '@/agents/core'
+import { createFakeLlmClient, FakeLlmClient } from '@/agents/llm/fake'
 import { mockTools, SimpleToolRegistry } from '@/agents/tools'
 import type { AgentInput } from '@/agents/types'
-import { createFakeLlmClient, FakeLlmClient } from '@/llm/fake'
 
 describe('AgentCore', () => {
   let client: FakeLlmClient

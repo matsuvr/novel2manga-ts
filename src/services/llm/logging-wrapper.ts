@@ -5,14 +5,17 @@
  * novelId毎にタイムスタンプファイル名でストレージに保存する
  */
 
+import type { ChatOptions, LlmClient, LlmMessage, LlmProvider, LlmResponse } from '@/agents/llm/types'
 import { getLLMProviderConfig } from '@/config/llm.config'
 import { getLogger } from '@/infrastructure/logging/logger'
-import type { LlmClient, LlmClientOptions, LlmMessage, LlmResponse } from '@/llm/client'
+
+type LlmClientOptions = ChatOptions
+
 import { getNovelIdForJob } from '@/utils/job'
 import { LlmLogService } from './log-service'
 
 export class LoggingLlmClientWrapper implements LlmClient {
-  readonly provider: string
+  readonly provider: LlmProvider
   private readonly inner: LlmClient
   private readonly logService: LlmLogService
   private readonly logger = getLogger().withContext({ service: 'LoggingLlmClientWrapper' })
@@ -43,6 +46,9 @@ export class LoggingLlmClientWrapper implements LlmClient {
         }
       }
 
+      if (!this.inner.chat) {
+        throw new Error('Inner client does not implement chat')
+      }
       response = await this.inner.chat(messages, options)
       return response
     } catch (e) {
@@ -78,17 +84,20 @@ export class LoggingLlmClientWrapper implements LlmClient {
     }
   }
 
-  // LlmClient の chat 以外のメソッドは内部クライアントに委譲
-  get embeddings() {
-    return this.inner.embeddings
+  // generateStructured は未対応クライアントをラップするケースは想定しないため必須
+  async generateStructured<T>(params: import('@/agents/llm/types').GenerateStructuredParams<T>): Promise<T> {
+    return this.inner.generateStructured(params)
   }
+
+  // LlmClient の chat 以外のメソッドは内部クライアントに委譲
+  // embeddings は新インターフェースでは未定義のため削除
 }
 
 /**
  * Structured Generator用のラッパークライアント
  */
 export class StructuredLoggingLlmClientWrapper implements LlmClient {
-  readonly provider: string
+  readonly provider: LlmProvider
   private readonly inner: LlmClient
   private readonly logService: LlmLogService
   private readonly logger = getLogger().withContext({ service: 'StructuredLoggingLlmClientWrapper' })
@@ -100,17 +109,13 @@ export class StructuredLoggingLlmClientWrapper implements LlmClient {
   }
 
   async chat(messages: LlmMessage[], options: LlmClientOptions = {}): Promise<LlmResponse> {
-    // StructuredLoggingLlmClientWrapperは主に構造化生成用なので、
-    // chatは内部クライアントに委譲
+    if (!this.inner.chat) {
+      throw new Error('Inner client does not support chat')
+    }
     return this.inner.chat(messages, options)
   }
 
-  async generateStructured<T = unknown>(params: {
-    messages: LlmMessage[]
-    schema: Record<string, unknown>
-    schemaName?: string
-    options?: LlmClientOptions
-  }): Promise<T> {
+  async generateStructured<T>(params: import('@/agents/llm/types').GenerateStructuredParams<T>): Promise<T> {
     const startTime = Date.now()
     let novelId: string | null = null
     let response: T | undefined
@@ -118,8 +123,8 @@ export class StructuredLoggingLlmClientWrapper implements LlmClient {
 
     try {
       // optionsにtelemetryがある場合はjobIdからnovelIdを取得を試行
-      if (params.options && 'telemetry' in params.options) {
-        const telemetry = params.options.telemetry as { jobId?: string }
+      if (params.telemetry) {
+        const telemetry = params.telemetry
         const jobId = telemetry?.jobId
         if (jobId) {
           try {
@@ -133,8 +138,8 @@ export class StructuredLoggingLlmClientWrapper implements LlmClient {
         }
       }
 
-      response = await this.inner.generateStructured?.(params)
-      return response as T
+    response = await this.inner.generateStructured(params)
+    return response
     } catch (e) {
       error = e instanceof Error ? e : new Error(String(e))
       throw error
@@ -147,17 +152,10 @@ export class StructuredLoggingLlmClientWrapper implements LlmClient {
           provider: this.provider,
           model: this.getModelFromConfig(),
           requestType: 'generateStructured',
-          request: this.logService.sanitizeRequest({
-            messages: params.messages,
-            schema: JSON.stringify(params.schema),
-            schemaName: params.schemaName || 'unknown',
-            options: params.options,
-          }),
+          request: this.logService.sanitizeRequest(params),
           response: response ? this.logService.sanitizeResponse(response) : undefined,
           error: error ? { message: error.message, stack: error.stack } : undefined,
-          telemetry: params.options && 'telemetry' in params.options
-            ? (params.options.telemetry as Record<string, unknown>)
-            : undefined,
+          telemetry: params.telemetry as Record<string, unknown> | undefined,
           duration,
         })
       }
@@ -183,8 +181,7 @@ export class StructuredLoggingLlmClientWrapper implements LlmClient {
  * LlmClientをログ機能付きでラップする関数
  */
 export function wrapWithNewLlmLogging(client: LlmClient, useStructured = false): LlmClient {
-  if (useStructured) {
-    return new StructuredLoggingLlmClientWrapper(client)
-  }
-  return new LoggingLlmClientWrapper(client)
+  return useStructured
+    ? new StructuredLoggingLlmClientWrapper(client)
+    : new LoggingLlmClientWrapper(client)
 }
