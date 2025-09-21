@@ -39,6 +39,7 @@
     "**/*.ts",
     "**/*.tsx",
     "**/*.d.ts",
+    "vitest-env.d.ts",
     ".next/types/**/*.ts"
   ],
   "exclude": [

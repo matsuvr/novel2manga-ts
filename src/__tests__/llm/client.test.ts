@@ -1,11 +1,10 @@
-// LEGACY TEST (client.test.ts)
-// 旧LLMレイヤ(client / fake) に依存していたため本実装移行で無効化。
-// 将来: 完全に不要になったらファイル削除してください。
-// NOTE: 空ファイルでVitestが失敗するためダミースイートを配置。
+import { describe, expect, it } from 'vitest'
 
+// Legacy client layer fully removed. Keep a trivial skipped suite so historical filename doesn't break any tooling.
+// Can be deleted once references are cleaned.
 describe.skip('legacy llm client (removed)', () => {
   it('placeholder', () => {
-    // no-op
-  });
-});
+    expect(true).toBe(true)
+  })
+})
 

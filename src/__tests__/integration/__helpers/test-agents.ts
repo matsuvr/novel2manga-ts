@@ -396,7 +396,8 @@ export function setupAgentMocks() {
     }),
     generateMangaLayoutForPlan: vi.fn().mockImplementation(async (episodeData, plan) => {
       // planに含まれるページに基づいて動的にレイアウトを生成
-  const pages = plan.plannedPages.map((plannedPage: any) => ({
+      // 型安全化: PlannedPage 型を利用
+      const pages = plan.plannedPages.map((plannedPage: import('@/types/page-splitting').PlannedPage) => ({
         page_number: plannedPage.pageNumber,
         panels: Array.from({ length: 4 }, (_, i) => ({
           position: { x: (i % 2) * 0.5, y: Math.floor(i / 2) * 0.5 },
