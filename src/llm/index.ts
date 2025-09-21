@@ -7,6 +7,7 @@ import { wrapWithLlmLogging } from './logging'
 import { GeminiClient, type GeminiConfig } from './providers/gemini'
 import { OpenAIClient, type OpenAIConfig } from './providers/openai'
 import { OpenAICompatibleClient, type OpenAICompatibleConfig } from './providers/openai-compatible'
+import { VertexAIClient, type VertexAIConfig } from './providers/vertexai'
 
 export type LLMProvider = 'openai' | 'gemini' | 'groq' | 'grok' | 'openrouter' | 'vertexai' | 'fake'
 
@@ -43,6 +44,19 @@ export function createLlmClient(config: LlmFactoryConfig): LlmClient {
         timeout: config.timeout,
       }
       return wrapWithLlmLogging(new GeminiClient(geminiConfig))
+    }
+
+    case 'vertexai': {
+      const vertexConfig: VertexAIConfig = {
+        model: config.model,
+        timeout: config.timeout,
+        vertexai: {
+          project: process.env.VERTEX_AI_PROJECT || '',
+          location: process.env.VERTEX_AI_LOCATION || '',
+          serviceAccountPath: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+        },
+      }
+      return wrapWithLlmLogging(new VertexAIClient(vertexConfig))
     }
 
     case 'groq': {

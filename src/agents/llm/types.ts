@@ -27,6 +27,8 @@ export interface LlmTelemetryContext {
   stepName?: string
   chunkIndex?: number
   episodeNumber?: number
+  retryAttempt?: number
+  cacheHit?: boolean
 }
 
 export interface GenerateStructuredParams<T> {
@@ -51,4 +53,3 @@ export interface OpenAICompatibleConfig {
 }
 
 // Cerebras provider removed
-
