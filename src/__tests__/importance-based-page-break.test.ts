@@ -82,7 +82,7 @@ describe('importance-based page breaks', () => {
     // New logic: both panels go to page 1 since 5+5=10 (≥6)
     expect(pages).toEqual([1, 1])
     expect(stats.totalPages).toBe(1)
-    expect(stats.remainingImportance).toBe(10) // Both panels' importance on page 1
+        expect(stats.lastPageTotalImportance).toBe(10) // Both panels' importance on page 1
   })
 
   it('groups panels correctly when sum equals page limit', () => {
@@ -94,7 +94,7 @@ describe('importance-based page breaks', () => {
     // 3+3=6 (page limit), so both go to page 1, then page resets for panel 3
     expect(pages).toEqual([1, 1, 2])
     expect(stats.totalPages).toBe(2)
-    expect(stats.remainingImportance).toBe(2)
+    expect(stats.lastPageTotalImportance).toBe(2)
   })
 
   // New test for the specific example case mentioned

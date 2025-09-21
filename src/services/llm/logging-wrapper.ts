@@ -5,6 +5,7 @@
  * novelId毎にタイムスタンプファイル名でストレージに保存する
  */
 
+import { getLLMProviderConfig } from '@/config/llm.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import type { LlmClient, LlmClientOptions, LlmMessage, LlmResponse } from '@/llm/client'
 import { getNovelIdForJob } from '@/utils/job'
@@ -166,10 +167,13 @@ export class StructuredLoggingLlmClientWrapper implements LlmClient {
   private getModelFromConfig(): string | undefined {
     // プロバイダー設定からモデル名を取得（設定可能であれば）
     try {
-      const { getLLMProviderConfig } = require('@/config/llm.config')
       const config = getLLMProviderConfig(this.provider as 'openai' | 'groq' | 'vertexai' | 'gemini')
       return config?.model
-    } catch {
+    } catch (e) {
+      this.logger.warn('Failed to get model from config', {
+        error: e instanceof Error ? e.message : String(e),
+        provider: this.provider
+      })
       return undefined
     }
   }
