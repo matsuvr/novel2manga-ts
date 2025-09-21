@@ -46,7 +46,7 @@ raw-responses/
 .env.test
 .env.production.local
 .env*.local
-manganamemaker-e402457d75fd.json
+manganamemaker*.json
 codex_auth.json
 
 # Vercel
