@@ -200,6 +200,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       id: jobId,
       novelId: novelId,
       title: `Analysis Job for ${title ?? 'Novel'}`,
+      status: 'processing',
       userId: user.id,
     })
 
