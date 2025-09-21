@@ -274,7 +274,7 @@ export class LayoutDatabaseService extends BaseDatabaseService {
         .select({ generated: layoutStatus.isGenerated })
         .from(layoutStatus)
         .where(eq(layoutStatus.jobId, jobId))
-        .all() as Array<{ generated: 0 | 1 | null }>
+        .all() as Array<{ generated: boolean | null }>
 
       count = rows.reduce((acc, r) => acc + (r.generated ? 1 : 0), 0)
 

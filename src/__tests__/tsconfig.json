@@ -5,7 +5,8 @@
     "baseUrl": "../../",
     "moduleResolution": "node",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@test/*": ["src/__tests__/*"]
     }
   },
   "exclude": [],

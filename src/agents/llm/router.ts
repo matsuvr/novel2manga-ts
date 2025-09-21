@@ -5,7 +5,6 @@ import {
 } from '../../config/llm.config'
 import { FakeLlmClient } from '../../llm/fake'
 import { defaultBaseUrl, type OpenAICompatProvider } from './base-url'
-import { CerebrasClient, type CerebrasClientConfig } from './cerebras'
 import { maybeWrapStructuredLogging } from './logging'
 import { OpenAICompatibleClient } from './openai-compatible'
 import type { LlmClient, LlmProvider, OpenAICompatibleConfig } from './types'
@@ -16,7 +15,7 @@ export type ProviderConfig =
       OpenAICompatibleConfig,
       'provider'
     >)
-  | ({ provider: 'cerebras' } & CerebrasClientConfig)
+
   | VertexAIClientConfig
   | { provider: 'fake' }
 
@@ -29,8 +28,6 @@ export function createLlmClient(cfg: ProviderConfig): LlmClient {
       return maybeWrapStructuredLogging(new OpenAICompatibleClient({ ...cfg, provider: cfg.provider }))
     case 'gemini':
       return maybeWrapStructuredLogging(new VertexAIClient(cfg))
-    case 'cerebras':
-      return maybeWrapStructuredLogging(new CerebrasClient(cfg))
     case 'vertexai':
       return maybeWrapStructuredLogging(new VertexAIClient(cfg))
     case 'fake':
@@ -62,13 +59,7 @@ export function createClientForProvider(provider: LlmProvider): LlmClient {
     // 設定不足はフォールバック禁止(上位でそのままエラー)
     throw new Error(`Missing API key for provider: ${provider}`)
   }
-  if (provider === 'cerebras') {
-    const c: CerebrasClientConfig = {
-      apiKey: cfg.apiKey,
-      model: cfg.model,
-    }
-    return createLlmClient({ provider: 'cerebras', ...c })
-  }
+
   if (provider === 'vertexai' || provider === 'gemini') {
     const vertexConfig = cfg.vertexai
     if (!vertexConfig) {

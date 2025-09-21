@@ -9,13 +9,13 @@ import { Card, CardContent } from '@/components/ui/card'
 type RunSummary = {
   ingest?: unknown
   chunk?: unknown
-  analyzeCount: number
-  scenes: number
-  panels: number
-  images: number
-  pages: number
+  analyzeCount?: number
+  scenes?: number
+  panels?: number
+  images?: number
+  pages?: number
   publish?: unknown
-  elapsedMs: number
+  elapsedMs?: number
 }
 
 export function ScenarioViewer() {
@@ -54,8 +54,11 @@ export function ScenarioViewer() {
         z.object({ ok: z.literal(false), error: z.string().optional() }),
       ])
       const json = zResponse.parse(await res.json())
-      if (!json.ok) throw new Error(json.error || 'Run failed')
-      setSummary(json.summary)
+      if (json.ok) {
+        setSummary(json.summary)
+      } else {
+        throw new Error(json.error || 'Run failed')
+      }
     } catch (e) {
       setError((e as Error).message)
     } finally {

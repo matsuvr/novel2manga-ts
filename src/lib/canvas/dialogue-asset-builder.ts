@@ -1,5 +1,5 @@
 import { dialogueAssetsConfig } from '@/config/dialogue-assets.config'
-import type { Page } from '@/types/panel-layout'
+import type { Dialogue, Page } from '@/types/panel-layout'
 import type { VerticalTextRenderRequest } from '@/types/vertical-text'
 import type { DialogueAsset } from './canvas-renderer'
 
@@ -24,12 +24,10 @@ export function collectDialogueRequests(
   page: Page,
   computeMaxCharsPerLine: (panelHeightRatio: number) => number,
   extractDialogueText: (text: string) => string,
-  getFontForDialogue: (d: {
-    text: string
-    speaker?: string
-    emotion?: string
-    type?: 'speech' | 'thought' | 'narration' | undefined
-  }) => 'gothic' | 'mincho' | undefined,
+  getFontForDialogue: (d: Pick<Dialogue, 'text' | 'speaker' | 'emotion' | 'type'>) =>
+    | 'gothic'
+    | 'mincho'
+    | undefined,
 ): CollectDialogueResult {
   const items: VerticalTextRenderRequest[] = []
   const map: DialogueRequestMapEntry[] = []
@@ -41,9 +39,14 @@ export function collectDialogueRequests(
     const panelHeightRatio = panel.size.height
     const maxCharsForPanel = computeMaxCharsPerLine(panelHeightRatio)
     for (let i = 0; i < dialogues.length; i++) {
-      const d = dialogues[i]
+      const d = dialogues[i] as Dialogue
       const cleanedText = extractDialogueText(d.text)
-      const selectedFont = getFontForDialogue(d)
+      const selectedFont = getFontForDialogue({
+        text: d.text,
+        speaker: d.speaker,
+        emotion: (d as { emotion?: string }).emotion,
+        type: d.type,
+      })
       const item: VerticalTextRenderRequest = {
         text: cleanedText,
         maxCharsPerLine: maxCharsForPanel,

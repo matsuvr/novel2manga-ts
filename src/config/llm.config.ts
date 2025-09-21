@@ -6,7 +6,6 @@ export type LLMProvider =
   | 'groq'
   | 'grok'
   | 'openrouter'
-  | 'cerebras'
   | 'vertexai'
   | 'fake'
 
@@ -54,9 +53,7 @@ export function getProviderForUseCase(useCase: LLMUseCase): LLMProvider {
   const envVal = process.env[envKey]
   if (
     envVal &&
-    ['openai', 'gemini', 'groq', 'grok', 'openrouter', 'cerebras', 'vertexai', 'fake'].includes(
-      envVal,
-    )
+    ['openai', 'gemini', 'groq', 'grok', 'openrouter', 'vertexai', 'fake'].includes(envVal)
   ) {
     return envVal as LLMProvider
   }
@@ -101,13 +98,6 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
       serviceAccountPath: undefined,
     },
   },
-  cerebras: {
-    apiKey: process.env.CEREBRAS_API_KEY,
-    // Structured outputs対応が安定している公開モデルに合わせる（ドキュメント例に準拠）
-    model: 'llama-4-scout-17b-16e-instruct',
-    maxTokens: 8192,
-    timeout: 30_000,
-  },
   gemini: {
     model: 'gemini-2.5-flash',
     maxTokens: 16000,
@@ -144,7 +134,7 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
     baseUrl: 'https://openrouter.ai/api/v1',
     maxTokens: 8192,
     timeout: 30_000,
-    preferCerebras: true,
+    preferCerebras: false,
   },
   fake: {
     apiKey: 'fake-key',
@@ -175,8 +165,6 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
   // Do not capture process.env at module load.
   const dynamicApiKey = (() => {
     switch (provider) {
-      case 'cerebras':
-        return process.env.CEREBRAS_API_KEY
       case 'openai':
         return process.env.OPENAI_API_KEY
       case 'groq':
@@ -201,8 +189,6 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
   // Return a fresh object; keep model/token config from the static table.
   const modelOverride = (() => {
     switch (provider) {
-      case 'cerebras':
-        return process.env.CEREBRAS_MODEL
       case 'openai':
         return process.env.OPENAI_MODEL
       case 'groq':

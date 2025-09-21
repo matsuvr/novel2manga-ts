@@ -63,7 +63,7 @@ AsyncLocalStorage 等による request/job correlation は下層基盤準備中�
 | Core infrastructure (db/cache/security/validation) | 完了 | Structured events へ統一 |
 | Services (database/application) | 完了 | Build 時副作用なし |
 | Canvas / Rendering | 完了 | 重要フェーズに event key 付与 |
-| LLM Providers (Gemini/Cerebras 等) | 完了 | JSON parse / fallback を structured 化 |
+| LLM Providers (Gemini 等) | 完了 | JSON parse / fallback を structured 化 |
 | Character persistence/snapshot | 完了 | snapshot 保存/失敗イベント |
 | Notification | 完了 | 送信失敗イベント統一 |
 | Config / Data (shared) | 部分未移行 | 例外ポリシー適用中 |
