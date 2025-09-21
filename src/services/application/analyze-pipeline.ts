@@ -184,8 +184,7 @@ export class AnalyzePipeline extends BasePipelineStep {
     await this.markStepCompleted(jobId, 'analyze', { logger })
 
     // UI遷移の空白対策: ここで currentStep=episode をセット
-    await this.updateJobStep(jobId, 'episode', { logger }, 0, 4)
-    await new Promise((resolve) => setTimeout(resolve, 300))
+  await this.updateJobStep(jobId, 'episode', { logger }, 0, 4)
 
     // ここで直接チャンク脚本を結合して combined script を作成・保存（ScriptMergeStep を撤去）
 

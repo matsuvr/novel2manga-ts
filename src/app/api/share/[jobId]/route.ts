@@ -22,8 +22,8 @@ interface ShareStatusResponse {
 
 export const GET = withAuth(
   async (request: NextRequest, user, context: { params: { jobId: string } }) => {
+    const params = await Promise.resolve(context.params)
     try {
-      const params = await Promise.resolve(context.params)
       const { jobId } = params
       validateJobId(jobId)
 
@@ -55,7 +55,6 @@ export const GET = withAuth(
 
       return createSuccessResponse<ShareStatusResponse>({ share: shareStatus })
     } catch (error) {
-      const params = await Promise.resolve(context.params)
       getLogger()
         .withContext({ route: 'api/share/[jobId]', method: 'GET' })
         .error('Failed to load share status', {
@@ -69,8 +68,8 @@ export const GET = withAuth(
 
 export const DELETE = withAuth(
   async (_request: NextRequest, user, context: { params: { jobId: string } }) => {
+    const params = await Promise.resolve(context.params)
     try {
-      const params = await Promise.resolve(context.params)
       const { jobId } = params
       validateJobId(jobId)
 
@@ -87,7 +86,6 @@ export const DELETE = withAuth(
 
       return createSuccessResponse({ success: true })
     } catch (error) {
-      const params = await Promise.resolve(context.params)
       getLogger()
         .withContext({ route: 'api/share/[jobId]', method: 'DELETE' })
         .error('Failed to disable share', {
