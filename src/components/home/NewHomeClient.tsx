@@ -292,7 +292,7 @@ export default function NewHomeClient() {
                 </div>
                 <Button
                   onClick={handleConvert}
-                  disabled={view !== 'idle' || !novelText.trim() || !isAuthenticated}
+                  disabled={isInputDisabled || !novelText.trim()}
                   size="lg"
                 >
                   {view === 'processing' ? '処理中...' : 'マンガに変換'}
