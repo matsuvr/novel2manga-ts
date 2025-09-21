@@ -38,6 +38,9 @@ ENV LLM_LOGGING=1
 FROM deps AS dev
 ENV NODE_ENV=development
 COPY . .
+# Ensure the Next.js cache directory exists with write permissions even when
+# the container runs as an arbitrary host user (docker-compose passes UID/GID).
+RUN install -d -m 0777 /app/.next
 # Copy helper script to ensure node_modules volume is seeded from the image
 COPY scripts/docker/ensure-node-modules.sh /usr/local/bin/ensure-node-modules.sh
 RUN chmod +x /usr/local/bin/ensure-node-modules.sh
