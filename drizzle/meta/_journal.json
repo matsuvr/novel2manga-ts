@@ -127,6 +127,13 @@
       "when": 1758360935112,
       "tag": "0017_normal_vertigo",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1760400000000,
+      "tag": "0018_job_leasing_and_notifications",
+      "breakpoints": true
     }
   ]
 }

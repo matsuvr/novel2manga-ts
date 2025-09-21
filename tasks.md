@@ -7,6 +7,8 @@
 - [x] Capture LLM prompt/response exchanges when `LLM_LOGGING=1` and persist them to `logs/llm-interactions.log`.
 - [x] Auto rebuild better-sqlite3 on Node ABI mismatch during database initialization.
 - [x] Detect "Module did not self-register" errors to trigger automatic rebuild of `better-sqlite3`.
+- [x] Auto-bootstrap missing Drizzle metadata (`__drizzle_migrations`) so new migrations apply to legacy SQLite files.
+- [x] Heal job leasing schema drift even when `__drizzle_migrations` already marks the migration as applied.
 - [ ] Upgrade Docker base Node image when `better-sqlite3` adds support for newer versions.
 - [x] Persist Vertex AI / Gemini token usage metrics via `db.tokenUsage().record` when telemetry is available.
 - [x] Surface per-model prompt/completion token totals and the novel preview on the results page UI.
