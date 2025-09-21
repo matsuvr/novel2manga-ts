@@ -31,6 +31,11 @@ vi.mock('@/utils/storage', async (importOriginal) => {
   }
 })
 
+// Mock chunk summary utility
+vi.mock('@/utils/chunk-summary', () => ({
+  getStoredSummary: vi.fn().mockResolvedValue(null),
+}))
+
 describe('ChunkScriptStep - Analysis Integration', () => {
   let chunkScriptStep: ChunkScriptStep
   let mockStorage: {
@@ -55,7 +60,7 @@ describe('ChunkScriptStep - Analysis Integration', () => {
 
     mockStorage = {
       get: vi.fn(),
-      put: vi.fn(),
+      put: vi.fn().mockResolvedValue(void 0),
     }
 
     mockLogger = {
@@ -76,8 +81,8 @@ describe('ChunkScriptStep - Analysis Integration', () => {
       'novel-1/jobs/job-1/analysis/chunk_0.json',
     )
 
-    // Setup script converter mock
-      vi.mocked(convertChunkToMangaScript).mockResolvedValue({
+    // Mock storage to return valid script JSON after save
+    const validScript = {
       style_tone: 'テスト用トーン',
       style_art: 'テスト用アート',
       style_sfx: 'テスト用効果音',
@@ -108,7 +113,19 @@ describe('ChunkScriptStep - Analysis Integration', () => {
         },
       ],
       continuity_checks: [],
+    }
+
+    // When get is called for script verification, return the valid script JSON
+    mockStorage.get.mockImplementation((key: string) => {
+      if (key.includes('script_chunk_')) {
+        return Promise.resolve({ text: JSON.stringify(validScript) })
+      }
+      // Default behavior for analysis data
+      return Promise.resolve(null)
     })
+
+    // Setup script converter mock to return the same valid script
+    vi.mocked(convertChunkToMangaScript).mockResolvedValue(validScript)
   })
 
   it('should pass analysis data to convertEpisodeTextToScript when analysis file exists', async () => {
@@ -135,7 +152,25 @@ describe('ChunkScriptStep - Analysis Integration', () => {
       }),
     }
 
-    mockStorage.get.mockResolvedValue(mockAnalysisData)
+    // Override the get mock for this specific test to return analysis data
+    mockStorage.get.mockImplementation((key: string) => {
+      if (key.includes('script_chunk_')) {
+        return Promise.resolve({ text: JSON.stringify({
+          style_tone: 'テスト用トーン',
+          style_art: 'テスト用アート',
+          style_sfx: 'テスト用効果音',
+          characters: [{ id: 'char_1', name_ja: 'テストキャラ', role: 'protagonist', speech_style: 'カジュアル', aliases: ['テスト'] }],
+          locations: [{ id: 'loc_1', name_ja: 'テスト場所', notes: 'テスト用場所' }],
+          props: [],
+          panels: [{ no: 1, cut: 'テストシーン説明', camera: 'medium', importance: 1, dialogue: [] }],
+          continuity_checks: [],
+        }) })
+      }
+      if (key.includes('chunk_0.json')) {
+        return Promise.resolve(mockAnalysisData)
+      }
+      return Promise.resolve(null)
+    })
 
     // Execute
     const result = await chunkScriptStep.convertChunksToScripts(chunks, {
@@ -184,8 +219,23 @@ describe('ChunkScriptStep - Analysis Integration', () => {
     const chunks = ['Test chunk without analysis.']
     const context = { jobId, logger: mockLogger }
 
-    // Mock storage returning null (file doesn't exist)
-    mockStorage.get.mockResolvedValue(null)
+    // Override the get mock for this specific test
+    mockStorage.get.mockImplementation((key: string) => {
+      if (key.includes('script_chunk_')) {
+        return Promise.resolve({ text: JSON.stringify({
+          style_tone: 'テスト用トーン',
+          style_art: 'テスト用アート',
+          style_sfx: 'テスト用効果音',
+          characters: [{ id: 'char_1', name_ja: 'テストキャラ', role: 'protagonist', speech_style: 'カジュアル', aliases: ['テスト'] }],
+          locations: [{ id: 'loc_1', name_ja: 'テスト場所', notes: 'テスト用場所' }],
+          props: [],
+          panels: [{ no: 1, cut: 'テストシーン説明', camera: 'medium', importance: 1, dialogue: [] }],
+          continuity_checks: [],
+        }) })
+      }
+      // Analysis file doesn't exist
+      return Promise.resolve(null)
+    })
 
     // Execute
     const result = await chunkScriptStep.convertChunksToScripts(chunks, {
@@ -222,8 +272,26 @@ describe('ChunkScriptStep - Analysis Integration', () => {
     const chunks = ['Test chunk with corrupted analysis.']
     const context = { jobId, logger: mockLogger }
 
-    // Mock corrupted analysis data
-    mockStorage.get.mockResolvedValue({ text: 'invalid json{' })
+    // Override the get mock for this specific test
+    mockStorage.get.mockImplementation((key: string) => {
+      if (key.includes('script_chunk_')) {
+        return Promise.resolve({ text: JSON.stringify({
+          style_tone: 'テスト用トーン',
+          style_art: 'テスト用アート',
+          style_sfx: 'テスト用効果音',
+          characters: [{ id: 'char_1', name_ja: 'テストキャラ', role: 'protagonist', speech_style: 'カジュアル', aliases: ['テスト'] }],
+          locations: [{ id: 'loc_1', name_ja: 'テスト場所', notes: 'テスト用場所' }],
+          props: [],
+          panels: [{ no: 1, cut: 'テストシーン説明', camera: 'medium', importance: 1, dialogue: [] }],
+          continuity_checks: [],
+        }) })
+      }
+      if (key.includes('chunk_0.json')) {
+        // Mock corrupted analysis data
+        return Promise.resolve({ text: 'invalid json{' })
+      }
+      return Promise.resolve(null)
+    })
 
     // Execute
     const result = await chunkScriptStep.convertChunksToScripts(chunks, {
@@ -265,8 +333,23 @@ describe('ChunkScriptStep - Analysis Integration', () => {
     const mockChunkText = 'abcdefg resume text'
     ;(mockPorts.chunk as any).getChunk = vi.fn().mockResolvedValue({ text: mockChunkText })
 
-    // No analysis data
-    mockStorage.get.mockResolvedValue(null)
+    // Override the get mock for this specific test
+    mockStorage.get.mockImplementation((key: string) => {
+      if (key.includes('script_chunk_')) {
+        return Promise.resolve({ text: JSON.stringify({
+          style_tone: 'テスト用トーン',
+          style_art: 'テスト用アート',
+          style_sfx: 'テスト用効果音',
+          characters: [{ id: 'char_1', name_ja: 'テストキャラ', role: 'protagonist', speech_style: 'カジュアル', aliases: ['テスト'] }],
+          locations: [{ id: 'loc_1', name_ja: 'テスト場所', notes: 'テスト用場所' }],
+          props: [],
+          panels: [{ no: 1, cut: 'テストシーン説明', camera: 'medium', importance: 1, dialogue: [] }],
+          continuity_checks: [],
+        }) })
+      }
+      // No analysis data
+      return Promise.resolve(null)
+    })
 
     const result = await chunkScriptStep.convertChunksToScripts(chunks, {
       ...context,

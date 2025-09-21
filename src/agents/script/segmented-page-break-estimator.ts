@@ -127,14 +127,17 @@ export async function estimatePageBreaksSegmented(
   for (const segment of segments) {
     try {
       const segmentResult = calculateImportanceBasedPageBreaks(segment.script, importanceCarry)
-      const adjustedPanels = segmentResult.pageBreaks.panels.map((p) => ({
+      const adjustedPanels = segmentResult.pageBreaks.panels.map((p: PageBreakV2['panels'][number]) => ({
         ...p,
         pageNumber: p.pageNumber + pageOffset,
       }))
       mergedPanels.push(...adjustedPanels)
 
-      importanceCarry = segmentResult.stats.remainingImportance
-      const maxPage = segmentResult.pageBreaks.panels.reduce((m, p) => Math.max(m, p.pageNumber), 0)
+      importanceCarry = segmentResult.stats.lastPageTotalImportance
+      const maxPage = segmentResult.pageBreaks.panels.reduce(
+        (m: number, p: PageBreakV2['panels'][number]) => Math.max(m, p.pageNumber),
+        0,
+      )
       let completedPages = maxPage
       if (importanceCarry > 0 && !segmentResult.stats.carryIntoNewPage) {
         completedPages = Math.max(0, maxPage - 1)

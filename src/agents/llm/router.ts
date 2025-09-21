@@ -1,40 +1,22 @@
-import {
-  getLLMDefaultProvider,
-  getLLMFallbackChain,
-  getLLMProviderConfig,
-} from '../../config/llm.config'
-import { FakeLlmClient } from '../../llm/fake'
+import { getLLMDefaultProvider, getLLMFallbackChain, getLLMProviderConfig } from '../../config/llm.config'
 import { defaultBaseUrl, type OpenAICompatProvider } from './base-url'
-import { maybeWrapStructuredLogging } from './logging'
+import { FakeLlmClient } from './fake'
 import { OpenAICompatibleClient } from './openai-compatible'
 import type { LlmClient, LlmProvider, OpenAICompatibleConfig } from './types'
-import { VertexAIClient, type VertexAIClientConfig } from './vertexai'
+import { VertexAIClient, type VertexAIConfig } from './vertexai'
 
 export type ProviderConfig =
-  | ({ provider: 'openai' | 'groq' | 'grok' | 'openrouter' } & Omit<
-      OpenAICompatibleConfig,
-      'provider'
-    >)
-
-  | VertexAIClientConfig
+  | ({ provider: 'openai' | 'groq' | 'grok' | 'openrouter' } & OpenAICompatibleConfig)
+  | ({ provider: 'gemini' | 'vertexai' } & VertexAIConfig)
   | { provider: 'fake' }
 
 export function createLlmClient(cfg: ProviderConfig): LlmClient {
-  switch (cfg.provider) {
-    case 'openai':
-    case 'groq':
-    case 'grok':
-    case 'openrouter':
-      return maybeWrapStructuredLogging(new OpenAICompatibleClient({ ...cfg, provider: cfg.provider }))
-    case 'gemini':
-      return maybeWrapStructuredLogging(new VertexAIClient(cfg))
-    case 'vertexai':
-      return maybeWrapStructuredLogging(new VertexAIClient(cfg))
-    case 'fake':
-      return maybeWrapStructuredLogging(new FakeLlmClient())
-    default:
-      throw new Error(`Unsupported provider: ${(cfg as ProviderConfig).provider}`)
+  if (cfg.provider === 'fake') return new FakeLlmClient()
+  if (cfg.provider === 'gemini' || cfg.provider === 'vertexai') {
+    return new VertexAIClient(cfg)
   }
+  // OpenAI 互換
+  return new OpenAICompatibleClient(cfg as Extract<ProviderConfig, { provider: 'openai' | 'groq' | 'grok' | 'openrouter' }>)
 }
 
 // llm.config.ts 由来のランタイム設定を優先し、未設定時のみ環境変数を利用
@@ -47,25 +29,17 @@ export function selectProviderOrder(): LlmProvider[] {
 }
 
 export function createClientForProvider(provider: LlmProvider): LlmClient {
-  if (provider === 'fake') {
-    return createLlmClient({ provider: 'fake' })
-  }
+  if (provider === 'fake') return createLlmClient({ provider: 'fake' })
 
   const cfg = getLLMProviderConfig(provider)
   if (!cfg || typeof cfg.model !== 'string' || !cfg.model) {
     throw new Error(`Missing or invalid model for provider: ${provider}`)
   }
-  if (!cfg.apiKey || cfg.apiKey.trim().length === 0) {
-    // 設定不足はフォールバック禁止(上位でそのままエラー)
-    throw new Error(`Missing API key for provider: ${provider}`)
-  }
 
   if (provider === 'vertexai' || provider === 'gemini') {
     const vertexConfig = cfg.vertexai
-    if (!vertexConfig) {
-      throw new Error(`Missing Vertex AI configuration for provider: ${provider}`)
-    }
-    const c: VertexAIClientConfig = {
+    if (!vertexConfig) throw new Error(`Missing Vertex AI configuration for provider: ${provider}`)
+    const c: ProviderConfig = {
       provider,
       model: cfg.model,
       project: _requireConfigured(vertexConfig.project, 'vertexai.project'),
@@ -75,18 +49,16 @@ export function createClientForProvider(provider: LlmProvider): LlmClient {
     return createLlmClient(c)
   }
 
-  // OpenAI-compatible providers only
-  const oc: Omit<OpenAICompatibleConfig, 'provider'> = {
+  if (!cfg.apiKey || cfg.apiKey.trim().length === 0) {
+    throw new Error(`Missing API key for provider: ${provider}`)
+  }
+  const oc: OpenAICompatibleConfig = {
     apiKey: cfg.apiKey,
     model: cfg.model,
     baseUrl: cfg.baseUrl ?? defaultBaseUrl(provider as OpenAICompatProvider),
-    // OpenAI gpt-5 系は Responses API を推奨（chat/completions の max_tokens 非対応）
-    useChatCompletions: provider !== 'openai' ? true : !/^gpt-5/i.test(cfg.model || ''),
-  }
-  return createLlmClient({
     provider: provider as OpenAICompatProvider,
-    ...oc,
-  })
+  }
+  return new OpenAICompatibleClient(oc)
 }
 
 function _resolveApiKey(apiKeyEnvFromConfig: string | undefined, candidates: string[]): string {
