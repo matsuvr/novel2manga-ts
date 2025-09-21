@@ -1,4 +1,4 @@
-import type { LlmMessage, LlmTool } from '@/llm/client'
+import type { LlmMessage, LlmTool } from '@/agents/llm/types'
 
 // エージェント入力
 export interface AgentInput {

@@ -4,7 +4,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { LlmClient, LlmMessage, LlmResponse } from '@/llm/client'
+import type { LlmClient, LlmMessage, LlmResponse } from '@/agents/llm/types'
 import { wrapWithNewLlmLogging } from '../../../services/llm/logging-wrapper'
 
 // モック設定
@@ -34,6 +34,7 @@ describe('LoggingLlmClientWrapper', () => {
     mockInnerClient = {
       provider: 'openai',
       chat: vi.fn(),
+      generateStructured: vi.fn(async () => ({}) as unknown),
     } as LlmClient
 
     // getNovelIdForJobのモック
@@ -175,14 +176,5 @@ describe('LoggingLlmClientWrapper', () => {
     })
   })
 
-  describe('embeddings delegation', () => {
-    it('embeddingsメソッドを正しく委譲する', () => {
-      const mockEmbeddings = vi.fn()
-      mockInnerClient.embeddings = mockEmbeddings
-
-      const wrappedClient = wrapWithNewLlmLogging(mockInnerClient, false)
-
-      expect(wrappedClient.embeddings).toBe(mockEmbeddings)
-    })
-  })
+  // embeddings 機能は新 LlmClient 仕様から削除されたためテスト対象外
 })

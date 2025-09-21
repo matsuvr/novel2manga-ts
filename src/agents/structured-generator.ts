@@ -10,7 +10,17 @@ import {
   RETRYABLE_JSON_ERROR_PATTERNS,
 } from '@/errors/error-patterns'
 import { getLogger } from '@/infrastructure/logging/logger'
-import { InvalidRequestError } from '@/llm/client'
+
+// 旧 llm/client の InvalidRequestError を簡易再実装（構造化生成で userPrompt 空を検出するため）
+class InvalidRequestError extends Error {
+  field?: string
+  constructor(message: string, field?: string) {
+    super(message)
+    this.name = 'InvalidRequestError'
+    this.field = field
+  }
+}
+
 import { normalizeLLMResponse } from '@/utils/dialogue-normalizer'
 import { getLLMProviderConfig } from '../config/llm.config'
 
