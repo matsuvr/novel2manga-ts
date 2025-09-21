@@ -21,15 +21,51 @@ type BetterSqlite3Module = typeof import('better-sqlite3')
 type BetterSqlite3Database = InstanceType<BetterSqlite3Module>
 
 interface DrizzleJournalEntry {
+  readonly idx: number
   readonly tag: string
   readonly when?: number
 }
 
 interface DrizzleJournal {
-  readonly entries?: ReadonlyArray<DrizzleJournalEntry>
+  readonly entries?: ReadonlyArray<unknown>
 }
 
+type NormalizedJournalEntry = Readonly<{
+  idx: number
+  hash: string
+  createdAt: number
+}>
+
 const JOB_LEASING_AND_NOTIFICATIONS_MIGRATION = '0018_job_leasing_and_notifications' as const
+
+function isDrizzleJournalEntry(entry: unknown): entry is DrizzleJournalEntry {
+  if (typeof entry !== 'object' || entry === null) {
+    return false
+  }
+  const candidate = entry as Record<string, unknown>
+  if (typeof candidate.tag !== 'string') {
+    return false
+  }
+  if (typeof candidate.idx !== 'number' || !Number.isFinite(candidate.idx)) {
+    return false
+  }
+  if ('when' in candidate && candidate.when !== undefined) {
+    if (typeof candidate.when !== 'number' || !Number.isFinite(candidate.when)) {
+      return false
+    }
+  }
+  return true
+}
+
+function ensureDrizzleMigrationsTable(sqliteDb: BetterSqlite3Database): void {
+  sqliteDb.exec(
+    `CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
+      "id" integer PRIMARY KEY AUTOINCREMENT,
+      "hash" text NOT NULL,
+      "created_at" numeric NOT NULL
+    );`,
+  )
+}
 
 function doesTableExist(sqliteDb: BetterSqlite3Database, tableName: string): boolean {
   const row = sqliteDb
@@ -123,16 +159,19 @@ function bootstrapDrizzleMigrationsMetadata(
     throw new Error(`Failed to parse Drizzle journal: ${message}`)
   }
 
-  const normalizedEntries = (Array.isArray(parsed.entries) ? parsed.entries : [])
-    .filter((entry): entry is DrizzleJournalEntry => Boolean(entry && typeof entry.tag === 'string'))
-    .map((entry) => ({
+  const normalizedEntries: NormalizedJournalEntry[] = (Array.isArray(parsed.entries)
+    ? parsed.entries
+    : [])
+    .filter(isDrizzleJournalEntry)
+    .map<NormalizedJournalEntry>((entry) => ({
+      idx: entry.idx,
       hash: entry.tag,
       createdAt:
         typeof entry.when === 'number' && Number.isFinite(entry.when)
           ? entry.when
           : Date.now(),
     }))
-    .sort((a, b) => a.createdAt - b.createdAt)
+    .sort((a, b) => a.createdAt - b.createdAt || a.idx - b.idx)
 
   if (normalizedEntries.length === 0) {
     throw new Error('Drizzle journal does not contain migration entries to seed metadata table')
@@ -155,7 +194,7 @@ function bootstrapDrizzleMigrationsMetadata(
     },
   }
 
-  const entriesToInsert: typeof normalizedEntries = []
+  const entriesToInsert: NormalizedJournalEntry[] = []
   let pendingStartIndex: number | null = null
 
   for (let index = 0; index < normalizedEntries.length; index += 1) {
@@ -174,17 +213,15 @@ function bootstrapDrizzleMigrationsMetadata(
     entriesToInsert.push(entry)
   }
 
-  if (entriesToInsert.length === 0) {
-    throw new Error('Unable to infer applied migrations from journal entries; aborting metadata bootstrap')
-  }
+  ensureDrizzleMigrationsTable(sqliteDb)
 
-  sqliteDb.exec(
-    `CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
-      "id" integer PRIMARY KEY AUTOINCREMENT,
-      "hash" text NOT NULL,
-      "created_at" numeric NOT NULL
-    );`,
-  )
+  if (entriesToInsert.length === 0) {
+    logger.info('database_migrate_meta_bootstrap_no_applied_migrations', {
+      reason: 'Unable to infer any applied migrations from journal entries.',
+      journalPath,
+    })
+    return
+  }
 
   const existingRows = sqliteDb
     .prepare('SELECT hash FROM "__drizzle_migrations"')
@@ -203,7 +240,7 @@ function bootstrapDrizzleMigrationsMetadata(
 
   let inserted = 0
 
-  const runInsert = sqliteDb.transaction((entries: ReadonlyArray<{ hash: string; createdAt: number }>) => {
+  const runInsert = sqliteDb.transaction((entries: ReadonlyArray<NormalizedJournalEntry>) => {
     for (const entry of entries) {
       if (!existingHashes.has(entry.hash)) {
         insertStatement.run(entry.hash, entry.createdAt)
@@ -310,33 +347,33 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
       // 明示的にスキップ指定がある場合はマイグレーションを行わない
       const migrationsFolder = path.join(process.cwd(), 'drizzle')
 
-  const hasDrizzleMeta = doesTableExist(sqliteDb, '__drizzle_migrations')
-  const hasJobsTable = doesTableExist(sqliteDb, 'jobs')
-  const leasingMigrationRecorded = hasDrizzleMeta
-    ? (() => {
-        const row = sqliteDb
-          .prepare('SELECT hash FROM "__drizzle_migrations" WHERE hash = ? LIMIT 1')
-          .get(JOB_LEASING_AND_NOTIFICATIONS_MIGRATION) as { readonly hash?: unknown } | undefined
-        return typeof row?.hash === 'string'
-      })()
-    : false
+      const hasDrizzleMeta = doesTableExist(sqliteDb, '__drizzle_migrations')
+      const hasJobsTable = doesTableExist(sqliteDb, 'jobs')
+      const leasingMigrationRecorded = hasDrizzleMeta
+        ? (() => {
+            const row = sqliteDb
+              .prepare('SELECT hash FROM "__drizzle_migrations" WHERE hash = ? LIMIT 1')
+              .get(JOB_LEASING_AND_NOTIFICATIONS_MIGRATION) as { readonly hash?: unknown } | undefined
+            return typeof row?.hash === 'string'
+          })()
+        : false
 
-  const hasUserTables = (() => {
-    const rows = sqliteDb
-      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-      .all() as unknown
+      const hasUserTables = (() => {
+        const rows = sqliteDb
+          .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+          .all() as unknown
         const list = Array.isArray(rows) ? rows : []
         return list.length > 0
       })()
 
-  if (hasJobsTable && (leasingMigrationRecorded || !hasDrizzleMeta)) {
-    ensureJobLeasingSchema(sqliteDb)
-  }
+      if (hasJobsTable && (leasingMigrationRecorded || !hasDrizzleMeta)) {
+        ensureJobLeasingSchema(sqliteDb)
+      }
 
-  if (!hasDrizzleMeta && hasUserTables) {
-    try {
-      bootstrapDrizzleMigrationsMetadata(sqliteDb, migrationsFolder)
-    } catch (bootstrapError) {
+      if (!hasDrizzleMeta && hasUserTables) {
+        try {
+          bootstrapDrizzleMigrationsMetadata(sqliteDb, migrationsFolder)
+        } catch (bootstrapError) {
           const message = bootstrapError instanceof Error ? bootstrapError.message : String(bootstrapError)
           getLogger().error('database_migrate_meta_bootstrap_failed', {
             message,
