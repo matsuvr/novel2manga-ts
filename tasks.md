@@ -3,6 +3,7 @@
 - [x] Route API errors through `logError`.
 - [x] Guard storage tracking against missing database connections.
 - [ ] Review remaining error logs for further cleanup.
+- [x] Require authentication before enabling landing page novel conversion inputs and provide a clear login prompt.
 - [x] Capture LLM prompt/response exchanges when `LLM_LOGGING=1` and persist them to `logs/llm-interactions.log`.
 - [x] Auto rebuild better-sqlite3 on Node ABI mismatch during database initialization.
 - [x] Detect "Module did not self-register" errors to trigger automatic rebuild of `better-sqlite3`.

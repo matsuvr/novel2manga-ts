@@ -34,12 +34,15 @@ function SampleButton({
   label,
   path,
   onPick,
+  disabled = false,
 }: {
   label: string
   path: string
   onPick: (t: string) => void
+  disabled?: boolean
 }) {
   const load = async () => {
+    if (disabled) return
     const url = path.startsWith('/docs/')
       ? path
       : `/api/docs?path=${encodeURIComponent(path.replace(/^\//, ''))}`
@@ -48,13 +51,14 @@ function SampleButton({
     onPick(await res.text())
   }
   return (
-    <Button variant="outline" size="sm" onClick={load}>
+    <Button variant="outline" size="sm" onClick={load} disabled={disabled}>
       {label}
     </Button>
   )
 }
 
 const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const LOGIN_REQUIRED_MESSAGE = '右上のボタンから登録／ログインをしてください'
 
 export default function NewHomeClient() {
   const router = useRouter()
@@ -67,6 +71,10 @@ export default function NewHomeClient() {
   const [error, setError] = useState<string | null>(null)
   // リダイレクトは router.push を即時実行する方針のため pendingRedirect は不要
   const [isDemo, setIsDemo] = useState(false)
+
+  const isAuthenticated = status === 'authenticated'
+  const isUnauthenticated = status === 'unauthenticated'
+  const isInputDisabled = view !== 'idle' || !isAuthenticated
 
   useEffect(() => {
     try {
@@ -85,6 +93,10 @@ export default function NewHomeClient() {
   const handleConvert = useCallback(async () => {
     setError(null)
     if (!novelText.trim()) return
+    if (!isAuthenticated) {
+      setError(LOGIN_REQUIRED_MESSAGE)
+      return
+    }
     setView('processing')
     try {
       const upload = await fetch('/api/novel', {
@@ -122,7 +134,7 @@ export default function NewHomeClient() {
       setView('idle')
       setError(e instanceof Error ? e.message : '変換に失敗しました')
     }
-  }, [novelText, isDemo, router])
+  }, [novelText, isDemo, router, isAuthenticated])
 
   const handleResume = useCallback(async () => {
     setError(null)
@@ -222,8 +234,11 @@ export default function NewHomeClient() {
                   onChange={(e) => setNovelText(e.target.value.slice(0, 2_000_000))}
                   placeholder="ここにテキストを入力..."
                   className="min-h-[280px]"
-                  disabled={view !== 'idle'}
+                  disabled={isInputDisabled}
                 />
+                {isUnauthenticated && (
+                  <p className="mt-2 text-sm text-destructive">{LOGIN_REQUIRED_MESSAGE}</p>
+                )}
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                   <div className="text-xs text-muted-foreground">
                     概算:{' '}
@@ -237,26 +252,31 @@ export default function NewHomeClient() {
                       label="空き家の冒険"
                       path="/docs/空き家の冒険.txt"
                       onPick={setNovelText}
+                      disabled={isInputDisabled}
                     />
                     <SampleButton
                       label="怪人二十面相"
                       path="/docs/怪人二十面相.txt"
                       onPick={setNovelText}
+                      disabled={isInputDisabled}
                     />
                     <SampleButton
                       label="モルグ街の殺人事件"
                       path="/docs/モルグ街の殺人事件.txt"
                       onPick={setNovelText}
+                      disabled={isInputDisabled}
                     />
                     <SampleButton
                       label="宮本武蔵 地の巻"
                       path="/docs/宮本武蔵地の巻.txt"
                       onPick={setNovelText}
+                      disabled={isInputDisabled}
                     />
                     <SampleButton
                       label="最後の一葉"
                       path="/docs/最後の一葉.txt"
                       onPick={setNovelText}
+                      disabled={isInputDisabled}
                     />
                   </div>
                 </div>
@@ -272,7 +292,7 @@ export default function NewHomeClient() {
                 </div>
                 <Button
                   onClick={handleConvert}
-                  disabled={view !== 'idle' || !novelText.trim()}
+                  disabled={isInputDisabled || !novelText.trim()}
                   size="lg"
                 >
                   {view === 'processing' ? '処理中...' : 'マンガに変換'}
