@@ -72,6 +72,9 @@ export default function ProgressPageClient({ novelId }: Props) {
         <p className="mt-1 text-xs text-white/80">
           このページはURLにnovelIdを含むため、途中で離れても再訪可能です。
         </p>
+        <p className="mt-1 text-xs text-white/80">
+          ジョブが完了したら、自動的に結果ページへ遷移します。また、ログインで用いたメールアドレスに通知が届きます。
+        </p>
       </div>
 
       {/* error/message states and spinner are shown above the processing card */}

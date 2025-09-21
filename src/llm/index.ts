@@ -1,8 +1,8 @@
 import { getLLMProviderConfig } from '@/config/llm.config'
 import { getLogger } from '@/infrastructure/logging/logger'
+import { wrapWithNewLlmLogging } from '@/services/llm/logging-wrapper'
 import type { LlmClient } from './client'
 import { FakeLlmClient } from './fake'
-import { wrapWithLlmLogging } from './logging'
 
 import { GeminiClient, type GeminiConfig } from './providers/gemini'
 import { OpenAIClient, type OpenAIConfig } from './providers/openai'
@@ -32,7 +32,7 @@ export function createLlmClient(config: LlmFactoryConfig): LlmClient {
         baseUrl: config.baseUrl,
         timeout: config.timeout,
       }
-      return wrapWithLlmLogging(new OpenAIClient(openaiConfig))
+      return wrapWithNewLlmLogging(new OpenAIClient(openaiConfig), false)
     }
 
 
@@ -43,7 +43,7 @@ export function createLlmClient(config: LlmFactoryConfig): LlmClient {
         model: config.model,
         timeout: config.timeout,
       }
-      return wrapWithLlmLogging(new GeminiClient(geminiConfig))
+      return wrapWithNewLlmLogging(new GeminiClient(geminiConfig), false)
     }
 
     case 'vertexai': {
@@ -56,7 +56,7 @@ export function createLlmClient(config: LlmFactoryConfig): LlmClient {
           serviceAccountPath: process.env.GOOGLE_APPLICATION_CREDENTIALS,
         },
       }
-      return wrapWithLlmLogging(new VertexAIClient(vertexConfig))
+      return wrapWithNewLlmLogging(new VertexAIClient(vertexConfig), false)
     }
 
     case 'groq': {
@@ -67,7 +67,7 @@ export function createLlmClient(config: LlmFactoryConfig): LlmClient {
         model: config.model,
         timeout: config.timeout,
       }
-      return wrapWithLlmLogging(new OpenAICompatibleClient(groqConfig))
+      return wrapWithNewLlmLogging(new OpenAICompatibleClient(groqConfig), false)
     }
 
     case 'grok': {
@@ -78,7 +78,7 @@ export function createLlmClient(config: LlmFactoryConfig): LlmClient {
         model: config.model,
         timeout: config.timeout,
       }
-      return wrapWithLlmLogging(new OpenAICompatibleClient(grokConfig))
+      return wrapWithNewLlmLogging(new OpenAICompatibleClient(grokConfig), false)
     }
 
     case 'openrouter': {
@@ -89,11 +89,11 @@ export function createLlmClient(config: LlmFactoryConfig): LlmClient {
         baseUrl: config.baseUrl || 'https://openrouter.ai/api/v1',
         timeout: config.timeout,
       }
-      return wrapWithLlmLogging(new OpenAIClient(openrouterConfig))
+      return wrapWithNewLlmLogging(new OpenAIClient(openrouterConfig), false)
     }
 
     case 'fake': {
-      return wrapWithLlmLogging(new FakeLlmClient())
+      return wrapWithNewLlmLogging(new FakeLlmClient(), false)
     }
 
     default:

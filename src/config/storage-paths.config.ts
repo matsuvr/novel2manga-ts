@@ -8,6 +8,7 @@ export const storageBaseDirs = {
   layouts: 'layouts',
   renders: 'renders',
   outputs: 'outputs',
+  llm_log: 'llm_log',
 } as const
 
 // 取り除くべき接頭辞（末尾スラッシュ必須）
@@ -18,6 +19,7 @@ export const removablePrefixes: readonly string[] = [
   `${storageBaseDirs.layouts}/`,
   `${storageBaseDirs.renders}/`,
   `${storageBaseDirs.outputs}/`,
+  `${storageBaseDirs.llm_log}/`,
 ]
 
 // 出力・ログ用途の固定文言

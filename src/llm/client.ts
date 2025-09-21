@@ -76,8 +76,19 @@ export interface LlmClientOptions {
 
 // LLMクライアントインターフェース
 export interface LlmClient {
+  // プロバイダー名
+  readonly provider: string
+
   // チャット完了
   chat(messages: LlmMessage[], options?: LlmClientOptions): Promise<LlmResponse>
+
+  // 構造化生成（オプション）
+  generateStructured?<T = unknown>(params: {
+    messages: LlmMessage[]
+    schema: Record<string, unknown>
+    schemaName?: string
+    options?: LlmClientOptions
+  }): Promise<T>
 
   // 埋め込み（オプション）
   embeddings?(input: string | string[], options?: { model?: string }): Promise<LlmEmbeddingResponse>

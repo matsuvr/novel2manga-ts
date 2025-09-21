@@ -56,6 +56,10 @@ export class OpenAICompatibleClient implements LlmClient {
     this.config = config
   }
 
+  get provider(): string {
+    return this.config.provider
+  }
+
   async chat(messages: LlmMessage[], options: LlmClientOptions = {}): Promise<LlmResponse> {
     try {
       const model = options.model || this.config.model

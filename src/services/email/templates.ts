@@ -8,12 +8,12 @@ export const generateJobNotificationContent = (data: JobNotificationData) => {
   const isCompleted = data.status === 'completed'
 
   const subject = isCompleted
-    ? '漫画化が完了しました - Novel2Manga'
-    : '漫画化でエラーが発生しました - Novel2Manga'
-  const title = isCompleted ? '漫画化が完了しました' : '漫画化でエラーが発生しました'
+    ? '漫画のコマ割りが完了しました - Novel2Manga'
+    : '漫画のコマ割りでエラーが発生しました - Novel2Manga'
+  const title = isCompleted ? '漫画のコマ割りが完了しました' : '漫画のコマ割りでエラーが発生しました'
   const message = isCompleted
-    ? 'お疲れ様です！あなたの小説の漫画化処理が正常に完了しました。'
-    : '申し訳ございません。あなたの小説の漫画化処理中にエラーが発生しました。'
+    ? 'お疲れ様です！あなたの小説の漫画のコマ割り処理が正常に完了しました。'
+    : '申し訳ございません。あなたの小説の漫画のコマ割り処理中にエラーが発生しました。'
 
   const action = isCompleted
     ? { url: jobUrl, label: '結果を確認する', color: '#4CAF50' }
