@@ -6,21 +6,23 @@
  */
 
 import type { NewMangaScript, PageBreakV2 } from '../../types/script'
+
+// 旧 PageBreak 型参照を残している箇所への後方互換エイリアス
+type PageBreak = PageBreakV2
+
 import { buildPanelContentFromScript, parseDialogueAndNarration } from './dialogue-utils'
 
 /**
  * Result of importance-based page break calculation
  */
-export interface ImportancePageBreakResult {
-  pageBreaks: PageBreakV2
+interface ImportancePageBreakResult {
+  pageBreaks: PageBreak
   stats: {
     totalPages: number
     totalPanels: number
     averagePanelsPerPage: number
     importanceDistribution: Record<number, number>
-    /** Remaining importance sum to carry over to next segment */
-    remainingImportance: number
-    /** Indicates the remaining importance belongs to a page that has not received any panels yet */
+    lastPageTotalImportance: number
     carryIntoNewPage: boolean
   }
 }
@@ -41,7 +43,7 @@ export function calculateImportanceBasedPageBreaks(
         totalPanels: 0,
         averagePanelsPerPage: 0,
         importanceDistribution: {},
-        remainingImportance: Math.max(0, Math.min(PAGE_IMPORTANCE_LIMIT - 1, initialImportance)),
+        lastPageTotalImportance: Math.max(0, Math.min(PAGE_IMPORTANCE_LIMIT - 1, initialImportance)),
         carryIntoNewPage: false,
       },
     }
@@ -100,7 +102,7 @@ export function calculateImportanceBasedPageBreaks(
       totalPanels,
       averagePanelsPerPage: Math.round(averagePanelsPerPage * 100) / 100,
       importanceDistribution,
-      remainingImportance: lastPageImportance,
+      lastPageTotalImportance: lastPageImportance,
       carryIntoNewPage: false,
     },
   }

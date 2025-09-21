@@ -107,15 +107,7 @@ export class LlmLogService {
       const prefix = `${novelId}/`
 
       const keys = await storage.list?.(prefix) || []
-
-      // prefixが重複している場合の修正
-      const fixedKeys = keys.map(key => {
-        // キーがprefixで始まり、さらにprefixが重複している場合は修正
-        if (key.startsWith(prefix + prefix.replace('/', ''))) {
-          return key.substring(prefix.length)
-        }
-        return key
-      })
+      const fixedKeys = this.fixDuplicatedPrefixKeys(keys, prefix)
 
       // タイムスタンプでソート（新しい順）
       const sortedKeys = fixedKeys
@@ -162,15 +154,7 @@ export class LlmLogService {
       const storage = await getLlmLogStorage()
       const prefix = `${novelId}/`
       const keys = await storage.list?.(prefix) || []
-
-      // prefixが重複している場合の修正
-      const fixedKeys = keys.map(key => {
-        // キーがprefixで始まり、さらにprefixが重複している場合は修正
-        if (key.startsWith(prefix + prefix.replace('/', ''))) {
-          return key.substring(prefix.length)
-        }
-        return key
-      })
+      const fixedKeys = this.fixDuplicatedPrefixKeys(keys, prefix)
 
       for (const key of fixedKeys) {
         try {
@@ -201,6 +185,20 @@ export class LlmLogService {
    */
   private formatTimestampForFilename(date: Date): string {
     return date.toISOString().replace(/[:]/g, '-').replace(/\./g, '-')
+  }
+
+  /**
+   * storage.list()が返すキーのプレフィックス重複問題への対処
+   * ワークアラウンド: キーを修正するヘルパーメソッド
+   */
+  private fixDuplicatedPrefixKeys(keys: string[], prefix: string): string[] {
+    return keys.map(key => {
+      // キーがprefixで始まり、さらにprefixが重複している場合は修正
+      if (key.startsWith(prefix + prefix.replace('/', ''))) {
+        return key.substring(prefix.length)
+      }
+      return key
+    })
   }
 
   /**

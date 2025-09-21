@@ -411,43 +411,32 @@ function instantiateClientEffect(
 }
 
 function instantiateClient(preference: LlmProviderPreference): LlmClient {
-  if (preference.provider === 'fake') {
-    return createLlmClient({ provider: 'fake' })
-  }
+  if (preference.provider === 'fake') return createLlmClient({ provider: 'fake' })
 
   if (preference.provider === 'gemini') {
     const cfg = getLLMProviderConfig('gemini')
-    if (!cfg.vertexai) {
-      throw new Error('Gemini provider requires Vertex AI configuration')
-    }
+    if (!cfg.vertexai) throw new Error('Gemini provider requires Vertex AI configuration')
     const { project, location, serviceAccountPath } = cfg.vertexai
-    if (!project || !location) {
-      throw new Error('Vertex AI configuration must include project and location')
-    }
-    const clientConfig: LlmProviderConfig = {
+    if (!project || !location) throw new Error('Vertex AI configuration must include project and location')
+    return createLlmClient({
       provider: 'gemini',
       model: preference.model ?? cfg.model,
       project,
       location,
       serviceAccountPath,
-    }
-    return createLlmClient(clientConfig)
+    } as LlmProviderConfig)
   }
 
   if (preference.provider === 'openai') {
     const cfg = getLLMProviderConfig('openai')
-    if (!cfg.apiKey) {
-      throw new Error('OpenAI provider requires an API key for speaker resolution')
-    }
+    if (!cfg.apiKey) throw new Error('OpenAI provider requires an API key for speaker resolution')
     const model = preference.model ?? cfg.model
-    const clientConfig: LlmProviderConfig = {
+    return createLlmClient({
       provider: 'openai',
       apiKey: cfg.apiKey,
       model,
       baseUrl: cfg.baseUrl ?? defaultBaseUrl('openai'),
-      useChatCompletions: !/^gpt-5/i.test(model),
-    }
-    return createLlmClient(clientConfig)
+    } as LlmProviderConfig)
   }
 
   throw new Error(`Unsupported provider preference: ${preference.provider}`)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  selectLayoutTemplate, 
+  selectLayoutTemplate,
   selectLayoutTemplateByCountRandom
 } from '@/utils/layout-templates'
 import {
@@ -13,7 +13,6 @@ describe('Template Selection Functions', () => {
     // Check which panel counts have multiple templates
     for (let count = 1; count <= 6; count++) {
       const templates = loadSampleTemplatesByCount(count)
-      console.log(`Panel count ${count}: ${templates.length} templates available`)
 
       if (templates.length > 0) {
         expect(templates.every(t => t.panelCount === count)).toBe(true)
@@ -47,8 +46,6 @@ describe('Template Selection Functions', () => {
             selectedTemplates.add(template.name)
           }
         }
-
-        console.log(`Panel count ${count}: Selected ${selectedTemplates.size}/${templates.length} different templates`)
 
         // If we have multiple templates, we should get different ones over 20 tries
         // (with high probability unless we're very unlucky)
