@@ -6,14 +6,6 @@ ENV PNPM_HOME=/root/.local/share/pnpm \
 
 WORKDIR /app
 
-# 非rootユーザーで実行
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nextjs -u 1001
-
-# .nextディレクトリを事前に作成し権限設定
-RUN mkdir -p .next && chown -R nextjs:nodejs .next
-
-USER nextjs
 # Install system dependencies for native modules and Playwright
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
