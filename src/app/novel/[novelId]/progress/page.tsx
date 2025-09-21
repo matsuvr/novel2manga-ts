@@ -45,17 +45,7 @@ export default async function ProgressPage({ params }: { params: Promise<{ novel
       <footer className="modern-header border-t mt-auto">
         <div className="container mx-auto px-6 py-6">
           <div className="flex items-center justify-between text-sm text-gray-600">
-            <p>© 2025 Novel to Manga Converter</p>
             <div className="flex items-center space-x-6">
-              <a href="/help" className="hover:text-blue-600 transition-colors">
-                ヘルプ
-              </a>
-              <a href="/privacy" className="hover:text-blue-600 transition-colors">
-                プライバシー
-              </a>
-              <a href="/terms" className="hover:text-blue-600 transition-colors">
-                利用規約
-              </a>
             </div>
           </div>
         </div>
