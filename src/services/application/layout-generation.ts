@@ -527,7 +527,7 @@ async function generateEpisodeLayoutInternal(
     })
     let pageBreaks: { panels: unknown[] } =
       pageBreaksRaw && Array.isArray(pageBreaksRaw.panels)
-        ? pageBreaksRaw
+        ? { panels: pageBreaksRaw.panels as unknown[] }
         : { panels: [] as unknown[] }
 
     // Progress validation: Page breaks must be estimated (fallback in demo)

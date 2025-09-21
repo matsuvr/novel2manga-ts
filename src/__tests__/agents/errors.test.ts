@@ -38,11 +38,11 @@ describe('AgentError', () => {
   describe('static factory methods', () => {
     it('should create AgentError from JSON parse error', () => {
       const jsonError = new SyntaxError('Unexpected token in JSON at position 0')
-      const agentError = AgentError.fromJsonParseError(jsonError, 'cerebras')
+      const agentError = AgentError.fromJsonParseError(jsonError, 'openai')
 
       expect(agentError.message).toContain('Failed to parse JSON response')
       expect(agentError.type).toBe(AgentErrorType.JSON_PARSE_ERROR)
-      expect(agentError.provider).toBe('cerebras')
+      expect(agentError.provider).toBe('openai')
       expect(agentError.originalError).toBe(jsonError)
     })
 
@@ -92,7 +92,7 @@ describe('AgentError', () => {
     })
 
     it('should handle different providers correctly', () => {
-      const providers = ['openai', 'gemini', 'cerebras'] as const
+      const providers = ['openai', 'gemini'] as const
 
       providers.forEach((provider) => {
         const error = new AgentError(AgentErrorType.API_ERROR, 'Test message', provider)
@@ -103,9 +103,9 @@ describe('AgentError', () => {
 
   describe('error message formatting', () => {
     it('should include provider information in error message', () => {
-      const error = new AgentError(AgentErrorType.API_ERROR, 'Custom message', 'cerebras')
+      const error = new AgentError(AgentErrorType.API_ERROR, 'Custom message', 'openai')
       expect(error.message).toBe('Custom message')
-      expect(error.provider).toBe('cerebras')
+      expect(error.provider).toBe('openai')
     })
 
     it('should preserve stack trace', () => {

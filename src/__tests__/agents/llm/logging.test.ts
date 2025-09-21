@@ -126,7 +126,7 @@ describe('maybeWrapStructuredLogging', () => {
     process.env.LLM_LOGGING_PATH = logPath
 
     const baseClient: LlmClient = {
-      provider: 'cerebras',
+      provider: 'fake',
       async generateStructured<T>(_params: GenerateStructuredParams<T>): Promise<T> {
         throw new Error('network timeout')
       },

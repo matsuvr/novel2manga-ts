@@ -1,7 +1,13 @@
-// Tailwind CSS v3 minimal config
+// tailwind.config.js (v3形式)
 /** @type {import('tailwindcss').Config} */
-export default {
-  content: ['./src/**/*.{ts,tsx,js,jsx}', './app/**/*.{ts,tsx,js,jsx}'],
-  theme: { extend: {} },
+module.exports = {
+  content: [
+    './src/**/*.{js,ts,jsx,tsx,mdx}',
+    './app/**/*.{js,ts,jsx,tsx,mdx}',
+    './components/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  theme: {
+    extend: {},
+  },
   plugins: [],
 }

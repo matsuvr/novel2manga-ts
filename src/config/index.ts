@@ -170,7 +170,7 @@ export function getCurrentLLMProvider() {
 
 // 特定のLLMプロバイダー設定を取得
 export function getLLMProviderConfig(
-  provider: 'openai' | 'gemini' | 'groq' | 'grok' | 'openrouter' | 'cerebras' | 'vertexai' | 'fake',
+  provider: 'openai' | 'gemini' | 'groq' | 'grok' | 'openrouter' | 'vertexai' | 'fake',
 ) {
   return getProviderConfig(provider)
 }

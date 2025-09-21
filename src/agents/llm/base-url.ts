@@ -20,12 +20,7 @@ export function resolveBaseUrl(provider: LlmProvider, baseUrlFromConfig?: string
     return baseUrlFromConfig
   }
   // OpenAI 互換系のみデフォルトURLを返す。それ以外（cerebras/fake/gemini/vertexai）は不定。
-  if (
-    provider === 'cerebras' ||
-    provider === 'fake' ||
-    provider === 'gemini' ||
-    provider === 'vertexai'
-  ) {
+  if (provider === 'fake' || provider === 'gemini' || provider === 'vertexai') {
     return 'unknown'
   }
   return defaultBaseUrl(provider as OpenAICompatProvider)

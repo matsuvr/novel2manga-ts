@@ -140,7 +140,10 @@ export async function loadJobResults(job: Job, novelId: string): Promise<JobResu
   return {
     normalizedJob,
     normalizedEpisodes,
-    layoutStatuses,
+    layoutStatuses: layoutStatuses.map((ls) => ({
+      episodeNumber: Number(ls.episodeNumber),
+      totalPages: ls.totalPages ?? undefined,
+    })),
     coverageWarnings,
     tokenUsageByModel: modelTokenUsage,
     novelPreview,

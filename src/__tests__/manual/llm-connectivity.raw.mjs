@@ -4,7 +4,7 @@
 //     npm run manual:llm:raw
 //     PROVIDER=openai npm run manual:llm:raw:provider
 
-const PROVIDERS = ['openai', 'gemini', 'cerebras', 'groq', 'openrouter']
+const PROVIDERS = ['openai', 'gemini', 'groq', 'openrouter']
 
 // minimal .env loader (no deps)
 import fs from 'node:fs'
@@ -55,7 +55,7 @@ function pickProviders(arg) {
   const present = []
   if (hasKey(['OPENAI_API_KEY'])) present.push('openai')
   if (hasKey(['GEMINI_API_KEY', 'GOOGLE_API_KEY'])) present.push('gemini')
-  if (hasKey(['CEREBRAS_API_KEY'])) present.push('cerebras')
+  // cerebras removed from supported providers
   if (hasKey(['GROQ_API_KEY'])) present.push('groq')
   if (hasKey(['OPENROUTER_API_KEY'])) present.push('openrouter')
   return present
@@ -113,35 +113,7 @@ async function testGemini() {
   }
 }
 
-async function testCerebras() {
-  const apiKey = env('CEREBRAS_API_KEY')
-  if (!apiKey) throw new Error('CEREBRAS_API_KEY is missing')
-  const model = env('CEREBRAS_MODEL') || 'llama3.1-8b'
-  const url = 'https://api.cerebras.ai/v1/chat/completions'
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: 'You are an echo bot.' },
-        { role: 'user', content: 'ping' },
-      ],
-      max_tokens: 8,
-    }),
-  })
-  const text = await res.text()
-  return {
-    provider: 'cerebras',
-    status: res.status,
-    ok: res.ok,
-    preview: text.slice(0, 200),
-    source: 'raw-cerebras',
-  }
-}
+// cerebras provider removed — raw HTTP test omitted
 
 async function testGroq() {
   const apiKey = env('GROQ_API_KEY')
@@ -209,7 +181,7 @@ async function main() {
   if (targets.length === 0) {
     console.log('[INFO] No API keys detected. Skipping raw connectivity test.')
     console.log(
-      'Set env: OPENAI_API_KEY / GEMINI_API_KEY|GOOGLE_API_KEY / CEREBRAS_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY',
+  'Set env: OPENAI_API_KEY / GEMINI_API_KEY|GOOGLE_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY',
     )
     process.exit(0)
   }
@@ -221,7 +193,6 @@ async function main() {
       let r
       if (p === 'openai') r = await testOpenAI()
       if (p === 'gemini') r = await testGemini()
-      if (p === 'cerebras') r = await testCerebras()
       if (p === 'groq') r = await testGroq()
       if (p === 'openrouter') r = await testOpenRouter()
       out.push(r)

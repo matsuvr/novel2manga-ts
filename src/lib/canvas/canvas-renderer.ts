@@ -171,7 +171,7 @@ export class CanvasRenderer {
 
   // Provide robust defaults in case app config is partially mocked in tests
   private getCanvasCfg() {
-    const base = this.appConfig?.rendering?.canvas || {}
+    const base: Partial<AppCanvasConfig> = (this.appConfig?.rendering?.canvas || {}) as Partial<AppCanvasConfig>
     const fallback = DEFAULT_CANVAS_RENDERING_CONFIG
     // shallow merge + deep for bubble.thoughtShape/prng
     const merged = {
@@ -183,10 +183,6 @@ export class CanvasRenderer {
         thoughtShape: {
           ...fallback.bubble.thoughtShape,
           ...(base.bubble?.thoughtShape || {}),
-          prng: {
-            ...fallback.bubble.thoughtShape.prng,
-            ...(base.bubble?.thoughtShape?.prng || {}),
-          },
         },
         thoughtTail: { ...fallback.bubble.thoughtTail, ...(base.bubble?.thoughtTail || {}) },
       },
