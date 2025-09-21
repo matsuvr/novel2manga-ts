@@ -34,6 +34,8 @@
 - Initialization logs now differentiate between failures before and after the automatic rebuild for clearer diagnostics.
 - Docker runtime now uses Node 20 LTS to align native module ABI with `better-sqlite3`.
 - Detection of native module errors now includes "Module did not self-register" messages, ensuring auto-rebuild covers more failure modes.
+- Legacy SQLite files that predate Drizzle metadata are auto-healed: startup rebuilds `__drizzle_migrations` from `drizzle/meta/_journal.json` and then executes pending migrations so columns like `jobs.locked_by` are always present.
+- If `__drizzle_migrations` already records the leasing migration but the `jobs` table drifted, initialization re-applies the leasing columns and notification outbox before continuing so runtime queries never hit `no such column` failures.
 
 
 ## Authentication

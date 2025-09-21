@@ -17,6 +17,250 @@ const require = createRequire(import.meta.url)
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null
 let rebuildAttempted = false
 
+type BetterSqlite3Module = typeof import('better-sqlite3')
+type BetterSqlite3Database = InstanceType<BetterSqlite3Module>
+
+interface DrizzleJournalEntry {
+  readonly idx: number
+  readonly tag: string
+  readonly when?: number
+}
+
+interface DrizzleJournal {
+  readonly entries?: ReadonlyArray<unknown>
+}
+
+type NormalizedJournalEntry = Readonly<{
+  idx: number
+  hash: string
+  createdAt: number
+}>
+
+const JOB_LEASING_AND_NOTIFICATIONS_MIGRATION = '0018_job_leasing_and_notifications' as const
+
+function isDrizzleJournalEntry(entry: unknown): entry is DrizzleJournalEntry {
+  if (typeof entry !== 'object' || entry === null) {
+    return false
+  }
+  const candidate = entry as Record<string, unknown>
+  if (typeof candidate.tag !== 'string') {
+    return false
+  }
+  if (typeof candidate.idx !== 'number' || !Number.isFinite(candidate.idx)) {
+    return false
+  }
+  if ('when' in candidate && candidate.when !== undefined) {
+    if (typeof candidate.when !== 'number' || !Number.isFinite(candidate.when)) {
+      return false
+    }
+  }
+  return true
+}
+
+function ensureDrizzleMigrationsTable(sqliteDb: BetterSqlite3Database): void {
+  sqliteDb.exec(
+    `CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
+      "id" integer PRIMARY KEY AUTOINCREMENT,
+      "hash" text NOT NULL,
+      "created_at" numeric NOT NULL
+    );`,
+  )
+}
+
+function doesTableExist(sqliteDb: BetterSqlite3Database, tableName: string): boolean {
+  const row = sqliteDb
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?")
+    .get(tableName) as { readonly name?: unknown } | undefined
+  return typeof row?.name === 'string'
+}
+
+function ensureJobLeasingSchema(sqliteDb: BetterSqlite3Database): void {
+  const logger = getLogger().withContext({ scope: 'drizzle-bootstrap' })
+  if (!doesTableExist(sqliteDb, 'jobs')) {
+    logger.debug('database_job_table_missing_for_legacy_patch', { table: 'jobs' })
+    return
+  }
+  const columnRows = sqliteDb
+    .prepare("PRAGMA table_info('jobs')")
+    .all() as ReadonlyArray<{ readonly name?: unknown }>
+  const existingColumns = new Set(
+    columnRows
+      .map((row) => (row && typeof row.name === 'string' ? row.name : ''))
+      .filter((name) => name.length > 0),
+  )
+
+  const columnStatements: ReadonlyArray<{ readonly name: string; readonly sql: string }> = [
+    { name: 'locked_by', sql: 'ALTER TABLE jobs ADD COLUMN locked_by TEXT' },
+    { name: 'lease_expires_at', sql: 'ALTER TABLE jobs ADD COLUMN lease_expires_at TEXT' },
+    { name: 'last_notified_status', sql: 'ALTER TABLE jobs ADD COLUMN last_notified_status TEXT' },
+    { name: 'last_notified_at', sql: 'ALTER TABLE jobs ADD COLUMN last_notified_at TEXT' },
+  ]
+
+  let appliedColumns = 0
+  for (const statement of columnStatements) {
+    if (!existingColumns.has(statement.name)) {
+      sqliteDb.exec(statement.sql)
+      appliedColumns += 1
+    }
+  }
+
+  const notificationsTable = sqliteDb
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='job_notifications'",
+    )
+    .get() as { readonly name?: unknown } | undefined
+
+  let createdNotificationsTable = false
+  if (!notificationsTable || typeof notificationsTable.name !== 'string') {
+    sqliteDb.exec(
+      `CREATE TABLE IF NOT EXISTS job_notifications (
+        id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_job_notifications_job FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+      );`,
+    )
+    sqliteDb.exec(
+      'CREATE UNIQUE INDEX IF NOT EXISTS unique_job_notification ON job_notifications (job_id, status);',
+    )
+    sqliteDb.exec(
+      'CREATE INDEX IF NOT EXISTS idx_job_notifications_job_id ON job_notifications (job_id);',
+    )
+    createdNotificationsTable = true
+  }
+
+  if (appliedColumns > 0 || createdNotificationsTable) {
+    logger.info('database_legacy_schema_patched', {
+      appliedColumns,
+      createdNotificationsTable,
+    })
+  }
+}
+
+function bootstrapDrizzleMigrationsMetadata(
+  sqliteDb: BetterSqlite3Database,
+  migrationsDir: string,
+): void {
+  const logger = getLogger().withContext({ scope: 'drizzle-bootstrap' })
+  const journalPath = path.join(migrationsDir, 'meta', '_journal.json')
+
+  if (!fs.existsSync(journalPath)) {
+    throw new Error(`Drizzle journal not found at ${journalPath}`)
+  }
+
+  const rawJournal = fs.readFileSync(journalPath, 'utf8')
+  let parsed: DrizzleJournal
+
+  try {
+    parsed = JSON.parse(rawJournal) as DrizzleJournal
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Failed to parse Drizzle journal: ${message}`)
+  }
+
+  const normalizedEntries: NormalizedJournalEntry[] = (Array.isArray(parsed.entries)
+    ? parsed.entries
+    : [])
+    .filter(isDrizzleJournalEntry)
+    .map<NormalizedJournalEntry>((entry) => ({
+      idx: entry.idx,
+      hash: entry.tag,
+      createdAt:
+        typeof entry.when === 'number' && Number.isFinite(entry.when)
+          ? entry.when
+          : Date.now(),
+    }))
+    .sort((a, b) => a.createdAt - b.createdAt || a.idx - b.idx)
+
+  if (normalizedEntries.length === 0) {
+    throw new Error('Drizzle journal does not contain migration entries to seed metadata table')
+  }
+
+  const migrationValidators: Record<string, (db: BetterSqlite3Database) => boolean> = {
+    [JOB_LEASING_AND_NOTIFICATIONS_MIGRATION]: (database) => {
+      const rows = database
+        .prepare("PRAGMA table_info('jobs')")
+        .all() as ReadonlyArray<{ readonly name?: unknown }>
+      const names = rows
+        .map((row) => (row && typeof row.name === 'string' ? row.name : ''))
+        .filter((name) => name.length > 0)
+      return (
+        names.includes('locked_by') &&
+        names.includes('lease_expires_at') &&
+        names.includes('last_notified_status') &&
+        names.includes('last_notified_at')
+      )
+    },
+  }
+
+  const entriesToInsert: NormalizedJournalEntry[] = []
+  let pendingStartIndex: number | null = null
+
+  for (let index = 0; index < normalizedEntries.length; index += 1) {
+    const entry = normalizedEntries[index]
+    const validator = migrationValidators[entry.hash]
+
+    if (validator && !validator(sqliteDb)) {
+      pendingStartIndex = index
+      logger.warn('database_migrate_meta_validator_pending', {
+        migration: entry.hash,
+        reason: 'validator returned false',
+      })
+      break
+    }
+
+    entriesToInsert.push(entry)
+  }
+
+  ensureDrizzleMigrationsTable(sqliteDb)
+
+  if (entriesToInsert.length === 0) {
+    logger.info('database_migrate_meta_bootstrap_no_applied_migrations', {
+      reason: 'Unable to infer any applied migrations from journal entries.',
+      journalPath,
+    })
+    return
+  }
+
+  const existingRows = sqliteDb
+    .prepare('SELECT hash FROM "__drizzle_migrations"')
+    .all() as ReadonlyArray<{ readonly hash?: unknown }>
+
+  const existingHashes = new Set<string>()
+  for (const row of existingRows) {
+    if (row && typeof row.hash === 'string' && row.hash.length > 0) {
+      existingHashes.add(row.hash)
+    }
+  }
+
+  const insertStatement = sqliteDb.prepare(
+    'INSERT INTO "__drizzle_migrations" ("hash", "created_at") VALUES (?, ?)',
+  )
+
+  let inserted = 0
+
+  const runInsert = sqliteDb.transaction((entries: ReadonlyArray<NormalizedJournalEntry>) => {
+    for (const entry of entries) {
+      if (!existingHashes.has(entry.hash)) {
+        insertStatement.run(entry.hash, entry.createdAt)
+        existingHashes.add(entry.hash)
+        inserted += 1
+      }
+    }
+  })
+
+  runInsert(entriesToInsert)
+
+  logger.info('database_migrate_meta_bootstrap_completed', {
+    inserted,
+    totalEntries: entriesToInsert.length,
+    journalPath,
+    pendingMigrations:
+      pendingStartIndex === null ? 0 : normalizedEntries.length - pendingStartIndex,
+  })
+}
+
 function isNativeModuleError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return (
@@ -101,58 +345,64 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
 
       // In dev/test, run migrations only when it's safe to do so。
       // 明示的にスキップ指定がある場合はマイグレーションを行わない
-      if (shouldRunMigrations()) {
-        // Detect if the DB already has application tables but lacks drizzle's meta table.
-        // In that case, running migrations may fail with "table already exists"; skip with a clear warning.
-        const hasDrizzleMeta = (() => {
-          const row = sqliteDb
-            .prepare(
-              "SELECT name FROM sqlite_master WHERE type='table' AND name='__drizzle_migrations'",
-            )
-            .get() as unknown
-          const name = (row as null | Record<string, unknown>)?.name
-          return typeof name === 'string'
-        })()
+      const migrationsFolder = path.join(process.cwd(), 'drizzle')
 
-        const hasUserTables = (() => {
-          const rows = sqliteDb
-            .prepare(
-              "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
-            )
-            .all() as unknown
-          const list = Array.isArray(rows) ? rows : []
-          return list.length > 0
-        })()
+      const hasDrizzleMeta = doesTableExist(sqliteDb, '__drizzle_migrations')
+      const hasJobsTable = doesTableExist(sqliteDb, 'jobs')
+      const leasingMigrationRecorded = hasDrizzleMeta
+        ? (() => {
+            const row = sqliteDb
+              .prepare('SELECT hash FROM "__drizzle_migrations" WHERE hash = ? LIMIT 1')
+              .get(JOB_LEASING_AND_NOTIFICATIONS_MIGRATION) as { readonly hash?: unknown } | undefined
+            return typeof row?.hash === 'string'
+          })()
+        : false
 
-        if (!hasDrizzleMeta && hasUserTables) {
-          // DBは既にアプリのテーブルを持つが、マイグレーション管理テーブルが無い状態。
-          // この場合は自動migrateをスキップし、明確なメッセージを出す。
-          getLogger().warn('database_migrate_meta_missing', {
+      const hasUserTables = (() => {
+        const rows = sqliteDb
+          .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+          .all() as unknown
+        const list = Array.isArray(rows) ? rows : []
+        return list.length > 0
+      })()
+
+      if (hasJobsTable && (leasingMigrationRecorded || !hasDrizzleMeta)) {
+        ensureJobLeasingSchema(sqliteDb)
+      }
+
+      if (!hasDrizzleMeta && hasUserTables) {
+        try {
+          bootstrapDrizzleMigrationsMetadata(sqliteDb, migrationsFolder)
+        } catch (bootstrapError) {
+          const message = bootstrapError instanceof Error ? bootstrapError.message : String(bootstrapError)
+          getLogger().error('database_migrate_meta_bootstrap_failed', {
+            message,
             dbPath,
-            action:
-              '開発用途: そのまま継続可能です。厳密整合が必要な場合はDBを初期化するか、手動でメタを整合させてください。',
-            options: [
-              '安全: database/novel2manga.db を一旦削除して起動時にクリーン作成（データ消去に注意）',
-              '上級: drizzle/meta/_journal.json の内容に合わせて __drizzle_migrations を手動作成・同期',
+            guidance: [
+              'database/novel2manga.db を退避した上で npm run db:migrate を実行すると再生成されます。',
+              'あるいは drizzle/meta/_journal.json を参照して __drizzle_migrations を手動整備してください。',
             ],
           })
-        } else {
-          try {
-            migrate(drizzleDb, { migrationsFolder: path.join(process.cwd(), 'drizzle') })
-          } catch (migrateError) {
-            // フォールバック禁止方針: マイグレーション失敗は重大事として明示し、起動を停止する
-            const message =
-              migrateError instanceof Error ? migrateError.message : String(migrateError)
-            getLogger().error('database_migrate_failed', {
-              message,
-              guidance: [
-                '1) 開発用途: database/novel2manga.db を削除して再作成 (データ消去に注意)',
-                '2) 既存DB維持: drizzle/meta/_journal.json と __drizzle_migrations の整合を取り、重複カラム/テーブルを手動修正',
-                '3) 競合例: 既に存在するカラムに対する ALTER TABLE 追加 (drizzle/000x_*.sql) など',
-              ],
-            })
-            throw migrateError
-          }
+          throw bootstrapError
+        }
+      }
+
+      const shouldMigrate = shouldRunMigrations()
+      if (shouldMigrate) {
+        try {
+          migrate(drizzleDb, { migrationsFolder })
+        } catch (migrateError) {
+          // フォールバック禁止方針: マイグレーション失敗は重大事として明示し、起動を停止する
+          const message = migrateError instanceof Error ? migrateError.message : String(migrateError)
+          getLogger().error('database_migrate_failed', {
+            message,
+            guidance: [
+              '1) 開発用途: database/novel2manga.db を削除して再作成 (データ消去に注意)',
+              '2) 既存DB維持: drizzle/meta/_journal.json と __drizzle_migrations の整合を取り、重複カラム/テーブルを手動修正',
+              '3) 競合例: 既に存在するカラムに対する ALTER TABLE 追加 (drizzle/000x_*.sql) など',
+            ],
+          })
+          throw migrateError
         }
       }
 
@@ -204,6 +454,14 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
     throw new Error('Database not initialized')
   }
   return db
+}
+
+export const __databaseInternals = {
+  ensureJobLeasingSchema,
+  bootstrapDrizzleMigrationsMetadata,
+  resetDatabaseCache: () => {
+    db = null
+  },
 }
 
 export { schema }
