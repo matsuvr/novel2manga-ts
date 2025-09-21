@@ -24,9 +24,7 @@ fi
 # Ensure the Next.js cache directory is present and writable before starting
 # the dev server. Docker volumes created with root ownership cause Next.js to
 # crash when it tries to update its build manifest.
-if [ ! -d "$NEXT_CACHE_DIR" ]; then
-  mkdir -p "$NEXT_CACHE_DIR" 2>/dev/null || true
-fi
+mkdir -p "$NEXT_CACHE_DIR"
 
 if [ ! -w "$NEXT_CACHE_DIR" ]; then
   cat >&2 <<'EOF'
