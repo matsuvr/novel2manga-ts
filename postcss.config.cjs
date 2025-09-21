@@ -3,7 +3,7 @@
 // See: https://tailwindcss.com/docs/installation (v4 transition notes)
 module.exports = {
   plugins: {
-    tailwindcss: {},
+    tailwindcss: {},  // '@tailwindcss/postcss' ではなく 'tailwindcss' を使用
     autoprefixer: {},
   },
 }

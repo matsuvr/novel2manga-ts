@@ -14,6 +14,8 @@ import type {
 import { isCharacterId } from '@/types/extractionV2'
 import {
   formatValidationErrors,
+  type ValidatedCharacterMemoryJson,
+  type ValidatedCharacterMemoryPromptJson,
   validateCharacterMemoryJson,
   validateCharacterMemoryPromptJson,
 } from '@/validation/extractionV2'
@@ -35,7 +37,7 @@ export function memoryToJson(memory: CharacterMemory): CharacterMemoryJson {
 }
 
 /** Convert JSON to CharacterMemory */
-export function jsonToMemory(json: CharacterMemoryJson): CharacterMemory {
+export function jsonToMemory(json: ValidatedCharacterMemoryJson): CharacterMemory {
   return {
     id: json.id,
     names: new Set(json.names),
@@ -47,7 +49,11 @@ export function jsonToMemory(json: CharacterMemoryJson): CharacterMemory {
         isCharacterId(entry[0]),
       ),
     ),
-    timeline: json.timeline,
+    timeline: json.timeline.map((t) => ({
+      chunkIndex: t.chunkIndex,
+      action: t.action,
+      index: t.index,
+    })),
     lastSeenChunk: json.lastSeenChunk,
   }
 }
@@ -203,7 +209,15 @@ export async function loadPromptMemory(
     if (Array.isArray(data)) {
       for (const item of data) {
         const validation = validateCharacterMemoryPromptJson(item)
-        if (validation.success) valid.push(validation.data)
+        if (validation.success) {
+          const d = validation.data as ValidatedCharacterMemoryPromptJson
+          valid.push({
+            id: d.id,
+            names: d.names,
+            summary: d.summary,
+            lastSeenChunk: d.lastSeenChunk,
+          })
+        }
       }
     } else {
       getLogger()

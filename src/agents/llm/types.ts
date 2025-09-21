@@ -5,7 +5,6 @@ export type LlmProvider =
   | 'groq'
   | 'grok'
   | 'openrouter'
-  | 'cerebras'
   | 'gemini'
   | 'vertexai'
   | 'fake'
@@ -51,8 +50,5 @@ export interface OpenAICompatibleConfig {
   useChatCompletions?: boolean
 }
 
-export interface CerebrasConfig {
-  baseUrl?: string
-  apiKey: string
-  model: string
-}
+// Cerebras provider removed
+

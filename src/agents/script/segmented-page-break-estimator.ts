@@ -135,7 +135,10 @@ export async function estimatePageBreaksSegmented(
 
       importanceCarry = segmentResult.stats.remainingImportance
       const maxPage = segmentResult.pageBreaks.panels.reduce((m, p) => Math.max(m, p.pageNumber), 0)
-      const completedPages = Math.max(0, maxPage - (importanceCarry > 0 ? 1 : 0))
+      let completedPages = maxPage
+      if (importanceCarry > 0 && !segmentResult.stats.carryIntoNewPage) {
+        completedPages = Math.max(0, maxPage - 1)
+      }
       pageOffset += completedPages
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)

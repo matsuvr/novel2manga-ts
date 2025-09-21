@@ -3,12 +3,12 @@ import { getLogger } from '@/infrastructure/logging/logger'
 import type { LlmClient } from './client'
 import { FakeLlmClient } from './fake'
 import { wrapWithLlmLogging } from './logging'
-import { CerebrasClient, type CerebrasConfig } from './providers/cerebras'
+
 import { GeminiClient, type GeminiConfig } from './providers/gemini'
 import { OpenAIClient, type OpenAIConfig } from './providers/openai'
 import { OpenAICompatibleClient, type OpenAICompatibleConfig } from './providers/openai-compatible'
 
-export type LLMProvider = 'openai' | 'gemini' | 'groq' | 'grok' | 'openrouter' | 'cerebras' | 'fake'
+export type LLMProvider = 'openai' | 'gemini' | 'groq' | 'grok' | 'openrouter' | 'vertexai' | 'fake'
 
 export interface LlmFactoryConfig {
   provider: LLMProvider
@@ -34,15 +34,7 @@ export function createLlmClient(config: LlmFactoryConfig): LlmClient {
       return wrapWithLlmLogging(new OpenAIClient(openaiConfig))
     }
 
-    case 'cerebras': {
-      const cerebrasConfig: CerebrasConfig = {
-        apiKey: config.apiKey || process.env.CEREBRAS_API_KEY || '',
-        model: config.model,
-        baseUrl: config.baseUrl,
-        timeout: config.timeout,
-      }
-      return wrapWithLlmLogging(new CerebrasClient(cerebrasConfig))
-    }
+
 
     case 'gemini': {
       const geminiConfig: GeminiConfig = {
@@ -120,7 +112,7 @@ export function getDefaultProvider(): LLMProvider {
   if (process.env.NODE_ENV === 'test') {
     return 'fake'
   }
-  return 'cerebras'
+  return 'vertexai'
 }
 
 /**
@@ -128,7 +120,7 @@ export function getDefaultProvider(): LLMProvider {
  * エラー時に次のプロバイダーを試行
  */
 export async function createLlmClientWithFallback(
-  providers: LLMProvider[] = ['cerebras', 'openai', 'gemini'],
+  providers: LLMProvider[] = ['openai', 'gemini'],
 ): Promise<LlmClient> {
   for (const provider of providers) {
     try {
@@ -153,7 +145,6 @@ export async function createLlmClientWithFallback(
 // エクスポート
 export * from './client'
 export * from './fake'
-export * from './providers/cerebras'
 export * from './providers/gemini'
 export * from './providers/openai'
 export * from './providers/openai-compatible'

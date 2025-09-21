@@ -20,6 +20,8 @@ export interface ImportancePageBreakResult {
     importanceDistribution: Record<number, number>
     /** Remaining importance sum to carry over to next segment */
     remainingImportance: number
+    /** Indicates the remaining importance belongs to a page that has not received any panels yet */
+    carryIntoNewPage: boolean
   }
 }
 
@@ -30,6 +32,7 @@ export function calculateImportanceBasedPageBreaks(
   script: NewMangaScript,
   initialImportance = 0,
 ): ImportancePageBreakResult {
+  const PAGE_IMPORTANCE_LIMIT = 6
   if (!script.panels || script.panels.length === 0) {
     return {
       pageBreaks: { panels: [] },
@@ -38,7 +41,8 @@ export function calculateImportanceBasedPageBreaks(
         totalPanels: 0,
         averagePanelsPerPage: 0,
         importanceDistribution: {},
-        remainingImportance: Math.max(0, Math.min(5, initialImportance)),
+        remainingImportance: Math.max(0, Math.min(PAGE_IMPORTANCE_LIMIT - 1, initialImportance)),
+        carryIntoNewPage: false,
       },
     }
   }
@@ -48,10 +52,11 @@ export function calculateImportanceBasedPageBreaks(
 
   let currentPage = 1
   let currentPanelIndex = 1
-  let importanceSum = Math.max(0, Math.min(5, initialImportance))
+  let importanceSum = Math.max(0, Math.min(PAGE_IMPORTANCE_LIMIT - 1, initialImportance))
+  let hasPanelsOnCurrentPage = false
 
   for (const panel of script.panels) {
-    const importance = Math.max(1, Math.min(6, panel.importance || 1))
+    const importance = Math.max(1, Math.min(PAGE_IMPORTANCE_LIMIT, panel.importance || 1))
 
     // Track importance distribution
     importanceDistribution[importance] = (importanceDistribution[importance] || 0) + 1
@@ -68,29 +73,36 @@ export function calculateImportanceBasedPageBreaks(
       ...(panel.sfx && { sfx: panel.sfx }),
     })
 
+    hasPanelsOnCurrentPage = true
     importanceSum += importance
 
     // Check if we should move to next page
-    if (importanceSum >= 6) {
+    if (importanceSum >= PAGE_IMPORTANCE_LIMIT) {
+      const overflow = importanceSum - PAGE_IMPORTANCE_LIMIT
       currentPage++
       currentPanelIndex = 1
-      importanceSum = 0
+      importanceSum = overflow
+      hasPanelsOnCurrentPage = false
     } else {
       currentPanelIndex++
     }
   }
 
   const totalPanels = script.panels.length
-  const averagePanelsPerPage = currentPage > 0 ? totalPanels / currentPage : 0
+  const maxPageNumber = resultPanels.reduce((max, panel) => Math.max(max, panel.pageNumber), 0)
+  const carryIntoNewPage = importanceSum > 0 && !hasPanelsOnCurrentPage
+  const totalPages = maxPageNumber + (carryIntoNewPage ? 1 : 0)
+  const averagePanelsPerPage = totalPages > 0 ? totalPanels / totalPages : 0
 
   return {
     pageBreaks: { panels: resultPanels },
     stats: {
-      totalPages: currentPage,
+      totalPages,
       totalPanels,
       averagePanelsPerPage: Math.round(averagePanelsPerPage * 100) / 100,
       importanceDistribution,
       remainingImportance: importanceSum,
+      carryIntoNewPage,
     },
   }
 }

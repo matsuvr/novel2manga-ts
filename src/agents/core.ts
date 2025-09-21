@@ -98,7 +98,6 @@ export class AgentCore {
   private getProviderName(): string {
     const clientName = this.client.constructor.name
     if (clientName.includes('OpenAI')) return 'openai'
-    if (clientName.includes('Cerebras')) return 'cerebras'
     if (clientName.includes('Gemini')) return 'gemini'
     if (clientName.includes('Fake')) return 'fake'
     return 'unknown'

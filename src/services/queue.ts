@@ -37,8 +37,9 @@ export function getJobQueue(): JobQueue {
   // while still memoizing the returned JobQueue.
   // Note: keep an InMemory fallback for other environments, but tests
   // expect an exception when JOBS_QUEUE is explicitly undefined.
-  // @ts-expect-error dynamic test shim on globalThis
-  const binding = globalThis.JOBS_QUEUE
+  const binding = (globalThis as Record<string, unknown>).JOBS_QUEUE as
+    | { send?: (msg: JobQueueMessage) => Promise<void> }
+    | undefined
   if (binding === undefined) {
     // If a singleton already exists (from prior use), return it.
     // However tests explicitly set JOBS_QUEUE = undefined and expect
@@ -52,8 +53,7 @@ export function getJobQueue(): JobQueue {
       singleton = {
         async enqueue(message: JobQueueMessage) {
           // Delegate to platform binding
-          // @ts-expect-error dynamic test shim
-          await globalThis.JOBS_QUEUE.send(message)
+          await (binding as { send: (msg: JobQueueMessage) => Promise<void> }).send(message)
         },
       }
     }

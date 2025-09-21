@@ -36,6 +36,10 @@ export interface StepResult<TData = unknown> {
   success: true
   data: TData
   message?: string
+  // Provide an optional error field for ergonomic access in callers that
+  // handle both success and error shapes. This keeps type narrowing simple
+  // across the codebase, while still using success as the primary discriminator.
+  error?: string
 }
 
 /**

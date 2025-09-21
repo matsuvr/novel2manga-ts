@@ -6,6 +6,14 @@ ENV PNPM_HOME=/root/.local/share/pnpm \
 
 WORKDIR /app
 
+# 非rootユーザーで実行
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nextjs -u 1001
+
+# .nextディレクトリを事前に作成し権限設定
+RUN mkdir -p .next && chown -R nextjs:nodejs .next
+
+USER nextjs
 # Install system dependencies for native modules and Playwright
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -20,8 +28,12 @@ RUN apt-get update && \
 
 # Install dependencies only (leverage Docker layer cache)
 FROM base AS deps
+# Install dependencies with devDependencies included so the development image has
+# the modules required by Next.js (for example @tailwindcss/postcss).
+ENV NODE_ENV=development
 COPY package.json package-lock.json ./
 RUN npm ci
+ENV NODE_ENV=production
 
 # Preserve a copy of installed node_modules in the image so containers can
 # populate a writable volume at runtime (avoids Next.js auto-installing

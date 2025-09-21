@@ -58,15 +58,15 @@ type SimplePromptConfig = {
 }
 function resolveProvider(): LLMProvider {
   const envP = (process.env.PROVIDER || '').trim().toLowerCase()
-  const allow: LLMProvider[] = ['openai', 'gemini', 'groq', 'openrouter', 'cerebras', 'fake']
+  const allow: LLMProvider[] = ['openai', 'gemini', 'groq', 'openrouter', 'fake']
   if (allow.includes(envP as LLMProvider)) return envP as LLMProvider
-  // キー検出による自動選択（優先度: gemini -> openai -> groq -> openrouter -> cerebras）
+  // キー検出による自動選択（優先度: gemini -> openai -> groq -> openrouter）
   const has = (k: string) => (process.env[k] || '').trim().length > 0
   if (has('GEMINI_API_KEY') || has('GOOGLE_API_KEY')) return 'gemini'
   if (has('OPENAI_API_KEY')) return 'openai'
   if (has('GROQ_API_KEY')) return 'groq'
   if (has('OPENROUTER_API_KEY')) return 'openrouter'
-  if (has('CEREBRAS_API_KEY')) return 'cerebras'
+  // cerebras removed from supported providers
   return 'gemini'
 }
 

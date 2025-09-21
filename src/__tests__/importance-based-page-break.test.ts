@@ -3,6 +3,24 @@ import { calculateImportanceBasedPageBreaks } from '@/agents/script/importance-b
 import type { NewMangaScript } from '@/types/script'
 
 describe('importance-based page breaks', () => {
+  const buildScript = (importances: number[]): NewMangaScript => ({
+    style_tone: '',
+    style_art: '',
+    style_sfx: '',
+    characters: [],
+    locations: [],
+    props: [],
+    continuity_checks: [],
+    panels: importances.map((importance, idx) => ({
+      no: idx + 1,
+      cut: `CUT ${idx + 1}`,
+      camera: `CAM ${idx + 1}`,
+      dialogue: [],
+      narration: [],
+      importance,
+    })),
+  })
+
   it('maps dialogue speaker/text and narration, and combines cut/camera into content', () => {
     const script: NewMangaScript = {
       style_tone: '',
@@ -48,5 +66,29 @@ describe('importance-based page breaks', () => {
     const p2 = pageBreaks.panels[1]
     expect(p2.content).toBe('CUT: 太郎の顔\nCAM: ズームイン')
     expect(p2.dialogue?.[0]).toEqual({ speaker: '花子', text: 'そうね', type: 'speech' })
+  })
+
+  it('carries overflow importance into the next page', () => {
+    const script = buildScript([5, 5])
+
+    const { pageBreaks, stats } = calculateImportanceBasedPageBreaks(script)
+    const pages = pageBreaks.panels.map((panel) => panel.pageNumber)
+
+    expect(pages).toEqual([1, 1])
+    expect(stats.remainingImportance).toBe(4)
+    expect(stats.carryIntoNewPage).toBe(true)
+    expect(stats.totalPages).toBe(2)
+  })
+
+  it('leaves partial pages when the last page has panels but does not reach the threshold', () => {
+    const script = buildScript([3, 3, 2])
+
+    const { pageBreaks, stats } = calculateImportanceBasedPageBreaks(script)
+    const pages = pageBreaks.panels.map((panel) => panel.pageNumber)
+
+    expect(pages).toEqual([1, 1, 2])
+    expect(stats.remainingImportance).toBe(2)
+    expect(stats.carryIntoNewPage).toBe(false)
+    expect(stats.totalPages).toBe(2)
   })
 })

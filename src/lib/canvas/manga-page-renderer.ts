@@ -442,13 +442,13 @@ export class MangaPageRenderer {
         padding: feature.defaults.padding,
       }
 
-      const allResults: Array<{ meta: { width: number; height: number }; pngBuffer: Buffer }> = []
+  const allResults: Array<{ meta: { width?: number; height?: number }; pngBuffer: Buffer }> = []
       let offset = 0
       const limit = dialogueAssetsConfig.batch.limit
       while (offset < items.length) {
         const slice = items.slice(offset, offset + limit)
         const apiStartTime = Date.now()
-        let res: Array<{ meta: { width: number; height: number }; pngBuffer: Buffer }> = []
+  let res: Array<{ meta: { width?: number; height?: number }; pngBuffer: Buffer }> = []
         try {
           const apiRes = await renderVerticalTextBatch({ defaults, items: slice })
           // Normalize to array type defensively
@@ -460,7 +460,7 @@ export class MangaPageRenderer {
               meta: { width: 100, height: 120 },
               pngBuffer: Buffer.from([]),
             }))
-            res = ph as Array<{ meta: { width: number; height: number }; pngBuffer: Buffer }>
+            res = ph as Array<{ meta: { width?: number; height?: number }; pngBuffer: Buffer }>
           } else {
             throw e
           }
@@ -486,7 +486,7 @@ export class MangaPageRenderer {
             res = slice.map(() => ({
               meta: { width: 100, height: 120 },
               pngBuffer: Buffer.from([]),
-            })) as Array<{ meta: { width: number; height: number }; pngBuffer: Buffer }>
+            })) as Array<{ meta: { width?: number; height?: number }; pngBuffer: Buffer }>
           } else {
             throw new Error('vertical-text batch returned non-array response')
           }
@@ -524,8 +524,8 @@ export class MangaPageRenderer {
             }) as unknown as CanvasImageSource
 
           let image: CanvasImageSource | undefined
-          let width = res.meta.width
-          let height = res.meta.height
+          let width = res.meta.width ?? 0
+          let height = res.meta.height ?? 0
 
           try {
             const created = await CanvasRenderer.createImageFromBuffer(res.pngBuffer)
@@ -548,7 +548,7 @@ export class MangaPageRenderer {
           return {
             key,
             image,
-            meta: { width, height },
+            meta: { width: Math.max(1, width || 0), height: Math.max(1, height || 0) },
           }
         }),
       )
