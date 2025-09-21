@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, or, sql } from 'drizzle-orm'
+import { and, desc, eq, isNull, lt, or, sql } from 'drizzle-orm'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import type { Job, NewJob } from '@/db/schema'
@@ -103,37 +103,30 @@ export class JobDatabaseService extends BaseDatabaseService {
 
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
-
-      return drizzleDb.transaction((tx) => {
-        // Only lease if pending and not locked or lock expired
-        tx
-          .update(jobs)
-          .set({
-            status: 'processing',
-            lockedBy: workerId,
-            leaseExpiresAt: leaseUntil,
-            startedAt: nowIso,
-            updatedAt: nowIso,
-          })
-          .where(
-            and(
-              eq(jobs.id, jobId),
-              eq(jobs.status, 'pending'),
-              or(
-                eq(jobs.lockedBy, null as unknown as string),
-                lt(jobs.leaseExpiresAt, nowIso),
-              ),
-            ),
-          )
-          .run()
-        // better-sqlite3 update().run() returns { changes } but drizzle typings hide it; assume success
-        // We conservatively return true; callers should still verify ownership if needed
-        return true
-      })
+      // Single UPDATE is atomic; no explicit transaction required.
+      const result = drizzleDb
+        .update(jobs)
+        .set({
+          status: 'processing',
+          lockedBy: workerId,
+          leaseExpiresAt: leaseUntil,
+          startedAt: nowIso,
+          updatedAt: nowIso,
+        })
+        .where(
+          and(
+            eq(jobs.id, jobId),
+            eq(jobs.status, 'pending'),
+            or(isNull(jobs.lockedBy), lt(jobs.leaseExpiresAt, nowIso)),
+          ),
+        )
+        .run()
+      const changes = (result as unknown as { changes?: number }).changes ?? 0
+      return changes > 0
     } else {
       let success = false
       await this.adapter.transaction(async (tx: DrizzleDatabase) => {
-        const res = await tx
+        const res: unknown = await tx
           .update(jobs)
           .set({
             status: 'processing',
@@ -146,13 +139,15 @@ export class JobDatabaseService extends BaseDatabaseService {
             and(
               eq(jobs.id, jobId),
               eq(jobs.status, 'pending'),
-              or(
-                eq(jobs.lockedBy, null as unknown as string),
-                lt(jobs.leaseExpiresAt, nowIso),
-              ),
+              or(isNull(jobs.lockedBy), lt(jobs.leaseExpiresAt, nowIso)),
             ),
           )
-        success = (Array.isArray(res) ? res.length > 0 : true)
+        // Try common patterns across drivers
+        const rowsAffected = (res as { rowsAffected?: number })?.rowsAffected
+        const changes = (res as { changes?: number })?.changes
+        if (typeof rowsAffected === 'number') success = rowsAffected > 0
+        else if (typeof changes === 'number') success = changes > 0
+        else success = Array.isArray(res) ? res.length > 0 : false
       })
       return success
     }
@@ -164,18 +159,15 @@ export class JobDatabaseService extends BaseDatabaseService {
     if (this.isSync()) {
       const drizzleDb = this.db as DrizzleDatabase
       drizzleDb
-        .transaction((tx) => {
-          tx
-            .update(jobs)
-            .set({ lockedBy: null as unknown as undefined, leaseExpiresAt: null as unknown as undefined, updatedAt: nowIso })
-            .where(eq(jobs.id, jobId))
-            .run()
-        })
+        .update(jobs)
+        .set({ lockedBy: null, leaseExpiresAt: null, updatedAt: nowIso })
+        .where(eq(jobs.id, jobId))
+        .run()
     } else {
       await this.adapter.transaction(async (tx: DrizzleDatabase) => {
         await tx
           .update(jobs)
-          .set({ lockedBy: null as unknown as undefined, leaseExpiresAt: null as unknown as undefined, updatedAt: nowIso })
+          .set({ lockedBy: null, leaseExpiresAt: null, updatedAt: nowIso })
           .where(eq(jobs.id, jobId))
       })
     }

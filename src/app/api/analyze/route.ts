@@ -93,7 +93,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
         id: jobId,
         novelId,
         title: 'Demo Analyze Job',
-        status: 'processing',
+        status: 'pending',
         userId: user.id,
       })
 
