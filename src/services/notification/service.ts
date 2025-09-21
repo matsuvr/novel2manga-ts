@@ -60,6 +60,25 @@ export const notificationService = {
   ): Promise<void> {
     try {
       const db = getDatabase()
+      // Record notification in outbox table first for idempotency.
+      // If already recorded (unique violation), skip sending.
+      try {
+        // Obtain properly constructed service via the unified database services
+        const { db } = await import('@/services/database')
+        const svc = db.jobs()
+        const firstTime = await svc.recordNotification(jobId, status)
+        if (!firstTime) {
+          logger.info('Notification already recorded, skipping send', { jobId, status })
+          return
+        }
+      } catch (e) {
+        // If DB service is unavailable or throws (e.g., during legacy tests), continue best-effort
+        logger.warn('recordNotification failed or unavailable, proceeding best-effort', {
+          jobId,
+          status,
+          error: e instanceof Error ? e.message : String(e),
+        })
+      }
       const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId))
       if (!job) {
         logger.warn('Job not found for notification', { jobId })

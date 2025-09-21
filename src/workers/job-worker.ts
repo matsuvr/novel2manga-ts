@@ -2,11 +2,10 @@
  * Background Job Processing Worker
  * Implements configurable job queue processing with status updates
  */
-import { and, eq } from 'drizzle-orm'
+import { and, eq, lt, or } from 'drizzle-orm'
 import { getDatabase } from '@/db'
 import { jobs } from '@/db/schema'
 import { getLogger } from '@/infrastructure/logging/logger'
-import { notificationService } from '@/services/notification/service'
 
 export interface JobWorkerConfig {
   tickIntervalMs: number
@@ -36,7 +35,9 @@ export class JobWorker {
     this.config = {
       tickIntervalMs: Number(process.env.WORKER_TICK_MS) || 5000,
       maxRetries: Number(process.env.WORKER_MAX_RETRIES) || 3,
-      enableNotifications: process.env.WORKER_ENABLE_NOTIFICATIONS !== 'false',
+      // Important: Default to false to avoid duplicate notifications.
+      // Enable explicitly via env only when the worker is the sole orchestrator.
+      enableNotifications: process.env.WORKER_ENABLE_NOTIFICATIONS === 'true',
       batchSize: Number(process.env.WORKER_BATCH_SIZE) || 1,
       ...config,
     }
@@ -110,7 +111,7 @@ export class JobWorker {
     try {
       const db = getDatabase()
 
-      // Get pending jobs with user isolation
+      // Get pending jobs not currently leased (or lease expired)
       const pendingJobs = await db
         .select({
           id: jobs.id,
@@ -126,8 +127,8 @@ export class JobWorker {
         .where(
           and(
             eq(jobs.status, 'pending'),
-            // Only process jobs that haven't exceeded max retries
-            // Use SQL comparison to handle null values properly
+            // not locked or lease expired
+            or(eq(jobs.lockedBy, null as unknown as string), lt(jobs.leaseExpiresAt, new Date().toISOString())),
           ),
         )
         .limit(this.config.batchSize)
@@ -155,6 +156,19 @@ export class JobWorker {
             `Maximum retry count (${this.config.maxRetries}) exceeded`,
           )
           continue
+        }
+
+        // Try to lease the job to avoid concurrent processing
+        try {
+          const { db: services } = await import('@/services/database')
+          const workerId = `worker-${process.pid}`
+          const leased = await services.jobs().leaseJob?.(job.id, workerId)
+          if (!leased) {
+            this.logger.info('Job lease failed, skipping', { jobId: job.id })
+            continue
+          }
+        } catch {
+          // If lease API not available, proceed (best-effort)
         }
 
         await this.processJob(job)
@@ -370,10 +384,20 @@ export class JobWorker {
       })
       .where(eq(jobs.id, jobId))
 
-    // Send completion notification
-    if (this.config.enableNotifications) {
-      await this.sendJobNotification(jobId, 'completed')
+    // Release lease
+    try {
+      const { db: services } = await import('@/services/database')
+      await services.jobs().releaseLease?.(jobId)
+    } catch (e) {
+      this.logger.warn('release_lease_failed_on_complete', {
+        jobId,
+        error: e instanceof Error ? e.message : String(e),
+      })
     }
+
+    // Notification is centralized in the application pipeline (BasePipelineStep ->
+    // updateJobStatusWithNotification). Worker does not send email directly to
+    // avoid duplicate notifications when both orchestrators run.
   }
 
   /**
@@ -391,10 +415,18 @@ export class JobWorker {
       })
       .where(eq(jobs.id, jobId))
 
-    // Send failure notification
-    if (this.config.enableNotifications) {
-      await this.sendJobNotification(jobId, 'failed', error)
+    // Release lease
+    try {
+      const { db: services } = await import('@/services/database')
+      await services.jobs().releaseLease?.(jobId)
+    } catch (e) {
+      this.logger.warn('release_lease_failed_on_fail', {
+        jobId,
+        error: e instanceof Error ? e.message : String(e),
+      })
     }
+
+    // Notification is centralized in the application pipeline. Do not send here.
   }
 
   /**
@@ -434,28 +466,9 @@ export class JobWorker {
     }
   }
 
-  /**
-   * Send job notification
-   */
-  private async sendJobNotification(
-    jobId: string,
-    status: 'completed' | 'failed',
-    error?: string,
-  ): Promise<void> {
-    try {
-      await notificationService.sendJobCompletionNotification(jobId, status, error)
-    } catch (notificationError) {
-      // Log but don't throw - notifications should not affect job processing
-      this.logger.error('Failed to send job notification', {
-        jobId,
-        status,
-        error:
-          notificationError instanceof Error
-            ? notificationError.message
-            : String(notificationError),
-      })
-    }
-  }
+  // Notification sending is intentionally not implemented here. The
+  // application pipeline is the single source of truth for user-facing
+  // notifications on job status transitions.
 
   /**
    * Graceful shutdown handler
