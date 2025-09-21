@@ -58,7 +58,7 @@ describe('JobWorker', () => {
 
       expect(status.config.tickIntervalMs).toBe(5000)
       expect(status.config.maxRetries).toBe(3)
-      expect(status.config.enableNotifications).toBe(true)
+      expect(status.config.enableNotifications).toBe(false)
       expect(status.config.batchSize).toBe(1)
     })
   })

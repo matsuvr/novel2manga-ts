@@ -180,6 +180,12 @@ export const jobs = sqliteTable(
     updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
     startedAt: text('started_at'),
     completedAt: text('completed_at'),
+    // Leasing/locking for workers
+    lockedBy: text('locked_by'),
+    leaseExpiresAt: text('lease_expires_at'),
+    // Notification idempotency (last notified status/time)
+    lastNotifiedStatus: text('last_notified_status'), // completed/failed
+    lastNotifiedAt: text('last_notified_at'),
   },
   (table) => ({
     novelIdIdx: index('idx_jobs_novel_id').on(table.novelId),
@@ -187,6 +193,24 @@ export const jobs = sqliteTable(
     novelIdStatusIdx: index('idx_jobs_novel_id_status').on(table.novelId, table.status),
     currentStepIdx: index('idx_jobs_current_step').on(table.currentStep),
     userIdIdx: index('idx_jobs_user_id').on(table.userId),
+    lockedByIdx: index('idx_jobs_locked_by').on(table.lockedBy),
+  }),
+)
+
+// Job notification outbox for idempotency
+export const jobNotifications = sqliteTable(
+  'job_notifications',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    jobId: text('job_id')
+      .notNull()
+      .references(() => jobs.id, { onDelete: 'cascade' }),
+    status: text('status').notNull(), // completed/failed
+    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    uniqueJobStatus: unique('unique_job_notification').on(table.jobId, table.status),
+    jobIdx: index('idx_job_notifications_job_id').on(table.jobId),
   }),
 )
 
@@ -582,6 +606,7 @@ export const jobsRelations = relations(jobs, ({ one, many }) => ({
     fields: [jobs.id],
     references: [jobShares.jobId],
   }),
+  notifications: many(jobNotifications),
 }))
 
 export const jobStepHistoryRelations = relations(jobStepHistory, ({ one }) => ({
@@ -711,6 +736,13 @@ export const storageFilesRelations = relations(storageFiles, ({ one }) => ({
   }),
 }))
 
+export const jobNotificationsRelations = relations(jobNotifications, ({ one }) => ({
+  job: one(jobs, {
+    fields: [jobNotifications.jobId],
+    references: [jobs.id],
+  }),
+}))
+
 export const tokenUsageRelations = relations(tokenUsage, ({ one }) => ({
   job: one(jobs, {
     fields: [tokenUsage.jobId],
@@ -741,6 +773,8 @@ export type RenderStatus = typeof renderStatus.$inferSelect
 export type NewRenderStatus = typeof renderStatus.$inferInsert
 export type Output = typeof outputs.$inferSelect
 export type NewOutput = typeof outputs.$inferInsert
+export type JobNotification = typeof jobNotifications.$inferSelect
+export type NewJobNotification = typeof jobNotifications.$inferInsert
 export type StorageFile = typeof storageFiles.$inferSelect
 export type NewStorageFile = typeof storageFiles.$inferInsert
 export type TokenUsage = typeof tokenUsage.$inferSelect

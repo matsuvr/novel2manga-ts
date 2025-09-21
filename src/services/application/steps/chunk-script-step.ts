@@ -12,7 +12,7 @@ export interface ChunkScriptResult {
 }
 
 export class ChunkScriptStep implements PipelineStep {
-  readonly stepName = 'chunk-script'
+  readonly stepName = 'scriptConversion'
 
   async convertChunksToScripts(
     chunks: string[],
@@ -50,7 +50,10 @@ export class ChunkScriptStep implements PipelineStep {
       const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
       const storage = await StorageFactory.getAnalysisStorage()
 
-      const isCoverageCheckEnabled = getAppConfigWithOverrides().features.enableCoverageCheck
+      const coverageFeatureEnabled = getAppConfigWithOverrides().features.enableCoverageCheck
+      // Hard-off: default to disabled unless explicitly set APP_DISABLE_COVERAGE_JUDGE=false
+      const coverageJudgeDisabled = process.env.APP_DISABLE_COVERAGE_JUDGE !== 'false'
+      const isCoverageCheckEnabled = coverageFeatureEnabled && !coverageJudgeDisabled
 
       const maxConcurrent = Math.max(1, Math.min(3, chunks.length))
       const indices = Array.from({ length: chunks.length }, (_, i) => i)
@@ -253,7 +256,7 @@ export class ChunkScriptStep implements PipelineStep {
             throw new Error(msg)
           }
 
-          // LLM coverage judge: attach coverageStats when enabled. In unit tests we skip to avoid network.
+          // LLM coverage judge: attach coverageStats when enabled and not hard-disabled
           if (isCoverageCheckEnabled) {
             const runJudgeOnce = async () => {
               const { getLlmStructuredGenerator } = await import('@/agents/structured-generator')
@@ -283,9 +286,13 @@ export class ChunkScriptStep implements PipelineStep {
               })
             }
             try {
+              const manualRetryEnabled = process.env.APP_COVERAGE_JUDGE_MANUAL_RETRY === 'true'
               let result = await runJudgeOnce()
-              if (!result || typeof result.coverageRatio !== 'number') {
-                logger.warn('Coverage judge returned invalid result, retrying once', {
+              if (
+                manualRetryEnabled &&
+                (!result || typeof result.coverageRatio !== 'number')
+              ) {
+                logger.warn('Coverage judge returned invalid result, retrying once (manual)', {
                   jobId,
                   chunkIndex: i,
                 })

@@ -73,6 +73,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       id: jobId,
       novelId: uuid as string,
       title: 'text_analysis',
+      status: 'processing',
       userId: user.id,
     })
 
@@ -88,7 +89,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       job: {
         id: jobId,
         type: 'text_analysis',
-        status: 'pending',
+        status: 'processing',
       },
     })
   } catch (error) {
