@@ -148,16 +148,30 @@ export class ChunkScriptStep implements PipelineStep {
 
           // 二重実行防止：processing状態のチェック
           if (status?.status === 'processing') {
-            logger.warn('Chunk is already being processed by another worker, skipping', {
+            logger.warn('Chunk appears to be processing. Attempting to reclaim before skipping', {
               jobId,
               chunkIndex: i,
             })
-            continue
+            try {
+              // Try to re-claim the chunk for processing. If another worker truly holds it,
+              // markProcessing may throw or be a no-op depending on the adapter. If reclaim
+              // succeeds, we proceed; otherwise skip.
+              await conversionDb.markProcessing(jobId, i)
+              logger.info('Reclaimed processing lock for chunk', { jobId, chunkIndex: i })
+              statusMap.set(i, { status: 'processing' })
+            } catch (claimErr) {
+              logger.warn('Failed to reclaim processing lock for chunk, skipping', {
+                jobId,
+                chunkIndex: i,
+                error: claimErr instanceof Error ? claimErr.message : String(claimErr),
+              })
+              continue
+            }
+          } else {
+            // Normal path: claim processing status
+            await conversionDb.markProcessing(jobId, i)
+            statusMap.set(i, { status: 'processing' })
           }
-
-          // 処理開始前にprocessing状態をマーク（二重実行防止）
-          await conversionDb.markProcessing(jobId, i)
-          statusMap.set(i, { status: 'processing' })
 
           jobDb.updateJobStep(jobId, `script_chunk_${i}`)
           const text = (await resolveChunkText(i)) ?? ''
