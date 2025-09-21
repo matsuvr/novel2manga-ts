@@ -98,6 +98,10 @@ export const JobServiceLive = Layer.succeed(JobService, {
             updatedAt: jobs.updatedAt,
             startedAt: jobs.startedAt,
             completedAt: jobs.completedAt,
+            lockedBy: jobs.lockedBy,
+            leaseExpiresAt: jobs.leaseExpiresAt,
+            lastNotifiedStatus: jobs.lastNotifiedStatus,
+            lastNotifiedAt: jobs.lastNotifiedAt,
             novelTitle: novels.title,
             novelAuthor: novels.author,
             novelOriginalTextPath: novels.originalTextPath,
@@ -208,6 +212,10 @@ export const JobServiceLive = Layer.succeed(JobService, {
                   updatedAt: normalizeTimestamp(row.updatedAt),
                   startedAt: normalizeTimestamp(row.startedAt),
                   completedAt: normalizeTimestamp(row.completedAt),
+                  lockedBy: row.lockedBy,
+                  leaseExpiresAt: normalizeTimestamp(row.leaseExpiresAt),
+                  lastNotifiedStatus: row.lastNotifiedStatus,
+                  lastNotifiedAt: normalizeTimestamp(row.lastNotifiedAt),
                 },
                 novel: row.novelTitle
                   ? {
@@ -347,6 +355,10 @@ export const JobServiceLive = Layer.succeed(JobService, {
               updatedAt: jobs.updatedAt,
               startedAt: jobs.startedAt,
               completedAt: jobs.completedAt,
+              lockedBy: jobs.lockedBy,
+              leaseExpiresAt: jobs.leaseExpiresAt,
+              lastNotifiedStatus: jobs.lastNotifiedStatus,
+              lastNotifiedAt: jobs.lastNotifiedAt,
               // Novel fields (nullable)
               novelTitle: novels.title,
               novelAuthor: novels.author,
@@ -414,6 +426,10 @@ export const JobServiceLive = Layer.succeed(JobService, {
           updatedAt: normalizeTimestamp(row.updatedAt),
           startedAt: normalizeTimestamp(row.startedAt),
           completedAt: normalizeTimestamp(row.completedAt),
+          lockedBy: row.lockedBy,
+          leaseExpiresAt: normalizeTimestamp(row.leaseExpiresAt),
+          lastNotifiedStatus: row.lastNotifiedStatus,
+          lastNotifiedAt: normalizeTimestamp(row.lastNotifiedAt),
         },
         novel: row.novelTitle
           ? {

@@ -819,6 +819,24 @@ export function getAppConfigWithOverrides(): AppConfig {
     const v = parseInt(process.env.APP_EXPANSION_TARGET_SCENARIO_CHARS, 10)
     if (!Number.isNaN(v) && v > 0) config.expansion.targetScenarioChars = v
   }
+
+  // Retry configuration overrides
+  if (process.env.APP_RETRY_MAX_ATTEMPTS) {
+    const v = parseInt(process.env.APP_RETRY_MAX_ATTEMPTS, 10)
+    if (!Number.isNaN(v) && v > 0) config.processing.retry.maxAttempts = v
+  }
+  if (process.env.APP_RETRY_INITIAL_DELAY) {
+    const v = parseInt(process.env.APP_RETRY_INITIAL_DELAY, 10)
+    if (!Number.isNaN(v) && v >= 0) config.processing.retry.initialDelay = v
+  }
+  if (process.env.APP_RETRY_MAX_DELAY) {
+    const v = parseInt(process.env.APP_RETRY_MAX_DELAY, 10)
+    if (!Number.isNaN(v) && v >= 0) config.processing.retry.maxDelay = v
+  }
+  if (process.env.APP_RETRY_BACKOFF_FACTOR) {
+    const v = parseFloat(process.env.APP_RETRY_BACKOFF_FACTOR)
+    if (!Number.isNaN(v) && v >= 1) config.processing.retry.backoffFactor = v
+  }
   if (process.env.APP_NON_NARRATIVE_ENABLED !== undefined) {
     config.nonNarrative.enabled = process.env.APP_NON_NARRATIVE_ENABLED === 'true'
   }

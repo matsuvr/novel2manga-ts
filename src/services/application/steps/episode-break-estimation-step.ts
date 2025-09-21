@@ -107,7 +107,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
       userPrompt: prompt,
       schema: EpisodeBreakSchema as unknown as z.ZodTypeAny,
       schemaName: 'EpisodeBreakPlan',
-      telemetry: { jobId, stepName: 'episode' },
+      telemetry: { jobId, stepName: 'EpisodeBreakPlan' },
     })
 
     // If LLM produced no episodes, fall back to a conservative single-episode plan

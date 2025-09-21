@@ -42,7 +42,8 @@ module.exports = {
         NODE_ENV: 'production',
         WORKER_TICK_MS: 5000,
         WORKER_MAX_RETRIES: 3,
-        WORKER_ENABLE_NOTIFICATIONS: 'true',
+        // Important: keep notifications disabled on worker by default to avoid duplicates.
+        WORKER_ENABLE_NOTIFICATIONS: 'false',
         WORKER_BATCH_SIZE: 1,
         WORKER_TIMEOUT_MS: 300000,
         WORKER_LOG_LEVEL: 'info',
@@ -51,7 +52,7 @@ module.exports = {
         NODE_ENV: 'development',
         WORKER_TICK_MS: 10000,
         WORKER_MAX_RETRIES: 2,
-        WORKER_ENABLE_NOTIFICATIONS: 'true',
+        WORKER_ENABLE_NOTIFICATIONS: 'false',
         WORKER_BATCH_SIZE: 1,
         WORKER_TIMEOUT_MS: 300000,
         WORKER_LOG_LEVEL: 'debug',

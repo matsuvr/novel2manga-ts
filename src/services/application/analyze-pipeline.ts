@@ -1,8 +1,13 @@
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
+
 // repositories shim no longer used
 // import { db } from '@/services/database/index'  // 直接のインポートを削除
 
+// Remove ScriptMergeStep and TextAnalysisStepV2 usage
+// import { ScriptMergeStep } from './steps/script-merge-step'
+// import { type AnalysisResult, TextAnalysisStep as TextAnalysisStepV2 } from './steps/text-analysis-step-v2'
+import type { NewMangaScript } from '@/types/script'
 // Import pipeline steps
 import {
   BasePipelineStep,
@@ -12,17 +17,10 @@ import {
   PageBreakStep,
   RenderingStep,
   type StepContext,
-  type StepExecutionResult,
   TextChunkingStep,
 } from './steps'
 import { ChunkScriptStep } from './steps/chunk-script-step'
 import { EpisodeBreakEstimationStep } from './steps/episode-break-estimation-step'
-import { ScriptMergeStep } from './steps/script-merge-step'
-// Use V2 text analysis (ExtractionV2) for schema compatibility with prompts
-import {
-  type AnalysisResult,
-  TextAnalysisStep as TextAnalysisStepV2,
-} from './steps/text-analysis-step-v2'
 
 export interface AnalyzeOptions {
   isDemo?: boolean
@@ -38,21 +36,13 @@ export interface AnalyzeOptions {
 /**
  * AnalyzePipeline - Main production analysis service
  *
- * 責務: 小説テキストの分析からレイアウト生成・レンダリングまでの一連の処理
- * フロー: チャンク分割 → textAnalysis → scriptConversion → pageBreakEstimation → layout → render
+ * 責務: 小説テキストの処理からレイアウト生成・レンダリングまでの一連の処理
+ * フロー: チャンク分割 → scriptConversion → episodeBreakEstimation → layout → render
  *
- * 使用箇所: /api/analyze (プロダクションメインエンドポイント)
+ * 使用箇所: /api/analyze（プロダクションメインエンドポイント）
  * テスト: src/__tests__/integration/service-integration.test.ts など多数
  *
- * Note: Orchestrator (scenario.ts) とは異なる責務を持つ
- * - AnalyzePipeline: ビジネスロジックの順序を定義。実際のロジックは個別のステップクラスに実装されている
- * - Orchestrator: APIチェーンの実行エンジン（開発・デモ用）
- *
- * 重要: このファイルでは「どこで何を I/O するか／LLM を呼ぶか」を日本語コメントで明示しています。
- * - 「ファイル/ストレージへ書き込む/読み込む」
- * - 「DB（Drizzle 経由）へ書き込む/読み込む」
- * - 「LLM へプロンプトを渡す（呼び出す）」
- * を見つけやすくするため、各該当箇所の直前にコメントを追加しています。
+ * 重要: このファイルでは「どこで何を I/O するか／LLM を呼ぶか」を日本語コメントで明示
  */
 export class AnalyzePipeline extends BasePipelineStep {
   readonly stepName = 'analyze-pipeline'
@@ -60,9 +50,7 @@ export class AnalyzePipeline extends BasePipelineStep {
   private readonly novelStep = new NovelManagementStep()
   private readonly jobStep = new JobManagementStep()
   private readonly chunkingStep = new TextChunkingStep()
-  private readonly analysisStep = new TextAnalysisStepV2()
   private readonly chunkScriptStep = new ChunkScriptStep()
-  private readonly scriptMergeStep = new ScriptMergeStep()
   private readonly episodeBreakStep = new EpisodeBreakEstimationStep()
   private readonly pageBreakStep = new PageBreakStep()
   private readonly renderingStep = new RenderingStep()
@@ -70,10 +58,8 @@ export class AnalyzePipeline extends BasePipelineStep {
 
   constructor(
     private readonly ports: StoragePorts = getStoragePorts(),
-    // keep optional logger for future detailed tracing without lint noise
-    _logger: LoggerPort = getLogger().withContext({
-      service: 'analyze-pipeline',
-    }),
+    // keep optional logger for future detailed tracing via getLogger().withContext
+    _logger: LoggerPort = getLogger().withContext({ service: 'analyze-pipeline' }),
   ) {
     super()
   }
@@ -153,64 +139,77 @@ export class AnalyzePipeline extends BasePipelineStep {
       await this.markStepCompleted(jobId, 'split', { logger })
     }
 
-    // Text analysis step (skip in demo mode to speed up tests and demos)
-    const analysisResult: StepExecutionResult<AnalysisResult> = options.isDemo
-      ? { success: true, data: { completed: true } }
-      : await this.analysisStep.analyzeChunks(chunks, existingJob || null, context)
-    if (!analysisResult.success) {
-      await this.updateJobStatus(jobId, 'failed', { logger }, analysisResult.error)
-      throw new Error(analysisResult.error)
-    }
+  // 旧: TextAnalysis は完全撤去（オプション isDemo に関わらずスキップ）
+  // 互換のため analyze ステップの開始/完了フラグは維持する
+  await this.updateJobStep(jobId, 'analyze', { logger }, 0, chunks.length)
 
-    // Mark analysis step as completed if not already done
-    if (!existingJob?.analyzeCompleted) {
-      await this.markStepCompleted(jobId, 'analyze', { logger })
-    }
-
-    // 新フロー: チャンクごと台本化 → 台本統合 → ページ割り（全体） → 束ね → レンダ
-
-    // UI遷移の空白時間対策:
-    // 要素分析(analyze)完了後、チャンク台本化/統合の間にUIが"停止"して見えないよう、
-    // ここで先に currentStep=episode をセットしてスピナーを継続表示させる。
-    // 進捗の総数は 4（準備→検出開始→検出完了→DB保存）として宣言し、最初は0/4にする。
-    await this.updateJobStep(jobId, 'episode', { logger }, 0, 4)
-    // UI反映のための短い待機（進捗表示を確実にするため）
-    await new Promise((resolve) => setTimeout(resolve, 300))
-
-    // チャンク台本化
+    // チャンクごとの脚本生成
     const chunkScriptRes = await this.chunkScriptStep.convertChunksToScripts(chunks, context)
     if (!chunkScriptRes.success) {
       await this.updateJobStatus(jobId, 'failed', { logger }, chunkScriptRes.error)
       throw new Error(chunkScriptRes.error)
     }
-    // 台本統合
-    const mergeRes = await this.scriptMergeStep.mergeChunkScripts(totalChunks, context)
-    if (!mergeRes.success) {
-      await this.updateJobStatus(jobId, 'failed', { logger }, mergeRes.error)
-      throw new Error(mergeRes.error)
-    }
 
-    // Store coverage warnings if any
-    if (mergeRes.data.coverageWarnings && mergeRes.data.coverageWarnings.length > 0) {
-      await this.updateJobCoverageWarnings(jobId, mergeRes.data.coverageWarnings, { logger })
-    }
+    // analyze ステップ完了を明示
+    await this.markStepCompleted(jobId, 'analyze', { logger })
 
-    // 統合台本を読み出してページ割り
+    // UI遷移の空白対策: ここで currentStep=episode をセット
+    await this.updateJobStep(jobId, 'episode', { logger }, 0, 4)
+    await new Promise((resolve) => setTimeout(resolve, 300))
+
+    // ここで直接チャンク脚本を結合して combined script を作成・保存（ScriptMergeStep を撤去）
     const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
     const analysisStorage = await StorageFactory.getAnalysisStorage()
-    const combinedText = await analysisStorage.get(
-      JsonStorageKeys.scriptCombined({ novelId: context.novelId, jobId }),
-    )
-    if (!combinedText) {
-      throw new Error('Combined script not found')
+
+    const allPanels: Array<NewMangaScript['panels'][number]> = []
+    try {
+      // 実在する script_chunk_{i}.json を順番に読む
+      for (let i = 0; ; i++) {
+        const key = JsonStorageKeys.scriptChunk({ novelId: context.novelId, jobId, index: i })
+        const obj = await analysisStorage.get(key)
+        if (!obj) break
+        let parsed: NewMangaScript
+        try {
+          parsed = JSON.parse(obj.text) as NewMangaScript
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e)
+          logger.error('Failed to parse script_chunk JSON', { jobId, chunkIndex: i, error: msg })
+          throw new Error(`Failed to parse script chunk ${i}: ${msg}`)
+        }
+        if (Array.isArray(parsed.panels)) {
+          allPanels.push(...parsed.panels)
+          logger.info('Collected panels from chunk', { jobId, chunkIndex: i, panelCount: parsed.panels.length })
+        } else {
+          logger.warn('script_chunk has no panels array', { jobId, chunkIndex: i })
+        }
+      }
+    } catch (mergeErr) {
+      const msg = mergeErr instanceof Error ? mergeErr.message : String(mergeErr)
+      logger.error('Failed during inline script merge', { jobId, error: msg })
+      await this.updateJobStatus(jobId, 'failed', { logger }, msg)
+      throw new Error(msg)
     }
-    const combinedScript = JSON.parse(combinedText.text)
+
+    if (allPanels.length === 0) {
+      const msg = 'Inline script merge produced 0 panels'
+      logger.error(msg, { jobId })
+      await this.updateJobStatus(jobId, 'failed', { logger }, msg)
+      throw new Error(msg)
+    }
+
+  // Downstream steps only require panels; other fields are optional in practice
+  const combinedScript = { panels: allPanels } as NewMangaScript
+    await analysisStorage.put(
+      JsonStorageKeys.scriptCombined({ novelId: context.novelId, jobId }),
+      JSON.stringify(combinedScript, null, 2),
+      { contentType: 'application/json; charset=utf-8', jobId, novelId: context.novelId },
+    )
 
     // エピソード切れ目検出の進捗を25%に更新
     await this.updateJobStep(jobId, 'episode', { logger }, 1, 4)
     logger.info('エピソード構成: 切れ目検出を開始', { jobId, progress: '25%' })
 
-    // エピソード切れ目検出
+    // エピソード切れ目検出（combinedScript を直接渡す）
     const episodeRes = await this.episodeBreakStep.estimateEpisodeBreaks(combinedScript, context)
     if (!episodeRes.success) {
       await this.updateJobStatus(jobId, 'failed', { logger }, episodeRes.error)
@@ -225,13 +224,12 @@ export class AnalyzePipeline extends BasePipelineStep {
       episodeCount: episodeRes.data.episodeBreaks.episodes.length,
     })
 
-    // エピソード境界をDBへ永続化（最小フィールドでのアップサート）
+    // エピソード境界をDBへ永続化（最小フィールドアップサート）
     try {
-      const { db } = await import('@/services/database') // 動的にインポート
+      const { db } = await import('@/services/database')
       const job = await db.jobs().getJob(jobId)
       if (!job) throw new Error(`Job not found for episode persistence: ${jobId}`)
 
-      // パネル→チャンクマッピングを作成 (共通ユーティリティを使用)
       const { buildPanelToChunkMapping, getChunkForPanel } = await import(
         '@/services/application/panel-to-chunk-mapping'
       )
@@ -245,7 +243,6 @@ export class AnalyzePipeline extends BasePipelineStep {
       const { EpisodeWriteService } = await import('@/services/application/episode-write')
       const episodeWriter = new EpisodeWriteService()
       const episodesForDb = episodeRes.data.episodeBreaks.episodes.map((ep) => {
-        // パネル範囲からチャンク範囲を計算
         const startChunk = getChunkForPanel(panelToChunkMapping, ep.startPanelIndex)
         const endChunk = getChunkForPanel(panelToChunkMapping, ep.endPanelIndex)
 
@@ -255,7 +252,6 @@ export class AnalyzePipeline extends BasePipelineStep {
           episodeNumber: ep.episodeNumber,
           title: ep.title,
           summary: undefined,
-          // 計算されたチャンク範囲を保存
           startChunk,
           startCharIndex: 0,
           endChunk,
@@ -263,7 +259,6 @@ export class AnalyzePipeline extends BasePipelineStep {
           confidence: 1,
         }
       })
-      // エピソードデータ保存の進捗を75%に更新
       await this.updateJobStep(jobId, 'episode', { logger }, 3, 4)
       logger.info('エピソード構成: データベース保存を開始', {
         jobId,
@@ -273,15 +268,15 @@ export class AnalyzePipeline extends BasePipelineStep {
 
       await episodeWriter.bulkReplaceByJobId(episodesForDb)
       try {
-        const { db } = await import('@/services/database') // 動的にインポート
-        const persisted = await db.episodes().getEpisodesByJobId(jobId)
+        const persisted = await (await import('@/services/database')).db
+          .episodes()
+          .getEpisodesByJobId(jobId)
         logger.info('Episode persistence summary', {
           jobId,
           requested: episodesForDb.length,
           persisted: persisted.length,
         })
 
-        // Early failure detection: Check episode persistence integrity
         if (persisted.length < episodesForDb.length) {
           const errorMessage = `Episode persistence mismatch (req=${episodesForDb.length}, got=${persisted.length})`
           logger.error('Episode persistence integrity check failed', {
@@ -296,7 +291,6 @@ export class AnalyzePipeline extends BasePipelineStep {
         }
       } catch (e) {
         if (e instanceof Error && e.message.includes('Episode persistence mismatch')) {
-          // Re-throw early failure errors
           throw e
         }
         logger.warn('Episode persistence summary failed', {
@@ -304,11 +298,9 @@ export class AnalyzePipeline extends BasePipelineStep {
           error: e instanceof Error ? e.message : String(e),
         })
       }
-      // エピソード構成を完了にマーク
       logger.info('エピソード構成: 完了', { jobId, progress: '100%' })
       await this.markStepCompleted(jobId, 'episode', { logger })
 
-      // レイアウト段階の進捗開始（ここからはレイアウト処理）
       await this.updateJobStep(jobId, 'layout', { logger }, totalChunks, totalChunks)
     } catch (persistEpisodesError) {
       logger.error('Failed to persist episodes during episode step', {
@@ -318,7 +310,6 @@ export class AnalyzePipeline extends BasePipelineStep {
             ? persistEpisodesError.message
             : String(persistEpisodesError),
       })
-      // Mark job as failed to surface the error in job status
       try {
         await this.updateJobStatus(jobId, 'failed', { logger }, String(persistEpisodesError))
       } catch (e) {
@@ -330,7 +321,7 @@ export class AnalyzePipeline extends BasePipelineStep {
       throw persistEpisodesError
     }
 
-    // importance-basedページ割り
+    // importance-based ページ割り（既存の PageBreakStep を利用してレイアウトとステータスを永続化）
     const pbRes = await this.pageBreakStep.estimatePageBreaks(
       combinedScript,
       episodeRes.data.episodeBreaks,
@@ -346,8 +337,7 @@ export class AnalyzePipeline extends BasePipelineStep {
     await this.updateJobTotalPages(jobId, totalPages, { logger })
     await this.markStepCompleted(jobId, 'layout', { logger })
 
-    // レンダ
-    // 注意: 第4引数はチャンク総数専用。ページ総数はjobs.total_pagesに保存済みのため渡さない
+    // レンダリング
     await this.updateJobStep(jobId, 'render', { logger }, 0)
     const renderingResult = await this.renderingStep.renderEpisodes(
       episodeNumbers,
@@ -362,17 +352,16 @@ export class AnalyzePipeline extends BasePipelineStep {
     }
     await this.markStepCompleted(jobId, 'render', { logger })
 
-    // 強制整合性チェック: エピソードがDBに永続化されていない場合は完了扱いにしない
+    // 完了整合性チェック
     try {
       logger.info('Running job completion integrity check', {
         jobId,
         expectedEpisodes: episodeNumbers.length,
       })
-      const { db } = await import('@/services/database') // 動的にインポート
+      const { db } = await import('@/services/database')
       const episodes = await db.episodes().getEpisodesByJobId(jobId)
       const epCount = episodes.length
       if (epCount === 0) {
-        // Collect detailed diagnostic information for troubleshooting
         const diagInfo = {
           episodesCount: 0,
           layoutFileCount: 0,
@@ -381,11 +370,9 @@ export class AnalyzePipeline extends BasePipelineStep {
         }
 
         try {
-          // Get episodes count
           diagInfo.episodesCount = episodes.length
           diagInfo.layoutStatusCount = epCount
 
-          // Check storage layout files
           const { StorageFactory, StorageKeys } = await import('@/utils/storage')
           const storage = await StorageFactory.getLayoutStorage()
           for (const ep of episodes) {
@@ -403,7 +390,6 @@ export class AnalyzePipeline extends BasePipelineStep {
           diagInfo.storageError = diagError instanceof Error ? diagError.message : String(diagError)
         }
 
-        // デモモードでのスキップ理由を明確化
         const reason = options.isDemo
           ? 'Demo mode - rendering skipped'
           : `No episodes persisted for this job (episodes=${diagInfo.episodesCount}, layoutFiles=${diagInfo.layoutFileCount}, layoutStatus=${diagInfo.layoutStatusCount})`
@@ -438,7 +424,7 @@ export class AnalyzePipeline extends BasePipelineStep {
     if (!completionResult.success) {
       throw new Error(completionResult.error)
     }
-    logger.info('AnalyzePipeline.runWithText: completed (new flow)', {
+    logger.info('AnalyzePipeline.runWithText: completed (simplified flow)', {
       jobId,
       chunkCount: totalChunks,
     })
@@ -449,14 +435,12 @@ export class AnalyzePipeline extends BasePipelineStep {
     const logger = getLogger().withContext({ service: 'analyze-pipeline' })
     logger.info('AnalyzePipeline.resumeJob: start', { jobId })
 
-    // ジョブの現在の状態を取得
-    const { db } = await import('@/services/database/index') // 動的にインポート
+    const { db } = await import('@/services/database/index')
     const job = await db.jobs().getJob(jobId)
     if (!job) {
       throw new Error(`Job not found: ${jobId}`)
     }
 
-    // 小説データを取得
     const novel = await db.novels().getNovel(job.novelId)
     if (!novel) {
       throw new Error(`Novel not found: ${job.novelId}`)
@@ -474,7 +458,6 @@ export class AnalyzePipeline extends BasePipelineStep {
       renderCompleted: job.renderCompleted,
     })
 
-    // 実際の完了状態を確認 - status が completed でも、すべてのステップが完了していない場合は再開可能
     const isActuallyCompleted =
       job.splitCompleted &&
       job.analyzeCompleted &&
@@ -487,7 +470,6 @@ export class AnalyzePipeline extends BasePipelineStep {
       return { resumePoint: 'completed' }
     }
 
-    // status が completed だが実際には完了していない場合、statusを processing に戻す
     if (job.status === 'completed' && !isActuallyCompleted) {
       logger.warn('Job marked as completed but steps incomplete, resetting status to processing', {
         jobId,
@@ -504,7 +486,6 @@ export class AnalyzePipeline extends BasePipelineStep {
       )
     }
 
-    // 小説テキストを取得（ストレージから読み込み）
     let novelText: string
     try {
       const novelStorage = await (await import('@/utils/storage')).StorageFactory.getNovelStorage()
@@ -524,8 +505,6 @@ export class AnalyzePipeline extends BasePipelineStep {
       throw new Error(`Failed to load novel text: ${message}`)
     }
 
-    // 処理を再開
-    // まず、何のステップから再開すべきかを判定
     let resumePoint: string
 
     if (!job.splitCompleted) {
@@ -550,7 +529,6 @@ export class AnalyzePipeline extends BasePipelineStep {
       return { resumePoint }
     }
 
-    // 既存のジョブIDを使って処理を再開
     const result = await this.runWithText(job.novelId, novelText, {
       existingJobId: jobId,
       title: novel.title || undefined,

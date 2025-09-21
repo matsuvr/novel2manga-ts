@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type { z } from 'zod'
 import { createClientForProvider, selectProviderOrder } from '@/agents/llm/router'
 import type { LlmClient, LlmProvider } from '@/agents/llm/types'
+import { getAppConfigWithOverrides } from '@/config/app.config'
 import {
   CONNECTIVITY_ERROR_PATTERNS,
   HTTP_ERROR_PATTERNS,
@@ -50,6 +51,7 @@ function createCacheKey(
   systemPrompt: string,
   userPrompt: string,
   maxTokens: number,
+  model: string,
 ): string {
   const hash = createHash('sha256')
   hash.update(provider)
@@ -61,6 +63,8 @@ function createCacheKey(
   hash.update(userPrompt)
   hash.update('\u241F')
   hash.update(String(maxTokens))
+  hash.update('\u241F')
+  hash.update(model)
 
   return hash.digest('hex')
 }
@@ -118,6 +122,7 @@ export class DefaultLlmStructuredGenerator {
     if (typeof maxTokens !== 'number' || !Number.isFinite(maxTokens) || maxTokens <= 0) {
       throw new Error(`Missing maxTokens in llm.config.ts for provider: ${prov}`)
     }
+    const model = cfg.model
 
     const logger = getLogger().withContext({ service: 'llm-structured-generator', name })
 
@@ -148,6 +153,7 @@ export class DefaultLlmStructuredGenerator {
       normalizedSystemPrompt,
       trimmedUserPrompt,
       maxTokens,
+      model,
     )
 
     const cachedPromise = responseCache.get(cacheKey)
@@ -164,8 +170,31 @@ export class DefaultLlmStructuredGenerator {
       return cloneResult(cachedValue as T)
     }
 
+    // In-flight coalescing: insert a placeholder promise before starting work
+  let resolveOuter: (v: unknown) => void = (_v) => { void 0 }
+  let rejectOuter: (e: unknown) => void = (_e) => { void 0 }
+    const outerPromise = new Promise<unknown>((resolve, reject) => {
+      resolveOuter = resolve
+      rejectOuter = reject
+    })
+    // TypeScript will ensure initialization before use due to control flow
+    responseCache.set(cacheKey, outerPromise)
+    trimCache()
+
     const generationPromise = (async (): Promise<T> => {
-      const maxRetries = 3
+      // Load retry config from app.config (with env overrides) for JSON/schema retry attempts
+      const appCfg = getAppConfigWithOverrides()
+      const retryCfg = appCfg?.processing?.retry ?? {
+        maxAttempts: 1,
+        initialDelay: 500,
+        maxDelay: 10_000,
+        backoffFactor: 2,
+      }
+      // Ensure sane bounds
+      const maxRetries = Math.max(1, Math.min(5, Number(retryCfg.maxAttempts) || 1))
+      const initialDelay = Math.max(0, Number(retryCfg.initialDelay) || 500)
+      const backoffFactor = Math.max(1, Number(retryCfg.backoffFactor) || 2)
+      const maxDelayMs = Math.max(initialDelay, Number(retryCfg.maxDelay) || 10_000)
       let lastError: unknown
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -173,6 +202,21 @@ export class DefaultLlmStructuredGenerator {
           const telemetryForAttempt = telemetryBase
             ? { ...telemetryBase, retryAttempt: attempt, cacheHit: false }
             : { agentName: args.name || 'llm-structured-generator', retryAttempt: attempt, cacheHit: false }
+
+          // If this is a retry attempt, map known stepNames to their "-Retry" variants for observability
+          if (attempt > 1) {
+            const stepName = (telemetryForAttempt as { stepName?: unknown }).stepName
+            if (typeof stepName === 'string') {
+              const retryLabelMap: Record<string, string> = {
+                chunkConversion: 'chunkConversion-Retry',
+                EpisodeBreakPlan: 'EpisodeBreakPlan-Retry',
+              }
+              const mapped = retryLabelMap[stepName]
+              if (mapped) {
+                ;(telemetryForAttempt as { stepName: string }).stepName = mapped
+              }
+            }
+          }
 
           const result = await client.generateStructured<T>({
             systemPrompt: normalizedSystemPrompt,
@@ -222,7 +266,11 @@ export class DefaultLlmStructuredGenerator {
 
           // 少し待ってからリトライ（指数バックオフ）
           if (attempt < maxRetries) {
-            await new Promise((resolve) => setTimeout(resolve, 1000 * attempt))
+            const delay = Math.min(
+              maxDelayMs,
+              Math.floor(initialDelay * backoffFactor ** (attempt - 1)),
+            )
+            await new Promise((resolve) => setTimeout(resolve, delay))
           }
         }
       }
@@ -231,14 +279,15 @@ export class DefaultLlmStructuredGenerator {
     })()
       .then((value) => cloneResult(value))
 
-    responseCache.set(cacheKey, generationPromise as Promise<unknown>)
-    trimCache()
-
     try {
       const resolved = await generationPromise
+      // Resolve any waiters on the placeholder and keep cache entry for future cache hits
+      resolveOuter(resolved)
       return cloneResult(resolved)
     } catch (error) {
       responseCache.delete(cacheKey)
+      // Reject any waiters on the placeholder to propagate the error
+      rejectOuter(error)
       throw error
     }
   }
@@ -285,6 +334,9 @@ export class DefaultLlmStructuredGenerator {
   }
 
   private isRetryableJsonError(message: string): boolean {
+    // Allow disabling schema-validation retries via env flag while keeping parse/format retries
+    const allowSchemaRetry = process.env.APP_LLM_SCHEMA_RETRY_ENABLED !== 'false'
+    if (!allowSchemaRetry && message.includes('schema validation failed')) return false
     // Groqの特定のJSONエラーをリトライ対象とする
     return RETRYABLE_JSON_ERROR_PATTERNS.some((pattern) => message.includes(pattern))
   }

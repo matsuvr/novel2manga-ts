@@ -1,8 +1,8 @@
-import { desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, isNull, lt, or, sql } from 'drizzle-orm'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import type { Job, NewJob } from '@/db/schema'
-import { chunks, episodes, jobs } from '@/db/schema'
+import { chunks, episodes, jobNotifications, jobs } from '@/db/schema'
 import { BaseDatabaseService } from './base-database-service'
 
 type DrizzleDatabase = BetterSQLite3Database<typeof schema>
@@ -89,6 +89,120 @@ export class JobDatabaseService extends BaseDatabaseService {
     }
 
     return payload.id
+  }
+
+  /** Try to lease a pending job for exclusive processing */
+  async leaseJob(
+    jobId: string,
+    workerId: string,
+    leaseMs = 5 * 60 * 1000,
+  ): Promise<boolean> {
+    const now = new Date()
+    const leaseUntil = new Date(now.getTime() + leaseMs).toISOString()
+    const nowIso = now.toISOString()
+
+    if (this.isSync()) {
+      const drizzleDb = this.db as DrizzleDatabase
+      // Single UPDATE is atomic; no explicit transaction required.
+      const result = drizzleDb
+        .update(jobs)
+        .set({
+          status: 'processing',
+          lockedBy: workerId,
+          leaseExpiresAt: leaseUntil,
+          startedAt: nowIso,
+          updatedAt: nowIso,
+        })
+        .where(
+          and(
+            eq(jobs.id, jobId),
+            eq(jobs.status, 'pending'),
+            or(isNull(jobs.lockedBy), lt(jobs.leaseExpiresAt, nowIso)),
+          ),
+        )
+        .run()
+      const changes = (result as unknown as { changes?: number }).changes ?? 0
+      return changes > 0
+    } else {
+      let success = false
+      await this.adapter.transaction(async (tx: DrizzleDatabase) => {
+        const res: unknown = await tx
+          .update(jobs)
+          .set({
+            status: 'processing',
+            lockedBy: workerId,
+            leaseExpiresAt: leaseUntil,
+            startedAt: nowIso,
+            updatedAt: nowIso,
+          })
+          .where(
+            and(
+              eq(jobs.id, jobId),
+              eq(jobs.status, 'pending'),
+              or(isNull(jobs.lockedBy), lt(jobs.leaseExpiresAt, nowIso)),
+            ),
+          )
+        // Try common patterns across drivers
+        const rowsAffected = (res as { rowsAffected?: number })?.rowsAffected
+        const changes = (res as { changes?: number })?.changes
+        if (typeof rowsAffected === 'number') success = rowsAffected > 0
+        else if (typeof changes === 'number') success = changes > 0
+        else success = Array.isArray(res) ? res.length > 0 : false
+      })
+      return success
+    }
+  }
+
+  /** Release lease on a job (on completion/failure) */
+  async releaseLease(jobId: string): Promise<void> {
+    const nowIso = new Date().toISOString()
+    if (this.isSync()) {
+      const drizzleDb = this.db as DrizzleDatabase
+      drizzleDb
+        .update(jobs)
+        .set({ lockedBy: null, leaseExpiresAt: null, updatedAt: nowIso })
+        .where(eq(jobs.id, jobId))
+        .run()
+    } else {
+      await this.adapter.transaction(async (tx: DrizzleDatabase) => {
+        await tx
+          .update(jobs)
+          .set({ lockedBy: null, leaseExpiresAt: null, updatedAt: nowIso })
+          .where(eq(jobs.id, jobId))
+      })
+    }
+  }
+
+  /** Record a notification in outbox (idempotent by unique constraint) */
+  async recordNotification(jobId: string, status: 'completed' | 'failed'): Promise<boolean> {
+    try {
+      if (this.isSync()) {
+        const drizzleDb = this.db as DrizzleDatabase
+        drizzleDb.transaction((tx) => {
+          tx
+            .insert(jobNotifications)
+            .values({ jobId, status })
+            .run()
+          tx
+            .update(jobs)
+            .set({ lastNotifiedStatus: status, lastNotifiedAt: new Date().toISOString() })
+            .where(eq(jobs.id, jobId))
+            .run()
+        })
+      } else {
+        await this.adapter.transaction(async (tx: DrizzleDatabase) => {
+          await tx.insert(jobNotifications).values({ jobId, status })
+          await tx
+            .update(jobs)
+            .set({ lastNotifiedStatus: status, lastNotifiedAt: new Date().toISOString() })
+            .where(eq(jobs.id, jobId))
+        })
+      }
+      return true
+    } catch {
+      // Unique violation → already recorded
+      return false
+    }
   }
 
   /**
