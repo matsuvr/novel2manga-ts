@@ -37,5 +37,44 @@ EOF
   exit 1
 fi
 
+# Ensure the database directory is present and writable
+DATABASE_DIR="/app/database"
+mkdir -p "$DATABASE_DIR"
+
+# Check if database directory is writable
+if [ ! -w "$DATABASE_DIR" ]; then
+  cat >&2 <<'EOF'
+[ensure-node-modules] Error: /app/database is not writable. The database directory
+or files may have incorrect ownership. Ensure the database directory and files
+are owned by the container user (typically UID:GID matching the host user).
+EOF
+  exit 1
+fi
+
+# Check if database file exists and is writable when present
+DATABASE_FILE="$DATABASE_DIR/novel2manga.db"
+if [ -f "$DATABASE_FILE" ] && [ ! -w "$DATABASE_FILE" ]; then
+  cat >&2 <<'EOF'
+[ensure-node-modules] Error: Database file is not writable. The SQLite database
+file may have incorrect ownership. Run the following on the host:
+  sudo chown $(id -u):$(id -g) database/novel2manga.db
+EOF
+  exit 1
+fi
+
+# Ensure local storage directories exist and are writable
+LOCAL_STORAGE_DIR="/app/.local-storage"
+mkdir -p "$LOCAL_STORAGE_DIR"/{novels,results,snapshots,analysis,chunks,layouts,outputs,renders}
+
+# Check if local storage directory is writable
+if [ ! -w "$LOCAL_STORAGE_DIR" ]; then
+  cat >&2 <<'EOF'
+[ensure-node-modules] Error: /app/.local-storage is not writable. The local storage directory
+may have incorrect ownership. Ensure the local storage directory and files
+are owned by the container user (typically UID:GID matching the host user).
+EOF
+  exit 1
+fi
+
 # Execute the original command
 exec "$@"

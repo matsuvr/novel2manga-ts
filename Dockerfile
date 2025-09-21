@@ -41,6 +41,8 @@ COPY . .
 # Ensure the Next.js cache directory exists with write permissions even when
 # the container runs as an arbitrary host user (docker-compose passes UID/GID).
 RUN install -d -m 0777 /app/.next
+# Ensure the database directory exists with write permissions for mounted volumes
+RUN install -d -m 0777 /app/database
 # Copy helper script to ensure node_modules volume is seeded from the image
 COPY scripts/docker/ensure-node-modules.sh /usr/local/bin/ensure-node-modules.sh
 RUN chmod +x /usr/local/bin/ensure-node-modules.sh
