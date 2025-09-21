@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -7,6 +8,7 @@ import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
@@ -71,6 +73,7 @@ export default function NewHomeClient() {
   const [error, setError] = useState<string | null>(null)
   // リダイレクトは router.push を即時実行する方針のため pendingRedirect は不要
   const [isDemo, setIsDemo] = useState(false)
+  const [agreeToTerms, setAgreeToTerms] = useState(false)
 
   const isAuthenticated = status === 'authenticated'
   const isUnauthenticated = status === 'unauthenticated'
@@ -95,6 +98,10 @@ export default function NewHomeClient() {
     if (!novelText.trim()) return
     if (!isAuthenticated) {
       setError(LOGIN_REQUIRED_MESSAGE)
+      return
+    }
+    if (!agreeToTerms) {
+      setError('利用規約に同意してください')
       return
     }
     setView('processing')
@@ -134,7 +141,7 @@ export default function NewHomeClient() {
       setView('idle')
       setError(e instanceof Error ? e.message : '変換に失敗しました')
     }
-  }, [novelText, isDemo, router, isAuthenticated])
+  }, [novelText, isDemo, router, isAuthenticated, agreeToTerms])
 
   const handleResume = useCallback(async () => {
     setError(null)
@@ -290,13 +297,28 @@ export default function NewHomeClient() {
                     <Progress value={Math.min((novelText.length / 2_000_000) * 100, 100)} />
                   </div>
                 </div>
-                <Button
-                  onClick={handleConvert}
-                  disabled={isInputDisabled || !novelText.trim()}
-                  size="lg"
-                >
-                  {view === 'processing' ? '処理中...' : 'マンガに変換'}
-                </Button>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <Checkbox
+                    checked={agreeToTerms}
+                    onChange={(e) => setAgreeToTerms(e.target.checked)}
+                    disabled={isInputDisabled}
+                    label={
+                      <span className="text-sm">
+                        <Link href="/terms" className="text-blue-600 hover:underline">
+                          利用規約
+                        </Link>
+                        に同意する
+                      </span>
+                    }
+                  />
+                  <Button
+                    onClick={handleConvert}
+                    disabled={isInputDisabled || !novelText.trim() || !agreeToTerms}
+                    size="lg"
+                  >
+                    {view === 'processing' ? '処理中...' : 'マンガに変換'}
+                  </Button>
+                </div>
               </CardFooter>
             </Card>
 
