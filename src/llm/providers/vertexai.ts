@@ -57,6 +57,10 @@ export class VertexAIClient implements LlmClient {
     })
   }
 
+  get provider(): string {
+    return 'vertexai'
+  }
+
   async chat(messages: LlmMessage[], options: LlmClientOptions = {}): Promise<LlmResponse> {
     try {
       const model = options.model || this.config.model

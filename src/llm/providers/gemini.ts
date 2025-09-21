@@ -33,6 +33,10 @@ export class GeminiClient implements LlmClient {
   private config: GeminiConfig
   private tokenMeter: TokenMeter
 
+  get provider(): string {
+    return 'gemini'
+  }
+
   constructor(config: GeminiConfig) {
     this.config = config
     if (config.vertexai) {

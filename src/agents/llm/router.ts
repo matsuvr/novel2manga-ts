@@ -5,7 +5,6 @@ import {
 } from '../../config/llm.config'
 import { FakeLlmClient } from '../../llm/fake'
 import { defaultBaseUrl, type OpenAICompatProvider } from './base-url'
-import { maybeWrapStructuredLogging } from './logging'
 import { OpenAICompatibleClient } from './openai-compatible'
 import type { LlmClient, LlmProvider, OpenAICompatibleConfig } from './types'
 import { VertexAIClient, type VertexAIClientConfig } from './vertexai'
@@ -25,13 +24,17 @@ export function createLlmClient(cfg: ProviderConfig): LlmClient {
     case 'groq':
     case 'grok':
     case 'openrouter':
-      return maybeWrapStructuredLogging(new OpenAICompatibleClient({ ...cfg, provider: cfg.provider }))
+      // TODO: 新しいログシステムとの統合は後で実装
+      return new OpenAICompatibleClient({ ...cfg, provider: cfg.provider })
     case 'gemini':
-      return maybeWrapStructuredLogging(new VertexAIClient(cfg))
+      // TODO: 新しいログシステムとの統合は後で実装
+      return new VertexAIClient(cfg)
     case 'vertexai':
-      return maybeWrapStructuredLogging(new VertexAIClient(cfg))
+      // TODO: 新しいログシステムとの統合は後で実装
+      return new VertexAIClient(cfg)
     case 'fake':
-      return maybeWrapStructuredLogging(new FakeLlmClient())
+      // TODO: 新しいログシステムとの統合は後で実装
+      return new FakeLlmClient() as unknown as LlmClient
     default:
       throw new Error(`Unsupported provider: ${(cfg as ProviderConfig).provider}`)
   }

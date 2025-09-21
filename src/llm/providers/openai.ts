@@ -59,6 +59,10 @@ export class OpenAIClient implements LlmClient {
   private client: OpenAI
   private config: OpenAIConfig
 
+  get provider(): string {
+    return 'openai'
+  }
+
   constructor(config: OpenAIConfig) {
     this.config = config
     this.client = new OpenAI({

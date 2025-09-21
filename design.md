@@ -6,9 +6,10 @@
 
 ## LLM Interaction Logging
 
-- Setting `LLM_LOGGING=1` enables a dedicated wrapper around all LLM clients that records only the prompt/response text pairs for each chat call.
-- Logs are appended to the first `logs/` directory discovered from a prioritized list (preferring the Docker mount at `/app/logs` when present); operators can still override the directory with `LLM_LOGGING_DIR` or provide a full path via `LLM_LOGGING_PATH` for diagnostics or tests. Note: the runtime resolver selects the first candidate from a configured priority list and does not perform a writability probe before choosing the target.
-- When disabled, the wrapper is a no-op and no log files are created, ensuring existing deployments remain unchanged.
+- All LLM interactions are automatically logged to storage under `llm_log/{novelId}/` directory
+- Each request/response is saved as a JSON file with timestamp filename format
+- Logs include request details, response data, error information, and telemetry context
+- No environment variable configuration required - logging is always enabled for service analysis
 
 ## Storage Tracking
 
