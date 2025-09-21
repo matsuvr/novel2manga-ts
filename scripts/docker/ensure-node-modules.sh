@@ -37,5 +37,41 @@ EOF
   exit 1
 fi
 
+# Reusable writable check
+check_writable() {
+  local dir_path="$1"
+  local dir_name="$2"
+
+  if [ ! -w "$dir_path" ]; then
+    cat >&2 <<EOF
+[ensure-node-modules] Error: $dir_name is not writable. The directory
+may have incorrect ownership. Ensure the directory and its files
+are owned by the container user (typically UID:GID matching the host user).
+EOF
+    exit 1
+  fi
+}
+
+# Ensure the database directory is present and writable
+DATABASE_DIR="/app/database"
+mkdir -p "$DATABASE_DIR"
+check_writable "$DATABASE_DIR" "/app/database"
+
+# Check if database file exists and is writable when present
+DATABASE_FILE="$DATABASE_DIR/novel2manga.db"
+if [ -f "$DATABASE_FILE" ] && [ ! -w "$DATABASE_FILE" ]; then
+  cat >&2 <<'EOF'
+[ensure-node-modules] Error: Database file is not writable. The SQLite database
+file may have incorrect ownership. Run the following on the host:
+  sudo chown $(id -u):$(id -g) database/novel2manga.db
+EOF
+  exit 1
+fi
+
+# Ensure local storage directories exist and are writable
+LOCAL_STORAGE_DIR="/app/.local-storage"
+mkdir -p "$LOCAL_STORAGE_DIR"/{novels,results,snapshots,analysis,chunks,layouts,outputs,renders}
+check_writable "$LOCAL_STORAGE_DIR" "/app/.local-storage"
+
 # Execute the original command
 exec "$@"

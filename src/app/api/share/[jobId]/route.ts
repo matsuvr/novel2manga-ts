@@ -22,8 +22,9 @@ interface ShareStatusResponse {
 
 export const GET = withAuth(
   async (request: NextRequest, user, context: { params: { jobId: string } }) => {
+    const params = await Promise.resolve(context.params)
     try {
-      const { jobId } = context.params
+      const { jobId } = params
       validateJobId(jobId)
 
       const job = await db.jobs().getJob(jobId)
@@ -57,7 +58,7 @@ export const GET = withAuth(
       getLogger()
         .withContext({ route: 'api/share/[jobId]', method: 'GET' })
         .error('Failed to load share status', {
-          jobId: context.params.jobId,
+          jobId: params.jobId,
           error: error instanceof Error ? error.message : String(error),
         })
       return createErrorResponse(error)
@@ -67,8 +68,9 @@ export const GET = withAuth(
 
 export const DELETE = withAuth(
   async (_request: NextRequest, user, context: { params: { jobId: string } }) => {
+    const params = await Promise.resolve(context.params)
     try {
-      const { jobId } = context.params
+      const { jobId } = params
       validateJobId(jobId)
 
       const job = await db.jobs().getJob(jobId)
@@ -87,7 +89,7 @@ export const DELETE = withAuth(
       getLogger()
         .withContext({ route: 'api/share/[jobId]', method: 'DELETE' })
         .error('Failed to disable share', {
-          jobId: context.params.jobId,
+          jobId: params.jobId,
           error: error instanceof Error ? error.message : String(error),
         })
       return createErrorResponse(error)
