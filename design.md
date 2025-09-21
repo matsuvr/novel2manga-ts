@@ -39,6 +39,7 @@
 ## Authentication
 
 - Exported NextAuth helpers (`auth`, `signIn`, `signOut`) directly to ensure runtime consumers receive callable functions. This resolves "auth is not a function" failures observed during E2E startup.
+- Landing page converter input and sample controls disable for unauthenticated visitors and surface the guidance message "右上のボタンから登録／ログインをしてください" so access is clearly gated until login or registration.
 
 ## E2E Testing
 
