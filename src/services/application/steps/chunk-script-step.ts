@@ -146,6 +146,19 @@ export class ChunkScriptStep implements PipelineStep {
             continue
           }
 
+          // 二重実行防止：processing状態のチェック
+          if (status?.status === 'processing') {
+            logger.warn('Chunk is already being processed by another worker, skipping', {
+              jobId,
+              chunkIndex: i,
+            })
+            continue
+          }
+
+          // 処理開始前にprocessing状態をマーク（二重実行防止）
+          await conversionDb.markProcessing(jobId, i)
+          statusMap.set(i, { status: 'processing' })
+
           jobDb.updateJobStep(jobId, `script_chunk_${i}`)
           const text = (await resolveChunkText(i)) ?? ''
 
@@ -172,7 +185,13 @@ export class ChunkScriptStep implements PipelineStep {
 
           let script: NewMangaScript
           try {
-            await conversionDb.markProcessing(jobId, i)
+            logger.info('Starting LLM script conversion', {
+              jobId,
+              chunkIndex: i,
+              textLength: text.length,
+              textPreview: text.substring(0, 100).replace(/\n/g, '\\n')
+            })
+
             script = await convertChunkToMangaScript(
               {
                 chunkText: text,
@@ -184,6 +203,29 @@ export class ChunkScriptStep implements PipelineStep {
               },
               { jobId, isDemo: context.isDemo },
             )
+
+            logger.info('LLM script conversion completed', {
+              jobId,
+              chunkIndex: i,
+              scriptPresent: !!script,
+              panelCount: script?.panels?.length || 0,
+              characterCount: script?.characters?.length || 0,
+              locationCount: script?.locations?.length || 0,
+              scriptKeys: script ? Object.keys(script) : []
+            })
+
+            // LLMレスポンスの基本構造をチェック
+            if (!script) {
+              const msg = `LLM returned null/undefined script for chunk ${i}`
+              logger.error(msg, { jobId, chunkIndex: i })
+              throw new Error(msg)
+            }
+
+            if (typeof script !== 'object') {
+              const msg = `LLM returned non-object script for chunk ${i}: ${typeof script}`
+              logger.error(msg, { jobId, chunkIndex: i, script })
+              throw new Error(msg)
+            }
           } catch (e) {
             // 生成失敗の診断を analysis に保存
             try {
@@ -366,11 +408,59 @@ export class ChunkScriptStep implements PipelineStep {
             })
           }
           const key = JsonStorageKeys.scriptChunk({ novelId, jobId, index: i })
-          await storage.put(key, JSON.stringify(script, null, 2), {
+          const scriptJson = JSON.stringify(script, null, 2)
+
+          // 追加のバリデーション：保存前に再度チェック
+          if (!script.panels || script.panels.length === 0) {
+            const msg = `Pre-save validation failed: script chunk ${i} has no panels`
+            logger.error(msg, { jobId, chunkIndex: i, script })
+            await conversionDb.markFailed(jobId, i, msg)
+            throw new Error(msg)
+          }
+
+          logger.info('Saving script chunk to storage', {
+            jobId,
+            chunkIndex: i,
+            key,
+            panelCount: script.panels.length,
+            jsonLength: scriptJson.length
+          })
+
+          await storage.put(key, scriptJson, {
             contentType: 'application/json; charset=utf-8',
             jobId,
             chunk: String(i),
           })
+
+          // 保存後にファイルが実際に存在することを確認
+          const savedFile = await storage.get(key)
+          if (!savedFile) {
+            const msg = `Post-save verification failed: script chunk ${i} was not saved properly`
+            logger.error(msg, { jobId, chunkIndex: i, key })
+            await conversionDb.markFailed(jobId, i, msg)
+            throw new Error(msg)
+          }
+
+          // 保存されたファイルをパースして検証
+          try {
+            const savedScript = JSON.parse(savedFile.text) as NewMangaScript
+            if (!savedScript.panels || savedScript.panels.length === 0) {
+              const msg = `Post-save content verification failed: script chunk ${i} has no panels in saved file`
+              logger.error(msg, { jobId, chunkIndex: i, savedScript })
+              await conversionDb.markFailed(jobId, i, msg)
+              throw new Error(msg)
+            }
+            logger.info('Script chunk saved and verified successfully', {
+              jobId,
+              chunkIndex: i,
+              savedPanelCount: savedScript.panels.length
+            })
+          } catch (parseErr) {
+            const msg = `Post-save parse verification failed: script chunk ${i} saved file is not valid JSON`
+            logger.error(msg, { jobId, chunkIndex: i, error: parseErr instanceof Error ? parseErr.message : String(parseErr) })
+            await conversionDb.markFailed(jobId, i, msg)
+            throw new Error(msg)
+          }
           await conversionDb.markCompleted(jobId, i, key)
           processedCount += 1
           statusMap.set(i, { status: 'completed' })

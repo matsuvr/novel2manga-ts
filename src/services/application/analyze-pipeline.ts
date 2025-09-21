@@ -144,10 +144,40 @@ export class AnalyzePipeline extends BasePipelineStep {
   await this.updateJobStep(jobId, 'analyze', { logger }, 0, chunks.length)
 
     // チャンクごとの脚本生成
+    logger.info('Starting chunk script conversion', { jobId, chunkCount: chunks.length })
     const chunkScriptRes = await this.chunkScriptStep.convertChunksToScripts(chunks, context)
     if (!chunkScriptRes.success) {
+      logger.error('Chunk script conversion failed', {
+        jobId,
+        error: chunkScriptRes.error,
+        chunkCount: chunks.length
+      })
       await this.updateJobStatus(jobId, 'failed', { logger }, chunkScriptRes.error)
       throw new Error(chunkScriptRes.error)
+    }
+    logger.info('Chunk script conversion completed successfully', {
+      jobId,
+      chunkCount: chunks.length,
+      resultSuccess: chunkScriptRes.success
+    })
+
+    // ストレージとキーヘルパーをインポート
+    const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
+    const analysisStorage = await StorageFactory.getAnalysisStorage()
+
+    // 即座にファイルの存在を確認
+    logger.info('Verifying script chunk files immediately after conversion', { jobId })
+
+    for (let i = 0; i < chunks.length; i++) {
+      const key = JsonStorageKeys.scriptChunk({ novelId: context.novelId, jobId, index: i })
+      const obj = await analysisStorage.get(key)
+      logger.info('Post-conversion file check', {
+        jobId,
+        chunkIndex: i,
+        key,
+        exists: !!obj,
+        fileSize: obj?.text?.length || 0
+      })
     }
 
     // analyze ステップ完了を明示
@@ -158,41 +188,99 @@ export class AnalyzePipeline extends BasePipelineStep {
     await new Promise((resolve) => setTimeout(resolve, 300))
 
     // ここで直接チャンク脚本を結合して combined script を作成・保存（ScriptMergeStep を撤去）
-    const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
-    const analysisStorage = await StorageFactory.getAnalysisStorage()
 
     const allPanels: Array<NewMangaScript['panels'][number]> = []
     try {
       // 実在する script_chunk_{i}.json を順番に読む
+      let foundChunks = 0
       for (let i = 0; ; i++) {
         const key = JsonStorageKeys.scriptChunk({ novelId: context.novelId, jobId, index: i })
+        logger.info('Attempting to read script chunk', { jobId, chunkIndex: i, key, novelId: context.novelId })
+
         const obj = await analysisStorage.get(key)
-        if (!obj) break
+        if (!obj) {
+          logger.info('No more script chunks found', { jobId, lastIndex: i - 1, totalChunks: foundChunks })
+          break
+        }
+        foundChunks++
+
         let parsed: NewMangaScript
         try {
           parsed = JSON.parse(obj.text) as NewMangaScript
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e)
-          logger.error('Failed to parse script_chunk JSON', { jobId, chunkIndex: i, error: msg })
+          logger.error('Failed to parse script_chunk JSON', {
+            jobId,
+            chunkIndex: i,
+            error: msg,
+            textPreview: obj.text.substring(0, 200)
+          })
           throw new Error(`Failed to parse script chunk ${i}: ${msg}`)
         }
+
         if (Array.isArray(parsed.panels)) {
           allPanels.push(...parsed.panels)
-          logger.info('Collected panels from chunk', { jobId, chunkIndex: i, panelCount: parsed.panels.length })
+          logger.info('Collected panels from chunk', {
+            jobId,
+            chunkIndex: i,
+            panelCount: parsed.panels.length,
+            totalPanelsSoFar: allPanels.length
+          })
         } else {
-          logger.warn('script_chunk has no panels array', { jobId, chunkIndex: i })
+          logger.warn('script_chunk has no panels array', {
+            jobId,
+            chunkIndex: i,
+            parsedKeys: Object.keys(parsed),
+            hasStyle: !!parsed.style_tone,
+            hasCharacters: !!parsed.characters,
+            hasLocations: !!parsed.locations
+          })
         }
       }
+
+      logger.info('Script chunk collection completed', {
+        jobId,
+        totalChunks: foundChunks,
+        totalPanels: allPanels.length
+      })
     } catch (mergeErr) {
       const msg = mergeErr instanceof Error ? mergeErr.message : String(mergeErr)
-      logger.error('Failed during inline script merge', { jobId, error: msg })
+      logger.error('Failed during inline script merge', {
+        jobId,
+        error: msg,
+        novelId: context.novelId,
+        totalPanelsCollected: allPanels.length,
+        stackTrace: mergeErr instanceof Error ? mergeErr.stack : 'No stack trace available'
+      })
       await this.updateJobStatus(jobId, 'failed', { logger }, msg)
       throw new Error(msg)
     }
 
     if (allPanels.length === 0) {
       const msg = 'Inline script merge produced 0 panels'
-      logger.error(msg, { jobId })
+      logger.error(msg, {
+        jobId,
+        novelId: context.novelId,
+        context: {
+          chunkScriptStepSuccess: chunkScriptRes.success,
+          // デバッグ用: ストレージに何があるかチェック
+          debugInfo: 'Checking script chunk files existence'
+        }
+      })
+
+      // デバッグ用: 実際にストレージファイルが存在するかチェック
+      try {
+        const debugKeys = []
+        for (let i = 0; i < 10; i++) {
+          const key = JsonStorageKeys.scriptChunk({ novelId: context.novelId, jobId, index: i })
+          const obj = await analysisStorage.get(key)
+          debugKeys.push({ index: i, key, exists: !!obj, textLength: obj?.text?.length || 0 })
+        }
+        logger.error('Debug: Script chunk files check', { jobId, debugKeys })
+      } catch (debugErr) {
+        logger.error('Debug check failed', { jobId, debugError: debugErr instanceof Error ? debugErr.message : String(debugErr) })
+      }
+
       await this.updateJobStatus(jobId, 'failed', { logger }, msg)
       throw new Error(msg)
     }
