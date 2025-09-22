@@ -71,7 +71,9 @@ export const POST = async (request: NextRequest) => {
           ? originalText
           : null
     if (!raw || raw.trim().length === 0) {
-      return createErrorResponse(new ValidationError('text もしくは originalText が必要です'))
+      // 統合テストおよび /api/novel/storage との整合性のためメッセージ統一
+      // 期待値: 'テキストが必要です'
+      return createErrorResponse(new ValidationError('テキストが必要です'))
     }
 
     // 認証後にストレージに保存（認証失敗時のストレージ消費を防ぐ）

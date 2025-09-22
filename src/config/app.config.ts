@@ -12,9 +12,9 @@ import { NarrativeJudgeSchema } from '../types/validation'
 
 export const appConfig = {
     chunking: {
-      defaultChunkSize: 3000,
-      defaultOverlapSize: 200,
-      maxChunkSize: 4000,
+      defaultChunkSize: 4000,
+      defaultOverlapSize: 100,
+      maxChunkSize: 6000,
       minChunkSize: 100,
       maxOverlapRatio: 0.5,
     },
@@ -135,6 +135,7 @@ JSONのみ。expandedText は改行を保持。文字数は target ±20% 以内�
     logging: { level: 'info' as 'error' | 'warn' | 'info' | 'debug', enableFileLogging: true, enableConsoleLogging: true, logDir: 'logs', rotateDaily: true, maxLogFiles: 7 },
     development: { enableVerboseLogging: false, enablePerformanceMetrics: true, enableErrorDetails: true, mockExternalAPIs: false, enableTestMode: false },
     ui: { progress: { tokenUsagePollIntervalMs: 2000, currentEpisodeProgressWeight: 0.5, defaultEpisodeNumber: 1 }, logs: { maxEntries: 50, maxVisibleLogHeightVh: 60 }, sse: { maxReconnectAttempts: 5, maxReconnectDelayMs: 30000, fallbackPollingIntervalMs: 30000, expectedHeartbeatMs: 20000 } },
+    navigation: { fallbackRedirectDelayMs: 1200 },
   }
 
 export type AppConfig = typeof appConfig

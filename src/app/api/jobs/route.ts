@@ -2,17 +2,39 @@ import { Effect } from 'effect'
 import type { NextRequest } from 'next/server'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { db } from '@/services/database'
+import { JobService, JobServiceLive } from '@/services/job/service'
 import { getAuthenticatedUser, withAuth } from '@/utils/api-auth'
 import { createErrorResponse, createSuccessResponse, ValidationError } from '@/utils/api-error'
 import { generateUUID } from '@/utils/uuid'
 
 /**
- * GET /api/jobs - list current user's jobs (minimal implementation for E2E expectations)
+ * GET /api/jobs - list current user's jobs with pagination and filtering
  */
-export const GET = withAuth(async (_request: NextRequest, user) => {
+export const GET = withAuth(async (request: NextRequest, user) => {
   try {
-    const jobs = await db.jobs().getJobsByUser(user.id)
-    return createSuccessResponse({ jobs })
+    const { searchParams } = new URL(request.url)
+    const limit = Math.max(1, Math.min(100, Number(searchParams.get('limit') || '12')))
+    const offset = Math.max(0, Number(searchParams.get('offset') || '0'))
+    const status = searchParams.get('status') || undefined
+
+    const getUserJobsEffect = Effect.gen(function* () {
+      const jobService = yield* JobService
+      return yield* jobService.getUserJobs(user.id, { limit, offset, status })
+    })
+
+    const jobsWithNovels = await Effect.runPromise(
+      Effect.provide(getUserJobsEffect, JobServiceLive)
+    )
+
+    return createSuccessResponse({
+      data: jobsWithNovels,
+      metadata: {
+        limit,
+        offset,
+        status,
+        timestamp: new Date().toISOString(),
+      },
+    })
   } catch (error) {
     return createErrorResponse(error, 'ジョブ一覧の取得に失敗しました')
   }
