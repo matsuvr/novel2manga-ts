@@ -133,19 +133,52 @@ export async function estimatePageBreaksSegmented(
       }))
       mergedPanels.push(...adjustedPanels)
 
-      importanceCarry = segmentResult.stats.lastPageTotalImportance
+      // Determine carry: if last segment page was 'open' (not saturated), we keep its residual importance.
+      // If the last page was saturated (exact multiple of 6), we MUST reset carry to 0, otherwise we incorrectly
+      // start the next segment with an initialImportance equal to the full limit, causing an immediate page break
+      // and creating a low-importance standalone page (root cause of issue: page with importance 3 alone).
+      importanceCarry = segmentResult.stats.carryIntoNewPage
+        ? 0
+        : segmentResult.stats.lastPageTotalImportance
       const maxPage = segmentResult.pageBreaks.panels.reduce(
         (m: number, p: PageBreakV2['panels'][number]) => Math.max(m, p.pageNumber),
         0,
       )
-      let completedPages = maxPage
-      if (importanceCarry > 0 && !segmentResult.stats.carryIntoNewPage) {
-        completedPages = Math.max(0, maxPage - 1)
-      }
+      // If the last page was saturated (carryIntoNewPage true), all pages are completed -> offset by maxPage
+      // If not saturated and has panels, we offset by (maxPage - 1) so next segment continues the partial page
+      const saturated = segmentResult.stats.carryIntoNewPage
+      const completedPages = saturated ? maxPage : Math.max(0, maxPage - 1)
       pageOffset += completedPages
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       throw new Error(`Segment ${segment.segmentIndex} page break estimation failed: ${msg}`)
+    }
+  }
+
+  // Runtime invariant: except for the last page, each page's cumulative original importance must reach >= 6
+  const pageGroups = new Map<number, typeof mergedPanels>()
+  for (const p of mergedPanels) {
+    if (!pageGroups.has(p.pageNumber)) pageGroups.set(p.pageNumber, [])
+    const arr = pageGroups.get(p.pageNumber)
+    if (arr) arr.push(p)
+  }
+  const maxPage = Math.max(0, ...Array.from(pageGroups.keys()))
+  const originalPanels = script.panels || []
+  for (const [pageNo, panels] of pageGroups.entries()) {
+    if (pageNo === maxPage) continue // last page may be < 6 (residual)
+    let sum = 0
+    for (const bp of panels) {
+      const idx = bp.panelIndex - 1
+      const original = originalPanels[idx]
+      if (original) {
+        const imp = Math.max(1, Math.min(6, original.importance || 1))
+        sum += imp
+      }
+    }
+    if (sum < 6) {
+      throw new Error(
+        `Importance pagination invariant violated: page ${pageNo} total importance=${sum} (<6). This indicates a segmentation/merge bug.`,
+      )
     }
   }
 

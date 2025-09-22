@@ -95,6 +95,9 @@ export function calculateImportanceBasedPageBreaks(
     return sum + originalPanel.importance
   }, 0)
 
+  // carryIntoNewPage: true if last page ended exactly on boundary (i.e., lastPageImportance % 6 === 0)
+  const carryIntoNewPage = lastPageImportance > 0 && lastPageImportance % PAGE_IMPORTANCE_LIMIT === 0
+
   return {
     pageBreaks: { panels: resultPanels },
     stats: {
@@ -103,7 +106,7 @@ export function calculateImportanceBasedPageBreaks(
       averagePanelsPerPage: Math.round(averagePanelsPerPage * 100) / 100,
       importanceDistribution,
       lastPageTotalImportance: lastPageImportance,
-      carryIntoNewPage: false,
+      carryIntoNewPage,
     },
   }
 }
