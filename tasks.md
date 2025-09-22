@@ -5,6 +5,10 @@
 - [ ] Review remaining error logs for further cleanup.
 - [x] Require authentication before enabling landing page novel conversion inputs and provide a clear login prompt.
 - [x] Implement novelId-based LLM logging to `storage/llm_log/{novelId}/` with timestamp filenames for service analysis.
+	- [x] Wrap structured generation client so ALL `generateStructured` / object generation paths are auto-logged (including fallback providers)
+	- [x] Ensure narrativity judge, chunkConversion, EpisodeBreak estimation each attach `telemetry.jobId` (novelId correlation)
+	- [x] Add integration test `integration-logging.e2e.test.ts` covering the three call types and sanitization
+	- [ ] (Optional) Add unit guard test asserting `structured-generator.createClient` applies logging wrapper (regression prevention)
 - [x] Auto rebuild better-sqlite3 on Node ABI mismatch during database initialization.
 - [x] Detect "Module did not self-register" errors to trigger automatic rebuild of `better-sqlite3`.
 - [x] Auto-bootstrap missing Drizzle metadata (`__drizzle_migrations`) so new migrations apply to legacy SQLite files.
