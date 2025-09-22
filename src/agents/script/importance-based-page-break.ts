@@ -88,15 +88,37 @@ export function calculateImportanceBasedPageBreaks(
   const totalPages = maxPageNumber
   const averagePanelsPerPage = totalPages > 0 ? totalPanels / totalPages : 0
 
-  // Calculate remaining importance from the last page
+  // Calculate remaining importance from the last (possibly partial) page.
+  // We must include the initialImportance carry that started this segment. That carry only applies to the
+  // very first page of this segment. If the segment produced multiple pages, only the first page's
+  // accumulated importance includes initialImportance. Our goal: determine the residual importance to
+  // carry forward (if page not saturated) and whether the last page ended exactly on a boundary.
   const lastPagePanels = resultPanels.filter(panel => panel.pageNumber === maxPageNumber)
-  const lastPageImportance = lastPagePanels.reduce((sum, panel) => {
+  const lastPagePanelsImportance = lastPagePanels.reduce((sum, panel) => {
     const originalPanel = script.panels[panel.panelIndex - 1] // Convert back to 0-based index
-    return sum + originalPanel.importance
+    const imp = Math.max(1, Math.min(PAGE_IMPORTANCE_LIMIT, originalPanel.importance || 1))
+    return sum + imp
   }, 0)
 
-  // carryIntoNewPage: true if last page ended exactly on boundary (i.e., lastPageImportance % 6 === 0)
-  const carryIntoNewPage = lastPageImportance > 0 && lastPageImportance % PAGE_IMPORTANCE_LIMIT === 0
+  // Determine if the last produced page is also the first page (only one page in this segment)
+  const onlyOnePageInSegment = maxPageNumber === 1
+
+  // If only one page in segment, the effective total importance on that page includes the starting carry.
+  // Otherwise, the last page importance is just the sum within that page (carry was consumed earlier pages).
+  const effectiveLastPageImportance = onlyOnePageInSegment
+    ? Math.min(PAGE_IMPORTANCE_LIMIT, initialImportance) + lastPagePanelsImportance
+    : lastPagePanelsImportance
+
+  // If the effective importance reached exactly the limit (==6), we signal that next segment/page starts fresh.
+  const carryIntoNewPage =
+    effectiveLastPageImportance > 0 && effectiveLastPageImportance % PAGE_IMPORTANCE_LIMIT === 0
+
+  // The residual importance to pass forward (reported as lastPageTotalImportance) should be:
+  //  - 0 if saturated
+  //  - effectiveLastPageImportance % PAGE_IMPORTANCE_LIMIT if not saturated
+  const lastPageImportance = carryIntoNewPage
+    ? PAGE_IMPORTANCE_LIMIT
+    : effectiveLastPageImportance % PAGE_IMPORTANCE_LIMIT || effectiveLastPageImportance
 
   return {
     pageBreaks: { panels: resultPanels },
