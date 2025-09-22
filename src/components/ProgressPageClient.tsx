@@ -23,10 +23,11 @@ export default function ProgressPageClient({ novelId }: Props) {
     async function ensureJob() {
       try {
         setMessage('ジョブを確認/再開しています…')
-        const res = await fetch('/api/resume', {
+        const e2e = process.env.NEXT_PUBLIC_E2E === '1'
+        const res = await fetch(`/api/resume${e2e ? '?e2e=1' : ''}`, {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(e2e ? { 'x-e2e-auth-bypass': '1' } : {}) },
           body: JSON.stringify({ novelId }),
           cache: 'no-store',
         })
@@ -39,7 +40,20 @@ export default function ProgressPageClient({ novelId }: Props) {
         const jid = data.jobId
         if (!jid) throw new Error('jobIdを取得できませんでした')
         setJobId(jid)
-        setMessage(null)
+        // ジョブが既に完了済みなら即座に結果ページへ遷移（E2Eで事前にcompletedにするケース向け最適化）
+        if (data.status === 'completed') {
+          setMessage('ジョブは既に完了しています。結果ページへ移動します…')
+          // 小さな遅延でUX向上（テキスト表示猶予）
+          setTimeout(() => {
+            if (!cancelled) {
+              const e2e2 = process.env.NEXT_PUBLIC_E2E === '1'
+              const suffix2 = e2e2 ? '?e2e=1' : ''
+              router.replace(`/novel/${novelId}/results/${jid}${suffix2}`)
+            }
+          }, 300)
+        } else {
+          setMessage(null)
+        }
       } catch (e) {
         if (cancelled) return
         setError(e instanceof Error ? e.message : 'ジョブの確認に失敗しました')
@@ -53,13 +67,13 @@ export default function ProgressPageClient({ novelId }: Props) {
     return () => {
       cancelled = true
     }
-  }, [novelId])
+  }, [novelId, router])
 
   const handleComplete = React.useCallback(async () => {
     if (!jobId) return
-    // 以前の /ready ポーリングと pending ページは廃止。
-    // ジョブ完了通知(onComplete)を受けたら即結果ページへ遷移。
-    router.replace(`/novel/${novelId}/results/${jobId}`)
+    const e2e = process.env.NEXT_PUBLIC_E2E === '1'
+    const suffix = e2e ? '?e2e=1' : ''
+    router.replace(`/novel/${novelId}/results/${jobId}${suffix}`)
   }, [jobId, novelId, router])
 
   return (
