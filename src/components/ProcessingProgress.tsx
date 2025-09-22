@@ -10,6 +10,7 @@ import { Progress } from '@/components/ui/progress'
 import { appConfig } from '@/config/app.config'
 import type { Job } from '@/types/job-sse'
 import { parseJobSSEPayload } from '@/types/job-sse'
+import { fetchWithE2E, getEventSourceURL } from '@/utils/e2e-fetch-options'
 
 const _MAX_PAGES = appConfig.rendering.limits.maxPages
 
@@ -475,7 +476,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
     const interval = appConfig.ui.progress.tokenUsagePollIntervalMs
     const fetchTokens = async () => {
       try {
-        const res = await fetch(`/api/jobs/${jobId}/token-usage`)
+        const res = await fetchWithE2E(`/api/jobs/${jobId}/token-usage`)
         if (!res.ok) return
         const data = (await res.json()) as { tokenUsage?: Array<{ promptTokens?: number; completionTokens?: number }> }
         if (cancelled) return
@@ -534,7 +535,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
     const fallbackPolling = async () => {
       if (!alive && isMountedRef.current) {
         try {
-          const res = await fetch(`/api/jobs/${jobId}`)
+          const res = await fetchWithE2E(`/api/jobs/${jobId}`)
           if (res.ok) {
             const json = (await res.json()) as
               | JobData
@@ -605,7 +606,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
         } catch {
           /* noop */
         }
-        const replacement = new EventSource(`/api/jobs/${jobId}/events`)
+        const replacement = new EventSource(getEventSourceURL(`/api/jobs/${jobId}/events`))
         esRef.current = replacement
         attachEventHandlers(replacement)
       }, delay)
@@ -615,7 +616,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
     try {
       esRef.current?.close()
     } catch {/* ignore */}
-    esRef.current = new EventSource(`/api/jobs/${jobId}/events`)
+    esRef.current = new EventSource(getEventSourceURL(`/api/jobs/${jobId}/events`))
     attachEventHandlers(esRef.current)
 
     return () => {

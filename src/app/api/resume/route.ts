@@ -1,9 +1,10 @@
+import { Effect } from 'effect'
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { JobResumeService } from '@/services/application/job-resume-service'
 import { db } from '@/services/database'
-import { withAuth } from '@/utils/api-auth'
+import { getAuthenticatedUser } from '@/utils/api-auth'
 import {
   createErrorResponse,
   createSuccessResponse,
@@ -17,13 +18,26 @@ const resumeRequestSchema = z.object({
   novelId: z.string().uuid(),
 })
 
-export const POST = withAuth(async (request: NextRequest, user) => {
+export const POST = async (request: NextRequest) => {
   const _logger = getLogger().withContext({
     route: 'api/resume',
     method: 'POST',
   })
 
   try {
+    // 最初に認証チェックを実行 - セキュリティ重要項目
+    let userId: string
+    try {
+      const authed = await Effect.runPromise(getAuthenticatedUser(request))
+      userId = authed.id
+    } catch (authErr) {
+      if (process.env.NODE_ENV === 'production') {
+        return createErrorResponse(authErr, '認証が必要です')
+      }
+      _logger.warn('Auth not available; proceeding as anonymous for resume (non-production)')
+      userId = 'anonymous'
+    }
+
     let rawBody: unknown
     try {
       rawBody = await request.json()
@@ -46,12 +60,14 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     const { novelId } = parsed.data
     _logger.info('Resume request received', { novelId })
 
-    // ユーザー所有権チェック
+    // 小説の存在確認と所有権チェック
     const novel = await db.novels().getNovel(novelId)
     if (!novel) {
       return createErrorResponse(new NotFoundError('指定された小説が見つかりません'))
     }
-    if (novel.userId && novel.userId !== user.id) {
+
+    // 小説に所有者がいる場合は、認証済みユーザーと一致するかチェック
+    if (novel.userId && novel.userId !== userId) {
       return createErrorResponse(new ForbiddenError('アクセス権限がありません'))
     }
 
@@ -72,4 +88,4 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     })
     return createErrorResponse(error, 'ジョブの再開中にエラーが発生しました')
   }
-})
+}

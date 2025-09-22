@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { appConfig } from '@/config/app.config'
 
 type View = 'idle' | 'processing' | 'redirecting'
+type RequiresAction = 'EXPAND' | 'EXPLAINER'
 
 function Section({
   id,
@@ -74,6 +75,11 @@ export default function NewHomeClient() {
   // リダイレクトは router.push を即時実行する方針のため pendingRedirect は不要
   const [isDemo, setIsDemo] = useState(false)
   const [agreeToTerms, setAgreeToTerms] = useState(false)
+  // analyze 後に consent が必要な場合の状態
+  const [pendingJobId, setPendingJobId] = useState<string | null>(null)
+  const [pendingNovelId, setPendingNovelId] = useState<string | null>(null)
+  const [requiresAction, setRequiresAction] = useState<RequiresAction | null>(null)
+  const [consentSubmitting, setConsentSubmitting] = useState(false)
 
   const isAuthenticated = status === 'authenticated'
   const isUnauthenticated = status === 'unauthenticated'
@@ -132,18 +138,71 @@ export default function NewHomeClient() {
         id?: string
         data?: { jobId?: string }
         jobId?: string
+        requiresAction?: RequiresAction
       }
-    const newJobId = a.id || a.data?.jobId || a.jobId
-    if (!analyze.ok || !newJobId) throw new Error('分析の開始に失敗しました')
-    const url = `/novel/${encodeURIComponent(u.uuid)}/progress`
-    setView('redirecting')
-    // push は即時には遷移せず並行するので redirecting 状態を表示
-    await router.push(url)
+      const newJobId = a.id || a.data?.jobId || a.jobId
+      if (!analyze.ok || !newJobId) throw new Error('分析の開始に失敗しました')
+      // consent 必要分岐
+      if (a.requiresAction) {
+        setPendingJobId(newJobId)
+        setPendingNovelId(u.uuid)
+        setRequiresAction(a.requiresAction)
+        // view は processing のまま（モーダル表示）
+        return
+      }
+      const url = `/novel/${encodeURIComponent(u.uuid)}/progress`
+      setView('redirecting')
+      await router.push(url)
     } catch (e) {
       setView('idle')
       setError(e instanceof Error ? e.message : '変換に失敗しました')
     }
   }, [novelText, isDemo, router, isAuthenticated, agreeToTerms])
+
+  const consentDescription = useMemo(() => {
+    if (!requiresAction) return ''
+    if (requiresAction === 'EXPAND') {
+      return '入力されたテキストが短いため、このままでは十分なマンガ用脚本に展開できません。AI が不足するシーンや会話を補完し、元の意図を尊重しつつシナリオを拡張します。AI による創作的補完を許可しますか？'
+    }
+    return '入力されたテキストは物語ではなく説明的・論述的な内容と判定されました。教育マンガ形式（先生役と生徒役の対話など）でわかりやすく再構成します。そうした再構成（創作的脚色）を許可しますか？'
+  }, [requiresAction])
+
+  const consentTitle = requiresAction === 'EXPAND' ? '短い入力の拡張について' : '論述テキストの教育マンガ化について'
+
+  const handleConsentAccept = useCallback(async () => {
+    if (!pendingJobId || !requiresAction) return
+    setConsentSubmitting(true)
+    setError(null)
+    try {
+      const endpoint = requiresAction === 'EXPAND' ? '/api/consent/expand' : '/api/consent/explainer'
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: pendingJobId }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j?.message || '同意処理に失敗しました')
+      // 成功したら progress へ
+      setRequiresAction(null)
+      setConsentSubmitting(false)
+      setView('redirecting')
+      const nid = j.novelId || pendingNovelId
+      if (!nid) throw new Error('novelId の特定に失敗しました')
+      await router.push(`/novel/${encodeURIComponent(nid)}/progress`)
+    } catch (e) {
+      setConsentSubmitting(false)
+      setError(e instanceof Error ? e.message : '同意に失敗しました')
+    }
+  }, [pendingJobId, requiresAction, router, pendingNovelId])
+
+  const handleConsentDecline = useCallback(() => {
+    // ユーザーが拒否 → 入力編集へ戻す（ジョブは paused のまま）
+    setRequiresAction(null)
+    setPendingJobId(null)
+    setPendingNovelId(null)
+    setView('idle')
+  }, [])
 
   const handleResume = useCallback(async () => {
     setError(null)
@@ -195,6 +254,38 @@ export default function NewHomeClient() {
           </div>
         </Section>
       </div>
+
+      {requiresAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="mb-4 text-lg font-semibold text-gray-800">{consentTitle}</h2>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">{consentDescription}</p>
+            <ul className="mt-4 list-disc space-y-1 pl-5 text-xs text-gray-600">
+              {requiresAction === 'EXPAND' && (
+                <>
+                  <li>原意や雰囲気を尊重しつつ背景・登場人物・会話を補います</li>
+                  <li>補完された内容は AI による創作であり元テキストと異なる要素が追加されます</li>
+                </>
+              )}
+              {requiresAction === 'EXPLAINER' && (
+                <>
+                  <li>説明文を教師と生徒などのキャラクタ対話へ再構成します</li>
+                  <li>理解促進のための比喩・簡略化が入る場合があります</li>
+                </>
+              )}
+              <li>許可後に処理が再開されます。拒否すると元の入力編集に戻ります。</li>
+            </ul>
+            <div className="mt-6 flex justify-end gap-3">
+              <Button variant="outline" onClick={handleConsentDecline} disabled={consentSubmitting}>
+                戻る
+              </Button>
+              <Button onClick={handleConsentAccept} disabled={consentSubmitting}>
+                {consentSubmitting ? '送信中...' : '許可して続行'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Converter */}
       <div id="converter" className="bg-muted/30 py-12">

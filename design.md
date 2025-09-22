@@ -136,3 +136,58 @@ Tracking:
 - Tasks added to `tasks.md` under "extractionV2 deprecation" checklist.
 
 Once step 5 completes, this section will be revised to "Removed" with the PR reference.
+
+## Input Consent Branching (Short / Non-Narrative)
+
+Purpose:
+ユーザー入力が「短すぎる (EXPAND)」「非物語/論述的 (EXPLAINER)」と自動判定された場合、AI による創作的補完や再構成を行う前に明示的な同意を取得し、ユーザー期待との乖離を防ぐ。
+
+### Detection Logic
+1. Length Check: `validation.minInputChars` 未満であれば `status: SHORT` → `consentRequired: EXPAND`。
+2. Narrativity Judge: LLM (lite→fallback) により `isNarrative && kind ∈ {novel, short_story, play, rakugo}` 以外のケースは `NON_NARRATIVE` → `consentRequired: EXPLAINER`。
+3. いずれでもない場合は `status: OK` で通常パイプラインへ。
+
+### API Flow
+`POST /api/analyze`:
+- SHORT / NON_NARRATIVE の場合: Job を `paused` にし `{ jobId, requiresAction: 'EXPAND' | 'EXPLAINER' }` を返す。
+- それ以外: 従来通り非同期分析開始。
+
+`POST /api/consent/expand`:
+- Branch marker を `EXPAND` で保存。
+- LLM により補完シナリオ生成し元テキストを上書き。
+- Job を `processing` に戻しパイプライン再開。
+
+`POST /api/consent/explainer`:
+- Branch marker を `EXPLAINER` で保存。
+- Explainer キャラクター生成＆シード。
+- Job を `processing` に戻しパイプライン再開。
+
+### Storage / Markers
+- `analysis/branch-markers/{jobId}.json` に `{ branch: 'EXPAND' | 'EXPLAINER' | 'NORMAL', reason?, source? }`。
+
+### Frontend (NewHomeClient)
+- `/api/analyze` 応答の `requiresAction` を検出しモーダル表示。
+- EXPAND: 「短い入力の拡張について」説明。AI が欠落情報(背景/会話)を補う旨を明示。
+- EXPLAINER: 「論述テキストの教育マンガ化について」説明。対話形式再構成 & 比喩発生の可能性を明示。
+- 許可 → 対応 consent API 呼び出し → progress ページ遷移。
+- 拒否 → 入力編集に戻る (Job は paused 維持)。
+
+### Rationale
+- サービスのコア価値: 原文忠実なマンガ化。創作的脚色が入る場面を透明化するコンプライアンス設計。
+- 明示同意により「結果が入力と違いすぎる」利用者クレーム低減。
+
+### Edge Cases / Failure Modes
+- Consent API エラー: モーダル内でエラー表示し再試行可能。
+- Expansion 出力が短すぎる (<100 chars): 500 エラーを返しユーザーに再入力促す（今後リトライ戦略検討）。
+- Classification LLM 失敗: 現状 `createError` で Job を failed。将来的にはフォールバック簡易ヒューリスティック導入可能。
+
+### Open Follow-ups
+- Consent API が `novelId` を返すよう拡張（現状フロントはアップロード時保持）。
+- Paused ジョブ一覧 UI / 再同意導線（マイページ）。
+- Expansion/Explainer の品質・差分ログを LLM ログにメタ付与。
+- 同意バナーの国際化 (i18n) 対応。
+
+### Testing
+- Unit: `InputValidationStep` で短文/非物語分岐を検証済。
+- Integration: `consent-flow.test.ts` で EXPAND / EXPLAINER end-to-end (モック LLM) を検証。
+

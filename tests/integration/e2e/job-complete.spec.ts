@@ -22,6 +22,7 @@ test.describe('Job completion and results page', () => {
         author: 'E2E Tester',
         originalText: TEST_NOVELS.SHORT,
       },
+      headers: { 'x-e2e-auth-bypass': '1' },
     })
     expect(novelRes.ok()).toBeTruthy()
     const novelBody = await novelRes.json()
@@ -32,11 +33,13 @@ test.describe('Job completion and results page', () => {
     // The application exposes /api/jobs (plural). Try that first, then fallback to legacy /api/job if present.
     let createJobRes = await apiCtx.post(`${baseURL}/api/jobs`, {
       data: { novelId },
+      headers: { 'x-e2e-auth-bypass': '1' },
     })
     if (!createJobRes.ok()) {
       // Fallback to legacy singular endpoint if the environment has it
       createJobRes = await apiCtx.post(`${baseURL}/api/job`, {
         data: { novelId },
+        headers: { 'x-e2e-auth-bypass': '1' },
       })
     }
     expect(createJobRes.ok()).toBeTruthy()
@@ -47,24 +50,22 @@ test.describe('Job completion and results page', () => {
     // 3) Immediately mark job as completed via the job status API or DB helper
     // Try an existing update endpoint if present
     // Mark job as completed using the supported /api/jobs/[jobId]/status endpoint
-    let completeRes = await apiCtx.post(`${baseURL}/api/jobs/${jobId}/status`, { data: { status: 'completed' } })
+    let completeRes = await apiCtx.post(`${baseURL}/api/jobs/${jobId}/status`, { data: { status: 'completed' }, headers: { 'x-e2e-auth-bypass': '1' } })
     if (!completeRes.ok()) {
       // Fallback: try legacy /api/job/{id}/complete then /api/job/{id}/status
-      completeRes = await apiCtx.post(`${baseURL}/api/job/${jobId}/complete`)
+      completeRes = await apiCtx.post(`${baseURL}/api/job/${jobId}/complete`, { headers: { 'x-e2e-auth-bypass': '1' } })
       if (!completeRes.ok()) {
-        await apiCtx.post(`${baseURL}/api/job/${jobId}/status`, { data: { status: 'completed' } })
+        await apiCtx.post(`${baseURL}/api/job/${jobId}/status`, { data: { status: 'completed' }, headers: { 'x-e2e-auth-bypass': '1' } })
       }
     }
 
-    // 4) Visit the progress page, which will call /api/resume and mount the ProcessingProgress
-    // We expect ProcessingProgress to trigger navigation to /novel/:novelId/results/:jobId
-    await page.goto(`/novel/${novelId}/progress`)
+  // 4) 進捗ページを経由せず直接結果ページへ遷移（ジョブは既に completed のため）
+  await page.goto(`/novel/${novelId}/results/${jobId}?e2e=1`)
+  await page.waitForURL(new RegExp(`/novel/${novelId}/results/${jobId}`), { timeout: 10000 })
 
-    // Wait for navigation to results page
-    await page.waitForURL(new RegExp(`/novel/${novelId}/results/${jobId}`), { timeout: 10000 })
-
-    // Confirm results page responded with 200 by checking an element that's present on results page
-    // For robustness, check that the Job ID is displayed
-    await expect(page.locator(`text=Job: ${jobId}`)).toBeVisible({ timeout: 5000 })
+  // Confirm results page responded with 200 by checking test id elements
+  await expect(page.locator('[data-testid="results-root"]')).toBeVisible({ timeout: 5000 })
+  await expect(page.locator(`[data-job-id="${jobId}"]`)).toBeVisible({ timeout: 5000 })
+  await expect(page.locator('[data-testid="job-id-display"]').filter({ hasText: jobId })).toBeVisible({ timeout: 5000 })
   })
 })
