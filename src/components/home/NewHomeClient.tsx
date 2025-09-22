@@ -63,6 +63,7 @@ function SampleButton({
 const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const LOGIN_REQUIRED_MESSAGE = '右上のボタンから登録／ログインをしてください'
 
+
 export default function NewHomeClient() {
   const router = useRouter()
   const { status } = useSession()
@@ -80,6 +81,8 @@ export default function NewHomeClient() {
   const [pendingNovelId, setPendingNovelId] = useState<string | null>(null)
   const [requiresAction, setRequiresAction] = useState<RequiresAction | null>(null)
   const [consentSubmitting, setConsentSubmitting] = useState(false)
+  // push が完了しないケースのフォールバック用にターゲットURLを保持
+  const [redirectTarget, setRedirectTarget] = useState<string | null>(null)
 
   const isAuthenticated = status === 'authenticated'
   const isUnauthenticated = status === 'unauthenticated'
@@ -152,10 +155,19 @@ export default function NewHomeClient() {
       }
       const url = `/novel/${encodeURIComponent(u.uuid)}/progress`
       setView('redirecting')
-      await router.push(url)
+
+      // 即座にナビゲーションを実行 (Next.js のバージョンによっては Promise を返さないため安全にラップ)
+      try {
+        router.push(url)
+        setRedirectTarget(url)
+      } catch (error) {
+        console.error('Navigation failed:', error)
+        window.location.href = url
+      }
     } catch (e) {
       setView('idle')
-      setError(e instanceof Error ? e.message : '変換に失敗しました')
+      const errorMessage = e instanceof Error ? e.message : '変換に失敗しました'
+      setError(`${errorMessage}。ページが遷移しない場合は、ブラウザの更新ボタンを押して再度お試しください。`)
     }
   }, [novelText, isDemo, router, isAuthenticated, agreeToTerms])
 
@@ -168,6 +180,19 @@ export default function NewHomeClient() {
   }, [requiresAction])
 
   const consentTitle = requiresAction === 'EXPAND' ? '短い入力の拡張について' : '論述テキストの教育マンガ化について'
+
+  // ルーター遷移が何らかの理由で完了しない (戻れない/描画されない) ケースに備えフォールバック
+  useEffect(() => {
+    if (!redirectTarget || view !== 'redirecting') return
+    const delay =  appConfig.navigation?.fallbackRedirectDelayMs ?? 1500
+    const id = setTimeout(() => {
+      // まだ同じ状態ならハードリダイレクト
+      if (view === 'redirecting') {
+        window.location.assign(redirectTarget)
+      }
+    }, delay)
+    return () => clearTimeout(id)
+  }, [redirectTarget, view])
 
   const handleConsentAccept = useCallback(async () => {
     if (!pendingJobId || !requiresAction) return
@@ -189,10 +214,20 @@ export default function NewHomeClient() {
       setView('redirecting')
       const nid = j.novelId || pendingNovelId
       if (!nid) throw new Error('novelId の特定に失敗しました')
-      await router.push(`/novel/${encodeURIComponent(nid)}/progress`)
+
+      const progressUrl = `/novel/${encodeURIComponent(nid)}/progress`
+
+      try {
+        router.push(progressUrl)
+        setRedirectTarget(progressUrl)
+      } catch (error) {
+        console.error('Navigation failed:', error)
+        window.location.href = progressUrl
+      }
     } catch (e) {
       setConsentSubmitting(false)
-      setError(e instanceof Error ? e.message : '同意に失敗しました')
+      const errorMessage = e instanceof Error ? e.message : '同意に失敗しました'
+      setError(`${errorMessage}。ページが遷移しない場合は、ブラウザの更新ボタンを押して再度お試しください。`)
     }
   }, [pendingJobId, requiresAction, router, pendingNovelId])
 
@@ -229,10 +264,20 @@ export default function NewHomeClient() {
         data.status === 'completed'
           ? `/novel/${encodeURIComponent(nid)}/results/${encodeURIComponent(data.jobId)}`
           : `/novel/${encodeURIComponent(nid)}/progress`
-      await router.push(url)
+
+      setView('redirecting')
+
+      try {
+        router.push(url)
+        setRedirectTarget(url)
+      } catch (error) {
+        console.error('Navigation failed:', error)
+        window.location.href = url
+      }
     } catch (e) {
       setView('idle')
-      setError(e instanceof Error ? e.message : '再開に失敗しました')
+      const errorMessage = e instanceof Error ? e.message : '再開に失敗しました'
+      setError(`${errorMessage}。novelIDが正しいことを確認してください。`)
     }
   }, [resumeId, router])
 

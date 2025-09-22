@@ -79,10 +79,12 @@ describe('importance-based page breaks', () => {
     const { pageBreaks, stats } = calculateImportanceBasedPageBreaks(script)
     const pages = pageBreaks.panels.map((panel) => panel.pageNumber)
 
-    // New logic: both panels go to page 1 since 5+5=10 (≥6)
-    expect(pages).toEqual([1, 1])
-    expect(stats.totalPages).toBe(1)
-        expect(stats.lastPageTotalImportance).toBe(10) // Both panels' importance on page 1
+  // New logic: both panels go to page 1 since 5+5=10 (≥6)
+  expect(pages).toEqual([1, 1])
+  expect(stats.totalPages).toBe(1)
+  // lastPageTotalImportance はキャリー用の残余(または飽和時は LIMIT)ではなく、新仕様では
+  // 飽和したページの residual を 0 としないため、10%6=4 の残余を返す実装となっている。
+  expect(stats.lastPageTotalImportance).toBe(4)
   })
 
   it('groups panels correctly when sum equals page limit', () => {
@@ -133,6 +135,38 @@ describe('importance-based page breaks', () => {
     expect(result.pageBreaks.panels).toHaveLength(1)
     expect(result.pageBreaks.panels[0].pageNumber).toBe(1)
     expect(result.stats.totalPages).toBe(1)
+  })
+
+  it('includes initialImportance when determining saturation (carry 4 + panel 2)', () => {
+    const script = buildScript([2, 3])
+    // Start with a carry of 4, first panel (importance 2) should saturate page (4+2=6) → next panel on new page
+    const { pageBreaks, stats } = calculateImportanceBasedPageBreaks(script, 4)
+    const pages = pageBreaks.panels.map(p => p.pageNumber)
+    expect(pages).toEqual([1, 2])
+    // lastPageTotalImportance: last page has only panel importance 3 (not saturated)
+    expect(stats.lastPageTotalImportance).toBe(3)
+    expect(stats.carryIntoNewPage).toBe(false)
+  })
+
+  // Regression guard: requested logic
+  // Sum importance values sequentially; once cumulative >= 6, close the page with those panels.
+  // Example sequence 1,2,2,3,4,6,6 => [[1,2,2,3],[4,6],[6]]
+  it('groups [1,2,2,3,4,6,6] into pages [[1,2,2,3],[4,6],[6]]', () => {
+    const importances = [1, 2, 2, 3, 4, 6, 6]
+    const script = buildScript(importances)
+    const { pageBreaks } = calculateImportanceBasedPageBreaks(script)
+
+    const pages: Record<number, number[]> = {}
+    for (const p of pageBreaks.panels) {
+      pages[p.pageNumber] ||= []
+      pages[p.pageNumber].push(p.panelIndex)
+    }
+
+    expect(pages[1]).toEqual([1, 2, 3, 4]) // 1+2+2+3=8 >=6
+    expect(pages[2]).toEqual([5, 6]) // 4+6=10 >=6
+    expect(pages[3]).toEqual([7]) // 6 >=6
+    // Ensure no extra pages created
+    expect(Object.keys(pages).length).toBe(3)
   })
 
   it('handles empty script', () => {
