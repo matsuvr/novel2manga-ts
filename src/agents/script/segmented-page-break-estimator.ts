@@ -54,6 +54,7 @@ export async function estimatePageBreaksSegmented(
   script: NewMangaScript,
   opts: SegmentedPageBreakOptions = {},
 ): Promise<SegmentedPageBreakResult> {
+  type PanelWithGlobal = PageBreakV2['panels'][number] & { globalPanelIndex?: number }
   // Demo mode: return fixed page break plan for testing
   if (opts?.isDemo || process.env.NODE_ENV === 'test') {
     const demoPageBreaks: PageBreakV2 = {
@@ -127,10 +128,17 @@ export async function estimatePageBreaksSegmented(
   for (const segment of segments) {
     try {
       const segmentResult = calculateImportanceBasedPageBreaks(segment.script, importanceCarry)
-      const adjustedPanels = segmentResult.pageBreaks.panels.map((p: PageBreakV2['panels'][number]) => ({
-        ...p,
-        pageNumber: p.pageNumber + pageOffset,
-      }))
+      const adjustedPanels = segmentResult.pageBreaks.panels.map((p: PageBreakV2['panels'][number]) => {
+        // p.panelIndex はセグメント内 1-based。segment.panelIndices は元スクリプトの 0-based グローバル index
+        const globalZeroBased = segment.panelIndices[p.panelIndex - 1]
+        const globalPanelIndex = typeof globalZeroBased === 'number' ? globalZeroBased + 1 : p.panelIndex
+        return {
+          ...p,
+          pageNumber: p.pageNumber + pageOffset,
+          // グローバル参照用 index を追加 (既存型に影響しないよう as any で付加)
+          ...(globalPanelIndex ? { globalPanelIndex } : {}),
+        } as PanelWithGlobal
+      })
       mergedPanels.push(...adjustedPanels)
 
       // Determine carry: if last segment page was 'open' (not saturated), we keep its residual importance.
@@ -158,7 +166,9 @@ export async function estimatePageBreaksSegmented(
   // Runtime invariant: except for the last page, each page's cumulative original importance must reach >= 6
   const pageGroups = new Map<number, typeof mergedPanels>()
   for (const p of mergedPanels) {
-    if (!pageGroups.has(p.pageNumber)) pageGroups.set(p.pageNumber, [])
+    if (!pageGroups.has(p.pageNumber)) {
+      pageGroups.set(p.pageNumber, [])
+    }
     const arr = pageGroups.get(p.pageNumber)
     if (arr) arr.push(p)
   }
@@ -167,9 +177,12 @@ export async function estimatePageBreaksSegmented(
   for (const [pageNo, panels] of pageGroups.entries()) {
     if (pageNo === maxPage) continue // last page may be < 6 (residual)
     let sum = 0
-    for (const bp of panels) {
-      const idx = bp.panelIndex - 1
-      const original = originalPanels[idx]
+    for (const bpRaw of panels) {
+      const bp = bpRaw as PanelWithGlobal
+      // globalPanelIndex があればそれを利用。なければ互換フォールバック
+      const globalIdx = bp.globalPanelIndex
+      const originalIdx = typeof globalIdx === 'number' ? globalIdx - 1 : bp.panelIndex - 1
+      const original = originalPanels[originalIdx]
       if (original) {
         const imp = Math.max(1, Math.min(6, original.importance || 1))
         sum += imp
