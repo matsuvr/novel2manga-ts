@@ -135,6 +135,27 @@ describe('importance-based page breaks', () => {
     expect(result.stats.totalPages).toBe(1)
   })
 
+  // Regression guard: requested logic
+  // Sum importance values sequentially; once cumulative >= 6, close the page with those panels.
+  // Example sequence 1,2,2,3,4,6,6 => [[1,2,2,3],[4,6],[6]]
+  it('groups [1,2,2,3,4,6,6] into pages [[1,2,2,3],[4,6],[6]]', () => {
+    const importances = [1, 2, 2, 3, 4, 6, 6]
+    const script = buildScript(importances)
+    const { pageBreaks } = calculateImportanceBasedPageBreaks(script)
+
+    const pages: Record<number, number[]> = {}
+    for (const p of pageBreaks.panels) {
+      pages[p.pageNumber] ||= []
+      pages[p.pageNumber].push(p.panelIndex)
+    }
+
+    expect(pages[1]).toEqual([1, 2, 3, 4]) // 1+2+2+3=8 >=6
+    expect(pages[2]).toEqual([5, 6]) // 4+6=10 >=6
+    expect(pages[3]).toEqual([7]) // 6 >=6
+    // Ensure no extra pages created
+    expect(Object.keys(pages).length).toBe(3)
+  })
+
   it('handles empty script', () => {
     const script = buildScript([])
     const result = calculateImportanceBasedPageBreaks(script)
