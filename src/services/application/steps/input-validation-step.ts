@@ -1,9 +1,9 @@
 import { getLlmStructuredGenerator } from '@/agents/structured-generator'
-import { getAppConfigWithOverrides } from '@/config/app.config'
-import {
+import { 
   buildNarrativityJudgeUser,
+  buildNarrativityJudgeUserLite,getAppConfigWithOverrides, 
   NARRATIVITY_JUDGE_SYSTEM,
-} from '@/prompts/narrativityJudge.prompt'
+  NARRATIVITY_JUDGE_SYSTEM_LITE,} from '@/config/app.config'
 import type { ValidationOutcome } from '@/types/validation'
 import { NarrativeJudgeSchema } from '@/types/validation'
 import type { StepContext, StepExecutionResult } from './base-step'
@@ -31,13 +31,33 @@ export class InputValidationStep extends BasePipelineStep {
 
     try {
       const generator = getLlmStructuredGenerator()
-      const judge = await generator.generateObjectWithFallback<import('@/types/validation').NarrativeJudgeResult>({
-        name: 'narrativity-judge',
-        systemPrompt: NARRATIVITY_JUDGE_SYSTEM,
-        userPrompt: buildNarrativityJudgeUser(text),
-        schema: NarrativeJudgeSchema,
-        schemaName: 'NarrativeJudge',
-      })
+      const useLite = cfg.validation.model === 'vertexai_lite'
+      let judge: import('@/types/validation').NarrativeJudgeResult
+      try {
+        judge = await generator.generateObjectWithFallback<import('@/types/validation').NarrativeJudgeResult>({
+          name: 'narrativity-judge-lite',
+            systemPrompt: useLite ? NARRATIVITY_JUDGE_SYSTEM_LITE : NARRATIVITY_JUDGE_SYSTEM,
+          userPrompt: useLite ? buildNarrativityJudgeUserLite(text) : buildNarrativityJudgeUser(text),
+          schema: NarrativeJudgeSchema,
+          schemaName: 'NarrativeJudge',
+        })
+      } catch (liteError) {
+        // Fallback: try full model prompt if lite was selected
+        if (useLite) {
+          logger.warn('Lite narrativity judge failed, falling back to full prompt', {
+            error: liteError instanceof Error ? liteError.message : String(liteError),
+          })
+          judge = await generator.generateObjectWithFallback<import('@/types/validation').NarrativeJudgeResult>({
+            name: 'narrativity-judge',
+            systemPrompt: NARRATIVITY_JUDGE_SYSTEM,
+            userPrompt: buildNarrativityJudgeUser(text),
+            schema: NarrativeJudgeSchema,
+            schemaName: 'NarrativeJudge',
+          })
+        } else {
+          throw liteError
+        }
+      }
 
       const isNarrative =
         judge.isNarrative && ['novel', 'short_story', 'play', 'rakugo'].includes(judge.kind)

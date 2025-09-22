@@ -1,4 +1,5 @@
 import type { z } from 'zod'
+import type { LlmProvider } from '@/agents/llm/types'
 import {
   DEFAULT_SCRIPT_SEGMENTATION_CONFIG,
   type ScriptSegmentationConfig,
@@ -90,7 +91,8 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
 
     // Use provider for episode break estimation
     const provider = getProviderForUseCase('episodeBreak')
-    const generator = new DefaultLlmStructuredGenerator([provider])
+  const providerNormalized: LlmProvider = provider === 'vertexai_lite' || provider === 'gemini' ? 'vertexai' : (provider as LlmProvider)
+  const generator = new DefaultLlmStructuredGenerator([providerNormalized])
 
     // Read prompts from provided app config
     const eb = appCfg.llm.episodeBreakEstimation || { systemPrompt: '', userPromptTemplate: '' }

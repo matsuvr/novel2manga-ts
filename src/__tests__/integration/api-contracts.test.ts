@@ -13,9 +13,6 @@ import { TestStorageDataFactory, TestStorageFactory } from './__helpers/test-sto
 
 // テスト用の設定モック
 vi.mock('@/config', () => ({
-  getTextAnalysisConfig: vi.fn(() => ({
-    userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
-  })),
   getLLMProviderConfig: vi.fn(() => ({
     apiKey: 'test-key',
     model: 'test-model',

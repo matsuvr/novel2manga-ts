@@ -1,11 +1,11 @@
 import { Data, Effect } from 'effect'
+import type { LlmProvider } from '@/agents/llm/types'
 import { DefaultLlmStructuredGenerator } from '@/agents/structured-generator'
-import { getChunkConversionConfig } from '@/config'
+import { getAppConfig, getChunkConversionConfig } from '@/config'
 import { getLogger } from '@/infrastructure/logging/logger'
-import {
-  type ChunkConversionResult,
-  ChunkConversionSchema,
-} from '@/types/chunk-conversion'
+import { BranchType } from '@/types/branch'
+import { type ChunkConversionResult, ChunkConversionSchema } from '@/types/chunk-conversion'
+import { getBranchType } from '@/utils/branch-marker'
 
 export interface ChunkConversionInput {
   /** 対象チャンク本文 */
@@ -29,6 +29,7 @@ export interface ChunkConversionOptions {
 export interface ChunkConversionInvocationResult {
   result: ChunkConversionResult
   provider: string
+  branch?: BranchType
 }
 
 export class ChunkConversionAgentError extends Data.TaggedError('ChunkConversionAgentError')<{
@@ -82,7 +83,21 @@ export const chunkConversionEffect = (
   return Effect.gen(function* () {
     ensureValidInput(input)
 
-    const config = getChunkConversionConfig()
+    const baseConfig = getChunkConversionConfig()
+    const appCfg = getAppConfig()
+
+    // ブランチ判定 (jobId が無い場合は NORMAL)
+    const branch: BranchType = yield* (options.jobId
+      ? Effect.tryPromise({
+          try: () => getBranchType(options.jobId as string),
+          catch: (cause) =>
+            new ChunkConversionAgentError({
+              reason: 'Failed to determine branch type',
+              cause,
+            }),
+        }).pipe(Effect.catchAll(() => Effect.succeed(BranchType.NORMAL)))
+      : Effect.succeed(BranchType.NORMAL))
+
     const sanitizedText = input.chunkText.trim()
     const replacements = {
       chunkIndex: String(input.chunkIndex),
@@ -96,16 +111,38 @@ export const chunkConversionEffect = (
       nextChunkSummary: resolveTemplateValue(input.nextChunkSummary, ''),
     }
 
-    const systemPrompt = applyTemplate(config.systemPrompt, replacements)
-    const userPrompt = applyTemplate(config.userPromptTemplate, replacements)
+    // ブランチごとのプロンプト選択（user は統一済）
+    const branchPrompts = (() => {
+      if (branch === BranchType.EXPLAINER) {
+        const p = appCfg.llm.explainerConversion
+        if (!p?.systemPrompt || !p?.userPromptTemplate) {
+          throw new ChunkConversionAgentError({
+            reason: 'Explainer conversion prompts missing (llm.explainerConversion)',
+          })
+        }
+        return p
+      }
+      return baseConfig
+    })()
 
-    const generator = new DefaultLlmStructuredGenerator([config.provider])
+    const systemPrompt = applyTemplate(branchPrompts.systemPrompt, replacements)
+    const userPrompt = applyTemplate(branchPrompts.userPromptTemplate, replacements)
+
+    // config層(LLMProvider) と agent層(LlmProvider) の union 差異を吸収
+    const providerNormalized = ((): LlmProvider => {
+      if (baseConfig.provider === 'vertexai_lite') return 'vertexai'
+      // gemini は内部的に vertexai 経由扱いだが types では 'gemini' 未定義のため vertexai にフォールバック
+      if (baseConfig.provider === 'gemini') return 'vertexai'
+      return baseConfig.provider as LlmProvider
+    })()
+    const generator = new DefaultLlmStructuredGenerator([providerNormalized])
 
     yield* Effect.sync(() =>
       logger.info('Executing chunk conversion', {
         chunkIndex: input.chunkIndex,
-        provider: config.provider,
+  provider: providerNormalized,
         chunkLength: sanitizedText.length,
+        branch,
       }),
     )
 
@@ -130,7 +167,6 @@ export const chunkConversionEffect = (
         }),
     })
 
-    // Normalize to satisfy strict typing (ensure required arrays exist)
     const normalized: ChunkConversionResult = {
       ...result,
       memory: {
@@ -153,14 +189,16 @@ export const chunkConversionEffect = (
     yield* Effect.sync(() =>
       logger.info('Chunk conversion completed', {
         chunkIndex: input.chunkIndex,
-        provider: config.provider,
+        provider: baseConfig.provider,
         panelCount: normalized.script.length,
+        branch,
       }),
     )
 
     return {
       result: normalized,
-      provider: config.provider,
+      provider: baseConfig.provider,
+      branch,
     }
   })
 }

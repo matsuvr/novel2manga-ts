@@ -86,10 +86,6 @@ vi.mock('@/config', () => ({
     systemPrompt: 'Chunk conversion system prompt',
     userPromptTemplate: 'チャンク変換: {{chunkText}}',
   })),
-  getScriptConversionConfig: vi.fn(() => ({
-    systemPrompt: 'script-system',
-    userPromptTemplate: 'Episode: {{episodeText}}',
-  })),
   getLLMProviderConfig: vi.fn(() => ({
     apiKey: 'test-key',
     model: 'test-model',
