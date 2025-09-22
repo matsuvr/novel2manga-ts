@@ -6,6 +6,7 @@ import { getLogger } from '@/infrastructure/logging/logger'
 import { BranchType } from '@/types/branch'
 import { type ChunkConversionResult, ChunkConversionSchema } from '@/types/chunk-conversion'
 import { getBranchType } from '@/utils/branch-marker'
+import { normalizeCharacterIds } from '@/utils/chunk-conversion-normalize'
 
 export interface ChunkConversionInput {
   /** 対象チャンク本文 */
@@ -167,7 +168,7 @@ export const chunkConversionEffect = (
         }),
     })
 
-    const normalized: ChunkConversionResult = {
+    const baseNormalized: ChunkConversionResult = {
       ...result,
       memory: {
         characters: (result.memory?.characters ?? []).map((c) => ({
@@ -185,6 +186,17 @@ export const chunkConversionEffect = (
         sfx: p.sfx ?? [],
       })),
     }
+
+    const normalization = normalizeCharacterIds(baseNormalized)
+    if (normalization.applied) {
+      yield* Effect.sync(() =>
+        logger.warn('Applied character id normalization fallback', {
+          chunkIndex: input.chunkIndex,
+          reason: normalization.reason,
+        }),
+      )
+    }
+    const normalized = normalization.normalized
 
     yield* Effect.sync(() =>
       logger.info('Chunk conversion completed', {

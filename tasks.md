@@ -38,6 +38,16 @@
 
 - [x] Ensure progress hints show accurate chunk/episode totals without `?` placeholders.
 
+- [x] Replace raw speaker IDs (c1, c2, ...) with character names during layout generation.
+- [ ] Decide & implement policy for unknown speaker IDs lacking a character map entry (current: leave ID as-is; option: display `不明` or fallback name). Document decision in README or rendering docs.
+ - [ ] Restore safe parallel chunk processing (currently forced maxConcurrent=1 as a mitigation for memory context race). Steps:
+	 - [ ] Instrument race conditions (log fiber/worker IDs & shared state snapshot hashes)
+	 - [ ] Isolate LLM client/context per worker (no shared mutable prompt builders)
+	 - [ ] Add deterministic seeding & explicit cancellation boundaries
+	 - [ ] Reintroduce configurable `appConfig.chunking.maxConcurrent` (default 2→3 after soak)
+	 - [ ] Add integration stress test (≥10 chunks) verifying deterministic outputs across runs
+	 - [ ] Remove temporary TODO comment once stabilized
+
 ## extractionV2 Deprecation
 
 - [x] Mark `src/prompts/extractionV2.ts` with deprecation header
