@@ -98,3 +98,41 @@
 
 - The processing progress screen preserves the last known totals for chunks and episodes so runtime hints always display a
   numeric "current / total" indicator instead of falling back to `?` when SSE payloads omit the totals.
+
+## (Deprecated) extractionV2 Prompt & Schema
+
+Status: DEPRECATED (2025-09-22)
+
+Rationale:
+- Legacy extractionV2 prompt helpers were isolated in `src/prompts/extractionV2.ts` and are no longer invoked by the active pipeline.
+- Scene / Highlight V2 schemas remain ONLY for validation tests (`validation/extraction-v2-schema.test.ts`) and character-related utilities still importing types from `@/types/extractionV2`.
+- Central prompt consolidation moved all surviving LLM templates into `app.config.ts`; retaining a separate prompt file introduces drift risk.
+
+Audit Summary:
+- Code search shows no runtime imports of the functions: `getExtractionV2SystemPrompt`, `generateExtractionV2UserPrompt`, or `migrateOldExtractionToV2` outside the deprecated file itself.
+- Storage structure documentation (`database/storage-structure.md`) contains no keys specific to extractionV2 outputs.
+- No persisted storage artifacts with an explicit `extractionV2` naming pattern were identified (manual scan + audit tests pass).
+
+Removal Plan (Phased):
+1. Short Term (current): Mark file with deprecation header (done) and document plan here.
+2. Character Module Adjustment: Replace direct imports of granular extractionV2 types with slimmer internal domain types (e.g. `CharacterEvent`, `CharacterCastEntry`) if continued; otherwise re-export minimal subset.
+3. Test Refactor: Migrate `extraction-v2-schema.test.ts` to either:
+  - a) Legacy snapshot test capturing minimal canonical sample, or
+  - b) Remove entirely if character pipeline no longer depends on structural constraints beyond basic indexing.
+4. Schema Prune: Delete unused zod schemas & type helpers after confirming step 2.
+5. File Deletion: Remove `src/prompts/extractionV2.ts` in the same PR as step 4 with CHANGELOG note: "Removed: legacy extractionV2 prompt helpers".
+6. Follow-up Cleanup: Eliminate now-dead imports in `character/` modules; run full test & integration suite to ensure zero functional drift.
+
+Acceptance Gates for Final Removal:
+- No production or staging logs referencing extractionV2 functions for ≥14 days.
+- All character resolver logic green without importing extractionV2-specific composite types.
+- Test suite passes after converting/removing schema tests.
+
+Risk Mitigation:
+- If unforeseen dependency appears, revert by restoring file from Git history (no data migration required).
+- Removal does not alter database schema or storage key namespace; strictly application-layer prompt consolidation.
+
+Tracking:
+- Tasks added to `tasks.md` under "extractionV2 deprecation" checklist.
+
+Once step 5 completes, this section will be revised to "Removed" with the PR reference.

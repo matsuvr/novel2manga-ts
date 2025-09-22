@@ -309,33 +309,14 @@ vi.mock('@/config', async (importOriginal) => {
       },
     }),
     getAppConfig: vi.fn().mockReturnValue({
-      features: {
-        enableCoverageCheck: false,
-      },
-      llm: {
-        chunkConversion: {
-          systemPrompt: 'mock chunk conversion system prompt',
-          userPromptTemplate: '{{chunkText}}',
-        },
-        scriptConversion: {
-          coverageThreshold: 0.8,
-          enableCoverageRetry: true,
-        },
-      },
-    }),
-    getTextAnalysisConfig: vi.fn().mockReturnValue({
-      userPromptTemplate: '{{chunkIndex}}',
-      systemPrompt: 'mock system prompt',
+      features: { enableCoverageCheck: false },
+      llm: { chunkConversion: { systemPrompt: 'mock chunk conversion system prompt', userPromptTemplate: '{{chunkText}}' } },
     }),
     getChunkConversionConfig: vi.fn().mockReturnValue({
       provider: 'openai',
       maxTokens: 1000,
       systemPrompt: 'mock chunk conversion system prompt',
       userPromptTemplate: '{{chunkText}}',
-    }),
-    getScriptConversionConfig: vi.fn().mockReturnValue({
-      userPromptTemplate: '{{chunkIndex}}',
-      systemPrompt: 'mock system prompt',
     }),
     getEpisodeConfig: vi.fn().mockReturnValue({
       smallPanelThreshold: 8,
@@ -403,36 +384,14 @@ vi.mock('@/config/app.config', () => ({
     features: {
       enableCoverageCheck: false,
     },
-    llm: {
-      scriptConversion: {
-        coverageThreshold: 0.8,
-        enableCoverageRetry: true,
-        systemPrompt: 'mock system prompt',
-      },
-    },
+    llm: {},
     episode: {
       smallPanelThreshold: 8,
       minPanelsPerEpisode: 10,
       maxPanelsPerEpisode: 1000,
     },
   },
-  getAppConfig: vi.fn().mockReturnValue({
-    features: {
-      enableCoverageCheck: false,
-    },
-    llm: {
-      scriptConversion: {
-        coverageThreshold: 0.8,
-        enableCoverageRetry: true,
-        systemPrompt: 'mock system prompt',
-      },
-    },
-    episode: {
-      smallPanelThreshold: 8,
-      minPanelsPerEpisode: 10,
-      maxPanelsPerEpisode: 1000,
-    },
-  }),
+  getAppConfig: vi.fn().mockReturnValue({ features: { enableCoverageCheck: false }, llm: {}, episode: { smallPanelThreshold: 8, minPanelsPerEpisode: 10, maxPanelsPerEpisode: 1000 } }),
   getAppConfigWithOverrides: vi.fn().mockReturnValue({
     chunking: {
       defaultChunkSize: 1000,
@@ -480,14 +439,7 @@ vi.mock('@/config/app.config', () => ({
     features: {
       enableCoverageCheck: false,
     },
-    llm: {
-      scriptConversion: {
-        coverageThreshold: 0.8,
-        enableCoverageRetry: true,
-        systemPrompt: 'mock system prompt',
-        userPromptTemplate: 'mock user prompt',
-      },
-    },
+    llm: {},
     episode: {
       smallPanelThreshold: 8,
       minPanelsPerEpisode: 10,
@@ -514,17 +466,7 @@ vi.mock('@/logging', () => ({
   },
 }))
 
-// Mock user service types (ensure error classes are available)
-vi.mock('@/services/user/types', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/services/user/types')>()
-  return {
-    ...actual,
-    // Re-export all error classes to ensure they're available in tests
-    DatabaseError: actual.DatabaseError,
-    UserNotFoundError: actual.UserNotFoundError,
-    ValidationError: actual.ValidationError,
-  }
-})
+// Removed mock for '@/services/user/types' (module no longer exists)
 
 // Provide a stable default mock for CanvasRenderer unless explicitly disabled.
 // Default: use real CanvasRenderer. Enable mock only when explicitly requested.

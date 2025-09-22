@@ -7,6 +7,7 @@ export type LLMProvider =
   | 'grok'
   | 'openrouter'
   | 'vertexai'
+  | 'vertexai_lite'
   | 'fake'
 
 export interface ProviderConfig {
@@ -30,9 +31,6 @@ export interface ProviderConfig {
 // Use-case aware provider selection (centralized, configurable)
 export type LLMUseCase =
   | 'chunkConversion'
-  | 'scriptConversion'
-  | 'coverageJudge'
-  | 'textAnalysis'
   | 'pageBreak'
   | 'panelAssignment'
   | 'episodeBreak'
@@ -40,9 +38,9 @@ export type LLMUseCase =
 // Mapping for use-case specific provider preferences.
 // NOTE: Do not hardcode in application code; change preferences here.
 const useCaseProviders: Partial<Record<LLMUseCase, LLMProvider>> = {
-  // 指示: チャンク変換・スクリプト変換には高性能なLLMを使用
+  // 指示: チャンク変換には高性能なLLMを使用
   chunkConversion: 'vertexai',
-  // エピソード切れ目検出もVertex AI（Gemini）を使用
+  // エピソード切れ目検出も Vertex AI を使用
   episodeBreak: 'vertexai',
   // その他はデフォルト（groq）を使用
 }
@@ -92,6 +90,16 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
     // - ここで環境変数を即時参照して throw すると、テスト環境で
     //   単に本モジュールを import しただけで失敗してしまうため禁止。
     // - 値はプレースホルダで初期化し、実使用時に上書き・検証する。
+    vertexai: {
+      project: undefined,
+      location: undefined,
+      serviceAccountPath: undefined,
+    },
+  },
+  vertexai_lite: {
+    model: 'gemini-2.5-flash-lite',
+    maxTokens: 4096,
+    timeout: 20_000,
     vertexai: {
       project: undefined,
       location: undefined,

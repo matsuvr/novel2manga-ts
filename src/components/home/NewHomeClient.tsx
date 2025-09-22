@@ -194,36 +194,6 @@ export default function NewHomeClient() {
         </Section>
       </div>
 
-      {/* Features / Steps */}
-      <Section id="how-it-works" className="py-12">
-        <div className="mx-auto grid max-w-5xl gap-4 sm:grid-cols-3">
-          {[
-            {
-              key: 'paste',
-              title: '貼り付け',
-              desc: 'テキストをそのまま入力。ファイルもドロップ可。',
-            },
-            {
-              key: 'analyze',
-              title: 'AI 解析',
-              desc: 'プロット/シーンを抽出し、ページ割りを設計。',
-            },
-            {
-              key: 'review',
-              title: '結果を閲覧',
-              desc: 'エピソードごとにページを確認、ZIPエクスポートも可能。',
-            },
-          ].map((f) => (
-            <Card key={f.key}>
-              <CardHeader>
-                <CardTitle className="text-lg">{f.title}</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">{f.desc}</CardContent>
-            </Card>
-          ))}
-        </div>
-      </Section>
-
       {/* Converter */}
       <div id="converter" className="bg-muted/30 py-12">
         <Section>

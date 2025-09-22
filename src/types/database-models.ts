@@ -29,66 +29,39 @@ export type LayoutStatus = z.infer<typeof LayoutStatusSchema>
 export type RenderStatus = z.infer<typeof RenderStatusSchema>
 
 // ========================================
-// Core Models (設計書対応)
-// ========================================
-
-// Novel - 小説エンティティ（最上位）
+// Core Novel model
 export const NovelSchema = z.object({
-  id: z.string(), // UUID
-  title: z.string().optional(), // 小説タイトル
-  author: z.string().optional(), // 著者名
-  originalTextPath: z.string(), // ストレージ上のファイルパス
-  textLength: z.number(), // 総文字数
-  language: z.string(), // 言語コード
-  metadataPath: z.string().optional(), // メタデータJSONパス
+  id: z.string(),
+  title: z.string().optional(),
+  author: z.string().optional(),
+  originalTextPath: z.string(),
+  textLength: z.number(),
+  language: z.string().default('ja'),
+  totalChunks: z.number().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 })
 
-// Job - 変換ジョブ（Novelに対する処理単位）
+// Core Job model (ties processing run to a novel)
 export const JobSchema = z.object({
   id: z.string(),
   novelId: z.string(),
-  jobName: z.string().optional(), // ジョブ名
-
-  // ステータス管理
-  status: JobStatusSchema, // pending/processing/completed/failed/paused
-  currentStep: JobStepSchema, // initialized/split/analyze/episode/layout/render/complete
-
-  // 各ステップの完了状態
-  splitCompleted: z.boolean(),
-  analyzeCompleted: z.boolean(),
-  episodeCompleted: z.boolean(),
-  layoutCompleted: z.boolean(),
-  renderCompleted: z.boolean(),
-
-  // 各ステップの成果物パス（ディレクトリ）
-  chunksDirPath: z.string().optional(), // チャンクファイルディレクトリ
-  analysesDirPath: z.string().optional(), // 分析結果ディレクトリ
-  episodesDataPath: z.string().optional(), // エピソード情報JSON
-  layoutsDirPath: z.string().optional(), // レイアウトディレクトリ
-  rendersDirPath: z.string().optional(), // 描画結果ディレクトリ
-
-  // 進捗詳細
-  totalChunks: z.number(),
-  processedChunks: z.number(),
-  totalEpisodes: z.number(),
-  processedEpisodes: z.number(),
-  totalPages: z.number(),
-  renderedPages: z.number(),
-  // 実行中の位置（UX向上用）
-  processingEpisode: z.number().optional(),
-  processingPage: z.number().optional(),
-
-  // エラー管理
+  status: JobStatusSchema,
+  currentStep: JobStepSchema,
+  totalChunks: z.number().default(0),
+  processedChunks: z.number().default(0),
+  totalEpisodes: z.number().default(0),
+  processedEpisodes: z.number().default(0),
+  totalPages: z.number().default(0),
+  renderedPages: z.number().default(0),
+  retryCount: z.number().default(0),
   lastError: z.string().optional(),
-  lastErrorStep: z.string().optional(),
-  retryCount: z.number(),
-
-  // 再開用の状態保存
-  resumeDataPath: z.string().optional(), // 中断時の詳細状態JSONファイル
-
-  // タイムスタンプ
+  lastErrorStep: JobStepSchema.optional(),
+  splitCompleted: z.boolean().default(false),
+  analyzeCompleted: z.boolean().default(false),
+  episodeCompleted: z.boolean().default(false),
+  layoutCompleted: z.boolean().default(false),
+  renderCompleted: z.boolean().default(false),
   createdAt: z.date(),
   updatedAt: z.date(),
   startedAt: z.date().optional(),
@@ -261,32 +234,7 @@ export const SituationSchema = z.object({
   index: z.number(),
 })
 
-// TextAnalysis - 5要素の詳細
-export const TextAnalysisSchema = z.object({
-  chunkId: z.string().optional(), // ChunkAnalysisの場合
-  characters: z.array(CharacterSchema), // 登場人物
-  scenes: z.array(SceneSchema), // シーン
-  dialogues: z.array(DialogueSchema), // 対話
-  highlights: z.array(HighlightSchema), // ハイライト
-  situations: z.array(SituationSchema), // 状況
-  metadata: z
-    .object({
-      chunkIndex: z.number().optional(),
-      totalChunks: z.number().optional(),
-      previousChunkSummary: z.string().optional(),
-      nextChunkSummary: z.string().optional(),
-    })
-    .optional(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-})
-
-// CachedAnalysisResult - キャッシュされた分析結果
-export const CachedAnalysisResultSchema = z.object({
-  result: TextAnalysisSchema,
-  timestamp: z.number(),
-  ttl: z.number().optional(),
-})
+// (Legacy analysis schemas removed as feature deprecated)
 
 // ========================================
 // TypeScript Type Definitions
@@ -334,8 +282,7 @@ export type Scene = z.infer<typeof SceneSchema>
 export type Dialogue = z.infer<typeof DialogueSchema>
 export type Highlight = z.infer<typeof HighlightSchema>
 export type Situation = z.infer<typeof SituationSchema>
-export type TextAnalysis = z.infer<typeof TextAnalysisSchema>
-export type CachedAnalysisResult = z.infer<typeof CachedAnalysisResultSchema>
+// (Legacy analysis related types removed)
 
 // ========================================
 // Progress and Extended Types
@@ -432,9 +379,7 @@ export function validateStorageFile(data: unknown): StorageFile {
   return StorageFileSchema.parse(data)
 }
 
-export function validateTextAnalysis(data: unknown): TextAnalysis {
-  return TextAnalysisSchema.parse(data)
-}
+// Legacy validate function removed (feature deprecated)
 
 // ヘルパー関数
 export function createNovel(

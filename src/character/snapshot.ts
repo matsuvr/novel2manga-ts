@@ -10,6 +10,7 @@ import { generateCastList } from '@/character/finalize'
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import { storageBaseDirs } from '@/config/storage-paths.config'
 import { getLogger } from '@/infrastructure/logging/logger'
+// Phase 1 migration: keep using CharacterCastEntry (legacy) while starting to adopt minimal domain types elsewhere.
 import type { CharacterCastEntry, CharacterMemoryIndex } from '@/types/extractionV2'
 
 /**
@@ -127,9 +128,9 @@ export function formatSnapshotForPrompt(snapshot: CharacterMemorySnapshot): stri
     entry.push(`${formatting.characterPrefix} ${character.displayName}`)
 
     // Add aliases if any
-    if (character.aliases.length > 0) {
+  if (character.aliases && character.aliases.length > 0) {
       entry.push(
-        `  ${formatting.aliasesLabel}: ${character.aliases.slice(0, formatting.maxAliases).join('、')}`,
+  `  ${formatting.aliasesLabel}: ${character.aliases.slice(0, formatting.maxAliases).join('、')}`,
       )
     }
 

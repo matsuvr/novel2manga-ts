@@ -65,7 +65,7 @@ interface ChunkWithAnalysis {
 }
 
 // DEPRECATED: This function is no longer used in the current flow
-// The current flow is: textAnalysis → scriptConversion → pageBreakEstimation
+// Updated flow: legacy script & legacy analysis removed → pageBreakEstimation
 export async function analyzeChunkBundle(
   chunksWithAnalyses: ChunkWithAnalysis[],
 ): Promise<BundleAnalysisResult> {

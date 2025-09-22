@@ -19,7 +19,6 @@ export const PROTECTED_ROUTES = [
   '/api/jobs',
   '/api/job',
   '/api/analyze',
-  '/api/analyze/chunk',
   '/api/resume',
 
   // Rendering
