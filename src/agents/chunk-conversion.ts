@@ -87,24 +87,16 @@ export const chunkConversionEffect = (
     const appCfg = getAppConfig()
 
     // ブランチ判定 (jobId が無い場合は NORMAL)
-    let branch: BranchType = BranchType.NORMAL
-    if (options.jobId) {
-      // NOTE: tryPromise の catch で BranchType.NORMAL を返すと Effect のエラー型推論が広がり
-      // Effect<_, ChunkConversionAgentError | BranchType> になってしまうため、ここでは一旦
-      // ChunkConversionAgentError を返し、ローカル try/catch で NORMAL にフォールバックする。
-      try {
-        branch = yield* Effect.tryPromise({
+    const branch: BranchType = yield* (options.jobId
+      ? Effect.tryPromise({
           try: () => getBranchType(options.jobId as string),
           catch: (cause) =>
             new ChunkConversionAgentError({
               reason: 'Failed to determine branch type',
               cause,
             }),
-        })
-      } catch {
-        branch = BranchType.NORMAL
-      }
-    }
+        }).pipe(Effect.catchAll(() => Effect.succeed(BranchType.NORMAL)))
+      : Effect.succeed(BranchType.NORMAL))
 
     const sanitizedText = input.chunkText.trim()
     const replacements = {

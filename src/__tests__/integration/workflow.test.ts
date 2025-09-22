@@ -6,6 +6,7 @@
 import crypto from 'node:crypto'
 import { NextRequest } from 'next/server'
 import { afterEach, describe as baseDescribe, beforeEach, expect, it, vi } from 'vitest'
+import type { DatabaseService } from '@/services/database'
 import { explainRateLimit, isRateLimitAcceptable } from './__helpers/rate-limit'
 // 依存モック適用後にルートを動的import
 import {
@@ -106,12 +107,29 @@ vi.mock('@/agents/layout-generator', () => ({
   }),
 }))
 
-// RepositoryFactory のモック（テストDBに委譲）
+// RepositoryFactory のモック（テストDBに委譲）。本番 DatabaseService に無いレガシー互換メソッドを optional 扱い
 let __testDbForFactory: TestDatabase | undefined
+interface LegacyTestDatabaseService extends DatabaseService {
+  markJobStepCompleted?: (id: string, step: any) => Promise<void>
+  updateJobStep?: (
+    id: string,
+    step: any,
+    processed?: number,
+    total?: number,
+    error?: string,
+    errorStep?: string,
+  ) => Promise<void>
+  getNovel?: (id: string) => Promise<any>
+  ensureNovel?: (id: string, payload: any) => Promise<any>
+  createChunksBatch?: (payloads: any[]) => Promise<void>
+  getChunksByJobId?: (jobId: string) => Promise<any[]>
+  getChunks?: (jobId: string) => Promise<any[]>
+}
 vi.mock('@/repositories/factory', () => {
+  const svc = () => __testDbForFactory!.service as unknown as LegacyTestDatabaseService
   const factory = () => ({
     getJobRepository: () => ({
-      create: (payload: any) => __testDbForFactory!.service.createJob(payload),
+      create: (payload: any) => svc().createJob(payload),
       updateStep: (
         id: string,
         step: any,
@@ -119,36 +137,26 @@ vi.mock('@/repositories/factory', () => {
         total?: number,
         error?: string,
         errorStep?: string,
-      ) =>
-        (__testDbForFactory!.service as any).updateJobStep(
-          id,
-          step,
-          processed,
-          total,
-          error,
-          errorStep,
-        ),
-      markStepCompleted: (id: string, step: any) =>
-        __testDbForFactory!.service.markJobStepCompleted(id, step),
-      updateStatus: (id: string, status: any) =>
-        __testDbForFactory!.service.updateJobStatus(id, status),
-      getJob: (id: string) => __testDbForFactory!.service.getJob(id),
-      getJobWithProgress: (id: string) => __testDbForFactory!.service.getJobWithProgress(id),
+      ) => svc().updateJobStep?.(id, step, processed, total, error, errorStep),
+      markStepCompleted: (id: string, step: any) => svc().markJobStepCompleted?.(id, step),
+      updateStatus: (id: string, status: any) => svc().updateJobStatus(id, status),
+      getJob: (id: string) => svc().getJob(id),
+      getJobWithProgress: (id: string) => svc().getJobWithProgress(id),
     }),
     getNovelRepository: () => ({
-      get: (id: string) => __testDbForFactory!.service.getNovel(id),
-      ensure: (id: string, payload: any) => __testDbForFactory!.service.ensureNovel(id, payload),
+      get: (id: string) => svc().getNovel?.(id),
+      ensure: (id: string, payload: any) => svc().ensureNovel?.(id, payload),
     }),
     getChunkRepository: () => ({
-      create: (payload: any) => __testDbForFactory!.service.createChunk(payload),
-      createBatch: (payloads: any[]) => __testDbForFactory!.service.createChunksBatch(payloads),
-      getByJobId: (jobId: string) => __testDbForFactory!.service.getChunksByJobId(jobId) as any,
+      create: (payload: any) => svc().createChunk(payload),
+      createBatch: (payloads: any[]) => svc().createChunksBatch?.(payloads),
+      getByJobId: (jobId: string) => svc().getChunksByJobId?.(jobId) as any,
       db: {
-        getChunksByJobId: (jobId: string) => __testDbForFactory!.service.getChunksByJobId(jobId),
+        getChunksByJobId: (jobId: string) => svc().getChunksByJobId?.(jobId),
       },
     }),
     getEpisodeRepository: () => ({
-      getByJobId: (jobId: string) => __testDbForFactory!.service.getEpisodesByJobId(jobId),
+      getByJobId: (jobId: string) => svc().getEpisodesByJobId(jobId),
     }),
   })
   return {
@@ -283,7 +291,7 @@ describe('Workflow Integration Tests', () => {
           const { ApiError } = require('@/utils/api-error')
           throw new ApiError('ジョブが見つかりません', 404, 'NOT_FOUND')
         }
-        const chunks = await testDb.service.getChunks(jobId)
+        const chunks = await (testDb.service as unknown as LegacyTestDatabaseService).getChunks?.(jobId)
         return { job, chunks }
       }),
     }))
@@ -306,7 +314,7 @@ describe('Workflow Integration Tests', () => {
               { status: 404 },
             )
           }
-          const chunks = await testDb.service.getChunks(jobId)
+          const chunks = await (testDb.service as unknown as LegacyTestDatabaseService).getChunks?.(jobId)
           return new Response(JSON.stringify({ success: true, job, chunks }), { status: 200 })
         }),
     }))
@@ -415,8 +423,8 @@ describe('Workflow Integration Tests', () => {
       expect(storedJob?.novelId).toBe(novelId)
       expect(storedJob?.status).toBe('completed')
 
-      const chunks = await testDb.service.getChunks(jobId)
-      expect(chunks).toHaveLength(analyzeData.chunkCount)
+  const chunks = await (testDb.service as unknown as LegacyTestDatabaseService).getChunks?.(jobId)
+  expect(chunks).toHaveLength(analyzeData.chunkCount)
 
       // ストレージの確認
       const novelStorage = await testStorageFactory.getNovelStorage()

@@ -84,7 +84,10 @@ vi.mock('@/utils/storage', async (importOriginal) => {
 
 vi.mock('@/config', () => ({}))
 
-describe('/api/analyze/chunk', () => {
+// NOTE: /api/analyze/chunk は既に廃止され route 実装は常に 410 (Gone) を返す。
+// そのため元々の詳細な振る舞いテストは意味を失った。
+// 本テストではエンドポイントが 410 を返し、利用不能であることのみを検証する。
+describe('/api/analyze/chunk (deprecated)', () => {
   let testJobId: string
   const testNovelId = 'test-novel'
   const chunkPath = (jobId: string, index: number) =>
@@ -163,7 +166,7 @@ describe('/api/analyze/chunk', () => {
   })
 
   describe('POST /api/analyze/chunk', () => {
-    it('有効なリクエストでチャンク分析を実行する', async () => {
+  it('有効なリクエストでも 410 (Gone) が返る', async () => {
       const requestBody = {
         jobId: testJobId,
         chunkIndex: 0,
@@ -180,31 +183,13 @@ describe('/api/analyze/chunk', () => {
       const response = await POST(request)
       const data = await response.json()
 
-      if (isRateLimitAcceptable(response.status, data)) {
-        expect([429, 503]).toContain(response.status)
-        expect(explainRateLimit(data)).toBeTruthy()
-        return
-      }
-
-      expect([200, 201, 500]).toContain(response.status)
-
-      if (response.status === 500) {
-        expect(data.success).toBe(false)
-        expect(data.error).toBeDefined()
-      } else {
-        expect(data.success).toBe(true)
-        expect(data.cached).toBe(false)
-        expect(data.data).toBeDefined()
-        expect(data.data.summary).toBe('チャンク分析結果の要約')
-        expect(data.data.characters).toHaveLength(1)
-        expect(data.data.scenes).toHaveLength(1)
-        expect(data.data.dialogues).toHaveLength(1)
-        expect(data.data.highlights).toHaveLength(1)
-        expect(data.data.situations).toHaveLength(1)
-      }
+      // Deprecated: 必ず 410
+      expect(response.status).toBe(410)
+      expect(data.success).toBe(false)
+      expect(String(data.error)).toMatch(/deprecated/i)
     })
 
-    it('既に分析済みのチャンクの場合はキャッシュされた結果を返す', async () => {
+    it('キャッシュ済みチャンク要求でも 410 (Gone)', async () => {
       const requestBody = {
         jobId: testJobId,
         chunkIndex: 1, // chunk_1はモックで既に分析済みに設定
@@ -221,14 +206,12 @@ describe('/api/analyze/chunk', () => {
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(200)
-      expect(data.success).toBe(true)
-      expect(data.cached).toBe(true)
-      expect(data.data).toBeDefined()
-      expect(data.data.summary).toBe('キャッシュされた分析結果')
+      expect(response.status).toBe(410)
+      expect(data.success).toBe(false)
+      expect(String(data.error)).toMatch(/deprecated/i)
     })
 
-    it('jobIdが未指定の場合は400エラーを返す', async () => {
+    it('jobId 未指定でも 410 (Gone)', async () => {
       const requestBody = {
         chunkIndex: 0,
       }
@@ -244,12 +227,12 @@ describe('/api/analyze/chunk', () => {
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(400)
+      expect(response.status).toBe(410)
       expect(data.success).toBe(false)
-      expect(data.error).toBe('Invalid request data')
+      expect(String(data.error)).toMatch(/deprecated/i)
     })
 
-    it('chunkIndexが未指定の場合は400エラーを返す', async () => {
+    it('chunkIndex 未指定でも 410 (Gone)', async () => {
       const requestBody = {
         jobId: testJobId,
       }
@@ -265,12 +248,12 @@ describe('/api/analyze/chunk', () => {
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(400)
+      expect(response.status).toBe(410)
       expect(data.success).toBe(false)
-      expect(data.error).toBe('Invalid request data')
+      expect(String(data.error)).toMatch(/deprecated/i)
     })
 
-    it('chunkIndexが数値でない場合は400エラーを返す', async () => {
+    it('chunkIndex が数値でなくても 410 (Gone)', async () => {
       const requestBody = {
         jobId: testJobId,
         chunkIndex: 'invalid',
@@ -287,12 +270,12 @@ describe('/api/analyze/chunk', () => {
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(400)
+      expect(response.status).toBe(410)
       expect(data.success).toBe(false)
-      expect(data.error).toBe('Invalid request data')
+      expect(String(data.error)).toMatch(/deprecated/i)
     })
 
-    it('存在しないチャンクファイルの場合は404エラーを返す', async () => {
+    it('存在しないチャンク指定でも 410 (Gone)', async () => {
       const requestBody = {
         jobId: testJobId,
         chunkIndex: 999, // 存在しないチャンク
@@ -309,12 +292,12 @@ describe('/api/analyze/chunk', () => {
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(404)
+      expect(response.status).toBe(410)
       expect(data.success).toBe(false)
-      expect(data.error).toContain('Chunk file not found')
+      expect(String(data.error)).toMatch(/deprecated/i)
     })
 
-    it('存在しないjobIdの場合は404エラーを返す', async () => {
+    it('存在しない jobId でも 410 (Gone)', async () => {
       const requestBody = {
         jobId: 'nonexistent-job',
         chunkIndex: 0,
@@ -331,9 +314,9 @@ describe('/api/analyze/chunk', () => {
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(404)
+      expect(response.status).toBe(410)
       expect(data.success).toBe(false)
-      expect(data.error).toContain('Chunk file not found')
+      expect(String(data.error)).toMatch(/deprecated/i)
     })
   })
 })

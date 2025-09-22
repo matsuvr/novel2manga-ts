@@ -104,7 +104,9 @@ export const POST = withAuth(async (req, user) => {
     db.jobs().updateJobStatus(jobId, 'processing', 'explainer accepted')
     db.jobs().updateJobStep(jobId, 'initialized')
 
-    // パイプライン再実行 (元テキストをそのまま使用)
+  // パイプライン再実行 (元テキストをそのまま使用)
+  // TODO(job-queue): fire-and-forget。障害復旧性/再試行/可観測性向上のため永続ジョブキュー化予定。
+  logger.warn('Explainer pipeline scheduled via fire-and-forget (non-durable). Queue migration pending.', { jobId })
     ;(async () => {
       try {
         const { AnalyzePipeline } = await import('@/services/application/analyze-pipeline')
