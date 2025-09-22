@@ -608,15 +608,19 @@ async function generateEpisodeLayoutInternal(
     const normalizedPageBreaks = normalizePageBreaksForPanelAssignment(pageBreaks)
     // ===== 新規追加: キャラID -> 名前 解決 (レンダリングでIDが残らないように) =====
     try {
-      if (Array.isArray((script as { characters?: Array<{ id: string; name_ja?: string; name?: string }> }).characters)) {
+      // script.characters はスキーマ上必須だが空配列の場合は置換不要
+      if (script.characters?.length > 0) {
         const { replaceCharacterIdsInPageBreaks } = await import('@/utils/pagebreak-speaker-normalizer')
-        const repRes = replaceCharacterIdsInPageBreaks(normalizedPageBreaks as unknown as { panels?: Array<{ dialogue?: Array<{ speaker?: string; text?: string; type?: string }>; content?: string }> }, (script as { characters?: Array<{ id: string; name_ja?: string; name?: string }> }).characters, { replaceInContent: true })
+        const repRes = replaceCharacterIdsInPageBreaks(normalizedPageBreaks, script.characters, { replaceInContent: true })
         logger.info('Speaker ID replacement applied', { episodeNumber, ...repRes })
       } else {
         logger.debug('No characters present in script; skipping speaker ID replacement', { episodeNumber })
       }
     } catch (speakerErr) {
-      logger.warn('Speaker ID replacement failed (continuing without replacement)', { episodeNumber, error: speakerErr instanceof Error ? speakerErr.message : String(speakerErr) })
+      logger.warn('Speaker ID replacement failed (continuing without replacement)', {
+        episodeNumber,
+        error: speakerErr instanceof Error ? speakerErr.message : String(speakerErr),
+      })
     }
     // ===== ここまで追加 =====
     let layoutBuilt = buildLayoutFromPageBreaks(normalizedPageBreaks as unknown as PageBreakV2, {

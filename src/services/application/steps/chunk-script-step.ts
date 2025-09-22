@@ -52,7 +52,15 @@ export class ChunkScriptStep implements PipelineStep {
 
   // coverageJudge 機能は完全撤去（旧: isCoverageCheckEnabled）
 
-  // 並列実行によるメモリ継承レース/LLMコンテキスト不一致の暫定回避: 一時的に1へ固定
+  // 並列実行によるメモリ継承レース/LLMコンテキスト不一致の暫定回避: 一時的に 1 へ固定
+  // TODO(novel2manga-ts #parallel-chunk-restoration): メモリ共有/LLMコンテキスト競合の根本原因を解消し
+  //   安全な並列実行（最大 3 並列）を再導入する。対策案:
+  //   1. ワーカーごとの独立コンテキスト確立 (Effect Fiber の分離 / LLM クライアントインスタンス再生成)
+  //   2. chunk 毎の deterministic seed と random state のリセット
+  //   3. I/O (storage/job 更新) の逐次化 or transactional queue
+  //   4. 競合発生ログの計測メトリクス追加 (race origin 可視化)
+  //   5. トグル config 化 (appConfig.chunking.maxConcurrent) で段階的 rollout
+  //   tasks.md に追跡タスクを追加済み。
   const maxConcurrent = 1 // Math.max(1, Math.min(3, chunks.length))
       const indices = Array.from({ length: chunks.length }, (_, i) => i)
 
