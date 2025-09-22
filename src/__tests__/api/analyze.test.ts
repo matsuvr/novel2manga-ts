@@ -149,30 +149,36 @@ describe('/api/analyze', () => {
 
     vi.mocked(DatabaseService).mockReturnValue(mockDbService)
 
-    // db() 経由のサービスモック設定（型衝突回避のため any キャスト）
-    const novelsService = db.novels() as any
-    novelsService.getNovel.mockResolvedValue({
+    // db() 経由のサービスモック設定（型安全モック）
+    const novelsService = db.novels()
+    vi.spyOn(novelsService, 'getNovel').mockResolvedValue({
       id: testNovelId,
       title: 'テスト小説',
+      author: null,
       originalTextPath: 'test-novel.txt',
       textLength: 1000,
       language: 'ja',
+      metadataPath: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      // withAuth (test) が返す userId と一致させ 403 を回避
+      userId: 'test-user-bypass',
     })
-    novelsService.ensureNovel.mockResolvedValue?.()
+    vi.spyOn(novelsService, 'ensureNovel').mockResolvedValue()
 
-    const jobsService = db.jobs() as any
-    jobsService.createJobRecord.mockResolvedValue?.()
-    jobsService.getJob.mockResolvedValue(null)
-    jobsService.updateJobStatus.mockResolvedValue?.()
-    jobsService.updateJobStep.mockResolvedValue?.()
+    const jobsService = db.jobs()
+  vi.spyOn(jobsService, 'createJobRecord').mockResolvedValue('test-job-uuid')
+    vi.spyOn(jobsService, 'getJob').mockResolvedValue(null)
+    vi.spyOn(jobsService, 'updateJobStatus').mockResolvedValue()
+    vi.spyOn(jobsService, 'updateJobStep').mockResolvedValue()
 
-    const chunksService = db.chunks() as any
-    chunksService.createChunk.mockResolvedValue?.()
-    chunksService.createChunksBatch.mockResolvedValue?.()
+    const chunksService = db.chunks()
+  vi.spyOn(chunksService, 'createChunk').mockResolvedValue('chunk-1')
+  vi.spyOn(chunksService, 'createChunksBatch').mockResolvedValue(undefined)
 
-    const episodesService = db.episodes() as any
-    episodesService.getEpisodesByJobId.mockResolvedValue([])
-    episodesService.createEpisodes.mockResolvedValue?.()
+    const episodesService = db.episodes()
+    vi.spyOn(episodesService, 'getEpisodesByJobId').mockResolvedValue([])
+    vi.spyOn(episodesService, 'createEpisodes').mockResolvedValue()
 
     // ストレージのモック設定
     mockNovelStorage = {
@@ -284,8 +290,8 @@ describe('/api/analyze', () => {
 
     it('存在しないnovelIdの場合は404エラーを返す', async () => {
       // 存在しない小説のモック設定
-      mockDbService.getNovel.mockResolvedValueOnce(null)
-  ;(db.novels() as any).getNovel.mockResolvedValueOnce(null)
+    mockDbService.getNovel.mockResolvedValueOnce(null)
+    vi.spyOn(db.novels(), 'getNovel').mockResolvedValueOnce(null)
 
       const requestBody = {
         novelId: 'nonexistent-novel-id',
@@ -316,8 +322,15 @@ describe('/api/analyze', () => {
         textLength: 1000,
         language: 'ja',
       }
-      mockDbService.getNovel.mockResolvedValueOnce(novelData)
-  ;(db.novels() as any).getNovel.mockResolvedValueOnce(novelData)
+    mockDbService.getNovel.mockResolvedValueOnce(novelData)
+      vi.spyOn(db.novels(), 'getNovel').mockResolvedValueOnce({
+        ...novelData,
+        author: null,
+        metadataPath: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        userId: 'test-user-bypass',
+      })
       mockNovelStorage.get.mockReturnValueOnce(null)
 
       const requestBody = {

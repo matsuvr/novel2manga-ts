@@ -1,4 +1,5 @@
 import { Effect } from 'effect'
+import { z } from 'zod'
 import { DefaultLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getAppConfigWithOverrides } from '@/config/app.config'
 import { getLogger } from '@/infrastructure/logging/logger'
@@ -15,6 +16,17 @@ export interface ExpandPreprocessResult {
   expandedText: string
   notes: string[]
 }
+
+// LLM 出力期待値スキーマ
+// expandedText: 一定以上の長さの拡張結果
+// notes: 追加のメモ (任意) – 空配列可
+export const ExpandPreprocessResultSchema = z
+  .object({
+    expandedText: z.string().min(50, 'expandedText must be >= 50 chars'),
+    notes: z.array(z.string()).min(0),
+  })
+  .strict()
+export type ExpandPreprocessResultSchemaType = z.infer<typeof ExpandPreprocessResultSchema>
 
 export class ExpandPreprocessError extends Error {
   constructor(message: string, readonly cause?: unknown) {
@@ -83,52 +95,27 @@ export async function runExpandPreprocess(
 
   // structured-generator で汎用 JSON 取り扱いが無い前提: 生テキスト取得 API があれば置換。ここでは簡易に object fallback を再利用しつつ手動パース想定。
   // Fallback: structuredオブジェクト生成APIがあれば利用し、string を抽出
-  const rawTextResult = await Effect.runPromise(
+  const validated = await Effect.runPromise(
     Effect.tryPromise({
       try: async () => {
-        // generateObjectWithFallback を利用し、自由形式テキスト JSON を期待
-        const result = await generator.generateObjectWithFallback<{ raw: string }>({
+        const result = await generator.generateObjectWithFallback<ExpandPreprocessResultSchemaType>({
           name: 'expand-preprocess',
           systemPrompt,
           userPrompt,
-          // 緩いスキーマ: 最低限 raw 文字列のみ (実際のプロンプトは JSON 全体を出す)
-          schema: undefined as unknown as import('zod').ZodTypeAny, // 既存 infra 互換のため型アサート
-          schemaName: 'ExpandPreprocessRaw',
+          schema: ExpandPreprocessResultSchema,
+          schemaName: 'ExpandPreprocessResult',
           telemetry: { jobId: input.jobId, stepName: 'expandPreprocess' },
         })
-        // 期待フォーマットは本来 JSON 文字列。result.raw が無い場合はエラー
-        if (!result || typeof (result as unknown) !== 'object') {
-          throw new Error('Empty expand preprocess result')
-        }
-        // result は仮の構造なので JSON 文字列本体を持っていると仮定 (最終的に generateTextWithFallback 実装後に置換)
-        const serialized = JSON.stringify(result)
-        return serialized
+        return result
       },
       catch: (cause) => new ExpandPreprocessError('LLM call failed', cause),
     }),
   )
 
-  const rawText: string = typeof rawTextResult === 'string' ? rawTextResult : JSON.stringify(rawTextResult)
-
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(rawText)
-  } catch (e) {
-    throw new ExpandPreprocessError('Returned text was not valid JSON', e)
-  }
-  if (!parsed || typeof parsed !== 'object') {
-    throw new ExpandPreprocessError('Parsed result is not an object')
-  }
-  const expandedText = (parsed as { expandedText?: unknown }).expandedText
-  const notesValue = (parsed as { notes?: unknown }).notes
-  const notes = Array.isArray(notesValue) ? notesValue.filter((n): n is string => typeof n === 'string') : []
-  if (typeof expandedText !== 'string' || expandedText.trim().length < 50) {
-    throw new ExpandPreprocessError('Expanded text too short or missing')
-  }
   logger.info('Expand preprocess completed', {
-    expandedLength: expandedText.length,
-    notes: notes.length,
+    expandedLength: validated.expandedText.length,
+    notes: validated.notes.length,
     branch: BranchType.EXPAND,
   })
-  return { expandedText, notes }
+  return { expandedText: validated.expandedText, notes: validated.notes }
 }

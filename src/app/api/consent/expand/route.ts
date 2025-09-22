@@ -90,7 +90,10 @@ export const POST = withAuth(async (req, user) => {
   db.jobs().updateJobStatus(jobId, 'processing', 'expansion applied')
     db.jobs().updateJobStep(jobId, 'initialized')
 
-    // 非同期でパイプライン再実行
+  // 非同期でパイプライン再実行
+  // TODO(job-queue): 現在 fire-and-forget。サーバープロセス終了でロストする恐れがあるため
+  // BullMQ / RabbitMQ / Cloud Tasks 等の永続キューに移行し、再試行・可観測性を付与する。
+  logger.warn('Expansion pipeline scheduled via fire-and-forget (non-durable). Queue migration pending.', { jobId })
     ;(async () => {
       try {
         const { AnalyzePipeline } = await import('@/services/application/analyze-pipeline')
