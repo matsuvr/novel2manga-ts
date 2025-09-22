@@ -10,6 +10,7 @@ import {
   RETRYABLE_JSON_ERROR_PATTERNS,
 } from '@/errors/error-patterns'
 import { getLogger } from '@/infrastructure/logging/logger'
+import { wrapWithNewLlmLogging } from '@/services/llm/logging-wrapper'
 
 // 旧 llm/client の InvalidRequestError を簡易再実装（構造化生成で userPrompt 空を検出するため）
 class InvalidRequestError extends Error {
@@ -303,7 +304,9 @@ export class DefaultLlmStructuredGenerator {
   }
 
   private createClient(provider: LlmProvider): LlmClient {
-    return createClientForProvider(provider)
+    // すべての構造化生成呼び出しに LLM ログ記録を付与
+    const base = createClientForProvider(provider)
+    return wrapWithNewLlmLogging(base, true)
   }
 
   /**

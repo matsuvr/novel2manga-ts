@@ -1,7 +1,7 @@
 import { getLlmStructuredGenerator } from '@/agents/structured-generator'
-import { 
+import {
   buildNarrativityJudgeUser,
-  buildNarrativityJudgeUserLite,getAppConfigWithOverrides, 
+  buildNarrativityJudgeUserLite,getAppConfigWithOverrides,
   NARRATIVITY_JUDGE_SYSTEM,
   NARRATIVITY_JUDGE_SYSTEM_LITE,} from '@/config/app.config'
 import type { ValidationOutcome } from '@/types/validation'
@@ -34,26 +34,34 @@ export class InputValidationStep extends BasePipelineStep {
       const useLite = cfg.validation.model === 'vertexai_lite'
       let judge: import('@/types/validation').NarrativeJudgeResult
       try {
-        judge = await generator.generateObjectWithFallback<import('@/types/validation').NarrativeJudgeResult>({
-          name: 'narrativity-judge-lite',
-            systemPrompt: useLite ? NARRATIVITY_JUDGE_SYSTEM_LITE : NARRATIVITY_JUDGE_SYSTEM,
-          userPrompt: useLite ? buildNarrativityJudgeUserLite(text) : buildNarrativityJudgeUser(text),
-          schema: NarrativeJudgeSchema,
-          schemaName: 'NarrativeJudge',
-        })
+            judge = await generator.generateObjectWithFallback<import('@/types/validation').NarrativeJudgeResult>({
+              name: 'narrativity-judge-lite',
+              systemPrompt: useLite ? NARRATIVITY_JUDGE_SYSTEM_LITE : NARRATIVITY_JUDGE_SYSTEM,
+              userPrompt: useLite ? buildNarrativityJudgeUserLite(text) : buildNarrativityJudgeUser(text),
+              schema: NarrativeJudgeSchema,
+              schemaName: 'NarrativeJudge',
+              telemetry: {
+                jobId: context.jobId,
+                stepName: 'narrativity-judge',
+              },
+            })
       } catch (liteError) {
         // Fallback: try full model prompt if lite was selected
         if (useLite) {
           logger.warn('Lite narrativity judge failed, falling back to full prompt', {
             error: liteError instanceof Error ? liteError.message : String(liteError),
           })
-          judge = await generator.generateObjectWithFallback<import('@/types/validation').NarrativeJudgeResult>({
-            name: 'narrativity-judge',
-            systemPrompt: NARRATIVITY_JUDGE_SYSTEM,
-            userPrompt: buildNarrativityJudgeUser(text),
-            schema: NarrativeJudgeSchema,
-            schemaName: 'NarrativeJudge',
-          })
+              judge = await generator.generateObjectWithFallback<import('@/types/validation').NarrativeJudgeResult>({
+                name: 'narrativity-judge',
+                systemPrompt: NARRATIVITY_JUDGE_SYSTEM,
+                userPrompt: buildNarrativityJudgeUser(text),
+                schema: NarrativeJudgeSchema,
+                schemaName: 'NarrativeJudge',
+                telemetry: {
+                  jobId: context.jobId,
+                  stepName: 'narrativity-judge',
+                },
+              })
         } else {
           throw liteError
         }
