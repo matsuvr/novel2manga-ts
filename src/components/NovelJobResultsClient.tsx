@@ -187,7 +187,7 @@ export default function NovelJobResultsClient({
   )
 
   return (
-    <div className="container mx-auto max-w-5xl py-6">
+    <div className="container mx-auto max-w-5xl py-6" data-testid="results-root" data-job-id={job.id}>
       <h1 className="mb-2 text-2xl font-semibold">
         解析結果（小説ID: {novelId} ）
         {novelPreview && (
@@ -196,6 +196,7 @@ export default function NovelJobResultsClient({
           </span>
         )}
       </h1>
+      <p className="mb-2 text-xs text-muted-foreground" data-testid="job-id-display">Job ID: {job.id}</p>
       <p className="mb-4 text-sm text-muted-foreground">
         このページをブックマークすれば、後で直接アクセスできます。
       </p>

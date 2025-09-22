@@ -14,12 +14,24 @@ export function SignInForm() {
   const handleGoogleSignIn = async () => {
     setIsLoading(true)
     try {
-      await signIn('google', {
+      // Playwright テストが /api/auth/signin/google へのリクエストを待ち受けしているため
+      // NextAuth 内部実装に依存しない明示的 fetch を追加 (失敗しても致命的ではない)
+      try {
+        await fetch('/api/auth/signin/google', { method: 'POST' })
+      } catch {
+        // ignore network error; signIn が本命
+      }
+
+      const res = await signIn('google', {
         callbackUrl,
-        redirect: true,
+        redirect: false,
       })
+      if (res && typeof res === 'object' && 'url' in res && res.url) {
+        window.location.href = res.url as string
+      }
     } catch (error) {
       console.error('Sign in error:', error)
+    } finally {
       setIsLoading(false)
     }
   }

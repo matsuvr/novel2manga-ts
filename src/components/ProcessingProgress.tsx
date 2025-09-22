@@ -475,7 +475,10 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
     const interval = appConfig.ui.progress.tokenUsagePollIntervalMs
     const fetchTokens = async () => {
       try {
-        const res = await fetch(`/api/jobs/${jobId}/token-usage`)
+        const e2e = process.env.NEXT_PUBLIC_E2E === '1'
+        const res = await fetch(`/api/jobs/${jobId}/token-usage${e2e ? '?e2e=1' : ''}`, {
+          headers: e2e ? { 'x-e2e-auth-bypass': '1' } : undefined,
+        })
         if (!res.ok) return
         const data = (await res.json()) as { tokenUsage?: Array<{ promptTokens?: number; completionTokens?: number }> }
         if (cancelled) return
@@ -534,7 +537,10 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
     const fallbackPolling = async () => {
       if (!alive && isMountedRef.current) {
         try {
-          const res = await fetch(`/api/jobs/${jobId}`)
+          const e2e = process.env.NEXT_PUBLIC_E2E === '1'
+          const res = await fetch(`/api/jobs/${jobId}${e2e ? '?e2e=1' : ''}`, {
+            headers: e2e ? { 'x-e2e-auth-bypass': '1' } : undefined,
+          })
           if (res.ok) {
             const json = (await res.json()) as
               | JobData
@@ -605,7 +611,8 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
         } catch {
           /* noop */
         }
-        const replacement = new EventSource(`/api/jobs/${jobId}/events`)
+  const e2e = process.env.NEXT_PUBLIC_E2E === '1'
+  const replacement = new EventSource(`/api/jobs/${jobId}/events${e2e ? '?e2e=1' : ''}`)
         esRef.current = replacement
         attachEventHandlers(replacement)
       }, delay)
@@ -615,7 +622,8 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
     try {
       esRef.current?.close()
     } catch {/* ignore */}
-    esRef.current = new EventSource(`/api/jobs/${jobId}/events`)
+  const e2e = process.env.NEXT_PUBLIC_E2E === '1'
+  esRef.current = new EventSource(`/api/jobs/${jobId}/events${e2e ? '?e2e=1' : ''}`)
     attachEventHandlers(esRef.current)
 
     return () => {

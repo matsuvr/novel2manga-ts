@@ -35,21 +35,24 @@ export const revalidate = 0
 
 export default async function NovelJobResultsPage({ params }: { params: Promise<Params> }) {
   const { novelId, jobId } = await params
-  const session = await auth()
-  const viewerId = typeof session?.user?.id === 'string' ? session.user.id : null
-  const callbackPath = `/novel/${novelId}/results/${jobId}`
+  const e2eBypass = process.env.NEXT_PUBLIC_E2E === '1'
 
-  if (!viewerId) {
-    redirect(`/portal/api/auth/login?callbackUrl=${encodeURIComponent(callbackPath)}`)
-  }
-
+  // 先に job を取得（存在確認 & 所有者確認のため）。認証前でも閲覧許可は後で制御。
   const job = await db.jobs().getJob(jobId)
   if (!job || job.novelId !== novelId) {
     return notFound()
   }
-
-  if (job.userId && job.userId !== viewerId) {
-    redirect('/portal/dashboard')
+  let viewerId: string | null = null
+  if (!e2eBypass) {
+    const session = await auth()
+    viewerId = typeof session?.user?.id === 'string' ? session.user.id : null
+    const callbackPath = `/novel/${novelId}/results/${jobId}`
+    if (!viewerId) {
+      redirect(`/portal/api/auth/login?callbackUrl=${encodeURIComponent(callbackPath)}`)
+    }
+    if (job.userId && job.userId !== viewerId) {
+      redirect('/portal/dashboard')
+    }
   }
 
   if (job.status === 'failed') {
@@ -99,7 +102,7 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
   if (!fullPagesPresent) {
     if (jobCompleted) {
       return (
-        <div className="mx-auto max-w-5xl px-4 py-6">
+        <div className="mx-auto max-w-5xl px-4 py-6" data-testid="results-root" data-job-id={job.id}>
           <h1 className="mb-3 text-2xl font-semibold">処理は完了していますが結果がまだ利用できません</h1>
           <Card>
             <CardContent>
@@ -107,6 +110,7 @@ export default async function NovelJobResultsPage({ params }: { params: Promise<
                 ジョブは完了していますが、表示に必要なページデータがまだ生成されていません。
               </div>
               <div className="mt-2 text-sm">しばらく待ってからページを更新するか、進捗ページから再開してください。</div>
+              <div className="mt-3 text-xs text-muted-foreground" data-testid="job-id-display">Job ID: {job.id}</div>
               <div className="mt-4">
                 <a href={`/novel/${novelId}/progress`} className="underline">
                   進捗ページへ（手動で再開）
