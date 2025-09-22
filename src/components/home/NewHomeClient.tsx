@@ -104,7 +104,7 @@ export default function NewHomeClient() {
       setError('利用規約に同意してください')
       return
     }
-    setView('processing')
+  setView('processing')
     try {
       const upload = await fetch('/api/novel', {
         method: 'POST',
@@ -135,8 +135,10 @@ export default function NewHomeClient() {
       }
       const newJobId = a.id || a.data?.jobId || a.jobId
       if (!analyze.ok || !newJobId) throw new Error('分析の開始に失敗しました')
-      const url = `/novel/${encodeURIComponent(u.uuid)}/progress`
-      await router.push(url)
+  const url = `/novel/${encodeURIComponent(u.uuid)}/progress`
+  setView('redirecting')
+  // push は即時には遷移せず並行するので redirecting 状態を表示
+  await router.push(url)
     } catch (e) {
       setView('idle')
       setError(e instanceof Error ? e.message : '変換に失敗しました')
@@ -286,7 +288,11 @@ export default function NewHomeClient() {
                     disabled={isInputDisabled || !novelText.trim() || !agreeToTerms}
                     size="lg"
                   >
-                    {view === 'processing' ? '処理中...' : 'マンガに変換'}
+                    {view === 'processing'
+                      ? '処理中...'
+                      : view === 'redirecting'
+                        ? '遷移中...'
+                        : 'マンガに変換'}
                   </Button>
                 </div>
               </CardFooter>

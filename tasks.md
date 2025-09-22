@@ -38,6 +38,9 @@
 
 - [x] Ensure progress hints show accurate chunk/episode totals without `?` placeholders.
 
+- [x] Replace raw speaker IDs (c1, c2, ...) with character names during layout generation.
+- [ ] Decide & implement policy for unknown speaker IDs lacking a character map entry (current: leave ID as-is; option: display `不明` or fallback name). Document decision in README or rendering docs.
+
 ## extractionV2 Deprecation
 
 - [x] Mark `src/prompts/extractionV2.ts` with deprecation header

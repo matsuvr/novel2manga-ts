@@ -52,7 +52,8 @@ export class ChunkScriptStep implements PipelineStep {
 
   // coverageJudge 機能は完全撤去（旧: isCoverageCheckEnabled）
 
-      const maxConcurrent = Math.max(1, Math.min(3, chunks.length))
+  // 並列実行によるメモリ継承レース/LLMコンテキスト不一致の暫定回避: 一時的に1へ固定
+  const maxConcurrent = 1 // Math.max(1, Math.min(3, chunks.length))
       const indices = Array.from({ length: chunks.length }, (_, i) => i)
 
       await conversionDb.ensureStatuses(jobId, [...indices])
