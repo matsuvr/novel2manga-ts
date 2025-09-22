@@ -124,3 +124,55 @@ Maintainer: Logging WG (temporary: @matsuvr)
 - [x] `npm run build` で logger 起動/ファイル生成なし。
 - [x] `LOG_LEVEL=debug npm run build` でも出力なし。
 - [x] `ENABLE_FILE_LOG=1 node server` で `logs/app-YYYY-MM-DD.log` 生成。
+
+## LLM Request/Response Logging (追加セクション 2025-09-22)
+
+目的: 主要な LLM 呼び出し (物語判定 / chunkConversion / EpisodeBreak 推定 ほか構造化生成) の全リクエスト & レスポンス (エラー含む) を `storage/llm_log/{novelId}/<timestamp>.json` に保存し、後続の品質分析/再現性確保を可能にする。
+
+### カバレッジ方針
+1. Chat / Completion API 相当: `LoggingLlmClientWrapper` により telemetry 内の `jobId` から `novelId` を解決できた場合のみ保存。
+2. Structured Object 生成 (`generateStructured` / Fallback / Retry / Cache 命中 時): `StructuredLoggingLlmClientWrapper` が常にラップされ、成功/失敗/フォールバックの各段階を一つの論理呼び出しログとして記録。
+3. Fallback 連鎖: 最初の試行ごとに個別ログではなく、失敗 → フォールバック成功のシーケンスを 2 つの独立エントリとして記録 (失敗ログは `error` フィールド保持)。
+
+### 重要な実装保証
+- `structured-generator.ts` の `createClient()` は Provider クライアントを必ず `wrapWithNewLlmLogging(base, true)` でラップする。→ 新規 Structured ステップ実装時に追加の明示ラップ不要。
+- Telemetry に `jobId` が無い場合は novelId 解決不能のためスキップ (意図した挙動)。必須: `telemetry: { jobId, stepName, ... }`。
+- `stepName` は最小単位識別 (例: `narrativity-judge`, `chunkConversion`, `EpisodeBreakPlan`) に統一し、分析 SQL 側でフィルタ可能にする。
+- 大きなプロンプト/レスポンスは `sanitizeRequest` / `sanitizeResponse` によりサイズ上限を超えた本文を切り詰め (実テキスト全長は別途ストレージへ保存しない方針 / PII リスク軽減)。
+
+### JSON フォーマット (抜粋)
+```
+{
+	"novelId": "<uuid>",
+	"timestamp": "2025-09-22T12:34:56.789Z",
+	"requestType": "structured|chat",
+	"provider": "gemini|openai|fake|...",
+	"model": "...",
+	"telemetry": { "jobId": "...", "stepName": "chunkConversion", "chunkIndex": 0 },
+	"request": { "systemPrompt": "...", "userPrompt": "..." },
+	"response": { "raw": { /* provider payload (sanitized) */ }, "parsed": { /* schema parsed object (optional) */ } },
+	"error": { "message": "...", "name": "...", "stack": "..." } | null
+}
+```
+
+### テストによる保証
+- `src/__tests__/services/llm/integration-logging.e2e.test.ts` が 3 ステップ (判別 / 変換 / エピソード推定) のログ増加を検証し、最新ログ構造の基本フィールド存在を確認。
+- `log-service.test.ts` が `getLlmLogs` 並び順・件数制限・削除挙動・サニタイズ挙動をカバー。
+- 回帰防止 (任意 TODO): `structured-generator.createClient` がロギングラップを外していないことをユニットテスト化予定。
+
+### 運用ガイド
+- ログ件数肥大化対策 (PENDING): 一定日数 / 件数超過時に novel 単位でローテーション / 圧縮するメンテナンスジョブ導入予定。
+- 個人情報: プロンプト生成前にメール / トークン等を埋め込まない設計 (アプリ層でマスク済み)。今後 PII detector 導入を検討。
+
+### よくあるミスと対策
+| ミス | 症状 | 対策 |
+|------|------|------|
+| Telemetry に jobId 未設定 | ログが生成されない | ステップ入力オプションへ `jobId` を連鎖させる |
+| `generateStructured` を直接 new ProviderClient で利用 | ログ欠落 | 既存 `structured-generator` のファクトリ経由に統一 |
+| 大きな raw JSON を手動でログへ追加 | ファイル肥大・解析遅延 | 既存 wrapper に任せ追加メタのみ添付 |
+
+### 今後の拡張
+- Effect FiberRef による `jobId` 自動注入 (Roadmap P4) 後は手動 telemetry 指定の重複を削減。
+- OpenTelemetry Exporter レイヤー追加時に LLM ログを span の annotation として再利用。
+
+Revision: 2025-09-22 (Add LLM logging coverage & structured generation auto-wrap documentation)

@@ -10,6 +10,7 @@ vi.mock('@/utils/job', () => {
 })
 
 import { chunkConversionEffect } from '@/agents/chunk-conversion'
+import { getLogger } from '@/infrastructure/logging/logger'
 import { EpisodeBreakEstimationStep } from '@/services/application/steps/episode-break-estimation-step'
 import { InputValidationStep } from '@/services/application/steps/input-validation-step'
 import { LlmLogService } from '@/services/llm/log-service'
@@ -37,7 +38,7 @@ describe('LLM logging integration (fake provider)', () => {
     const step = new InputValidationStep()
     const res = await step.validate('これはテスト用の物語本文です。登場人物がいて出来事が起こります。', {
       jobId,
-      logger: (await import('@/infrastructure/logging/logger')).getLogger(),
+      logger: getLogger(),
     } as any)
     expect(res.success).toBe(true)
     await expectLogCountIncreases('narrativity-judge')
@@ -65,7 +66,7 @@ describe('LLM logging integration (fake provider)', () => {
     }
     const result = await step.estimateEpisodeBreaks(script, {
       jobId,
-      logger: (await import('@/infrastructure/logging/logger')).getLogger(),
+      logger: getLogger(),
     } as any)
     expect(result.success).toBe(true)
 
