@@ -317,15 +317,8 @@ export function setupAgentMocks() {
     }),
   }))
 
-  // config の部分モック（不足APIを補完）
+  // config の部分モック（legacy analysis 廃止に伴い簡素化）
   vi.mock('@/config', () => ({
-    getTextAnalysisConfig: vi.fn(() => ({
-      provider: 'fake',
-      maxTokens: 1000,
-      systemPrompt: 'system',
-      userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
-    })),
-    // テストでは短いテキストでも複数チャンク（少なくとも4つ）に分割されるよう小さめに設定
     getChunkingConfig: vi.fn(() => ({
       defaultChunkSize: 150,
       defaultOverlapSize: 30,

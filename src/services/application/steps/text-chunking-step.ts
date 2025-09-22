@@ -1,6 +1,9 @@
+import { ExpandPreprocessError, runExpandPreprocess } from '@/agents/expand-preprocess'
 import { getChunkingConfig } from '@/config'
 import type { Chunk, Job } from '@/db/schema'
 import { db } from '@/services/database'
+import { BranchType } from '@/types/branch'
+import { loadBranchMarker } from '@/utils/branch-marker'
 import { splitTextIntoSlidingChunks } from '@/utils/text-splitter'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
@@ -108,6 +111,94 @@ export class TextChunkingStep implements PipelineStep {
 
       // Create new chunks
       if (chunks.length === 0) {
+        // =============================================================
+        // EXPAND ブランチ: 短い入力を先に拡張してからチャンク分割
+        // 判定条件:
+        //  1) branch marker が BranchType.EXPAND
+        //  2) config.expansion.enabled
+        //  3) 入力長が閾値未満（targetScenarioChars * 0.6 など runExpandPreprocess 内で再検証）
+        // 成功時: novelText を expandedText に置換し、メタ情報を analysis storage に保存
+        // =============================================================
+        try {
+          const { getAppConfigWithOverrides } = await import('@/config/app.config')
+          const cfg = getAppConfigWithOverrides()
+          const expansionEnabled = !!cfg.expansion?.enabled
+          let branch: BranchType | undefined
+          try {
+            const marker = await loadBranchMarker(jobId)
+            branch = marker?.branch
+          } catch (e) {
+            logger.warn('Failed to load branch marker (continuing without)', {
+              jobId,
+              error: e instanceof Error ? e.message : String(e),
+            })
+          }
+          if (expansionEnabled && branch === BranchType.EXPAND) {
+            const originalLength = novelText.length
+            // runExpandPreprocess 内で長さ閾値を越えていれば例外が発生しスキップ扱い
+            try {
+              const shortReason = 'input below expansion threshold'
+              const expandResult = await runExpandPreprocess({
+                rawInput: novelText,
+                shortReason,
+                jobId,
+                targetScenarioChars: cfg.expansion.targetScenarioChars,
+              })
+              novelText = expandResult.expandedText
+              // 永続化 (analysis storage)
+              try {
+                const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
+                const storage = await StorageFactory.getAnalysisStorage()
+                const key = JsonStorageKeys.expandedInput
+                  ? JsonStorageKeys.expandedInput({ novelId, jobId })
+                  : `${jobId}/expanded_input.json` // 後方互換: キーが未定義の場合のフォールバック
+                const payload = {
+                  jobId,
+                  novelId,
+                  branch,
+                  originalLength,
+                  expandedLength: novelText.length,
+                  notes: expandResult.notes,
+                  createdAt: new Date().toISOString(),
+                }
+                await storage.put(key, JSON.stringify(payload, null, 2), {
+                  jobId,
+                  branch: String(branch),
+                  kind: 'expandedInput',
+                })
+                logger.info('Stored expanded input artifact', {
+                  jobId,
+                  key,
+                  originalLength,
+                  expandedLength: novelText.length,
+                  notes: expandResult.notes.length,
+                })
+              } catch (storeErr) {
+                logger.warn('Failed to persist expanded input artifact (continuing)', {
+                  jobId,
+                  error: storeErr instanceof Error ? storeErr.message : String(storeErr),
+                })
+              }
+            } catch (expErr) {
+              if (expErr instanceof ExpandPreprocessError) {
+                logger.info('Expansion skipped or failed (non-fatal)', {
+                  jobId,
+                  reason: expErr.message,
+                })
+              } else {
+                logger.warn('Unexpected expansion error (continuing without expansion)', {
+                  jobId,
+                  error: expErr instanceof Error ? expErr.message : String(expErr),
+                })
+              }
+            }
+          }
+        } catch (outerExpErr) {
+          logger.warn('Expansion pre-chunk integration encountered error (continuing)', {
+            jobId,
+            error: outerExpErr instanceof Error ? outerExpErr.message : String(outerExpErr),
+          })
+        }
         // 機械的な固定長チャンク分割（オーバーラップ付き）
         // Rationale: sentence-based splitting caused instability across languages and inconsistent
         // segment sizes; sliding window chunking yields predictable boundaries and better LLM context

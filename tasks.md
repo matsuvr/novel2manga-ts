@@ -38,3 +38,16 @@
 
 - [x] Ensure progress hints show accurate chunk/episode totals without `?` placeholders.
 
+## extractionV2 Deprecation
+
+- [x] Mark `src/prompts/extractionV2.ts` with deprecation header
+- [x] Document rationale & plan in `design.md`
+- [x] Confirm no runtime imports of extractionV2 prompt helpers
+- [x] Audit storage docs for extractionV2-specific artifacts
+- [ ] Introduce minimal internal domain types to decouple character modules from full extractionV2 types
+- [ ] Refactor `validation/extraction-v2-schema.test.ts` (decide: prune or legacy snapshot)
+- [ ] Prune unused zod schemas / helpers once decoupled
+- [ ] Delete `src/prompts/extractionV2.ts`
+- [ ] Remove residual extractionV2 imports in character modules
+- [ ] Update CHANGELOG / PR with removal note
+

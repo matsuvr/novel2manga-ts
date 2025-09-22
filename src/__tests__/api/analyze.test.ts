@@ -18,60 +18,8 @@ let mockChunksService: any
 let mockRenderService: any
 let mockLayoutService: any
 
-// モック設定
-vi.mock('@/agents/chunk-analyzer', () => ({
-  getChunkAnalyzerAgent: vi.fn(() => ({
-    generateObject: vi.fn().mockResolvedValue({
-      summary: 'テストチャンクの要約',
-      characters: [
-        {
-          name: 'テスト太郎',
-          description: 'テスト用キャラクター',
-          firstAppearance: 0,
-        },
-      ],
-      scenes: [
-        {
-          location: 'テスト場所',
-          time: '朝',
-          description: 'テストシーン',
-          startIndex: 0,
-          endIndex: 100,
-        },
-      ],
-      dialogues: [
-        {
-          speakerId: 'テスト太郎',
-          text: 'こんにちは',
-          emotion: 'normal',
-          index: 50,
-        },
-      ],
-      highlights: [
-        {
-          type: 'climax' as const,
-          description: 'クライマックス',
-          importance: 8,
-          startIndex: 80,
-          endIndex: 120,
-          text: 'クライマックス部分',
-        },
-      ],
-      situations: [
-        {
-          description: 'テスト状況',
-          index: 10,
-        },
-      ],
-    }),
-  })),
-}))
-
+// legacy analysis / chunk-analyzer removed: related mocks pruned
 vi.mock('@/config', () => ({
-  getTextAnalysisConfig: vi.fn(() => ({
-    userPromptTemplate:
-      'チャンク{{chunkIndex}}の分析: {{chunkText}} 前要約: {{previousChunkSummary}} 次要約: {{nextChunkSummary}}',
-  })),
   getLLMProviderConfig: vi.fn(() => ({ maxTokens: 1000 })),
   getDatabaseConfig: vi.fn(() => ({ sqlite: { path: ':memory:' } })),
 }))
@@ -201,27 +149,30 @@ describe('/api/analyze', () => {
 
     vi.mocked(DatabaseService).mockReturnValue(mockDbService)
 
-    // db() 関数用のモック設定
-    const mockedDb = vi.mocked(db)
-    mockedDb.novels().getNovel.mockResolvedValue({
+    // db() 経由のサービスモック設定（型衝突回避のため any キャスト）
+    const novelsService = db.novels() as any
+    novelsService.getNovel.mockResolvedValue({
       id: testNovelId,
       title: 'テスト小説',
       originalTextPath: 'test-novel.txt',
       textLength: 1000,
       language: 'ja',
     })
-    mockedDb.novels().ensureNovel.mockResolvedValue()
-    mockedDb.jobs().createJobRecord.mockResolvedValue()
-    mockedDb.jobs().getJob.mockResolvedValue(null)
-    mockedDb.jobs().updateJobStatus.mockResolvedValue()
-    mockedDb.jobs().updateJobStep.mockResolvedValue()
-    mockedDb.jobs().markStepCompleted.mockResolvedValue()
-    mockedDb.jobs().updateJobTotalPages.mockResolvedValue()
-    mockedDb.jobs().updateJobCoverageWarnings.mockResolvedValue()
-    mockedDb.chunks().createChunk.mockResolvedValue()
-    mockedDb.chunks().createChunksBatch.mockResolvedValue()
-    mockedDb.episodes().getEpisodesByJobId.mockResolvedValue([])
-    mockedDb.episodes().createEpisodes.mockResolvedValue()
+    novelsService.ensureNovel.mockResolvedValue?.()
+
+    const jobsService = db.jobs() as any
+    jobsService.createJobRecord.mockResolvedValue?.()
+    jobsService.getJob.mockResolvedValue(null)
+    jobsService.updateJobStatus.mockResolvedValue?.()
+    jobsService.updateJobStep.mockResolvedValue?.()
+
+    const chunksService = db.chunks() as any
+    chunksService.createChunk.mockResolvedValue?.()
+    chunksService.createChunksBatch.mockResolvedValue?.()
+
+    const episodesService = db.episodes() as any
+    episodesService.getEpisodesByJobId.mockResolvedValue([])
+    episodesService.createEpisodes.mockResolvedValue?.()
 
     // ストレージのモック設定
     mockNovelStorage = {
@@ -334,7 +285,7 @@ describe('/api/analyze', () => {
     it('存在しないnovelIdの場合は404エラーを返す', async () => {
       // 存在しない小説のモック設定
       mockDbService.getNovel.mockResolvedValueOnce(null)
-      vi.mocked(db).novels().getNovel.mockResolvedValueOnce(null)
+  ;(db.novels() as any).getNovel.mockResolvedValueOnce(null)
 
       const requestBody = {
         novelId: 'nonexistent-novel-id',
@@ -366,7 +317,7 @@ describe('/api/analyze', () => {
         language: 'ja',
       }
       mockDbService.getNovel.mockResolvedValueOnce(novelData)
-      vi.mocked(db).novels().getNovel.mockResolvedValueOnce(novelData)
+  ;(db.novels() as any).getNovel.mockResolvedValueOnce(novelData)
       mockNovelStorage.get.mockReturnValueOnce(null)
 
       const requestBody = {

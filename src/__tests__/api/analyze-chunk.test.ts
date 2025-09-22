@@ -82,12 +82,7 @@ vi.mock('@/utils/storage', async (importOriginal) => {
   }
 })
 
-vi.mock('@/config', () => ({
-  getTextAnalysisConfig: vi.fn(() => ({
-    userPromptTemplate:
-      'チャンク{{chunkIndex}}を分析してください: {{chunkText}} 前要約: {{previousChunkSummary}} 次要約: {{nextChunkSummary}}',
-  })),
-}))
+vi.mock('@/config', () => ({}))
 
 describe('/api/analyze/chunk', () => {
   let testJobId: string

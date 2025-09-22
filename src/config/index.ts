@@ -64,27 +64,6 @@ export function getChunkConversionConfig() {
   }
 }
 
-// 互換API: 旧 textAnalysis 設定呼び出し（後方互換）
-// textAnalysis は chunkConversion と異なるプロンプトスキーマを持つため
-// 正しく llm.textAnalysis を参照する
-export function getTextAnalysisConfig() {
-  const prompts = getAppConfig().llm as unknown as Record<
-    string,
-    { systemPrompt?: string; userPromptTemplate?: string }
-  >
-  const ta = prompts.textAnalysis || { systemPrompt: '', userPromptTemplate: '' }
-  const provider = getProviderForUseCase('textAnalysis')
-  const providerConfig = getProviderConfig(provider as LLMProvider)
-  if (!ta.systemPrompt || !ta.userPromptTemplate) {
-    throw new Error('Text analysis prompts are missing in app.config.ts (llm.textAnalysis)')
-  }
-  return {
-    provider,
-    maxTokens: providerConfig.maxTokens,
-    systemPrompt: ta.systemPrompt as string,
-    userPromptTemplate: ta.userPromptTemplate as string,
-  }
-}
 
 // レイアウト生成設定を取得
 export function getLayoutGenerationConfig() {
@@ -105,7 +84,7 @@ export function getLayoutGenerationConfig() {
 
 // DEPRECATED: チャンクバンドル統合分析設定を取得
 // This function is deprecated and should not be used in the current flow
-// The correct flow is: textAnalysis → scriptConversion → pageBreakEstimation
+// Updated flow: legacy script & analysis stages removed → pageBreakEstimation
 export function getChunkBundleAnalysisConfig() {
   const prompts = getAppConfig().llm as unknown as Record<
     string,
@@ -122,23 +101,7 @@ export function getChunkBundleAnalysisConfig() {
   }
 }
 
-// 劇台本化設定を取得
-export function getScriptConversionConfig() {
-  const prompts = getAppConfig().llm as unknown as Record<
-    string,
-    { systemPrompt?: string; userPromptTemplate?: string }
-  >
-  const sc = prompts.scriptConversion || { systemPrompt: '', userPromptTemplate: '' }
-  const provider = getDefaultProvider()
-  const providerConfig = getProviderConfig(provider as LLMProvider)
-  // Defensive: ensure both prompts are present for tests that partially mock config
-  return {
-    provider,
-    maxTokens: providerConfig.maxTokens,
-    systemPrompt: (sc.systemPrompt as string) || 'system: convert script',
-    userPromptTemplate: (sc.userPromptTemplate as string) || 'input: {{chunkText}}',
-  }
-}
+// 削除: scriptConversion (劇台本化) 設定は廃止。chunkConversion を使用してください。
 
 // ページ切れ目推定設定は廃止 (importance-based calculation に置き換え)
 
@@ -234,7 +197,6 @@ export function getFeatureConfig() {
   const config = getAppConfig()
   return {
     enableCaching: config.features.enableCaching,
-    enableTextAnalysis: config.features.enableTextAnalysis,
     enableCoverageCheck: config.features.enableCoverageCheck,
     enableBatchProcessing: true, // 固定値
   }
@@ -247,7 +209,7 @@ export function getApiConfig() {
     timeout: {
       default: config.api.timeout.default,
       upload: 60000, // 固定値
-      analysis: config.api.timeout.textAnalysis,
+  analysis: config.api.timeout.layoutGeneration, // mapped from legacy analysis timeout
     },
     retries: {
       default: config.processing.retry.maxAttempts,

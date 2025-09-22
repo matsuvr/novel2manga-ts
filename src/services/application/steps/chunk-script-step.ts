@@ -1,5 +1,5 @@
 import { convertChunkToMangaScript } from '@/agents/script/script-converter'
-import { getAppConfigWithOverrides } from '@/config/app.config'
+// import { getAppConfigWithOverrides } from '@/config/app.config' // (coverage機能撤去で未使用)
 import { db } from '@/services/database'
 import { isFactoryInitialized } from '@/services/database/database-service-factory'
 import type { NewMangaScript } from '@/types/script'
@@ -50,10 +50,7 @@ export class ChunkScriptStep implements PipelineStep {
       const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
       const storage = await StorageFactory.getAnalysisStorage()
 
-      const coverageFeatureEnabled = getAppConfigWithOverrides().features.enableCoverageCheck
-      // Hard-off: default to disabled unless explicitly set APP_DISABLE_COVERAGE_JUDGE=false
-      const coverageJudgeDisabled = process.env.APP_DISABLE_COVERAGE_JUDGE !== 'false'
-      const isCoverageCheckEnabled = coverageFeatureEnabled && !coverageJudgeDisabled
+  // coverageJudge 機能は完全撤去（旧: isCoverageCheckEnabled）
 
       const maxConcurrent = Math.max(1, Math.min(3, chunks.length))
       const indices = Array.from({ length: chunks.length }, (_, i) => i)
@@ -133,6 +130,33 @@ export class ChunkScriptStep implements PipelineStep {
         }
       }
 
+      // 事前に EXPAND の適用有無を検出（analysis/expanded_input.json の存在で判定）
+      let expansionMeta: { expanded: boolean; originalLength?: number; expandedLength?: number } = { expanded: false }
+      try {
+        const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
+        const analysisStorage = await StorageFactory.getAnalysisStorage()
+        const expKey = JsonStorageKeys.expandedInput({ novelId, jobId })
+        const expObj = await analysisStorage.get(expKey)
+        if (expObj) {
+          try {
+            const parsed = JSON.parse(expObj.text) as { originalLength?: number; expandedLength?: number }
+            expansionMeta = {
+              expanded: true,
+              originalLength: parsed.originalLength,
+              expandedLength: parsed.expandedLength,
+            }
+          } catch {
+            expansionMeta = { expanded: true }
+          }
+          logger.info('Detected expansion artifact for job', { jobId, ...expansionMeta })
+        }
+      } catch (e) {
+        logger.warn('Failed to probe expansion artifact (continuing)', {
+          jobId,
+          error: e instanceof Error ? e.message : String(e),
+        })
+      }
+
       const worker = async () => {
         while (true) {
           const i = indices.shift()
@@ -189,6 +213,9 @@ export class ChunkScriptStep implements PipelineStep {
             hasPreviousSummary: !!previousSummary,
             hasNextSummary: !!nextSummary,
             hasAnalysis: Object.values(analysisData).some((v) => v !== ''),
+            expansionApplied: expansionMeta.expanded,
+            expansionOriginalLength: expansionMeta.originalLength,
+            expansionExpandedLength: expansionMeta.expandedLength,
           })
 
           if (!text || text.trim().length === 0) {
@@ -243,13 +270,16 @@ export class ChunkScriptStep implements PipelineStep {
           } catch (e) {
             // 生成失敗の診断を analysis に保存
             try {
-              const { getProviderForUseCase, getLLMProviderConfig } = await import(
-                '@/config/llm.config'
-              )
+              const { getProviderForUseCase, getLLMProviderConfig } = await import('@/config/llm.config')
               const { resolveBaseUrl } = await import('@/agents/llm/base-url')
-              const provider = getProviderForUseCase('scriptConversion')
+              // scriptConversion 用の個別 use-case は撤去 -> chunkConversion を利用
+              const provider = getProviderForUseCase('chunkConversion')
               const provCfg = getLLMProviderConfig(provider)
-              const baseUrl = resolveBaseUrl(provider, provCfg.baseUrl)
+              const providerNormalized: 'vertexai' | 'openai' | 'groq' | 'grok' | 'openrouter' | 'fake' =
+                provider === 'vertexai_lite' || provider === 'gemini'
+                  ? 'vertexai'
+                  : (provider as 'openai' | 'groq' | 'grok' | 'openrouter' | 'vertexai' | 'fake')
+              const baseUrl = resolveBaseUrl(providerNormalized, provCfg.baseUrl)
 
               const errorInfo = {
                 jobId,
@@ -312,77 +342,7 @@ export class ChunkScriptStep implements PipelineStep {
             throw new Error(msg)
           }
 
-          // LLM coverage judge: attach coverageStats when enabled and not hard-disabled
-          if (isCoverageCheckEnabled) {
-            const runJudgeOnce = async () => {
-              const { getLlmStructuredGenerator } = await import('@/agents/structured-generator')
-              const gen = getLlmStructuredGenerator()
-              const { CoverageAssessmentSchema } = await import('@/types/script')
-              const rawText = text
-              const scriptJson = JSON.stringify(script)
-              return gen.generateObjectWithFallback<{
-                coverageRatio: number
-                missingPoints: string[]
-                overSummarized: boolean
-                notes?: string
-              }>({
-                name: 'coverage-judge',
-                systemPrompt:
-                  (await import('@/config/app.config')).appConfig?.llm?.coverageJudge
-                    ?.systemPrompt ?? 'Coverage judge',
-                userPrompt:
-                  (
-                    await import('@/config/app.config')
-                  ).appConfig?.llm?.coverageJudge?.userPromptTemplate
-                    ?.replace('{{rawText}}', rawText)
-                    ?.replace('{{scriptJson}}', scriptJson) ?? '',
-                schema: CoverageAssessmentSchema as unknown as import('zod').ZodTypeAny,
-                schemaName: 'CoverageAssessment',
-                telemetry: { jobId, chunkIndex: i, stepName: 'coverage-judge' },
-              })
-            }
-            try {
-              const manualRetryEnabled = process.env.APP_COVERAGE_JUDGE_MANUAL_RETRY === 'true'
-              let result = await runJudgeOnce()
-              if (
-                manualRetryEnabled &&
-                (!result || typeof result.coverageRatio !== 'number')
-              ) {
-                logger.warn('Coverage judge returned invalid result, retrying once (manual)', {
-                  jobId,
-                  chunkIndex: i,
-                })
-                result = await runJudgeOnce()
-              }
-              if (
-                result &&
-                typeof result === 'object' &&
-                typeof result.coverageRatio === 'number'
-              ) {
-                ;(
-                  script as {
-                    coverageStats?: {
-                      coverageRatio: number
-                      missingPoints: string[]
-                      overSummarized: boolean
-                    }
-                  }
-                ).coverageStats = {
-                  coverageRatio: Math.max(0, Math.min(1, result.coverageRatio)),
-                  missingPoints: Array.isArray(result.missingPoints)
-                    ? result.missingPoints.slice(0, 10)
-                    : [],
-                  overSummarized: !!result.overSummarized,
-                }
-              }
-            } catch (e) {
-              logger.warn('Coverage judge failed (continuing without coverageStats)', {
-                jobId,
-                chunkIndex: i,
-                error: e instanceof Error ? e.message : String(e),
-              })
-            }
-          }
+          // coverage judge 削除: ここでの coverageStats 付与ロジックも削除済み
 
           logger.info('Manga script generated successfully', {
             jobId,

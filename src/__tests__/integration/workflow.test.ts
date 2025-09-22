@@ -21,19 +21,13 @@ import { TestStorageDataFactory, TestStorageFactory } from './__helpers/test-sto
 
 // 設定モック
 vi.mock('@/config', () => ({
-  getTextAnalysisConfig: vi.fn(() => ({
-    userPromptTemplate: 'テスト用プロンプト: {{chunkText}}',
-  })),
   getChunkConversionConfig: vi.fn(() => ({
     provider: 'openai',
     maxTokens: 1000,
     systemPrompt: 'Chunk conversion system prompt',
     userPromptTemplate: 'チャンク変換: {{chunkText}}',
   })),
-  getScriptConversionConfig: vi.fn(() => ({
-    systemPrompt: 'script-system',
-    userPromptTemplate: 'Episode: {{episodeText}}',
-  })),
+  // legacy scriptConversion & analysis removed
   getLLMProviderConfig: vi.fn(() => ({
     apiKey: 'test-key',
     model: 'test-model',
@@ -86,14 +80,7 @@ vi.mock('@/utils/storage', () => ({
   }),
 }))
 
-// Agent のモック
-vi.mock('@/agents/chunk-analyzer', () => ({
-  analyzeChunkWithFallback: vi.fn().mockResolvedValue({
-    result: TEST_CHUNK_ANALYSIS,
-    usedProvider: 'mock',
-    fallbackFrom: [],
-  }),
-}))
+// chunk-analyzer は廃止済み: 以前の分析結果を直接利用するためモック削除
 
 // レイアウト生成エージェントのモック
 vi.mock('@/agents/layout-generator', () => ({
