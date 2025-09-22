@@ -7,6 +7,7 @@ const mockJobService = {
 
 vi.mock('@/utils/api-auth', () => ({
   withAuth: (handler: any) => handler,
+  getAuthenticatedUser: vi.fn(),
 }))
 
 vi.mock('@/services/application/job-details', () => ({
@@ -20,21 +21,22 @@ vi.mock('@/services/database', () => ({
 }))
 
 const jobDetailsModule = await import('@/services/application/job-details')
+const authModule = await import('@/utils/api-auth')
 const { GET } = await import('@/app/api/jobs/[jobId]/status/route')
 
 beforeEach(() => {
   vi.clearAllMocks()
   mockJobService.getJob.mockResolvedValue(null)
+  // 認証をモック - 非プロダクション環境でanonymousユーザーとして実行される想定
+  vi.mocked(authModule.getAuthenticatedUser).mockRejectedValue(new Error('Auth not available'))
 })
 
 describe('/api/jobs/[jobId]/status', () => {
-  const user = { id: 'user-1' }
-
   it('returns 404 when job does not exist', async () => {
     mockJobService.getJob.mockResolvedValueOnce(null)
 
     const request = new NextRequest('http://localhost/api/jobs/missing/status')
-    const response = await GET(request, user as any, { params: { jobId: 'missing' } })
+    const response = await GET(request, { params: Promise.resolve({ jobId: 'missing' }) })
     const json = await response.json()
 
     expect(response.status).toBe(404)
@@ -42,11 +44,12 @@ describe('/api/jobs/[jobId]/status', () => {
   })
 
   it('returns 500 when job status retrieval fails', async () => {
-    mockJobService.getJob.mockResolvedValueOnce({ id: 'job-err', userId: user.id })
+    // userIdがnullのジョブで認証をスキップ
+    mockJobService.getJob.mockResolvedValueOnce({ id: 'job-err', userId: null })
     vi.mocked(jobDetailsModule.getJobDetails).mockRejectedValueOnce(new Error('DB connection failed'))
 
     const request = new NextRequest('http://localhost/api/jobs/job-err/status')
-    const response = await GET(request, user as any, { params: { jobId: 'job-err' } })
+    const response = await GET(request, { params: Promise.resolve({ jobId: 'job-err' }) })
     const json = await response.json()
 
     expect(response.status).toBe(500)
