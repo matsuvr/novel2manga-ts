@@ -9,7 +9,8 @@ let agentInstance: CompatAgent | null = null
 
 export function getChunkAnalyzerAgent(): CompatAgent {
   if (!agentInstance) {
-    const config = getTextAnalysisConfig()
+  // DEPRECATED: using legacy textAnalysis config (to be removed after migration)
+  const config = getTextAnalysisConfig()
     const provider = getLLMDefaultProvider()
 
     agentInstance = new CompatAgent({
@@ -49,6 +50,7 @@ export async function analyzeChunkWithFallback<T extends z.ZodTypeAny>(
   fallbackFrom: string[]
 }> {
   const _logger = getLogger().withContext({ agent: 'chunk-analyzer' })
+  // DEPRECATED phase: still referencing textAnalysis prompts
   const config = getTextAnalysisConfig()
   const generator = getLlmStructuredGenerator()
   const result = await generator.generateObjectWithFallback({

@@ -81,20 +81,6 @@ function getTextAnalysisConfig(): SimplePromptConfig {
     userPromptTemplate: prompts.userPromptTemplate,
   }
 }
-function getScriptConversionConfig(): SimplePromptConfig {
-  const prompts = (appConfig.llm as unknown as Record<string, any>).scriptConversion || {
-    systemPrompt: '',
-    userPromptTemplate: '',
-  }
-  const provider = resolveProvider()
-  const providerConfig = getLLMProviderConfig(provider)
-  return {
-    provider,
-    maxTokens: providerConfig.maxTokens,
-    systemPrompt: prompts.systemPrompt,
-    userPromptTemplate: prompts.userPromptTemplate,
-  }
-}
 // getPageBreakEstimationConfig removed - replaced with importance-based calculation
 
 // 期待JSONスキーマ（app.config.ts の仕様に合わせた緩めの検証）
@@ -223,41 +209,14 @@ async function runTextAnalysis(): Promise<NamedResult> {
       provider: cfg.provider,
       maxTokens: cfg.maxTokens,
     })
-    const obj = await agent.generateObject(TextAnalysisSchema, prompt)
-    return {
-      name: 'textAnalysis',
-      ok: true,
-      provider: cfg.provider,
-      preview: JSON.stringify(obj).slice(0, 200),
-      jsonOk: true,
-    }
-  } catch (e) {
-    return {
-      name: 'textAnalysis',
-      ok: false,
-      provider: cfg.provider,
-      error: (e as Error).message,
-    }
-  }
-}
-
-async function runScriptConversion(): Promise<NamedResult> {
-  const cfg = getScriptConversionConfig()
-  const prompt = (cfg.userPromptTemplate || 'Episode text: {{episodeText}}').replace(
-    '{{episodeText}}',
-    '太郎は走った。花子は笑った。二人は空を見上げた。',
-  )
-
-  try {
-    const agent = new CompatAgent({
-      name: 'manual-script',
-      instructions: cfg.systemPrompt,
-      provider: cfg.provider,
-      maxTokens: cfg.maxTokens,
+    const obj = await agent.generateObject({
+      systemPrompt: cfg.systemPrompt,
+      userPrompt: prompt,
+      schema: TextAnalysisSchema,
+      schemaName: 'TextAnalysis',
     })
-    const obj = await agent.generateObject(ScriptSchema, prompt)
     return {
-      name: 'scriptConversion',
+      name: 'textAnalysis',
       ok: true,
       provider: cfg.provider,
       preview: JSON.stringify(obj).slice(0, 200),
@@ -265,13 +224,14 @@ async function runScriptConversion(): Promise<NamedResult> {
     }
   } catch (e) {
     return {
-      name: 'scriptConversion',
+      name: 'textAnalysis',
       ok: false,
       provider: cfg.provider,
       error: (e as Error).message,
     }
   }
 }
+
 
 // runPageBreakEstimation removed - replaced with importance-based calculation
 
@@ -282,7 +242,6 @@ async function main() {
 
   const results = [] as NamedResult[]
   results.push(await runTextAnalysis())
-  results.push(await runScriptConversion())
   // runPageBreakEstimation removed - replaced with importance-based calculation
   console.log(JSON.stringify({ results }, null, 2))
 }

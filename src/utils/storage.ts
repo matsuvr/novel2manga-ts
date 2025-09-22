@@ -823,6 +823,9 @@ export const JsonStorageKeys = {
     ensureNonNegativeInteger(index, 'chunk index')
     return buildNovelJobScopedPath(novelId, jobId, 'analysis', `chunk_${index}.summary.json`)
   },
+  expandedInput: ({ novelId, jobId }: JobScopedKeyInput) => {
+    return buildNovelJobScopedPath(novelId, jobId, 'analysis', 'expanded_input.json')
+  },
   // episodeBundling removed - replaced with episode break estimation
 } as const
 

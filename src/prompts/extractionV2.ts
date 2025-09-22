@@ -1,6 +1,19 @@
 /**
- * Extraction V2 Prompts Configuration
- * Character-stateful extraction prompts for text analysis
+ * Extraction V2 Prompts Configuration (DEPRECATED)
+ *
+ * 状態: 現在コードベース内でこのファイルのエクスポートは参照されていません (grep 無一致)。
+ * ただし V2 スキーマ（types/extractionV2）はテストで利用され続けているため、
+ * 直ちの削除ではなく一段階の非推奨マーキングに留めます。
+ *
+ * 次段階候補:
+ * 1. もし将来的に再利用予定が無ければ schema/テストからも段階的に削除
+ * 2. もしくは app.config.ts へマイグレーション (純データ化) 後、この実装ファイル削除
+ * 3. migrateOldExtractionToV2 ヘルパは旧JSON資産移行が完了したら削除可能
+ *
+ * 削除判定条件 (提案):
+ * - 過去 N リリースで再有効化要求なし
+ * - 既存ストレージに旧形式JSONが存在しない (メンテナンススクリプトで監査)
+ * - 新 pipeline が v3 仕様へ統一済み
  */
 
 import type {

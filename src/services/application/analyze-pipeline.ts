@@ -4,9 +4,7 @@ import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/por
 // repositories shim no longer used
 // import { db } from '@/services/database/index'  // 直接のインポートを削除
 
-// Remove ScriptMergeStep and TextAnalysisStepV2 usage
-// import { ScriptMergeStep } from './steps/script-merge-step'
-// import { type AnalysisResult, TextAnalysisStep as TextAnalysisStepV2 } from './steps/text-analysis-step-v2'
+// Cleaned legacy steps: ScriptMergeStep, TextAnalysisStepV2 removed
 import type { NewMangaScript } from '@/types/script'
 // Import pipeline steps
 import {
@@ -37,7 +35,7 @@ export interface AnalyzeOptions {
  * AnalyzePipeline - Main production analysis service
  *
  * 責務: 小説テキストの処理からレイアウト生成・レンダリングまでの一連の処理
- * フロー: チャンク分割 → scriptConversion → episodeBreakEstimation → layout → render
+ * フロー: チャンク分割 → episodeBreakEstimation → layout → render (scriptConversion 廃止)
  *
  * 使用箇所: /api/analyze（プロダクションメインエンドポイント）
  * テスト: src/__tests__/integration/service-integration.test.ts など多数
@@ -121,6 +119,35 @@ export class AnalyzePipeline extends BasePipelineStep {
     const { jobId, existingJob } = jobInitResult.data
     context.jobId = jobId
 
+    // ------------------------------------------------------------
+    // Narrativity 早期判定 & ブランチ自動設定 (DRY 化: ensureBranchMarker)
+    // - 既存マーカーがあれば尊重（再分類しない）
+    // - 無ければ LLM 分類 + 保存
+    // ------------------------------------------------------------
+    try {
+      const { ensureBranchMarker } = await import('@/utils/branch-marker')
+      const ensured = await ensureBranchMarker(jobId, novelText)
+      if (ensured.created) {
+        logger.info('Auto branch classification applied', {
+          jobId,
+          branch: ensured.branch,
+          reason: ensured.reason,
+          metrics: ensured.metrics,
+          source: ensured.source,
+        })
+      } else {
+        logger.info('Existing branch marker preserved (no auto classification)', {
+          jobId,
+          branch: ensured.branch,
+        })
+      }
+    } catch (e) {
+      logger.warn('Branch auto-classification failed (continuing as NORMAL if absent)', {
+        jobId,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
+
     // Process text chunks
     const chunkingResult = await this.chunkingStep.processTextChunks(
       novelText,
@@ -139,9 +166,8 @@ export class AnalyzePipeline extends BasePipelineStep {
       await this.markStepCompleted(jobId, 'split', { logger })
     }
 
-  // 旧: TextAnalysis は完全撤去（オプション isDemo に関わらずスキップ）
-  // 互換のため analyze ステップの開始/完了フラグは維持する
-  await this.updateJobStep(jobId, 'analyze', { logger }, 0, chunks.length)
+    // Legacy per-chunk analysis stage removed; keep analyze step markers for backward compatibility
+    await this.updateJobStep(jobId, 'analyze', { logger }, 0, chunks.length)
 
     // チャンクごとの脚本生成
     logger.info('Starting chunk script conversion', { jobId, chunkCount: chunks.length })
@@ -180,11 +206,11 @@ export class AnalyzePipeline extends BasePipelineStep {
       })
     }
 
-    // analyze ステップ完了を明示
-    await this.markStepCompleted(jobId, 'analyze', { logger })
+  // Mark analyze step complete (legacy compatibility)
+  await this.markStepCompleted(jobId, 'analyze', { logger })
 
     // UI遷移の空白対策: ここで currentStep=episode をセット
-  await this.updateJobStep(jobId, 'episode', { logger }, 0, 4)
+    await this.updateJobStep(jobId, 'episode', { logger }, 0, 4)
 
     // ここで直接チャンク脚本を結合して combined script を作成・保存（ScriptMergeStep を撤去）
 

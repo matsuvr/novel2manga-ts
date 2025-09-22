@@ -1,7 +1,6 @@
 'use client'
 import { useCallback, useMemo, useState } from 'react'
 import { z } from 'zod'
-import { createNovelToMangaScenario } from '@/agents/scenarios/novel-to-manga'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -19,7 +18,11 @@ type RunSummary = {
 }
 
 export function ScenarioViewer() {
-  const scenario = useMemo(() => createNovelToMangaScenario(), [])
+  // novel-to-manga シナリオは廃止されたため UI も簡易化（将来別デモ導線を入れるまでプレースホルダ）
+  const scenario = useMemo(
+    () => ({ steps: [], edges: [] as Array<{ from: string; to: string; fanIn: string }> }),
+    [],
+  )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [summary, setSummary] = useState<RunSummary | null>(null)
@@ -70,26 +73,26 @@ export function ScenarioViewer() {
     <Card>
       <CardContent>
         <div className="space-y-3">
-          <h2 className="text-xl font-semibold">Novel → Manga Scenario (Dev Tool)</h2>
+          <h2 className="text-xl font-semibold">Scenario (deprecated placeholder)</h2>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
             <div>
               <h3 className="mb-1 text-sm font-semibold">Steps</h3>
               <ul className="space-y-1 text-sm">
-                {scenario.steps.map((s) => (
-                  <li key={s.id} className="rounded border px-2 py-1">
-                    {s.id}
+                {scenario.steps.length === 0 && (
+                  <li className="rounded border px-2 py-1 text-xs text-muted-foreground">
+                    (no steps – removed)
                   </li>
-                ))}
+                )}
               </ul>
             </div>
             <div>
               <h3 className="mb-1 text-sm font-semibold">Edges</h3>
               <ul className="space-y-1 text-sm">
-                {scenario.edges.map((e, i) => (
-                  <li key={`${e.from}-${e.to}-${i}`} className="rounded border px-2 py-1">
-                    {e.from} → {e.to} ({e.fanIn})
+                {scenario.edges.length === 0 && (
+                  <li className="rounded border px-2 py-1 text-xs text-muted-foreground">
+                    (no edges)
                   </li>
-                ))}
+                )}
               </ul>
             </div>
           </div>
