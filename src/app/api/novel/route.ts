@@ -23,6 +23,19 @@ export const POST = async (request: NextRequest) => {
   const logger = getLogger().withContext({ route: 'api/novel', method: 'POST' })
 
   try {
+    // 最初に認証チェックを実行 - セキュリティ重要項目（ストレージ消費前に実行）
+    let userId: string
+    try {
+      const authed = await Effect.runPromise(getAuthenticatedUser(request))
+      userId = authed.id
+    } catch (authErr) {
+      if (process.env.NODE_ENV === 'production') {
+        return createErrorResponse(authErr, '認証が必要です')
+      }
+      logger.warn('Auth not available; proceeding as anonymous (non-production)')
+      userId = 'anonymous'
+    }
+
     // Windows環境での文字化け対策：生のバイトデータを直接処理
     let body: unknown
     try {
@@ -61,20 +74,10 @@ export const POST = async (request: NextRequest) => {
       return createErrorResponse(new ValidationError('text もしくは originalText が必要です'))
     }
 
+    // 認証後にストレージに保存（認証失敗時のストレージ消費を防ぐ）
     const data = await saveNovelToStorage(raw)
 
     // DBに保存（ドメインサービス使用）
-    let userId = 'anonymous'
-    try {
-      const authed = await Effect.runPromise(getAuthenticatedUser(request))
-      userId = authed.id
-    } catch (authErr) {
-      if (process.env.NODE_ENV === 'production') {
-        return createErrorResponse(authErr, '認証が必要です')
-      }
-      logger.warn('Auth not available; proceeding as anonymous (non-production)')
-    }
-
     try {
       await db.novels().ensureNovel(
         data.uuid,

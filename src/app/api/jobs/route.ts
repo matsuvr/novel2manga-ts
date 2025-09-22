@@ -25,6 +25,19 @@ export const GET = withAuth(async (_request: NextRequest, user) => {
 export const POST = async (request: NextRequest) => {
   const logger = getLogger().withContext({ route: 'api/jobs', method: 'POST' })
   try {
+    // 最初に認証チェックを実行 - セキュリティ重要項目
+    let userId: string
+    try {
+      const authed = await Effect.runPromise(getAuthenticatedUser(request))
+      userId = authed.id
+    } catch (authErr) {
+      if (process.env.NODE_ENV === 'production') {
+        return createErrorResponse(authErr, '認証が必要です')
+      }
+      logger.warn('Auth not available for job creation; proceeding as anonymous (non-production)')
+      userId = 'anonymous'
+    }
+
     let body: unknown
     try {
       body = await request.json()
@@ -36,41 +49,29 @@ export const POST = async (request: NextRequest) => {
       return createErrorResponse(new ValidationError('novelId が必要です'))
     }
 
-    // Novel 存在確認 & 所有権
+    // Novel 存在確認 & 所有権チェック
     const novel = await db.novels().getNovel(novelId)
     if (!novel) {
       return createErrorResponse(new ValidationError('指定された小説が見つかりません'))
     }
-    let userId = novel.userId
-    if (!userId) {
-      try {
-        const authed = await Effect.runPromise(getAuthenticatedUser(request))
-        userId = authed.id
-      } catch (authErr) {
-        if (process.env.NODE_ENV === 'production') {
-          return createErrorResponse(authErr, '認証が必要です')
-        }
-        logger.warn('Auth not available for job creation; proceeding as anonymous (non-production)')
-        userId = 'anonymous'
-      }
-    }
-    if (novel.userId && userId !== novel.userId) {
+
+    // 既存の小説に所有者がいる場合は、認証済みユーザーと一致するかチェック
+    if (novel.userId && novel.userId !== userId) {
       return createErrorResponse(new ValidationError('アクセス権限がありません'))
     }
 
-    if (!userId) {
-      // 最終フォールバック（type guard）
-      userId = 'anonymous'
-    }
+    // Jobの所有者は認証済みユーザーまたは小説の既存所有者
+    const jobOwnerId = novel.userId || userId
+
     const jobId = await db.jobs().createJobRecord({
       id: generateUUID(),
       novelId,
       title: typeof jobName === 'string' && jobName ? jobName : 'text_analysis',
       status: 'processing',
-      userId,
+      userId: jobOwnerId,
     })
 
-    logger.info('Job created', { jobId, novelId })
+    logger.info('Job created', { jobId, novelId, jobOwnerId })
     return createSuccessResponse({ data: { id: jobId, novelId } }, 201)
   } catch (error) {
     logger.error('Job creation failed', {
