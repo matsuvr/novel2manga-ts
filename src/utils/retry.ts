@@ -6,7 +6,7 @@ import { EpisodeError as EE } from '@/types/errors/episode-error'
 export interface RetryOptions {
   readonly label: string
   readonly logger?: { info: (m: string, meta?: Record<string, unknown>) => void; warn: (m: string, meta?: Record<string, unknown>) => void }
-  readonly onFail?: (error: EpisodeError, attempt: number) => void | Promise<void>
+  // NOTE: onFail フックは未使用のため削除（必要になったらコールバックとして再導入検討）
 }
 
 /**

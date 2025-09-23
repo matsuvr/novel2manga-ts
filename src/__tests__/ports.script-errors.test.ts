@@ -6,7 +6,7 @@ import { DatabaseError, ExternalIOError } from '@/types/errors/episode-error'
 
 // We will stub storage + database dynamic imports
 vi.mock('@/utils/storage', async () => {
-  const actual: any = await vi.importActual('@/utils/storage')
+  const actual = await vi.importActual<typeof import('@/utils/storage')>('@/utils/storage')
   return {
     ...actual,
     getAnalysisStorage: async () => ({
@@ -17,7 +17,7 @@ vi.mock('@/utils/storage', async () => {
       fullPages: ({ novelId, jobId }: { novelId: string; jobId: string }) => `${novelId}/${jobId}/full_pages.json`,
     },
     StorageKeys: {
-      episodeLayout: ({ novelId, jobId, episodeNumber }: any) => `${novelId}/${jobId}/layouts/episode_${episodeNumber}.json`,
+      episodeLayout: ({ novelId, jobId, episodeNumber }: { novelId: string; jobId: string; episodeNumber: number }) => `${novelId}/${jobId}/layouts/episode_${episodeNumber}.json`,
     },
   }
 })
@@ -100,21 +100,21 @@ describe('EpisodePort.saveLayout failure scenarios', () => {
 
   it('propagates DatabaseError when DB upsert fails', async () => {
     // Patch existing mocks instead of late doMock (module already loaded)
-    const storageModule: any = await import('@/infrastructure/storage/ports')
-    storageModule.getStoragePorts = () => ({
+    const storageModule = await import('@/infrastructure/storage/ports')
+    ;(storageModule as unknown as { getStoragePorts: () => unknown }).getStoragePorts = () => ({
       layout: {
         putEpisodeLayout: vi.fn(async () => 'layout.json'),
         putEpisodeLayoutProgress: vi.fn(async () => 'progress.json'),
       },
     })
-    const dbModule: any = await import('@/services/database')
-    dbModule.db.layout = () => ({
+    const dbModule = await import('@/services/database')
+    ;(dbModule.db as unknown as { layout: () => unknown }).layout = () => ({
       upsertLayoutStatus: vi.fn(async () => {
         throw new Error('db down')
       }),
     })
-    dbModule.db.jobs = () => ({ updateJobTotalPages: vi.fn(async () => undefined) })
-    dbModule.db.episodes = () => ({
+    ;(dbModule.db as unknown as { jobs: () => unknown }).jobs = () => ({ updateJobTotalPages: vi.fn(async () => undefined) })
+    ;(dbModule.db as unknown as { episodes: () => unknown }).episodes = () => ({
       getEpisode: vi.fn(async () => ({ id: 'e1', novelId: 'n1', jobId: 'j1', episodeNumber: 1 })),
       getEpisodesByJobId: vi.fn(async () => []),
       updateEpisodeTextPath: vi.fn(async () => undefined),

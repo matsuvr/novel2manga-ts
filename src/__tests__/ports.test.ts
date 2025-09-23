@@ -21,7 +21,22 @@ vi.mock('@/utils/storage', async () => {
 
 // Mock database services for DrizzleEpisodePort
 vi.mock('@/services/database', () => {
-  const episodes: any[] = []
+  // Episode 型の最小部分のみ利用 (テスト内で必要なフィールド)
+  interface TestEpisode {
+    id: string
+    novelId: string
+    jobId: string
+    episodeNumber: number
+    title?: string | null
+    summary?: string | null
+    startChunk?: number
+    startCharIndex?: number
+    endChunk?: number
+    endCharIndex?: number
+    confidence?: number
+    episodeTextPath?: string | null
+  }
+  const episodes: TestEpisode[] = []
   return {
     db: {
       episodes: () => ({
@@ -40,7 +55,10 @@ vi.mock('@/services/database', () => {
 
 describe('ScriptPort', () => {
   it('loads combined script successfully', async () => {
-    const { __scriptMemory, JsonStorageKeys } = await import('@/utils/storage') as any
+    const { __scriptMemory, JsonStorageKeys } = (await import('@/utils/storage')) as unknown as {
+      __scriptMemory: Map<string, string>
+      JsonStorageKeys: { scriptCombined: (p: { novelId: string; jobId: string }) => string }
+    }
     const key = JsonStorageKeys.scriptCombined({ novelId: 'n1', jobId: 'j1' })
     __scriptMemory.set(
       key,
@@ -63,7 +81,10 @@ describe('ScriptPort', () => {
   })
 
   it('normalizes panel indices (removes invalid/duplicates and reindexes) - expects successful parse with valid subset', async () => {
-    const { __scriptMemory, JsonStorageKeys } = await import('@/utils/storage') as any
+    const { __scriptMemory, JsonStorageKeys } = (await import('@/utils/storage')) as unknown as {
+      __scriptMemory: Map<string, string>
+      JsonStorageKeys: { scriptCombined: (p: { novelId: string; jobId: string }) => string }
+    }
     const key = JsonStorageKeys.scriptCombined({ novelId: 'n2', jobId: 'j2' })
     const rawObject = {
       style_tone: 't',
@@ -95,7 +116,9 @@ describe('ScriptPort', () => {
 
 describe('EpisodePort', () => {
   beforeAll(async () => {
-    const { __episodesMemory } = await import('@/services/database') as any
+    const { __episodesMemory } = (await import('@/services/database')) as unknown as {
+      __episodesMemory: Array<{ id: string; novelId: string; jobId: string; episodeNumber: number; title: string; summary: string; startChunk: number; startCharIndex: number; endChunk: number; endCharIndex: number; confidence: number; createdAt: string; episodeTextPath: string | null }>
+    }
     __episodesMemory.push({
       id: 'e1',
       novelId: 'n1',
