@@ -26,11 +26,11 @@ graph TD
     K --> L[最終検証]
 
     L --> M[エピソード情報をDBに保存]
-    M --> N[Episode Processing Step]
-
-    N --> O[チャンクメタデータ取得]
-    O --> P[エピソード境界に基づくテキスト抽出]
-    P --> Q[エピソードテキストをストレージに保存]
+  M --> N[Episode Processing Step]
+  %% 旧: N --> O[チャンクメタデータ取得] O --> P[テキスト抽出]
+  %% 新フロー: チャンクメタは不要。Panel Index 直接参照でテキスト抽出。
+  N --> P[パネル範囲に基づくテキスト抽出]
+  P --> Q[エピソードテキストをストレージに保存]
 
     Q --> R[Layout Generation開始]
     R --> S[Episode Data構築]

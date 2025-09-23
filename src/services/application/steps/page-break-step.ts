@@ -228,10 +228,9 @@ export class PageBreakStep implements PipelineStep {
         title: 'Combined Episodes',
         episodeNumber: 1,
         episodeTitle: 'Combined Episodes',
-        // 重要: pageNumber の二重オフセットにより番号が飛ぶ問題を避けるため、
-        // ここでは各エピソード内で付与された page_number をそのまま集約し、
-        // 昇順で安定化して保存する（再番号付けは行わない）
-        pages: allPages.sort((a, b) => a.page_number - b.page_number),
+        // 旧実装は episode 内で 1..M にリセットされた page_number を sort し episodes を interleave させていた。
+        // Legacy Step でも LayoutPipeline と同様に挿入順を保持しグローバル連番を再付与。
+        pages: allPages.map((p, idx) => ({ page_number: idx + 1, panels: p.panels })),
         episodes: bundledEpisodes.episodes,
       }
 
