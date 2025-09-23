@@ -124,35 +124,16 @@ export class EpisodeProcessingStep implements PipelineStep {
 
     let storage: Awaited<ReturnType<(typeof import('@/utils/storage'))['StorageFactory']['getAnalysisStorage']>> | null = null
     let key: string | null = null
-    try {
-      const storageModule = await import('@/utils/storage')
-      storage = await storageModule.StorageFactory.getAnalysisStorage()
-      if (
-        typeof (storageModule.StorageKeys as unknown as Record<string, unknown>).episodeText ===
-        'function'
-      ) {
-        key = (
-          storageModule.StorageKeys as unknown as {
-            episodeText: (params: {
-              novelId: string
-              jobId: string
-              episodeNumber: number
-            }) => string
-          }
-        ).episodeText({ novelId, jobId, episodeNumber })
-      } else {
-        key = `${novelId}/jobs/${jobId}/analysis/episode_${episodeNumber}.txt`
-      }
-    } catch (e) {
-      if (process.env.NODE_ENV === 'test') {
-        logger.warn('EpisodeProcessingStep: storage init failed (test env fallback: skipping persistence)', {
-          jobId,
-          episodeNumber,
-          error: e instanceof Error ? e.message : String(e),
-        })
-        return
-      }
-      throw e
+    const storageModule = await import('@/utils/storage')
+    storage = await storageModule.StorageFactory.getAnalysisStorage()
+    if (typeof (storageModule.StorageKeys as unknown as Record<string, unknown>).episodeText === 'function') {
+      key = (
+        storageModule.StorageKeys as unknown as {
+          episodeText: (params: { novelId: string; jobId: string; episodeNumber: number }) => string
+        }
+      ).episodeText({ novelId, jobId, episodeNumber })
+    } else {
+      key = `${novelId}/jobs/${jobId}/analysis/episode_${episodeNumber}.txt`
     }
     if (!storage || !key) {
       logger.warn('EpisodeProcessingStep: storage unavailable, skipping persistence', { jobId, episodeNumber })
