@@ -111,6 +111,14 @@ JSONのみ。expandedText は改行を保持。文字数は target ±20% 以内�
       },
       // feature guarded: new orchestrated rendering pipeline (pure renderer + asset cache + batch vertical text)
       enableNewRenderPipeline: false,
+      newPipeline: {
+        // 同時に描画する最大ページ数（CPUコア-1 を後で clamp する想定）
+        maxConcurrency: 4,
+        // 先行してユーザーにプレビューしたいページ数（優先キュー）
+        priorityPreviewPages: 2,
+        // 縦書きアセット生成の1バッチ上限（dialogue-assets.config との整合に注意）
+        dialogueBatchLimit: 32,
+      },
     },
     api: {
       rateLimit: { layoutGeneration: { requests: 30, window: 60000 }, imageGeneration: { requests: 50, window: 60000 }, pageRender: { requests: 100, window: 60000 } },
