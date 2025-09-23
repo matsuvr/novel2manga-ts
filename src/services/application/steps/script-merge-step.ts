@@ -145,9 +145,29 @@ export class ScriptMergeStep implements PipelineStep {
         if (allLowCoverageChunks.length > 0) {
           // Get episode repository to map chunks to episodes (best-effort)
           // DB の取得や参照に失敗してもマージ自体は継続し、エピソード番号の付与を省略する
-          let allEpisodes: Array<{ startChunk: number; endChunk: number; episodeNumber: number }> = []
+          let allEpisodes: Array<{
+            episodeNumber: number
+            startChunk: number
+            endChunk: number
+            startPanelIndex: number | null
+            endPanelIndex: number | null
+          }> = []
           try {
-            allEpisodes = await db.episodes().getEpisodesByJobId(jobId)
+            const rows = await db.episodes().getEpisodesByJobId(jobId)
+            type EpisodeRowWithOptionalPanels = {
+              episodeNumber: number
+              startChunk: number
+              endChunk: number
+              startPanelIndex?: number | null
+              endPanelIndex?: number | null
+            }
+            allEpisodes = (rows as EpisodeRowWithOptionalPanels[]).map((r) => ({
+              episodeNumber: r.episodeNumber,
+              startChunk: r.startChunk,
+              endChunk: r.endChunk,
+              startPanelIndex: r.startPanelIndex ?? null,
+              endPanelIndex: r.endPanelIndex ?? null,
+            }))
           } catch (e) {
             logger.warn('Failed to load episodes for coverage mapping (continuing without episodes)', {
               jobId,
@@ -156,8 +176,15 @@ export class ScriptMergeStep implements PipelineStep {
           }
 
           coverageWarnings = allLowCoverageChunks.map((c) => {
+            // まず panel index ベースの episode 範囲が完全に揃っているか判定
+            // (全エピソードが startPanelIndex/endPanelIndex を持つ) → panel ベースで chunkIndex を panel に変換する術はここには無いので
+            // 現段階では fallback: chunk 範囲を継続利用。ただし将来 panel 単位 coverage 計測を行う際の拡張ポイントコメントを残す。
+
             const episodeNumbers = allEpisodes
-              .filter((episode) => c.index >= episode.startChunk && c.index <= episode.endChunk)
+              .filter((episode) => {
+                // 現在 coverage は chunk 粒度。panel index 版 coverage 実装時に panel→chunk マッピングをここで利用予定。
+                return c.index >= episode.startChunk && c.index <= episode.endChunk
+              })
               .map((episode) => episode.episodeNumber)
               .sort((a, b) => a - b)
 

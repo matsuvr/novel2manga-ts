@@ -2,7 +2,7 @@ import { and, desc, eq, isNull, lt, or, sql } from 'drizzle-orm'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import type { Job, NewJob } from '@/db/schema'
-import { chunks, episodes, jobNotifications, jobs } from '@/db/schema'
+import { chunks, episodes, jobNotifications, jobs, novelJobLocks } from '@/db/schema'
 import { BaseDatabaseService } from './base-database-service'
 
 type DrizzleDatabase = BetterSQLite3Database<typeof schema>
@@ -151,6 +151,105 @@ export class JobDatabaseService extends BaseDatabaseService {
       })
       return success
     }
+  }
+
+  /**
+   * Acquire a short lease specifically for starting the AnalyzePipeline.
+   * This prevents multiple nearly-simultaneous /api/analyze requests from
+   * launching duplicate pipelines for the same job (which would duplicate
+   * LLM costs for chunk 0 etc.).
+   *
+   * Reuses the same lockedBy / leaseExpiresAt columns. We intentionally allow
+   * acquisition when status is either 'pending' or 'processing' (in case the
+   * job record was created directly in processing state) but only if split/analyze
+   * are not yet completed. TTL kept short (default 120s) because startup window
+   * is small; AnalyzePipeline itself can later extend/ignore this lease – it is
+   * purely to serialize initial start.
+   */
+  async acquirePipelineLease(
+    jobId: string,
+    starterId: string,
+    leaseMs = 120 * 1000,
+  ): Promise<boolean> {
+    const now = new Date()
+    const leaseUntil = new Date(now.getTime() + leaseMs).toISOString()
+    const nowIso = now.toISOString()
+
+    // Conditional update predicate shared logic
+    const predicate = and(
+      eq(jobs.id, jobId),
+      or(eq(jobs.status, 'pending'), eq(jobs.status, 'processing')),
+      // not already fully processed
+  or(isNull(jobs.splitCompleted), eq(jobs.splitCompleted, false)),
+  or(isNull(jobs.analyzeCompleted), eq(jobs.analyzeCompleted, false)),
+      // lease is free or expired
+      or(isNull(jobs.lockedBy), lt(jobs.leaseExpiresAt, nowIso)),
+    )
+    if (this.isSync()) {
+      const drizzleDb = this.db as DrizzleDatabase
+      const result = drizzleDb
+        .update(jobs)
+        .set({
+          lockedBy: starterId,
+          leaseExpiresAt: leaseUntil,
+          updatedAt: nowIso,
+        })
+        .where(predicate)
+        .run()
+      const changes = (result as unknown as { changes?: number }).changes ?? 0
+      return changes > 0
+    }
+
+    let success = false
+    await this.adapter.transaction(async (tx: DrizzleDatabase) => {
+      const res: unknown = await tx
+        .update(jobs)
+        .set({ lockedBy: starterId, leaseExpiresAt: leaseUntil, updatedAt: nowIso })
+        .where(predicate)
+      const rowsAffected = (res as { rowsAffected?: number })?.rowsAffected
+      const changes = (res as { changes?: number })?.changes
+      if (typeof rowsAffected === 'number') success = rowsAffected > 0
+      else if (typeof changes === 'number') success = changes > 0
+      else success = Array.isArray(res) ? res.length > 0 : false
+    })
+    return success
+  }
+
+  /**
+   * Acquire a short-lived lock for a novel to serialize job creation.
+   * TTL is small (default 3s). Returns true if acquired.
+   */
+  async acquireNovelLock(novelId: string, ttlMs = 3000): Promise<boolean> {
+    const now = Date.now()
+    const expiresAt = new Date(now + ttlMs).toISOString()
+    const nowIso = new Date(now).toISOString()
+    if (!this.isSync()) throw new Error('Async adapters not supported for novel lock')
+    const drizzleDb = this.db as DrizzleDatabase
+    let acquired = false
+    drizzleDb.transaction((tx) => {
+      try {
+        tx.insert(novelJobLocks).values({ novelId, expiresAt }).run()
+        acquired = true
+        return
+      } catch {
+        // fallthrough
+      }
+      const updated = tx
+        .update(novelJobLocks)
+        .set({ lockedAt: nowIso, expiresAt })
+        .where(sql`novel_id = ${novelId} AND expires_at < ${nowIso}`)
+        .run() as unknown as { changes?: number }
+      acquired = (updated.changes ?? 0) > 0
+    })
+    return acquired
+  }
+
+  async releaseNovelLock(novelId: string): Promise<void> {
+    if (!this.isSync()) throw new Error('Async adapters not supported for novel lock')
+    const drizzleDb = this.db as DrizzleDatabase
+    drizzleDb.transaction((tx) => {
+      tx.delete(novelJobLocks).where(eq(novelJobLocks.novelId, novelId)).run()
+    })
   }
 
   /** Release lease on a job (on completion/failure) */

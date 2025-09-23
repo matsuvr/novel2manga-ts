@@ -23,6 +23,9 @@ interface ImportancePageBreakResult {
     averagePanelsPerPage: number
     importanceDistribution: Record<number, number>
     lastPageTotalImportance: number
+    /** true if the final produced page is NOT saturated (importance sum < limit) */
+    lastPageOpen: boolean
+    /** true if the final produced page ended exactly on a boundary (so next starts fresh) */
     carryIntoNewPage: boolean
   }
 }
@@ -44,7 +47,8 @@ export function calculateImportanceBasedPageBreaks(
         averagePanelsPerPage: 0,
         importanceDistribution: {},
         lastPageTotalImportance: Math.max(0, Math.min(PAGE_IMPORTANCE_LIMIT - 1, initialImportance)),
-        carryIntoNewPage: false,
+        lastPageOpen: initialImportance > 0,
+        carryIntoNewPage: initialImportance === 0 ? false : initialImportance >= PAGE_IMPORTANCE_LIMIT,
       },
     }
   }
@@ -110,15 +114,14 @@ export function calculateImportanceBasedPageBreaks(
     : lastPagePanelsImportance
 
   // If the effective importance reached exactly the limit (==6), we signal that next segment/page starts fresh.
-  const carryIntoNewPage =
-    effectiveLastPageImportance > 0 && effectiveLastPageImportance % PAGE_IMPORTANCE_LIMIT === 0
-
-  // The residual importance to pass forward (reported as lastPageTotalImportance) should be:
-  //  - 0 if saturated
-  //  - effectiveLastPageImportance % PAGE_IMPORTANCE_LIMIT if not saturated
-  const lastPageImportance = carryIntoNewPage
-    ? PAGE_IMPORTANCE_LIMIT
-    : effectiveLastPageImportance % PAGE_IMPORTANCE_LIMIT || effectiveLastPageImportance
+  // New semantics:
+  //  - A page is "saturated" if effectiveLastPageImportance >= PAGE_IMPORTANCE_LIMIT (we never carry overshoot)
+  //  - If saturated: residual (lastPageTotalImportance) = 0, lastPageOpen = false, carryIntoNewPage = true
+  //  - If not: residual = effectiveLastPageImportance ( < limit ), lastPageOpen = true, carryIntoNewPage = false
+  const saturated = effectiveLastPageImportance >= PAGE_IMPORTANCE_LIMIT
+  const lastPageOpen = !saturated
+  const lastPageImportance = saturated ? 0 : effectiveLastPageImportance
+  const carryIntoNewPage = saturated
 
   return {
     pageBreaks: { panels: resultPanels },
@@ -128,6 +131,7 @@ export function calculateImportanceBasedPageBreaks(
       averagePanelsPerPage: Math.round(averagePanelsPerPage * 100) / 100,
       importanceDistribution,
       lastPageTotalImportance: lastPageImportance,
+      lastPageOpen,
       carryIntoNewPage,
     },
   }

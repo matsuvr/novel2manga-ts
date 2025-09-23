@@ -65,3 +65,50 @@
 - [ ] Remove residual extractionV2 imports in character modules
 - [ ] Update CHANGELOG / PR with removal note
 
+## Panel Index / Char Offset Migration (Updated)
+
+- [x] Phase 0: Inventory references (`startCharIndex` / `endCharIndex`) — cataloged
+- [x] Phase 1: Panel index normalization utility + LLM prompt reliance (canonical in estimation)
+- [x] Phase 2: EpisodeProcessingStep rewritten to panel range only (no feature flag; hard switch)
+- [x] Phase 3: LayoutGeneration persistence path now writes panel indices (PageBreakStep dual-writing startPanelIndex/endPanelIndex); remaining reads still tolerant of legacy fields
+- [x] Phase 4: Added DB columns `startPanelIndex` / `endPanelIndex` (migration 0008 + schema + EpisodeDatabaseService + PageBreakStep). Currently dual-writing; char offset columns retained.
+- [ ] Phase 5: Purge char offset reads from all runtime paths (leave columns deprecated) — PARTIAL
+	- [x] Coverage mapping path updated to tolerate panel indices (still chunk-based until panel coverage available)
+	- [x] Added `episode-boundaries` helper for forward migration
+	- [ ] Migrate `layout-generation.ts` to panel index episode text reconstruction (replace chunk slicing)
+	- [ ] Remove UI references displaying startChunk/startCharIndex if not needed
+- [ ] Phase 6: Drop `start_char_index` / `end_char_index` columns via migration
+- [ ] Phase 7: Final doc sweep (design.md / storage-structure.md) confirming panel indices canonical & offsets removed
+
+Notes:
+- Feature flag `features.episode.usePanelBoundaries` was not introduced (simplified path). Hard migration chosen to eliminate context divergence.
+- Backfill strategy: derive panel indices for historical episodes by mapping stored episodeText against concatenated panel texts (tooling TBD).
+
+## Episode Break Post-Normalization Simplification
+
+- [ ] Audit `normalizeEpisodeBreaks` and `bundleAndValidate` to identify logic now redundant due to upfront panel normalization (e.g., clamping / start=1 enforcement duplication)
+- [ ] Extract minimal residual validation (continuity, length constraints) into a pure `validateEpisodeRanges` utility
+- [ ] Benchmark before/after estimation pipeline (panel count 50 / 200 / 800) to confirm no regression
+- [ ] Add focused unit tests for boundary normalization edge cases now that panel indices are guaranteed contiguous
+
+## Panel Normalization Mapping Persistence (Feature Flag)
+
+- [ ] Add config flag `debug.savePanelNormalizationMapping` (default false)
+- [ ] Implement utility `maybePersistPanelMapping(jobId, mapping)` writing JSON under `storage/debug/panel-mapping/{jobId}.json` when enabled
+- [ ] Call utility in EpisodeBreakEstimationStep only when `changed === true`
+- [ ] Add unit test ensuring no file write when flag false & mapping present
+- [ ] Add doc note in episode-generation-flow.md appendix (enable flag only for debugging large scripts)
+
+## Episode / Layout Refactor (Effect + Panel Index) NEW
+
+- [x] (F1) Add EpisodeError taxonomy & refactor EpisodeProcessingStep to Effect (replace ad-hoc try/catch)
+- [x] (F2) Add panel validation schema + pure episode text builder + integrate & reindex slice panels
+- [x] (F3) Extract EpisodeDataAssembler (panel-range -> text) consolidating slice + reindex + builder (pure & Effect) with dedicated unit tests (maxPanels config 化済)
+- [ ] (F4) Convert Layout pipeline into composed Steps (ImportanceNormalize, PageBreakDerive, TemplateAssign, LayoutValidate)
+- [ ] (F5) Introduce ScriptPort / EpisodePort adapters (DrizzleEpisodeAdapter, FileSystemScriptAdapter)
+- [ ] (F6) Remove residual chunk-only references (inventory & prune) now redundant post panel index migration
+- [ ] (F7) Implement retry policy (exponential) only for TransientLLMError / ExternalIOError
+- [ ] (F8) Add validation schemas (episode / layout) (panel schema DONE) and centralize in validation utilities
+- [ ] (F9) Update design.md & episode-generation-flow.md (completed refactor phases F1-F8) when each milestone lands
+- [ ] (F10) Add integration tests: invalid panel range → ValidationError, empty episode text → InvariantViolation, transient script read error → successful retry
+

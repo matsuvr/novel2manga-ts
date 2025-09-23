@@ -58,6 +58,26 @@ export function createTestDb(migrationsFolder = `${process.cwd()}/drizzle`) {
   sqlite.pragma('foreign_keys = ON')
   const db = drizzle(sqlite, { schema })
   migrate(db, { migrationsFolder })
+  // Test environment legacy patch: ensure episodes has panel index columns
+  try {
+    const rows = sqlite.prepare("PRAGMA table_info('episodes')").all() as Array<{ name?: unknown }>
+    const names = new Set(rows.map(r => typeof r.name === 'string' ? r.name : ''))
+    let applied = 0
+    if (!names.has('start_panel_index')) {
+      sqlite.exec('ALTER TABLE episodes ADD COLUMN start_panel_index INTEGER')
+      applied += 1
+    }
+    if (!names.has('end_panel_index')) {
+      sqlite.exec('ALTER TABLE episodes ADD COLUMN end_panel_index INTEGER')
+      applied += 1
+    }
+    if (applied > 0) {
+      // eslint-disable-next-line no-console
+      console.warn('[test-db] patched episodes panel index columns applied=', applied)
+    }
+  } catch {
+    // ignore patch errors to avoid masking migration issues
+  }
   return { sqlite, db }
 }
 

@@ -61,6 +61,7 @@ export const appConfig = {
       narrativityClassification: {
         systemPrompt: `あなたは文章をマンガ脚本前処理用に分類するアナライザーです。以下の3クラスから厳密に1つを JSON で返します。\n\n分類基準:\n1. EXPAND: 入力が極端に短い / 断片的 / タイトル+一文 / 設定が不足し、このままでは十分な複数パネル脚本展開が困難な場合。意味は把握できるが展開に必要な舞台・登場人物・動機などが足りないものを含む。\n2. EXPLAINER: 叙述的な物語展開ではなく、説明・解説・手順・箇条書き・見出し列挙・仕様・教科書的説明など、ストーリーの時間的進行やキャラクター間の相互作用を主目的としないテキスト。\n3. NORMAL: 上記どちらにも当てはまらない、物語的（キャラクター/出来事/進行）テキスト。短すぎない場合はこちら。\n\n注意:\n- 返答は JSON 1行のみ。キーは branch, reason。\n- branch は "EXPAND" | "EXPLAINER" | "NORMAL" のみ。\n- reason は日本語で簡潔に (最大300字)。\n- 入力文字数や不足情報を根拠に必須なら EXPAND を選ぶ。`,
         userPromptTemplate: `【入力テキスト】(length={{length}} chars / targetForExpansion={{expansionTarget}})\n{{text}}\n\n必ず JSON で: {"branch":"EXPAND|EXPLAINER|NORMAL","reason":"..."}`,
+        providerOrder: ['vertexai_lite','openai_nano','gemini'] as const,
       },
       // EXPAND ブランチ用: 短い/断片的な入力を「展開シナリオ本文」に拡張し、その結果を通常の chunkConversion に流す前処理。
       // 出力は単純な JSON: { "expandedText": string, "notes": string[] }
@@ -85,7 +86,7 @@ export const appConfig = {
 JSONのみ。expandedText は改行を保持。文字数は target ±20% 以内。`,
       },
       explainerConversion: {
-        systemPrompt: `あなたは教育マンガ編集者です。非物語テキストを学習目的の explainer-v1 JSON に変換します。これは、先生役、生徒役1，生徒役2、モブキャラクターの対話により、入力テキストをわかりやすく解説するものです。JSON以外禁止。`,
+        systemPrompt: `あなたは教育マンガ編集者です。非物語テキストを学習目的の explainer-v1 JSON に変換します。出力JSONの先頭フィールド version は必ず "explainer-v1" とし、chunkConversion(version=3) と同一構造(memory,situations,summary,script)を維持してください。これは、先生役、生徒役1，生徒役2、モブキャラクターの対話により、入力テキストをわかりやすく解説するものです。JSON以外禁止。`,
         // chunkConversion と共通化: パイプライン後段の共通処理を容易にするため同一テンプレート
         userPromptTemplate: `### コンテキスト\nチャンク(0始): {{chunkIndex}} / {{chunksNumber}}\n前要約: {{previousChunkSummary}}\n次要約: {{nextChunkSummary}}\n既存メモリ(JSON):\n{{previousElementMemoryJson}}\n\n### 対象本文\n{{chunkText}}\n\n### 指示\n1. memory.characters / scenes を必要に応じ更新 (再登場のみは追加しない)。\n2. situations を重要事象で作成。\n3. script パネル列を生成 (1パネル1要点, no昇順, dialogueは speaker/ text, 60字目安)。\n4. summary を160字以内。\n5. characters[*].id は c<number> 形式 (例 c1,c2) を厳守。既存IDを再使用し、新規のみ連番追加。dialogue[*].speaker はその ID か '不明'。\n6. 仕様に合う JSON のみを1つだけ出力 (前後余計な文字列禁止)。`,
       },

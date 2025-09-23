@@ -72,19 +72,17 @@ describe('importance-based page breaks', () => {
     expect(p2.dialogue?.[0]).toEqual({ speaker: '花子', text: 'そうね', type: 'speech' })
   })
 
-  // Updated test to match new logic
-  it('keeps adding panels until reaching 6 or more', () => {
+  // Updated test: overshoot discards residual; saturated page => residual=0
+  it('keeps adding panels until reaching 6 or more (overshoot discards residual)', () => {
     const script = buildScript([5, 5])
 
     const { pageBreaks, stats } = calculateImportanceBasedPageBreaks(script)
     const pages = pageBreaks.panels.map((panel) => panel.pageNumber)
 
-  // New logic: both panels go to page 1 since 5+5=10 (≥6)
-  expect(pages).toEqual([1, 1])
-  expect(stats.totalPages).toBe(1)
-  // lastPageTotalImportance はキャリー用の残余(または飽和時は LIMIT)ではなく、新仕様では
-  // 飽和したページの residual を 0 としないため、10%6=4 の残余を返す実装となっている。
-  expect(stats.lastPageTotalImportance).toBe(4)
+    expect(pages).toEqual([1, 1])
+    expect(stats.totalPages).toBe(1)
+    expect(stats.lastPageTotalImportance).toBe(0)
+    expect(stats.lastPageOpen).toBe(false)
   })
 
   it('groups panels correctly when sum equals page limit', () => {
@@ -97,6 +95,7 @@ describe('importance-based page breaks', () => {
     expect(pages).toEqual([1, 1, 2])
     expect(stats.totalPages).toBe(2)
     expect(stats.lastPageTotalImportance).toBe(2)
+    expect(stats.lastPageOpen).toBe(true)
   })
 
   // New test for the specific example case mentioned
@@ -135,6 +134,8 @@ describe('importance-based page breaks', () => {
     expect(result.pageBreaks.panels).toHaveLength(1)
     expect(result.pageBreaks.panels[0].pageNumber).toBe(1)
     expect(result.stats.totalPages).toBe(1)
+    expect(result.stats.lastPageTotalImportance).toBe(0)
+    expect(result.stats.lastPageOpen).toBe(false)
   })
 
   it('includes initialImportance when determining saturation (carry 4 + panel 2)', () => {
@@ -145,6 +146,7 @@ describe('importance-based page breaks', () => {
     expect(pages).toEqual([1, 2])
     // lastPageTotalImportance: last page has only panel importance 3 (not saturated)
     expect(stats.lastPageTotalImportance).toBe(3)
+    expect(stats.lastPageOpen).toBe(true)
     expect(stats.carryIntoNewPage).toBe(false)
   })
 
@@ -167,6 +169,14 @@ describe('importance-based page breaks', () => {
     expect(pages[3]).toEqual([7]) // 6 >=6
     // Ensure no extra pages created
     expect(Object.keys(pages).length).toBe(3)
+  })
+
+  it('exposes lastPageOpen correctly for partial final page', () => {
+    const script = buildScript([2,2,1]) // cumulative 5 (<6)
+    const { stats } = calculateImportanceBasedPageBreaks(script)
+    expect(stats.lastPageOpen).toBe(true)
+    expect(stats.lastPageTotalImportance).toBe(5)
+    expect(stats.carryIntoNewPage).toBe(false)
   })
 
   it('handles empty script', () => {

@@ -31,6 +31,25 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     const { jobId, logger } = context
 
     try {
+      // Normalize panel indices (1..N contiguous) before any further processing.
+      // This guarantees LLM prompt + downstream logic rely solely on normalized numbering.
+      try {
+        const { withNormalizedPanels } = await import('@/utils/panel-normalization')
+        const norm = withNormalizedPanels(combinedScript)
+        if (norm.changed) {
+          logger.info('Panel indices normalized for episode break estimation', {
+            jobId,
+            originalPanelCount: combinedScript.panels?.length || 0,
+            normalizedPanelCount: norm.script.panels?.length || 0,
+          })
+        }
+        combinedScript = norm.script
+      } catch (e) {
+        logger.warn?.('Panel normalization failed (continuing with original panels)', {
+          jobId,
+          error: e instanceof Error ? e.message : String(e),
+        })
+      }
       const totalPanels = combinedScript.panels?.length || 0
       // Fetch app config once to avoid inconsistent per-call overrides
       const appCfg = this.getAppConfig()
@@ -98,7 +117,15 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     const eb = appCfg.llm.episodeBreakEstimation || { systemPrompt: '', userPromptTemplate: '' }
 
     // Create prompt with script data
-    const prompt = (eb.userPromptTemplate || '').replace(
+    const promptBase = eb.userPromptTemplate || ''
+    const augmented =
+      promptBase +
+      '\n\n### 追加指示(自動付与)\n' +
+      '- 入力 scriptJson.panels[*].no は既に 1..N の連番に正規化済み (欠番/重複なし)。\n' +
+      '- 出力 episodes[].startPanelIndex / endPanelIndex はこの連番を参照し境界を定義する。\n' +
+      '- エピソードは全文を連続被覆: 最初の startPanelIndex は 1、以降は前エピソード endPanelIndex+1、最後は N で終わる。\n' +
+      '- 文字オフセットや行数ではなくパネル番号のみを根拠に判断する。\n'
+    const prompt = augmented.replace(
       '{{scriptJson}}',
       JSON.stringify(combinedScript, null, 2),
     )

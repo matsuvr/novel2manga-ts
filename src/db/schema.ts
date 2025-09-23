@@ -214,6 +214,21 @@ export const jobNotifications = sqliteTable(
   }),
 )
 
+// Novel-level short lease to serialize /api/analyze job creation
+export const novelJobLocks = sqliteTable(
+  'novel_job_locks',
+  {
+    novelId: text('novel_id')
+      .primaryKey()
+      .references(() => novels.id, { onDelete: 'cascade' }),
+    lockedAt: text('locked_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    expiresAt: text('expires_at').notNull(),
+  },
+  (table) => ({
+    expiresIdx: index('idx_novel_job_locks_expires').on(table.expiresAt),
+  }),
+)
+
 export const jobShares = sqliteTable(
   'job_shares',
   {
@@ -349,6 +364,9 @@ export const episodes = sqliteTable(
     startCharIndex: integer('start_char_index').notNull(),
     endChunk: integer('end_chunk').notNull(),
     endCharIndex: integer('end_char_index').notNull(),
+  // New canonical panel boundary columns (nullable during migration phase)
+  startPanelIndex: integer('start_panel_index'),
+  endPanelIndex: integer('end_panel_index'),
     confidence: real('confidence').notNull(),
     episodeTextPath: text('episode_text_path'),
     createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),

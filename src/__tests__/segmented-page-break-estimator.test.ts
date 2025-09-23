@@ -88,4 +88,59 @@ describe('segmented page break estimator', () => {
         expect(imp).toBeGreaterThanOrEqual(6)
       }
     })
+
+  it('residual carry (open page) correctly continues into next segment', async () => {
+    // Segment1 panels importance: 2 + 2 =4 (<6) -> open page residual=4
+    // Segment2 begins with carry=4 then panel importance 2 -> saturates (4+2=6)
+    // Next panel starts new page
+    const script: NewMangaScript = {
+      style_tone: '', style_art: '', style_sfx: '', characters: [], locations: [], props: [], continuity_checks: [],
+      panels: [
+        { no:1, cut:'s1p1', camera:'c', importance:2, dialogue:[], narration:[] },
+        { no:2, cut:'s1p2', camera:'c', importance:2, dialogue:[], narration:[] },
+        { no:3, cut:'s2p1', camera:'c', importance:2, dialogue:[], narration:[] }, // closes page (residual 0)
+        { no:4, cut:'s2p2', camera:'c', importance:3, dialogue:[], narration:[] }, // new page accum=3
+        { no:5, cut:'s2p3', camera:'c', importance:3, dialogue:[], narration:[] }, // accum=6 closes
+      ],
+    }
+    const result = await estimatePageBreaksSegmented(script, {
+      forceSegmentation: true,
+      segmentationConfig: { maxPanelsPerSegment: 2, minPanelsForSegmentation: 2, contextOverlapPanels: 0 },
+    })
+    const pages = result.pageBreaks.panels.map(p=>p.pageNumber)
+    // First three panels same page, next two same next page
+    expect(pages).toEqual([1,1,1,2,2])
+  })
+
+  it('saturated boundary resets residual so next segment starts fresh', async () => {
+    // Segment1: 3 + 3 = 6 (saturated) -> residual=0
+    // Segment2 should start fresh and not inherit 6
+    const script: NewMangaScript = {
+      style_tone: '', style_art: '', style_sfx: '', characters: [], locations: [], props: [], continuity_checks: [],
+      panels: [
+        { no:1, cut:'a', camera:'c', importance:3, dialogue:[], narration:[] },
+        { no:2, cut:'b', camera:'c', importance:3, dialogue:[], narration:[] }, // saturates
+        { no:3, cut:'c', camera:'c', importance:2, dialogue:[], narration:[] }, // new page starts sum=2
+        { no:4, cut:'d', camera:'c', importance:4, dialogue:[], narration:[] }, // sum=6 closes
+        { no:5, cut:'e', camera:'c', importance:1, dialogue:[], narration:[] }, // page3 sum=1
+      ],
+    }
+    const result = await estimatePageBreaksSegmented(script, {
+      forceSegmentation: true,
+      segmentationConfig: { maxPanelsPerSegment: 2, minPanelsForSegmentation: 2, contextOverlapPanels: 0 },
+    })
+    const pages = result.pageBreaks.panels.map(p=>p.pageNumber)
+    expect(pages).toEqual([1,1,2,2,3])
+    // Invariant check: non-final pages (1,2) importance >=6
+    const original = script.panels
+    const byPage: Record<number, number[]> = {}
+    result.pageBreaks.panels.forEach(p => { (byPage[p.pageNumber] ||= []).push(p.panelIndex) })
+    const maxPage = Math.max(...Object.keys(byPage).map(Number))
+    for (const [pgStr, idxs] of Object.entries(byPage)) {
+      const pg = Number(pgStr)
+      if (pg === maxPage) continue
+      const sum = idxs.reduce((s,i)=> s + (original[i-1].importance||1),0)
+      expect(sum).toBeGreaterThanOrEqual(6)
+    }
+  })
 })
