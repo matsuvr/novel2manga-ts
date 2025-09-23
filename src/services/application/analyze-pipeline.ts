@@ -7,6 +7,7 @@ import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/por
 import { getLayoutBundlingConfig, getLayoutLimits } from '@/config/layout.config'
 // Cleaned legacy steps: ScriptMergeStep, TextAnalysisStepV2 removed
 import type { NewMangaScript } from '@/types/script'
+import { EpisodeProcessingPipeline } from './episode-processing-pipeline'
 import { LayoutPipeline } from './layout-pipeline'
 // Import pipeline steps
 import {
@@ -53,6 +54,8 @@ export class AnalyzePipeline extends BasePipelineStep {
   private readonly episodeBreakStep = new EpisodeBreakEstimationStep()
   private readonly renderingStep = new RenderingStep()
   private readonly completionStep = new CompletionStep()
+  private readonly episodeProcessingPipelineFactory = (logger: LoggerPort) =>
+    new EpisodeProcessingPipeline(logger)
 
   constructor(
     private readonly ports: StoragePorts = getStoragePorts(),
@@ -406,7 +409,42 @@ export class AnalyzePipeline extends BasePipelineStep {
           error: e instanceof Error ? e.message : String(e),
         })
       }
-      logger.info('エピソード構成: 完了', { jobId, progress: '100%' })
+      // ここで EpisodeProcessingPipeline を実行 (本文抽出 & 保存)
+      await this.updateJobStep(jobId, 'episode', { logger }, 3, 5)
+      logger.info('エピソード構成: 本文抽出開始 (EpisodeProcessingPipeline)', {
+        jobId,
+        progress: '60%',
+      })
+      try {
+        const processingPipeline = this.episodeProcessingPipelineFactory(logger)
+        const processingRes = await processingPipeline.run(
+          {
+            jobId,
+            novelId: context.novelId,
+            script: combinedScript,
+            episodeBreaks: episodeRes.data.episodeBreaks,
+          },
+          { logger, ports: this.ports },
+        )
+        if (!processingRes.success) {
+          const msg = `Episode text extraction failed at episode ${processingRes.error.episodeNumber}: ${processingRes.error.message}`
+          logger.error(msg, { jobId })
+          await this.updateJobStatus(jobId, 'failed', { logger }, msg)
+          throw new Error(msg)
+        }
+        logger.info('EpisodeProcessingPipeline: 全エピソード本文抽出完了', {
+          jobId,
+          processedEpisodes: processingRes.data.processedEpisodes.length,
+        })
+      } catch (processingErr) {
+        const msg = processingErr instanceof Error ? processingErr.message : String(processingErr)
+        logger.error('EpisodeProcessingPipeline failed', { jobId, error: msg })
+        throw processingErr
+      }
+
+      // Episode ステップ完了 (5 分割進捗: detection 50% -> persistence 60% -> text extraction 100%)
+      await this.updateJobStep(jobId, 'episode', { logger }, 5, 5)
+      logger.info('エピソード構成: 完了 (本文抽出含む)', { jobId, progress: '100%' })
       await this.markStepCompleted(jobId, 'episode', { logger })
 
       await this.updateJobStep(jobId, 'layout', { logger }, totalChunks, totalChunks)
