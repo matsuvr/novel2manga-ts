@@ -2,6 +2,7 @@
 
 export type LLMProvider =
   | 'openai'
+  | 'openai_nano'
   | 'gemini'
   | 'groq'
   | 'grok'
@@ -122,6 +123,12 @@ export const providers: Record<LLMProvider, ProviderConfig> = {
     maxTokens: 128000,
     timeout: 60_000,
   },
+  openai_nano: {
+    apiKey: process.env.OPENAI_API_KEY,
+    model: 'gpt-5-nano',
+    maxTokens: 8192,
+    timeout: 20_000,
+  },
   groq: {
     apiKey: process.env.GROQ_API_KEY,
     model: 'openai/gpt-oss-120b',
@@ -175,6 +182,8 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
     switch (provider) {
       case 'openai':
         return process.env.OPENAI_API_KEY
+      case 'openai_nano':
+        return process.env.OPENAI_API_KEY
       case 'groq':
         return process.env.GROQ_API_KEY
       case 'grok':
@@ -199,6 +208,8 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
     switch (provider) {
       case 'openai':
         return process.env.OPENAI_MODEL
+      case 'openai_nano':
+        return process.env.OPENAI_NANO_MODEL
       case 'groq':
         return process.env.GROQ_MODEL
       case 'grok':

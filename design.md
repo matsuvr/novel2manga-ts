@@ -66,6 +66,65 @@
 - Segmented estimator now carries over importance sums between segments, maintaining correct panel grouping and template selection across page boundaries.
 - Importance-based calculator exposes remaining importance even for empty scripts and clamps segment page offsets to avoid negative numbering.
 
+### (2025-09) Importance-Based Pagination リファクタ概要
+
+目的: 「ページの重要度合計が 6 に達するまで同一ページに積む」ルールを厳密化し、セグメント分割時のキャリー不整合による早期改ページ (例: 合計 3 や 4 での改ページ) を根絶する。
+
+#### 新しい用語
+- Saturated Page (飽和ページ): そのページ内の累積 importance >= 6 で閉じられたページ
+- Open Page (未飽和ページ): 累積 importance < 6 のままスクリプト末尾 / セグメント末尾に到達して終了したページ
+- Residual Importance (残余): 未飽和ページの累積 importance 値 ( < 6 )。飽和ページでは常に 0
+
+#### 旧仕様の問題点
+- 飽和判定に modulo (sum % 6 === 0) を使用し、オーバーシュート (例: 7,8,9,10) の余りを次セグメントの初期値へ流用 → 6 を跨いだ直後の余剰 1〜4 が次セグメント開始時にキャリー扱いとなり、早期改ページを誘発。
+- 飽和ページで importanceSum=6 の値そのものを carry 相当で保持 → 次セグメント先頭が即座に改ページ分離されてしまうケースを誘発。
+
+#### 新仕様 (核心ルール)
+1. ページは「累積 >= 6 になった瞬間に閉じる」。オーバーシュート分は破棄し residual へは載せない。
+2. 飽和ページの residual は常に 0。Open Page の residual は <6 の実値。
+3. セグメント境界で:
+   - lastPageOpen = true なら residual を次セグメントへ initialImportance として渡す。
+   - lastPageOpen = false (飽和) なら常に 0 で再開。
+4. `lastPageOpen` と `lastPageTotalImportance` を公式インタフェース化。`carryIntoNewPage` は「飽和 (= !lastPageOpen)」を意味する派生フラグ。
+
+#### 実装ポイント
+- `calculateImportanceBasedPageBreaks`:
+  - 飽和判定: `effectiveLastPageImportance >= LIMIT` の単純比較。
+  - residual 算出: 飽和なら 0 / 未飽和なら累積。
+  - 返す統計: `lastPageOpen`, `lastPageTotalImportance`, `carryIntoNewPage` (飽和なら true)。
+- `segmented-page-break-estimator`:
+  - `importanceCarry = lastPageOpen ? lastPageTotalImportance : 0`
+  - `pageOffset += lastPageOpen ? (maxPage - 1) : maxPage`
+  - 既存 invariant (非最終ページ sum >=6) 維持。
+- `PageBreakStep`:
+  - パイプライン防御: 非最終ページ importance sum <6 を検出でエラー。
+
+#### Invariant 一覧
+| Invariant | 説明 | 違反時対処 |
+|-----------|------|-----------|
+| Non-final page importance >=6 | 全ての最終ページ以外の累積 importance は 6 以上 | 例外 throw (セグメントマージ & パイプライン両方) |
+| Residual <6 | `lastPageOpen=true` のとき residual は 1..5 | ロジック上自然に保証 / テストで検証 |
+| Residual=0 when saturated | 飽和ページは residual=0 | 算出直後アサーション (暗黙) |
+
+#### 代表ケース
+| 入力 importance 列 | ページ分割 | コメント |
+|--------------------|-----------|----------|
+| 4,1,2,2,1,2,5 | [4,1,2] / [2,1,2,5] | 7 と 10 で飽和 / 余り捨てる |
+| 5,5 | [5,5] | 10>=6 → 1ページのみ / residual=0 |
+| 2,2 (segment1) + 2,3,3 (segment2) | [2,2,2] / [3,3] | segment1 residual=4 + next panel(2)=6 で閉じる |
+
+#### テスト拡充
+- オーバーシュート (5,5) → residual=0
+- Open residual (2,2,1) → residual=5, lastPageOpen=true
+- セグメント跨ぎ residual 継続 / 飽和リセット 2 パターン追加
+
+#### 今後の拡張余地 (任意)
+- オーバーシュート統計 (discardedImportance 合計) の収集
+- 動的 LIMIT (ジャンル・媒体別最適化) を config 経由で差し替え可能にする
+- Importance 再配分アルゴリズム (極端な高値集中をならす) の検討
+
+これにより「部分ページが 6 未満で確定する」パターンは最終ページを除き構造的に発生不能となった。
+
 
 ## Speaker Resolution
 

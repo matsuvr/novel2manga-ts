@@ -54,6 +54,8 @@ export async function setupServiceIntegration(): Promise<ServiceIntegrationConte
         getStatusesByJob: vi.fn(async () => []),
         ensureStatuses: vi.fn(async () => {}),
         markProcessing: vi.fn(async () => {}),
+        // Added for updated ChunkScriptStep which now attempts to use optimistic locking
+        acquireChunkProcessing: vi.fn(async () => true),
         markCompleted: vi.fn(async () => {}),
         markFailed: vi.fn(async () => {}),
       }),

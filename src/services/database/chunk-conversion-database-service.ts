@@ -99,6 +99,59 @@ export class ChunkConversionDatabaseService extends BaseDatabaseService {
     throw new Error('Async adapters are not supported. Use the sync BetterSQLite3 adapter.')
   }
 
+  /**
+   * Attempt to claim a chunk for processing only if it is still in 'pending' state.
+   * Returns true if this call transitioned the chunk to processing, false if it was
+   * already processing/completed/failed (i.e., another worker/pipeline got it first).
+   */
+  async acquireChunkProcessing(jobId: string, chunkIndex: number): Promise<boolean> {
+    const now = new Date().toISOString()
+    if (!this.isSync()) throw new Error('Async adapters are not supported. Use the sync BetterSQLite3 adapter.')
+    const drizzleDb = this.db as DrizzleDatabase
+    let changed = false
+    drizzleDb.transaction((tx) => {
+      // Read current row (if any)
+      const existing = tx
+        .select()
+        .from(chunkConversionStatus)
+        .where(and(eq(chunkConversionStatus.jobId, jobId), eq(chunkConversionStatus.chunkIndex, chunkIndex)))
+        .limit(1)
+        .all()
+      if (existing.length === 0) {
+        // Insert new row as processing (same semantics as old markProcessing first call)
+        tx
+          .insert(chunkConversionStatus)
+          .values({
+            jobId,
+            chunkIndex,
+            status: 'processing',
+            startedAt: now,
+            updatedAt: now,
+          })
+          .run()
+        changed = true
+        return
+      }
+      const row = existing[0] as ChunkConversionStatusRecord
+      if (row.status !== 'pending') {
+        changed = false
+        return
+      }
+      tx
+        .update(chunkConversionStatus)
+        .set({
+          status: 'processing',
+          errorMessage: null,
+          startedAt: now,
+          updatedAt: now,
+        })
+        .where(and(eq(chunkConversionStatus.jobId, jobId), eq(chunkConversionStatus.chunkIndex, chunkIndex)))
+        .run()
+      changed = true
+    })
+    return changed
+  }
+
   async markCompleted(jobId: string, chunkIndex: number, resultPath: string | null): Promise<void> {
     const now = new Date().toISOString()
 

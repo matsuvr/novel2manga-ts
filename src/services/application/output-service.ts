@@ -131,6 +131,8 @@ export class OutputService {
                 startCharIndex: 0,
                 endChunk: 0,
                 endCharIndex: 0,
+                startPanelIndex: null,
+                endPanelIndex: null,
                 confidence: 1,
                 episodeTextPath: null,
                 createdAt: new Date().toISOString(),

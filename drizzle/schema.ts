@@ -69,6 +69,9 @@ export const episodes = sqliteTable(
     startCharIndex: integer('start_char_index').notNull(),
     endChunk: integer('end_chunk').notNull(),
     endCharIndex: integer('end_char_index').notNull(),
+  // New canonical panel boundary fields (panel index based). Initially nullable for migration; will be NOT NULL after backfill.
+  startPanelIndex: integer('start_panel_index'),
+  endPanelIndex: integer('end_panel_index'),
   confidence: real().notNull(),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
     episodeTextPath: text('episode_text_path'),
