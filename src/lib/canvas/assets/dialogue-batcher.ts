@@ -21,7 +21,9 @@ export async function ensureDialogueAssets(requests: DialogueBatchRequestItem[])
   const missing = requests.filter(r => !getDialogueAsset(r.key))
   if (missing.length === 0) return
   const logger = getLogger().withContext({ service: 'dialogue-batcher' })
-  const limit = dialogueAssetsConfig.batch.limit
+  const baseLimit = dialogueAssetsConfig.batch.limit
+  const adaptiveCfg = dialogueAssetsConfig.batch.adaptive
+  let dynamicLimit: number = adaptiveCfg?.enabled ? adaptiveCfg.initial : baseLimit
   // defaults: 先頭 missing から共有値を抽出（無ければ appConfig の centralized defaults）
   const defaults = missing.length > 0 ? {
     fontSize: missing[0].fontSize,
@@ -37,26 +39,49 @@ export async function ensureDialogueAssets(requests: DialogueBatchRequestItem[])
 
   let offset = 0
   const allResults: Array<{ pngBuffer: Buffer; meta: { width?: number; height?: number } }> = []
-  while (offset < missing.length) {
-    const slice = missing.slice(offset, offset + limit)
+  // 再帰的バッチ実行（失敗時二分割フォールバック）
+  const execBatchRecursive = async (slice: DialogueBatchRequestItem[]): Promise<Array<{ pngBuffer: Buffer; meta: { width?: number; height?: number } }>> => {
+    if (slice.length === 0) return []
     try {
-      // Preserve per-dialogue layout params (maxCharsPerLine, font) so API can size correctly
+      const t0 = performance.now()
       const apiRes = await renderVerticalTextBatch({
         defaults,
-        // API 仕様上 items は VerticalTextRenderRequest 相当: key/style は送らない
-        items: slice.map(s => ({
-          text: s.text,
-          maxCharsPerLine: s.maxCharsPerLine,
-          font: s.font,
-        })),
+        items: slice.map(s => ({ text: s.text, maxCharsPerLine: s.maxCharsPerLine, font: s.font })),
       })
-      if (Array.isArray(apiRes)) allResults.push(...apiRes)
-      else throw new Error('vertical-text batch returned non-array')
-    } catch (e) {
-      logger.error('vertical_text_batch_failed', { error: e instanceof Error ? e.message : String(e) })
-      throw e
+      const dt = performance.now() - t0
+      if (adaptiveCfg?.enabled) {
+        if (dt > adaptiveCfg.slowThresholdMs && dynamicLimit > adaptiveCfg.min) {
+          dynamicLimit = Math.max(adaptiveCfg.min, Math.floor(dynamicLimit * adaptiveCfg.adjustFactor)) as number
+          logger.info('vertical_text_batch_adapt_down', { prev: slice.length, next: dynamicLimit, ms: dt })
+        } else if (dt < adaptiveCfg.fastThresholdMs && dynamicLimit < adaptiveCfg.max) {
+          const grow = Math.max(1, Math.floor(dynamicLimit * 0.25))
+          dynamicLimit = Math.min(adaptiveCfg.max, dynamicLimit + grow) as number
+          logger.info('vertical_text_batch_adapt_up', { prev: slice.length, next: dynamicLimit, ms: dt })
+        }
+      }
+      if (!Array.isArray(apiRes)) throw new Error('vertical-text batch returned non-array')
+      return apiRes
+    } catch (err) {
+      // 単一要素ならプレースホルダ（後段 loadImage で置換不要 / meta 最低寸法）
+      if (slice.length === 1) {
+        logger.warn('vertical_text_single_failed_placeholder', { key: slice[0].key, error: err instanceof Error ? err.message : String(err) })
+        return [{ pngBuffer: Buffer.from('VT_PLACEHOLDER'), meta: { width: 10, height: 10 } }]
+      }
+      // 二分割して部分成功を試みる
+      const mid = Math.floor(slice.length / 2)
+      if (mid === 0) throw err
+      logger.warn('vertical_text_batch_split_retry', { size: slice.length, error: err instanceof Error ? err.message : String(err) })
+      const left = await execBatchRecursive(slice.slice(0, mid))
+      const right = await execBatchRecursive(slice.slice(mid))
+      return [...left, ...right]
     }
-    offset += limit
+  }
+  while (offset < missing.length) {
+    const effectiveLimit = Math.min(dynamicLimit, baseLimit)
+    const slice = missing.slice(offset, offset + effectiveLimit)
+    const apiRes = await execBatchRecursive(slice)
+    allResults.push(...apiRes)
+    offset += effectiveLimit
   }
   if (allResults.length !== missing.length) {
     throw new Error(`vertical-text batch size mismatch: requested ${missing.length}, got ${allResults.length}`)
