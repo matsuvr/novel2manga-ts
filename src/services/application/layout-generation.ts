@@ -3,6 +3,7 @@ import { buildLayoutFromPageBreaks } from '@/agents/script/panel-assignment'
 import type { Episode } from '@/db'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
+import { getPorts } from '@/ports/factory'
 import type { JobWithProgress } from '@/services/database'
 import { db as dbFactory } from '@/services/database'
 import type { MangaLayout } from '@/types/panel-layout'
@@ -43,7 +44,7 @@ export async function generateEpisodeLayout(
   jobId: string,
   episodeNumber: number,
   options: GenerateLayoutOptions = {},
-  ports: StoragePorts = getStoragePorts(),
+  _ports: StoragePorts = getStoragePorts(),
   logger: LoggerPort = getLogger().withContext({
     jobId,
     episodeNumber,
@@ -65,7 +66,7 @@ export async function generateEpisodeLayout(
     jobId,
     episodeNumber,
     options,
-    ports,
+    _ports,
     logger,
   )
   activeLayoutGenerations.set(lockKey, generationPromise)
@@ -162,7 +163,7 @@ async function generateEpisodeLayoutInternal(
   jobId: string,
   episodeNumber: number,
   options: GenerateLayoutOptions = {},
-  ports: StoragePorts = getStoragePorts(),
+  _storagePorts: StoragePorts = getStoragePorts(),
   logger: LoggerPort = getLogger().withContext({
     jobId,
     episodeNumber,
@@ -457,83 +458,45 @@ async function generateEpisodeLayoutInternal(
       })
     }
 
-    // 保存（JSON形式に統一）- with atomic error handling
+    // 保存 + ステータス永続化 (EpisodePort.saveLayout に集約)
     try {
-      const jsonContent = JSON.stringify(normalized.layout)
-
-      // Atomic write operations - must both succeed or both fail
-      await Promise.all([
-        ports.layout.putEpisodeLayout(episode.novelId, jobId, episodeNumber, jsonContent),
-        ports.layout.putEpisodeLayoutProgress(
-          episode.novelId,
-          jobId,
-          episodeNumber,
-          JSON.stringify({
-            pages: normalized.layout.pages,
-            lastPlannedPage: Math.max(...normalized.layout.pages.map((p) => p.page_number)),
-            updatedAt: new Date().toISOString(),
-            validation: { pageIssues: normalized.pageIssues },
+      const { episode: episodePort } = getPorts()
+      if (episodePort.saveLayout) {
+        const EffectLib = await import('effect')
+        await EffectLib.Effect.runPromise(
+          episodePort.saveLayout({
+            novelId: episode.novelId,
+            jobId,
+            episodeNumber,
+            layoutJson: normalized.layout,
+            fullPagesPath: JsonStorageKeys.fullPages({ novelId: episode.novelId, jobId }),
           }),
-        ),
-      ])
+        )
+      } else {
+        logger.warn('layout:episode_port_saveLayout_unimplemented', { episodeNumber })
+      }
     } catch (storageError) {
-      logger.error('layout:storage_atomic_write_failed', {
+      logger.error('layout:saveLayout_failed', {
         episodeNumber,
         error: (storageError as Error).message,
         stack: (storageError as Error).stack,
       })
-      // テスト期待に合わせ、デモモードでも失敗を明示する
-      throw new Error('Storage operation failed')
+      throw new Error('saveLayout failed')
     }
 
-    // ステータス更新
+    // ステータス更新 (ジョブ進行。レイアウトDB保存は saveLayout 内で完了済み)
     try {
       await jobRepo.markStepCompleted(jobId, 'layout')
       await jobRepo.updateStep(jobId, 'render')
+      if (!isDemo && job) {
+        dbFactory.jobs().updateProcessingPosition(jobId, { episode: episodeNumber, page: null })
+      }
     } catch (statusError) {
       logger.error('layout:job_status_update_failed', {
         episodeNumber,
         error: (statusError as Error).message,
       })
       throw new Error(`Job status update failed: ${(statusError as Error).message}`)
-    }
-
-    // デモモードまたはジョブ未発見時はDB更新をスキップ（明示ログ）。
-    if (!isDemo && job) {
-      try {
-        // Persist layout status using new domain service
-        const totalPagesEp = normalized.layout.pages.length
-        const totalPanelsEp = normalized.layout.pages.reduce(
-          (acc, p) => acc + (Array.isArray(p.panels) ? p.panels.length : 0),
-          0,
-        )
-        dbFactory.layout().upsertLayoutStatus({
-          jobId,
-          episodeNumber,
-          totalPages: totalPagesEp,
-          totalPanels: totalPanelsEp,
-          layoutPath: StorageKeys.episodeLayout({
-            novelId: episode.novelId,
-            jobId,
-            episodeNumber,
-          }),
-        })
-        // Update job total pages conservatively
-        dbFactory.jobs().updateJobTotalPages(jobId, totalPagesEp)
-        // 現在処理中のエピソードを記録（ページは未確定のためnull）
-        dbFactory.jobs().updateProcessingPosition(jobId, { episode: episodeNumber, page: null })
-      } catch (dbError) {
-        logger.error('layout:db_totals_persist_failed', {
-          error: (dbError as Error).message,
-          episodeNumber,
-        })
-        throw new Error(`Database update failed: ${(dbError as Error).message}`)
-      }
-    } else {
-      logger.warn('layout:skip_db_persist', {
-        reason: isDemo ? 'demo-mode' : 'job-not-found',
-        episodeNumber,
-      })
     }
 
     const storageKey = StorageKeys.episodeLayout({

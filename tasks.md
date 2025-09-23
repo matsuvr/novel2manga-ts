@@ -106,7 +106,8 @@ Notes:
 - [x] (F3) Extract EpisodeDataAssembler (panel-range -> text) consolidating slice + reindex + builder (pure & Effect) with dedicated unit tests (maxPanels config 化済)
 - [ ] (F4) Convert Layout pipeline into composed Steps (ImportanceNormalize, PageBreakDerive, TemplateAssign, LayoutValidate)
 - [ ] (F5) Introduce ScriptPort / EpisodePort adapters (DrizzleEpisodeAdapter, FileSystemScriptAdapter)
-- [ ] (F6) Remove residual chunk-only references (inventory & prune) now redundant post panel index migration
+- [x] (F6) Remove residual chunk-only references (inventory & prune) now redundant post panel index migration
+	- Completed: analyze-pipeline now persists startPanelIndex/endPanelIndex directly; chunk/char fields zero-filled for backward DB compatibility. Docs updated (episode-generation-flow.md F6 row). Follow-up: schedule migration to drop legacy columns (see Phase 6 in Panel Index / Char Offset Migration).
 - [ ] (F7) Implement retry policy (exponential) only for TransientLLMError / ExternalIOError
 - [ ] (F8) Add validation schemas (episode / layout) (panel schema DONE) and centralize in validation utilities
 - [ ] (F9) Update design.md & episode-generation-flow.md (completed refactor phases F1-F8) when each milestone lands
