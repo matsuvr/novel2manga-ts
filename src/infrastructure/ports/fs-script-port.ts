@@ -27,7 +27,8 @@ export class FileSystemScriptPort implements ScriptPort {
               ls.panels = ls.panels.filter((p: unknown) => {
                 if (!p || typeof p !== 'object') return false
                 const lp = p as LoosePanel
-                return Number.isInteger(lp.no) && typeof lp.no === 'number' && lp.no >= 0
+                // パネル番号は 1 始まり (NewMangaScriptSchema の MangaPanelSchema で min(1))
+                return Number.isInteger(lp.no) && typeof lp.no === 'number' && lp.no >= 1
               })
             } else {
               ls.panels = []

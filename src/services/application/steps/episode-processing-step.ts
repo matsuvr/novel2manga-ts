@@ -141,8 +141,8 @@ export class EpisodeProcessingStep implements PipelineStep {
       },
       dbOperation: async () => {
         // Use EpisodePort (Effect を Promise へ実行) for update
-        const eff = ports.episode.updateEpisodeTextPath(jobId, episodeNumber, key)
-        await (await import('effect')).Effect.runPromise(eff)
+  const eff = ports.episode.updateEpisodeTextPath(jobId, episodeNumber, key)
+  await Effect.runPromise(eff)
       },
       tracking: {
         filePath: key,
