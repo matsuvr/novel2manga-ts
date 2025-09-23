@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NewRenderingOrchestrator } from '@/services/application/rendering/new-rendering-orchestrator'
 import type { MangaLayout } from '@/types/panel-layout'
+import { appConfig } from '../config/app.config'
 
 const mockPutPageRender = vi.fn(async () => {})
 const mockPutPageThumbnail = vi.fn(async () => {})
@@ -41,7 +42,7 @@ describe('NewRenderingOrchestrator', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
-  it('renders all pages and reports counts + metrics + thumbnails', async () => {
+  it('renders all pages and reports counts + metrics (thumbnails optional)', async () => {
     const layout = makeLayout(3)
     const orchestrator = new NewRenderingOrchestrator()
     const res = await orchestrator.renderMangaLayout(layout, { novelId: 'n1', jobId: 'j1', episode: 1 })
@@ -49,9 +50,18 @@ describe('NewRenderingOrchestrator', () => {
     expect(res.renderedPages).toBe(3)
     expect(res.errors.length).toBe(0)
     expect(mockPutPageRender).toHaveBeenCalledTimes(3)
-    expect(mockPutPageThumbnail).toHaveBeenCalledTimes(3)
+    // サムネイル生成はフラグ rendering.generateThumbnails に依存し、デフォルトはOFF
+    // OFF の場合は一度も呼ばれず metrics.thumbnails も 0 になる
+    // ON の場合（将来設定変更/別環境）でも 3 を期待して整合性を保つ
+  const generateThumbnails = appConfig.rendering.generateThumbnails
+    if (generateThumbnails) {
+      expect(mockPutPageThumbnail).toHaveBeenCalledTimes(3)
+      expect(res.metrics?.thumbnails).toBe(3)
+    } else {
+      expect(mockPutPageThumbnail).toHaveBeenCalledTimes(0)
+      expect(res.metrics?.thumbnails).toBe(0)
+    }
     expect(res.metrics).toBeDefined()
-    expect(res.metrics?.thumbnails).toBe(3)
     expect(res.metrics?.dialogues).toBe(0)
     expect(res.metrics?.sfx).toBe(0)
     expect(res.metrics?.fallbackPages).toBeGreaterThanOrEqual(0)

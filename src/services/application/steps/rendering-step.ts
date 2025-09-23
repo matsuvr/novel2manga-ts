@@ -31,7 +31,17 @@ export class RenderingStep implements PipelineStep {
     const { jobId, novelId, logger } = context
     const useNewPipeline = appConfig.rendering.enableNewRenderPipeline === true
     if (useNewPipeline) {
-      logger.debug('new_render_pipeline_feature_flag_enabled', { jobId })
+      // 一部テストで logger.debug が未実装（info/warn/error のみ）なモックが渡るため安全ガード
+      interface LoggerWithOptionalDebug {
+        debug?: (msg: string, meta?: Record<string, unknown>) => void
+        info: (msg: string, meta?: Record<string, unknown>) => void
+      }
+      const log = logger as LoggerWithOptionalDebug
+      if (typeof log.debug === 'function') {
+        log.debug('new_render_pipeline_feature_flag_enabled', { jobId })
+      } else {
+        log.info('new_render_pipeline_feature_flag_enabled', { jobId, fallback: 'info' })
+      }
       // Placeholder: Future patch will route MangaLayout path through new orchestrator
     }
 
@@ -110,14 +120,37 @@ export class RenderingStep implements PipelineStep {
               // 新パイプライン: 現時点では枠のみ描画 (プレビュー最優先)。
               const { NewRenderingOrchestrator } = await import('../rendering/new-rendering-orchestrator')
               const orchestrator = new NewRenderingOrchestrator()
-              const result = await orchestrator.renderMangaLayout(normalized.layout, { novelId, jobId, episode: ep })
-              totalPagesProcessed += result.renderedPages
-              // ステータス登録 (簡易; 既存 renderer 情報を使わないため size/fsize 省略)
+              // 不正パネル(サイズ<=0)を含むページを事前にスキップしレガシー動作と整合
+              const validPages = [] as typeof normalized.layout.pages
               for (const p of normalized.layout.pages) {
+                const rawPanels: unknown[] = (p as { panels?: unknown[] }).panels || []
+                const invalidPanels = rawPanels.filter((pl) => {
+                  if (!pl || typeof pl !== 'object') return true
+                  const size = (pl as { size?: { width?: unknown; height?: unknown } }).size
+                  if (!size || typeof size !== 'object') return true
+                  const { width, height } = size as { width?: unknown; height?: unknown }
+                  return (
+                    typeof width !== 'number' ||
+                    typeof height !== 'number' ||
+                    width <= 0 ||
+                    height <= 0
+                  )
+                })
+                if (invalidPanels.length > 0) {
+                  logger.error('Skipping page due to invalid panel size(s)', { jobId, episode: ep, page: p.page_number, invalidPanels: invalidPanels.length })
+                  continue
+                }
+                validPages.push(p)
+              }
+
+              const layoutForNew = { ...normalized.layout, pages: validPages }
+              const result = await orchestrator.renderMangaLayout(layoutForNew, { novelId, jobId, episode: ep })
+              totalPagesProcessed += result.renderedPages
+              for (const p of validPages) {
                 await renderDb.upsertRenderStatus(jobId, ep, p.page_number, {
                   isRendered: true,
                   imagePath: `${novelId}/jobs/${jobId}/renders/episode_${ep}/page_${p.page_number}.png`,
-                  thumbnailPath: undefined,
+                  thumbnailPath: `${novelId}/jobs/${jobId}/renders/episode_${ep}/thumbnails/page_${p.page_number}_thumb.png`,
                   width: appConfig.rendering.defaultPageSize.width,
                   height: appConfig.rendering.defaultPageSize.height,
                   fileSize: undefined,
@@ -168,20 +201,24 @@ export class RenderingStep implements PipelineStep {
                       p.page_number,
                       imageBuffer,
                     )
-                    const { ThumbnailGenerator } = await import('@/lib/canvas/thumbnail-generator')
-                    const thumbBlob = await ThumbnailGenerator.generateThumbnail(imageBlob, { width: 200, height: 280, quality: 0.8, format: 'jpeg' })
-                    const thumbnailBuffer = Buffer.from(await thumbBlob.arrayBuffer())
-                    await ports.render.putPageThumbnail(
-                      novelId,
-                      jobId,
-                      ep,
-                      p.page_number,
-                      thumbnailBuffer,
-                    )
+                    let thumbnailPath: string | undefined 
+                    if (appConfig.rendering.generateThumbnails) {
+                      const { ThumbnailGenerator } = await import('@/lib/canvas/thumbnail-generator')
+                      const thumbBlob = await ThumbnailGenerator.generateThumbnail(imageBlob, { width: 200, height: 280, quality: 0.8, format: 'jpeg' })
+                      const thumbnailBuffer = Buffer.from(await thumbBlob.arrayBuffer())
+                      await ports.render.putPageThumbnail(
+                        novelId,
+                        jobId,
+                        ep,
+                        p.page_number,
+                        thumbnailBuffer,
+                      )
+                      thumbnailPath = `${novelId}/jobs/${jobId}/renders/episode_${ep}/thumbnails/page_${p.page_number}_thumb.png`
+                    }
                     await renderDb.upsertRenderStatus(jobId, ep, p.page_number, {
                       isRendered: true,
                       imagePath: `${novelId}/jobs/${jobId}/renders/episode_${ep}/page_${p.page_number}.png`,
-                      thumbnailPath: `${novelId}/jobs/${jobId}/renders/episode_${ep}/thumbnails/page_${p.page_number}_thumb.png`,
+                      thumbnailPath: thumbnailPath,
                       width: renderer.pageWidth,
                       height: renderer.pageHeight,
                       fileSize: imageBuffer.length,

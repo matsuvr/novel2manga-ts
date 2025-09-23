@@ -15,7 +15,8 @@ const GOLDEN_FILE = path.join(GOLDEN_DIR, 'page1.png')
 
 function ensureDir(p: string) { if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true }) }
 
-function canvasToPngBuffer(canvas: any): Buffer {
+interface MinimalCanvas { toBuffer: (mime?: string) => Buffer }
+function canvasToPngBuffer(canvas: MinimalCanvas): Buffer {
   try {
     return canvas.toBuffer('image/png')
   } catch {

@@ -2,8 +2,11 @@ import os from 'node:os'
 import { appConfig } from '@/config/app.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { getStoragePorts } from '@/infrastructure/storage/ports'
+import { globalMeasureTextCache } from '@/lib/canvas/metrics/measure-text-cache'
 import { renderPageToCanvas } from '@/lib/canvas/renderer/page-renderer'
+// (Optional future) pure renderer import preserved in separate file; current orchestrator uses renderPageToCanvas facade.
 import type { MangaLayout } from '@/types/panel-layout'
+import { collectDialogueTexts, createDialogueSegmentsPipeline } from './assets/dialogue-segments-pipeline'
 
 export interface NewRenderOrchestratorOptions {
   novelId: string
@@ -22,6 +25,9 @@ export interface NewRenderResult {
     sfx: number
     fallbackPages: number
     thumbnails: number
+    pagesReused: number
+    textMeasureCacheHits: number
+    textMeasureCacheMisses: number
   }
 }
 
@@ -31,9 +37,30 @@ export interface NewRenderResult {
  * - 残りページは単純な制限付き並列 (Promise プール)
  * - まだ dialogueAssets や SFX 抽出は legacy MangaPageRenderer 内ロジック非移行のため "枠のみ" レンダリング
  */
+export interface OrchestratorDeps {
+  limit?: (concurrency: number) => <T>(fn: () => Promise<T>) => Promise<T>
+  createCanvasFn?: (w: number, h: number) => unknown
+}
+
 export class NewRenderingOrchestrator {
   private readonly logger = getLogger().withContext({ service: 'new-render-orchestrator' })
   private readonly cfg = appConfig.rendering.newPipeline
+  private readonly limitFactory: OrchestratorDeps['limit']
+  private readonly createCanvasFn: (w: number, h: number) => unknown
+
+  constructor(deps: OrchestratorDeps = {}) {
+    this.limitFactory = deps.limit
+    this.createCanvasFn = deps.createCanvasFn ?? ((w, h) => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { createCanvas } = require('@napi-rs/canvas') as { createCanvas: (w: number, h: number) => unknown }
+        return createCanvas(w, h)
+      } catch (e) {
+        this.logger.warn('createCanvas_dynamic_failed', { error: e instanceof Error ? e.message : String(e) })
+        return { width: w, height: h }
+      }
+    })
+  }
 
   async renderMangaLayout(layout: MangaLayout, opts: NewRenderOrchestratorOptions): Promise<NewRenderResult> {
     const tStart = performance.now()
@@ -42,7 +69,10 @@ export class NewRenderingOrchestrator {
     let dialoguesCount = 0
     let sfxCount = 0
     let fallbackPages = 0
-    let thumbnails = 0
+  let thumbnails = 0
+  let reusedHits = 0
+  const textMeasureCacheHitsStart = globalMeasureTextCache.stats().hits
+  const textMeasureCacheMissesStart = globalMeasureTextCache.stats().misses
 
     const maxCores = Math.max(1, os.cpus().length - 1)
     const maxConcurrency = Math.max(1, Math.min(this.cfg.maxConcurrency, maxCores))
@@ -51,99 +81,152 @@ export class NewRenderingOrchestrator {
 
     let renderedPages = 0
     const enqueue = <T,>(tasks: Array<() => Promise<T>>, concurrency: number): Promise<void> => {
+      if (this.limitFactory) {
+        const limiter = this.limitFactory(concurrency)
+        let chain: Promise<unknown> = Promise.resolve()
+        for (const task of tasks) {
+          chain = chain.then(() => limiter(task))
+        }
+        return chain.then(() => undefined)
+      }
+      // fallback inline pool (small and battle-tested earlier)
       return new Promise((resolve) => {
         let inFlight = 0
         let index = 0
         const next = () => {
           if (index >= tasks.length && inFlight === 0) return resolve()
           while (inFlight < concurrency && index < tasks.length) {
-            const task = tasks[index]
-            index++
-            if (!task) break
+            const task = tasks[index++]
             inFlight++
-            task().catch(() => { /* individual error already logged */ }).finally(() => {
-              inFlight--
-              next()
-            })
+            task().catch((err) => {
+              this.logger.debug('task_error_swallowed_limit', { error: err instanceof Error ? err.message : String(err) })
+            }).finally(() => { inFlight--; next() })
           }
         }
         next()
       })
     }
 
-    const makeTask = (pageNumber: number) => async () => {
-      try {
-        const canvas = renderPageToCanvas({ layout, pageNumber, width: appConfig.rendering.defaultPageSize.width, height: appConfig.rendering.defaultPageSize.height })
-        // PNG バッファへ変換 (@napi-rs/canvas の NodeCanvas 仕様)
-        let pngBuffer: Buffer
+
+    // --- Asset Pipeline: dialogue segmentation pre-warm ---
+  const dialogueTexts = collectDialogueTexts(layout as unknown as { pages: MangaLayout['pages'] })
+    const segmentsPipeline = createDialogueSegmentsPipeline(20)
+    segmentsPipeline.prepare(dialogueTexts)
+    this.logger.info('segments_pipeline_prepared', segmentsPipeline.stats())
+
+    // --- Canvas Pool (simple reuse to avoid repeated native allocations) ---
+    // 型: @napi-rs/canvas の createCanvas 戻り値（ランタイム import のため正確型を参照できない）
+    // 最低限 width/height/toBuffer/getContext を持つと想定
+    interface ReusableCanvasLike {
+      width: number
+      height: number
+      getContext?: (t: '2d') => CanvasRenderingContext2D | null
+      toBuffer?: (mime?: string) => Buffer
+    }
+    interface PooledCanvas { canvas: ReusableCanvasLike; busy: boolean }
+    const canvasPool: PooledCanvas[] = []
+    const acquireCanvas = (): ReusableCanvasLike => {
+      const free = canvasPool.find(c => !c.busy)
+      if (free) { free.busy = true; reusedHits++; return free.canvas }
+      // 新規生成（サイズ: defaultPageSize）
+      const createdCanvas = this.createCanvasFn(appConfig.rendering.defaultPageSize.width, appConfig.rendering.defaultPageSize.height) as ReusableCanvasLike
+      const created: PooledCanvas = { canvas: createdCanvas, busy: true }
+      canvasPool.push(created)
+      return created.canvas
+    }
+    const releaseCanvas = (c: ReusableCanvasLike) => {
+      const found = canvasPool.find(p => p.canvas === c)
+      if (found) found.busy = false
+    }
+
+    // Wrap original task maker to inject pipeline + retry (1 retry for transient errors)
+    const makeTaskWithAssets = (pageNumber: number) => async () => {
+      let attempts = 0
+      const maxAttempts = 2 // first try + 1 retry
+      while (attempts < maxAttempts) {
+        attempts++
         try {
-          pngBuffer = (canvas as unknown as { toBuffer: (mime?: string) => Buffer }).toBuffer('image/png')
-        } catch (nativeErr) {
-          const nmsg = nativeErr instanceof Error ? nativeErr.message : String(nativeErr)
-          // Fallback: minimal placeholder buffer so pipeline can progress under test env without native binding fully working
-          this.logger.warn('toBuffer_fallback_placeholder', { page: pageNumber, error: nmsg })
-          pngBuffer = Buffer.from(`PNG_PLACEHOLDER_PAGE_${pageNumber}`)
-          fallbackPages++
-        }
-        await ports.render.putPageRender(opts.novelId, opts.jobId, opts.episode, pageNumber, pngBuffer)
-        // Derive dialogue & sfx counts from layout (cheap lookup once per rendered page)
-        const page = layout.pages.find(p => p.page_number === pageNumber)
-        if (page) {
-          for (const panel of page.panels) {
-            dialoguesCount += panel.dialogues?.length || 0
-            sfxCount += panel.sfx?.length || 0
+          const pooled = acquireCanvas()
+          // getContext が未定義の場合は再利用前にダミーを付与（型整合用 / 実際の createCanvas では提供される想定）
+          if (!pooled.getContext) {
+            ;(pooled as ReusableCanvasLike & { getContext: (t: '2d') => CanvasRenderingContext2D | null }).getContext = () => null
           }
-        }
-        // Thumbnail generation: simple scale down using drawImage onto temp canvas
-        try {
-          const thumbWidth = 256
-          interface SizedCanvas { width: number; height: number; toBuffer?: (mime?: string) => Buffer }
-          const sized = canvas as unknown as SizedCanvas
-          if (typeof sized.width === 'number' && typeof sized.height === 'number' && sized.width > 0) {
-            const ratio = thumbWidth / sized.width
-            const thumbHeight = Math.round(sized.height * ratio)
-            const ThumbFactory = (canvas.constructor as unknown as { createCanvas?: (w: number, h: number) => SizedCanvas }).createCanvas
-            const thumbCanvas: SizedCanvas & { getContext?: (type: string) => CanvasRenderingContext2D | null } = ThumbFactory ? ThumbFactory(thumbWidth, thumbHeight) : createFallbackThumbCanvas(thumbWidth, thumbHeight)
-            const tctx = thumbCanvas.getContext?.('2d')
-            if (tctx?.drawImage) {
-              tctx.drawImage(canvas as unknown as HTMLCanvasElement, 0, 0, thumbWidth, thumbHeight)
-              let thumbPng: Buffer
-              try {
-                thumbPng = thumbCanvas.toBuffer ? thumbCanvas.toBuffer('image/png') : Buffer.from(`PNG_THUMB_PLACEHOLDER_${pageNumber}`)
-              } catch {
-                thumbPng = Buffer.from(`PNG_THUMB_PLACEHOLDER_${pageNumber}`)
-              }
-              await ports.render.putPageThumbnail(opts.novelId, opts.jobId, opts.episode, pageNumber, thumbPng)
-              thumbnails++
+          const canvas = renderPageToCanvas({ layout, pageNumber, width: appConfig.rendering.defaultPageSize.width, height: appConfig.rendering.defaultPageSize.height, targetCanvas: pooled as ReusableCanvasLike & { getContext: (t: '2d') => CanvasRenderingContext2D | null } }, undefined, { segmentsPipeline })
+          // The rest identical to makeTask body (could refactor, kept inline to minimize churn)
+          let pngBuffer: Buffer
+          try {
+            pngBuffer = (canvas as unknown as { toBuffer: (mime?: string) => Buffer }).toBuffer('image/png')
+          } catch (nativeErr) {
+            const nmsg = nativeErr instanceof Error ? nativeErr.message : String(nativeErr)
+            this.logger.warn('toBuffer_fallback_placeholder', { page: pageNumber, error: nmsg })
+            pngBuffer = Buffer.from(`PNG_PLACEHOLDER_PAGE_${pageNumber}`)
+            fallbackPages++
+          }
+          await ports.render.putPageRender(opts.novelId, opts.jobId, opts.episode, pageNumber, pngBuffer)
+          const page = layout.pages.find(p => p.page_number === pageNumber)
+          if (page) {
+            for (const panel of page.panels) {
+              dialoguesCount += panel.dialogues?.length || 0
+              sfxCount += panel.sfx?.length || 0
             }
           }
-        } catch (thumbErr) {
-          this.logger.warn('thumbnail_generation_failed', { page: pageNumber, error: thumbErr instanceof Error ? thumbErr.message : String(thumbErr) })
+          if (appConfig.rendering.generateThumbnails) try {
+            const thumbWidth = 256
+            interface SizedCanvas { width: number; height: number; toBuffer?: (mime?: string) => Buffer }
+            const sized = canvas as unknown as SizedCanvas
+            if (typeof sized.width === 'number' && typeof sized.height === 'number' && sized.width > 0) {
+              const ratio = thumbWidth / sized.width
+              const thumbHeight = Math.round(sized.height * ratio)
+              const ThumbFactory = (canvas.constructor as unknown as { createCanvas?: (w: number, h: number) => SizedCanvas }).createCanvas
+              const thumbCanvas: SizedCanvas & { getContext?: (type: string) => CanvasRenderingContext2D | null } = ThumbFactory ? ThumbFactory(thumbWidth, thumbHeight) : createFallbackThumbCanvas(thumbWidth, thumbHeight)
+              const tctx = thumbCanvas.getContext?.('2d')
+              if (tctx?.drawImage) {
+                tctx.drawImage(canvas as unknown as HTMLCanvasElement, 0, 0, thumbWidth, thumbHeight)
+                let thumbPng: Buffer
+                try {
+                  thumbPng = thumbCanvas.toBuffer ? thumbCanvas.toBuffer('image/png') : Buffer.from(`PNG_THUMB_PLACEHOLDER_${pageNumber}`)
+                } catch {
+                  thumbPng = Buffer.from(`PNG_THUMB_PLACEHOLDER_${pageNumber}`)
+                }
+                await ports.render.putPageThumbnail(opts.novelId, opts.jobId, opts.episode, pageNumber, thumbPng)
+                thumbnails++
+              }
+            }
+          } catch (thumbErr) {
+            this.logger.warn('thumbnail_generation_failed', { page: pageNumber, error: thumbErr instanceof Error ? thumbErr.message : String(thumbErr) })
+          }
+          renderedPages++
+          this.logger.info('page_rendered_new_pipeline', { jobId: opts.jobId, episode: opts.episode, page: pageNumber, renderedPages, totalPages, attempts, reusedHits })
+          releaseCanvas(pooled)
+          return
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e)
+          if (attempts < maxAttempts) {
+            this.logger.warn('page_render_retry', { page: pageNumber, attempts, error: msg })
+            continue
+          }
+          errors.push({ page: pageNumber, message: msg })
+          this.logger.error('page_render_failed_new_pipeline', { jobId: opts.jobId, episode: opts.episode, page: pageNumber, error: msg, attempts })
+          return
         }
-        renderedPages++
-        this.logger.info('page_rendered_new_pipeline', { jobId: opts.jobId, episode: opts.episode, page: pageNumber, renderedPages, totalPages })
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
-        errors.push({ page: pageNumber, message: msg })
-        this.logger.error('page_render_failed_new_pipeline', { jobId: opts.jobId, episode: opts.episode, page: pageNumber, error: msg })
       }
     }
 
     const priorityPages = layout.pages.slice(0, priority).map(p => p.page_number)
     const restPages = layout.pages.slice(priorityPages.length).map(p => p.page_number)
 
-    // 先行ページは逐次（ユーザーへ即反映想定）
     for (const pn of priorityPages) {
-      await makeTask(pn)()
+      await makeTaskWithAssets(pn)()
     }
-
-    // 残りを制限付き並列
-    const tasks = restPages.map(pn => makeTask(pn))
+    const tasks = restPages.map(pn => makeTaskWithAssets(pn))
     await enqueue(tasks, maxConcurrency)
 
     const totalMs = performance.now() - tStart
     const avgMsPerPage = renderedPages > 0 ? totalMs / renderedPages : 0
-    return { renderedPages, totalPages, errors, metrics: { totalMs, avgMsPerPage, dialogues: dialoguesCount, sfx: sfxCount, fallbackPages, thumbnails } }
+    const cacheStats = globalMeasureTextCache.stats()
+    const deltaHits = cacheStats.hits - textMeasureCacheHitsStart
+    const deltaMisses = cacheStats.misses - textMeasureCacheMissesStart
+    return { renderedPages, totalPages, errors, metrics: { totalMs, avgMsPerPage, dialogues: dialoguesCount, sfx: sfxCount, fallbackPages, thumbnails, pagesReused: reusedHits, textMeasureCacheHits: deltaHits, textMeasureCacheMisses: deltaMisses } }
   }
 }
 
