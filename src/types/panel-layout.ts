@@ -28,7 +28,6 @@ type __AssertMangaLayoutConsistency = MangaLayout['pages'][number] extends Page 
 
 // エピソードデータ（レイアウト生成の入力）
 export interface EpisodeData {
-  chunkAnalyses: ChunkAnalysisResult[]
   author: string
   title: `Episode ${number}`
   episodeNumber: number
@@ -38,36 +37,25 @@ export interface EpisodeData {
   startCharIndex: number
   endChunk: number
   endCharIndex: number
-  chunks: ChunkData[] // このエピソードに含まれるチャンクとその解析結果
+  chunks: EpisodeChunk[] // 簡素化後: legacy解析構造廃止
 }
 
 // チャンクデータ（5要素解析結果を含む）
-export interface ChunkData {
+export interface EpisodeChunk {
   chunkIndex: number
-  text: string // チャンクの元テキスト
-  analysis: ChunkAnalysisResult // 5要素解析結果
-  isPartial?: boolean // エピソード境界によって部分的に含まれるチャンク
-  startOffset?: number // 部分チャンクの開始位置
-  endOffset?: number // 部分チャンクの終了位置
+  text: string
+  sfx?: string[]
+  isPartial?: boolean
+  startOffset?: number
+  endOffset?: number
+  // Optional lightweight analysis (added back for agents still consuming analysis)
+  analysis?: import('./chunk').ChunkAnalysisResult
 }
 
 // チャンクの5要素解析結果
-export interface ChunkAnalysisResult {
-  chunkIndex: number
-  characters: Character[]
-  scenes: Scene[]
-  dialogues: DialogueElement[]
-  highlights: Highlight[]
-  situations: Situation[]
-  summary: string
-  sfx?: string[] // SFX data from script conversion
-}
+// Legacy解析構造は削除。必要になれば ScriptPanel など別概念で再導入。
 
-export interface Character {
-  name: string
-  role: string
-  description: string
-}
+export interface Character { name: string; role: string; description: string }
 
 import type { Scene } from '@/domain/models/scene'
 // Re-export Scene for consumers needing layout + scene types from a single import path
@@ -79,29 +67,11 @@ export type { Scene }
 // ヘルパー経由にすることで除去時 (全移行完了後) に探索容易。
 // 未移行箇所が見つかった場合はタスク管理 (tasks.md) に "Remove legacy scene flags usage" を追記。
 
-export interface DialogueElement {
-  emotion: string
-  speaker: string
-  text: string
-  context: string
-  // 新フォーマット対応: レンダリングスタイル判定用の種別
-  // panel-layout.zod.ts の DialogueSchema と整合（optional）
-  type?: 'speech' | 'thought' | 'narration'
-}
+export interface DialogueElement { emotion: string; speaker: string; text: string; context: string; type?: 'speech' | 'thought' | 'narration' }
 
-export interface Highlight {
-  description: string
-  type: string
-  text: string
-  importance: number // 1-10
-  reason: string
-}
+export interface Highlight { description: string; type: string; text: string; importance: number; reason: string }
 
-export interface Situation {
-  event: string
-  description: string
-  significance: string
-}
+export interface Situation { event: string; description: string; significance: string }
 
 // レイアウト生成の設定
 export interface LayoutGenerationConfig {

@@ -1,4 +1,5 @@
 import type { AnalyzedChunk, IChunkRepository } from '@/domain/repositories/chunk-repository'
+import { createEmptyChunkAnalysis } from '@/types/chunk'
 import { getNovelIdForJob } from '@/utils/job'
 import { StorageFactory, StorageKeys } from '@/utils/storage'
 
@@ -14,9 +15,19 @@ export class StorageChunkRepository implements IChunkRepository {
       const existing = await analysisStorage.get(key)
       if (existing) {
         const data = JSON.parse(existing.text)
+        const analysis = data.analysis ?? data
+        // Normalize minimal shape to prevent undefined property access downstream
         results.push({
           chunkIndex: index,
-          analysis: data.analysis ?? data,
+          analysis: {
+            ...createEmptyChunkAnalysis(),
+            ...analysis,
+            characters: analysis.characters ?? [],
+            scenes: analysis.scenes ?? [],
+            dialogues: analysis.dialogues ?? [],
+            highlights: analysis.highlights ?? [],
+            situations: analysis.situations ?? [],
+          },
         })
       }
     }

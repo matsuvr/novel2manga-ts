@@ -2,15 +2,7 @@ import { appConfig } from '@/config/app.config'
 import { dialogueAssetsConfig } from '@/config/dialogue-assets.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { renderVerticalTextBatch } from '@/services/vertical-text-client'
-import type {
-  ChunkAnalysisResult,
-  Dialogue,
-  DialogueElement,
-  EpisodeData,
-  MangaLayout,
-  Page,
-  Panel,
-} from '@/types/panel-layout'
+import type { Dialogue, EpisodeChunk, EpisodeData, MangaLayout, Page, Panel } from '@/types/panel-layout'
 import { getFontForDialogue } from '@/types/vertical-text'
 import { CanvasRenderer, type DialogueAsset, type NodeCanvas } from './canvas-renderer'
 import {
@@ -19,7 +11,7 @@ import {
   collectDialogueRequests,
 } from './dialogue-asset-builder'
 import { PanelLayoutEngine } from './panel-layout-engine'
-import { SpeechBubblePlacer } from './speech-bubble-placer'
+// SpeechBubblePlacer / dialogue rendering disabled post-analysis removal
 
 export interface MangaPageRendererConfig {
   pageWidth: number
@@ -34,7 +26,6 @@ export class MangaPageRenderer {
   private config: MangaPageRendererConfig
   private canvasRenderer!: CanvasRenderer
   private layoutEngine: PanelLayoutEngine
-  private bubblePlacer: SpeechBubblePlacer
 
   // Async factory method for proper canvas initialization
   static async create(config?: Partial<MangaPageRendererConfig>): Promise<MangaPageRenderer> {
@@ -59,7 +50,6 @@ export class MangaPageRenderer {
       panelSpacing: this.config.panelSpacing,
     })
 
-    this.bubblePlacer = new SpeechBubblePlacer()
 
     if (!skipAsyncInit) {
       // For tests - use a synchronous mock canvas renderer
@@ -93,7 +83,7 @@ export class MangaPageRenderer {
    */
   async generateMangaLayout(episodeData: EpisodeData): Promise<MangaLayout> {
     // チャンク分析結果をページに分割
-    const pages = this.layoutEngine.divideIntoPages(episodeData.chunkAnalyses)
+  const pages = this.layoutEngine.divideIntoPages(episodeData.chunks)
 
     // マンガレイアウトの構築
     const mangaLayout: MangaLayout = {
@@ -125,26 +115,14 @@ export class MangaPageRenderer {
    * チャンク分析結果からパネルを生成
    */
   private async createPanelsFromChunks(
-    chunks: ChunkAnalysisResult[],
+    chunks: EpisodeChunk[],
     pageIndex: number,
   ): Promise<Panel[]> {
     // --- DEBUG LOG ---
     getLogger()
       .withContext({ service: 'manga-page-renderer' })
       .debug('creating_panels_for_page', { pageIndex, chunks: chunks.length })
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i]
-      getLogger()
-        .withContext({ service: 'manga-page-renderer' })
-        .debug('chunk_debug', {
-          pageIndex,
-            chunkIndex: chunk.chunkIndex,
-            dialoguesCount: (chunk.dialogues || []).length,
-            situationsCount: (chunk.situations || []).length,
-            highlightsCount: (chunk.highlights || []).length,
-            scenesCount: (chunk.scenes || []).length,
-        })
-    }
+    // legacy per-chunk debug removed (analysis layer gone)
     // --- END DEBUG LOG ---
 
     // パネルレイアウトを計算
@@ -162,15 +140,7 @@ export class MangaPageRenderer {
 
       // 対話の配置を計算
       // Chunk の dialogues は DialogueElement[] (emotion: string) なので描画用 Dialogue[] に正規化
-      const normalizedDialogues: Dialogue[] = (chunk.dialogues || []).map(
-        (d: DialogueElement): Dialogue => ({
-          speaker: d.speaker,
-          text: d.text,
-          emotion: d.emotion,
-          ...(d.type ? { type: d.type } : {}),
-        }),
-      )
-      const dialogues = this.bubblePlacer.placeDialogues(normalizedDialogues, layout)
+  const dialogues: Dialogue[] = []
 
       const panel: Panel = {
         id: panelId++,
@@ -178,9 +148,9 @@ export class MangaPageRenderer {
         size: layout.size,
         content,
         dialogues,
-        sfx: chunk.sfx, // Add SFX data from chunk analysis
+  sfx: chunk.sfx,
         sourceChunkIndex: chunk.chunkIndex,
-        importance: this.calculateImportance(chunk),
+  importance: 5,
       }
 
       panels.push(panel)
@@ -192,36 +162,8 @@ export class MangaPageRenderer {
   /**
    * チャンクからパネルのコンテンツ（状況説明）を構築
    */
-  private buildPanelContent(chunk: ChunkAnalysisResult): string {
-    const contents: string[] = []
-
-    // シーン情報
-    if (chunk.scenes && chunk.scenes.length > 0) {
-      const scene = chunk.scenes[0]
-      if (scene.location) {
-        contents.push(`場所: ${scene.location}`)
-      }
-      if (scene.time) {
-        contents.push(`時間: ${scene.time}`)
-      }
-    }
-
-    // 状況説明
-    if (chunk.situations && chunk.situations.length > 0) {
-      contents.push(chunk.situations[0].description)
-    }
-
-    // ハイライトシーン
-    if (chunk.highlights && chunk.highlights.length > 0) {
-      const highlight = chunk.highlights[0]
-      if (highlight.type === 'action_sequence') {
-        contents.push(`【アクション】${highlight.description}`)
-      } else if (highlight.type === 'emotional_peak') {
-        contents.push(`【感情】${highlight.description}`)
-      }
-    }
-
-    return contents.join('\n')
+  private buildPanelContent(_chunk: EpisodeChunk): string {
+    return ''
   }
 
   /**
@@ -243,22 +185,7 @@ export class MangaPageRenderer {
   /**
    * チャンクの重要度を計算
    */
-  private calculateImportance(chunk: ChunkAnalysisResult): number {
-    let importance = 5 // デフォルト中程度
-
-    // ハイライトがある場合は重要度を上げる
-    if (chunk.highlights && chunk.highlights.length > 0) {
-      const maxImportance = Math.max(...chunk.highlights.map((h) => h.importance || 5))
-      importance = Math.max(importance, maxImportance)
-    }
-
-    // 対話が多い場合も重要度を上げる
-    if (chunk.dialogues && chunk.dialogues.length > 5) {
-      importance = Math.max(importance, 7)
-    }
-
-    return Math.min(importance, 10)
-  }
+  // (legacy importance calculation removed)
 
   /**
    * マンガレイアウトをCanvasに描画

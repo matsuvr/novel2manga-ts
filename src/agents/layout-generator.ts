@@ -4,15 +4,7 @@ import { getLayoutGenerationConfig } from '@/config'
 import { Page } from '@/domain/models/page'
 import type { PanelInit } from '@/domain/models/panel'
 import type { PageBatchPlan } from '@/types/page-splitting'
-import type {
-  ChunkAnalysisResult,
-  ChunkData,
-  EpisodeData,
-  LayoutGenerationConfig,
-  LayoutTemplate,
-  MangaLayout,
-  Panel,
-} from '@/types/panel-layout'
+import type { EpisodeData, LayoutGenerationConfig, LayoutTemplate, MangaLayout, Panel } from '@/types/panel-layout'
 import { selectLayoutTemplateByCountRandom } from '@/utils/layout-templates'
 import type { PanelImportanceLevel } from '@/utils/panel-importance'
 import { mapImportanceToPanelSize, normalizeImportanceDistribution } from '@/utils/panel-importance'
@@ -242,7 +234,7 @@ export async function generateMangaLayoutForPlan(
 type PanelDialogueInit = NonNullable<PanelInit['dialogues']>[number]
 
 interface PanelSlotCandidate {
-  readonly chunk: ChunkData
+  readonly chunk: { chunkIndex: number; text: string; sfx?: string[] }
   readonly segmentStart?: number
   readonly segmentEnd?: number
 }
@@ -273,24 +265,7 @@ interface PreparedSlot {
 
 function pickChunkForIndex(episodeData: EpisodeData, i: number) {
   const arr = episodeData.chunks
-  if (arr.length === 0) {
-    return {
-      chunkIndex: 0,
-      text: '',
-      analysis: {
-        chunkIndex: 0,
-        characters: [],
-        scenes: [],
-        dialogues: [],
-        highlights: [],
-        situations: [],
-        summary: episodeData.episodeSummary || '',
-      } as ChunkAnalysisResult,
-      isPartial: false,
-      startOffset: 0,
-      endOffset: 0,
-    }
-  }
+  if (arr.length === 0) return { chunkIndex: 0, text: '' }
   return arr[i % arr.length]
 }
 
@@ -309,13 +284,7 @@ function assemblePagesFromCandidates(
 
   for (const candidate of candidates) {
     candidate.slots.forEach((slot, slotIndex) => {
-      const prepared = preparePanelFromAnalysis(
-        slot.chunk.analysis,
-        config,
-        slot.segmentStart,
-        slot.segmentEnd,
-        slot.chunk.text,
-      )
+      const prepared = preparePanelFromChunkText(slot.chunk.text, config, slot.segmentStart, slot.segmentEnd)
 
       const preparedSlot: PreparedSlot = {
         pageNumber: candidate.pageNumber,
@@ -380,112 +349,30 @@ function assemblePagesFromCandidates(
   return pages
 }
 
-function preparePanelFromAnalysis(
-  analysis: ChunkAnalysisResult,
-  config: LayoutGenerationConfig,
+function preparePanelFromChunkText(
+  chunkText: string,
+  _config: LayoutGenerationConfig,
   segmentStart?: number,
   segmentEnd?: number,
-  chunkText?: string,
 ): PreparedPanelData {
-  const parts: string[] = []
   const hasSegment =
     typeof segmentStart === 'number' &&
     segmentStart >= 0 &&
     typeof segmentEnd === 'number' &&
     segmentEnd >= segmentStart
-  const safeText = typeof chunkText === 'string' ? chunkText : undefined
-  const segmentText =
-    hasSegment && safeText && typeof segmentStart === 'number' && typeof segmentEnd === 'number'
-      ? safeText.slice(segmentStart, segmentEnd)
-      : undefined
-  const firstScene = analysis.scenes?.[0]
-  if (firstScene?.location) parts.push(`場所: ${firstScene.location}`)
-  if (firstScene?.time) parts.push(`時間: ${firstScene.time}`)
-  if (analysis.situations?.length) {
-    const sit =
-      hasSegment && segmentText
-        ? analysis.situations.find((s) =>
-            s.description ? segmentText.includes(s.description) : false,
-          )
-        : analysis.situations[0]
-    if (sit) parts.push(sit.description)
-  }
-  if (analysis.highlights?.length) {
-    const hi =
-      hasSegment && segmentText
-        ? analysis.highlights.find((h) => (h.text ? segmentText.includes(h.text) : false)) ||
-          analysis.highlights[0]
-        : analysis.highlights[0]
-    if (hi) {
-      const tag =
-        hi.type === 'action_sequence' ? 'アクション' : hi.type === 'emotional_peak' ? '感情' : '注目'
-      parts.push(`【${tag}】${hi.description}`)
-    }
-  }
-  if (parts.length === 0) {
-    if (hasSegment && segmentText && segmentText.trim().length > 0) {
-      parts.push(ellipsis(segmentText.trim(), 120))
-    } else if (analysis.summary) {
-      parts.push(analysis.summary)
-    }
-  }
-  const content = parts.join('\n')
-
-  const maxDialogs = Math.max(1, Math.round((config.dialogueDensity || 0.6) * 3))
-  let dialogs = analysis.dialogues ?? []
-  if (hasSegment && safeText) {
-    const filtered: typeof dialogs = []
-    for (const d of dialogs) {
-      const text = d.text?.trim()
-      if (!text) continue
-      const idx = safeText.indexOf(text)
-      if (idx >= 0 && idx >= (segmentStart as number) && idx < (segmentEnd as number)) {
-        filtered.push(d)
-      }
-    }
-    dialogs = filtered
-  }
-
-  const selectedDialogs = dialogs.slice(0, maxDialogs)
-
-  let dialogueCharCount = 0
-  let narrationCharCount = 0
-  const dialogues: PanelDialogueInit[] = selectedDialogs.map((d) => {
-    const resolvedText = d.text ?? ''
-    const normalizedLength = resolvedText.trim().length
-    if (normalizedLength > 0) {
-      if (d.type === 'narration') narrationCharCount += normalizedLength
-      else dialogueCharCount += normalizedLength
-    }
-    return {
-      speaker: d.speaker,
-      text: resolvedText,
-      ...(d.type ? { type: d.type } : {}),
-    }
-  })
-
-  const highlightImportance = analysis.highlights?.length
-    ? Math.max(...analysis.highlights.map((h) => h.importance || 5))
-    : 5
-  let rawImportance = Math.max(5, highlightImportance)
-  if ((analysis.dialogues?.length ?? 0) > 5) {
-    rawImportance = Math.max(rawImportance, 7)
-  }
-  rawImportance = Math.max(1, Math.min(rawImportance, 10))
-
-  const contentLength = content.replace(/\s+/g, '').length
-
+  const text = hasSegment ? chunkText.slice(segmentStart, segmentEnd) : chunkText
+  const snippet = text.slice(0, 120)
+  const content = snippet
+  const dialogues: PanelDialogueInit[] = []
+  const dialogueCharCount = 0
+  const narrationCharCount = content.length
+  const rawImportance = Math.min(10, Math.max(1, content.length / 50))
   return {
     content,
     dialogues,
     rawImportance,
     dialogueCharCount,
     narrationCharCount,
-    contentLength,
+    contentLength: content.length,
   }
-}
-
-function ellipsis(text: string, max: number): string {
-  if (text.length <= max) return text
-  return `${text.slice(0, Math.max(0, max - 1))}…`
 }

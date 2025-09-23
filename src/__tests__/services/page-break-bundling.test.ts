@@ -1,29 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  bundleEpisodesByActualPageCount,
-  PageBreakStep,
-} from '@/services/application/steps/page-break-step'
+import { bundleEpisodesByActualPageCount } from '@/services/application/layout-pipeline/helpers'
+import type { StepContext } from '@/services/application/steps/base-step'
 import type { EpisodeBreakPlan, PageBreakV2 } from '@/types/script'
 
-// Access private method via casting for testing
-interface PageBreakStepPrivate {
-  bundleEpisodesByActualPageCount: (
-    episodeBreaks: EpisodeBreakPlan,
-    pageBreakPlan: PageBreakV2,
-    bundling: { minPageCount: number; enabled: boolean },
-    context: any,
-  ) => EpisodeBreakPlan
-}
+describe('Page-based bundling helper (legacy compatibility scenario)', () => {
+  const logger = {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    withContext: () => logger,
+  }
+  const context: StepContext = { jobId: 'job-bundle-pages', logger, novelId: 'novel-x' }
 
-describe('PageBreakStep page-based bundling', () => {
-  let step: PageBreakStep
-  const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
-  const context = { jobId: 'job-bundle-pages', logger }
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    step = new PageBreakStep()
-  })
+  beforeEach(() => vi.clearAllMocks())
 
   it('merges short episodes using actual page counts and merges last into previous', () => {
     // Build a simple pageBreakPlan where each panel is its own page (1 panel = 1 page)

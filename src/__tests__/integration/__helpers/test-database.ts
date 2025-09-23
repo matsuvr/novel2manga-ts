@@ -37,6 +37,28 @@ export async function createTestDatabase(): Promise<TestDatabase> {
     }
   }
 
+  // Safety patch: ensure episodes table has panel index columns even when legacy
+  // migration set (without explicit ALTER) created the table without them.
+  try {
+    const rows = sqlite.prepare("PRAGMA table_info('episodes')").all() as Array<{ name?: unknown }>
+    const names = new Set(rows.map(r => typeof r.name === 'string' ? r.name : ''))
+    let applied = 0
+    if (!names.has('start_panel_index')) {
+      sqlite.exec('ALTER TABLE episodes ADD COLUMN start_panel_index INTEGER')
+      applied += 1
+    }
+    if (!names.has('end_panel_index')) {
+      sqlite.exec('ALTER TABLE episodes ADD COLUMN end_panel_index INTEGER')
+      applied += 1
+    }
+    if (applied > 0) {
+      // eslint-disable-next-line no-console
+      console.warn('[test-database] patched episodes panel index columns applied=', applied)
+    }
+  } catch {
+    // Ignore patch errors – tests relying on these columns will surface issues.
+  }
+
   // 簡易実装のサービス（本番 DatabaseService の必要部分のみを再現）
   const service = {
     async createNovel(
@@ -309,7 +331,7 @@ export class TestDataFactory {
       title: 'Test Novel',
       textLength: 1000,
       language: 'ja' as const,
-      userId: userId as const,
+      userId: userId,
       ...overrides,
     }
 

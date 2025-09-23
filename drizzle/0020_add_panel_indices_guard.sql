@@ -1,0 +1,18 @@
+-- 0020_add_panel_indices_guard.sql
+-- Purpose: Re-add episode panel index columns in case earlier duplicate-number migration (0008) was skipped.
+-- WARNING: If columns already exist this migration will fail. In that case:
+--   1. Remove (or rename) this file locally
+--   2. Re-run migrations
+--   3. Restore file (no-op) if needed for history consistency
+-- SQLite lacks IF NOT EXISTS for ADD COLUMN; accepting possible manual resolution.
+
+-- NO-OP (2025-09-24): This guard migration is superseded by 0021_rebuild_episodes_with_panel_indices.sql
+-- Rationale:
+--   * 0021 rebuilds the episodes table with start_panel_index / end_panel_index columns unconditionally.
+--   * This file previously attempted to ADD COLUMN and could fail if the columns already existed, causing
+--     confusing local migration errors.
+--   * Converting to a no-op preserves historical hash ordering without risking failures on fresh setups.
+--   * Safe because 0021 guarantees the columns post-migration; environments that already applied the
+--     original 0020 keep their schema; new environments skip redundant alteration.
+--
+-- Intentionally left without SQL statements.

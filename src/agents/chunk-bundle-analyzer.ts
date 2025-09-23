@@ -134,7 +134,7 @@ export async function analyzeChunkBundle(
       const analysis = chunk.analysis
 
       // キャラクター情報の集約
-      analysis.characters.forEach((char) => {
+  analysis.characters.forEach((char: { name: string; description?: string | null }) => {
         if (!charactersMap.has(char.name)) {
           charactersMap.set(char.name, { descriptions: [], appearances: 0 })
         }
@@ -147,22 +147,22 @@ export async function analyzeChunkBundle(
       })
 
       // シーン情報の集約
-      analysis.scenes.forEach((scene) => {
+  analysis.scenes.forEach((scene: { location: string; time?: string | null; description: string }) => {
         const sceneDesc = `${scene.location}${scene.time ? ` (${scene.time})` : ''}: ${scene.description}`
         allScenes.push(sceneDesc)
       })
 
       // 対話の集約
-      analysis.dialogues.forEach((dialogue) => {
+  analysis.dialogues.forEach((dialogue: { speakerId: string; text: string; emotion?: string | null }) => {
         allDialogues.push({
           speaker: dialogue.speakerId,
-          text: dialogue.text,
-          emotion: dialogue.emotion,
+            text: dialogue.text,
+            emotion: dialogue.emotion ?? undefined,
         })
       })
 
       // ハイライトの集約（テキストの一部を含める）
-      analysis.highlights.forEach((highlight) => {
+  analysis.highlights.forEach((highlight: { startIndex: number; endIndex: number; type: string; description: string; importance: number }) => {
         const highlightText = chunk.text.substring(
           highlight.startIndex,
           Math.min(highlight.endIndex, highlight.startIndex + 100),
@@ -176,7 +176,7 @@ export async function analyzeChunkBundle(
       })
 
       // 状況説明の集約
-      analysis.situations.forEach((situation) => {
+  analysis.situations.forEach((situation: { description: string }) => {
         allSituations.push(situation.description)
       })
     })

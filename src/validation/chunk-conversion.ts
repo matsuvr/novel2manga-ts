@@ -99,7 +99,10 @@ export const ChunkConversionMemorySchema = z
 
 export const ChunkConversionSchema = z
   .object({
-    version: z.literal('3'),
+    // version: 既存 '3' に加え EXPLAINER ブランチが LLM プロンプト文言から自発的に生成する
+    // 'explainer-v1' を許容。後段コードでは version を参照していないため互換性影響は無い。
+    // 将来的にバージョン別挙動を導入する場合は enum 管理へ拡張予定。
+    version: z.union([z.literal('3'), z.literal('explainer-v1')]),
     memory: ChunkConversionMemorySchema,
     situations: z.array(ChunkConversionSituationSchema),
     summary: z.string().min(1).max(160),
