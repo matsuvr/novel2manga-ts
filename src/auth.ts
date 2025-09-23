@@ -20,6 +20,15 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
   ),
   session: { strategy: 'jwt' },
   debug: process.env.NODE_ENV === 'development',
+  // --- Host Trust Configuration -------------------------------------------------
+  // Auth.js v5 では、リクエスト Host ヘッダが既知/許可リストに含まれない場合
+  // "UntrustedHost" エラーが throw され、今回のような
+  //   [auth][error] UntrustedHost: Host must be trusted.
+  // が頻発する。リバースプロキシ (例: nginx, CDN) 経由や複数ドメイン / Trailing slash
+  // 差異がある構成では host 判定が失敗しやすいため、明示的に trustHost を有効化。
+  // セキュリティ的には AUTH_URL(NEXTAUTH_URL) を厳密に 1 つ設定した上で true にする。
+  // 必要に応じて、将来的に granular な allowlist 実装に切り替える余地を残す。
+  trustHost: true,
   secret: String(process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET),
   providers: [
     GoogleProvider({
