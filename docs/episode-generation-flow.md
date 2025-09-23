@@ -681,10 +681,86 @@ const episodeDataAssembler = compose(panelRangeStep, buildTextStep)
 | F2 | Validation 抽出 | panel / episode / layout スキーマ化 |
 | F3 | Assembler 抽出 | EpisodeDataAssembler + 単体テスト |
 | F4 | Layout パイプ化 | 各 Step 分離 & compose |
-| F5 | Port 適用 | EpisodePort / ScriptPort 実装 + 注入 |
-| F6 | Chunk 依存縮退 | 残存 chunk ベースアクセス除去 |
-| F7 | リトライ導入 | Transient エラーにスケジュール適用 |
+| F5 | Port 適用 | EpisodePort / ScriptPort 実装 + 注入 (2025-09 完了: `src/ports/*`, DrizzleEpisodePort, FileSystemScriptPort, EpisodeProcessingStep / LayoutGeneration へ導入, ScriptPort 内で Panel Index 正規化責務移行, EpisodePort.saveLayout による layout/status 永続化集約) |
+| F6 | Chunk 依存縮退 | 残存 chunk ベースアクセス除去 | 完了: panel index 永続化へ移行 (chunk フィールド 0 埋め互換保持) |
+| F7 | リトライ導入 | Transient エラーにスケジュール適用 (Effect Schedule + EpisodeError.isRetryable に基づく標準 exponential backoff 実装。`retry.config.ts` / `utils/retry.ts` 追加。EpisodeProcessingStep に適用済) |
 | F8 | 統合テスト強化 | 正常 + 代表エラーシナリオ |
+
+#### F8: 統合テスト強化 詳細設計（WIP）
+
+目的: Episode / Layout / Persistence / Retry を跨ぐエンドツーエンド (integration) の信頼性確保。ユニットテストで既にカバーされる純アルゴリズム部分を除き、以下の「統合振る舞い + エラー復旧 + 副作用整合性」を検証する。
+
+##### カバレッジ対象境界
+| ドメイン境界 | 対象コンポーネント | 目的 |
+|---------------|------------------|------|
+| Episode Processing | `EpisodeProcessingStep` + `EpisodePort` + Storage | パネル範囲→テキスト保存 + DB パス更新の整合 |
+| Layout Pipeline | Segmentation→Importance→Alignment→Bundling→Persistence | kind 別エラー/フォールバック分岐の一貫性 |
+| Retry Wrapper | `withEpisodeRetry` | Transient エラー時の再試行回数/遅延遵守 |
+| Persistence Atomicity | Storage 書込 + DB upsert | 途中失敗時の片落ち防止 (再試行後成功状態確認) |
+| Logging / Observability | 構造化ログ (attempt, kind) | 後続集計可能な最低限フィールド存在 |
+
+##### 代表シナリオ (正常系)
+| ID | シナリオ | 期待結果 |
+|----|----------|----------|
+| S1 | 単一 Episode (複数パネル) 処理 → Layout 生成 → 永続化 | episode テキスト/ layout JSON / DB フィールド更新完了 |
+| S2 | 複数 Episode 連続処理 (連番) | 各 episode_* ファイル作成 & パス重複なし |
+| S3 | Bundling 無効設定 | 出力エピソード数 = 入力 EpisodeBreakPlan 通り |
+| S4 | Segmentation fallback (demo/test) | 単一セグメントで後続成功・ログ downgraded |
+
+##### 代表シナリオ (エラー/回復系)
+| ID | 失敗注入ポイント | エラー種別期待 | 回復挙動 | 追加検証 |
+|----|-----------------|----------------|-----------|-----------|
+| E1 | Storage 書込 1〜2 回失敗→3 回目成功 | ExternalIOError | リトライ後成功 / attempts=3 | 重複ファイル作成なし |
+| E2 | DB upsert 一時失敗 (transient) | DatabaseError(transient) | リトライ後成功 | episodeTextPath 一貫性 |
+| E3 | Alignment 不整合 (意図的 gap) | ALIGNMENT_FAILED | 即失敗 (retry なし) | 途中生成ファイルなし |
+| E4 | Layout 保存時 I/O 失敗 (永続的) | LAYOUT_PERSIST_FAILED | 規定回数後失敗 | episode テキストは残る (ロールバックなしポリシー明記) |
+| E5 | Segmentation 推定失敗 | SEGMENTATION_FAILED | fallback 単一セグメント採用 | ログ kind=SEGMENTATION_FAILED + downgraded フラグ |
+
+##### 実装戦略
+1. injection hooks: 既存 mock/port 層に fault injection オプション追加 (`TestStorageAdapter` / Drizzle モックラッパ)
+2. deterministic timing: retry の遅延をテスト時に `retryPolicyConfig` を上書き (baseDelay=1ms / maxDelay=2ms / jitter=false)
+3. helper builders: `createTestEpisodeScript(panels: number)` / `createEpisodeBreakPlan(ranges)` で冗長記述削減
+4. fixture isolation: 各シナリオ毎に一時ディレクトリ (in-memory / tmp prefix) を割当て副作用衝突防止
+5. log capture: ログファクトリをテスト用 collector に差し替え assertion (attempt count, kind)
+
+##### 成功基準 (Definition of Done)
+| 項目 | 基準 |
+|------|------|
+| シナリオ網羅 | 上記 S1..S4 / E1..E5 すべて実装 & 緑 |
+| 再現性 | 連続 5 回実行で flakiness 0 (retry を含む) |
+| 観測性 | 失敗系で attempt, error.kind, episodeNumber を最低 1 行構造化ログに含む |
+| ドキュメント | 本節 + `tests/integration/README.md` にテスト戦略記述 |
+| コンフィグ上書き | test 環境で retry policy override 実装 (ENV or direct injection) |
+
+##### タスク分解 (draft)
+| Seq | タスク | 期待成果 |
+|-----|--------|----------|
+| 1 | retryPolicyConfig テスト用オーバーライド仕組み | 低レイテンシで安定した retry 検証 |
+| 2 | Fault Injection Adapter (storage) | E1/E4 シナリオ再現 |
+| 3 | Fault Injection Adapter (DB) | E2 シナリオ再現 |
+| 4 | Alignment gap 生成ユーティリティ | E3 失敗誘発 |
+| 5 | Segmentation 失敗モック追加 | E5 失敗→fallback 検証 |
+| 6 | ログ collector 実装 & assertion utils | attempt / kind チェック簡素化 |
+| 7 | 正常系シナリオ Tests (S1..S4) | ベースライン確立 |
+| 8 | エラー系シナリオ Tests (E1..E5) | 回復/失敗挙動保証 |
+| 9 | Docs 整備 & tasks.md 反映 | 維持管理性向上 |
+
+##### リスク / 留意点
+- Retry ポリシーをテスト専用に短縮する際、本番値との乖離をコメントで明示（乖離がロジック判断に影響しないことを保証）。
+- Fault injection により内部実装詳細へ過度に耦合しない (Port インターフェース境界で注入)。
+- レース条件: 再試行中に部分的に生成された一時ファイルをテストが誤検出しないようパス命名に attempt suffix を付けない (idempotent 書込戦略)。
+- Layout / Episode テキスト両方が対象となる複合失敗シナリオはスコープ外 (将来 F8+ 拡張)。
+
+##### 将来拡張候補 (F8+)
+| 候補 | 目的 |
+|------|------|
+| Chaos テスト (ランダム fault rate) | 回復ロジックの長時間耐性検証 |
+| Metrics Export テスト | 集計メトリクス (retryAttemptsTotal 等) の露出保証 |
+| Parallel Episode Processing テスト | 競合時の DB 一貫性検証 |
+| Snapshot-less Trace Assertion | ログ/イベント系列のプロパティベース検証 |
+
+> NOTE: 本 F8 は「代表的 I/O 境界の信頼性」を目的とし、性能・負荷試験は別タスク (Performance Test Plan) で扱う。
+
 
 ### 8. 期待効果
 

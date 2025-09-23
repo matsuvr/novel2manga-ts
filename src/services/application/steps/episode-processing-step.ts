@@ -3,6 +3,7 @@ import { assembleEpisodeText } from '@/services/application/episode-text/assembl
 import type { EpisodeError } from '@/types/errors/episode-error'
 import { DatabaseError, ExternalIOError, ValidationError } from '@/types/errors/episode-error'
 import type { EpisodeBreakPlan, NewMangaScript } from '@/types/script'
+import { withEpisodeRetry } from '@/utils/retry'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
 export interface EpisodeTextResult {
@@ -44,7 +45,7 @@ export class EpisodeProcessingStep implements PipelineStep {
   ): Effect.Effect<EpisodeTextResult, EpisodeError> {
     const { logger, jobId } = context
     const self = this
-    return Effect.gen(function* () {
+    const core = Effect.gen(function* () {
       const episode = breaks.episodes.find((e) => e.episodeNumber === episodeNumber)
       if (!episode) {
         return yield* Effect.fail(
@@ -88,6 +89,12 @@ export class EpisodeProcessingStep implements PipelineStep {
       })
       return { episodeText }
     })
+
+    // Wrap with retry policy for transient storage / DB issues
+    return withEpisodeRetry(core, {
+      label: 'episode-processing',
+      logger: context.logger,
+    })
   }
 
 
@@ -119,6 +126,9 @@ export class EpisodeProcessingStep implements PipelineStep {
     )
 
     // エピソード本文の保存をストレージ+DB一体のトランザクションで実行（強整合性）
+    const { getPorts } = await import('@/ports/factory')
+    const ports = getPorts()
+
     await executeStorageWithDbOperation({
       storage,
       key,
@@ -130,8 +140,9 @@ export class EpisodeProcessingStep implements PipelineStep {
         episode: String(episodeNumber),
       },
       dbOperation: async () => {
-        const { db } = await import('@/services/database')
-        db.episodes().updateEpisodeTextPath(jobId, episodeNumber, key)
+        // Use EpisodePort (Effect を Promise へ実行) for update
+  const eff = ports.episode.updateEpisodeTextPath(jobId, episodeNumber, key)
+  await Effect.runPromise(eff)
       },
       tracking: {
         filePath: key,

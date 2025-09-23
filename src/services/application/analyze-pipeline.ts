@@ -343,34 +343,29 @@ export class AnalyzePipeline extends BasePipelineStep {
       const job = await db.jobs().getJob(jobId)
       if (!job) throw new Error(`Job not found for episode persistence: ${jobId}`)
 
-      const { buildPanelToChunkMapping, getChunkForPanel } = await import(
-        '@/services/application/panel-to-chunk-mapping'
-      )
-      const panelToChunkMapping = await buildPanelToChunkMapping(
-        context.novelId,
-        jobId,
-        totalChunks,
-        logger,
-      )
-
+      // F6: Chunk 依存縮退
+      // panel-to-chunk マッピングを撤去し、DB 永続化は panel index を正とする。
+      // 互換のため chunk フィールドは 0 埋めで保持 (後続マイグレーションで削除予定)。
       const { EpisodeWriteService } = await import('@/services/application/episode-write')
       const episodeWriter = new EpisodeWriteService()
-      const episodesForDb = episodeRes.data.episodeBreaks.episodes.map((ep) => {
-        const startChunk = getChunkForPanel(panelToChunkMapping, ep.startPanelIndex)
-        const endChunk = getChunkForPanel(panelToChunkMapping, ep.endPanelIndex)
-
-        return {
-          novelId: job.novelId,
-          jobId,
-          episodeNumber: ep.episodeNumber,
-          title: ep.title,
-          summary: undefined,
-          startChunk,
-          startCharIndex: 0,
-          endChunk,
-          endCharIndex: 0,
-          confidence: 1,
-        }
+      const episodesForDb = episodeRes.data.episodeBreaks.episodes.map((ep) => ({
+        novelId: job.novelId,
+        jobId,
+        episodeNumber: ep.episodeNumber,
+        title: ep.title,
+        summary: undefined,
+        startChunk: 0,
+        startCharIndex: 0,
+        endChunk: 0,
+        endCharIndex: 0,
+        startPanelIndex: ep.startPanelIndex,
+        endPanelIndex: ep.endPanelIndex,
+        confidence: 1,
+      }))
+      logger.info('episode:persistence_panel_index_mode', {
+        jobId,
+        episodes: episodesForDb.length,
+        note: 'chunk fields zero-filled; startPanelIndex/endPanelIndex persisted',
       })
       await this.updateJobStep(jobId, 'episode', { logger }, 3, 4)
       logger.info('エピソード構成: データベース保存を開始', {
