@@ -30,9 +30,8 @@ export function drawBasicBubble(ctx: Basic2DContext, input: BubbleShapeInput) {
   if (type === 'narration') {
     ctx.rect(x, y, width, height)
   } else {
-    const hasEllipse = typeof (ctx as unknown as { ellipse?: unknown }).ellipse === 'function'
-    if (hasEllipse) {
-      ;(ctx as unknown as CanvasRenderingContext2D & { ellipse: typeof CanvasRenderingContext2D.prototype.ellipse }).ellipse(
+    if (ctx.ellipse) {
+      ctx.ellipse(
         x + width / 2,
         y + height / 2,
         width / 2,

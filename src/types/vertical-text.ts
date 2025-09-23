@@ -4,7 +4,8 @@ import type { Dialogue } from './panel-layout'
 // Request payload to vertical text API (we'll map camelCase to snake_case when sending)
 export const VerticalTextRenderRequestSchema = z.object({
   text: z.string().min(1, 'text is required'),
-  font: z.enum(['gothic', 'mincho']).optional(), // optional = デフォルトのアンチックフォント
+  // 'antique' を明示的に許容: 無指定または 'antique' の場合 API デフォルト(アンチック体)
+  font: z.enum(['antique', 'gothic', 'mincho']).optional(), // optional or 'antique' = アンチック
   fontSize: z.number().int().positive().optional(),
   lineHeight: z.number().positive().optional(),
   letterSpacing: z.number().optional(),
@@ -64,6 +65,8 @@ export function getFontForDialogue(dialogue: Dialogue): 'gothic' | 'mincho' | un
       case 'thought':
         return 'gothic'
       default:
+        // NOTE: undefined を返す = API には font を送らずデフォルト(アンチック)を利用する。
+        // 'antique' を明示的に送ることと意味的に同義。payload最小化のため省略。
         return undefined
     }
   }
@@ -71,5 +74,6 @@ export function getFontForDialogue(dialogue: Dialogue): 'gothic' | 'mincho' | un
   // 後方互換: 話者名から推測
   if (dialogue.speaker === 'ナレーション') return 'mincho'
   if (dialogue.speaker?.includes('（心の声）')) return 'gothic'
+  // type が無く、特別な推測条件にも当てはまらない場合も undefined (＝ 'antique' 相当)
   return undefined
 }
