@@ -29,6 +29,11 @@ export class RenderingStep implements PipelineStep {
     context: StepContext,
   ): Promise<StepExecutionResult<RenderingResult>> {
     const { jobId, novelId, logger } = context
+    const useNewPipeline = appConfig.rendering.enableNewRenderPipeline === true
+    if (useNewPipeline) {
+      logger.debug('new_render_pipeline_feature_flag_enabled', { jobId })
+      // Placeholder: Future patch will route MangaLayout path through new orchestrator
+    }
 
     try {
       const shouldRender = !options.isDemo

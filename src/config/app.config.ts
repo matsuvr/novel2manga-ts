@@ -109,6 +109,8 @@ JSONのみ。expandedText は改行を保持。文字数は target ±20% 以内�
         speakerLabel: { enabled: true, fontSize: 1.4, padding: 8, backgroundColor: '#ffffff', borderColor: '#333333', textColor: '#333333', offsetX: 0.3, offsetY: 0.7, borderRadius: 6, maxCharsPerLine: 5 },
         contentText: { enabled: true, fontSize: { min: 20, max: 28, default: 24 }, padding: 8, lineHeight: 1.4, textColor: '#333333', placement: { strategy: 'auto', preferredAreas: ['left','top','bottom'], minAreaSize: 80 }, maxWidthRatio: 0.8, maxHeightRatio: 0.6 },
       },
+      // feature guarded: new orchestrated rendering pipeline (pure renderer + asset cache + batch vertical text)
+      enableNewRenderPipeline: false,
     },
     api: {
       rateLimit: { layoutGeneration: { requests: 30, window: 60000 }, imageGeneration: { requests: 50, window: 60000 }, pageRender: { requests: 100, window: 60000 } },
