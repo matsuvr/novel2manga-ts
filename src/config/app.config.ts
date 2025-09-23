@@ -110,7 +110,17 @@ JSONのみ。expandedText は改行を保持。文字数は target ±20% 以内�
         contentText: { enabled: true, fontSize: { min: 20, max: 28, default: 24 }, padding: 8, lineHeight: 1.4, textColor: '#333333', placement: { strategy: 'auto', preferredAreas: ['left','top','bottom'], minAreaSize: 80 }, maxWidthRatio: 0.8, maxHeightRatio: 0.6 },
       },
       // feature guarded: new orchestrated rendering pipeline (pure renderer + asset cache + batch vertical text)
-      enableNewRenderPipeline: false,
+  enableNewRenderPipeline: true,
+    // 省コスト目的: 本番環境では現状サムネイル未使用のためデフォルトOFF
+    generateThumbnails: false,
+      newPipeline: {
+        // 同時に描画する最大ページ数（CPUコア-1 を後で clamp する想定）
+        maxConcurrency: 4,
+        // 先行してユーザーにプレビューしたいページ数（優先キュー）
+        priorityPreviewPages: 2,
+        // 縦書きアセット生成の1バッチ上限（dialogue-assets.config との整合に注意）
+        dialogueBatchLimit: 32,
+      },
     },
     api: {
       rateLimit: { layoutGeneration: { requests: 30, window: 60000 }, imageGeneration: { requests: 50, window: 60000 }, pageRender: { requests: 100, window: 60000 } },

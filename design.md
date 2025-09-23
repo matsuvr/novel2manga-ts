@@ -250,3 +250,223 @@ Purpose:
 - Unit: `InputValidationStep` で短文/非物語分岐を検証済。
 - Integration: `consent-flow.test.ts` で EXPAND / EXPLAINER end-to-end (モック LLM) を検証。
 
+## (2025-09) Rendering Pipeline リファクタ (New Orchestrator)
+
+目的: 既存モノリシック Canvas レンダラの複雑化 (行分割・バブル配置・SFX・IO 書き込み・サムネ生成が一箇所に同居) により、性能/保守性/テスト容易性が低下していたため、段階的移行可能なレイヤード構造へ再設計。
+
+### レイヤ構成
+| Layer | 役割 | 主な入出力 | 副作用 |
+|-------|------|-----------|--------|
+| Orchestrator | ページ単位タスク生成/並列制御/優先度/リトライ/メトリクス集計 | MangaLayout, config → PNG/Thumb, metrics | Storage 書き込み, ログ |
+| Asset (Dialogue Segments Pipeline) | 句読点 + BudouX ベース日本語フレーズ分割キャッシュ | dialogue text[] → phrase[] cache | メモリ内キャッシュのみ |
+| Renderer Facade (`renderPageToCanvas`) | Canvas生成 + Pure renderer 呼び出し (暫定) | PageRenderInput → Canvas | ネイティブ createCanvas |
+| Pure Renderer (`renderPagePure`) | 描画アルゴリズム (枠/吹き出し/SFX) | ctx + layout subset → mutated ctx | なし (副作用は受け取った ctx のみ) |
+| IO Ports | 永続化 | Buffers → storage (page / thumbnail) | ファイル/オブジェクトストレージ |
+
+段階的移行のため、現時点では `renderPageToCanvas` が legacy 互換の簡易ファサードとして Canvas 生成と Pure Renderer 呼び出しを一括で提供。最終段階では Orchestrator → (CanvasFactory DI) → Pure Renderer 直接呼び出しへ縮退予定。
+
+### Orchestrator の主機能 (`NewRenderingOrchestrator`)
+1. 優先ページ先行処理: `priorityPreviewPages` で冒頭数ページを直列先行 → UX 改善 (最初のサムネ/プレビューを短時間で用意)。
+2. 制限付き並列: 残りページは `maxConcurrency` (CPUコア-1上限) のプールで実行。`limit` 関数を DI 可能 (p-limit 互換シグネチャ)。
+3. アセットプリウォーム: 全 dialogue のユニーク集合抽出 → Segmentation Pipeline `prepare()` で BudouX 実行を一括化 (後続ページの重複計測コスト削減)。
+4. リトライ戦略: ページ単位で一時失敗時 1 回再試行 (合計 2 attempt)。
+5. フォールバック耐性: `canvas.toBuffer()` 失敗時にプレースホルダ PNG (バイト列) を生成し処理継続 + `fallbackPages` メトリクス加算。
+6. サムネイル生成: 256px 幅縮小 (ネイティブ createCanvas 取得失敗時は簡易フェイク Canvas)。
+7. メトリクス収集: 合計/平均描画時間, dialogue/sfx カウント, フォールバック発生数, サムネ枚数 (今後: segmentation cache hit/miss も統合予定)。
+8. DI ポイント: `limitFactory`, `createCanvasFn` をコンストラクタで注入 → テストで純粋化やメモリ/CPU 制御が容易。
+9. Feature Flag: `appConfig.rendering.enableNewRenderPipeline` により旧実装と並行稼働 (安全な段階的スイッチ)。
+
+### Dialogue Segments Pipeline
+`createDialogueSegmentsPipeline(maxCharsPerSegment)` は BudouX + 文字数分割をフレーズ単位キャッシュし、描画時は `getSegments(text)` で O(1) 参照。最終行幅計算は ctx.measureText に依存するため事前計算で確定させず、フレーズ列のみ保持 (Width 適応型ラップ)。
+
+Stats:
+- misses: 初回分割回数
+- cached: ヒット数
+- size: キャッシュユニーク件数
+
+Orchestrator 起動時に `prepare(uniqueTexts)` で一括ウォーム。大規模エピソードで繰り返し台詞が多い場合に CPU 削減。
+
+### 日本語折返し戦略 (Wrap by Phrase)
+1. テキスト → BudouX フレーズ配列
+2. 各フレーズを順次連結し `measureText` 幅が (bubbleWidth - padding*2) を超えたら改行確定
+3. 単語境界を持たない連続かな/漢字列での不自然改行を回避し、視覚的自然性を向上
+4. `maxBubbleWidth = min(panel幅*0.9, config.maxBubbleWidthPx)` により過度な横長バブルを抑制
+
+### Pure Renderer
+`renderPagePure(ctx, { layout, pageNumber, width, height, segmentsPipeline })` は Canvas 生成を外部化し、描画副作用を ctx に限定。これにより:
+- Node 環境 / Headless Mock での単体テスト容易化
+- 将来的な WebGL / OffscreenCanvas 置換をオーケストレータ側 DI 差し替えのみで許容
+
+### エラーモデル
+| 障害 | 対応 | 続行性 |
+|------|------|--------|
+| `toBuffer` ネイティブ例外 | プレースホルダ Buffer 生成 + warn | YES |
+| サムネ生成失敗 | warn ログ (ページ自体は成功扱い) | YES |
+| レンダリング中例外 | ページ再試行 (1 回) | 条件付き |
+| 再試行後失敗 | errors[] へ蓄積 / 全体継続 | YES |
+
+### 移行ロードマップ
+Phase 1 (完了): 枠 + 吹き出し/ SFX の簡易描画, Segmentation キャッシュ, 優先度/並列/リトライ。
+Phase 2 (予定): 旧 renderer の高度バブル形状 / 影 / フォントアセット移行、メトリクス拡張 (cache stats)。
+Phase 3: Pure Renderer 直接利用 (Facade 削除) + ページ別差分レンダ (再レンダ最小化)。
+Phase 4: Visual Regression Golden へ新パイプライン差し替え + レイアウト差分ヒートマップ。
+
+### テスト指針
+- Unit: Segments Pipeline キャッシュ統計 / Pure Renderer モック ctx 呼び出し回数
+- Integration: Orchestrator 並列数制限 (人工的遅延挿入) + リトライ発火ケース
+- Visual Regression: Golden 画像比較 (pixelmatch) との乖離許容閾値を config 化
+
+### 今後の拡張候補
+- ページ内コンテンツ量に応じた自動フォント縮小 (overflow 防止)
+- SFX レイヤ別ブレンドモード (擬音の強調)
+- Bubble Shape Generator 差し替え API (漫画風しっぽ付きなど) を Pure Renderer に注入
+- Incremental Rendering: 失敗ページのみ再実行する差分タスク生成
+- Segmentation Pipeline: discardedImportance など他ステップ統計と統合し一括メトリクス出力
+
+関連ファイル:
+`src/services/application/rendering/new-rendering-orchestrator.ts`
+`src/services/application/rendering/assets/dialogue-segments-pipeline.ts`
+`src/lib/canvas/renderer/page-renderer.ts`
+`src/lib/canvas/renderer/page-renderer-pure.ts`
+
+### (2025-09) サムネイル生成フラグ `rendering.generateThumbnails`
+
+目的: 現行 UI / API でページサムネイル（縮小版画像）が未使用であるため、レンダリングコスト (Canvas 縮小 + PNG エンコード + ストレージ書き込み) を約 2x → 1x に削減し CPU/IO/ストレージ負荷を低減する。
+
+#### 設定
+`app.config.ts` 内 `rendering.generateThumbnails: boolean` (デフォルト: `false`)
+
+#### 挙動
+| フラグ | Orchestrator | Legacy RenderingStep | メトリクス | DB 保存 | Storage | 互換性 |
+|--------|--------------|----------------------|------------|---------|---------|----------|
+| true   | 256px幅サムネ生成し `putPageThumbnail` 呼び出し | 従来通り生成 | `metrics.thumbnails` に枚数加算 | `thumbnail_path` 列へパス保存 | `thumbnails/` 配下にファイル | 従来同等 |
+| false  | サムネ生成スキップ | サムネ生成スキップ | `metrics.thumbnails = 0` | `thumbnail_path` は `NULL/undefined` のまま | なし | 参照側は `undefined` を許容 |
+
+#### 実装ポイント
+- 新パイプライン: `NewRenderingOrchestrator.renderMangaLayout` 内のサムネイル生成ブロックを `if (appConfig.rendering.generateThumbnails)` で囲みスキップ時は呼び出しゼロ。
+- レガシー: `RenderingStep` も同旗でガード。`thumbnailPath` はローカル変数で条件代入し未生成時は `undefined`。
+- メトリクス: スキップ時 `thumbnails` カウンタを増やさないため 0 を自然に保持。
+- DB: 既存 `thumbnail_path` カラムは nullable のため移行作業不要。
+- API `/api/render/status/[jobId]`: `thumbnailPath` が `undefined` でも後方互換 (既に null 許容)。
+
+#### テスト更新
+- `new-rendering-orchestrator.basic.test.ts`: サムネイル呼び出しとメトリクスをフラグ依存で分岐。デフォルト OFF で 0 を検証。
+- 既存 integration テストは `thumbnailPath: null` 前提のものがあり、スキップ挙動と整合済み。
+
+#### 再有効化手順
+1. `app.config.ts` の `generateThumbnails` を `true` に変更。
+2. `npm run test:unit` / `test:integration` 実行し `thumbnails` メトリクス > 0 を確認。
+3. 必要なら UI / API クライアントで `thumbnailPath` 利用実装を追加。
+
+#### 将来展望 (任意)
+- 需要発生時: 動的要求 (クライアントから「最初の N ページだけサムネイル」) に対応する部分生成 API。
+- 画像最適化: WebP / AVIF 縮小生成 (alpha 透過要件に応じ選択) と差し替え。
+- キャッシュ: 一次生成後に layout 更新検知時のみ該当ページのサムネを再生成する差分更新モード。
+
+#### リスク評価
+- 現行 UI がサムネイルを参照しない前提のため機能低下なし。
+- 外部連携 (将来ギャラリービュー) が `thumbnail_path` 非 null を暗黙期待していた場合は影響。→ 現時点で該当なし (コード検索済み)。
+
+#### ロールバック
+設定値を `true` に戻すだけで再生成が新規レンダリング時に行われる (過去ページの再生成は手動再レンダが必要)。
+
+---
+
+### (2025-09) Canvas Reuse Pool (ページレンダリング最適化)
+
+目的: ページ毎に `createCanvas` を呼び出すとネイティブメモリアロケーション & 初期化コスト (フォントテーブル, バックバッファ確保) が積み上がり、ページ数が多いエピソードで GC / ネイティブ解放待ちがスループットを阻害する。Canvas を簡易プールし再利用することで、ページ切替時にピクセルバッファをクリアするだけで済ませ、CPU/ネイティブヒープ消費を削減する。
+
+#### 実装概要
+| 項目 | 内容 |
+|------|------|
+| プール位置 | `NewRenderingOrchestrator.renderMangaLayout` ローカル (関数スコープ) |
+| 構造 | `Array<{ canvas, busy }>` の軽量配列 |
+| 取得 | 未使用 (`busy=false`) を線形検索。あれば `reusedHits++`。なければ新規 `createCanvasFn()` |
+| 解放 | ページ処理終了後 `busy=false` に戻す |
+| 互換性 | サイズは現状固定 (`defaultPageSize`) のためミスマッチ判定不要 |
+| Renderer 側 | `renderPageToCanvas` に `targetCanvas` オプション追加。再利用時は `clearRect + fillBackground` で初期化 |
+
+#### 追加メトリクス
+`metrics.pagesReused`: 再利用ヒット数 (新規生成はカウントしない)。一時的な効果検証のため導入。必要に応じヒット率 = pagesReused / renderedPages を派生指標としてダッシュボード化。
+
+#### リセット戦略
+再利用 canvas は前フレームの transform / state が残存する可能性があるため:
+1. `ctx.setTransform(1,0,0,1,0,0)` (存在すれば)
+2. `clearRect(0,0,w,h)`
+3. 白背景塗り直し
+
+#### 効果 (想定)
+- 大規模 (>=50 ページ) レンダリングで `createCanvas` 呼び出しを 1/ページ → 1/同時並列数 に近似。並列数 4 の場合 50→4 回。
+- ネイティブ層でのヒープ断片化・再確保頻度低減。
+- GC プレッシャ軽減 (JS ラッパオブジェクト生成削減)。
+
+#### 制約 / 注意点
+- 現状 1 サイズのみ対応。将来ページ毎サイズ可変化する場合は (w,h) 毎にサブプールを分離または都度破棄。
+- `toBuffer()` 失敗フォールバック時にも Canvas 自体は再利用される: 失敗が内容依存 (腐敗) でない前提。連続失敗パターン検知時に隔離するロジックは未実装 (TODO)。
+- サムネイル生成 OFF デフォルトのため、縮小用一時 Canvas の再利用は未着手 (必要性低)。
+
+#### 拡張余地 (後続タスク案)
+1. `pagesReusedRate` をメトリクス化 (prometheus exporter 統合時)。
+2. `measureText` 結果のページ内キャッシュ (dialogue + font + size キー) 追加で描画ループ短縮。
+3. サムネイル再有効化時: 256px 専用サブプール導入で縮小バッファ再利用。
+4. 利用頻度低 Canvas のスパース回収 (レンダ完了時に pool クリア) のオンデマンド化 → 長期ワーカー常駐プロセスのメモリ安定性向上。
+
+#### 実装参照
+- `src/services/application/rendering/new-rendering-orchestrator.ts` (pool / metrics)
+- `src/lib/canvas/renderer/page-renderer.ts` (`targetCanvas` オプション)
+
+---
+
+### (2025-09) measureText LRU キャッシュ & 縦書きダイアログ Adaptive Batch
+
+#### measureText キャッシュ
+| 項目 | 内容 |
+|------|------|
+| 目的 | 頻出フレーズ幅計測の重複 `ctx.measureText` 呼び出し削減 |
+| 方式 | グローバル LRU (容量 2000, key=`font|text`) |
+| 実装 | `src/lib/canvas/metrics/measure-text-cache.ts` (`MeasureTextCache`) |
+| 利用箇所 | `page-renderer-pure.ts` / `page-renderer.ts` のバブル折返し幅算出 |
+| 無効化 | 現状フラグなし (オーバーヘッド極小) |
+| エビクション | tail (最も古い参照) を削除 |
+
+メトリクス: Orchestrator 実行ごとの差分 `textMeasureCacheHits` / `textMeasureCacheMisses` を集計 (実行前スナップ → 完了後差分)。命名はプロメトリクス導入時の Counter 化を想定。
+
+将来拡張: フォントごと別 LRU / サイズ可変 (日本語+英数字別) / SerDes によるウォームスタート。
+
+#### Dialogue Vertical Text Adaptive Batch
+| 項目 | 内容 |
+|------|------|
+| 目的 | バッチサイズ固定 50 による遅延 (遅い I/O / ネットワーク時) を緩和し、速い環境では Throughput 最大化 |
+| 設定 | `dialogue-assets.config.ts` -> `batch.adaptive` (enabled / initial / min / max / slowThresholdMs / fastThresholdMs / adjustFactor) |
+| アルゴリズム | 各バッチの elapsed=dt を計測し: dt>slowThreshold → limit *= adjustFactor / dt<fastThreshold → limit += limit*0.25 (丸め) |
+| 安全策 | min / max クランプ + 毎ループ slice 再計算 |
+| ログ | `vertical_text_batch_adapt_down|up` で prev/next/時間を info 出力 |
+
+閾値根拠 (初期値):
+- slowThreshold=450ms: 1 ページ中多数台詞取得時に 500ms 超が UX 境界 (体感遅延) となるため少し手前で調整。
+- fastThreshold=120ms: ネットワーク/レンダ一括処理が十分速いケースで余裕を活かしストールを防ぐ。
+
+将来課題: 連続 n 回 slow / fast によるヒステリシス導入, 成功率 (失敗バッチ) 反映, limit=1 付近での指数退避。
+
+---
+
+### (2025-09) Vertical Text Batch 部分成功リカバリ
+
+| 項目 | 内容 |
+|------|------|
+| 課題 | 1 バッチ失敗で全リクエストが失われレンダ全体が中断していた |
+| 方針 | 失敗バッチを二分割し再帰的に再試行、最終1件まで縮小しても失敗するテキストはプレースホルダ画像で代替 |
+| 実装 | `dialogue-batcher.ts` 内 `execBatchRecursive` 関数 |
+| プレースホルダ | 固定 10x10 / バッファ内容 `VT_PLACEHOLDER` (将来: 明示エラーパターン描画検討) |
+| ログ | `vertical_text_batch_split_retry` / `vertical_text_single_failed_placeholder` |
+| 再試行戦略 | 二分割 (binary split) のみ。指数バックオフは未実装 (API の速応性前提) |
+| 失敗伝播 | 分割後も全て失敗した理論上ケースは再帰でプレースホルダ化され例外非伝播 |
+
+将来拡張案:
+- 連続プレースホルダ率が閾値超過した場合の警告メトリクス化。
+- エラー種別 (一時的 / 恒久) に応じた再試行回数調整。
+- バッチ側 API が部分成功レスポンスを返せるようになった場合の最適化 (現行は失敗=全落ち扱い)。
+
+---
+
+
