@@ -1,57 +1,69 @@
-// Chunk analysis and processing types
-
-export interface ChunkAnalysisResult {
-  chunkIndex: number
-  characters: Array<{
-    name: string
-    role: 'protagonist' | 'antagonist' | 'supporting' | 'minor'
-    description?: string
-  }>
-  scenes: Array<{
-    time?: string
-    location: string
-    timeOfDay?: string
-    atmosphere?: string
-    description?: string
-  }>
-  dialogues: Array<{
-    text: string
-    speakerId: string
-    speaker: string
-    content: string
-    emotion?: string
-    importance: 'high' | 'medium' | 'low'
-  }>
-  highlights: Array<{
-    importance: number
-    description: string
-    endIndex: number
-    startIndex: number
-    type: 'action' | 'emotion' | 'plot' | 'description'
-    content: string
-    intensity: number
-    relevance: number
-  }>
-  situations: Array<{
-    type: 'conflict' | 'resolution' | 'transition' | 'development'
-    description: string
-    significance: number
-  }>
-  narrativeElements: {
-    tension: number
-    pacing: 'slow' | 'medium' | 'fast'
-    emotionalTone: string
-    plotRelevance: number
-  }
-}
+// (Slimmed) chunk types: legacy analysis structures were removed, but
+// some agents still rely on a lightweight analysis shape. We re-introduce
+// a minimal, forward-compatible structure (no heavy legacy fields) so that
+// analysis-dependent code can compile without resurrecting the full legacy model.
 
 export interface ChunkData {
   chunkIndex: number
   text: string
-  analysis?: ChunkAnalysisResult
+  sfx?: string[]
 }
 
 export interface ChunkSummary {
   chunkIndex: number
   summary: string
+}
+
+// Lightweight per-chunk analysis types (only properties actually consumed
+// by current agents). Add new facets here when needed; avoid bloating.
+export interface ChunkCharacter {
+  name: string
+  description?: string
+}
+
+export interface ChunkScene {
+  location: string
+  description: string
+  time?: string | null
+}
+
+export interface ChunkDialogue {
+  speakerId: string
+  text: string
+  emotion?: string | null
+}
+
+export interface ChunkHighlight {
+  startIndex: number
+  endIndex: number
+  type: string
+  description: string
+  importance: number
+}
+
+export interface ChunkSituation {
+  description: string
+}
+
+// Summary is optional (some flows may only fill arrays). Keep arrays present
+// to simplify consuming code (fallback to empty arrays instead of undefined).
+export interface ChunkAnalysisResult {
+  summary?: string
+  characters: ChunkCharacter[]
+  scenes: ChunkScene[]
+  dialogues: ChunkDialogue[]
+  highlights: ChunkHighlight[]
+  situations: ChunkSituation[]
+}
+
+// Utility constructor for empty analysis (avoid duplicating literals)
+export function createEmptyChunkAnalysis(): ChunkAnalysisResult {
+  return {
+    summary: '',
+    characters: [],
+    scenes: [],
+    dialogues: [],
+    highlights: [],
+    situations: [],
+  }
 }

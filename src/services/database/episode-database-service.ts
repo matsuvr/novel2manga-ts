@@ -20,6 +20,12 @@ export class EpisodeDatabaseService extends BaseDatabaseService {
   async createEpisodes(episodeList: Array<Omit<NewEpisode, 'id' | 'createdAt'>>): Promise<void> {
     if (episodeList.length === 0) return
 
+    // Support transitional presence of new panel index fields before they become mandatory.
+    type MaybePanelEpisode = Omit<NewEpisode, 'id' | 'createdAt'> & {
+      startPanelIndex?: number | null
+      endPanelIndex?: number | null
+    }
+
     const toInsert = episodeList.map((episode) => ({
       id: makeEpisodeId(episode.jobId, episode.episodeNumber),
       novelId: episode.novelId,
@@ -31,6 +37,8 @@ export class EpisodeDatabaseService extends BaseDatabaseService {
       startCharIndex: episode.startCharIndex,
       endChunk: episode.endChunk,
       endCharIndex: episode.endCharIndex,
+      startPanelIndex: (episode as MaybePanelEpisode).startPanelIndex ?? null,
+      endPanelIndex: (episode as MaybePanelEpisode).endPanelIndex ?? null,
       confidence: episode.confidence,
     }))
 
@@ -49,6 +57,8 @@ export class EpisodeDatabaseService extends BaseDatabaseService {
               startCharIndex: sql`excluded.start_char_index`,
               endChunk: sql`excluded.end_chunk`,
               endCharIndex: sql`excluded.end_char_index`,
+              startPanelIndex: sql`excluded.start_panel_index`,
+              endPanelIndex: sql`excluded.end_panel_index`,
               confidence: sql`excluded.confidence`,
             },
           })
@@ -83,6 +93,8 @@ export class EpisodeDatabaseService extends BaseDatabaseService {
               startCharIndex: sql`excluded.start_char_index`,
               endChunk: sql`excluded.end_chunk`,
               endCharIndex: sql`excluded.end_char_index`,
+              startPanelIndex: sql`excluded.start_panel_index`,
+              endPanelIndex: sql`excluded.end_panel_index`,
               confidence: sql`excluded.confidence`,
             },
           })

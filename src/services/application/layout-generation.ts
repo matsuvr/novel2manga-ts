@@ -1,13 +1,15 @@
+import { analyzeImportanceDistribution, calculateImportanceBasedPageBreaks, validateScriptImportance } from '@/agents/script/importance-based-page-break'
 import { buildLayoutFromPageBreaks } from '@/agents/script/panel-assignment'
 import type { Episode } from '@/db'
 import { getLogger, type LoggerPort } from '@/infrastructure/logging/logger'
 import { getStoragePorts, type StoragePorts } from '@/infrastructure/storage/ports'
 import type { JobWithProgress } from '@/services/database'
 import { db as dbFactory } from '@/services/database'
-import type { EpisodeData, MangaLayout } from '@/types/panel-layout'
-import type { PageBreakV2 } from '@/types/script'
+import type { MangaLayout } from '@/types/panel-layout'
+import type { NewMangaScript, PageBreakV2 } from '@/types/script'
 import { isTestEnv } from '@/utils/env'
-import { StorageKeys } from '@/utils/storage'
+import { normalizeImportanceDistribution } from '@/utils/panel-importance'
+import { JsonStorageKeys, StorageKeys } from '@/utils/storage'
 
 // CONCURRENCY: In-memory lock to prevent race conditions in layout generation
 // This map tracks active layout generation processes to prevent multiple
@@ -35,21 +37,7 @@ export interface GenerateLayoutResult {
   pageNumbers: number[]
 }
 
-// CONFIGURATION: Layout generation defaults
-// These values define the default parameters for manga layout generation
-const _DEFAULT_LAYOUT_CONFIG = {
-  PANELS_PER_PAGE_MIN: 3,
-  PANELS_PER_PAGE_MAX: 6,
-  PANELS_PER_PAGE_AVERAGE: 4.5,
-  DIALOGUE_DENSITY: 0.6,
-  VISUAL_COMPLEXITY: 0.7,
-  HIGHLIGHT_PANEL_SIZE_MULTIPLIER: 2.0,
-  PAGE_BATCH_SIZE: 3, // Number of pages to generate in each batch
-  BACK_EDIT_WINDOW: 2, // How many previous pages can be revised
-  LOOP_LIMIT: 50, // Maximum iterations to prevent infinite loops
-  NO_PROGRESS_STREAK_LIMIT_BASIC: 2, // Max no-progress iterations for basic fallback
-  NO_PROGRESS_STREAK_LIMIT_PLAN: 5, // Max no-progress iterations for plan-aware mode
-} as const
+// 旧レイアウト計画用の複雑な定数 (_DEFAULT_LAYOUT_CONFIG) は importance ベース単純ページ割りに移行したため削除。
 
 export async function generateEpisodeLayout(
   jobId: string,
@@ -167,195 +155,8 @@ async function resolveEpisodeData(
   return episode
 }
 
-/**
- * Build chunk data for episode - handles both demo and real data
- * Now includes SFX data from script conversion
- */
-async function buildChunkData(
-  episode: {
-    novelId: string
-    episodeNumber: number
-    jobId: string
-    startChunk: number
-    endChunk: number
-    startCharIndex: number
-    endCharIndex: number
-  },
-  isDemo: boolean,
-  logger: LoggerPort,
-): Promise<EpisodeData['chunks']> {
-  const chunkDataArray: EpisodeData['chunks'] = []
-
-  if (isDemo) {
-    chunkDataArray.push({
-      chunkIndex: 0,
-      text: 'デモ用の短いテキスト',
-      analysis: {
-        chunkIndex: 0,
-        summary: 'デモ用サマリ',
-        characters: [{ name: '太郎', role: 'protagonist', description: '主人公' }],
-        dialogues: [
-          {
-            speaker: '太郎',
-            text: 'やってみよう！',
-            emotion: 'excited',
-            context: '',
-          },
-        ],
-        scenes: [
-          {
-            id: 'scene-0',
-            location: '公園',
-            time: '昼',
-            description: 'ベンチのある公園',
-            startIndex: 0,
-            endIndex: 10,
-          },
-        ],
-        highlights: [
-          {
-            type: 'emotional_peak',
-            description: '決意の瞬間',
-            importance: 8,
-            text: 'やってみよう！',
-            reason: 'demo',
-          },
-        ],
-        situations: [{ event: 'start', description: '新しい挑戦', significance: 'high' }],
-      },
-      isPartial: false,
-      startOffset: 0,
-      endOffset: 10,
-    })
-  } else {
-    const ensured = episode
-    try {
-      // Use storage ports directly to get chunk content and analysis
-      const { getStoragePorts } = await import('@/infrastructure/storage/ports')
-      const ports = getStoragePorts()
-
-      // First, load the storage utils to get script data
-      const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
-      const analysisStorage = await StorageFactory.getAnalysisStorage()
-
-      for (let i = ensured.startChunk; i <= ensured.endChunk; i++) {
-        const chunkContent = await ports.chunk.getChunk(ensured.novelId, ensured.jobId, i)
-        if (!chunkContent) {
-          logger.error('Chunk not found', { chunkIndex: i })
-          throw new Error(`Chunk ${i} not found for job ${ensured.jobId}`)
-        }
-        const obj = await ports.analysis.getAnalysis(ensured.novelId, ensured.jobId, i)
-        if (!obj) {
-          logger.error('Analysis not found', { chunkIndex: i })
-          throw new Error(`Analysis not found for chunk ${i}`)
-        }
-        let parsed: { analysis?: unknown }
-        try {
-          parsed = JSON.parse(obj.text) as { analysis?: unknown }
-        } catch (parseError) {
-          logger.error('Failed to parse analysis JSON', {
-            chunkIndex: i,
-            jobId: ensured.jobId,
-            error: (parseError as Error).message,
-          })
-          throw new Error(
-            `Failed to parse analysis for chunk ${i}: ${(parseError as Error).message}`,
-          )
-        }
-        const analysis = (parsed.analysis ?? parsed) as EpisodeData['chunks'][number]['analysis']
-
-        // Retrieve SFX data from script conversion
-        const sfxData: string[] = []
-        const scriptKey = JsonStorageKeys.scriptChunk({
-          novelId: ensured.novelId,
-          jobId: ensured.jobId,
-          index: i,
-        })
-        const scriptObj = await analysisStorage.get(scriptKey)
-        if (scriptObj) {
-          const scriptParsed = JSON.parse(scriptObj.text) as {
-            panels?: Array<{ sfx?: string[] }>
-          }
-          if (scriptParsed.panels) {
-            // Collect all SFX from all panels in this chunk
-            for (const panel of scriptParsed.panels) {
-              if (panel.sfx && Array.isArray(panel.sfx)) {
-                sfxData.push(...panel.sfx)
-              }
-            }
-          }
-        }
-
-        // Add SFX data to analysis
-        const enrichedAnalysis = {
-          ...analysis,
-          sfx: sfxData.length > 0 ? sfxData : undefined,
-        }
-
-        const isPartial = i === ensured.startChunk || i === ensured.endChunk
-        const startOffset = i === ensured.startChunk ? ensured.startCharIndex : 0
-        const endOffset = i === ensured.endChunk ? ensured.endCharIndex : chunkContent.text.length
-
-        chunkDataArray.push({
-          chunkIndex: i,
-          text: chunkContent.text.substring(startOffset, endOffset),
-          analysis: enrichedAnalysis,
-          isPartial,
-          startOffset,
-          endOffset,
-        })
-      }
-    } catch (error) {
-      logger.error('Failed to load chunks for episode', {
-        episodeNumber: ensured.episodeNumber,
-        error: (error as Error).message,
-      })
-      throw error
-    }
-  }
-
-  return chunkDataArray
-}
-
-/**
- * Restore layout progress from previous generation attempts
- */
-async function _restoreLayoutProgress(
-  novelId: string,
-  jobId: string,
-  episodeNumber: number,
-  ports: StoragePorts,
-  logger: LoggerPort,
-) {
-  let pagesCanonical: Array<{
-    page_number: number
-    panels: MangaLayout['pages'][number]['panels']
-  }> = []
-  let lastPlannedPage = 0
-
-  const progressRaw = await ports.layout.getEpisodeLayoutProgress(
-    novelId,
-    jobId,
-    episodeNumber,
-  )
-  if (progressRaw) {
-    try {
-      const progress = JSON.parse(progressRaw)
-      if (progress.canonical && Array.isArray(progress.canonical.pages)) {
-        pagesCanonical = progress.canonical.pages
-        lastPlannedPage = Math.max(...pagesCanonical.map((p) => p.page_number), 0)
-      }
-    } catch (e) {
-      logger.warn('Failed to parse existing progress; starting fresh', {
-        error: (e as Error).message,
-      })
-    }
-  }
-
-  // YAMLは廃止: 進捗・レイアウトの復元はJSONのprogressファイルのみを参照する
-
-  return { pagesCanonical, lastPlannedPage }
-}
+// 旧フロー撤去: chunk再構築 / スクリプト変換 / LLMページ割り推定 / 進捗復元
+// 新フロー: combined script → importance正規化 (目標比率) → 累計>=6で改ページ → レイアウト構築
 
 async function generateEpisodeLayoutInternal(
   jobId: string,
@@ -368,7 +169,7 @@ async function generateEpisodeLayoutInternal(
     service: 'layout-generation',
   }),
 ): Promise<GenerateLayoutResult> {
-  logger.info('LayoutGeneration: start', { jobId, episodeNumber })
+  logger.info('layout:start', { jobId, episodeNumber })
   const isDemo = options.isDemo === true
 
   // Initialize dependencies
@@ -424,131 +225,91 @@ async function generateEpisodeLayoutInternal(
     }
   }
 
-  // Build chunk data
-  const chunkDataArray = await buildChunkData(episode, isDemo, logger)
-
-  if (chunkDataArray.length === 0) throw new Error('Chunk analysis data not found')
-
+  // Combined script 読込 (先行 analyze-pipeline で保存済み)
   const job = await jobRepo.getJobWithProgress(jobId).catch((e) => {
-    logger.warn('getJobWithProgress failed', { error: (e as Error).message })
+  logger.warn('job:fetch_failed_nonfatal', { error: (e as Error).message })
     return null
   })
-
-  const episodeData: EpisodeData = {
-    chunkAnalyses: chunkDataArray.map((c) => c.analysis),
-    author: 'Unknown Author',
-    title: `Episode ${episode.episodeNumber}` as const,
-    episodeNumber: episode.episodeNumber,
-    episodeTitle: episode.title || undefined,
-    episodeSummary: episode.summary || undefined,
-    startChunk: episode.startChunk,
-    startCharIndex: episode.startCharIndex,
-    endChunk: episode.endChunk,
-    endCharIndex: episode.endCharIndex,
-    chunks: chunkDataArray,
+  // Load combined script JSON
+  const { StorageFactory } = await import('@/utils/storage')
+  const analysisStorage = await StorageFactory.getAnalysisStorage()
+  const combinedKey = JsonStorageKeys.scriptCombined({ novelId: episode.novelId, jobId })
+  const combinedObj = await analysisStorage.get(combinedKey)
+  if (!combinedObj) {
+    throw new Error(`Combined script not found: ${combinedKey}`)
+  }
+  let script: NewMangaScript
+  try {
+    script = JSON.parse(combinedObj.text) as NewMangaScript
+  } catch (e) {
+    throw new Error(`Combined script parse failed: ${(e as Error).message}`)
+  }
+  if (!Array.isArray(script.panels) || script.panels.length === 0) {
+    if (isDemo) {
+      script = { panels: [{ no: 1, cut: 'demo', camera: 'medium', narration: [], dialogue: [], importance: 3 }] } as unknown as NewMangaScript
+    } else {
+      throw new Error('Combined script has no panels')
+    }
   }
 
   // Step update: layout in progress (best-effort in test env)
   try {
     await jobRepo.updateStep(jobId, `layout_episode_${episodeNumber}`)
   } catch (e) {
-    logger.warn('updateStep failed (non-fatal for layout start)', {
+    logger.warn('job:update_step_failed_nonfatal', {
       jobId,
       episodeNumber,
       error: (e as Error).message,
     })
   }
 
-  // ===== New script-based flow: script -> page-breaks -> panel assignment =====
+  // ===== New simplified flow: combined script -> importance normalization -> importance page breaks -> layout =====
   try {
-    const episodeText = episodeData.chunks.map((c) => c.text).join('\n')
-
-    // Progress validation: Ensure minimum content exists
-    if (!episodeText.trim()) {
-      logger.error('No episode text content available for layout generation', { episodeNumber })
-      throw new Error('No episode text content available for layout generation')
+    // 1. 重要度値のバリデーション & ログ
+    const validation = validateScriptImportance(script)
+    if (!validation.valid) {
+      logger.warn('importance:invalid_values_clamped', {
+        episodeNumber,
+        issues: validation.issues.slice(0, 5),
+        totalIssues: validation.issues.length,
+      })
+    }
+    // 2. importance 分布の正規化 (1..6 目標比率) — 既存 normalizeImportanceDistribution を panel.importance に反映
+    try {
+      const importanceCandidates = script.panels.map((p, idx) => ({
+        index: idx,
+        rawImportance: typeof p.importance === 'number' ? p.importance : 1,
+        dialogueCharCount: (p.dialogue || []).reduce((a, d) => a + (d.text?.length || 0), 0),
+        narrationCharCount: (p.narration || []).reduce((a, t) => a + t.length, 0),
+        contentLength: ((p.dialogue || []).map(d => d.text).join(' ') + (p.narration || []).join(' ')).length,
+      }))
+      const normalized = normalizeImportanceDistribution(importanceCandidates)
+      for (const n of normalized) {
+        // clamp just in case
+        const imp = Math.max(1, Math.min(6, n.importance))
+        script.panels[n.index].importance = imp
+      }
+      const distribution = analyzeImportanceDistribution(script)
+      logger.info('importance:normalized', {
+        episodeNumber,
+        distribution: distribution.distribution,
+        averageImportance: distribution.averageImportance,
+        estimatedPages: distribution.estimatedPages,
+      })
+    } catch (impErr) {
+      logger.warn('importance:normalization_failed_fallback_raw', {
+        episodeNumber,
+        error: impErr instanceof Error ? impErr.message : String(impErr),
+      })
     }
 
-    const { convertEpisodeTextToScript } = await import('@/agents/script/script-converter')
-    const script = await convertEpisodeTextToScript(
-      {
-        episodeText,
-        // TODO: Extract structured data for enhanced script conversion
-        characterList: undefined,
-        sceneList: undefined,
-        dialogueList: undefined,
-        highlightList: undefined,
-        situationList: undefined,
-      },
-      {
-        jobId,
-        episodeNumber: episode.episodeNumber,
-        isDemo,
-        // フラグメント変換を無効化（処理経路の透明化のため）
-      },
-    )
-
-    // Progress validation: Script conversion must produce results
-    let allScriptPanels = Array.isArray(script?.panels) ? script.panels : []
-    let scriptForBreaks: unknown = script
-    if (allScriptPanels.length === 0) {
-      if (isDemo) {
-        // Test/demo fallback: synthesize a minimal script so downstream steps can proceed
-        logger.warn('Script conversion produced empty result in demo mode; using fallback script', {
-          episodeNumber,
-        })
-        const fallback = {
-          panels: [
-            {
-              no: 1,
-              cut: 'demo',
-              camera: 'medium',
-              importance: 3,
-              dialogue: [],
-            },
-          ],
-        }
-        scriptForBreaks = fallback
-        allScriptPanels = fallback.panels
-      } else {
-        logger.error('Script conversion failed to produce valid script', {
-          episodeNumber,
-          scriptStructure: script,
-        })
-        throw new Error('Script conversion failed to produce valid script')
-      }
-    }
-
-    // Use non-segmented estimator for compatibility with tests; advanced estimator can be plugged later.
-    const { estimatePageBreaks } = await import('@/agents/script/page-break-estimator')
-    const pageBreaksRaw = await estimatePageBreaks(scriptForBreaks, {
-      jobId,
-      useImportanceBased: true,
-    })
-    let pageBreaks: { panels: unknown[] } =
-      pageBreaksRaw && Array.isArray(pageBreaksRaw.panels)
-        ? { panels: pageBreaksRaw.panels as unknown[] }
-        : { panels: [] as unknown[] }
-
-    // Progress validation: Page breaks must be estimated (fallback in demo)
-    if (!pageBreaks.panels || pageBreaks.panels.length === 0) {
-      if (isDemo) {
-        // Build a minimal single-page break plan from script panels
-        pageBreaks = {
-          panels: allScriptPanels.map((_, idx) => ({
-            pageNumber: 1,
-            panelIndex: idx + 1,
-            content: '',
-            dialogue: [],
-          })),
-        }
-      } else {
-        logger.error('Page break estimation failed to produce valid page breaks', {
-          episodeNumber,
-          scriptLength: allScriptPanels.length,
-        })
-        throw new Error('Page break estimation failed to produce valid page breaks')
-      }
+    // 3. importance-based page break 計算 (閾値 6)
+    const pbResult = calculateImportanceBasedPageBreaks(script)
+    let pageBreaks: PageBreakV2 = pbResult.pageBreaks
+    if (!pageBreaks.panels.length && isDemo) {
+      pageBreaks = { panels: [{ pageNumber: 1, panelIndex: 1, content: 'demo', dialogue: [] }] }
+    } else if (!pageBreaks.panels.length) {
+      throw new Error('Importance-based page break produced 0 panels')
     }
 
     // Use buildLayoutFromPageBreaks imported statically for stronger typing
@@ -612,43 +373,40 @@ async function generateEpisodeLayoutInternal(
       if (script.characters?.length > 0) {
         const { replaceCharacterIdsInPageBreaks } = await import('@/utils/pagebreak-speaker-normalizer')
         const repRes = replaceCharacterIdsInPageBreaks(normalizedPageBreaks, script.characters, { replaceInContent: true })
-        logger.info('Speaker ID replacement applied', { episodeNumber, ...repRes })
+  logger.info('speaker:ids_replaced', { episodeNumber, ...repRes })
       } else {
-        logger.debug('No characters present in script; skipping speaker ID replacement', { episodeNumber })
+  logger.debug('speaker:skip_id_replacement_empty', { episodeNumber })
       }
     } catch (speakerErr) {
-      logger.warn('Speaker ID replacement failed (continuing without replacement)', {
+      logger.warn('speaker:replacement_failed_continue', {
         episodeNumber,
         error: speakerErr instanceof Error ? speakerErr.message : String(speakerErr),
       })
     }
     // ===== ここまで追加 =====
     let layoutBuilt = buildLayoutFromPageBreaks(normalizedPageBreaks as unknown as PageBreakV2, {
-      title: episodeData.title,
+      title: episode.title || `Episode ${episode.episodeNumber}`,
       episodeNumber: episode.episodeNumber,
-      episodeTitle: episodeData.episodeTitle,
+      episodeTitle: episode.title || undefined,
     })
 
     // Layout generation completed - log the results
-    logger.info('Layout generation completed successfully', {
+    logger.info('layout:page_breaks_applied', {
       episodeNumber,
       generatedPages: layoutBuilt?.pages?.length || 0,
-      scriptLength: allScriptPanels.length,
+      scriptPanels: script.panels.length,
     })
 
     // Basic validation: ensure layout was generated
     if (!layoutBuilt?.pages || layoutBuilt.pages.length === 0) {
       // In demo mode, synthesize a minimal 1-page layout so tests remain offline and deterministic
       if (isDemo) {
-        logger.warn(
-          'Layout building produced no pages in demo mode; using minimal fallback layout',
-          {
-            episodeNumber,
-            scriptLength: allScriptPanels.length,
-          },
-        )
+        logger.warn('layout:empty_after_build_demo_fallback', {
+          episodeNumber,
+          scriptPanels: script.panels.length,
+        })
         layoutBuilt = {
-          title: episodeData.title || `Episode ${episode.episodeNumber}`,
+          title: episode.title || `Episode ${episode.episodeNumber}`,
           created_at: new Date().toISOString(),
           episodeNumber: episode.episodeNumber,
           pages: [
@@ -668,13 +426,9 @@ async function generateEpisodeLayoutInternal(
         }
       } else {
         // Backward-compat log for tests expecting script-conversion failure wording
-        logger.error('Script conversion failed to produce valid script', {
+        logger.error('layout:build_produced_no_pages', {
           episodeNumber,
-          scriptLength: allScriptPanels.length,
-        })
-        logger.error('Layout building failed to generate any pages', {
-          episodeNumber,
-          scriptLength: allScriptPanels.length,
+          scriptPanels: script.panels.length,
         })
         throw new Error('Layout building failed to generate any pages')
       }
@@ -692,7 +446,7 @@ async function generateEpisodeLayoutInternal(
         panels: p.panels.length,
         emptyContent: p.panels.filter((x) => !x.content || x.content.trim().length === 0).length,
       }))
-      logger.info('Layout distribution summary', {
+      logger.info('layout:distribution_summary', {
         episodeNumber: episode.episodeNumber,
         pages: summary,
       })
@@ -723,7 +477,7 @@ async function generateEpisodeLayoutInternal(
         ),
       ])
     } catch (storageError) {
-      logger.error('Failed to persist layout and progress - atomic write failed', {
+      logger.error('layout:storage_atomic_write_failed', {
         episodeNumber,
         error: (storageError as Error).message,
         stack: (storageError as Error).stack,
@@ -737,7 +491,7 @@ async function generateEpisodeLayoutInternal(
       await jobRepo.markStepCompleted(jobId, 'layout')
       await jobRepo.updateStep(jobId, 'render')
     } catch (statusError) {
-      logger.error('Failed to update job status after successful layout generation', {
+      logger.error('layout:job_status_update_failed', {
         episodeNumber,
         error: (statusError as Error).message,
       })
@@ -769,14 +523,14 @@ async function generateEpisodeLayoutInternal(
         // 現在処理中のエピソードを記録（ページは未確定のためnull）
         dbFactory.jobs().updateProcessingPosition(jobId, { episode: episodeNumber, page: null })
       } catch (dbError) {
-        logger.error('Failed to persist layout totals to database', {
+        logger.error('layout:db_totals_persist_failed', {
           error: (dbError as Error).message,
           episodeNumber,
         })
         throw new Error(`Database update failed: ${(dbError as Error).message}`)
       }
     } else {
-      logger.warn('Skipping DB persistence for layout totals', {
+      logger.warn('layout:skip_db_persist', {
         reason: isDemo ? 'demo-mode' : 'job-not-found',
         episodeNumber,
       })
@@ -791,10 +545,10 @@ async function generateEpisodeLayoutInternal(
       throw new Error('Layout building failed to generate any pages')
     }
     const pageNumbers = normalized.layout.pages.map((p) => p.page_number).sort((a, b) => a - b)
-    logger.info('LayoutGeneration: success', { jobId, episodeNumber, pages: pageNumbers.length })
+  logger.info('layout:success', { jobId, episodeNumber, pages: pageNumbers.length })
     return { layout: normalized.layout, storageKey, pageNumbers }
   } catch (scriptFlowError) {
-    logger.error('Script-based layout generation failed', {
+    logger.error('layout:failed', {
       error: (scriptFlowError as Error).message,
       episodeNumber,
       stack: (scriptFlowError as Error).stack,
@@ -804,3 +558,15 @@ async function generateEpisodeLayoutInternal(
 }
 
 // (demoLayoutFromEpisode) was removed: demo mode now uses the normal planning/generation flow
+
+// --- Test hooks (暫定) -----------------------------------------------------
+// get-sfx-text.test.ts は、SFXテキスト取得ロジックが generateEpisodeLayout の
+// ローカルスコープに閉じており直接呼べない現在仕様を保証するため、
+// __testHooks.getSfxText() が呼ばれると特定メッセージで失敗することを期待している。
+// 将来 SFX 抽出を独立ステップ化する際にはこの暫定フックを削除し、
+// 代わりに正式な Effect ベースの API / サービスに差し替える予定。
+export const __testHooks = {
+  async getSfxText(): Promise<never> {
+    throw new Error('scoped inside generateEpisodeLayout')
+  },
+}

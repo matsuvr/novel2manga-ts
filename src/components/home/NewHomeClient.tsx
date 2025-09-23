@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { appConfig } from '@/config/app.config'
 
 type View = 'idle' | 'processing' | 'redirecting'
-type RequiresAction = 'EXPAND' | 'EXPLAINER'
+
+import { getConsentTexts } from '@/config/consent.config'
+import type { ConsentAction } from '@/types/consent'
+
+type RequiresAction = ConsentAction
 
 function Section({
   id,
@@ -83,6 +87,8 @@ export default function NewHomeClient() {
   const [consentSubmitting, setConsentSubmitting] = useState(false)
   // push が完了しないケースのフォールバック用にターゲットURLを保持
   const [redirectTarget, setRedirectTarget] = useState<string | null>(null)
+  // 多重クリック防止（viewstate 変更前の瞬間クリック連打対策）
+  const convertClickedRef = useRef(false)
 
   const isAuthenticated = status === 'authenticated'
   const isUnauthenticated = status === 'unauthenticated'
@@ -103,6 +109,8 @@ export default function NewHomeClient() {
   }, [novelText])
 
   const handleConvert = useCallback(async () => {
+    if (convertClickedRef.current) return
+    convertClickedRef.current = true
     setError(null)
     if (!novelText.trim()) return
     if (!isAuthenticated) {
@@ -168,18 +176,13 @@ export default function NewHomeClient() {
       setView('idle')
       const errorMessage = e instanceof Error ? e.message : '変換に失敗しました'
       setError(`${errorMessage}。ページが遷移しない場合は、ブラウザの更新ボタンを押して再度お試しください。`)
+      convertClickedRef.current = false
     }
   }, [novelText, isDemo, router, isAuthenticated, agreeToTerms])
 
-  const consentDescription = useMemo(() => {
-    if (!requiresAction) return ''
-    if (requiresAction === 'EXPAND') {
-      return '入力されたテキストが短いため、このままでは十分なマンガ用脚本に展開できません。AI が不足するシーンや会話を補完し、元の意図を尊重しつつシナリオを拡張します。AI による創作的補完を許可しますか？'
-    }
-    return '入力されたテキストは物語ではなく説明的・論述的な内容と判定されました。教育マンガ形式（先生役と生徒役の対話など）でわかりやすく再構成します。そうした再構成（創作的脚色）を許可しますか？'
-  }, [requiresAction])
-
-  const consentTitle = requiresAction === 'EXPAND' ? '短い入力の拡張について' : '論述テキストの教育マンガ化について'
+  const consentTexts = useMemo(() => (requiresAction ? getConsentTexts(requiresAction) : null), [requiresAction])
+  const consentDescription = consentTexts?.description ?? ''
+  const consentTitle = consentTexts?.title ?? ''
 
   // ルーター遷移が何らかの理由で完了しない (戻れない/描画されない) ケースに備えフォールバック
   useEffect(() => {
@@ -306,18 +309,9 @@ export default function NewHomeClient() {
             <h2 className="mb-4 text-lg font-semibold text-gray-800">{consentTitle}</h2>
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">{consentDescription}</p>
             <ul className="mt-4 list-disc space-y-1 pl-5 text-xs text-gray-600">
-              {requiresAction === 'EXPAND' && (
-                <>
-                  <li>原意や雰囲気を尊重しつつ背景・登場人物・会話を補います</li>
-                  <li>補完された内容は AI による創作であり元テキストと異なる要素が追加されます</li>
-                </>
-              )}
-              {requiresAction === 'EXPLAINER' && (
-                <>
-                  <li>説明文を教師と生徒などのキャラクタ対話へ再構成します</li>
-                  <li>理解促進のための比喩・簡略化が入る場合があります</li>
-                </>
-              )}
+              {consentTexts?.bullets.map((b) => (
+                <li key={b}>{b}</li>
+              ))}
               <li>許可後に処理が再開されます。拒否すると元の入力編集に戻ります。</li>
             </ul>
             <div className="mt-6 flex justify-end gap-3">

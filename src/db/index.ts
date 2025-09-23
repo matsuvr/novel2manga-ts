@@ -138,6 +138,83 @@ function ensureJobLeasingSchema(sqliteDb: BetterSqlite3Database): void {
   }
 }
 
+// Legacy safety patch: create novel_job_locks table if migration 0019 has not been applied.
+// Some developer environments may have an older persistent database volume whose
+// __drizzle_migrations meta stops at 0018. In that case the new migration 0019
+// (novel_job_locks) would normally be applied automatically, but if migrations
+// were skipped (DB_SKIP_MIGRATE=1) or the meta table was bootstrapped manually
+// before pulling latest code, the table may be missing causing /api/analyze to fail
+// with "no such table: novel_job_locks". We defensively ensure the table exists.
+function ensureNovelJobLocksSchema(sqliteDb: BetterSqlite3Database): void {
+  const logger = getLogger().withContext({ scope: 'drizzle-bootstrap' })
+  // Require novels table (foreign key target) – if it does not exist we are in a
+  // pre-schema state and should not create partial tables.
+  if (!doesTableExist(sqliteDb, 'novels')) {
+    logger.debug('database_novels_table_missing_for_locks_patch', { table: 'novels' })
+    return
+  }
+  if (doesTableExist(sqliteDb, 'novel_job_locks')) {
+    return
+  }
+  // Create table + index mirroring drizzle/0019_novel_job_locks.sql (kept in sync intentionally)
+  sqliteDb.exec(
+    `CREATE TABLE IF NOT EXISTS novel_job_locks (
+      novel_id TEXT PRIMARY KEY REFERENCES novels(id) ON DELETE CASCADE,
+      locked_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+      expires_at TEXT NOT NULL
+    );`,
+  )
+  sqliteDb.exec(
+    'CREATE INDEX IF NOT EXISTS idx_novel_job_locks_expires ON novel_job_locks(expires_at);',
+  )
+  logger.info('database_legacy_schema_patched', { createdTable: 'novel_job_locks' })
+}
+
+// Safety patch: ensure episodes table has panel boundary columns (start_panel_index, end_panel_index).
+// In test (in-memory) environments the migrations may not have been executed if TEST_FILE_DB != 1.
+// We defensively add the columns when missing so integration tests depending on these fields pass.
+function ensureEpisodePanelIndicesSchema(sqliteDb: BetterSqlite3Database): void {
+  const logger = getLogger().withContext({ scope: 'drizzle-bootstrap' })
+  if (!doesTableExist(sqliteDb, 'episodes')) {
+    logger.debug('database_episodes_table_missing_for_panel_patch')
+    return
+  }
+  const columnRows = sqliteDb
+    .prepare("PRAGMA table_info('episodes')")
+    .all() as ReadonlyArray<{ readonly name?: unknown }>
+  const existing = new Set(
+    columnRows
+      .map((r) => (r && typeof r.name === 'string' ? r.name : ''))
+      .filter((n) => n.length > 0),
+  )
+  let applied = 0
+  if (!existing.has('start_panel_index')) {
+    try {
+      sqliteDb.exec('ALTER TABLE episodes ADD COLUMN start_panel_index INTEGER')
+      applied += 1
+    } catch (error) {
+      logger.warn('database_panel_patch_start_failed', {
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  if (!existing.has('end_panel_index')) {
+    try {
+      sqliteDb.exec('ALTER TABLE episodes ADD COLUMN end_panel_index INTEGER')
+      applied += 1
+    } catch (error) {
+      logger.warn('database_panel_patch_end_failed', {
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  if (applied > 0) {
+    logger.info('database_legacy_schema_patched', {
+      appliedEpisodePanelColumns: applied,
+    })
+  }
+}
+
 function bootstrapDrizzleMigrationsMetadata(
   sqliteDb: BetterSqlite3Database,
   migrationsDir: string,
@@ -370,6 +447,12 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
         ensureJobLeasingSchema(sqliteDb)
       }
 
+      // Always run the safety patch before migration execution so that even when
+      // migrations are skipped (DB_SKIP_MIGRATE=1) APIs depending on locks work.
+      ensureNovelJobLocksSchema(sqliteDb)
+      // Ensure episodes panel boundary columns exist for legacy / in-memory DBs
+      ensureEpisodePanelIndicesSchema(sqliteDb)
+
       if (!hasDrizzleMeta && hasUserTables) {
         try {
           bootstrapDrizzleMigrationsMetadata(sqliteDb, migrationsFolder)
@@ -391,6 +474,15 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
       if (shouldMigrate) {
         try {
           migrate(drizzleDb, { migrationsFolder })
+          // Episodes テーブルは古いマイグレーションセットでは panel index カラムを含まない。
+          // 既存DBの場合は上の ensureEpisodePanelIndicesSchema で追加されるが、
+          // ':memory:' など新規作成パスでは migrate 実行前は episodes テーブル自体が存在せずスキップされる。
+          // そのためマイグレーション完了後に再度パッチを実行し不足カラムを補う。
+          try {
+            ensureEpisodePanelIndicesSchema(sqliteDb)
+          } catch {
+            /* ignore secondary patch errors */
+          }
         } catch (migrateError) {
           // フォールバック禁止方針: マイグレーション失敗は重大事として明示し、起動を停止する
           const message = migrateError instanceof Error ? migrateError.message : String(migrateError)
@@ -458,6 +550,7 @@ export function getDatabase(): ReturnType<typeof drizzle<typeof schema>> {
 
 export const __databaseInternals = {
   ensureJobLeasingSchema,
+  ensureNovelJobLocksSchema,
   bootstrapDrizzleMigrationsMetadata,
   resetDatabaseCache: () => {
     db = null

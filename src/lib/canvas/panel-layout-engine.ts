@@ -1,4 +1,4 @@
-import type { ChunkAnalysisResult, Position, Size } from '@/types/panel-layout'
+import type { EpisodeChunk, Position, Size } from '@/types/panel-layout'
 
 export interface PanelLayoutConfig {
   margin: number
@@ -32,26 +32,15 @@ export class PanelLayoutEngine {
   /**
    * チャンク分析結果をページに分割
    */
-  divideIntoPages(chunks: ChunkAnalysisResult[]): ChunkAnalysisResult[][] {
-    const pages: ChunkAnalysisResult[][] = []
-    let currentPage: ChunkAnalysisResult[] = []
+  divideIntoPages(chunks: EpisodeChunk[]): EpisodeChunk[][] {
+    const pages: EpisodeChunk[][] = []
+    let currentPage: EpisodeChunk[] = []
 
     for (const chunk of chunks) {
-      // ハイライトシーンは単独ページにする可能性を考慮
-      const isHighlight = chunk.highlights?.some((h) => h.importance >= 8)
-
-      if (isHighlight && currentPage.length > 0) {
-        // 現在のページを確定
+      currentPage.push(chunk)
+      if (currentPage.length >= this.config.preferredPanelsPerPage) {
         pages.push(currentPage)
-        currentPage = [chunk]
-      } else {
-        currentPage.push(chunk)
-
-        // ページが満杯になったら次のページへ
-        if (currentPage.length >= this.config.preferredPanelsPerPage) {
-          pages.push(currentPage)
-          currentPage = []
-        }
+        currentPage = []
       }
     }
 
@@ -66,7 +55,7 @@ export class PanelLayoutEngine {
   /**
    * チャンクに基づいてパネルレイアウトを計算
    */
-  calculatePanelLayout(chunks: ChunkAnalysisResult[]): PanelLayout[] {
+  calculatePanelLayout(chunks: EpisodeChunk[]): PanelLayout[] {
     const panelCount = chunks.length
 
     // パネル数に応じてレイアウトパターンを選択
@@ -101,92 +90,38 @@ export class PanelLayoutEngine {
   /**
    * 2パネルレイアウト
    */
-  private twoPanelLayout(chunks: ChunkAnalysisResult[]): PanelLayout[] {
+  private twoPanelLayout(_chunks: EpisodeChunk[]): PanelLayout[] {
     const margin = this.config.margin / 1000
     const spacing = this.config.panelSpacing / 1000
 
     // 重要度に応じて縦分割か横分割を決定
-    const verticalSplit = chunks.some((c) => c.highlights?.some((h) => h.importance >= 7))
-
-    if (verticalSplit) {
-      // 縦分割（右から左へ）
-      const width = (1 - 2 * margin - spacing) / 2
-      return [
-        {
-          position: { x: 0.5 + spacing / 2, y: margin },
-          size: { width, height: 1 - 2 * margin },
-        },
-        {
-          position: { x: margin, y: margin },
-          size: { width, height: 1 - 2 * margin },
-        },
-      ]
-    } else {
-      // 横分割
-      const height = (1 - 2 * margin - spacing) / 2
-      return [
-        {
-          position: { x: margin, y: margin },
-          size: { width: 1 - 2 * margin, height },
-        },
-        {
-          position: { x: margin, y: 0.5 + spacing / 2 },
-          size: { width: 1 - 2 * margin, height },
-        },
-      ]
-    }
+    const height = (1 - 2 * margin - spacing) / 2
+    return [
+      { position: { x: margin, y: margin }, size: { width: 1 - 2 * margin, height } },
+      { position: { x: margin, y: 0.5 + spacing / 2 }, size: { width: 1 - 2 * margin, height } },
+    ]
   }
 
   /**
    * 3パネルレイアウト（L字型）
    */
-  private threePanelLayout(chunks: ChunkAnalysisResult[]): PanelLayout[] {
+  private threePanelLayout(_chunks: EpisodeChunk[]): PanelLayout[] {
     const margin = this.config.margin / 1000
     const spacing = this.config.panelSpacing / 1000
 
     // 最初のパネルが重要な場合は大きくする
-    const firstImportant = chunks[0].highlights?.some((h) => h.importance >= 7)
-
-    if (firstImportant) {
-      // 右上に大きなパネル、左側に2つの小さなパネル
-      return [
-        {
-          position: { x: 0.4 + spacing / 2, y: margin },
-          size: { width: 0.6 - margin - spacing / 2, height: 1 - 2 * margin },
-        },
-        {
-          position: { x: margin, y: margin },
-          size: { width: 0.4 - margin - spacing / 2, height: 0.5 - margin - spacing / 2 },
-        },
-        {
-          position: { x: margin, y: 0.5 + spacing / 2 },
-          size: { width: 0.4 - margin - spacing / 2, height: 0.5 - margin - spacing / 2 },
-        },
-      ]
-    } else {
-      // 均等な3分割
-      const width = (1 - 2 * margin - 2 * spacing) / 3
-      return [
-        {
-          position: { x: 1 - margin - width, y: margin },
-          size: { width, height: 1 - 2 * margin },
-        },
-        {
-          position: { x: 0.5 - width / 2, y: margin },
-          size: { width, height: 1 - 2 * margin },
-        },
-        {
-          position: { x: margin, y: margin },
-          size: { width, height: 1 - 2 * margin },
-        },
-      ]
-    }
+    const width = (1 - 2 * margin - 2 * spacing) / 3
+    return [
+      { position: { x: 1 - margin - width, y: margin }, size: { width, height: 1 - 2 * margin } },
+      { position: { x: 0.5 - width / 2, y: margin }, size: { width, height: 1 - 2 * margin } },
+      { position: { x: margin, y: margin }, size: { width, height: 1 - 2 * margin } },
+    ]
   }
 
   /**
    * 4パネルレイアウト（田の字型）
    */
-  private fourPanelLayout(_chunks: ChunkAnalysisResult[]): PanelLayout[] {
+  private fourPanelLayout(_chunks: EpisodeChunk[]): PanelLayout[] {
     const margin = this.config.margin / 1000
     const spacing = this.config.panelSpacing / 1000
     const width = (1 - 2 * margin - spacing) / 2
@@ -216,7 +151,7 @@ export class PanelLayoutEngine {
   /**
    * 6パネルレイアウト（2x3グリッド）
    */
-  private sixPanelLayout(chunks: ChunkAnalysisResult[]): PanelLayout[] {
+  private sixPanelLayout(chunks: EpisodeChunk[]): PanelLayout[] {
     const margin = this.config.margin / 1000
     const spacing = this.config.panelSpacing / 1000
     const width = (1 - 2 * margin - spacing) / 2
@@ -225,43 +160,13 @@ export class PanelLayoutEngine {
     const layouts: PanelLayout[] = []
 
     // 重要なシーンがある場合は変形レイアウト
-    const importantIndex = chunks.findIndex((c) => c.highlights?.some((h) => h.importance >= 8))
-
-    if (importantIndex !== -1 && importantIndex < 3) {
-      // 上部に大きなパネルを配置
+    for (let i = 0; i < 6; i++) {
+      const row = Math.floor(i / 2)
+      const col = i % 2
       layouts.push({
-        position: { x: margin, y: margin },
-        size: { width: 1 - 2 * margin, height: height * 1.5 },
+        position: { x: col === 0 ? 0.5 + spacing / 2 : margin, y: margin + row * (height + spacing) },
+        size: { width, height },
       })
-
-      // 残りを下部に配置
-      const remainingHeight = 1 - margin - (height * 1.5 + margin + spacing)
-      const smallHeight = (remainingHeight - spacing) / 2
-
-      for (let i = 0; i < 4; i++) {
-        const row = Math.floor(i / 2)
-        const col = i % 2
-        layouts.push({
-          position: {
-            x: col === 0 ? 0.5 + spacing / 2 : margin,
-            y: margin + height * 1.5 + spacing + row * (smallHeight + spacing),
-          },
-          size: { width, height: smallHeight },
-        })
-      }
-    } else {
-      // 通常の2x3グリッド
-      for (let i = 0; i < 6; i++) {
-        const row = Math.floor(i / 2)
-        const col = i % 2
-        layouts.push({
-          position: {
-            x: col === 0 ? 0.5 + spacing / 2 : margin,
-            y: margin + row * (height + spacing),
-          },
-          size: { width, height },
-        })
-      }
     }
 
     return layouts.slice(0, chunks.length)
@@ -270,7 +175,7 @@ export class PanelLayoutEngine {
   /**
    * グリッドレイアウト（7パネル以上）
    */
-  private gridLayout(chunks: ChunkAnalysisResult[]): PanelLayout[] {
+  private gridLayout(chunks: EpisodeChunk[]): PanelLayout[] {
     const margin = this.config.margin / 1000
     const spacing = this.config.panelSpacing / 1000
     const panelCount = Math.min(chunks.length, this.config.maxPanelsPerPage)

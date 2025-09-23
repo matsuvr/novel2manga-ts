@@ -25,15 +25,32 @@ export interface LayoutLLMInput {
 }
 
 export function buildLayoutLLMInput(episodeData: EpisodeData): LayoutLLMInput {
-  const simplifiedChunks: SimplifiedChunkInput[] = episodeData.chunks.map((chunk) => ({
-    chunkIndex: chunk.chunkIndex,
-    summary: chunk.analysis.summary,
-    hasHighlight: chunk.analysis.highlights.length > 0,
-    highlightImportance: Math.max(...chunk.analysis.highlights.map((h) => h.importance), 0),
-    dialogueCount: chunk.analysis.dialogues.length,
-    sceneDescription: chunk.analysis.scenes.map((s) => s.setting).join(', '),
-    characters: chunk.analysis.characters.map((c) => c.name),
-  }))
+  const simplifiedChunks: SimplifiedChunkInput[] = episodeData.chunks.map((chunk) => {
+    const a = chunk.analysis
+    if (!a) {
+      return {
+        chunkIndex: chunk.chunkIndex,
+        summary: '',
+        hasHighlight: false,
+        highlightImportance: 0,
+        dialogueCount: 0,
+        sceneDescription: '',
+        characters: [],
+      }
+    }
+    return {
+      chunkIndex: chunk.chunkIndex,
+      summary: a.summary || '',
+      hasHighlight: a.highlights.length > 0,
+      highlightImportance: Math.max(...a.highlights.map((h) => h.importance), 0),
+      dialogueCount: a.dialogues.length,
+      sceneDescription: a.scenes
+        .map((s: { setting?: string; location?: string }) => (s.setting ?? s.location ?? ''))
+        .filter((v) => v.length > 0)
+        .join(', '),
+      characters: a.characters.map((c) => c.name),
+    }
+  })
 
   return {
     episodeData: {

@@ -56,7 +56,11 @@ export async function estimatePageBreaksSegmented(
 ): Promise<SegmentedPageBreakResult> {
   type PanelWithGlobal = PageBreakV2['panels'][number] & { globalPanelIndex?: number }
   // Demo mode: return fixed page break plan for testing
-  if (opts?.isDemo || process.env.NODE_ENV === 'test') {
+  // Demo shortcut: In test environment we still need to exercise real logic unless explicitly isDemo.
+  // So only short-circuit when isDemo is true (or when NODE_ENV=test AND forceSegmentation is NOT requested
+  // and no opts.useImportanceBased override). This keeps existing demo behavior for simple tests while
+  // allowing segmentation/page-break invariants to be validated.
+  if (opts?.isDemo || (process.env.NODE_ENV === 'test' && !opts.forceSegmentation)) {
     const demoPageBreaks: PageBreakV2 = {
       panels: [
         {
@@ -120,14 +124,16 @@ export async function estimatePageBreaksSegmented(
   const wasSegmented = segments.length > 1 || !!opts.forceSegmentation
   const jsonSizes = segments.map(estimateSegmentJsonSize)
 
-  // Process segments sequentially, carrying over importance sum
+  // Process segments sequentially with explicit open/closed page semantics.
+  // importanceCarry: residual importance from an open (unsaturated) last page.
+  // pageOffset: number of fully closed pages already committed.
   let importanceCarry = 0
   let pageOffset = 0
   const mergedPanels: PageBreakV2['panels'] = []
 
   for (const segment of segments) {
     try {
-      const segmentResult = calculateImportanceBasedPageBreaks(segment.script, importanceCarry)
+  const segmentResult = calculateImportanceBasedPageBreaks(segment.script, importanceCarry)
       const adjustedPanels = segmentResult.pageBreaks.panels.map((p: PageBreakV2['panels'][number]) => {
         // p.panelIndex はセグメント内 1-based。segment.panelIndices は元スクリプトの 0-based グローバル index
         const globalZeroBased = segment.panelIndices[p.panelIndex - 1]
@@ -141,22 +147,21 @@ export async function estimatePageBreaksSegmented(
       })
       mergedPanels.push(...adjustedPanels)
 
-      // Determine carry: if last segment page was 'open' (not saturated), we keep its residual importance.
-      // If the last page was saturated (exact multiple of 6), we MUST reset carry to 0, otherwise we incorrectly
-      // start the next segment with an initialImportance equal to the full limit, causing an immediate page break
-      // and creating a low-importance standalone page (root cause of issue: page with importance 3 alone).
-      importanceCarry = segmentResult.stats.carryIntoNewPage
-        ? 0
-        : segmentResult.stats.lastPageTotalImportance
+      // New semantics:
+      //  - If last page saturated (lastPageOpen=false): residual=0, all pages are closed -> offset by maxPage, carry=0
+      //  - If last page open (lastPageOpen=true): final page remains in-progress -> offset by (maxPage - 1), carry = residual
+      const { lastPageOpen, lastPageTotalImportance } = segmentResult.stats
       const maxPage = segmentResult.pageBreaks.panels.reduce(
         (m: number, p: PageBreakV2['panels'][number]) => Math.max(m, p.pageNumber),
         0,
       )
-      // If the last page was saturated (carryIntoNewPage true), all pages are completed -> offset by maxPage
-      // If not saturated and has panels, we offset by (maxPage - 1) so next segment continues the partial page
-      const saturated = segmentResult.stats.carryIntoNewPage
-      const completedPages = saturated ? maxPage : Math.max(0, maxPage - 1)
-      pageOffset += completedPages
+      if (lastPageOpen) {
+        importanceCarry = lastPageTotalImportance
+        pageOffset += Math.max(0, maxPage - 1)
+      } else {
+        importanceCarry = 0
+        pageOffset += maxPage
+      }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       throw new Error(`Segment ${segment.segmentIndex} page break estimation failed: ${msg}`)

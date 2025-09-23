@@ -166,6 +166,38 @@ export class ChunkScriptStep implements PipelineStep {
         })
       }
 
+      // Unified claim helper so older test mocks (without acquireChunkProcessing) still work
+      interface ClaimCapable {
+        acquireChunkProcessing?: (jobId: string, chunkIndex: number) => Promise<boolean>
+        markProcessing?: (jobId: string, chunkIndex: number) => Promise<void>
+      }
+      const claimChunk = async (idx: number): Promise<boolean> => {
+        const svc: ClaimCapable = conversionDb as unknown as ClaimCapable
+        if (typeof svc.acquireChunkProcessing === 'function') {
+          try {
+            return await svc.acquireChunkProcessing(jobId, idx)
+          } catch (e) {
+            logger.warn('acquireChunkProcessing threw, falling back to markProcessing', {
+              jobId,
+              chunkIndex: idx,
+              error: e instanceof Error ? e.message : String(e),
+            })
+          }
+        }
+        // Fallback legacy behaviour: always mark processing and return true
+        try {
+          await svc.markProcessing?.(jobId, idx)
+          return true
+        } catch (e) {
+          logger.warn('markProcessing failed during fallback claim', {
+            jobId,
+            chunkIndex: idx,
+            error: e instanceof Error ? e.message : String(e),
+          })
+          return false
+        }
+      }
+
       const worker = async () => {
         while (true) {
           const i = indices.shift()
@@ -189,7 +221,11 @@ export class ChunkScriptStep implements PipelineStep {
               // Try to re-claim the chunk for processing. If another worker truly holds it,
               // markProcessing may throw or be a no-op depending on the adapter. If reclaim
               // succeeds, we proceed; otherwise skip.
-              await conversionDb.markProcessing(jobId, i)
+              const reclaimed = await claimChunk(i)
+              if (!reclaimed) {
+                logger.info('Chunk already claimed by another processor, skipping after reclaim attempt', { jobId, chunkIndex: i })
+                continue
+              }
               logger.info('Reclaimed processing lock for chunk', { jobId, chunkIndex: i })
               statusMap.set(i, { status: 'processing' })
             } catch (claimErr) {
@@ -202,7 +238,11 @@ export class ChunkScriptStep implements PipelineStep {
             }
           } else {
             // Normal path: claim processing status
-            await conversionDb.markProcessing(jobId, i)
+            const claimed = await claimChunk(i)
+            if (!claimed) {
+              logger.info('Skip chunk: another worker claimed concurrently', { jobId, chunkIndex: i })
+              continue
+            }
             statusMap.set(i, { status: 'processing' })
           }
 

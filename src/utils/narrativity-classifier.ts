@@ -1,6 +1,8 @@
 import { z } from 'zod'
+import type { LlmProvider } from '@/agents/llm/types'
 import { DefaultLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getAppConfigWithOverrides } from '@/config/app.config'
+import type { LLMProvider } from '@/config/llm.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { BranchType } from '@/types/branch'
 
@@ -50,7 +52,25 @@ export async function classifyNarrativity(
     .replace('{{text}}', text)
 
   try {
-    const generator = new DefaultLlmStructuredGenerator() // 既存プロバイダ順序を利用
+    type NarrativityPrompts = {
+      systemPrompt: string
+      userPromptTemplate: string
+      providerOrder?: readonly LLMProvider[]
+    }
+    const narrowed: NarrativityPrompts = prompts as NarrativityPrompts
+    const providerOrder = narrowed.providerOrder ? [...narrowed.providerOrder] : undefined
+    const mapped: LlmProvider[] | undefined = providerOrder
+      ?.map((p) => {
+        if (p === 'vertexai_lite') return 'vertexai'
+        if (p === 'openai_nano') return 'openai'
+        // pass through only if within LlmProvider
+        if (['openai','groq','grok','openrouter','gemini','vertexai','fake'].includes(p)) {
+          return p as LlmProvider
+        }
+        return undefined as unknown as LlmProvider
+      })
+      .filter((v): v is LlmProvider => Boolean(v))
+    const generator = new DefaultLlmStructuredGenerator(mapped)
     const result = await generator.generateObjectWithFallback({
       name: 'narrativity-classification',
       systemPrompt,
@@ -60,9 +80,15 @@ export async function classifyNarrativity(
       telemetry: { stepName: 'narrativityClassification', jobId: options.jobId },
     })
 
-    const branch = BranchType[result.branch as keyof typeof BranchType]
+    // branch 正規化: LLM 応答が期待列挙外/欠損の場合は NORMAL にフォールバック
+    let branch = BranchType[result.branch as keyof typeof BranchType]
     if (!branch) {
-      throw new Error(`Invalid branch from LLM: ${result.branch}`)
+      getLogger()
+        .withContext({ service: 'narrativity-classifier' })
+        .warn('LLM returned invalid or empty narrativity branch. Normalizing to NORMAL', {
+          rawBranch: result?.branch,
+        })
+      branch = BranchType.NORMAL
     }
     return {
       branch,
