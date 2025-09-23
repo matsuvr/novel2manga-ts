@@ -1,26 +1,29 @@
 services:
   web:
-    user: "1000:1000"  # 環境変数に依存せず直接指定
+    user: "1000:1000"
     build:
       context: .
-      target: dev
+      target: runner
     ports:
       - '3000:3000'
     volumes:
-      - ./:/app # ソースコードのみマウント
-      # Mount source code but keep the container-built node_modules by
-      # mapping the named volume `node_modules` into the container path.
-      - node_modules:/app/node_modules
-      # Persist Next.js cache between restarts to avoid full recompiles on the
-      # first request after container restart.
-      - next_cache:/app/.next
+      - database:/app/database
+      - storage:/app/storage
+      - local_storage:/app/.local-storage
+      - logs:/app/logs
     env_file:
       - .env
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       VERTICAL_TEXT_GENERATOR_URL: http://vertical-text-generator:8000
-    # Ensure node_modules volume is seeded from image-installed modules
-    command: ['/usr/local/bin/ensure-node-modules.sh', 'npm', 'run', 'dev']
+    command: ['npm', 'run', 'start']
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     depends_on:
       - vertical-text-generator
 
@@ -29,8 +32,7 @@ services:
       context: ./vertical_text_generator
     ports:
       - '8000:8000'
-    volumes:
-      - ./vertical_text_generator:/app
+    # In production we do not mount source to avoid masking image code
     environment:
       PORT: 8000
       PYTHONPATH: /app
@@ -44,8 +46,16 @@ services:
       GUNICORN_GRACEFUL_TIMEOUT: 30
       GUNICORN_KEEPALIVE: 5
       GUNICORN_MAX_REQUESTS: 0
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8000/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 volumes:
-  node_modules:
-  next_cache:
   database:
+  storage:
+  local_storage:
+  logs:

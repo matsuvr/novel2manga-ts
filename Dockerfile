@@ -68,5 +68,15 @@ COPY --from=build /app/.next ./.next
 COPY --from=build /app/public ./public
 COPY --from=build /app/package.json ./package.json
 
+# Ensure runtime writable directories (for sqlite DB, storage, logs, local cache)
+# Named volumes in docker-compose.prod.yml mount over these paths; creating them
+# here with open perms avoids "SQLITE_CANTOPEN: unable to open database file" when
+# the volume is empty and owned by root while container runs as non-root/user 1000.
+RUN install -d -m 0777 \
+  /app/database \
+ && install -d -m 0777 /app/storage \
+ && install -d -m 0777 /app/.local-storage \
+ && install -d -m 0777 /app/logs
+
 EXPOSE 3000
 CMD ["npm", "run", "start"]
