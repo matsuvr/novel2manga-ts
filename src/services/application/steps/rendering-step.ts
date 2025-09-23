@@ -106,76 +106,96 @@ export class RenderingStep implements PipelineStep {
               logger.error('Layout normalization failed', { jobId, episode: ep, error: (normError as Error).message })
               continue
             }
-            const { MangaPageRenderer } = await import('@/lib/canvas/manga-page-renderer')
-            const { appConfig } = await import('@/config/app.config')
-            const renderer = await MangaPageRenderer.create({
-              pageWidth: appConfig.rendering.defaultPageSize.width,
-              pageHeight: appConfig.rendering.defaultPageSize.height,
-              margin: 20,
-              panelSpacing: 10,
-              defaultFont: 'sans-serif',
-              fontSize: 14,
-            })
-            try {
+            if (appConfig.rendering.enableNewRenderPipeline) {
+              // 新パイプライン: 現時点では枠のみ描画 (プレビュー最優先)。
+              const { NewRenderingOrchestrator } = await import('../rendering/new-rendering-orchestrator')
+              const orchestrator = new NewRenderingOrchestrator()
+              const result = await orchestrator.renderMangaLayout(normalized.layout, { novelId, jobId, episode: ep })
+              totalPagesProcessed += result.renderedPages
+              // ステータス登録 (簡易; 既存 renderer 情報を使わないため size/fsize 省略)
               for (const p of normalized.layout.pages) {
-                try {
-                  // パネルの基本検証（ゼロサイズなど）
-                  const rawPanels: unknown[] = (p as { panels?: unknown[] }).panels || []
-                  const invalidPanels = rawPanels.filter((pl) => {
-                    if (!pl || typeof pl !== 'object') return true
-                    const size = (pl as { size?: { width?: unknown; height?: unknown } }).size
-                    if (!size || typeof size !== 'object') return true
-                    const { width, height } = size as { width?: unknown; height?: unknown }
-                    return (
-                      typeof width !== 'number' ||
-                      typeof height !== 'number' ||
-                      width <= 0 ||
-                      height <= 0
-                    )
-                  })
-                  if (invalidPanels.length > 0) {
-                    logger.error('Skipping page due to invalid panel size(s)', { jobId, episode: ep, page: p.page_number, invalidPanels: invalidPanels.length })
-                    totalPagesProcessed++
-                    continue
-                  }
-
-                  jobDb.updateProcessingPosition(jobId, { episode: ep, page: p.page_number })
-                  const imageBlob = await renderer.renderToImage(normalized.layout, p.page_number, 'png')
-                  const imageBuffer = Buffer.from(await imageBlob.arrayBuffer())
-                  await ports.render.putPageRender(
-                    novelId,
-                    jobId,
-                    ep,
-                    p.page_number,
-                    imageBuffer,
-                  )
-                  const { ThumbnailGenerator } = await import('@/lib/canvas/thumbnail-generator')
-                  const thumbBlob = await ThumbnailGenerator.generateThumbnail(imageBlob, { width: 200, height: 280, quality: 0.8, format: 'jpeg' })
-                  const thumbnailBuffer = Buffer.from(await thumbBlob.arrayBuffer())
-                  await ports.render.putPageThumbnail(
-                    novelId,
-                    jobId,
-                    ep,
-                    p.page_number,
-                    thumbnailBuffer,
-                  )
-                  await renderDb.upsertRenderStatus(jobId, ep, p.page_number, {
-                    isRendered: true,
-                    imagePath: `${novelId}/jobs/${jobId}/renders/episode_${ep}/page_${p.page_number}.png`,
-                    thumbnailPath: `${novelId}/jobs/${jobId}/renders/episode_${ep}/thumbnails/page_${p.page_number}_thumb.png`,
-                    width: renderer.pageWidth,
-                    height: renderer.pageHeight,
-                    fileSize: imageBuffer.length,
-                  })
-                  totalPagesProcessed++
-                  logger.info(`レンダリング進捗: EP${ep} ページ${p.page_number}完了`, { jobId, episode: ep, page: p.page_number, progress: `${totalPagesProcessed}/${totalPagesExpected}`, progressPercent: totalPagesExpected ? Math.round((totalPagesProcessed / totalPagesExpected) * 100) : null })
-                } catch (pageError) {
-                  logger.error('Page rendering failed (continuing)', { jobId, episode: ep, page: p.page_number, error: (pageError as Error).message })
-                  totalPagesProcessed++
-                }
+                await renderDb.upsertRenderStatus(jobId, ep, p.page_number, {
+                  isRendered: true,
+                  imagePath: `${novelId}/jobs/${jobId}/renders/episode_${ep}/page_${p.page_number}.png`,
+                  thumbnailPath: undefined,
+                  width: appConfig.rendering.defaultPageSize.width,
+                  height: appConfig.rendering.defaultPageSize.height,
+                  fileSize: undefined,
+                })
               }
-            } finally {
-              try { renderer.cleanup() } catch { /* ignore */ }
+              if (result.errors.length > 0) {
+                logger.warn('new_pipeline_page_errors', { jobId, episode: ep, errors: result.errors.slice(0, 5) })
+              }
+            } else {
+              const { MangaPageRenderer } = await import('@/lib/canvas/manga-page-renderer')
+              const { appConfig: cfg } = await import('@/config/app.config')
+              const renderer = await MangaPageRenderer.create({
+                pageWidth: cfg.rendering.defaultPageSize.width,
+                pageHeight: cfg.rendering.defaultPageSize.height,
+                margin: 20,
+                panelSpacing: 10,
+                defaultFont: 'sans-serif',
+                fontSize: 14,
+              })
+              try {
+                for (const p of normalized.layout.pages) {
+                  try {
+                    const rawPanels: unknown[] = (p as { panels?: unknown[] }).panels || []
+                    const invalidPanels = rawPanels.filter((pl) => {
+                      if (!pl || typeof pl !== 'object') return true
+                      const size = (pl as { size?: { width?: unknown; height?: unknown } }).size
+                      if (!size || typeof size !== 'object') return true
+                      const { width, height } = size as { width?: unknown; height?: unknown }
+                      return (
+                        typeof width !== 'number' ||
+                        typeof height !== 'number' ||
+                        width <= 0 ||
+                        height <= 0
+                      )
+                    })
+                    if (invalidPanels.length > 0) {
+                      logger.error('Skipping page due to invalid panel size(s)', { jobId, episode: ep, page: p.page_number, invalidPanels: invalidPanels.length })
+                      totalPagesProcessed++
+                      continue
+                    }
+                    jobDb.updateProcessingPosition(jobId, { episode: ep, page: p.page_number })
+                    const imageBlob = await renderer.renderToImage(normalized.layout, p.page_number, 'png')
+                    const imageBuffer = Buffer.from(await imageBlob.arrayBuffer())
+                    await ports.render.putPageRender(
+                      novelId,
+                      jobId,
+                      ep,
+                      p.page_number,
+                      imageBuffer,
+                    )
+                    const { ThumbnailGenerator } = await import('@/lib/canvas/thumbnail-generator')
+                    const thumbBlob = await ThumbnailGenerator.generateThumbnail(imageBlob, { width: 200, height: 280, quality: 0.8, format: 'jpeg' })
+                    const thumbnailBuffer = Buffer.from(await thumbBlob.arrayBuffer())
+                    await ports.render.putPageThumbnail(
+                      novelId,
+                      jobId,
+                      ep,
+                      p.page_number,
+                      thumbnailBuffer,
+                    )
+                    await renderDb.upsertRenderStatus(jobId, ep, p.page_number, {
+                      isRendered: true,
+                      imagePath: `${novelId}/jobs/${jobId}/renders/episode_${ep}/page_${p.page_number}.png`,
+                      thumbnailPath: `${novelId}/jobs/${jobId}/renders/episode_${ep}/thumbnails/page_${p.page_number}_thumb.png`,
+                      width: renderer.pageWidth,
+                      height: renderer.pageHeight,
+                      fileSize: imageBuffer.length,
+                    })
+                    totalPagesProcessed++
+                    logger.info(`レンダリング進捗: EP${ep} ページ${p.page_number}完了`, { jobId, episode: ep, page: p.page_number, progress: `${totalPagesProcessed}/${totalPagesExpected}`, progressPercent: totalPagesExpected ? Math.round((totalPagesProcessed / totalPagesExpected) * 100) : null })
+                  } catch (pageError) {
+                    logger.error('Page rendering failed (continuing)', { jobId, episode: ep, page: p.page_number, error: (pageError as Error).message })
+                    totalPagesProcessed++
+                  }
+                }
+              } finally {
+                try { renderer.cleanup() } catch { /* ignore */ }
+              }
             }
           } else if (
             parsedObj.panels &&
