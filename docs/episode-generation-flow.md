@@ -803,24 +803,50 @@ class ChunkBatchProcessor {
 ### 5. 実装計画
 
 #### フェーズ1: テストカバレッジ向上（✅ 完了）
-1. (撤去) ChunkDataBuilder関連テストは不要化
-2. エピソード境界ケースのテスト強化
-3. エラーシナリオのテスト追加
+1. (撤去) ChunkDataBuilder関連テストは不要化（Legacy レイヤ削除に伴いテストも除去）
+2. エピソード境界ケースのテスト強化（パネル連番 / 範囲異常 / 空テキスト）
+3. エラーシナリオのテスト追加（ValidationError / InvariantViolation など EpisodeError taxonomy）
 
-#### フェーズ2: 責任分離（✅ 一部完了）
-1. ✅ 旧buildChunkDataレイヤー削除（インライン最小化）
-2. ✅ getSfxText 導入（ローカル関数; 将来 util化余地）
+#### フェーズ2: 責任分離（✅ 完了）
+1. 旧buildChunkDataレイヤー削除（インライン最小化）
+2. getSfxText 導入（ローカル関数; 将来 util 化余地）
+3. Panel Index 正規化基盤導入（normalizePanelIndices）
+4. EpisodeProcessingStep Effect 化 + EpisodeError taxonomy 導入
+5. LayoutPipeline 5 ステージ化（Segmentation → Importance → Alignment → Bundling → Persistence）
 
-#### フェーズ3: パフォーマンス改善（🔄 進行中）
-1. EpisodeDataServiceの実装
-2. バッチ処理の導入
-3. 並行処理の安全な実装
-4. キャッシュ機能の追加
+#### フェーズ3: パフォーマンス / 信頼性改善（♻ 再定義中）
+| 項目 | 状態 | メモ |
+|------|------|------|
+| EpisodeDataService の実装 | 方向転換完了 | 専用 Service → pure Assembler + Ports へピボット（冗長レイヤ削減）|
+| バッチ処理の導入 | 設計中 | Episode 並列処理ポリシー（排他 vs 冪等リトライ）ドラフト作成中（未コード）|
+| 並行処理の安全な実装 | 未着手 | Port / Drizzle upsert 衝突シミュレーション & ロック方針要検討 |
+| キャッシュ機能の追加 | 未着手 | Script / Layout 中間成果キャッシュ (segments, alignment) 方針未確定 |
+| Retry ポリシー導入 | 部分完了 | EpisodeProcessingStep に transient / IO retry 適用済 / LayoutPipeline 未適用 |
 
-#### フェーズ4: アーキテクチャ刷新（📋 計画中）
-1. Pipeline Patternの導入
-2. Repository Patternの実装
-3. 統合テストの強化
+#### フェーズ4: アーキテクチャ刷新 / テスト強化（🚧 進行中）
+| 項目 | 状態 | メモ |
+|------|------|------|
+| Pipeline Pattern の導入 | 部分完了 | LayoutPipeline 導入済 / EpisodeProcessing の Step 合成リファクタ残 |
+| Repository Pattern の実装 | 方向転換完了 | Heavy Repository 撤回 → Ports (ScriptPort / EpisodePort) 採用（docs 反映済）|
+| 統合テストの強化 | 部分進行 | Ports / Layout 基本テスト緑。F8 (fault injection / retry 振る舞い) 追加予定 |
+
+##### Plan Drift 注記
+初期計画の「EpisodeDataService / Repository Pattern」は抽象過多と判断し、Port + pure function (Assembler / Pipeline Steps) へ方針転換。これに伴い Phase3/4 のラベルを「再定義中 / 方向転換完了」として明示。
+
+##### Next Actions（優先順）
+1. [P3] バッチ & 並行処理設計確定 → 設計ドキュメントドラフト化 / 競合解決方針 (optimistic + idempotent retry) 明文化
+2. [P3] Retry ポリシー LayoutPipeline への適用（SEGMENTATION_FAILED の一時失敗分類 + exp backoff 実装）
+3. [P3] キャッシュ方針決定（segments/alignment）→ config フラグ & LRU/FS 比較評価
+4. [P4] EpisodeProcessing Step 合成リファクタ（panelRange→slice→textBuild→persist の純化）
+5. [P4] F8 統合テストシナリオ (S1..S4 / E1..E5) + fault injection adapter 実装
+6. tasks.md 差分同期（pivot 反映済確認 / 追加タスク: LayoutPipeline retry, cache policy）
+7. Retry 設定 (exponential backoff) の config 化 (`retry.config.ts`) + docs 追記
+
+##### 完了判定基準（更新）
+| フェーズ | Done 条件（再定義後） |
+|----------|-----------------------|
+| P3 | バッチ/並行/キャッシュ/全パイプ retry 方針確定 & 部分実装 (retry + 1 つ性能改善) |
+| P4 | EpisodeProcessing Step 化 + 統合テスト (F8) シナリオ緑 + Port 方針ドキュメント整合 |
 
 ## 結論
 
