@@ -191,8 +191,18 @@ export class LayoutPipeline {
       }
 
       // Stage 5: Combined full pages
+      // NOTE: pagesAccumulator はエピソード順 + エピソード内昇順で push 済み。
+      // 以前は page_number (各エピソード内で 1..M リセット) で sort していたため
+      // Episode 2 page 1 が Episode 1 page 2 より先に来る interleave 問題があった。
+      // 対策: 並び替えを行わず挿入順を保持しつつ、full_pages.json では
+      // グローバル連番 page_number を再採番して一意性と読み順を保証する。
   const fullPagesKey = JsonStorageKeys.fullPages({ novelId, jobId })
       try {
+        // グローバル連番へ再マップ
+        const globalPages = pagesAccumulator.map((p, idx) => ({
+          page_number: idx + 1,
+          panels: p.panels,
+        }))
         await this.ports.layoutStorage.put(
           fullPagesKey,
           JSON.stringify(
@@ -200,7 +210,7 @@ export class LayoutPipeline {
               title: 'Combined Episodes',
               episodeNumber: 1,
               episodeTitle: 'Combined Episodes',
-              pages: pagesAccumulator.sort((a, b) => a.page_number - b.page_number),
+              pages: globalPages,
               episodes: bundledEpisodes.episodes,
             },
             null,
