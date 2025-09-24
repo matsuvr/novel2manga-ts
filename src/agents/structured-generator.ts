@@ -220,7 +220,7 @@ export class DefaultLlmStructuredGenerator {
             if (typeof stepName === 'string') {
               const retryLabelMap: Record<string, string> = {
                 chunkConversion: 'chunkConversion-Retry',
-                EpisodeBreakPlan: 'EpisodeBreakPlan-Retry',
+                'episode-break-estimation': 'episode-break-estimation-Retry',
               }
               const mapped = retryLabelMap[stepName]
               if (mapped) {

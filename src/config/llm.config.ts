@@ -52,7 +52,17 @@ export function getProviderForUseCase(useCase: LLMUseCase): LLMProvider {
   const envVal = process.env[envKey]
   if (
     envVal &&
-    ['openai', 'gemini', 'groq', 'grok', 'openrouter', 'vertexai', 'fake'].includes(envVal)
+    [
+      'openai',
+      'openai_nano',
+      'gemini',
+      'groq',
+      'grok',
+      'openrouter',
+      'vertexai',
+      'vertexai_lite',
+      'fake',
+    ].includes(envVal)
   ) {
     return envVal as LLMProvider
   }
@@ -196,6 +206,8 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
       case 'vertexai':
         // Vertex AI uses service account authentication, not API keys
         return 'vertex-ai-auth'
+      case 'vertexai_lite':
+        return 'vertex-ai-auth'
       case 'fake':
         return 'fake-key'
       default:
@@ -220,13 +232,15 @@ export function getLLMProviderConfig(provider: LLMProvider): ProviderConfig {
         return process.env.GEMINI_MODEL
       case 'vertexai':
         return process.env.VERTEX_AI_MODEL
+      case 'vertexai_lite':
+        return process.env.VERTEX_AI_LITE_MODEL ?? process.env.VERTEX_AI_MODEL
       default:
         return undefined
     }
   })()
 
   // Vertex AI はここで実際の環境変数を読み込み・検証する（遅延検証）
-  if (provider === 'vertexai' || provider === 'gemini') {
+  if (provider === 'vertexai' || provider === 'vertexai_lite' || provider === 'gemini') {
     const project = process.env.VERTEX_AI_PROJECT
     const location = process.env.VERTEX_AI_LOCATION
     const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS

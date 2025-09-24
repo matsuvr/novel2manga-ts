@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { promises as fs } from 'node:fs'
+import path from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { DefaultLlmStructuredGenerator } from '@/agents/structured-generator'
+import type { LoggerPort } from '@/infrastructure/logging/logger'
+import type { StoragePorts } from '@/infrastructure/storage/ports'
+import type { StepContext } from '@/services/application/steps/base-step'
 import { EpisodeBreakEstimationStep } from '@/services/application/steps/episode-break-estimation-step'
-import type { EpisodeBreakPlan } from '@/types/script'
+import type { EpisodeBreakPlan, NewMangaScript } from '@/types/script'
 import { TEST_EPISODE_CONFIG } from './integration/__helpers/test-agents'
 
 // Privateメソッドに型安全にアクセスするためのテスト用インターフェース
@@ -12,6 +18,109 @@ interface EpisodeBreakEstimationStepPrivate {
     cfg: typeof TEST_EPISODE_CONFIG,
   ) => { valid: boolean; issues: string[] }
 }
+
+const TEST_NOVEL_ID = 'test-novel'
+const TEST_JOB_ID = 'test-job'
+
+const testScript: NewMangaScript = {
+  style_tone: 'test',
+  style_art: 'test',
+  style_sfx: 'test',
+  characters: [],
+  locations: [],
+  props: [],
+  continuity_checks: [],
+  panels: [
+    {
+      no: 1,
+      cut: 'first-cut',
+      camera: 'wide',
+      narration: ['narration'],
+      dialogue: [],
+      sfx: [],
+      importance: 3,
+    },
+    {
+      no: 2,
+      cut: 'second-cut',
+      camera: 'close',
+      narration: ['narration-2'],
+      dialogue: [],
+      sfx: [],
+      importance: 3,
+    },
+  ],
+}
+
+function createLoggerStub(): LoggerPort {
+  const stub: Partial<LoggerPort> = {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  }
+  stub.withContext = vi.fn().mockReturnValue(stub as LoggerPort)
+  return stub as LoggerPort
+}
+
+const analysisDir = path.join(
+  process.cwd(),
+  '.test-storage',
+  'analysis',
+  TEST_NOVEL_ID,
+  'jobs',
+  TEST_JOB_ID,
+)
+
+async function cleanTestStorage(): Promise<void> {
+  await fs.rm(path.join(process.cwd(), '.test-storage'), { recursive: true, force: true })
+}
+
+describe('EpisodeBreakEstimationStep caching behaviour', () => {
+  beforeEach(async () => {
+    await cleanTestStorage()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('reuses cached episode plan on subsequent invocations', async () => {
+    const generatorSpy = vi
+      .spyOn(DefaultLlmStructuredGenerator.prototype, 'generateObjectWithFallback')
+      .mockResolvedValue({
+        episodes: [
+          {
+            episodeNumber: 1,
+            title: 'Episode 1',
+            startPanelIndex: 1,
+            endPanelIndex: 2,
+            description: 'Test',
+          },
+        ],
+      } satisfies EpisodeBreakPlan)
+
+    const step = new EpisodeBreakEstimationStep()
+    const logger = createLoggerStub()
+    const context: StepContext = {
+      jobId: TEST_JOB_ID,
+      novelId: TEST_NOVEL_ID,
+      logger,
+      ports: {} as StoragePorts,
+    }
+
+    const firstResult = await step.estimateEpisodeBreaks(structuredClone(testScript), context)
+    expect(firstResult.success).toBe(true)
+    expect(generatorSpy).toHaveBeenCalledTimes(1)
+
+    const secondResult = await step.estimateEpisodeBreaks(structuredClone(testScript), context)
+    expect(secondResult.success).toBe(true)
+    expect(generatorSpy).toHaveBeenCalledTimes(1)
+
+    const cachedPath = path.join(analysisDir, 'analysis', 'episode_break_plan.json')
+    await expect(fs.access(cachedPath)).resolves.not.toThrow()
+  })
+})
 
 describe('EpisodeBreakEstimationStep.normalizeEpisodeBreaks', () => {
   it('重複した開始インデックスを与えられた場合、余剰エピソードを除去し連続カバレッジに正規化する', () => {

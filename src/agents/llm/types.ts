@@ -2,11 +2,13 @@ import type { z } from 'zod'
 
 export type LlmProvider =
   | 'openai'
+  | 'openai_nano'
   | 'groq'
   | 'grok'
   | 'openrouter'
   | 'gemini'
   | 'vertexai'
+  | 'vertexai_lite'
   | 'fake'
 
 export interface StructuredOutputSpec<T> {
@@ -99,7 +101,7 @@ export interface OpenAICompatibleConfig {
   baseUrl?: string
   apiKey: string
   model: string
-  provider: Extract<LlmProvider, 'openai' | 'groq' | 'grok' | 'openrouter'>
+  provider: Extract<LlmProvider, 'openai' | 'openai_nano' | 'groq' | 'grok' | 'openrouter'>
   useChatCompletions?: boolean
 }
 

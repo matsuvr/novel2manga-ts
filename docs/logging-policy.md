@@ -137,7 +137,7 @@ Maintainer: Logging WG (temporary: @matsuvr)
 ### 重要な実装保証
 - `structured-generator.ts` の `createClient()` は Provider クライアントを必ず `wrapWithNewLlmLogging(base, true)` でラップする。→ 新規 Structured ステップ実装時に追加の明示ラップ不要。
 - Telemetry に `jobId` が無い場合は novelId 解決不能のためスキップ (意図した挙動)。必須: `telemetry: { jobId, stepName, ... }`。
-- `stepName` は最小単位識別 (例: `narrativity-judge`, `chunkConversion`, `EpisodeBreakPlan`) に統一し、分析 SQL 側でフィルタ可能にする。
+- `stepName` は最小単位識別 (例: `narrativity-judge`, `chunkConversion`, `episode-break-estimation`) に統一し、分析 SQL 側でフィルタ可能にする。
 - 大きなプロンプト/レスポンスは `sanitizeRequest` / `sanitizeResponse` によりサイズ上限を超えた本文を切り詰め (実テキスト全長は別途ストレージへ保存しない方針 / PII リスク軽減)。
 
 ### JSON フォーマット (抜粋)

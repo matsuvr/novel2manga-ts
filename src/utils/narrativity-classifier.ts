@@ -59,16 +59,19 @@ export async function classifyNarrativity(
     }
     const narrowed: NarrativityPrompts = prompts as NarrativityPrompts
     const providerOrder = narrowed.providerOrder ? [...narrowed.providerOrder] : undefined
+    const allowedProviders: ReadonlyArray<LlmProvider> = [
+      'openai',
+      'openai_nano',
+      'groq',
+      'grok',
+      'openrouter',
+      'gemini',
+      'vertexai',
+      'vertexai_lite',
+      'fake',
+    ]
     const mapped: LlmProvider[] | undefined = providerOrder
-      ?.map((p) => {
-        if (p === 'vertexai_lite') return 'vertexai'
-        if (p === 'openai_nano') return 'openai'
-        // pass through only if within LlmProvider
-        if (['openai','groq','grok','openrouter','gemini','vertexai','fake'].includes(p)) {
-          return p as LlmProvider
-        }
-        return undefined as unknown as LlmProvider
-      })
+      ?.map((p) => (allowedProviders.includes(p as LlmProvider) ? (p as LlmProvider) : undefined))
       .filter((v): v is LlmProvider => Boolean(v))
     const generator = new DefaultLlmStructuredGenerator(mapped)
     const result = await generator.generateObjectWithFallback({
