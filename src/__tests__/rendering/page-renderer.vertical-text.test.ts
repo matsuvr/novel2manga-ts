@@ -77,4 +77,88 @@ describe('renderPageToCanvas vertical dialogue integration', () => {
     expect(hasDrawImage).toBe(true)
     expect(hasFillTextDialogue).toBe(false)
   })
+
+  it('places multiple dialogue assets from right to left within panel bounds', () => {
+    const layout = makeLayout(['右端', '中央', '左端'])
+    const panel = layout.pages[0].panels[0]
+    const vt = appConfig.rendering.verticalText.defaults
+    panel.dialogues?.forEach((dialogue, idx) => {
+      const key = buildDialogueKey({
+        dialogue: dialogue as any,
+        fontSize: vt.fontSize,
+        lineHeight: vt.lineHeight,
+        letterSpacing: vt.letterSpacing,
+        padding: vt.padding,
+        maxCharsPerLine: vt.maxCharsPerLine,
+      })
+      const width = 40 + idx * 10
+      const height = 120
+      const dummyImage = { width, height } as unknown as CanvasImageSource
+      setDialogueAsset(key, { image: dummyImage, width, height })
+    })
+
+    const canvas = renderPageToCanvas({ layout, pageNumber: 1, width: 600, height: 600 }) as unknown as MockCanvas
+    const drawCalls = canvas.ctx.calls.filter(c => c.startsWith('drawImage@'))
+    expect(drawCalls).toHaveLength(3)
+
+    const parsed = drawCalls.map((call) => {
+      const coords = call.replace('drawImage@', '').split(',')
+      const x = Number(coords[0])
+      const w = Number(coords[2])
+      return { x, w }
+    })
+
+    for (let i = 1; i < parsed.length; i++) {
+      expect(parsed[i].x).toBeLessThan(parsed[i - 1].x)
+    }
+    for (const { x, w } of parsed) {
+      expect(x).toBeGreaterThanOrEqual(0)
+      expect(x + w).toBeLessThanOrEqual(canvas.width)
+    }
+  })
+
+  it('keeps narration bubbles separated and anchored to the right edge', () => {
+    const layout = makeLayout(['長めのナレーション1', '長めのナレーション2', '長めのナレーション3'])
+    const panel = layout.pages[0].panels[0]
+    panel.dialogues = panel.dialogues?.map(dialogue => ({ ...dialogue, type: 'narration' }))
+    const vt = appConfig.rendering.verticalText.defaults
+    panel.dialogues?.forEach((dialogue, idx) => {
+      const key = buildDialogueKey({
+        dialogue: dialogue as any,
+        fontSize: vt.fontSize,
+        lineHeight: vt.lineHeight,
+        letterSpacing: vt.letterSpacing,
+        padding: vt.padding,
+        maxCharsPerLine: vt.maxCharsPerLine,
+      })
+      const width = 120
+      const height = 360 + idx * 40
+      const dummyImage = { width, height } as unknown as CanvasImageSource
+      setDialogueAsset(key, { image: dummyImage, width, height })
+    })
+
+    const canvas = renderPageToCanvas({ layout, pageNumber: 1, width: 800, height: 1200 }) as unknown as MockCanvas
+    const bubbleRects = canvas.ctx.calls
+      .filter(call => call.startsWith('rect:'))
+      .map(call => {
+        const [, data] = call.split(':')
+        const [x, y, w, h] = data.split(',').map(Number)
+        return { x, y, w, h }
+      })
+      // 除外: パネル全体をクリップする rect (幅または高さがキャンバスサイズと同等)
+      .filter(rect => rect.w < canvas.width * 0.9 && rect.h < canvas.height * 0.9)
+
+    expect(bubbleRects).toHaveLength(3)
+    // 右→左の順序、右端に寄せ、重なり無しを検証
+    for (let i = 0; i < bubbleRects.length; i++) {
+      const current = bubbleRects[i]
+      const rightEdge = current.x + current.w
+      expect(rightEdge).toBeLessThanOrEqual(800) // パネル右端内
+      expect(rightEdge).toBeGreaterThan(800 * 0.5) // 右側半分に存在
+      if (i > 0) {
+        const prev = bubbleRects[i - 1]
+        expect(current.x + current.w).toBeLessThanOrEqual(prev.x)
+      }
+    }
+  })
 })
