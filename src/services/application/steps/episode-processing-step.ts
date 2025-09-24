@@ -141,42 +141,81 @@ export class EpisodeProcessingStep implements PipelineStep {
     }
 
     const txManagerModule = await import('@/services/application/transaction-manager')
-  const { executeStorageWithDbOperation } = txManagerModule
+    const { executeStorageWithDbOperation } = txManagerModule
 
     // エピソード本文の保存をストレージ+DB一体のトランザクションで実行（強整合性）
     const { getPorts } = await import('@/ports/factory')
     const ports = getPorts()
 
-    await executeStorageWithDbOperation({
-      storage,
-      key,
-      value: episodeText,
-      metadata: {
-        contentType: 'text/plain; charset=utf-8',
+    try {
+      await executeStorageWithDbOperation({
+        storage,
+        key,
+        value: episodeText,
+        metadata: {
+          contentType: 'text/plain; charset=utf-8',
+          jobId,
+          novelId,
+          episode: String(episodeNumber),
+        },
+        dbOperation: async () => {
+          // Use EpisodePort (Effect を Promise へ実行) for update
+          const eff = ports.episode.updateEpisodeTextPath(jobId, episodeNumber, key)
+          await Effect.runPromise(eff)
+        },
+        tracking: {
+          filePath: key,
+          fileCategory: 'episode',
+          fileType: 'txt',
+          novelId,
+          jobId,
+          mimeType: 'text/plain; charset=utf-8',
+        },
+      })
+
+      logger.info('Episode text saved atomically with DB path update', {
         jobId,
-        novelId,
-        episode: String(episodeNumber),
-      },
-      dbOperation: async () => {
-        // Use EpisodePort (Effect を Promise へ実行) for update
+        episodeNumber,
+        episodeTextKey: key,
+        mode: 'strong-consistency',
+      })
+    } catch (err) {
+      // 強整合経路失敗時のフォールバック: ストレージ → DB を順次実行 (ベストエフォート)
+      const causeMsg = err instanceof Error ? err.message : String(err)
+      logger.error('Episode text persistence (strong consistency wrapper) failed; attempting sequential fallback', {
+        jobId,
+        episodeNumber,
+        episodeTextKey: key,
+        error: causeMsg,
+      })
+      try {
+        await storage.put(key, episodeText, {
+          contentType: 'text/plain; charset=utf-8',
+          jobId,
+          novelId,
+          episode: String(episodeNumber),
+          fallback: 'non-transactional',
+        })
         const eff = ports.episode.updateEpisodeTextPath(jobId, episodeNumber, key)
         await Effect.runPromise(eff)
-      },
-      tracking: {
-        filePath: key,
-        fileCategory: 'episode',
-        fileType: 'txt',
-        novelId,
-        jobId,
-        mimeType: 'text/plain; charset=utf-8',
-      },
-    })
-
-    logger.info('Episode text saved atomically with DB path update', {
-      jobId,
-      episodeNumber,
-      episodeTextKey: key,
-    })
+        logger.warn('Episode text persisted with degraded consistency (non-transactional fallback)', {
+          jobId,
+          episodeNumber,
+          episodeTextKey: key,
+        })
+      } catch (fallbackErr) {
+        const fbMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)
+        logger.error('Episode text fallback persistence also failed', {
+          jobId,
+          episodeNumber,
+          episodeTextKey: key,
+          error: fbMsg,
+          originalError: causeMsg,
+        })
+        // Re-throw original error context; 上位で ExternalIOError として再分類されリトライ対象
+        throw err
+      }
+    }
   }
 
   /**

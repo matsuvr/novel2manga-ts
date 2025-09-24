@@ -11,6 +11,8 @@ import { type SfxPlacement, SfxPlacer } from './sfx-placer'
 
 /** パネル全幅に対する水平スロット領域の割合。0.9はパネル幅の90%をスロット領域として確保するための値。 */
 const HORIZONTAL_SLOT_COVERAGE = 0.9
+/** 複数バブル配置時のカラム間スペース比率（パネル幅に対する割合）。狭すぎると重なり、広すぎると無駄領域。 */
+const BUBBLE_COLUMN_GAP_RATIO = 0.01
 /** バブルの上端オフセット比率。0.2はバブルをパネル上端から20%下げて配置するための値。 */
 const BUBBLE_TOP_OFFSET_RATIO = 0.2
 /** バブルエリアの最大高さ比率。0.7はパネル高さの70%までバブルを配置可能とするための値。 */
@@ -124,6 +126,25 @@ export class CanvasRenderer {
   // Exposed for tests to spy and validate SFX placement interactions
   public sfxPlacer: SfxPlacer
   private layoutCoordinator: PanelLayoutCoordinator
+  // ランタイム描画メトリクス
+  private metrics: {
+    dialogue: {
+      count: number
+      totalScale: number
+      maxScale: number
+      minScale: number
+      perBubble: Array<{ panelId: number | string; index: number; scale: number; w: number; h: number }>
+    }
+    panels: {
+      count: number
+      totalUnusedSlotRatio: number
+    }
+    sfx: {
+      count: number
+      placementAttempts: number
+    }
+    timestamps: { start: number; end?: number }
+  }
 
   // Factory kept async for backward compatibility with call sites
   static async create(config: CanvasConfig): Promise<CanvasRenderer> {
@@ -167,6 +188,12 @@ export class CanvasRenderer {
     this.setupCanvas()
     this.sfxPlacer = new SfxPlacer()
     this.layoutCoordinator = new PanelLayoutCoordinator()
+    this.metrics = {
+      dialogue: { count: 0, totalScale: 0, maxScale: 0, minScale: Number.POSITIVE_INFINITY, perBubble: [] },
+      panels: { count: 0, totalUnusedSlotRatio: 0 },
+      sfx: { count: 0, placementAttempts: 0 },
+      timestamps: { start: Date.now() },
+    }
   }
 
   // Provide robust defaults in case app config is partially mocked in tests
@@ -312,6 +339,7 @@ export class CanvasRenderer {
   }
 
   drawPanel(panel: Panel): void {
+    this.metrics.panels.count += 1
     // レイアウトコーディネーターをリセット
     this.layoutCoordinator.reset()
 
@@ -349,32 +377,45 @@ export class CanvasRenderer {
         }
         try {
           if (panel.dialogues.length > 1) {
-            const slotWidth = (width * HORIZONTAL_SLOT_COVERAGE) / panel.dialogues.length
-            const bubbleY = y + height * BUBBLE_TOP_OFFSET_RATIO
-            const maxAreaHeight = height * MAX_BUBBLE_AREA_HEIGHT_RATIO
+            // --- Improved multi-dialogue layout ---
+            // 読み順（縦書き日本語）は右→左。従来コードは2個時のみ反転 / 3個以上は左→右で不正。
+            // ここで常に右端から左へカラムを割り当てる。
+            const dialogueCount = panel.dialogues.length
+            const usableWidth = width * HORIZONTAL_SLOT_COVERAGE
+            const gap = width * BUBBLE_COLUMN_GAP_RATIO
+            const totalGap = gap * (dialogueCount - 1)
+            const slotWidth = (usableWidth - totalGap) / dialogueCount
 
-            for (let i = 0; i < panel.dialogues.length; i++) {
-              const dialogue = panel.dialogues[i]
-              const key = `${panel.id}:${i}`
+            const bubbleTop = y + height * BUBBLE_TOP_OFFSET_RATIO
+            const maxBubbleAreaHeight = height * MAX_BUBBLE_AREA_HEIGHT_RATIO
+
+            // 右端スロットのX開始位置（margin考慮）
+            const rightEdgeStart = x + width - width * PANEL_MARGIN_RATIO - slotWidth
+
+            for (let logicalIndex = 0; logicalIndex < dialogueCount; logicalIndex++) {
+              // logicalIndex: 0 が右端
+              const dialogue = panel.dialogues[logicalIndex]
+              const key = `${panel.id}:${logicalIndex}`
               const asset = this.dialogueAssets?.[key]
               if (!asset) throw new Error(`Dialogue asset missing for ${key}`)
 
-              const targetDrawWidth = slotWidth / Math.sqrt(2) - BUBBLE_PADDING * 2
-              const widthScale = targetDrawWidth > 0 ? targetDrawWidth / asset.width : 0
-              const targetDrawHeight = maxAreaHeight / Math.sqrt(2) - BUBBLE_PADDING * 2
-              const heightScale = targetDrawHeight > 0 ? targetDrawHeight / asset.height : 0
-              const scale = Math.min(widthScale, heightScale, 1)
-              if (scale <= 0) continue
+              const slotX = rightEdgeStart - (slotWidth + gap) * logicalIndex
 
-              const drawW = asset.width * scale
-              const drawH = asset.height * scale
-              const bubbleW = (drawW + BUBBLE_PADDING * 2) * Math.sqrt(2)
-              const bubbleH = (drawH + BUBBLE_PADDING * 2) * Math.sqrt(2)
+              // スケール計算（幅・高さを別々に制限、等比）
+              const maxDrawW = Math.max(1, slotWidth - BUBBLE_PADDING * 2)
+              const maxDrawH = Math.max(1, maxBubbleAreaHeight - BUBBLE_PADDING * 2)
+              const scale = Math.min(maxDrawW / asset.width, maxDrawH / asset.height, 1)
+              const drawW = Math.max(1, asset.width * scale)
+              const drawH = Math.max(1, asset.height * scale)
 
-              const slotIndex = panel.dialogues.length === 2 ? panel.dialogues.length - 1 - i : i
-              const slotX = x + width * PANEL_MARGIN_RATIO + slotWidth * slotIndex
+              // バブルサイズ（余白含む）。従来の sqrt(2) 補正は根拠不明かつ文字が枠外にはみ出す要因だったため撤廃。
+              const bubbleW = drawW + BUBBLE_PADDING * 2
+              const bubbleH = drawH + BUBBLE_PADDING * 2
+
+              // 横方向センタリング（slot幅内）
               const bx = slotX + (slotWidth - bubbleW) / 2
-              const by = bubbleY
+              const by = bubbleTop
+
               const slotBounds = { x: slotX, y, width: slotWidth, height }
 
               this.drawDialogueBubble({
@@ -387,11 +428,18 @@ export class CanvasRenderer {
                 imageWidth: drawW,
                 imageHeight: drawH,
                 bounds: slotBounds,
-                // 水平配置の場合、ラベル（セリフ）のX方向のオフセット比率は常に1（右端）に設定します。
-                // これは、バブルが横に並ぶため、ラベルをバブルの右側に寄せて配置するためです。
-                // 縦配置や他の配置ではこの値が異なる場合があります（例: 0.5で中央寄せなど）。
+                // ラベルは右側に添わせる（縦書きの視線導線上自然）。
                 labelOffsetXRatio: 1,
               })
+
+              // メトリクス更新 (unused slot ratio = (slotWidth - bubbleW)/slotWidth)
+              const unusedRatio = slotWidth > 0 ? Math.max(0, (slotWidth - bubbleW) / slotWidth) : 0
+              this.metrics.panels.totalUnusedSlotRatio += unusedRatio / dialogueCount // per panel average component
+              this.metrics.dialogue.count += 1
+              this.metrics.dialogue.totalScale += scale
+              this.metrics.dialogue.maxScale = Math.max(this.metrics.dialogue.maxScale, scale)
+              this.metrics.dialogue.minScale = Math.min(this.metrics.dialogue.minScale, scale)
+              this.metrics.dialogue.perBubble.push({ panelId: panel.id, index: logicalIndex, scale, w: drawW, h: drawH })
             }
           } else if (panel.dialogues.length === 1) {
             const dialogue = panel.dialogues[0]
@@ -441,6 +489,15 @@ export class CanvasRenderer {
                 imageHeight: drawH,
                 bounds: panelBounds,
               })
+
+              // single-bubble: unused horizontal ratio is always 0 (slot == bubble)
+              this.metrics.panels.totalUnusedSlotRatio += 0
+              const scale = drawW / asset.width
+              this.metrics.dialogue.count += 1
+              this.metrics.dialogue.totalScale += scale
+              this.metrics.dialogue.maxScale = Math.max(this.metrics.dialogue.maxScale, scale)
+              this.metrics.dialogue.minScale = Math.min(this.metrics.dialogue.minScale, scale)
+              this.metrics.dialogue.perBubble.push({ panelId: panel.id, index: 0, scale, w: drawW, h: drawH })
             }
           }
         } finally {
@@ -450,6 +507,7 @@ export class CanvasRenderer {
 
       // SFXを配置・描画し、占有領域を登録
       if (panel.sfx && panel.sfx.length > 0) {
+        this.metrics.sfx.count += panel.sfx.length
         this.ctx.save()
         this.ctx.beginPath()
         if (canClip && this.hasRect(this.ctx)) {
@@ -464,6 +522,8 @@ export class CanvasRenderer {
             height: area.height,
           }))
           const sfxPlacements = this.sfxPlacer.placeSfx(panel.sfx, panel, panelBounds, preOccupied)
+          // placementAttempts を概算 (各 SFX 固定 1 + 予備探索は placer 側で後日 exposing 予定、現状は count と同じ)
+          this.metrics.sfx.placementAttempts += sfxPlacements.length
           for (const placement of sfxPlacements) {
             this.drawSfxWithPlacement(placement)
             const estBounds = {
