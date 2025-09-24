@@ -64,11 +64,11 @@ export interface VertexAIConfig {
 }
 
 export interface VertexAIClientConfig extends VertexAIConfig {
-  provider: 'vertexai' | 'gemini'
+  provider: Extract<import('./types').LlmProvider, 'vertexai' | 'vertexai_lite' | 'gemini'>
 }
 
 export class VertexAIClient implements LlmClient {
-  readonly provider: 'vertexai' | 'gemini'
+  readonly provider: Extract<import('./types').LlmProvider, 'vertexai' | 'vertexai_lite' | 'gemini'>
   private readonly client: GoogleGenAI
   private readonly model: string
 

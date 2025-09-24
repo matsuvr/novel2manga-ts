@@ -7,6 +7,7 @@ import { buildDialogueKey } from '../assets/dialogue-key'
 import { createCanvas, ensureCanvasInited } from '../core/canvas-init'
 import { drawBasicBubble, drawPanelFrame, fillBackgroundWhite } from '../core/draw-primitives'
 import { measureTextWidthCached } from '../metrics/measure-text-cache'
+import { SfxPlacer } from '../sfx-placer'
 
 export interface PageRenderInput {
   layout: MangaLayout
@@ -21,8 +22,9 @@ export interface PageRenderInput {
 }
 
 /**
- * Extremely thin initial facade. For now it only draws panel frames (no dialogues/SFX) to allow
- * incremental rollout. We will progressively migrate logic from legacy CanvasRenderer.
+ * Server-side facade for the new rendering pipeline. This module must never execute in a browser;
+ * the rendering step runs inside workers/Node runtime only. Tests exercise it under happy-dom, so
+ * browser-like globals are tolerated when NODE_ENV === 'test'.
  */
 interface TextRenderConfig {
   dialogue: { font: string; lineHeight: number; bubblePadding: number; maxBubbleWidthPx: number }
@@ -32,6 +34,25 @@ interface TextRenderConfig {
 const defaultTextConfig: TextRenderConfig = {
   dialogue: { font: '14px "Noto Sans JP"', lineHeight: 18, bubblePadding: 8, maxBubbleWidthPx: 320 },
   sfx: { font: 'bold 20px "Noto Sans JP"', lineSpacing: 24, fillStyle: 'rgba(0,0,0,0.7)' },
+}
+
+const HORIZONTAL_SLOT_COVERAGE = 0.9
+const BUBBLE_COLUMN_GAP_RATIO = 0.01
+const BUBBLE_TOP_OFFSET_RATIO = 0.2
+const MAX_BUBBLE_AREA_HEIGHT_RATIO = 0.7
+const PANEL_MARGIN_RATIO = 0.05
+const MULTI_DIALOGUE_MAX_SPAN_RATIO = 0.6
+const SINGLE_BUBBLE_MAX_WIDTH_RATIO = 0.45
+const SINGLE_BUBBLE_MIN_HEIGHT = 60
+const MIN_BUBBLE_HEIGHT = 30
+const AVAILABLE_VERTICAL_MARGIN = 2
+
+type Rect = { x: number; y: number; width: number; height: number }
+
+const isBrowserContext = typeof window !== 'undefined' && typeof document !== 'undefined'
+const isTestRuntime = process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST)
+if (isBrowserContext && !isTestRuntime) {
+  throw new Error('renderPageToCanvas is server-only. Remove unintended client-side rendering call.')
 }
 
 export interface PageRendererDeps {
@@ -65,8 +86,8 @@ export function renderPageToCanvas(input: PageRenderInput, cfg: TextRenderConfig
     const h = panel.size.height * input.height
     drawPanelFrame(ctx, x, y, w, h)
 
-  renderPanelDialogues(ctx, panel, { x, y, w, h }, cfg, deps)
-    renderPanelSfx(ctx, panel, { x, y, w, h }, cfg)
+    const dialogueAreas = renderPanelDialogues(ctx, panel, { x, y, w, h }, cfg, deps)
+    renderPanelSfx(ctx, panel, { x, y, w, h }, cfg, dialogueAreas)
     renderPanelContent(ctx, panel, { x, y, w, h })
   }
   return canvas
@@ -74,25 +95,194 @@ export function renderPageToCanvas(input: PageRenderInput, cfg: TextRenderConfig
 
 interface PanelBox { x: number; y: number; w: number; h: number }
 
+type PanelDialogue = NonNullable<
+  MangaLayout['pages'][number]['panels'][number]['dialogues']
+>[number]
+
+interface AssetRenderInfo {
+  image: CanvasImageSource
+  drawWidth: number
+  drawHeight: number
+}
+
+interface FallbackRenderInfo {
+  lines: string[]
+  font: string
+  lineHeight: number
+  textWidth: number
+  textHeight: number
+}
+
+interface DialogueRenderInstruction {
+  dialogue: PanelDialogue
+  bubbleX: number
+  bubbleY: number
+  bubbleWidth: number
+  bubbleHeight: number
+  asset?: AssetRenderInfo
+  fallback?: FallbackRenderInfo
+}
+
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value))
+
+function updateFontSize(baseFont: string, size: number): string {
+  if (!baseFont) return `${size}px "Noto Sans JP"`
+  if (baseFont.includes('px')) {
+    return baseFont.replace(/\d+(?:\.\d+)?px/, `${size}px`)
+  }
+  return `${size}px ${baseFont}`
+}
+
 function renderPanelDialogues(
   ctx: CanvasRenderingContext2D,
   panel: MangaLayout['pages'][number]['panels'][number],
   box: PanelBox,
   cfg: TextRenderConfig,
   // 将来: segmentsPipeline など追加依存を使用するためのプレースホルダ
-  _deps?: PageRendererDeps,
-) {
-  if (!panel.dialogues || panel.dialogues.length === 0) return
-  const { bubblePadding, maxBubbleWidthPx, font } = cfg.dialogue
-  let offsetY = box.y + bubblePadding
-  ctx.font = font
+  deps?: PageRendererDeps,
+): Rect[] {
+  if (!panel.dialogues || panel.dialogues.length === 0) return []
+  const bubblePadding = cfg.dialogue.bubblePadding ?? 10
   const vtDefaults = appConfig.rendering.verticalText.defaults
-  for (const d of panel.dialogues) {
-    const raw = d.text?.trim()
-    if (!raw) continue
-    // 1) 縦書き画像アセット lookup
+  const panelBox: Rect = { x: box.x, y: box.y, width: box.w, height: box.h }
+  const bubbleTop = box.y + box.h * BUBBLE_TOP_OFFSET_RATIO
+  const maxBubbleAreaHeight = box.h * MAX_BUBBLE_AREA_HEIGHT_RATIO
+
+  const instructions =
+    panel.dialogues.length > 1
+      ? layoutMultipleDialogues(
+          ctx,
+          panel.dialogues,
+          panelBox,
+          bubbleTop,
+          maxBubbleAreaHeight,
+          bubblePadding,
+          cfg,
+          vtDefaults,
+          deps,
+        )
+      : layoutSingleDialogue(
+          ctx,
+          panel.dialogues[0],
+          panelBox,
+          bubbleTop,
+          maxBubbleAreaHeight,
+          bubblePadding,
+          cfg,
+          vtDefaults,
+          deps,
+        )
+
+  const occupied: Rect[] = []
+  const prevFill = ctx.fillStyle
+  const prevStroke = ctx.strokeStyle
+  const prevFont = ctx.font
+
+  for (const inst of instructions) {
+    ctx.fillStyle = 'rgba(255,255,255,0.9)'
+    ctx.strokeStyle = '#000'
+    drawBasicBubble(ctx as unknown as import('../core/draw-primitives').Basic2DContext, {
+      x: inst.bubbleX,
+      y: inst.bubbleY,
+      width: inst.bubbleWidth,
+      height: inst.bubbleHeight,
+      type: inst.dialogue.type || 'speech',
+    })
+
+    let rendered = false
+    if (inst.asset) {
+      const drawX = inst.bubbleX + (inst.bubbleWidth - inst.asset.drawWidth) / 2
+      const drawY = inst.bubbleY + (inst.bubbleHeight - inst.asset.drawHeight) / 2
+      try {
+        ctx.drawImage(
+          inst.asset.image as CanvasImageSource,
+          drawX,
+          drawY,
+          inst.asset.drawWidth,
+          inst.asset.drawHeight,
+        )
+        rendered = true
+      } catch {
+        // fall through to fallback text
+      }
+    }
+
+    if (!rendered) {
+      const text = inst.dialogue.text ?? ''
+      if (!inst.fallback && text) {
+        const maxContentWidth = Math.max(10, inst.bubbleWidth - bubblePadding * 2)
+        const maxContentHeight = Math.max(10, inst.bubbleHeight - bubblePadding * 2)
+        inst.fallback = buildFallbackText(
+          ctx,
+          text,
+          maxContentWidth,
+          maxContentHeight,
+          cfg.dialogue.font,
+          vtDefaults,
+          deps,
+        )
+      }
+
+      if (inst.fallback) {
+        const prevLocalFont = ctx.font
+        ctx.font = inst.fallback.font
+        ctx.fillStyle = '#000'
+        let ty = inst.bubbleY + bubblePadding + inst.fallback.lineHeight * 0.8
+        for (const line of inst.fallback.lines) {
+          ctx.fillText(line, inst.bubbleX + bubblePadding, ty)
+          ty += inst.fallback.lineHeight
+          if (ty > inst.bubbleY + inst.bubbleHeight - bubblePadding) break
+        }
+        ctx.font = prevLocalFont
+      }
+    }
+
+    occupied.push({
+      x: inst.bubbleX,
+      y: inst.bubbleY,
+      width: inst.bubbleWidth,
+      height: inst.bubbleHeight,
+    })
+  }
+
+  ctx.fillStyle = prevFill
+  ctx.strokeStyle = prevStroke
+  ctx.font = prevFont
+  return occupied
+}
+
+function layoutMultipleDialogues(
+  ctx: CanvasRenderingContext2D,
+  dialogues: readonly PanelDialogue[],
+  panelBox: Rect,
+  bubbleTop: number,
+  maxBubbleAreaHeight: number,
+  bubblePadding: number,
+  cfg: TextRenderConfig,
+  vtDefaults: typeof appConfig.rendering.verticalText.defaults,
+  deps?: PageRendererDeps,
+): DialogueRenderInstruction[] {
+  const instructions: DialogueRenderInstruction[] = []
+  const count = dialogues.length
+  const usableWidth = panelBox.width * HORIZONTAL_SLOT_COVERAGE
+  const gap = panelBox.width * BUBBLE_COLUMN_GAP_RATIO
+  const totalGap = gap * (count - 1)
+  let slotWidth = Math.max(1, (usableWidth - totalGap) / Math.max(1, count))
+  const maxSpanWidth = panelBox.width * MULTI_DIALOGUE_MAX_SPAN_RATIO
+  const projectedSpan = slotWidth * count + totalGap
+  if (projectedSpan > maxSpanWidth && maxSpanWidth > totalGap) {
+    const compressedSlotWidth = (maxSpanWidth - totalGap) / count
+    const minSlotWidth = bubblePadding * 2 + 20
+    slotWidth = Math.max(minSlotWidth, compressedSlotWidth)
+  }
+  const rightEdgeStart =
+    panelBox.x + panelBox.width - panelBox.width * PANEL_MARGIN_RATIO - slotWidth
+
+  for (let logicalIndex = 0; logicalIndex < count; logicalIndex++) {
+    const dialogue = dialogues[logicalIndex]
+    const rawText = dialogue.text ?? ''
     const key = buildDialogueKey({
-      dialogue: d,
+      dialogue,
       fontSize: vtDefaults.fontSize,
       lineHeight: vtDefaults.lineHeight,
       letterSpacing: vtDefaults.letterSpacing,
@@ -100,63 +290,238 @@ function renderPanelDialogues(
       maxCharsPerLine: vtDefaults.maxCharsPerLine,
     })
     const asset = getDialogueAsset(key)
+    const slotX = rightEdgeStart - (slotWidth + gap) * logicalIndex
+    const slotRightEdge = slotX + slotWidth
+    const maxContentWidth = Math.max(10, slotWidth - bubblePadding * 2)
+    const maxContentHeight = Math.max(10, maxBubbleAreaHeight - bubblePadding * 2)
+
     if (asset) {
-      // 画像寸法を元に bubble を生成（左右中央配置）
-      const bubbleWidth = Math.min(asset.width + bubblePadding * 2, Math.min(box.w * 0.9, maxBubbleWidthPx))
-      const bubbleHeight = asset.height + bubblePadding * 2
-      const bubbleX = box.x + (box.w - bubbleWidth) / 2
-      const bubbleY = offsetY
-      ctx.fillStyle = 'rgba(255,255,255,0.9)'
-      ctx.strokeStyle = '#000'
-      drawBasicBubble(ctx as unknown as import('../core/draw-primitives').Basic2DContext, { x: bubbleX, y: bubbleY, width: bubbleWidth, height: bubbleHeight, type: d.type || 'speech' })
-      // 画像を中央に配置
-      const imgX = bubbleX + (bubbleWidth - asset.width) / 2
-      const imgY = bubbleY + bubblePadding
-      try {
-        ctx.drawImage(asset.image as unknown as CanvasImageSource, imgX, imgY, asset.width, asset.height)
-      } catch {
-        // drawImage 失敗時はフォールバックテキスト
-        // フォールバックテキスト（既にバブル描画済み）
-        fallbackHorizontalText(
-          ctx,
-          raw,
-          bubbleX,
-          bubbleY,
-          bubbleWidth,
-            bubbleHeight,
-          bubblePadding,
-          font,
-        )
+      const scale = Math.min(maxContentWidth / asset.width, maxContentHeight / asset.height, 1)
+      const drawW = Math.max(1, asset.width * scale)
+      const drawH = Math.max(1, asset.height * scale)
+      const bubbleW = drawW + bubblePadding * 2
+      const bubbleH = Math.max(MIN_BUBBLE_HEIGHT, drawH + bubblePadding * 2)
+      const bx = clamp(slotRightEdge - bubbleW, panelBox.x, panelBox.x + panelBox.width - bubbleW)
+      const maxBottom = panelBox.y + panelBox.height - AVAILABLE_VERTICAL_MARGIN
+      let by = bubbleTop
+      if (by + bubbleH > maxBottom) {
+        by = Math.max(panelBox.y + PANEL_MARGIN_RATIO * panelBox.height, maxBottom - bubbleH)
       }
-      offsetY += bubbleHeight + 6
-      if (offsetY > box.y + box.h) break
+      instructions.push({
+        dialogue,
+        bubbleX: bx,
+        bubbleY: by,
+        bubbleWidth: bubbleW,
+        bubbleHeight: bubbleH,
+        asset: { image: asset.image as CanvasImageSource, drawWidth: drawW, drawHeight: drawH },
+      })
       continue
     }
-    // 2) フォールバック: 水平テキスト（従来ロジック簡素形）
-    const fallbackFont = font
-    const maxBubbleWidth = Math.min(box.w * 0.9, maxBubbleWidthPx)
-    // フォールバック時でもフレーズ単位の自然な改行を維持する
-    const phraseSegments = _deps?.segmentsPipeline
-      ? _deps.segmentsPipeline.getSegments(raw)
-      : wrapJapaneseByBudoux(raw, 12) // BudouX を直接利用（セグメント長ヒューリスティック）
-    const lines = wrapLinesByPhrase(ctx, phraseSegments, maxBubbleWidth - bubblePadding * 2)
-    const lineHeight = vtDefaults.lineHeight // bubbleKey と整合
-    const bubbleHeight = lines.length * lineHeight + bubblePadding * 2
-    const bubbleWidth = Math.max(...lines.map(l => measureTextWidthCached(ctx, l)), 10) + bubblePadding * 2
-    const bubbleX = box.x + (box.w - bubbleWidth) / 2
-    const bubbleY = offsetY
-    ctx.fillStyle = 'rgba(255,255,255,0.85)'
-    ctx.strokeStyle = '#000'
-    drawBasicBubble(ctx as unknown as import('../core/draw-primitives').Basic2DContext, { x: bubbleX, y: bubbleY, width: bubbleWidth, height: bubbleHeight, type: d.type || 'speech' })
-    ctx.fillStyle = '#000'
-    ctx.font = fallbackFont
-    let ty = bubbleY + bubblePadding + lineHeight * 0.8
-    for (const line of lines) {
-      ctx.fillText(line, bubbleX + bubblePadding, ty)
-      ty += lineHeight
+
+    const fallback = buildFallbackText(
+      ctx,
+      rawText,
+      maxContentWidth,
+      maxContentHeight,
+      cfg.dialogue.font,
+      vtDefaults,
+      deps,
+    )
+    const bubbleW = Math.max(
+      bubblePadding * 2,
+      Math.min(slotWidth, fallback.textWidth + bubblePadding * 2),
+    )
+    const bubbleH = Math.max(
+      MIN_BUBBLE_HEIGHT,
+      Math.min(maxBubbleAreaHeight, fallback.textHeight + bubblePadding * 2),
+    )
+    const bx = clamp(slotRightEdge - bubbleW, panelBox.x, panelBox.x + panelBox.width - bubbleW)
+    const maxBottom = panelBox.y + panelBox.height - AVAILABLE_VERTICAL_MARGIN
+    let by = bubbleTop
+    if (by + bubbleH > maxBottom) {
+      by = Math.max(panelBox.y + PANEL_MARGIN_RATIO * panelBox.height, maxBottom - bubbleH)
     }
-    offsetY += bubbleHeight + 6
-    if (offsetY > box.y + box.h) break
+    instructions.push({
+      dialogue,
+      bubbleX: bx,
+      bubbleY: by,
+      bubbleWidth: bubbleW,
+      bubbleHeight: bubbleH,
+      fallback,
+    })
+  }
+
+  return instructions
+}
+
+function layoutSingleDialogue(
+  ctx: CanvasRenderingContext2D,
+  dialogue: PanelDialogue,
+  panelBox: Rect,
+  bubbleTop: number,
+  maxBubbleAreaHeight: number,
+  bubblePadding: number,
+  cfg: TextRenderConfig,
+  vtDefaults: typeof appConfig.rendering.verticalText.defaults,
+  deps?: PageRendererDeps,
+): DialogueRenderInstruction[] {
+  const rawText = dialogue.text ?? ''
+  const key = buildDialogueKey({
+    dialogue,
+    fontSize: vtDefaults.fontSize,
+    lineHeight: vtDefaults.lineHeight,
+    letterSpacing: vtDefaults.letterSpacing,
+    padding: vtDefaults.padding,
+    maxCharsPerLine: vtDefaults.maxCharsPerLine,
+  })
+  const asset = getDialogueAsset(key)
+  const maxAreaWidth = panelBox.width * SINGLE_BUBBLE_MAX_WIDTH_RATIO
+  const perBubbleMaxHeight = Math.max(SINGLE_BUBBLE_MIN_HEIGHT, maxBubbleAreaHeight)
+  const availableVertical = panelBox.y + panelBox.height - bubbleTop
+  const maxThisBubbleHeight = Math.max(
+    MIN_BUBBLE_HEIGHT,
+    Math.min(perBubbleMaxHeight, availableVertical - AVAILABLE_VERTICAL_MARGIN),
+  )
+
+  if (asset) {
+    let scale = Math.min(maxAreaWidth / asset.width, maxThisBubbleHeight / asset.height, 1)
+    let drawW = Math.max(1, asset.width * scale)
+    let drawH = Math.max(1, asset.height * scale)
+    let bubbleW = (drawW + bubblePadding * 2) * Math.SQRT2
+    let bubbleH = Math.max(MIN_BUBBLE_HEIGHT, (drawH + bubblePadding * 2) * Math.SQRT2)
+
+    if (bubbleH > maxThisBubbleHeight) {
+      const targetDrawH = maxThisBubbleHeight / Math.SQRT2 - bubblePadding * 2
+      const newScale = targetDrawH > 0 ? targetDrawH / asset.height : 0
+      scale = Math.min(scale, newScale)
+      drawW = Math.max(1, asset.width * scale)
+      drawH = Math.max(1, asset.height * scale)
+      bubbleW = (drawW + bubblePadding * 2) * Math.SQRT2
+      bubbleH = Math.max(MIN_BUBBLE_HEIGHT, (drawH + bubblePadding * 2) * Math.SQRT2)
+    }
+
+    bubbleW = clamp(bubbleW, bubblePadding * 2, panelBox.width * 0.95)
+    bubbleH = clamp(bubbleH, MIN_BUBBLE_HEIGHT, maxThisBubbleHeight)
+    const maxBottom = panelBox.y + panelBox.height - AVAILABLE_VERTICAL_MARGIN
+    let by = bubbleTop
+    if (by + bubbleH > maxBottom) {
+      by = Math.max(panelBox.y + PANEL_MARGIN_RATIO * panelBox.height, maxBottom - bubbleH)
+    }
+    const bx = panelBox.x + panelBox.width - bubbleW - panelBox.width * PANEL_MARGIN_RATIO
+
+    return [
+      {
+        dialogue,
+        bubbleX: bx,
+        bubbleY: by,
+        bubbleWidth: bubbleW,
+        bubbleHeight: bubbleH,
+        asset: { image: asset.image as CanvasImageSource, drawWidth: drawW, drawHeight: drawH },
+      },
+    ]
+  }
+
+  const maxContentWidth = Math.max(10, maxAreaWidth / Math.SQRT2 - bubblePadding * 2)
+  const maxContentHeight = Math.max(10, maxThisBubbleHeight / Math.SQRT2 - bubblePadding * 2)
+  const fallback = buildFallbackText(
+    ctx,
+    rawText,
+    maxContentWidth,
+    maxContentHeight,
+    cfg.dialogue.font,
+    vtDefaults,
+    deps,
+  )
+  const contentWidth = Math.min(maxContentWidth, fallback.textWidth)
+  const contentHeight = Math.min(maxContentHeight, fallback.textHeight)
+  let bubbleW = (contentWidth + bubblePadding * 2) * Math.SQRT2
+  let bubbleH = (contentHeight + bubblePadding * 2) * Math.SQRT2
+  bubbleW = clamp(bubbleW, bubblePadding * 2, panelBox.width * 0.95)
+  bubbleH = clamp(bubbleH, MIN_BUBBLE_HEIGHT, maxThisBubbleHeight)
+  const maxBottom = panelBox.y + panelBox.height - AVAILABLE_VERTICAL_MARGIN
+  let by = bubbleTop
+  if (by + bubbleH > maxBottom) {
+    by = Math.max(panelBox.y + PANEL_MARGIN_RATIO * panelBox.height, maxBottom - bubbleH)
+  }
+  const bx = panelBox.x + panelBox.width - bubbleW - panelBox.width * PANEL_MARGIN_RATIO
+
+  return [
+    {
+      dialogue,
+      bubbleX: bx,
+      bubbleY: by,
+      bubbleWidth: bubbleW,
+      bubbleHeight: bubbleH,
+      fallback: {
+        ...fallback,
+        textWidth: contentWidth,
+        textHeight: contentHeight,
+      },
+    },
+  ]
+}
+
+function buildFallbackText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxContentWidth: number,
+  maxContentHeight: number,
+  baseFont: string,
+  vtDefaults: typeof appConfig.rendering.verticalText.defaults,
+  deps?: PageRendererDeps,
+): FallbackRenderInfo {
+  const sanitizedWidth = Math.max(10, maxContentWidth)
+  const sanitizedHeight = Math.max(10, maxContentHeight)
+  const normalized = (text ?? '').trim()
+  if (!normalized) {
+    const font = updateFontSize(baseFont, vtDefaults.fontSize)
+    return { lines: [], font, lineHeight: Math.max(12, vtDefaults.fontSize * vtDefaults.lineHeight), textWidth: 0, textHeight: 0 }
+  }
+
+  const segments =
+    deps?.segmentsPipeline?.getSegments(normalized) ?? wrapJapaneseByBudoux(normalized, 12)
+
+  let fontSize = vtDefaults.fontSize
+  let font = updateFontSize(baseFont, fontSize)
+  const prevFont = ctx.font
+  ctx.font = font
+  let lineHeight = Math.max(12, fontSize * vtDefaults.lineHeight)
+  let lines = wrapLinesByPhrase(ctx, segments, sanitizedWidth)
+  if (lines.length === 0) {
+    lines = simpleWrapLines(ctx, normalized, sanitizedWidth)
+  }
+  let textHeight = lines.length * lineHeight
+  let textWidth = lines.reduce((acc, line) => Math.max(acc, measureTextWidthCached(ctx, line)), 0)
+  let iterations = 0
+  while (textHeight > sanitizedHeight && fontSize > 10 && iterations < 32) {
+    fontSize -= 1
+    font = updateFontSize(baseFont, fontSize)
+    ctx.font = font
+    lineHeight = Math.max(12, fontSize * vtDefaults.lineHeight)
+    lines = wrapLinesByPhrase(ctx, segments, sanitizedWidth)
+    if (lines.length === 0) {
+      lines = simpleWrapLines(ctx, normalized, sanitizedWidth)
+    }
+    textHeight = lines.length * lineHeight
+    textWidth = lines.reduce((acc, line) => Math.max(acc, measureTextWidthCached(ctx, line)), 0)
+    iterations += 1
+  }
+
+  if (textHeight > sanitizedHeight && lines.length > 0) {
+    const maxLines = Math.max(1, Math.floor(sanitizedHeight / lineHeight))
+    lines = lines.slice(0, maxLines)
+    textHeight = lines.length * lineHeight
+    textWidth = lines.reduce((acc, line) => Math.max(acc, measureTextWidthCached(ctx, line)), 0)
+  }
+
+  textWidth = Math.min(sanitizedWidth, textWidth)
+  ctx.font = prevFont
+  return {
+    lines,
+    font,
+    lineHeight,
+    textWidth,
+    textHeight,
   }
 }
 
@@ -197,63 +562,55 @@ function wrapLinesByPhrase(
   return lines
 }
 
-function fallbackHorizontalText(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  bubbleX: number,
-  bubbleY: number,
-  bubbleWidth: number,
-  bubbleHeight: number,
-  padding: number,
-  font: string,
-) {
-  ctx.font = font
-  ctx.fillStyle = '#000'
-  // 画像 draw 失敗時フォールバック: BudouX + phrase wrap（自然性維持）
-  const phrases = wrapJapaneseByBudoux(text, 12)
-  const lines = wrapLinesByPhrase(ctx, phrases, bubbleWidth - padding * 2)
-  // フォールバック安全弁: phrase wrap が 0 行になる理論的異常時に simpleWrapLines へ
-  const finalLines = lines.length === 0 ? simpleWrapLines(ctx, text, bubbleWidth - padding * 2) : lines
-  const lineHeight = 18
-  let ty = bubbleY + padding + lineHeight * 0.8
-  for (const line of finalLines) {
-    ctx.fillText(line, bubbleX + padding, ty)
-    ty += lineHeight
-    if (ty > bubbleY + bubbleHeight - padding) break
-  }
-}
-
 function renderPanelSfx(
   ctx: CanvasRenderingContext2D,
   panel: MangaLayout['pages'][number]['panels'][number],
   box: PanelBox,
   cfg: TextRenderConfig,
+  dialogueAreas: Rect[],
 ) {
   if (!panel.sfx || panel.sfx.length === 0) return
-  // Simple heuristic placement (improved SFX visibility vs 初期版)
-  const baseFont =  Math.min( Math.max(24, box.h * 0.14), 56)
-  let used = 0
-  for (let i=0;i<panel.sfx.length;i++) {
-    const raw = panel.sfx[i]
-    if (!raw) continue
-    const fontSize = Math.max(18, Math.round(baseFont * (1 - (i*0.12))))
+
+  const placer = new SfxPlacer()
+  const placements = placer.placeSfx(
+    panel.sfx,
+    panel,
+    { x: box.x, y: box.y, width: box.w, height: box.h },
+    dialogueAreas,
+  )
+
+  const mainFill = cfg.sfx.fillStyle || '#000000'
+  const supRatio = 0.35
+  const supMin = 10
+
+  for (const placement of placements) {
     ctx.save()
-    ctx.font = `bold ${fontSize}px "Noto Sans JP"`
-    ctx.fillStyle = cfg.sfx.fillStyle
-    // rotate a little bit for manga-like effect
-    const rotation = [ -0.18, 0.12, -0.1, 0.15, 0 ][i % 5]
-    const sx = box.x + 8 + (i%2===0 ? 0 : box.w*0.55)
-    const sy = box.y + 12 + used
-    ctx.translate(sx, sy)
-    ctx.rotate(rotation)
-    ctx.translate(-sx, -sy)
+    if (placement.rotation) {
+      ctx.translate(placement.x, placement.y)
+      ctx.rotate(placement.rotation)
+      ctx.translate(-placement.x, -placement.y)
+    }
+
+    const fontSize = Math.max(12, Math.round(placement.fontSize))
+    const font = `bold ${fontSize}px "Noto Sans JP", sans-serif`
+    ctx.font = font
     ctx.lineWidth = 4
-    ctx.strokeStyle = 'white'
-    ctx.strokeText(raw, sx, sy)
-    ctx.fillText(raw, sx, sy)
+    ctx.strokeStyle = '#ffffff'
+    ctx.fillStyle = mainFill
+    ctx.textBaseline = 'top'
+    ctx.textAlign = 'left'
+    ctx.strokeText(placement.text, placement.x, placement.y)
+    ctx.fillText(placement.text, placement.x, placement.y)
+
+    if (placement.supplement) {
+      const supSize = Math.max(supMin, Math.round(fontSize * supRatio))
+      ctx.font = `normal ${supSize}px "Noto Sans JP", sans-serif`
+      const supY = placement.y + fontSize * 1.1
+      ctx.strokeText(placement.supplement, placement.x, supY)
+      ctx.fillText(placement.supplement, placement.x, supY)
+    }
+
     ctx.restore()
-    used += fontSize * 1.2
-    if (sy + fontSize > box.y + box.h - 8) break
   }
 }
 

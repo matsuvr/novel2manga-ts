@@ -11,6 +11,9 @@ export interface BranchMarker {
   jobId: string
   branch: BranchType
   createdAt: string // ISO timestamp
+  reason?: string
+  source?: 'llm' | 'fallback'
+  metrics?: { length: number }
 }
 
 // ensureBranchMarker の戻り値共通型
