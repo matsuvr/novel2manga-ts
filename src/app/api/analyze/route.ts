@@ -14,8 +14,7 @@ import {
   extractErrorMessage,
   ValidationError,
 } from '@/utils/api-error'
-import { saveBranchMarker } from '@/utils/branch-marker'
-import { classifyNarrativity } from '@/utils/narrativity-classifier'
+import { ensureBranchMarker } from '@/utils/branch-marker'
 import { detectDemoMode } from '@/utils/request-mode'
 import { generateUUID } from '@/utils/uuid'
 
@@ -330,11 +329,8 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     // テスト環境は既存挙動維持のためスキップ（LLM呼び出し未モックによる不安定性回避）。
     if (novelText !== FETCH_FROM_STORAGE && process.env.NODE_ENV !== 'test') {
       try {
-        const narrativity = await classifyNarrativity(novelText, { jobId })
-        if (narrativity.branch === BranchType.EXPLAINER) {
-          try {
-            await saveBranchMarker(jobId, BranchType.EXPLAINER)
-          } catch {/* ignore marker save errors */}
+        const ensured = await ensureBranchMarker(jobId, novelText)
+        if (ensured.branch === BranchType.EXPLAINER) {
           try {
             db.jobs().updateJobStatus?.(jobId, 'paused', 'EXPLAINER')
           } catch {/* ignore */}

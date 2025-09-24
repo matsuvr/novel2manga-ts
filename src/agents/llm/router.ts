@@ -6,17 +6,19 @@ import type { LlmClient, LlmProvider, OpenAICompatibleConfig } from './types'
 import { VertexAIClient, type VertexAIConfig } from './vertexai'
 
 export type ProviderConfig =
-  | ({ provider: 'openai' | 'groq' | 'grok' | 'openrouter' } & OpenAICompatibleConfig)
-  | ({ provider: 'gemini' | 'vertexai' } & VertexAIConfig)
+  | ({ provider: 'openai' | 'openai_nano' | 'groq' | 'grok' | 'openrouter' } & OpenAICompatibleConfig)
+  | ({ provider: 'gemini' | 'vertexai' | 'vertexai_lite' } & VertexAIConfig)
   | { provider: 'fake' }
 
 export function createLlmClient(cfg: ProviderConfig): LlmClient {
   if (cfg.provider === 'fake') return new FakeLlmClient()
-  if (cfg.provider === 'gemini' || cfg.provider === 'vertexai') {
+  if (cfg.provider === 'gemini' || cfg.provider === 'vertexai' || cfg.provider === 'vertexai_lite') {
     return new VertexAIClient(cfg)
   }
   // OpenAI 互換
-  return new OpenAICompatibleClient(cfg as Extract<ProviderConfig, { provider: 'openai' | 'groq' | 'grok' | 'openrouter' }>)
+  return new OpenAICompatibleClient(
+    cfg as Extract<ProviderConfig, { provider: 'openai' | 'openai_nano' | 'groq' | 'grok' | 'openrouter' }>,
+  )
 }
 
 // llm.config.ts 由来のランタイム設定を優先し、未設定時のみ環境変数を利用
@@ -36,7 +38,7 @@ export function createClientForProvider(provider: LlmProvider): LlmClient {
     throw new Error(`Missing or invalid model for provider: ${provider}`)
   }
 
-  if (provider === 'vertexai' || provider === 'gemini') {
+  if (provider === 'vertexai' || provider === 'gemini' || provider === 'vertexai_lite') {
     const vertexConfig = cfg.vertexai
     if (!vertexConfig) throw new Error(`Missing Vertex AI configuration for provider: ${provider}`)
     const c: ProviderConfig = {
@@ -55,8 +57,8 @@ export function createClientForProvider(provider: LlmProvider): LlmClient {
   const oc: OpenAICompatibleConfig = {
     apiKey: cfg.apiKey,
     model: cfg.model,
-    baseUrl: cfg.baseUrl ?? defaultBaseUrl(provider as OpenAICompatProvider),
-    provider: provider as OpenAICompatProvider,
+    baseUrl: cfg.baseUrl ?? defaultBaseUrl((provider === 'openai_nano' ? 'openai' : provider) as OpenAICompatProvider),
+    provider: provider as Extract<LlmProvider, 'openai' | 'openai_nano' | 'groq' | 'grok' | 'openrouter'>,
   }
   return new OpenAICompatibleClient(oc)
 }

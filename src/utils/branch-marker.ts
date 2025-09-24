@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { storageBaseDirs } from '@/config/storage-paths.config'
 import { getLogger } from '@/infrastructure/logging/logger'
@@ -27,10 +27,17 @@ function getBranchMarkersDir(dataDir?: string): string {
   return path.join(base, storageBaseDirs.analysis, BRANCH_MARKERS_DIR)
 }
 
+interface BranchMarkerDetails {
+  reason?: string
+  source?: 'llm' | 'fallback'
+  metrics?: { length: number }
+}
+
 export async function saveBranchMarker(
   jobId: string,
   branch: BranchType,
   dataDir?: string,
+  details: BranchMarkerDetails = {},
 ): Promise<void> {
   const dir = getBranchMarkersDir(dataDir)
   if (!existsSync(dir)) {
@@ -40,6 +47,7 @@ export async function saveBranchMarker(
     jobId,
     branch,
     createdAt: new Date().toISOString(),
+    ...details,
   }
   const filePath = path.join(dir, `${jobId}.json`)
   await writeFile(filePath, JSON.stringify(marker, null, 2), 'utf-8')
@@ -91,12 +99,98 @@ export async function ensureBranchMarker(
 ): Promise<EnsureBranchMarkerResult> {
   const existing = await loadBranchMarker(jobId, dataDir)
   if (existing) {
-    return { branch: existing.branch, created: false }
+    return {
+      branch: existing.branch,
+      created: false,
+      reason: existing.reason,
+      source: existing.source,
+      metrics: existing.metrics,
+    }
   }
+
+  const dir = getBranchMarkersDir(dataDir)
+  if (!existsSync(dir)) {
+    await mkdir(dir, { recursive: true })
+  }
+  const lockPath = path.join(dir, `${jobId}.lock`)
+
+  const acquireLock = async (): Promise<boolean> => {
+    try {
+      await writeFile(
+        lockPath,
+        JSON.stringify({ jobId, createdAt: new Date().toISOString(), pid: process.pid }),
+        { flag: 'wx' },
+      )
+      return true
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+        return false
+      }
+      throw error
+    }
+  }
+
+  const releaseLock = async () => {
+    try {
+      await unlink(lockPath)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        try {
+          getLogger()
+            .withContext({ service: 'branch-marker' })
+            .warn('branch_marker_lock_release_failed', {
+              jobId,
+              error: error instanceof Error ? error.message : String(error),
+            })
+        } catch {/* ignore logging errors */}
+      }
+    }
+  }
+
+  const waitForExistingMarker = async (): Promise<BranchMarker | null> => {
+    const timeoutMs = 5_000
+    const intervalMs = 150
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < timeoutMs) {
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+      const marker = await loadBranchMarker(jobId, dataDir)
+      if (marker) return marker
+      if (!existsSync(lockPath)) break
+    }
+    return null
+  }
+
+  let locked = await acquireLock()
+  if (!locked) {
+    const marker = await waitForExistingMarker()
+    if (marker) {
+      return {
+        branch: marker.branch,
+        created: false,
+        reason: marker.reason,
+        source: marker.source,
+        metrics: marker.metrics,
+      }
+    }
+    locked = await acquireLock()
+  }
+
+  if (!locked) {
+    try {
+      getLogger()
+        .withContext({ service: 'branch-marker' })
+        .warn('branch_marker_lock_acquire_failed', { jobId })
+    } catch {/* ignore */}
+  }
+
   // LLM 分類を実行
   try {
-  const classification = await classifyNarrativity(rawText, { jobId })
-    await saveBranchMarker(jobId, classification.branch, dataDir)
+    const classification = await classifyNarrativity(rawText, { jobId })
+    await saveBranchMarker(jobId, classification.branch, dataDir, {
+      reason: classification.reason,
+      source: classification.source,
+      metrics: classification.metrics,
+    })
     return {
       branch: classification.branch,
       created: true,
@@ -113,5 +207,9 @@ export async function ensureBranchMarker(
       })
     } catch {/* ignore */}
     return { branch: BranchType.NORMAL, created: false }
+  } finally {
+    if (locked) {
+      await releaseLock()
+    }
   }
 }

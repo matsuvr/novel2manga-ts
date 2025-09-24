@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
+// import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
 import { appConfig } from '@/config/app.config'
@@ -74,7 +74,7 @@ export default function NewHomeClient() {
 
   const [view, setView] = useState<View>('idle')
   const [novelText, setNovelText] = useState('')
-  const [resumeId, setResumeId] = useState('')
+  // const [resumeId, setResumeId] = useState('')
   // 内部で参照する最小限の state のみ保持
   const [error, setError] = useState<string | null>(null)
   // リダイレクトは router.push を即時実行する方針のため pendingRedirect は不要
@@ -242,47 +242,47 @@ export default function NewHomeClient() {
     setView('idle')
   }, [])
 
-  const handleResume = useCallback(async () => {
-    setError(null)
-    if (!uuidV4.test(resumeId)) {
-      setError('novelId は UUID 形式で入力してください')
-      return
-    }
-    setView('processing')
-    try {
-      const res = await fetch('/api/resume', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ novelId: resumeId }),
-      })
-      const data = (await res.json().catch(() => ({}))) as {
-        jobId?: string
-        novelId?: string
-        status?: string
-      }
-      if (!res.ok || !data.jobId) throw new Error('再開に失敗しました')
-      const nid = data.novelId || resumeId
-      const url =
-        data.status === 'completed'
-          ? `/novel/${encodeURIComponent(nid)}/results/${encodeURIComponent(data.jobId)}`
-          : `/novel/${encodeURIComponent(nid)}/progress`
+  // const handleResume = useCallback(async () => {
+  //   setError(null)
+  //   if (!uuidV4.test(resumeId)) {
+  //     setError('novelId は UUID 形式で入力してください')
+  //     return
+  //   }
+  //   setView('processing')
+  //   try {
+  //     const res = await fetch('/api/resume', {
+  //       method: 'POST',
+  //       credentials: 'include',
+  //       headers: { 'Content-Type': 'application/json' },
+  //       body: JSON.stringify({ novelId: resumeId }),
+  //     })
+  //     const data = (await res.json().catch(() => ({}))) as {
+  //       jobId?: string
+  //       novelId?: string
+  //       status?: string
+  //     }
+  //     if (!res.ok || !data.jobId) throw new Error('再開に失敗しました')
+  //     const nid = data.novelId || resumeId
+  //     const url =
+  //       data.status === 'completed'
+  //         ? `/novel/${encodeURIComponent(nid)}/results/${encodeURIComponent(data.jobId)}`
+  //         : `/novel/${encodeURIComponent(nid)}/progress`
 
-      setView('redirecting')
+  //     setView('redirecting')
 
-      try {
-        router.push(url)
-        setRedirectTarget(url)
-      } catch (error) {
-        console.error('Navigation failed:', error)
-        window.location.href = url
-      }
-    } catch (e) {
-      setView('idle')
-      const errorMessage = e instanceof Error ? e.message : '再開に失敗しました'
-      setError(`${errorMessage}。novelIDが正しいことを確認してください。`)
-    }
-  }, [resumeId, router])
+  //     try {
+  //       router.push(url)
+  //       setRedirectTarget(url)
+  //     } catch (error) {
+  //       console.error('Navigation failed:', error)
+  //       window.location.href = url
+  //     }
+  //   } catch (e) {
+  //     setView('idle')
+  //     const errorMessage = e instanceof Error ? e.message : '再開に失敗しました'
+  //     setError(`${errorMessage}。novelIDが正しいことを確認してください。`)
+  //   }
+  // }, [resumeId, router])
 
   return (
     <div className="flex min-h-[calc(100dvh-56px)] flex-col">
@@ -376,12 +376,6 @@ export default function NewHomeClient() {
                       disabled={isInputDisabled}
                     />
                     <SampleButton
-                      label="宮本武蔵 地の巻"
-                      path="/docs/宮本武蔵地の巻.txt"
-                      onPick={setNovelText}
-                      disabled={isInputDisabled}
-                    />
-                    <SampleButton
                       label="最後の一葉"
                       path="/docs/最後の一葉.txt"
                       onPick={setNovelText}
@@ -429,7 +423,7 @@ export default function NewHomeClient() {
             </Card>
 
             <div className="flex flex-col gap-6">
-              <Card>
+              {/* <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">処理の再開</CardTitle>
                 </CardHeader>
@@ -451,7 +445,7 @@ export default function NewHomeClient() {
                     以前のジョブを再開できます。完了済みなら結果ページへ移動します。
                   </p>
                 </CardContent>
-              </Card>
+              </Card> */}
 
               <Card>
                 <CardHeader>
@@ -460,7 +454,16 @@ export default function NewHomeClient() {
                 <CardContent className="text-sm text-muted-foreground">
                   {status === 'authenticated'
                     ? 'ログイン中です。マイページから過去ジョブを管理できます。'
-                    : 'ログインすると、履歴やエクスポートを保存できます。'}
+                    : '未ログインです。ログインしてから利用してください。'}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">利用上の注意</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm text-muted-foreground">
+                  <p>自身が書いた原稿か、著作権の消失した古典を入力してください。勝手に他人の著作物を翻案するのはやめましょう。</p>
                 </CardContent>
               </Card>
             </div>
