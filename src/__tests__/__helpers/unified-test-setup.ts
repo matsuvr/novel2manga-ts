@@ -2,8 +2,10 @@
  * 統合テスト環境セットアップ - すべてのストレージテストの根本的な問題を解決
  */
 import { vi } from 'vitest'
-import type { Database } from '@/types/database'
-import type { Storage } from '@/types/storage'
+// Database / Storage の正式型はプロダクションコードで Drizzle 経由となるが
+// テスト専用 Mock では最小限の形状のみ必要なため local interface を定義する。
+// Storage は utils/storage.ts のインタフェースを流用する形で再インポートする。
+import type { Storage } from '@/utils/storage'
 
 // Test-specific types to replace `any`
 interface MockJob {
@@ -139,7 +141,8 @@ export class UnifiedStorageFactory {
 }
 
 // モックDB実装
-export class MockDatabase implements Partial<Database> {
+// Drizzle BetterSQLite3Database 形状の最小 subset を模倣
+export class MockDatabase {
   private jobs: Map<string, MockJob> = new Map()
   private episodes: Map<string, MockEpisode[]> = new Map()
   private novels: Map<string, MockNovel> = new Map()
@@ -168,6 +171,11 @@ export class MockDatabase implements Partial<Database> {
       }),
     }
   }
+
+  // Drizzle の BetterSQLite3Database っぽい形状を最低限満たすためのダミー select 実装
+  // TransactionManager の isDrizzleDb 判定は typeof obj.select === 'function' のみなので
+  // ここで関数を提供すれば十分。返り値はテストで利用されないため空配列を返す。
+  select(): unknown[] { return [] }
 
   // Drizzleトランザクションメソッドを追加
   async transaction<T>(fn: (tx: MockDatabase) => Promise<T>): Promise<T> {
@@ -255,7 +263,10 @@ export function setupUnifiedTestEnvironment() {
   }))
 
   vi.mock('@/services/application/storage-tracker', () => ({
+    // async 版 (トランザクション外で利用)
     recordStorageFile: vi.fn().mockResolvedValue(undefined),
+    // sync 版 (better-sqlite3 トランザクション内で利用)
+    recordStorageFileSync: vi.fn(),
   }))
 
   return {

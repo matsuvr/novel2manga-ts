@@ -167,19 +167,52 @@ export class MangaPageRenderer {
   }
 
   /**
-   * パネルの縦幅比率から、縦書きAPIへ渡す1行最大文字数を算出
-   * - height <= 0.2: 6文字
-   * - height <= 0.3: 8文字
-   * - otherwise: 設定のデフォルト値
+   * パネル高さに基づいて縦書きAPIへ渡す 1 行最大文字数を動的決定する。
+   * 目的:
+   *  - フォント画像が縦方向に過剰な余白を残さず 目標被覆率(heightCoverage) 付近に収まるよう調整
+   *  - 極端に小さいパネルでは行長を縮め縦方向伸長を抑制（可読性確保）
+   * アルゴリズム(簡易モデル):
+   *  1. ページ実寸 = config.pageHeight * panelHeightRatio
+   *  2. 目標使用可能高さ = 実寸 * heightCoverage (デフォルト 0.75)
+   *  3. 1 行の実高 = fontSize * lineHeight
+   *  4. 想定行数(linesGuess) = floor(目標使用可能高さ / 実高)
+   *  5. 1 行最大文字数 = clamp( round(defaultMaxChars * sqrt(panelHeightRatio / baseRatio)), minChars, defaultMax )
+   *     - baseRatio = 0.3 （経験的基準）
+   *     - 高さが低いほど sqrt 比率 < 1 で短くなる
+   *  6. ただし linesGuess <= 1 の場合は可読性維持のため defaultMax を返す（縦にほぼ余裕なし）
+   *  7. 追加のガード: panelHeightRatio <= 0.12 なら強制的に minChars
    */
   private computeMaxCharsPerLine(panelHeightRatio: number): number {
-    const verticalTextConfig = appConfig.rendering.verticalText
-    const defaults = verticalTextConfig?.defaults || {
-      maxCharsPerLine: 14,
+    const vt = appConfig.rendering.verticalText
+    const defaults = vt?.defaults || { fontSize: 24, lineHeight: 1.6, padding: 12, maxCharsPerLine: 14 }
+    const dyn = (vt as unknown as { dynamicCoverage?: { enabled?: boolean; heightCoverage?: number; minCharsPerLine?: number } })?.dynamicCoverage
+    const enabled = dyn?.enabled !== false
+    const heightCoverage = dyn?.heightCoverage ?? 0.75
+    const minChars = dyn?.minCharsPerLine ?? 4
+    const defaultMax = defaults.maxCharsPerLine || 14
+    if (!enabled) {
+      // 旧閾値ロジック互換（保険）
+      if (panelHeightRatio <= 0.2) return Math.max(minChars, 6)
+      if (panelHeightRatio <= 0.3) return Math.max(minChars, 8)
+      return defaultMax
     }
-    if (panelHeightRatio <= 0.2) return 6
-    if (panelHeightRatio <= 0.3) return 8
-    return defaults.maxCharsPerLine
+
+    // Panel 実高さ(px) を元に使用可能ライン数を推定
+    const pageHeight = this.config.pageHeight
+    const panelPixelHeight = pageHeight * panelHeightRatio
+    const lineHeightPx = defaults.fontSize * defaults.lineHeight
+    const usableTargetHeight = panelPixelHeight * heightCoverage
+    const linesGuess = Math.floor(usableTargetHeight / lineHeightPx)
+
+    // 非常に低いパネル: 文字密度を避け最小
+    if (panelHeightRatio <= 0.12) return minChars
+    if (linesGuess <= 1) return defaultMax // ほぼ1行 → 行長短縮しても縦余白改善にならない
+
+    const baseRatio = 0.3
+    const scaleFactor = Math.sqrt(Math.max(0.05, Math.min(2, panelHeightRatio / baseRatio)))
+    const raw = Math.round(defaultMax * scaleFactor)
+    const clamped = Math.min(defaultMax, Math.max(minChars, raw))
+    return clamped
   }
 
   /**

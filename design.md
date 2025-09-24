@@ -56,10 +56,67 @@
 ## Speech Bubble Placement
 
 - When a panel contains two dialogue or narration elements, the first bubble is positioned on the right and the second on the left to follow vertical Japanese reading order.
+- (2025-09 Refactor) Multi‑bubble (>=2) レイアウトを全面的に修正: 以前は2個時のみ右→左で3個以上は左→右となり読順破綻 + sqrt(2) 係数による過大バブルが文字画像と枠の不整合/重なりを誘発していた。現在は常に「右端→左」へカラム割当し、列幅計算: usableWidth = panelWidth * 0.9 から (列数-1)*gap を引いた残りを等分。不要な sqrt(2) 補正を撤廃し、画像サイズ + padding でバブル矩形を正確に計算することでテキストと枠のズレを解消し、重なり検出不要な安定配置を実現した。ユニットテスト `dialogue-bubble-layout.rtl.test.ts` で (a) 右→左 の x 座標単調減少, (b) バウンディングボックス非重複 を検証。
 - Speaker labels rendered on the bubble's top-right corner now use a 2× font ratio and expanded padding/radius so the rounded rectangle matches the larger text footprint.
 - Situation captions render directly on top of the panel without drawing a frame or translucent background while still reserving the padded placement area to avoid overlap with other elements.
 - Situation captions now request safe bounding boxes after speech bubbles and SFX are registered, clipping text rendering to the remaining rectangle so captions never overlap other elements.
 - Caption layout derives an estimated BudouX line limit from the bounding-box width, wraps narration by phrase, and progressively scales the font size when the computed line stack exceeds the available height so that the full caption always fits without truncation.
+
+### (2025-09) Adaptive Vertical Text Line Width & Rendering Metrics
+
+目的: パネルが極端に低い/高い場合でも縦書きセリフ画像の縦方向利用率を均し、縦余白や過剰な縮小を避ける。
+
+実装ポイント:
+1. `app.config.ts` に `verticalText.dynamicCoverage` を追加 (`enabled`, `heightCoverage=0.75`, `minCharsPerLine=4`).
+2. `computeMaxCharsPerLine(panelHeightRatio)` をルックアップ式(0.2/0.3 閾値)から連続スケール関数へ差し替え:
+  - Panel 実高 = `pageHeight * panelHeightRatio`
+  - 1行物理高 = `fontSize * lineHeight`
+  - 想定行数 = `floor(panelHeight * coverage / lineHeightPx)`
+  - 極小 (ratio <= 0.12) → `minChars`
+  - 行数推定 <=1 → デフォルト最大 (縦圧縮効果が薄いので短縮回避)
+  - 基準比 `baseRatio=0.3` に対し `scale = sqrt(clamp(panelHeightRatio/baseRatio,0.05,2))`
+  - `round(defaultMax * scale)` を `[minChars, defaultMax]` でクランプ
+
+将来拡張案:
+- 実際の API 返却画像高さ分布からフィードバックループ（学習）し非線形補正テーブルを生成
+- 台詞の語数/句数に基づき行長を動的補正（短文は短い列幅でも自然）
+
+### Rendering Metrics Collection
+
+`CanvasRenderer` にランタイムメトリクスを追加:
+
+| カテゴリ | 指標 | 説明 |
+|----------|------|------|
+| dialogue | count, totalScale, maxScale, minScale, perBubble[] | バブル単位のスケール分布と全体統計 |
+| panels | count, totalUnusedSlotRatio | マルチバブル時の未使用横幅率合計 (平均 = totalUnusedSlotRatio / panels.count) |
+| sfx | count, placementAttempts | SFX 配置試行回数（暫定: =count）|
+| timestamps | start, end | レンダリング区間境界（今後 end 設定予定）|
+
+利用例 (将来):
+```ts
+// 例: 平均バブルスケール閾値で劣化検出
+const avgScale = metrics.dialogue.totalScale / Math.max(1, metrics.dialogue.count)
+if (avgScale < 0.55) alert('Dialogue scale degradation detected')
+```
+
+### (2025-09) SFX Collision Refinement
+
+課題: 既存ヒューリスティック候補列で全て重なるケースで単純縮小のみ→他要素と視認性競合。
+
+改善:
+1. 通常候補/縮小 8 試行で失敗 → 7x7 グリッド fallback 探索。
+2. 各セル中心を起点にフォント縮小しながらオーバーラップ率 (重なり面積 / 自矩形面積) を計算。
+3. `overlapAreaRatio <= 0.02` なら即採用。そうでなければ最小オーバーラップ候補を蓄積し最後に選択。
+4. メトリクス: `totalCandidatesTried`, `gridCellsEvaluated`, `fallbackGridUsed`, `placements` を `SfxPlacer.getLastMetrics()` で取得可能。
+
+トレードオフ:
+- グリッド探索は最悪 49 セル * 数フォント縮小で O(N) 増加。ただしフォント縮小回数を早期打ち切りで限定し視覚安定性を優先。
+
+将来改善候補:
+- Occupied マップを coarse binary mask 化し畳み込み的にオーバーラップ 0 領域検出。
+- SFX 回転角度も探索パラメータに含め見た目バリエーションと隙間活用を同時最適化。
+- dialogue bubble / narration 領域に優先度を導入し SFX の侵入許容度 (weight) を差別化。
+
 
 ## Page Break Estimation
 
