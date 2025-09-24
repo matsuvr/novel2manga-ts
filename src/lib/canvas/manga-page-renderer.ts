@@ -183,12 +183,12 @@ export class MangaPageRenderer {
    *  7. 追加のガード: panelHeightRatio <= 0.12 なら強制的に minChars
    */
   private computeMaxCharsPerLine(panelHeightRatio: number): number {
-    const vt = appConfig.rendering.verticalText
-    const defaults = vt?.defaults || { fontSize: 24, lineHeight: 1.6, padding: 12, maxCharsPerLine: 14 }
-    const dyn = (vt as unknown as { dynamicCoverage?: { enabled?: boolean; heightCoverage?: number; minCharsPerLine?: number } })?.dynamicCoverage
-    const enabled = dyn?.enabled !== false
-    const heightCoverage = dyn?.heightCoverage ?? 0.75
-    const minChars = dyn?.minCharsPerLine ?? 4
+  const vt = appConfig.rendering.verticalText
+  const defaults = vt?.defaults || { fontSize: 24, lineHeight: 1.6, padding: 12, maxCharsPerLine: 14 }
+  const dyn = vt?.dynamicCoverage as { enabled: boolean; heightCoverage: number; minCharsPerLine: number } | undefined
+  const enabled = dyn ? dyn.enabled : false
+  const heightCoverage = dyn ? dyn.heightCoverage : 0.75
+  const minChars = dyn ? dyn.minCharsPerLine : 4
     const defaultMax = defaults.maxCharsPerLine || 14
     if (!enabled) {
       // 旧閾値ロジック互換（保険）

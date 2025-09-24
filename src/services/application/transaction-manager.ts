@@ -21,8 +21,9 @@ interface StorageDeleteOperation {
 }
 
 interface DatabaseOperation {
-  // better-sqlite3(drizzle) の同期トランザクション内で実行されるため Promise を返さない
-  execute: (tx?: DrizzleTransaction) => void
+  // better-sqlite3(drizzle) の同期トランザクション内で実行されるため Promise を返さない (契約)
+  // ただしランタイムで誤って Promise を返した場合検知できるよう unknown を返り値型にする
+  execute: (tx?: DrizzleTransaction) => unknown
   // rollback は外部（トランザクション外）で async 可
   rollback?: () => Promise<void>
 }
@@ -77,11 +78,17 @@ export class TransactionManager {
    * @param rollback - ロールバック処理（オプション）
    */
   addDatabaseOperation(
-    execute: (tx?: DrizzleTransaction) => void,
+    execute: (tx?: DrizzleTransaction) => unknown,
     rollback?: () => Promise<void>,
   ): void {
     if (this.executed) {
       throw new Error('Cannot add operations after execution started')
+    }
+    // 型的には void だが、呼び出し側が誤って async を渡した場合早期検知
+    if (execute.constructor && execute.constructor.name === 'AsyncFunction') {
+      throw new Error(
+        'addDatabaseOperation received an async function. DB ops must be synchronous to ensure transactional consistency. Pre-run external async work before registering the operation.',
+      )
     }
     this.dbOps.push({ execute, rollback })
   }
@@ -141,17 +148,25 @@ export class TransactionManager {
 
         // Drizzle(better-sqlite3) の transaction は同期だが、テスト用 Mock では async になっている。
         // どちらにも対応するため戻り値が thenable なら await する。
-        const maybePromise = (raw as DrizzleDb).transaction((tx) => {
+        const isPromiseLike = (v: unknown): v is Promise<unknown> =>
+          !!v && (typeof v === 'object' || typeof v === 'function') && 'then' in v
+
+        const result = (raw as DrizzleDb).transaction((tx) => {
           for (const dbOp of this.dbOps) {
-            dbOp.execute(tx as unknown as DrizzleTransaction)
+            const r: unknown = dbOp.execute(tx as unknown as DrizzleTransaction)
+            if (isPromiseLike(r)) {
+              throw new Error(
+                'Detected Promise return from database operation inside synchronous transaction. Refactor to perform async work before entering TransactionManager.',
+              )
+            }
           }
           for (const trackingOp of this.trackingOps) {
             recordStorageFileSync(trackingOp.params, tx as unknown as DrizzleTransaction)
           }
-        }) as unknown
-
-        if (maybePromise && typeof (maybePromise as Promise<unknown>).then === 'function') {
-          await maybePromise
+        })
+        // Drizzle/better-sqlite3 は同期だが、テスト用 Mock は Promise を返す場合があるので await
+        if (isPromiseLike(result)) {
+          await result
         }
         this.committed = true
       } else {
