@@ -133,10 +133,11 @@ export class NewRenderingOrchestrator {
     // Collect unique dialogues across all pages for batching
   const vtDefaults = appConfig.rendering.verticalText.defaults
   const uniq = new Map<string, DialogueBatchRequestItem>()
+    const DEFAULT_PANEL_HEIGHT_RATIO = 0.3 // fallback when panel.size?.height missing
     for (const page of layout.pages) {
       for (const panel of page.panels) {
         if (!panel.dialogues) continue
-        const panelHeightRatio = panel.size?.height ?? 0.3
+        const panelHeightRatio = panel.size?.height ?? DEFAULT_PANEL_HEIGHT_RATIO
         const dynMaxChars = computeDynamicMaxCharsPerLine(panelHeightRatio)
         for (const d of panel.dialogues) {
           const text = d.text?.trim()

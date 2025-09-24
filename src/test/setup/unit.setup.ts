@@ -393,6 +393,14 @@ vi.mock('@/config/app.config', () => ({
   },
   getAppConfig: vi.fn().mockReturnValue({ features: { enableCoverageCheck: false }, llm: {}, episode: { smallPanelThreshold: 8, minPanelsPerEpisode: 10, maxPanelsPerEpisode: 1000 } }),
   getAppConfigWithOverrides: vi.fn().mockReturnValue({
+    // pagination セクションを追加 (テストで importance 分布正規化を期待するため
+    // preserveScriptImportance は false にし、元パネルの rawImportance をそのまま使用せず
+    // normalizeImportanceDistribution を通すコードパスを強制する)
+    pagination: {
+      pageImportanceLimit: 6,
+      preserveScriptImportance: false,
+      recomputeImportanceFallback: true,
+    },
     chunking: {
       defaultChunkSize: 1000,
     },

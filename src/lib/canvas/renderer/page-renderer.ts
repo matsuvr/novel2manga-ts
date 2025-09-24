@@ -8,6 +8,7 @@ import { createCanvas, ensureCanvasInited } from '../core/canvas-init'
 import { drawBasicBubble, drawPanelFrame, drawThoughtBubble, fillBackgroundWhite } from '../core/draw-primitives'
 import { measureTextWidthCached } from '../metrics/measure-text-cache'
 import { SfxPlacer } from '../sfx-placer'
+import { computeDynamicMaxCharsPerLine } from '../vertical-text-dynamic'
 
 export interface PageRenderInput {
   layout: MangaLayout
@@ -147,6 +148,8 @@ function renderPanelDialogues(
   const panelBox: Rect = { x: box.x, y: box.y, width: box.w, height: box.h }
   const bubbleTop = box.y + box.h * BUBBLE_TOP_OFFSET_RATIO
   const maxBubbleAreaHeight = box.h * MAX_BUBBLE_AREA_HEIGHT_RATIO
+  // パネル高さ比率: レイアウト上 panel.size.height はページ正規化済み (0..1) を想定
+  const dynMaxCharsPerLine = computeDynamicMaxCharsPerLine(panel.size.height)
 
   const instructions =
     panel.dialogues.length > 1
@@ -159,6 +162,7 @@ function renderPanelDialogues(
           bubblePadding,
           cfg,
           vtDefaults,
+          dynMaxCharsPerLine,
           deps,
         )
       : layoutSingleDialogue(
@@ -170,6 +174,7 @@ function renderPanelDialogues(
           bubblePadding,
           cfg,
           vtDefaults,
+          dynMaxCharsPerLine,
           deps,
         )
 
@@ -186,7 +191,7 @@ function renderPanelDialogues(
     const dialogueType = inst.dialogue.type || 'speech'
     if (dialogueType === 'thought') {
       drawThoughtBubble(
-        ctx as unknown as import('../core/draw-primitives').Basic2DContext & { quadraticCurveTo: (...a: number[]) => void },
+        ctx as import('../core/draw-primitives').Basic2DContext & { quadraticCurveTo?: (...a: number[]) => void; moveTo?: (...a: number[]) => void; lineTo?: (...a: number[]) => void },
         inst.bubbleX,
         inst.bubbleY,
         inst.bubbleWidth,
@@ -277,6 +282,7 @@ function layoutMultipleDialogues(
   bubblePadding: number,
   cfg: TextRenderConfig,
   vtDefaults: typeof appConfig.rendering.verticalText.defaults,
+  dynMaxCharsPerLine: number,
   deps?: PageRendererDeps,
 ): DialogueRenderInstruction[] {
   const instructions: DialogueRenderInstruction[] = []
@@ -298,13 +304,14 @@ function layoutMultipleDialogues(
   for (let logicalIndex = 0; logicalIndex < count; logicalIndex++) {
     const dialogue = dialogues[logicalIndex]
     const rawText = dialogue.text ?? ''
+  const dynMax = dynMaxCharsPerLine
     const key = buildDialogueKey({
       dialogue,
       fontSize: vtDefaults.fontSize,
       lineHeight: vtDefaults.lineHeight,
       letterSpacing: vtDefaults.letterSpacing,
       padding: vtDefaults.padding,
-      maxCharsPerLine: vtDefaults.maxCharsPerLine,
+      maxCharsPerLine: dynMax,
     })
     const asset = getDialogueAsset(key)
     const slotX = rightEdgeStart - (slotWidth + gap) * logicalIndex
@@ -380,16 +387,18 @@ function layoutSingleDialogue(
   bubblePadding: number,
   cfg: TextRenderConfig,
   vtDefaults: typeof appConfig.rendering.verticalText.defaults,
+  dynMaxCharsPerLine: number,
   deps?: PageRendererDeps,
 ): DialogueRenderInstruction[] {
   const rawText = dialogue.text ?? ''
+  const dynMax = dynMaxCharsPerLine
   const key = buildDialogueKey({
     dialogue,
     fontSize: vtDefaults.fontSize,
     lineHeight: vtDefaults.lineHeight,
     letterSpacing: vtDefaults.letterSpacing,
     padding: vtDefaults.padding,
-    maxCharsPerLine: vtDefaults.maxCharsPerLine,
+    maxCharsPerLine: dynMax,
   })
   const asset = getDialogueAsset(key)
   const maxAreaWidth = panelBox.width * SINGLE_BUBBLE_MAX_WIDTH_RATIO
