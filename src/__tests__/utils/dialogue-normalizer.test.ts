@@ -126,11 +126,16 @@ describe('dialogue-normalizer', () => {
 
       const result = normalizePageDialogues(input)
 
-  expect(result.panels![0].dialogue).toEqual([
-        { speaker: 'キャラA', text: '古い形式' },
-        { speaker: 'キャラB', text: '文字列形式' },
-      ])
-  expect(result.panels![1].dialogue).toEqual([{ speaker: 'キャラC', text: '正しい形式' }])
+      // panels の存在をまず検証してからアクセス（非nullアサーション回避）
+      expect(result.panels).toBeDefined()
+      expect(Array.isArray(result.panels)).toBe(true)
+      if (!result.panels) throw new Error('panels should be defined')
+
+      expect(result.panels[0].dialogue).toEqual([
+            { speaker: 'キャラA', text: '古い形式' },
+            { speaker: 'キャラB', text: '文字列形式' },
+          ])
+      expect(result.panels[1].dialogue).toEqual([{ speaker: 'キャラC', text: '正しい形式' }])
     })
 
     it('dialogue配列がないパネルはそのまま返す', () => {

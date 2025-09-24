@@ -6,6 +6,7 @@ import { type DialogueBatchRequestItem, ensureDialogueAssets } from '@/lib/canva
 import { buildDialogueKey } from '@/lib/canvas/assets/dialogue-key'
 import { globalMeasureTextCache } from '@/lib/canvas/metrics/measure-text-cache'
 import { renderPageToCanvas } from '@/lib/canvas/renderer/page-renderer'
+import { computeDynamicMaxCharsPerLine } from '@/lib/canvas/vertical-text-dynamic'
 // (Optional future) pure renderer import preserved in separate file; current orchestrator uses renderPageToCanvas facade.
 import type { MangaLayout } from '@/types/panel-layout'
 import { getFontForDialogue } from '@/types/vertical-text'
@@ -132,21 +133,25 @@ export class NewRenderingOrchestrator {
     // Collect unique dialogues across all pages for batching
   const vtDefaults = appConfig.rendering.verticalText.defaults
   const uniq = new Map<string, DialogueBatchRequestItem>()
+    const DEFAULT_PANEL_HEIGHT_RATIO = 0.3 // fallback when panel.size?.height missing
     for (const page of layout.pages) {
       for (const panel of page.panels) {
         if (!panel.dialogues) continue
+        const panelHeightRatio = panel.size?.height ?? DEFAULT_PANEL_HEIGHT_RATIO
+        const dynMaxChars = computeDynamicMaxCharsPerLine(panelHeightRatio)
         for (const d of panel.dialogues) {
           const text = d.text?.trim()
           if (!text) continue
+          const maxCharsPerLine = dynMaxChars
           const key = buildDialogueKey({
             dialogue: d,
             fontSize: vtDefaults.fontSize,
             lineHeight: vtDefaults.lineHeight,
             letterSpacing: vtDefaults.letterSpacing,
             padding: vtDefaults.padding,
-            maxCharsPerLine: vtDefaults.maxCharsPerLine,
+            maxCharsPerLine,
           })
-            if (uniq.has(key)) continue
+          if (uniq.has(key)) continue
           const font = getFontForDialogue(d)
           uniq.set(key, {
             key,
@@ -156,7 +161,7 @@ export class NewRenderingOrchestrator {
             lineHeight: vtDefaults.lineHeight,
             letterSpacing: vtDefaults.letterSpacing,
             padding: vtDefaults.padding,
-            maxCharsPerLine: vtDefaults.maxCharsPerLine,
+            maxCharsPerLine,
             font,
           })
         }
