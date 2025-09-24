@@ -295,8 +295,7 @@ export default function NewHomeClient() {
               Novel to Manga Converter
             </h1>
             <p className="mx-auto mt-3 max-w-2xl text-sm/6 opacity-90 sm:text-base/7">
-              小説テキストを貼り付けるだけ。AI
-              が読みやすい絵コンテに自動変換します。
+              小説テキストを貼り付けるだけ。AIが読みやすい絵コンテに自動変換します。
             </p>
             <div className="mt-6 flex items-center justify-center gap-3"></div>
           </div>
@@ -336,12 +335,15 @@ export default function NewHomeClient() {
                 <p className="text-sm text-muted-foreground">
                   2,000,000 文字まで。サンプルも試せます。
                 </p>
+                <p className="text-xs text-muted-foreground">
+                  下記3作品（山月記 / 羅生門 / 銀河鉄道の夜）は著作権が消失したパブリックドメイン作品で、サンプルとして提供しています。
+                </p>
               </CardHeader>
               <CardContent>
                 <Textarea
                   value={novelText}
                   onChange={(e) => setNovelText(e.target.value.slice(0, 2_000_000))}
-                  placeholder="ここにテキストを入力..."
+                  placeholder="あなたの小説をペーストするか、以下のボタンからサンプルの小説を入力する"
                   className="min-h-[280px]"
                   disabled={isInputDisabled}
                 />
@@ -358,26 +360,20 @@ export default function NewHomeClient() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <SampleButton
-                      label="空き家の冒険"
-                      path="/docs/空き家の冒険.txt"
+                      label="山月記"
+                      path="/docs/山月記.txt"
                       onPick={setNovelText}
                       disabled={isInputDisabled}
                     />
                     <SampleButton
-                      label="怪人二十面相"
-                      path="/docs/怪人二十面相.txt"
+                      label="羅生門"
+                      path="/docs/羅生門.txt"
                       onPick={setNovelText}
                       disabled={isInputDisabled}
                     />
                     <SampleButton
-                      label="モルグ街の殺人事件"
-                      path="/docs/モルグ街の殺人事件.txt"
-                      onPick={setNovelText}
-                      disabled={isInputDisabled}
-                    />
-                    <SampleButton
-                      label="最後の一葉"
-                      path="/docs/最後の一葉.txt"
+                      label="銀河鉄道の夜"
+                      path="/docs/銀河鉄道の夜.txt"
                       onPick={setNovelText}
                       disabled={isInputDisabled}
                     />

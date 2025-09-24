@@ -91,6 +91,7 @@ output.txt
 tmp_test/
 *tmp/
 tmp/
+.test-storage-unit/
 
 # log files
 *.log

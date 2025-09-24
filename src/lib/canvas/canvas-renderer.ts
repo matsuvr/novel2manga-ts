@@ -5,6 +5,7 @@ import { appConfig, getAppConfigWithOverrides } from '@/config/app.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import type { AppCanvasConfig } from '@/types/canvas-config'
 import type { Dialogue, MangaLayout, Panel } from '@/types/panel-layout'
+import type { VerticalTextBounds } from '@/types/vertical-text'
 import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
 import { PanelLayoutCoordinator } from './panel-layout-coordinator'
 import { type SfxPlacement, SfxPlacer } from './sfx-placer'
@@ -88,6 +89,7 @@ export interface DialogueAsset {
   image: CanvasImageSource
   width: number
   height: number
+  contentBounds?: VerticalTextBounds
 }
 
 interface DrawBubbleParams {
@@ -288,21 +290,31 @@ export class CanvasRenderer {
       dialogue.emotion === 'shout'
         ? canvasCfg.bubble.shoutLineWidth
         : canvasCfg.bubble.normalLineWidth
-    const shapeType = dialogue.type || 'speech'
-    this.drawBubbleShape(shapeType, bx, by, bubbleW, bubbleH)
+  const shapeType = dialogue.type || 'speech'
+
+  // --- Safety clamp ------------------------------------------------------
+  // 縦書きテキスト画像(drawW/drawH)が算出済みバブルより大きい場合、
+  // 少なくとも画像+パディングが収まるサイズに拡張（稀に contentBounds 推定誤差で発生）。
+  let finalBubbleW = bubbleW
+  let finalBubbleH = bubbleH
+  const pad = BUBBLE_PADDING * 0.5 // ここでは最低限の内側余白を確保（既存 padding 設計への影響最小化）
+  if (drawW + pad * 2 > finalBubbleW) finalBubbleW = drawW + pad * 2
+  if (drawH + pad * 2 > finalBubbleH) finalBubbleH = drawH + pad * 2
+
+  this.drawBubbleShape(shapeType, bx, by, finalBubbleW, finalBubbleH)
     this.ctx.restore()
 
     // 画像（縦書きセリフ）
-    const imgX = bx + (bubbleW - drawW) / 2
-    const imgY = by + (bubbleH - drawH) / 2
+  const imgX = bx + (finalBubbleW - drawW) / 2
+  const imgY = by + (finalBubbleH - drawH) / 2
     this.ctx.drawImage(asset.image, imgX, imgY, drawW, drawH)
 
     // 占有領域登録
     this.layoutCoordinator.registerDialogueArea(dialogue, {
       x: bx,
       y: by,
-      width: bubbleW,
-      height: bubbleH,
+      width: finalBubbleW,
+      height: finalBubbleH,
     })
 
     // 話者ラベル
@@ -324,7 +336,7 @@ export class CanvasRenderer {
       const offsetXRatio = labelOffsetXRatio ?? speakerLabelCfg.offsetX ?? 0.3
       const offsetYRatio = labelOffsetYRatio ?? speakerLabelCfg.offsetY ?? 0.7
       const borderRadius = speakerLabelCfg.borderRadius ?? SPEAKER_LABEL_BORDER_RADIUS
-      this.drawSpeakerLabel(dialogue.speaker, bx + bubbleW, by, {
+      this.drawSpeakerLabel(dialogue.speaker, bx + finalBubbleW, by, {
         fontSize,
         padding: paddingLabel,
         backgroundColor: bg,
@@ -402,15 +414,18 @@ export class CanvasRenderer {
               const slotX = rightEdgeStart - (slotWidth + gap) * logicalIndex
 
               // スケール計算（幅・高さを別々に制限、等比）
+              const effective = this.getEffectiveDialogueDimensions(asset)
               const maxDrawW = Math.max(1, slotWidth - BUBBLE_PADDING * 2)
               const maxDrawH = Math.max(1, maxBubbleAreaHeight - BUBBLE_PADDING * 2)
-              const scale = Math.min(maxDrawW / asset.width, maxDrawH / asset.height, 1)
+              const widthBasis = Math.max(1, effective.width)
+              const heightBasis = Math.max(1, effective.height)
+              const scale = Math.min(maxDrawW / widthBasis, maxDrawH / heightBasis, 1)
               const drawW = Math.max(1, asset.width * scale)
               const drawH = Math.max(1, asset.height * scale)
 
-              // バブルサイズ（余白含む）。従来の sqrt(2) 補正は根拠不明かつ文字が枠外にはみ出す要因だったため撤廃。
-              const bubbleW = drawW + BUBBLE_PADDING * 2
-              const bubbleH = drawH + BUBBLE_PADDING * 2
+              // バブルサイズ（余白含む）。コンテンツ境界に基づき必要寸法を確保。
+              const bubbleW = Math.max(1, effective.width * scale + BUBBLE_PADDING * 2)
+              const bubbleH = Math.max(1, effective.height * scale + BUBBLE_PADDING * 2)
 
               // 横方向センタリング（slot幅内）
               const bx = slotX + (slotWidth - bubbleW) / 2
@@ -451,12 +466,18 @@ export class CanvasRenderer {
             const maxAreaWidth = width * SINGLE_BUBBLE_MAX_WIDTH_RATIO
             const maxAreaHeightTotal = height * MAX_BUBBLE_AREA_HEIGHT_RATIO
             const perBubbleMaxHeight = Math.max(SINGLE_BUBBLE_MIN_HEIGHT, maxAreaHeightTotal)
+            const effective = this.getEffectiveDialogueDimensions(asset)
+            const widthBasis = Math.max(1, effective.width)
+            const heightBasis = Math.max(1, effective.height)
 
-            let scale = Math.min(maxAreaWidth / asset.width, perBubbleMaxHeight / asset.height, 1)
-            let drawW = asset.width * scale
-            let drawH = asset.height * scale
-            let bubbleW = (drawW + BUBBLE_PADDING * 2) * Math.sqrt(2)
-            let bubbleH = (drawH + BUBBLE_PADDING * 2) * Math.sqrt(2)
+            let scale = Math.min(maxAreaWidth / widthBasis, perBubbleMaxHeight / heightBasis, 1)
+            scale = Math.max(0, Math.min(1, scale))
+            let drawW = Math.max(1, asset.width * scale)
+            let drawH = Math.max(1, asset.height * scale)
+            let baseBubbleW = Math.max(1, effective.width * scale + BUBBLE_PADDING * 2)
+            let baseBubbleH = Math.max(1, effective.height * scale + BUBBLE_PADDING * 2)
+            let bubbleW = baseBubbleW * Math.SQRT2
+            let bubbleH = baseBubbleH * Math.SQRT2
 
             const availableVertical = y + height - bubbleY
             const maxThisBubbleHeight = Math.max(
@@ -464,14 +485,18 @@ export class CanvasRenderer {
               Math.min(perBubbleMaxHeight, availableVertical - AVAILABLE_VERTICAL_MARGIN),
             )
             if (bubbleH > maxThisBubbleHeight) {
-              const targetDrawH = maxThisBubbleHeight / Math.sqrt(2) - BUBBLE_PADDING * 2
-              const newScale = targetDrawH > 0 ? targetDrawH / asset.height : 0
-              scale = Math.min(scale, newScale)
-
-              drawW = asset.width * scale
-              drawH = asset.height * scale
-              bubbleW = (drawW + BUBBLE_PADDING * 2) * Math.sqrt(2)
-              bubbleH = (drawH + BUBBLE_PADDING * 2) * Math.sqrt(2)
+              const targetBaseHeight = maxThisBubbleHeight / Math.SQRT2
+              const allowable = (targetBaseHeight - BUBBLE_PADDING * 2) / heightBasis
+              const newScale = allowable > 0 ? Math.min(scale, allowable) : 0
+              if (newScale < scale) {
+                scale = Math.max(0, newScale)
+                drawW = Math.max(1, asset.width * scale)
+                drawH = Math.max(1, asset.height * scale)
+                baseBubbleW = Math.max(1, effective.width * scale + BUBBLE_PADDING * 2)
+                baseBubbleH = Math.max(1, effective.height * scale + BUBBLE_PADDING * 2)
+                bubbleW = baseBubbleW * Math.SQRT2
+                bubbleH = baseBubbleH * Math.SQRT2
+              }
             }
 
             if (bubbleH > 0 && bubbleY + bubbleH <= y + height) {
@@ -777,6 +802,31 @@ export class CanvasRenderer {
     }
 
     this.ctx.restore()
+  }
+
+  /**
+   * コンテンツ境界を考慮した実効的なアセット幅・高さを算出
+   */
+  private getEffectiveDialogueDimensions(asset: DialogueAsset): { width: number; height: number } {
+    const baseWidth = Math.max(1, asset.width)
+    const baseHeight = Math.max(1, asset.height)
+    const bounds = asset.contentBounds
+    if (!bounds) {
+      return { width: baseWidth, height: baseHeight }
+    }
+
+    const overflowLeft = Math.max(0, -bounds.x)
+    const overflowRight = Math.max(0, bounds.x + bounds.width - asset.width)
+    const overflowTop = Math.max(0, -bounds.y)
+    const overflowBottom = Math.max(0, bounds.y + bounds.height - asset.height)
+
+    const effectiveWidth = Math.max(baseWidth, bounds.width + overflowLeft + overflowRight)
+    const effectiveHeight = Math.max(baseHeight, bounds.height + overflowTop + overflowBottom)
+
+    return {
+      width: Math.max(1, effectiveWidth),
+      height: Math.max(1, effectiveHeight),
+    }
   }
 
   /**

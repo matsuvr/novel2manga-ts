@@ -67,13 +67,18 @@ describe.skip('integration: vertical text drawImage bounds and concurrency', () 
   it('drawImage dimensions fit within panel bounds', async () => {
     const { renderVerticalText } = await import('@/services/vertical-text-client')
     ;(renderVerticalText as any).mockResolvedValue({
-      meta: { image_base64: 'x', width: 800, height: 1200 },
+      meta: {
+        image_base64: 'x',
+        width: 800,
+        height: 1200,
+        trimmed: true,
+        content_bounds: { x: 0, y: 0, width: 800, height: 1200 },
+      },
       pngBuffer: Buffer.from('iVBOR', 'base64'),
     })
 
     // Oversized image; stub Image creation to return same size
     const canvasMod = await import('@/lib/canvas/canvas-renderer')
-    // @ts-expect-error test shim
     canvasMod.CanvasRenderer.createImageFromBuffer = vi.fn().mockResolvedValue({
       image: { __img: true },
       width: 800,
@@ -136,13 +141,18 @@ pages:
       await new Promise((r) => setTimeout(r, 10))
       inFlight--
       return {
-        meta: { image_base64: 'x', width: 120, height: 300 },
+        meta: {
+          image_base64: 'x',
+          width: 120,
+          height: 300,
+          trimmed: true,
+          content_bounds: { x: 0, y: 0, width: 120, height: 300 },
+        },
         pngBuffer: Buffer.from('iVBOR', 'base64'),
       }
     })
 
     const canvasMod = await import('@/lib/canvas/canvas-renderer')
-    // @ts-expect-error test shim
     canvasMod.CanvasRenderer.createImageFromBuffer = vi.fn().mockResolvedValue({
       image: { __img: true },
       width: 120,

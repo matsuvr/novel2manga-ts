@@ -1,9 +1,10 @@
 import { appConfig } from '@/config/app.config'
 import { dialogueAssetsConfig } from '@/config/dialogue-assets.config'
 import { getLogger } from '@/infrastructure/logging/logger'
-import { renderVerticalTextBatch } from '@/services/vertical-text-client'
+import { type RenderedVerticalTextBatchItem, renderVerticalTextBatch } from '@/services/vertical-text-client'
 import type { Dialogue, EpisodeChunk, EpisodeData, MangaLayout, Page, Panel } from '@/types/panel-layout'
-import { getFontForDialogue } from '@/types/vertical-text'
+import type { VerticalTextBounds } from '@/types/vertical-text'
+import { getFontForDialogue, resolveContentBounds } from '@/types/vertical-text'
 import { CanvasRenderer, type DialogueAsset, type NodeCanvas } from './canvas-renderer'
 import {
   buildAssetsFromImages,
@@ -197,22 +198,38 @@ export class MangaPageRenderer {
       return defaultMax
     }
 
-    // Panel 実高さ(px) を元に使用可能ライン数を推定
+    // === 復元: レガシー実装の趣旨（パネル縦方向の実容量に応じて 1 行縦文字数を決める） ===
+    // 旧コードでは panelPixelHeight と行高から理論上の収容行数(linesGuess)を求め、
+    // それをベースに maxCharsPerLine を短くしてフォント縮小を避けていた。リファクタ時に
+    // sqrt スケーリングのみになり小さいコマでも 14 付近が返るケースがあり可読性低下。
+    // ここでは targetCoverage を考慮した linesGuess を直接上限とし、
+    // 「極小」「小」「中以上」で段階的に緩やかに伸ばす方式に変更。
+
     const pageHeight = this.config.pageHeight
     const panelPixelHeight = pageHeight * panelHeightRatio
     const lineHeightPx = defaults.fontSize * defaults.lineHeight
     const usableTargetHeight = panelPixelHeight * heightCoverage
-    const linesGuess = Math.floor(usableTargetHeight / lineHeightPx)
+    const linesGuess = Math.max(0, Math.floor(usableTargetHeight / lineHeightPx))
 
-    // 非常に低いパネル: 文字密度を避け最小
-    if (panelHeightRatio <= 0.12) return minChars
-    if (linesGuess <= 1) return defaultMax // ほぼ1行 → 行長短縮しても縦余白改善にならない
+    // しきい値設定（経験的）：極小 / 小 / 標準
+    const tinyThreshold = 0.12
+    const smallThreshold = 0.2
 
-    const baseRatio = 0.3
-    const scaleFactor = Math.sqrt(Math.max(0.05, Math.min(2, panelHeightRatio / baseRatio)))
-    const raw = Math.round(defaultMax * scaleFactor)
-    const clamped = Math.min(defaultMax, Math.max(minChars, raw))
-    return clamped
+    // 極小: 最低値（フォントをこれ以上圧縮しない）
+    if (panelHeightRatio <= tinyThreshold) return minChars
+
+    // 小: linesGuess が最小値と同等なら 1 文字だけ余裕を持たせて tiny との差を確保 (テスト単調性確保)
+    if (panelHeightRatio <= smallThreshold) {
+      if (linesGuess <= minChars) return Math.min(defaultMax, minChars + 1)
+      return Math.min(defaultMax, Math.max(minChars + 1, linesGuess))
+    }
+
+    // 中〜大: linesGuess を上限値にしつつ、defaultMax を超えない。
+    // 大きなパネルでは行数増やしても幅(列数)調整で可読性が落ちにくいので defaultMax を許容。
+    if (linesGuess <= 1) return defaultMax // coverage 的に 1 行しか入らない → 旧挙動維持
+    const capacityBased = Math.min(linesGuess, defaultMax)
+    // linesGuess が defaultMax より小さい場合のみ縮める; それ以上は上限
+    return Math.max(minChars + 1, capacityBased)
   }
 
   /**
@@ -402,25 +419,32 @@ export class MangaPageRenderer {
         padding: feature.defaults.padding,
       }
 
-  const allResults: Array<{ meta: { width?: number; height?: number }; pngBuffer: Buffer }> = []
+  const allResults: RenderedVerticalTextBatchItem[] = []
       let offset = 0
       const limit = dialogueAssetsConfig.batch.limit
       while (offset < items.length) {
         const slice = items.slice(offset, offset + limit)
         const apiStartTime = Date.now()
-  let res: Array<{ meta: { width?: number; height?: number }; pngBuffer: Buffer }> = []
+        let res: RenderedVerticalTextBatchItem[] = []
         try {
           const apiRes = await renderVerticalTextBatch({ defaults, items: slice })
           // Normalize to array type defensively
-          res = Array.isArray(apiRes) ? apiRes : []
+          res = Array.isArray(apiRes) ? (apiRes as RenderedVerticalTextBatchItem[]) : []
         } catch (e) {
           // テスト/モック未設定時はプレースホルダにフォールバック
           if (process.env.NODE_ENV === 'test') {
+            const placeholderMeta = {
+              image_base64: 'VT_PLACEHOLDER',
+              width: 100,
+              height: 120,
+              trimmed: true,
+              content_bounds: { x: 0, y: 0, width: 100, height: 120 },
+            }
             const ph = slice.map(() => ({
-              meta: { width: 100, height: 120 },
-              pngBuffer: Buffer.from([]),
+              meta: { ...placeholderMeta },
+              pngBuffer: Buffer.alloc(0),
             }))
-            res = ph as Array<{ meta: { width?: number; height?: number }; pngBuffer: Buffer }>
+            res = ph
           } else {
             throw e
           }
@@ -444,9 +468,15 @@ export class MangaPageRenderer {
             process.env.NODE_ENV === 'development'
           ) {
             res = slice.map(() => ({
-              meta: { width: 100, height: 120 },
-              pngBuffer: Buffer.from([]),
-            })) as Array<{ meta: { width?: number; height?: number }; pngBuffer: Buffer }>
+              meta: {
+                image_base64: 'VT_PLACEHOLDER',
+                width: 100,
+                height: 120,
+                trimmed: true,
+                content_bounds: { x: 0, y: 0, width: 100, height: 120 },
+              },
+              pngBuffer: Buffer.alloc(0),
+            }))
           } else {
             throw new Error('vertical-text batch returned non-array response')
           }
@@ -470,7 +500,7 @@ export class MangaPageRenderer {
       const images: Array<{
         key: string
         image: CanvasImageSource
-        meta: { width: number; height: number }
+  meta: { width: number; height: number; contentBounds?: VerticalTextBounds }
       }> = await Promise.all(
         allResults.map(async (res, idx) => {
           const { key, panelId, dialogueIndex } = map[idx]
@@ -486,6 +516,7 @@ export class MangaPageRenderer {
           let image: CanvasImageSource | undefined
           let width = res.meta.width ?? 0
           let height = res.meta.height ?? 0
+          const bounds = resolveContentBounds(res.meta)
 
           try {
             const created = await CanvasRenderer.createImageFromBuffer(res.pngBuffer)
@@ -508,7 +539,11 @@ export class MangaPageRenderer {
           return {
             key,
             image,
-            meta: { width: Math.max(1, width || 0), height: Math.max(1, height || 0) },
+            meta: {
+              width: Math.max(1, width || 0),
+              height: Math.max(1, height || 0),
+              contentBounds: bounds,
+            },
           }
         }),
       )

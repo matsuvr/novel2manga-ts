@@ -5,6 +5,7 @@
  * Logic: Sum importance values until they reach 6, then create a new page.
  */
 
+import { getAppConfigWithOverrides } from '@/config/app.config'
 import type { NewMangaScript, PageBreakV2 } from '../../types/script'
 
 // 旧 PageBreak 型参照を残している箇所への後方互換エイリアス
@@ -37,7 +38,8 @@ export function calculateImportanceBasedPageBreaks(
   script: NewMangaScript,
   initialImportance = 0,
 ): ImportancePageBreakResult {
-  const PAGE_IMPORTANCE_LIMIT = 6
+  const cfg = getAppConfigWithOverrides()
+  const PAGE_IMPORTANCE_LIMIT = cfg.pagination.pageImportanceLimit
   if (!script.panels || script.panels.length === 0) {
     return {
       pageBreaks: { panels: [] },
@@ -71,7 +73,7 @@ export function calculateImportanceBasedPageBreaks(
     const importance = Math.max(1, Math.min(PAGE_IMPORTANCE_LIMIT, panel.importance || 1))
 
     if (strictMode) {
-      // 事前判定で超過を避ける
+      // STRICT: 事前判定で超過を避ける (現在はユーザー仕様では未使用、環境変数で明示有効時のみ)
       if (importanceSum + importance > PAGE_IMPORTANCE_LIMIT) {
         currentPage++
         importanceSum = 0
@@ -93,13 +95,14 @@ export function calculateImportanceBasedPageBreaks(
     importanceSum += importance
 
     if (strictMode) {
-      // ちょうど一致でリセット
+      // STRICT: ちょうど一致でページを閉じる (超過は事前判定で避け済み)
       if (importanceSum === PAGE_IMPORTANCE_LIMIT) {
         currentPage++
         importanceSum = 0
       }
     } else {
-      // 互換モード: >= LIMIT でページを閉じ、合計は保持せず次へ
+      // レガシー/ユーザー仕様: パネルを加算してから >= LIMIT になったらページを閉じる。
+      // 超過(>LIMIT) も許容し、そのパネルは同ページ内に残る。
       if (importanceSum >= PAGE_IMPORTANCE_LIMIT) {
         currentPage++
         importanceSum = 0

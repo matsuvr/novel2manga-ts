@@ -17,7 +17,13 @@ vi.mock('@/services/vertical-text-client', () => ({
     }
     return items.map((it: any, idx: number) => ({
       pngBuffer: Buffer.from(`IMG_${idx}_${it.text}`),
-      meta: { width: 12, height: 12 },
+      meta: {
+        image_base64: 'VT_PLACEHOLDER',
+        width: 12,
+        height: 12,
+        trimmed: true,
+        content_bounds: { x: 0, y: 0, width: 12, height: 12 },
+      },
     }))
   }),
 }))
