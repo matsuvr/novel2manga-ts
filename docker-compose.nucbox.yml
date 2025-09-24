@@ -3,7 +3,7 @@ services:
     user: "1000:1000"  # 環境変数に依存せず直接指定
     build:
       context: .
-      target: dev
+      target: production
     ports:
       - '3000:3000'
     volumes:
@@ -17,10 +17,10 @@ services:
     env_file:
       - .env
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       VERTICAL_TEXT_GENERATOR_URL: http://vertical-text-generator:8000
     # Ensure node_modules volume is seeded from image-installed modules
-    command: ['/usr/local/bin/ensure-node-modules.sh', 'npm', 'run', 'dev']
+    command: ['/usr/local/bin/ensure-node-modules.sh', 'npm', 'run', 'start']
     depends_on:
       - vertical-text-generator
 
