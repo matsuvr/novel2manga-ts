@@ -29,6 +29,8 @@ export const PanelSchema = z.object({
   sfx: z.array(z.string()).optional(), // Sound effects (SFX) support
   sourceChunkIndex: z.number().optional(),
   importance: z.number().optional(),
+  // Preserve pre-normalization importance for debugging / analytics. Added 2025-09-24.
+  originalImportance: z.number().optional(),
 })
 
 export const PageSchema = z.object({

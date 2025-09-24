@@ -1,5 +1,12 @@
+import type { VerticalTextBounds } from '@/types/vertical-text'
+
 // Simple in-memory cache (future: optional persistent layer)
-export interface DialogueImageAsset { width: number; height: number; image: CanvasImageSource }
+export interface DialogueImageAsset {
+  width: number
+  height: number
+  image: CanvasImageSource
+  contentBounds?: VerticalTextBounds
+}
 
 const mem = new Map<string, DialogueImageAsset>()
 

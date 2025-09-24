@@ -10,6 +10,7 @@ import { Progress } from '@/components/ui/progress'
 import { appConfig } from '@/config/app.config'
 import type { Job } from '@/types/job-sse'
 import { parseJobSSEPayload } from '@/types/job-sse'
+import { isRenderCompletelyDone, toJobStatusLite } from '@/utils/completion'
 import { fetchWithE2E, getEventSourceURL } from '@/utils/e2e-fetch-options'
 
 const _MAX_PAGES = appConfig.rendering.limits.maxPages
@@ -226,13 +227,8 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
       })
 
       if (jobDataString === lastJobData) {
-        const totalPages = Number(job.totalPages || 0)
-        const renderedPages = Number(job.renderedPages || 0)
-        const fallbackCompleted = job.status === 'completed' && totalPages > 0 && renderedPages >= totalPages
-        const statusCompleted = job.status === 'completed' || job.status === 'complete'
-        const uiCompleted = job.renderCompleted === true || fallbackCompleted || statusCompleted
-        // no-op or signal stop
-        return uiCompleted || job.status === 'failed' ? 'stop' : null
+        const strictDone = isRenderCompletelyDone(toJobStatusLite(job))
+        return strictDone || job.status === 'failed' ? 'stop' : null
       }
 
       setLastJobData(jobDataString)
@@ -276,13 +272,9 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
         const updatedSteps = prevSteps.map((s) => ({ ...s }))
         let completedCount = 0
 
-        const totalPages = Number(job.totalPages || 0)
-        const renderedPages = Number(job.renderedPages || 0)
-        const fallbackCompleted = job.status === 'completed' && totalPages > 0 && renderedPages >= totalPages
-        const statusCompleted = job.status === 'completed' || job.status === 'complete'
-        const uiCompleted = job.renderCompleted === true || fallbackCompleted || statusCompleted
+        const strictDone = isRenderCompletelyDone(toJobStatusLite(job))
 
-        if (uiCompleted) {
+        if (strictDone) {
           for (let idx = 0; idx < updatedSteps.length; idx++) {
             updatedSteps[idx].status = 'completed'
           }
@@ -331,7 +323,8 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
           { flag: job.analyzeCompleted, processing: ['analyze', 'analyze_'], index: 2, progressKey: 'processedChunks', totalKey: 'totalChunks' },
           { flag: job.episodeCompleted, processing: ['episode', 'episode_'], index: 3, progressKey: 'processedChunks', totalKey: 'totalChunks' },
           { flag: job.layoutCompleted, processing: ['layout', 'layout_'], index: 4, progressKey: 'processedEpisodes', totalKey: 'totalEpisodes' },
-          { flag: job.renderCompleted, processing: ['render', 'render_'], index: 5, progressKey: 'renderedPages', totalKey: 'totalPages' },
+          // レンダリングの完了表示は strict 完了条件を満たすまで遅延させる
+          { flag: strictDone, processing: ['render', 'render_'], index: 5, progressKey: 'renderedPages', totalKey: 'totalPages' },
         ]
 
         let foundProcessing = false
@@ -421,8 +414,8 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
         return updatedSteps
       })
 
-      const statusCompleted = job.status === 'completed' || job.status === 'complete'
-      return statusCompleted || job.status === 'failed' ? 'stop' : 'continue'
+      const strictDone = isRenderCompletelyDone(toJobStatusLite(job))
+      return strictDone || job.status === 'failed' ? 'stop' : 'continue'
     },
     [addLog, describeStep, inProgressWeight, lastJobData, normalizationToastShown, isDemoMode],
   )
@@ -516,7 +509,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
         if (!updater) return
         const result = updater(data)
         if (result === 'stop') {
-          const done = data.job.status === 'completed' || data.job.status === 'complete' || data.job.renderCompleted === true
+          const done = isRenderCompletelyDone(toJobStatusLite(data.job))
           if (done) {
             addLog('info', '処理が完了しました。上部のエクスポートからダウンロードできます。')
             setCompleted(true)
@@ -550,7 +543,7 @@ function ProcessingProgress({ jobId, onComplete, modeHint, isDemoMode, currentEp
             if (!updater) return
             const result = updater({ job: jobPayload })
             if (result === 'stop') {
-              const done = jobPayload.status === 'completed' || jobPayload.status === 'complete' || jobPayload.renderCompleted === true
+              const done = isRenderCompletelyDone(toJobStatusLite(jobPayload))
               if (done) {
                 addLog('info', '処理が完了しました（フォールバックポーリングにより検知）。上部のエクスポートからダウンロードできます。')
                 setCompleted(true)

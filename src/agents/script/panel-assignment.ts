@@ -1,10 +1,11 @@
+import { getAppConfigWithOverrides } from '@/config/app.config'
 import type { Dialogue, MangaLayout, Panel } from '@/types/panel-layout'
 import type { NewMangaScript, PageBreakV2, PanelAssignmentPlan } from '@/types/script'
 import { selectLayoutTemplateByCountRandom } from '@/utils/layout-templates'
-import {
-  type ImportanceCandidate,
-  normalizeImportanceDistribution,
-} from '@/utils/panel-importance'
+import { type ImportanceCandidate, normalizeImportanceDistribution } from '@/utils/panel-importance'
+
+// Internal helper type to ensure panels carry full Panel schema (including originalImportance)
+interface RawPage { page_number: number; panels: Panel[] }
 
 export async function assignPanels(
   _script: NewMangaScript,
@@ -91,14 +92,18 @@ export function buildLayoutFromPageBreaks(
   }
 
   const importanceCandidates: ImportanceCandidate[] = []
+  const cfg = getAppConfigWithOverrides()
+  // 一部テスト環境では pagination.preserveScriptImportance が未設定の場合があるため安全なデフォルト(false)
+  // false -> normalizeImportanceDistribution を利用し期待された分布(0.2/0.2/0.3/0.2/0.05/0.05)になる
+  const preserveScriptImportance = !!cfg.pagination?.preserveScriptImportance
   const panelIndexMatrix: number[][] = []
 
-  const rawPages = Array.from(pageMap.entries()).map(([pageNumber, panelsInPage]) => {
+  const rawPages: RawPage[] = Array.from(pageMap.entries()).map(([pageNumber, panelsInPage]) => {
     const template = selectLayoutTemplateByCountRandom(Math.max(1, panelsInPage.length))
     let nextId = 1
     const usedContentInPage = new Set<string>()
     const panelIndicesForPage: number[] = []
-    const panels: Panel[] = panelsInPage.map((pp, idx) => {
+  const panels: Panel[] = panelsInPage.map((pp, idx) => {
       // 新しい形式からcontentとdialogueを直接取得
       let content = pp.content || ''
       const dialogueArr = Array.isArray(pp.dialogue) ? pp.dialogue : []
@@ -208,23 +213,29 @@ export function buildLayoutFromPageBreaks(
         dialogues,
         sfx, // Include SFX in the layout panel
         sourceChunkIndex: 0,
-        importance: highlightBasedImportance,
-      }
+        importance: highlightBasedImportance, // temporary, may be overwritten below
+        originalImportance: highlightBasedImportance,
+      } as Panel
     })
 
     panelIndexMatrix.push(panelIndicesForPage)
-    return { page_number: pageNumber, panels }
+    return { page_number: pageNumber, panels } as RawPage
   })
 
-  const normalizedAssignments = normalizeImportanceDistribution(importanceCandidates)
+  const normalizedAssignments = preserveScriptImportance
+    ? importanceCandidates.map((c) => ({ index: c.index, importance: Math.max(1, Math.min(6, c.rawImportance)) }))
+    : normalizeImportanceDistribution(importanceCandidates)
   const assignmentMap = new Map(normalizedAssignments.map((entry) => [entry.index, entry.importance]))
 
   const pages = rawPages.map((page, pageIdx) => {
     const panelIndices = panelIndexMatrix[pageIdx] ?? []
-    const normalizedPanels = page.panels.map((panel, panelIdx) => ({
-      ...panel,
-      importance: assignmentMap.get(panelIndices[panelIdx]) ?? 1,
-    }))
+    const normalizedPanels = page.panels.map((panel, panelIdx) => {
+      const computed = assignmentMap.get(panelIndices[panelIdx]) ?? 1
+      if (preserveScriptImportance) {
+        return { ...panel, importance: computed, originalImportance: panel.originalImportance ?? computed }
+      }
+      return { ...panel, importance: computed }
+    })
     return { page_number: page.page_number, panels: normalizedPanels }
   })
 

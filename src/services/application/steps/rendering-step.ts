@@ -144,18 +144,25 @@ export class RenderingStep implements PipelineStep {
               }
 
               const layoutForNew = { ...normalized.layout, pages: validPages }
-              const result = await orchestrator.renderMangaLayout(layoutForNew, { novelId, jobId, episode: ep })
+              const result = await orchestrator.renderMangaLayout(layoutForNew, {
+                novelId,
+                jobId,
+                episode: ep,
+                onPageStart: async (pageNumber) => {
+                  await jobDb.updateProcessingPosition(jobId, { episode: ep, page: pageNumber })
+                },
+                onPageRendered: async ({ pageNumber, renderKey, thumbnailKey, width, height, fileSize }) => {
+                  await renderDb.upsertRenderStatus(jobId, ep, pageNumber, {
+                    isRendered: true,
+                    imagePath: renderKey,
+                    thumbnailPath: thumbnailKey,
+                    width,
+                    height,
+                    fileSize,
+                  })
+                },
+              })
               totalPagesProcessed += result.renderedPages
-              for (const p of validPages) {
-                await renderDb.upsertRenderStatus(jobId, ep, p.page_number, {
-                  isRendered: true,
-                  imagePath: `${novelId}/jobs/${jobId}/renders/episode_${ep}/page_${p.page_number}.png`,
-                  thumbnailPath: `${novelId}/jobs/${jobId}/renders/episode_${ep}/thumbnails/page_${p.page_number}_thumb.png`,
-                  width: appConfig.rendering.defaultPageSize.width,
-                  height: appConfig.rendering.defaultPageSize.height,
-                  fileSize: undefined,
-                })
-              }
               if (result.errors.length > 0) {
                 logger.warn('new_pipeline_page_errors', { jobId, episode: ep, errors: result.errors.slice(0, 5) })
               }
@@ -201,7 +208,7 @@ export class RenderingStep implements PipelineStep {
                       p.page_number,
                       imageBuffer,
                     )
-                    let thumbnailPath: string | undefined 
+                    let thumbnailPath: string | undefined
                     if (appConfig.rendering.generateThumbnails) {
                       const { ThumbnailGenerator } = await import('@/lib/canvas/thumbnail-generator')
                       const thumbBlob = await ThumbnailGenerator.generateThumbnail(imageBlob, { width: 200, height: 280, quality: 0.8, format: 'jpeg' })

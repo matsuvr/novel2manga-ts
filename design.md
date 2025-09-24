@@ -119,6 +119,33 @@ if (avgScale < 0.55) alert('Dialogue scale degradation detected')
 
 
 ## Page Break Estimation
+### 重要度ベース改ページ仕様 (2025-09 再確認)
+
+基本ルール (レガシー/標準モード):
+1. ページ内で importance を逐次加算する (初期値 0)。
+2. パネルを現在のページに配置し、その importance を合計へ加算する。
+3. 加算後の合計が `>= limit` (config.pagination.pageImportanceLimit, 初期 6) になったら、そのページをクローズ。
+4. 次のパネル (存在すれば) から新しいページを開始し、合計を 0 にリセット。
+
+結果: 合計が limit を超過 (例: 4+1+2=7) しても超過したパネルは同一ページ内に残る。ちょうど一致 (3+3=6) の場合も同ページ内に残し、次パネルから新ページ。
+
+STRICT モード (環境変数 IMPORTANCE_STRICT=1): 事前判定で超過を避け、`current + panel > limit` ならパネルを次ページへ送り、`== limit` ならパネルを配置後即クローズ。デフォルト無効。
+
+不変条件 (レガシー標準): 最終ページを除きほとんどのページで合計 >= limit になるが、セグメント境界や carry の影響で最終直前ページが < limit になることは想定外 (監視は optional)。
+
+テスト: `src/__tests__/importance-pagination.invariant.test.ts` はレガシー(add-then-check) 振る舞いを固定。
+
+設定キー:
+```
+pagination.pageImportanceLimit: number (default 6)
+pagination.preserveScriptImportance: boolean (script 由来 importance を layout へ極力保持)
+pagination.recomputeImportanceFallback: boolean (不正値時のみ再計算)
+```
+
+将来拡張候補:
+- パネル個数上限との複合条件
+- lookahead による均等化 (現在は greedy)
+
 
 - Segmented estimator now carries over importance sums between segments, maintaining correct panel grouping and template selection across page boundaries.
 - Importance-based calculator exposes remaining importance even for empty scripts and clamps segment page offsets to avoid negative numbering.
