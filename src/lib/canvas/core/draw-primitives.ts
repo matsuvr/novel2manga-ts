@@ -66,14 +66,16 @@ export function drawThoughtBubble(
   h: number,
   cfg: ThoughtBubbleConfig,
 ) {
+  const MIN_BUMPS = 6
+  const PRNG_MAGIC_FACTOR = 12.9898
   const cx = x + w / 2
   const cy = y + h / 2
   const baseR = Math.min(w, h) / 2
-  const bumps = Math.max(6, cfg.bumps)
+  const bumps = Math.max(MIN_BUMPS, cfg.bumps)
   const amp = Math.max(0, cfg.amplitudeRatio)
   const randAmt = Math.max(0, cfg.randomness)
   const prng = (i: number) => {
-    const v = Math.sin((i + 1) * cfg.prng.sinScale * 12.9898 + cfg.prng.seedScale) * cfg.prng.multiplier
+    const v = Math.sin((i + 1) * cfg.prng.sinScale * PRNG_MAGIC_FACTOR + cfg.prng.seedScale) * cfg.prng.multiplier
     return (v - Math.floor(v)) * 2 - 1 // [-1,1]
   }
   ctx.beginPath()
@@ -103,17 +105,23 @@ export function drawThoughtBubble(
   if (cfg.tail?.enabled) {
     const { count, startRadiusRatio, decay, gapRatio, angle } = cfg.tail
     const startR = baseR * startRadiusRatio
-    const tailCx = cx + Math.cos(angle) * (baseR + startR * gapRatio)
-    const tailCy = cy + Math.sin(angle) * (baseR + startR * gapRatio)
+    // 初期位置: バブル境界の外側少し
+    let tx = cx + Math.cos(angle) * (baseR + startR * gapRatio)
+    let ty = cy + Math.sin(angle) * (baseR + startR * gapRatio)
+    let lastR = startR
     for (let i = 0; i < count; i++) {
       const r = Math.max(cfg.minRadiusPx, startR * decay ** i)
-      const tx = tailCx + Math.cos(angle) * i * r * (1 + gapRatio)
-      const ty = tailCy + Math.sin(angle) * i * r * (1 + gapRatio)
+      if (i > 0) {
+        const distance = (lastR + r) * 0.5 * (1 + gapRatio)
+        tx += Math.cos(angle) * distance
+        ty += Math.sin(angle) * distance
+      }
       ctx.beginPath()
       if (ctx.ellipse) ctx.ellipse(tx, ty, r, r, 0, 0, Math.PI * 2)
       else ctx.rect(tx - r, ty - r, r * 2, r * 2)
       ctx.fill()
       ctx.stroke()
+      lastR = r
     }
   }
 }
