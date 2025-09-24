@@ -93,7 +93,9 @@ export function buildLayoutFromPageBreaks(
 
   const importanceCandidates: ImportanceCandidate[] = []
   const cfg = getAppConfigWithOverrides()
-  const preserveScriptImportance = cfg.pagination.preserveScriptImportance
+  // 一部テスト環境では pagination.preserveScriptImportance が未設定の場合があるため安全なデフォルト(false)
+  // false -> normalizeImportanceDistribution を利用し期待された分布(0.2/0.2/0.3/0.2/0.05/0.05)になる
+  const preserveScriptImportance = !!cfg.pagination?.preserveScriptImportance
   const panelIndexMatrix: number[][] = []
 
   const rawPages: RawPage[] = Array.from(pageMap.entries()).map(([pageNumber, panelsInPage]) => {

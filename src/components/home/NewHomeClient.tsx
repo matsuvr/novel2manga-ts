@@ -336,7 +336,7 @@ export default function NewHomeClient() {
                   2,000,000 文字まで。サンプルも試せます。
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  下記3作品（山月記 / 羅生門 / 銀河鉄道の夜）は著作権が消失したパブリックドメイン作品で、サンプルとして提供しています。
+                  下記3作品（山月記 / 羅生門 / 注文の多い料理店）は著作権が消失したパブリックドメイン作品で、サンプルとして提供しています。
                 </p>
               </CardHeader>
               <CardContent>
@@ -372,8 +372,8 @@ export default function NewHomeClient() {
                       disabled={isInputDisabled}
                     />
                     <SampleButton
-                      label="銀河鉄道の夜"
-                      path="/docs/銀河鉄道の夜.txt"
+                      label="注文の多い料理店"
+                      path="/docs/注文の多い料理店.txt"
                       onPick={setNovelText}
                       disabled={isInputDisabled}
                     />

@@ -47,3 +47,82 @@ export function drawBasicBubble(ctx: Basic2DContext, input: BubbleShapeInput) {
   ctx.fill()
   ctx.stroke()
 }
+
+interface ThoughtBubbleConfig {
+  bumps: number
+  amplitudeRatio: number
+  randomness: number
+  minRadiusPx: number
+  prng: { seedScale: number; sinScale: number; multiplier: number }
+  tail?: { enabled: boolean; count: number; startRadiusRatio: number; decay: number; gapRatio: number; angle: number }
+}
+
+/** 雲形の思考バブルを描画 (config は appConfig.rendering.canvas.bubble.thoughtShape を想定) */
+export function drawThoughtBubble(
+  ctx: Basic2DContext & { quadraticCurveTo?: (...a: number[]) => void; moveTo?: (...a: number[]) => void; lineTo?: (...a: number[]) => void },
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  cfg: ThoughtBubbleConfig,
+) {
+  const MIN_BUMPS = 6
+  const PRNG_MAGIC_FACTOR = 12.9898
+  const cx = x + w / 2
+  const cy = y + h / 2
+  const baseR = Math.min(w, h) / 2
+  const bumps = Math.max(MIN_BUMPS, cfg.bumps)
+  const amp = Math.max(0, cfg.amplitudeRatio)
+  const randAmt = Math.max(0, cfg.randomness)
+  const prng = (i: number) => {
+    const v = Math.sin((i + 1) * cfg.prng.sinScale * PRNG_MAGIC_FACTOR + cfg.prng.seedScale) * cfg.prng.multiplier
+    return (v - Math.floor(v)) * 2 - 1 // [-1,1]
+  }
+  ctx.beginPath()
+  for (let i = 0; i <= bumps; i++) {
+    const t = i / bumps
+    const theta = t * Math.PI * 2
+    const noise = prng(i) * randAmt
+    const r = baseR * (1 + amp * noise)
+    const px = cx + Math.cos(theta) * r
+    const py = cy + Math.sin(theta) * r
+    if (i === 0) {
+      ctx.moveTo?.(px, py)
+    } else {
+      // 曲線 (quadratic) で滑らかに
+      const midTheta = theta - (Math.PI * 2) / bumps / 2
+      const midR = baseR * (1 + amp * prng(i - 0.5) * randAmt)
+      const cpx = cx + Math.cos(midTheta) * midR
+      const cpy = cy + Math.sin(midTheta) * midR
+      if (ctx.quadraticCurveTo) ctx.quadraticCurveTo(cpx, cpy, px, py)
+      else ctx.lineTo?.(px, py)
+    }
+  }
+  ctx.fill()
+  ctx.stroke()
+
+  // Tail (小さな円を並べる)
+  if (cfg.tail?.enabled) {
+    const { count, startRadiusRatio, decay, gapRatio, angle } = cfg.tail
+    const startR = baseR * startRadiusRatio
+    // 初期位置: バブル境界の外側少し
+    let tx = cx + Math.cos(angle) * (baseR + startR * gapRatio)
+    let ty = cy + Math.sin(angle) * (baseR + startR * gapRatio)
+    let lastR = startR
+    for (let i = 0; i < count; i++) {
+      const r = Math.max(cfg.minRadiusPx, startR * decay ** i)
+      if (i > 0) {
+        const distance = (lastR + r) * 0.5 * (1 + gapRatio)
+        tx += Math.cos(angle) * distance
+        ty += Math.sin(angle) * distance
+      }
+      ctx.beginPath()
+      if (ctx.ellipse) ctx.ellipse(tx, ty, r, r, 0, 0, Math.PI * 2)
+      else ctx.rect(tx - r, ty - r, r * 2, r * 2)
+      ctx.fill()
+      ctx.stroke()
+      lastR = r
+    }
+  }
+}
+
