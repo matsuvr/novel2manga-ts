@@ -102,7 +102,7 @@ JSONのみ。expandedText は改行を保持。文字数は target ±20% 以内�
       defaultPageSize: { width: 1190, height: 1684 },
       pageSizePresets: { a4Portrait: { width: 595, height: 842 }, a4Landscape: { width: 842, height: 595 }, b4Portrait: { width: 728, height: 1031 }, b4Landscape: { width: 1031, height: 728 } },
       limits: { maxPages: 5000 },
-      verticalText: { enabled: true, defaults: { fontSize: 24, lineHeight: 1.6, letterSpacing: 0, padding: 12, maxCharsPerLine: 14 }, maxConcurrent: 4 },
+  verticalText: { enabled: true, defaults: { fontSize: 24, lineHeight: 1.6, letterSpacing: 0, padding: 12, maxCharsPerLine: 14 }, maxConcurrent: 4, dynamicCoverage: { enabled: true, heightCoverage: 0.75, minCharsPerLine: 4 } as { enabled: boolean; heightCoverage: number; minCharsPerLine: number } },
       canvas: {
         sfx: { enabled: true, mainFontSize: { min: 24, max: 48, scaleFactor: 0.12 }, supplementFontSize: { scaleFactor: 0.35, min: 10 }, mainTextStyle: { fillStyle: '#000000', strokeStyle: '#ffffff', lineWidth: 4, fontWeight: 'bold' as 'bold' | 'normal' }, supplementTextStyle: { fillStyle: '#666666', strokeStyle: '#ffffff', lineWidth: 2, fontWeight: 'normal' as 'bold' | 'normal' }, rotation: { enabled: true, maxAngle: 0.15 }, placement: { avoidOverlap: true, preferredPositions: ['top-left','bottom-left','top-center','middle-left','bottom-right'] } },
         bubble: { fillStyle: '#ffffff', strokeStyle: '#000000', normalLineWidth: 2, shoutLineWidth: 3, thoughtShape: { bumps: 18, amplitudeRatio: 0.12, randomness: 0.3, minRadiusPx: 6, prng: { seedScale: 0.01337, sinScale: 12.9898, multiplier: 43758.5453 } }, thoughtTail: { enabled: true, count: 3, startRadiusRatio: 0.12, decay: 0.65, gapRatio: 0.28, angle: Math.PI * 0.75 } },

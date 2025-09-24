@@ -21,9 +21,29 @@ export interface SfxPlacement {
   y: number
   fontSize: number
   rotation?: number // ラジアン
+  // メトリクス用（任意）
+  overlapAreaRatio?: number
+  attempts?: number
+}
+
+export interface SfxPlacerLastMetrics {
+  totalCandidatesTried: number
+  gridCellsEvaluated: number
+  fallbackGridUsed: number
+  placements: number
 }
 
 export class SfxPlacer {
+  private lastMetrics: SfxPlacerLastMetrics = {
+    totalCandidatesTried: 0,
+    gridCellsEvaluated: 0,
+    fallbackGridUsed: 0,
+    placements: 0,
+  }
+
+  getLastMetrics(): SfxPlacerLastMetrics {
+    return { ...this.lastMetrics }
+  }
   /**
    * パネル内の他要素を避けてSFXを配置
    * @param sfxList SFXテキストのリスト
@@ -37,6 +57,12 @@ export class SfxPlacer {
     panelPixelBounds: { x: number; y: number; width: number; height: number },
     preOccupiedAreas: Array<{ x: number; y: number; width: number; height: number }> = [],
   ): SfxPlacement[] {
+    this.lastMetrics = {
+      totalCandidatesTried: 0,
+      gridCellsEvaluated: 0,
+      fallbackGridUsed: 0,
+      placements: 0,
+    }
     const placements: SfxPlacement[] = []
 
     // 占有領域を記録（他の要素との重なりを避けるため）
@@ -147,6 +173,7 @@ export class SfxPlacer {
     const ordered = [...candidates.slice(startIdx), ...candidates.slice(0, startIdx)]
 
     for (const c of ordered) {
+      this.lastMetrics.totalCandidatesTried += 1
       let fontSize = baseFontSize
       const minFont = 18
       let attempts = 0
@@ -167,21 +194,116 @@ export class SfxPlacer {
           test.x + test.width > panelBounds.x + panelBounds.width ||
           test.y + test.height > panelBounds.y + panelBounds.height
         if (!overlap && !outOfPanel) {
-          return {
+          const placement: SfxPlacement = {
             text: mainText,
             supplement,
             x: px,
             y: py,
             fontSize,
             rotation: this.calculateRotation(index),
+            overlapAreaRatio: 0,
+            attempts: attempts + 1,
           }
+          this.lastMetrics.placements += 1
+          return placement
         }
         fontSize = Math.max(minFont, Math.floor(fontSize * 0.9))
         attempts += 1
       }
     }
-
-    // 全て重なる場合は小さめで最初の候補
+    // === Fallback: グリッド探索で最小オーバーラップ位置を探す ===
+    const gridCols = 7
+    const gridRows = 7
+    let best: { x: number; y: number; fontSize: number; overlap: number } | null = null
+    const minFont = 18
+    for (let gy = 0; gy < gridRows; gy++) {
+      for (let gx = 0; gx < gridCols; gx++) {
+        this.lastMetrics.gridCellsEvaluated += 1
+        const cx = panelBounds.x + ((gx + 0.5) / gridCols) * panelBounds.width
+        const cy = panelBounds.y + ((gy + 0.5) / gridRows) * panelBounds.height
+        let trialFont = baseFontSize
+        let placed = false
+        let overlapAreaRatio = 1
+        while (trialFont >= minFont) {
+          const width = Math.max(1, mainText.length * trialFont * 0.8)
+          const height = trialFont * 1.5
+          const px = Math.min(
+            Math.max(cx, panelBounds.x),
+            panelBounds.x + panelBounds.width - width,
+          )
+          const py = Math.min(
+            Math.max(cy, panelBounds.y),
+            panelBounds.y + panelBounds.height - height,
+          )
+          const test = { x: px, y: py, width, height }
+            // 算出: オーバーラップ総面積/テスト矩形面積
+          const area = width * height
+          let overlapArea = 0
+          for (const occ of occupied) {
+            const ix = Math.max(test.x, occ.x)
+            const iy = Math.max(test.y, occ.y)
+            const iw = Math.min(test.x + test.width, occ.x + occ.width) - ix
+            const ih = Math.min(test.y + test.height, occ.y + occ.height) - iy
+            if (iw > 0 && ih > 0) overlapArea += iw * ih
+            if (overlapArea > area) break
+          }
+          overlapAreaRatio = area > 0 ? overlapArea / area : 1
+          if (overlapAreaRatio <= 0.02) {
+            placed = true
+            if (!best || overlapAreaRatio < best.overlap) {
+              best = { x: px, y: py, fontSize: trialFont, overlap: overlapAreaRatio }
+            }
+            break
+          }
+          // さらに縮小して再試行
+          trialFont = Math.floor(trialFont * 0.9)
+        }
+        if (!placed) {
+          // 最小値でもオーバーラップ有 → 候補として比較
+          const width = Math.max(1, mainText.length * trialFont * 0.8)
+          const height = trialFont * 1.5
+          const px = Math.min(
+            Math.max(cx, panelBounds.x),
+            panelBounds.x + panelBounds.width - width,
+          )
+          const py = Math.min(
+            Math.max(cy, panelBounds.y),
+            panelBounds.y + panelBounds.height - height,
+          )
+          const area = width * height
+          let overlapArea = 0
+          for (const occ of occupied) {
+            const ix = Math.max(px, occ.x)
+            const iy = Math.max(py, occ.y)
+            const iw = Math.min(px + width, occ.x + occ.width) - ix
+            const ih = Math.min(py + height, occ.y + occ.height) - iy
+            if (iw > 0 && ih > 0) overlapArea += iw * ih
+            if (overlapArea > area) break
+          }
+          const ratio = area > 0 ? overlapArea / area : 1
+          if (!best || ratio < best.overlap) {
+            best = { x: px, y: py, fontSize: trialFont, overlap: ratio }
+          }
+        }
+      }
+    }
+    if (best) {
+      this.lastMetrics.fallbackGridUsed += 1
+      this.lastMetrics.placements += 1
+      return {
+        text: mainText,
+        supplement,
+        x: best.x,
+        y: best.y,
+        fontSize: best.fontSize,
+        rotation: this.calculateRotation(index),
+        overlapAreaRatio: best.overlap,
+        attempts: this.lastMetrics.totalCandidatesTried,
+      }
+    }
+    // 最終フォールバック: 元々の最初候補縮小
+    this.lastMetrics.fallbackGridUsed += 1
+    this.lastMetrics.placements += 1
     return {
       text: mainText,
       supplement,
@@ -189,6 +311,8 @@ export class SfxPlacer {
       y: ordered[0].y,
       fontSize: baseFontSize * 0.7,
       rotation: this.calculateRotation(index),
+      overlapAreaRatio: 1,
+      attempts: this.lastMetrics.totalCandidatesTried,
     }
   }
 

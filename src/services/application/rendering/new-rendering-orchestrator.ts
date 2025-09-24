@@ -2,10 +2,13 @@ import os from 'node:os'
 import { appConfig } from '@/config/app.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import { getStoragePorts } from '@/infrastructure/storage/ports'
+import { type DialogueBatchRequestItem, ensureDialogueAssets } from '@/lib/canvas/assets/dialogue-batcher'
+import { buildDialogueKey } from '@/lib/canvas/assets/dialogue-key'
 import { globalMeasureTextCache } from '@/lib/canvas/metrics/measure-text-cache'
 import { renderPageToCanvas } from '@/lib/canvas/renderer/page-renderer'
 // (Optional future) pure renderer import preserved in separate file; current orchestrator uses renderPageToCanvas facade.
 import type { MangaLayout } from '@/types/panel-layout'
+import { getFontForDialogue } from '@/types/vertical-text'
 import { collectDialogueTexts, createDialogueSegmentsPipeline } from './assets/dialogue-segments-pipeline'
 
 export interface NewRenderOrchestratorOptions {
@@ -28,6 +31,8 @@ export interface NewRenderResult {
     pagesReused: number
     textMeasureCacheHits: number
     textMeasureCacheMisses: number
+    verticalDialogueTotal?: number
+    verticalDialogueGenerated?: number
   }
 }
 
@@ -113,6 +118,52 @@ export class NewRenderingOrchestrator {
     const segmentsPipeline = createDialogueSegmentsPipeline(20)
     segmentsPipeline.prepare(dialogueTexts)
     this.logger.info('segments_pipeline_prepared', segmentsPipeline.stats())
+
+    // --- Dialogue Vertical Image Assets (batch generation) ---
+    // Collect unique dialogues across all pages for batching
+  const vtDefaults = appConfig.rendering.verticalText.defaults
+  const uniq = new Map<string, DialogueBatchRequestItem>()
+    for (const page of layout.pages) {
+      for (const panel of page.panels) {
+        if (!panel.dialogues) continue
+        for (const d of panel.dialogues) {
+          const text = d.text?.trim()
+          if (!text) continue
+          const key = buildDialogueKey({
+            dialogue: d,
+            fontSize: vtDefaults.fontSize,
+            lineHeight: vtDefaults.lineHeight,
+            letterSpacing: vtDefaults.letterSpacing,
+            padding: vtDefaults.padding,
+            maxCharsPerLine: vtDefaults.maxCharsPerLine,
+          })
+            if (uniq.has(key)) continue
+          const font = getFontForDialogue(d)
+          uniq.set(key, {
+            key,
+            text,
+            style: d.type || 'speech',
+            fontSize: vtDefaults.fontSize,
+            lineHeight: vtDefaults.lineHeight,
+            letterSpacing: vtDefaults.letterSpacing,
+            padding: vtDefaults.padding,
+            maxCharsPerLine: vtDefaults.maxCharsPerLine,
+            font,
+          })
+        }
+      }
+    }
+    const verticalDialogueTotal = uniq.size
+    let verticalDialogueGenerated = 0
+    try {
+      const before = Date.now()
+      await ensureDialogueAssets(Array.from(uniq.values()))
+      verticalDialogueGenerated = uniq.size // ensureDialogueAssets only generates missing; all were missing first run
+      const after = Date.now()
+      this.logger.info('vertical_dialogue_assets_ready', { total: verticalDialogueTotal, ms: after - before })
+    } catch (e) {
+      this.logger.warn('vertical_dialogue_assets_failed', { error: e instanceof Error ? e.message : String(e), planned: verticalDialogueTotal })
+    }
 
     // --- Canvas Pool (simple reuse to avoid repeated native allocations) ---
     // 型: @napi-rs/canvas の createCanvas 戻り値（ランタイム import のため正確型を参照できない）
@@ -226,7 +277,7 @@ export class NewRenderingOrchestrator {
     const cacheStats = globalMeasureTextCache.stats()
     const deltaHits = cacheStats.hits - textMeasureCacheHitsStart
     const deltaMisses = cacheStats.misses - textMeasureCacheMissesStart
-    return { renderedPages, totalPages, errors, metrics: { totalMs, avgMsPerPage, dialogues: dialoguesCount, sfx: sfxCount, fallbackPages, thumbnails, pagesReused: reusedHits, textMeasureCacheHits: deltaHits, textMeasureCacheMisses: deltaMisses } }
+    return { renderedPages, totalPages, errors, metrics: { totalMs, avgMsPerPage, dialogues: dialoguesCount, sfx: sfxCount, fallbackPages, thumbnails, pagesReused: reusedHits, textMeasureCacheHits: deltaHits, textMeasureCacheMisses: deltaMisses, verticalDialogueTotal, verticalDialogueGenerated } }
   }
 }
 
