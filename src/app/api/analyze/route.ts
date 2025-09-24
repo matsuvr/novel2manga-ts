@@ -76,6 +76,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     }
 
     const { novelId: inputNovelId, text: inputText, title } = parsed.data
+    let preflightText: string | null = null
     const isTestEnv = process.env.NODE_ENV === 'test'
 
     // DEMOモード: LLM/分析はスキップ。ただし後続のAPIでFK制約が問題にならないよう
@@ -132,6 +133,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     let novelText: string
     if (inputText) {
       novelText = inputText
+      preflightText = inputText
       if (!novelId) novelId = generateUUID()
     } else if (inputNovelId) {
       // Novel テキストはサービス側で取得（この分岐では ensure せず、存在しなければ 404）
@@ -203,6 +205,33 @@ export const POST = withAuth(async (request: NextRequest, user) => {
             new ApiError('小説のテキストがストレージに見つかりません', 404, 'NOT_FOUND'),
           )
         }
+        let extractedText: string | null = null
+        if (typeof novelData.text === 'string') {
+          try {
+            const parsedPayload = JSON.parse(novelData.text) as { text?: unknown }
+            extractedText = typeof parsedPayload.text === 'string' ? parsedPayload.text : null
+          } catch (parseError) {
+            // ストレージ実装によっては JSON ではなくプレーンテキストの場合がある
+            extractedText = novelData.text
+            try {
+              getLogger()
+                .withContext({ route: 'api/analyze', method: 'POST' })
+                .warn('novel_storage_text_parse_failed', {
+                  novelId,
+                  error:
+                    parseError instanceof Error ? parseError.message : String(parseError),
+                })
+            } catch {
+              /* ignore logging errors */
+            }
+          }
+        }
+        if (!extractedText || extractedText.length === 0) {
+          return createErrorResponse(
+            new ApiError('小説のテキストがストレージに見つかりません', 404, 'NOT_FOUND'),
+          )
+        }
+        preflightText = extractedText
       } catch (e) {
         // ストレージエラーは 404 と区別するため 500 で返す（詳細はメッセージに含める）
         return createErrorResponse(e, '小説テキストの確認に失敗しました')
@@ -285,9 +314,9 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       }
     }
 
-    if (novelText !== FETCH_FROM_STORAGE) {
+    if (preflightText && preflightText.length > 0) {
       const validationStep = new InputValidationStep()
-      const validation = await validationStep.validate(novelText, {
+      const validation = await validationStep.validate(preflightText, {
         jobId,
         novelId,
         logger: _logger,
@@ -327,9 +356,9 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     // これまでは AnalyzePipeline 内 ensureBranchMarker() で EXPLAINER になってもそのまま処理継続 → 同意画面が出なかった。
     // ここで事前分類し、EXPLAINER なら job を paused にして requiresAction=EXPLAINER を返す。
     // テスト環境は既存挙動維持のためスキップ（LLM呼び出し未モックによる不安定性回避）。
-    if (novelText !== FETCH_FROM_STORAGE && process.env.NODE_ENV !== 'test') {
+    if (preflightText && process.env.NODE_ENV !== 'test') {
       try {
-        const ensured = await ensureBranchMarker(jobId, novelText)
+        const ensured = await ensureBranchMarker(jobId, preflightText)
         if (ensured.branch === BranchType.EXPLAINER) {
           try {
             db.jobs().updateJobStatus?.(jobId, 'paused', 'EXPLAINER')

@@ -8,6 +8,8 @@ import { POST as ConsentExplainerPost } from '@/app/api/consent/explainer/route'
 import { db } from '@/services/database'
 import { StorageFactory } from '@/utils/storage'
 
+const novelStorageData = new Map<string, { text: string }>()
+
 // Helper to fabricate short vs non-narrative text
 const SHORT_TEXT = '勇者と魔王' // shorter than validation.minInputChars (1000 default)
 const NON_NARR_TEXT = '気候変動とは、大気中の温室効果ガス濃度の上昇に伴い...' + '手順:'.repeat(10)
@@ -42,42 +44,79 @@ vi.mock('@/agents/structured-generator', () => ({
 }))
 
 // Mock storage
-vi.mock('@/utils/storage', () => ({
-  StorageFactory: {
-    getNovelStorage: vi.fn(),
-    getChunkStorage: vi.fn(),
-    getAnalysisStorage: vi.fn(),
-  },
-}))
+vi.mock('@/utils/storage', async () => {
+  const actual = await vi.importActual<typeof import('@/utils/storage')>('@/utils/storage')
+  return {
+    ...actual,
+    StorageFactory: {
+      ...actual.StorageFactory,
+      getNovelStorage: vi.fn(),
+      getChunkStorage: vi.fn(),
+      getAnalysisStorage: vi.fn(),
+    },
+  }
+})
 
 // Simplify database operations for integration style test without touching real DB
 vi.mock('@/services/database', () => {
   const jobs: Record<string, any> = {}
   const novels: Record<string, any> = {}
   const novelLocks = new Set<string>()
+
+  const novelFns = {
+    ensureNovel: vi.fn(async (id: string, payload: Record<string, unknown>) => {
+      novels[id] = { id, ...payload }
+      return id
+    }),
+    getNovel: vi.fn(async (id: string) => novels[id] || null),
+  }
+
+  const jobFns = {
+    createJobRecord: vi.fn(async (rec: any) => {
+      jobs[rec.id] = { ...rec }
+      return rec.id
+    }),
+    getJob: vi.fn(async (id: string) => jobs[id] || null),
+    getJobsByNovelId: vi.fn(async (novelId: string) =>
+      Object.values(jobs).filter((j) => j.novelId === novelId),
+    ),
+    updateJobStatus: vi.fn(async (id: string, status: string, reason?: string) => {
+      if (jobs[id]) {
+        jobs[id].status = status
+        if (reason) jobs[id].statusReason = reason
+      }
+    }),
+    updateJobStep: vi.fn(async (id: string, step?: string) => {
+      if (jobs[id]) jobs[id].step = step ?? 'initialized'
+    }),
+    acquireNovelLock: vi.fn(async (novelId: string) => {
+      if (novelLocks.has(novelId)) return false
+      novelLocks.add(novelId)
+      return true
+    }),
+    releaseNovelLock: vi.fn(async (novelId: string) => {
+      novelLocks.delete(novelId)
+    }),
+  }
+
+  const resetState = () => {
+    Object.keys(jobs).forEach((key) => delete jobs[key])
+    Object.keys(novels).forEach((key) => delete novels[key])
+    novelLocks.clear()
+  }
+
   return {
     db: {
-      novels: () => ({
-        ensureNovel: vi.fn(async (_id: string) => {}),
-        getNovel: vi.fn(async (id: string) => novels[id] || null),
-      }),
-      jobs: () => ({
-        createJobRecord: vi.fn(async (rec: any) => { jobs[rec.id] = { ...rec }; return rec.id }),
-        getJob: vi.fn(async (id: string) => jobs[id] || null),
-        getJobsByNovelId: vi.fn(async (novelId: string) => Object.values(jobs).filter(j => j.novelId === novelId)),
-        updateJobStatus: vi.fn(async (id: string, status: string) => { if (jobs[id]) jobs[id].status = status }),
-        updateJobStep: vi.fn(async (id: string) => { if (jobs[id]) jobs[id].step = 'initialized' }),
-        acquireNovelLock: vi.fn(async (novelId: string) => {
-          if (novelLocks.has(novelId)) return false
-          novelLocks.add(novelId)
-          return true
-        }),
-        releaseNovelLock: vi.fn(async (novelId: string) => { novelLocks.delete(novelId) }),
-      }),
+      novels: () => novelFns,
+      jobs: () => jobFns,
       episodes: () => ({ getEpisodesByJobId: vi.fn(async () => []), createEpisodes: vi.fn() }),
       chunks: () => ({ createChunk: vi.fn(), createChunksBatch: vi.fn() }),
       render: () => ({ upsertRenderStatus: vi.fn() }),
       layout: () => ({ upsertLayoutStatus: vi.fn() }),
+    },
+    __test: {
+      resetState,
+      novels,
     },
   }
 })
@@ -95,17 +134,27 @@ vi.mock('@/config/app.config', async (orig) => {
 })
 
 // Provide deterministic storage behavior
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks()
-  vi.mocked(StorageFactory.getNovelStorage).mockResolvedValue({
-    get: vi.fn(async (key: string) => {
-      // When analyze is called novel text is passed separately (we only need on consent endpoints)
-      return { text: JSON.stringify({ text: SHORT_TEXT }) }
+  const novelStorageMock = {
+    get: vi.fn(async (key: string) => novelStorageData.get(key) ?? null),
+    put: vi.fn(async (key: string, value: unknown) => {
+      if (typeof value === 'string') {
+        novelStorageData.set(key, { text: value })
+      } else if (value && typeof value === 'object' && 'text' in (value as Record<string, unknown>)) {
+        novelStorageData.set(key, { text: (value as { text: string }).text })
+      }
+      return key
     }),
-    put: vi.fn(async () => {}),
-  } as any)
+  }
+  novelStorageData.clear()
+  vi.mocked(StorageFactory.getNovelStorage).mockResolvedValue(novelStorageMock as any)
   vi.mocked(StorageFactory.getChunkStorage).mockResolvedValue({ put: vi.fn() } as any)
   vi.mocked(StorageFactory.getAnalysisStorage).mockResolvedValue({ put: vi.fn() } as any)
+  const dbModule = (await import('@/services/database')) as {
+    __test?: { resetState?: () => void; novels?: Record<string, any> }
+  }
+  dbModule.__test?.resetState?.()
 })
 
 function makeRequest(url: string, body: unknown) {
@@ -128,6 +177,13 @@ describe('Consent Flow Integration', () => {
     }
     const jobId = analyzeJson.jobId || analyzeJson.id
     expect(jobId).toBeTruthy()
+
+    const job = await db.jobs().getJob(jobId)
+    const novelId = job?.novelId
+    expect(novelId).toBeTruthy()
+    if (novelId) {
+      novelStorageData.set(`${novelId}.json`, { text: JSON.stringify({ text: SHORT_TEXT }) })
+    }
 
     // 2) consent expand
     const consentReq = makeRequest('/api/consent/expand', { jobId })
@@ -162,5 +218,58 @@ describe('Consent Flow Integration', () => {
     const consentJson = await consentRes.json()
     expect(consentJson.success).toBe(true)
     expect(consentJson.branch).toBe('EXPLAINER')
+  })
+
+  it('SHORT text retrieved via novelId triggers EXPAND consent', async () => {
+    const novelId = '00000000-0000-4000-8000-000000000001'
+    novelStorageData.set(`${novelId}.json`, { text: JSON.stringify({ text: SHORT_TEXT }) })
+    const novelRepo = db.novels()
+    await novelRepo.ensureNovel(
+      novelId,
+      {
+        title: 'Short Sample',
+        author: 'Tester',
+        originalTextPath: `${novelId}.json`,
+        textLength: SHORT_TEXT.length,
+        language: 'ja',
+        metadataPath: null,
+        userId: 'test-user',
+      } as any,
+    )
+
+    const analyzeReq = makeRequest('/api/analyze', { novelId })
+    const analyzeRes = await AnalyzePost(analyzeReq)
+    const analyzeJson = await analyzeRes.json()
+
+    expect(analyzeJson.requiresAction).toBe('EXPAND')
+    expect(analyzeJson.jobId || analyzeJson.id).toBeTruthy()
+  })
+
+  it('NON_NARRATIVE stored text analyzed via novelId triggers EXPLAINER consent', async () => {
+    const novelId = '00000000-0000-4000-8000-000000000002'
+    const longNonNarrText = `${NON_NARR_TEXT}${'手順:詳説\n'.repeat(300)}`
+    novelStorageData.set(`${novelId}.json`, {
+      text: JSON.stringify({ text: longNonNarrText }),
+    })
+    const novelRepo = db.novels()
+    await novelRepo.ensureNovel(
+      novelId,
+      {
+        title: 'Guidebook',
+        author: 'Tutor',
+        originalTextPath: `${novelId}.json`,
+        textLength: longNonNarrText.length,
+        language: 'ja',
+        metadataPath: null,
+        userId: 'test-user',
+      } as any,
+    )
+
+    const analyzeReq = makeRequest('/api/analyze', { novelId })
+    const analyzeRes = await AnalyzePost(analyzeReq)
+    const analyzeJson = await analyzeRes.json()
+
+    expect(analyzeJson.requiresAction).toBe('EXPLAINER')
+    expect(analyzeJson.jobId || analyzeJson.id).toBeTruthy()
   })
 })

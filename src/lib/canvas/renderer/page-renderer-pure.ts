@@ -28,6 +28,10 @@ export function renderPagePure(ctx: CanvasRenderingContext2D, input: PurePageRen
   if (input.clearBackground !== false) {
     fillBackgroundWhite(ctx, input.width, input.height)
   }
+  // 明示的にパネル枠線のスタイルを設定（環境によってはデフォルト値が透過/0幅等になるケースを防ぐ）
+  ctx.strokeStyle = '#000000'
+  // lineWidth=0 となる実装差異を避けるため最小1を保証
+  ctx.lineWidth = Math.max(1, (ctx.lineWidth as number) || 2)
   const page = input.layout.pages.find(p => p.page_number === input.pageNumber)
   if (!page) throw new Error(`Page ${input.pageNumber} not found`)
   for (const panel of page.panels) {

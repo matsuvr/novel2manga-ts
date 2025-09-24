@@ -17,6 +17,44 @@ export type JobStatusLite = {
 }
 
 /**
+ * Job (完全型) から Completion 判定に必要な最小サブセット(JobStatusLite)へ安全に射影するヘルパ。
+ * - 直接 unknown 経由の二重キャストを避ける
+ * - 余計なフィールドは含めず GC/シリアライズ負荷軽減
+ */
+export function toJobStatusLite(job: unknown): JobStatusLite | null {
+  if (!job || typeof job !== 'object') return null
+  const j = job as Record<string, unknown>
+  const out: JobStatusLite = {
+    status: typeof j.status === 'string' ? j.status : undefined,
+    renderCompleted: typeof j.renderCompleted === 'boolean' ? j.renderCompleted : undefined,
+    totalPages: typeof j.totalPages === 'number' || j.totalPages === null ? (j.totalPages as number | null) : undefined,
+    renderedPages: typeof j.renderedPages === 'number' || j.renderedPages === null ? (j.renderedPages as number | null) : undefined,
+  }
+  const progress = j.progress
+  if (progress && typeof progress === 'object') {
+    const per = (progress as { perEpisodePages?: unknown }).perEpisodePages
+    if (per && typeof per === 'object') {
+      const perEpisodePages: Record<string, { rendered?: number; total?: number }> = {}
+      for (const [k, v] of Object.entries(per as Record<string, unknown>)) {
+        if (v && typeof v === 'object') {
+          const rec = v as Record<string, unknown>
+            const rendered = typeof rec.rendered === 'number' ? rec.rendered : undefined
+            const total = typeof rec.total === 'number' ? rec.total : undefined
+            // total か rendered のどちらか一方でも数値なら登録
+            if (rendered !== undefined || total !== undefined) {
+              perEpisodePages[k] = { rendered, total }
+            }
+        }
+      }
+      if (Object.keys(perEpisodePages).length > 0) {
+        out.progress = { perEpisodePages }
+      }
+    }
+  }
+  return out
+}
+
+/**
  * 厳密な完了判定: サーバーが完了状態を返しても、ページ数一致を確認してから完了とみなす。
  * ルール:
  * - ステータスが completed/complete であること

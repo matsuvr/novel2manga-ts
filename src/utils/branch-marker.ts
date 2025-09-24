@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { getAppConfigWithOverrides } from '@/config/app.config'
 import { storageBaseDirs } from '@/config/storage-paths.config'
 import { getLogger } from '@/infrastructure/logging/logger'
 import type { BranchMarker, EnsureBranchMarkerResult } from '@/types/branch'
@@ -183,9 +184,12 @@ export async function ensureBranchMarker(
     } catch {/* ignore */}
   }
 
-  // LLM 分類を実行
+  // LLM 分類を実行 (先頭 N 文字サンプリング: narrativitySampleChars)
   try {
-    const classification = await classifyNarrativity(rawText, { jobId })
+    const cfg = getAppConfigWithOverrides()
+    const sampleLimit = cfg.llm?.narrativityClassification?.narrativitySampleChars ?? 1000
+    const sampled = rawText.length > sampleLimit ? rawText.slice(0, sampleLimit) : rawText
+    const classification = await classifyNarrativity(sampled, { jobId })
     await saveBranchMarker(jobId, classification.branch, dataDir, {
       reason: classification.reason,
       source: classification.source,

@@ -1,6 +1,6 @@
 import { dialogueAssetsConfig } from '@/config/dialogue-assets.config'
 import type { Dialogue, Page } from '@/types/panel-layout'
-import type { VerticalTextRenderRequest } from '@/types/vertical-text'
+import type { VerticalTextBounds, VerticalTextRenderRequest } from '@/types/vertical-text'
 import type { DialogueAsset } from './canvas-renderer'
 
 export interface DialogueRequestMapEntry {
@@ -104,13 +104,22 @@ export function buildTestPlaceholderAssets(
  */
 export function buildAssetsFromImages(
   map: DialogueRequestMapEntry[],
-  images: Array<{ key: string; image: CanvasImageSource; meta: { width: number; height: number } }>,
+  images: Array<{
+    key: string
+    image: CanvasImageSource
+    meta: { width: number; height: number; contentBounds?: VerticalTextBounds }
+  }>,
 ): Record<string, DialogueAsset> {
   const assets: Record<string, DialogueAsset> = {}
   for (const img of images) {
     const width = Math.max(1, img.meta.width)
     const height = Math.max(1, img.meta.height)
-    assets[img.key] = { image: img.image, width, height }
+    assets[img.key] = {
+      image: img.image,
+      width,
+      height,
+      contentBounds: img.meta.contentBounds,
+    }
   }
   // map の key で欠損が無いか検証（純粋）
   for (const entry of map) {

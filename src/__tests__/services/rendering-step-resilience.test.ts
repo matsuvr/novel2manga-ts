@@ -48,6 +48,9 @@ vi.mock('@/infrastructure/storage/ports', () => ({
     },
   }),
 }))
+const updateProcessingPositionMock = vi.fn()
+const upsertRenderStatusMock = vi.fn()
+
 vi.mock('@/services/database', async () => {
   const actual = await vi.importActual<object>('@/services/database/index')
   return {
@@ -55,10 +58,10 @@ vi.mock('@/services/database', async () => {
     db: {
       jobs: () => ({
         getJob: vi.fn().mockResolvedValue({ id: 'job-test', novelId: TEST_NOVEL_ID }),
-        updateProcessingPosition: vi.fn(),
+        updateProcessingPosition: updateProcessingPositionMock,
       }),
       render: () => ({
-        upsertRenderStatus: vi.fn(),
+        upsertRenderStatus: upsertRenderStatusMock,
       }),
     },
   }
@@ -89,6 +92,10 @@ vi.mock('@/utils/layout-normalizer', () => ({
 describe('RenderingStep resilience', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    updateProcessingPositionMock.mockClear()
+    upsertRenderStatusMock.mockClear()
+    renderImages.clear()
+    layoutJsonByEpisode.clear()
   })
 
   it('continues rendering remaining pages when one page has invalid panels', async () => {
@@ -164,5 +171,12 @@ describe('RenderingStep resilience', () => {
     expect(page1).not.toBeNull()
     expect(page2).toBeNull() // skipped
     expect(page3).not.toBeNull()
+
+    expect(updateProcessingPositionMock).toHaveBeenCalledTimes(2)
+    expect(updateProcessingPositionMock).toHaveBeenNthCalledWith(1, jobId, { episode: episodeNumber, page: 1 })
+    expect(updateProcessingPositionMock).toHaveBeenNthCalledWith(2, jobId, { episode: episodeNumber, page: 3 })
+    expect(upsertRenderStatusMock).toHaveBeenCalledTimes(2)
+    expect(upsertRenderStatusMock).toHaveBeenNthCalledWith(1, jobId, episodeNumber, 1, expect.objectContaining({ isRendered: true, imagePath: expect.any(String) }))
+    expect(upsertRenderStatusMock).toHaveBeenNthCalledWith(2, jobId, episodeNumber, 3, expect.objectContaining({ isRendered: true, imagePath: expect.any(String) }))
   })
 })

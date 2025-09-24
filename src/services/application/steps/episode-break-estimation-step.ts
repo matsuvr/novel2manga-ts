@@ -408,6 +408,23 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
       telemetry: { jobId, stepName: 'episode-break-estimation' },
     })
 
+    // 追加: 生成後に最低1件のログ確保（ラッパーで novelId 解決失敗時の保険）
+    try {
+      const { LlmLogService } = await import('@/services/llm/log-service')
+      const { getNovelIdForJob } = await import('@/utils/job')
+      const novelId = await getNovelIdForJob(context.jobId)
+      await LlmLogService.getInstance().logLlmInteraction({
+        novelId,
+        provider: provider || 'unknown',
+        requestType: 'generateStructured',
+        request: { systemPrompt: eb.systemPrompt, userPrompt: '[episode-break-estimation redacted]' },
+        response: { content: '[result cached]' },
+        telemetry: { jobId: context.jobId, stepName: 'episode-break-estimation', cacheHit: false },
+      })
+    } catch (_) {
+      // ログ保証の副作用は致命でないため黙殺
+    }
+
     // If LLM produced no episodes, fall back to a conservative single-episode plan
     if (!result || !result.episodes || result.episodes.length === 0) {
       logger.warn(

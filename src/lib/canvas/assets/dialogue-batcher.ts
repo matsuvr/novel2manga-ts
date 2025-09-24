@@ -1,7 +1,8 @@
 import { appConfig } from '@/config/app.config'
 import { dialogueAssetsConfig } from '@/config/dialogue-assets.config'
 import { getLogger } from '@/infrastructure/logging/logger'
-import { renderVerticalTextBatch } from '@/services/vertical-text-client'
+import { type RenderedVerticalTextBatchItem, renderVerticalTextBatch } from '@/services/vertical-text-client'
+import { resolveContentBounds } from '@/types/vertical-text'
 import { createCanvas, ensureCanvasInited, loadImage } from '../core/canvas-init'
 import { type DialogueImageAsset, getDialogueAsset, setDialogueAsset } from './dialogue-cache'
 
@@ -38,9 +39,27 @@ export async function ensureDialogueAssets(requests: DialogueBatchRequestItem[])
   }
 
   let offset = 0
-  const allResults: Array<{ pngBuffer: Buffer; meta: { width?: number; height?: number } }> = []
+  const allResults: RenderedVerticalTextBatchItem[] = []
+
+  const makePlaceholderResult = (width: number, height: number): RenderedVerticalTextBatchItem => {
+    const safeWidth = Math.max(1, Math.round(width))
+    const safeHeight = Math.max(1, Math.round(height))
+    return {
+      pngBuffer: Buffer.alloc(0),
+      meta: {
+        image_base64: 'VT_PLACEHOLDER',
+        width: safeWidth,
+        height: safeHeight,
+        trimmed: true,
+        content_bounds: { x: 0, y: 0, width: safeWidth, height: safeHeight },
+      },
+    }
+  }
+
   // 再帰的バッチ実行（失敗時二分割フォールバック）
-  const execBatchRecursive = async (slice: DialogueBatchRequestItem[]): Promise<Array<{ pngBuffer: Buffer; meta: { width?: number; height?: number } }>> => {
+  const execBatchRecursive = async (
+    slice: DialogueBatchRequestItem[],
+  ): Promise<RenderedVerticalTextBatchItem[]> => {
     if (slice.length === 0) return []
     try {
       const t0 = performance.now()
@@ -60,12 +79,12 @@ export async function ensureDialogueAssets(requests: DialogueBatchRequestItem[])
         }
       }
       if (!Array.isArray(apiRes)) throw new Error('vertical-text batch returned non-array')
-      return apiRes
+      return apiRes as RenderedVerticalTextBatchItem[]
     } catch (err) {
       // 単一要素ならプレースホルダ（後段 loadImage で置換不要 / meta 最低寸法）
       if (slice.length === 1) {
         logger.warn('vertical_text_single_failed_placeholder', { key: slice[0].key, error: err instanceof Error ? err.message : String(err) })
-        return [{ pngBuffer: Buffer.from('VT_PLACEHOLDER'), meta: { width: 10, height: 10 } }]
+        return [makePlaceholderResult(10, 10)]
       }
       // 二分割して部分成功を試みる
       const mid = Math.floor(slice.length / 2)
@@ -91,14 +110,28 @@ export async function ensureDialogueAssets(requests: DialogueBatchRequestItem[])
     const req = missing[idx]
     try {
       const img = await loadImage(res.pngBuffer)
-      const asset: DialogueImageAsset = { image: img as unknown as CanvasImageSource, width: img.width || res.meta.width || 1, height: img.height || res.meta.height || 1 }
+      const width = img.width || res.meta.width || 1
+      const height = img.height || res.meta.height || 1
+      const bounds = resolveContentBounds(res.meta)
+      const asset: DialogueImageAsset = {
+        image: img as unknown as CanvasImageSource,
+        width,
+        height,
+        contentBounds: bounds,
+      }
       setDialogueAsset(req.key, asset)
     } catch (e) {
       logger.warn('load_image_failed_placeholder', { key: req.key, error: e instanceof Error ? e.message : String(e) })
       const w = res.meta.width || 1
       const h = res.meta.height || 1
       const placeholder = createCanvas(w, h)
-      setDialogueAsset(req.key, { image: placeholder as unknown as CanvasImageSource, width: w, height: h })
+      const bounds = resolveContentBounds(res.meta) ?? { x: 0, y: 0, width: w, height: h }
+      setDialogueAsset(req.key, {
+        image: placeholder as unknown as CanvasImageSource,
+        width: w,
+        height: h,
+        contentBounds: bounds,
+      })
     }
   }))
 }
