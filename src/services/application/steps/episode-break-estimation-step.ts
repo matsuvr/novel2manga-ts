@@ -1,3 +1,7 @@
+import { createHash } from 'node:crypto'
+import { existsSync } from 'node:fs'
+import { mkdir, unlink, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import type { z } from 'zod'
 import type { LlmProvider } from '@/agents/llm/types'
 import {
@@ -8,6 +12,7 @@ import {
 import { DefaultLlmStructuredGenerator } from '@/agents/structured-generator'
 import { getAppConfigWithOverrides, getEpisodeConfig } from '@/config'
 import { getProviderForUseCase } from '@/config/llm.config'
+import { storageBaseDirs } from '@/config/storage-paths.config'
 import { type EpisodeBreakPlan, EpisodeBreakSchema, type NewMangaScript } from '@/types/script'
 import type { PipelineStep, StepContext, StepExecutionResult } from './base-step'
 
@@ -18,8 +23,201 @@ export interface EpisodeBreakResult {
 
 type EpisodeConfig = ReturnType<typeof getEpisodeConfig>
 
+interface EpisodePlanLockState {
+  acquired: boolean
+  lockPath: string
+}
+
+const EPISODE_PLAN_LOCK_FILENAME = 'episode_break_plan.lock'
+
 export class EpisodeBreakEstimationStep implements PipelineStep {
   readonly stepName = 'episode-break-estimation'
+
+  private resolveStorageBaseDir(): string {
+    if (process.env.BASE_STORAGE_PATH) {
+      return process.env.BASE_STORAGE_PATH
+    }
+    if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
+      return path.join(process.cwd(), '.test-storage')
+    }
+    return path.join(process.cwd(), '.local-storage')
+  }
+
+  private getEpisodePlanDirectory(context: StepContext): string {
+    const base = this.resolveStorageBaseDir()
+    return path.join(
+      base,
+      storageBaseDirs.analysis,
+      context.novelId,
+      'jobs',
+      context.jobId,
+      'analysis',
+    )
+  }
+
+  private getEpisodePlanLockPath(context: StepContext): string {
+    return path.join(this.getEpisodePlanDirectory(context), EPISODE_PLAN_LOCK_FILENAME)
+  }
+
+  private async acquireEpisodePlanLock(context: StepContext): Promise<EpisodePlanLockState> {
+    const lockPath = this.getEpisodePlanLockPath(context)
+    try {
+      await mkdir(path.dirname(lockPath), { recursive: true })
+      await writeFile(
+        lockPath,
+        JSON.stringify({
+          jobId: context.jobId,
+          novelId: context.novelId,
+          createdAt: new Date().toISOString(),
+          pid: process.pid,
+        }),
+        { flag: 'wx' },
+      )
+      return { acquired: true, lockPath }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code
+      if (code && code !== 'EEXIST') {
+        context.logger.warn('Failed to acquire episode break plan lock', {
+          jobId: context.jobId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+      return { acquired: false, lockPath }
+    }
+  }
+
+  private async releaseEpisodePlanLock(
+    context: StepContext,
+    lockPath: string,
+  ): Promise<void> {
+    try {
+      await unlink(lockPath)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+        context.logger.warn('Failed to release episode break plan lock', {
+          jobId: context.jobId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+  }
+
+  private async waitForEpisodePlanFromOtherProcess(
+    context: StepContext,
+    cache: { scriptHash: string; totalPanels: number },
+    lockPath: string,
+  ): Promise<EpisodeBreakPlan | null> {
+    const timeoutMs = 15_000
+    const pollMs = 250
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < timeoutMs) {
+      const cached = await this.loadCachedEpisodePlan(context, cache)
+      if (cached) {
+        context.logger.info('Using episode break plan produced by concurrent worker', {
+          jobId: context.jobId,
+        })
+        return cached
+      }
+      if (!existsSync(lockPath)) {
+        break
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollMs))
+    }
+    return this.loadCachedEpisodePlan(context, cache)
+  }
+
+  private async loadCachedEpisodePlan(
+    context: StepContext,
+    cache: { scriptHash: string; totalPanels: number },
+  ): Promise<EpisodeBreakPlan | null> {
+    const { jobId, novelId, logger } = context
+    try {
+      const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
+      const storage = await StorageFactory.getAnalysisStorage()
+      const key = JsonStorageKeys.episodeBreakPlan({ novelId, jobId })
+      const cached = await storage.get(key)
+      if (!cached) return null
+
+      interface CachedPayload {
+        plan?: EpisodeBreakPlan
+        metadata?: {
+          scriptHash?: string
+          panelCount?: number
+        }
+      }
+
+      const payload = JSON.parse(cached.text) as CachedPayload
+      if (!payload?.plan || !payload.plan.episodes) return null
+      if (payload.metadata?.scriptHash !== cache.scriptHash) return null
+      if (
+        typeof payload.metadata?.panelCount === 'number' &&
+        payload.metadata.panelCount !== cache.totalPanels
+      ) {
+        return null
+      }
+
+      const validation = EpisodeBreakSchema.safeParse(payload.plan)
+      if (!validation.success) {
+        logger.warn?.('Cached episode break plan failed schema validation. Ignoring.', {
+          jobId,
+          issues: validation.error.issues?.slice?.(0, 5),
+        })
+        return null
+      }
+
+      logger.info('Using cached episode break plan', {
+        jobId,
+        totalEpisodes: validation.data.episodes.length,
+      })
+      return validation.data
+    } catch (error) {
+      logger.warn?.('Failed to load cached episode break plan', {
+        jobId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return null
+    }
+  }
+
+  private async cacheEpisodePlan(
+    context: StepContext,
+    plan: EpisodeBreakPlan,
+    cache: { scriptHash: string; totalPanels: number },
+  ): Promise<void> {
+    const { jobId, novelId, logger } = context
+    try {
+      const { StorageFactory, JsonStorageKeys } = await import('@/utils/storage')
+      const storage = await StorageFactory.getAnalysisStorage()
+      const key = JsonStorageKeys.episodeBreakPlan({ novelId, jobId })
+      const payload = {
+        plan,
+        metadata: {
+          scriptHash: cache.scriptHash,
+          panelCount: cache.totalPanels,
+          createdAt: new Date().toISOString(),
+        },
+      }
+      await storage.put(
+        key,
+        JSON.stringify(payload, null, 2),
+        {
+          contentType: 'application/json; charset=utf-8',
+          jobId,
+          novelId,
+          totalEpisodes: String(plan.episodes.length),
+        },
+      )
+      logger.info('Cached episode break plan', {
+        jobId,
+        totalEpisodes: plan.episodes.length,
+      })
+    } catch (error) {
+      logger.warn?.('Failed to cache episode break plan (continuing without cache)', {
+        jobId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
 
   /**
    * Estimate episode breaks from combined script using sliding window for long scripts
@@ -51,6 +249,10 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
         })
       }
       const totalPanels = combinedScript.panels?.length || 0
+      const serializedScript = JSON.stringify(combinedScript)
+      const scriptHash = createHash('sha256').update(serializedScript).digest('hex')
+      const cacheInfo = { scriptHash, totalPanels }
+
       // Fetch app config once to avoid inconsistent per-call overrides
       const appCfg = this.getAppConfig()
       const episodeCfg = this.getEpisodeCfgSafe()
@@ -59,33 +261,100 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
         panelCount: totalPanels,
       })
 
-      // Read segmentation config from app config
+      if (totalPanels > 0) {
+        const cached = await this.loadCachedEpisodePlan(context, cacheInfo)
+        if (cached) {
+          return {
+            success: true,
+            data: {
+              episodeBreaks: cached,
+              totalEpisodes: cached.episodes.length,
+            },
+          }
+        }
+      }
+
+      let lockState: EpisodePlanLockState | null = null
+      if (totalPanels > 0) {
+        lockState = await this.acquireEpisodePlanLock(context)
+        if (!lockState.acquired) {
+          const planFromOtherWorker = await this.waitForEpisodePlanFromOtherProcess(
+            context,
+            cacheInfo,
+            lockState.lockPath,
+          )
+          if (planFromOtherWorker) {
+            return {
+              success: true,
+              data: {
+                episodeBreaks: planFromOtherWorker,
+                totalEpisodes: planFromOtherWorker.episodes.length,
+              },
+            }
+          }
+
+          const retryLock = await this.acquireEpisodePlanLock(context)
+          if (retryLock.acquired) {
+            lockState = retryLock
+          } else {
+            const cachedAfterWait = await this.loadCachedEpisodePlan(context, cacheInfo)
+            if (cachedAfterWait) {
+              return {
+                success: true,
+                data: {
+                  episodeBreaks: cachedAfterWait,
+                  totalEpisodes: cachedAfterWait.episodes.length,
+                },
+              }
+            }
+            logger.warn('Proceeding with episode break estimation without exclusive lock', {
+              jobId,
+            })
+          }
+        }
+      }
+
       const segmentationConfig: ScriptSegmentationConfig = {
         ...DEFAULT_SCRIPT_SEGMENTATION_CONFIG,
         ...(appCfg.scriptSegmentation || {}),
       }
 
-      // Check if we need to use sliding window approach
-      if (totalPanels <= segmentationConfig.minPanelsForSegmentation) {
-        logger.info('Using direct episode break estimation (small script)', {
-          jobId,
-          panelCount: totalPanels,
-        })
-        return await this.estimateEpisodeBreaksDirect(combinedScript, context, appCfg, episodeCfg)
-      } else {
-        logger.info('Using sliding window episode break estimation (large script)', {
-          jobId,
-          panelCount: totalPanels,
-          segmentationConfig,
-        })
-        return await this.estimateEpisodeBreaksWithSlidingWindow(
-          combinedScript,
-          segmentationConfig,
-          context,
-          appCfg,
-          episodeCfg,
-        )
+      let result: StepExecutionResult<EpisodeBreakResult>
+      try {
+        if (totalPanels <= segmentationConfig.minPanelsForSegmentation) {
+          logger.info('Using direct episode break estimation (small script)', {
+            jobId,
+            panelCount: totalPanels,
+          })
+          result = await this.estimateEpisodeBreaksDirect(
+            combinedScript,
+            context,
+            appCfg,
+            episodeCfg,
+            cacheInfo,
+          )
+        } else {
+          logger.info('Using sliding window episode break estimation (large script)', {
+            jobId,
+            panelCount: totalPanels,
+            segmentationConfig,
+          })
+          result = await this.estimateEpisodeBreaksWithSlidingWindow(
+            combinedScript,
+            segmentationConfig,
+            context,
+            appCfg,
+            episodeCfg,
+            cacheInfo,
+          )
+        }
+      } finally {
+        if (lockState?.acquired) {
+          await this.releaseEpisodePlanLock(context, lockState.lockPath)
+        }
       }
+
+      return result
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       logger.error('Episode break estimation failed', {
@@ -105,13 +374,13 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     context: StepContext,
     appCfg: AppConfig,
     episodeCfg: EpisodeConfig,
+    cacheInfo?: { scriptHash: string; totalPanels: number },
   ): Promise<StepExecutionResult<EpisodeBreakResult>> {
     const { jobId, logger } = context
 
     // Use provider for episode break estimation
-    const provider = getProviderForUseCase('episodeBreak')
-  const providerNormalized: LlmProvider = provider === 'vertexai_lite' || provider === 'gemini' ? 'vertexai' : (provider as LlmProvider)
-  const generator = new DefaultLlmStructuredGenerator([providerNormalized])
+    const provider = getProviderForUseCase('episodeBreak') as LlmProvider
+    const generator = new DefaultLlmStructuredGenerator([provider])
 
     // Read prompts from provided app config
     const eb = appCfg.llm.episodeBreakEstimation || { systemPrompt: '', userPromptTemplate: '' }
@@ -136,7 +405,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
       userPrompt: prompt,
       schema: EpisodeBreakSchema as unknown as z.ZodTypeAny,
       schemaName: 'EpisodeBreakPlan',
-      telemetry: { jobId, stepName: 'EpisodeBreakPlan' },
+      telemetry: { jobId, stepName: 'episode-break-estimation' },
     })
 
     // If LLM produced no episodes, fall back to a conservative single-episode plan
@@ -158,6 +427,9 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
             endPanelIndex: Math.max(1, totalPanels),
           } as unknown as EpisodeBreakPlan['episodes'][number],
         ],
+      }
+      if (cacheInfo) {
+        await this.cacheEpisodePlan(context, fallback, cacheInfo)
       }
       return {
         success: true,
@@ -200,6 +472,10 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
       bundled = fallback
     }
 
+    if (cacheInfo) {
+      await this.cacheEpisodePlan(context, bundled, cacheInfo)
+    }
+
     logger.info('Episode break estimation completed', {
       jobId,
       totalEpisodes: bundled.episodes.length,
@@ -228,6 +504,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
     context: StepContext,
     appCfg: AppConfig,
     episodeCfg: EpisodeConfig,
+    cacheInfo: { scriptHash: string; totalPanels: number },
   ): Promise<StepExecutionResult<EpisodeBreakResult>> {
     const { jobId, logger } = context
 
@@ -266,6 +543,7 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
         context,
         appCfg,
         episodeCfg,
+        undefined,
       )
       if (!segmentResult.success) {
         throw new Error(
@@ -307,6 +585,8 @@ export class EpisodeBreakEstimationStep implements PipelineStep {
       episodeCfg,
       'Merged episode break validation',
     )
+
+    await this.cacheEpisodePlan(context, bundled, cacheInfo)
 
     logger.info('Sliding window episode break estimation completed', {
       jobId,

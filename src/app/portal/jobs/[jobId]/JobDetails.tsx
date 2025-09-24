@@ -102,7 +102,7 @@ export function JobDetails({ jobId }: JobDetailsProps) {
                 href={routesConfig.portal.dashboard}
                 className="text-sm bg-gray-100 text-gray-800 rounded-md px-2 py-1 hover:bg-gray-200"
               >
-                ダッシュボードに戻る
+                マイページに戻る
               </Link>
             </div>
           </div>

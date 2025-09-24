@@ -139,7 +139,7 @@ function renderPanelDialogues(
   box: PanelBox,
   cfg: TextRenderConfig,
   // 将来: segmentsPipeline など追加依存を使用するためのプレースホルダ
-  _deps?: PageRendererDeps,
+  deps?: PageRendererDeps,
 ): Rect[] {
   if (!panel.dialogues || panel.dialogues.length === 0) return []
   const bubblePadding = cfg.dialogue.bubblePadding ?? 10
@@ -159,7 +159,7 @@ function renderPanelDialogues(
           bubblePadding,
           cfg,
           vtDefaults,
-          _deps,
+          deps,
         )
       : layoutSingleDialogue(
           ctx,
@@ -170,7 +170,7 @@ function renderPanelDialogues(
           bubblePadding,
           cfg,
           vtDefaults,
-          _deps,
+          deps,
         )
 
   const occupied: Rect[] = []
@@ -209,6 +209,20 @@ function renderPanelDialogues(
 
     if (!rendered) {
       const text = inst.dialogue.text ?? ''
+      if (!inst.fallback && text) {
+        const maxContentWidth = Math.max(10, inst.bubbleWidth - bubblePadding * 2)
+        const maxContentHeight = Math.max(10, inst.bubbleHeight - bubblePadding * 2)
+        inst.fallback = buildFallbackText(
+          ctx,
+          text,
+          maxContentWidth,
+          maxContentHeight,
+          cfg.dialogue.font,
+          vtDefaults,
+          deps,
+        )
+      }
+
       if (inst.fallback) {
         const prevLocalFont = ctx.font
         ctx.font = inst.fallback.font
@@ -220,17 +234,6 @@ function renderPanelDialogues(
           if (ty > inst.bubbleY + inst.bubbleHeight - bubblePadding) break
         }
         ctx.font = prevLocalFont
-      } else if (text) {
-        fallbackHorizontalText(
-          ctx,
-          text,
-          inst.bubbleX,
-          inst.bubbleY,
-          inst.bubbleWidth,
-          inst.bubbleHeight,
-          bubblePadding,
-          cfg.dialogue.font,
-        )
       }
     }
 
@@ -557,32 +560,6 @@ function wrapLinesByPhrase(
   }
   if (current) lines.push(current)
   return lines
-}
-
-function fallbackHorizontalText(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  bubbleX: number,
-  bubbleY: number,
-  bubbleWidth: number,
-  bubbleHeight: number,
-  padding: number,
-  font: string,
-) {
-  ctx.font = font
-  ctx.fillStyle = '#000'
-  // 画像 draw 失敗時フォールバック: BudouX + phrase wrap（自然性維持）
-  const phrases = wrapJapaneseByBudoux(text, 12)
-  const lines = wrapLinesByPhrase(ctx, phrases, bubbleWidth - padding * 2)
-  // フォールバック安全弁: phrase wrap が 0 行になる理論的異常時に simpleWrapLines へ
-  const finalLines = lines.length === 0 ? simpleWrapLines(ctx, text, bubbleWidth - padding * 2) : lines
-  const lineHeight = 18
-  let ty = bubbleY + padding + lineHeight * 0.8
-  for (const line of finalLines) {
-    ctx.fillText(line, bubbleX + padding, ty)
-    ty += lineHeight
-    if (ty > bubbleY + bubbleHeight - padding) break
-  }
 }
 
 function renderPanelSfx(

@@ -1,5 +1,10 @@
 {
   "jobId": "job-telemetry",
   "branch": "NORMAL",
-  "createdAt": "2025-09-24T06:47:56.568Z"
+  "createdAt": "2025-09-24T09:08:52.284Z",
+  "reason": "stub",
+  "source": "llm",
+  "metrics": {
+    "length": 11
+  }
 }

@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 // 先にモックを定義し、以降の import で利用されるようにする
 const novelId = 'testnovel123'
+const longNarrativeSample = Array.from({ length: 80 }, () => '登場人物がいて出来事が進行する物語です。').join('')
 vi.mock('@/utils/job', () => {
   return {
     getNovelIdForJob: vi.fn(async () => novelId),
@@ -22,6 +23,12 @@ import { clearStorageCache, getLlmLogStorage } from '@/utils/storage'
 describe('LLM logging integration (fake provider)', () => {
   const jobId = 'job123'
   let previousCount = 0
+  const createStepContext = () => ({
+    jobId,
+    novelId,
+    logger: getLogger(),
+    ports: {} as Record<string, unknown>,
+  })
 
   beforeAll(async () => {
     clearStorageCache()
@@ -36,10 +43,7 @@ describe('LLM logging integration (fake provider)', () => {
 
   it('logs narrativity judge call', async () => {
     const step = new InputValidationStep()
-    const res = await step.validate('これはテスト用の物語本文です。登場人物がいて出来事が起こります。', {
-      jobId,
-      logger: getLogger(),
-    } as any)
+    const res = await step.validate(longNarrativeSample, createStepContext() as any)
     expect(res.success).toBe(true)
     await expectLogCountIncreases('narrativity-judge')
   })
@@ -64,10 +68,7 @@ describe('LLM logging integration (fake provider)', () => {
     const script: any = {
       panels: Array.from({ length: 5 }, (_, i) => ({ no: i + 1, dialogue: [], narration: [] })),
     }
-    const result = await step.estimateEpisodeBreaks(script, {
-      jobId,
-      logger: getLogger(),
-    } as any)
+    const result = await step.estimateEpisodeBreaks(script, createStepContext() as any)
     expect(result.success).toBe(true)
 
     await expectLogCountIncreases('episode-break-estimation')

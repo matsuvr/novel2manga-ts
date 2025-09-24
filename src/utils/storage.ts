@@ -826,6 +826,9 @@ export const JsonStorageKeys = {
   expandedInput: ({ novelId, jobId }: JobScopedKeyInput) => {
     return buildNovelJobScopedPath(novelId, jobId, 'analysis', 'expanded_input.json')
   },
+  episodeBreakPlan: ({ novelId, jobId }: JobScopedKeyInput) => {
+    return buildNovelJobScopedPath(novelId, jobId, 'analysis', 'episode_break_plan.json')
+  },
   // episodeBundling removed - replaced with episode break estimation
 } as const
 

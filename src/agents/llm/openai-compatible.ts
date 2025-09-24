@@ -11,7 +11,7 @@ type ChatMessage = { role: 'system' | 'user'; content: string }
 export class OpenAICompatibleClient implements LlmClient {
   readonly provider: Extract<
     import('./types').LlmProvider,
-    'openai' | 'groq' | 'grok' | 'openrouter'
+    'openai' | 'openai_nano' | 'groq' | 'grok' | 'openrouter'
   >
   private readonly baseUrl: string
   private readonly apiKey: string
@@ -66,7 +66,8 @@ export class OpenAICompatibleClient implements LlmClient {
 
   constructor(cfg: OpenAICompatibleConfig) {
     this.provider = cfg.provider
-    this.baseUrl = (cfg.baseUrl ?? defaultBaseUrl(cfg.provider)).replace(/\/$/, '')
+  const providerForBaseUrl = cfg.provider === 'openai_nano' ? 'openai' : cfg.provider
+  this.baseUrl = (cfg.baseUrl ?? defaultBaseUrl(providerForBaseUrl)).replace(/\/$/, '')
     this.apiKey = cfg.apiKey
     this.model = cfg.model
     this.useChatCompletions = cfg.useChatCompletions ?? true
