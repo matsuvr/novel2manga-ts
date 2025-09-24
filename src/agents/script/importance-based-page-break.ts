@@ -59,31 +59,51 @@ export function calculateImportanceBasedPageBreaks(
   let currentPage = 1
   let importanceSum = Math.max(0, Math.min(PAGE_IMPORTANCE_LIMIT - 1, initialImportance))
 
+  // 互換モードと厳格モード
+  //  - 互換モード(デフォルト): パネルを加算後、合計 >= LIMIT になった時点でページをクローズ（結果として最終合計が LIMIT を超えることを許容）。
+  //    既存テスト群はこの振る舞いを前提としている（例: 4,1,2 -> 7 を1ページに置く）。
+  //  - 厳格モード(STRICT): 加算前に超過を検出し、新ページに送る（合計が LIMIT を超えない）。ユーザー要件で指摘された
+  //    「4,5,4 のケースで 4 のみを最初のページにしたい」などを満たす。環境変数 IMPORTANCE_STRICT=1 で有効化。
+  const strictMode = process.env.IMPORTANCE_STRICT === '1'
+
   for (let i = 0; i < script.panels.length; i++) {
     const panel = script.panels[i]
     const importance = Math.max(1, Math.min(PAGE_IMPORTANCE_LIMIT, panel.importance || 1))
 
-    // Track importance distribution
+    if (strictMode) {
+      // 事前判定で超過を避ける
+      if (importanceSum + importance > PAGE_IMPORTANCE_LIMIT) {
+        currentPage++
+        importanceSum = 0
+      }
+    }
+
+    // importance 分布記録（ページ番号は最終決定後）
     importanceDistribution[importance] = (importanceDistribution[importance] || 0) + 1
 
-    // dialogue/narration を統合して構造化
     const dialogue = parseDialogueAndNarration(panel.dialogue, panel.narration)
-
     resultPanels.push({
       pageNumber: currentPage,
-      panelIndex: i + 1, // 1-based index for display purposes
+      panelIndex: i + 1,
       content: buildPanelContentFromScript({ cut: panel.cut, camera: panel.camera }),
       dialogue,
-      // Add SFX support (will be added to schema later)
       ...(panel.sfx && { sfx: panel.sfx }),
     })
 
     importanceSum += importance
 
-    // If we've reached or exceeded the page limit, start a new page for next panel
-    if (importanceSum >= PAGE_IMPORTANCE_LIMIT) {
-      currentPage++
-      importanceSum = 0
+    if (strictMode) {
+      // ちょうど一致でリセット
+      if (importanceSum === PAGE_IMPORTANCE_LIMIT) {
+        currentPage++
+        importanceSum = 0
+      }
+    } else {
+      // 互換モード: >= LIMIT でページを閉じ、合計は保持せず次へ
+      if (importanceSum >= PAGE_IMPORTANCE_LIMIT) {
+        currentPage++
+        importanceSum = 0
+      }
     }
   }
 

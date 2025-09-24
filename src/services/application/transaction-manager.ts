@@ -2,7 +2,7 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import type * as schema from '@/db/schema'
 import { getDatabaseServiceFactory } from '@/services/database'
 import type { Storage } from '@/utils/storage'
-import { type RecordStorageFileParams, recordStorageFile } from './storage-tracker'
+import { type RecordStorageFileParams, recordStorageFile, recordStorageFileSync } from './storage-tracker'
 
 // Drizzle transaction type
 type DrizzleDb = BetterSQLite3Database<typeof schema>
@@ -21,7 +21,9 @@ interface StorageDeleteOperation {
 }
 
 interface DatabaseOperation {
-  execute: (tx?: DrizzleTransaction) => Promise<void>
+  // better-sqlite3(drizzle) の同期トランザクション内で実行されるため Promise を返さない
+  execute: (tx?: DrizzleTransaction) => void
+  // rollback は外部（トランザクション外）で async 可
   rollback?: () => Promise<void>
 }
 
@@ -75,7 +77,7 @@ export class TransactionManager {
    * @param rollback - ロールバック処理（オプション）
    */
   addDatabaseOperation(
-    execute: (tx?: DrizzleTransaction) => Promise<void>,
+    execute: (tx?: DrizzleTransaction) => void,
     rollback?: () => Promise<void>,
   ): void {
     if (this.executed) {
@@ -122,75 +124,37 @@ export class TransactionManager {
         completedStorageOps.push({ storage: op.storage, key: op.key })
       }
 
-      // Phase 2: データベース操作（単一トランザクション）
-      if (this.dbOps.length > 0) {
+      // Phase 2: データベース操作（Drizzle トランザクション）。
+      // Drizzle(better-sqlite3) の transaction コールバックは同期実行前提
+      // -> ここでは非同期 I/O (storage 等) を一切含めないことを保証済み。
+      if (this.dbOps.length > 0 || this.trackingOps.length > 0) {
         const raw = getDatabaseServiceFactory().getRawDatabase()
         drizzleDb = raw
 
-        // DrizzleDb型であることを確認する型ガード関数
-        function isDrizzleDb(obj: unknown): obj is DrizzleDb {
-          // テスト用のモックデータベースも許容する
-          if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
-            return true
-          }
-
+        const isDrizzleDb = (obj: unknown): obj is DrizzleDb => {
           if (!obj || typeof obj !== 'object') return false
-          const candidate = obj as { select?: unknown }
-          return typeof candidate.select === 'function'
+          return typeof (obj as { select?: unknown }).select === 'function'
         }
-
         if (!isDrizzleDb(raw)) {
           throw new Error('Database is not a Drizzle better-sqlite3 instance')
         }
 
-        // better-sqlite3 は async コールバック非対応のため、$client があり exec が使える場合は手動境界
-        interface DatabaseWithClient {
-          $client?: {
-            exec?: (sql: string) => void
+        // Drizzle(better-sqlite3) の transaction は同期だが、テスト用 Mock では async になっている。
+        // どちらにも対応するため戻り値が thenable なら await する。
+        const maybePromise = (raw as DrizzleDb).transaction((tx) => {
+          for (const dbOp of this.dbOps) {
+            dbOp.execute(tx as unknown as DrizzleTransaction)
           }
-        }
+          for (const trackingOp of this.trackingOps) {
+            recordStorageFileSync(trackingOp.params, tx as unknown as DrizzleTransaction)
+          }
+        }) as unknown
 
-        const dbWithClient = raw as unknown as DatabaseWithClient
-        const canManualTx = typeof dbWithClient.$client?.exec === 'function'
-
-        if (canManualTx) {
-          // 手動トランザクション境界
-          const exec = (raw as unknown as { $client?: { exec?: (sql: string) => void } }).$client
-            ?.exec
-          if (!exec) {
-            throw new Error('Database client does not support manual transactions')
-          }
-          exec('BEGIN IMMEDIATE')
-          try {
-            for (const dbOp of this.dbOps) {
-              await dbOp.execute(raw as unknown as DrizzleTransaction)
-            }
-            for (const trackingOp of this.trackingOps) {
-              await recordStorageFile(trackingOp.params, raw as unknown as DrizzleTransaction)
-            }
-            exec('COMMIT')
-            this.committed = true
-          } catch (e) {
-            try {
-              exec('ROLLBACK')
-            } catch (rollbackError) {
-              console.error('Manual transaction rollback failed:', rollbackError)
-            }
-            throw e
-          }
-        } else {
-          // Drizzle標準のトランザクションAPIは非同期コールバックをサポートしていません。
-          // このパスは非同期操作を含むため、安全に実行できません。
-          // 手動トランザクションが利用できない場合はエラーをスローします。
-          throw new Error(
-            'The configured database driver does not support async operations within a standard transaction. Manual transaction control is required.',
-          )
+        if (maybePromise && typeof (maybePromise as Promise<unknown>).then === 'function') {
+          await maybePromise
         }
+        this.committed = true
       } else {
-        // DB操作がない場合でも追跡は実行
-        for (const trackingOp of this.trackingOps) {
-          await recordStorageFile(trackingOp.params)
-        }
         this.committed = true
       }
 
@@ -208,7 +172,7 @@ export class TransactionManager {
         }
       }
     } catch (error) {
-      // ロールバック処理
+      // ロールバック処理: 既に書き込んだ storage を削除
       await this.performRollback(completedStorageOps, completedDeleteOps, drizzleDb)
       throw error
     }
@@ -290,7 +254,8 @@ export async function executeStorageDbTransaction<T>(options: {
   key: string
   value: string | Buffer
   metadata?: Record<string, string>
-  dbOperation: () => Promise<T>
+  // 同期 DB 操作（値を返す）。内部で Drizzle(better-sqlite3) を想定。
+  dbOperation: () => T
   dbRollback?: () => Promise<void>
   tracking?: RecordStorageFileParams
 }): Promise<T> {
@@ -300,8 +265,8 @@ export async function executeStorageDbTransaction<T>(options: {
 
   tx.addStorageWrite(options.storage, options.key, options.value, options.metadata)
 
-  tx.addDatabaseOperation(async (_tx) => {
-    dbResult = await options.dbOperation()
+  tx.addDatabaseOperation((_tx) => {
+    dbResult = options.dbOperation()
     dbOperationExecuted = true
   }, options.dbRollback)
 
@@ -336,6 +301,7 @@ export async function executeStorageWithTracking(options: {
   // 追跡のみ実行（失敗してもストレージ操作は完了済み）
   if (options.tracking) {
     try {
+      // トランザクション外なので非同期版を使用
       await recordStorageFile(options.tracking)
     } catch (error) {
       // 追跡失敗はログに記録するが、メイン処理は失敗させない
@@ -352,7 +318,8 @@ export async function executeStorageWithDbOperation(options: {
   key: string
   value: string | Buffer
   metadata?: Record<string, string>
-  dbOperation?: () => Promise<void>
+  // better-sqlite3 用の同期 DB 操作
+  dbOperation?: () => void
   dbRollback?: () => Promise<void>
   tracking?: RecordStorageFileParams
 }): Promise<void> {
@@ -361,8 +328,8 @@ export async function executeStorageWithDbOperation(options: {
   tx.addStorageWrite(options.storage, options.key, options.value, options.metadata)
 
   if (options.dbOperation) {
-    tx.addDatabaseOperation(async (_tx) => {
-      await options.dbOperation?.()
+    tx.addDatabaseOperation((_tx) => {
+      options.dbOperation?.()
     }, options.dbRollback)
   }
 
