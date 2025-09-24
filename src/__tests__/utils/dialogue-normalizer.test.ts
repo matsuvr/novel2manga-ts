@@ -85,6 +85,25 @@ describe('dialogue-normalizer', () => {
       expect(result[3].speaker).toBe('ナレーション')
       expect(result[4]).toEqual({ speaker: 'キャラD', text: '最後のセリフ' })
     })
+
+    it('既存のtypeを保持し新たな推論を行わない', () => {
+      const input = [
+        { speaker: 'A', text: '発話', type: 'speech' },
+        { speaker: 'B', text: '心の声だよ', type: 'thought' },
+        { speaker: 'C', text: '説明', type: 'narration' },
+        'D：これは「（心の声）」という語を含むけど推論しない',
+        'ナレーション的な自由文',
+      ]
+
+      const result = normalizeDialogues(input as unknown[])
+
+      expect(result[0]).toEqual({ speaker: 'A', text: '発話', type: 'speech' })
+      expect(result[1]).toEqual({ speaker: 'B', text: '心の声だよ', type: 'thought' })
+      expect(result[2]).toEqual({ speaker: 'C', text: '説明', type: 'narration' })
+      // 以下2件は type 無し（推論しない）
+      expect(result[3]).toEqual({ speaker: 'D', text: 'これは「（心の声）」という語を含むけど推論しない' })
+      expect(result[4]).toEqual({ speaker: 'ナレーション', text: 'ナレーション的な自由文' })
+    })
   })
 
   describe('normalizePageDialogues', () => {
@@ -107,11 +126,11 @@ describe('dialogue-normalizer', () => {
 
       const result = normalizePageDialogues(input)
 
-      expect(result.panels[0].dialogue).toEqual([
+  expect(result.panels![0].dialogue).toEqual([
         { speaker: 'キャラA', text: '古い形式' },
         { speaker: 'キャラB', text: '文字列形式' },
       ])
-      expect(result.panels[1].dialogue).toEqual([{ speaker: 'キャラC', text: '正しい形式' }])
+  expect(result.panels![1].dialogue).toEqual([{ speaker: 'キャラC', text: '正しい形式' }])
     })
 
     it('dialogue配列がないパネルはそのまま返す', () => {
@@ -160,12 +179,17 @@ describe('dialogue-normalizer', () => {
       }
 
       const result = normalizeLLMResponse(input)
-
-      expect(result.pages[0].panels[0].dialogue).toEqual([
+      expect(result.pages).toBeTruthy()
+      expect(Array.isArray(result.pages)).toBe(true)
+      expect(result.pages?.[0]).toBeTruthy()
+      expect(result.pages?.[0].panels?.[0]).toBeTruthy()
+      expect(result.pages?.[0].panels?.[0].dialogue).toEqual([
         { speaker: 'キャラA', text: 'こんにちは' },
         { speaker: 'キャラB', text: '古い形式' },
       ])
-      expect(result.pages[1].panels[0].dialogue).toEqual([
+      expect(result.pages?.[1]).toBeTruthy()
+      expect(result.pages?.[1].panels?.[0]).toBeTruthy()
+      expect(result.pages?.[1].panels?.[0].dialogue).toEqual([
         { speaker: 'キャラC', text: '正しい形式' },
       ])
     })

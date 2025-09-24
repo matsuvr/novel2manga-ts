@@ -87,4 +87,23 @@ describe('ensureBranchMarker', () => {
     expect(receivedJobId).toBe(jobId)
     spy.mockRestore()
   })
+
+  it('truncates input to configured narrativitySampleChars (1000) before classification', async () => {
+    const jobId = 'job-truncate'
+    const longText = 'あ'.repeat(1500) + '終端'
+    let receivedLength = -1
+    const spy = vi.spyOn(classifier, 'classifyNarrativity').mockImplementation(async (raw: string) => {
+      receivedLength = raw.length
+      return {
+        branch: BranchType.NORMAL,
+        reason: 'stub',
+        metrics: { length: raw.length },
+        source: 'llm' as const,
+      }
+    })
+    const res = await ensureBranchMarker(jobId, longText, TEST_DATA_DIR)
+    expect(res.created).toBe(true)
+    expect(receivedLength).toBe(1000) // 1000文字にトリミングされている
+    spy.mockRestore()
+  })
 })

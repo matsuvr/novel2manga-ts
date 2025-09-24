@@ -11,6 +11,15 @@ import { ExplainerCharactersSchema } from '../types/characters'
 import { NarrativeJudgeSchema } from '../types/validation'
 
 export const appConfig = {
+    pagination: {
+      // 1ページの重要度合計上限。累積が threshold 以上になった時点で「現在のコマでページを閉じ、次のコマを新ページ開始」する。
+      pageImportanceLimit: 6,
+      // レイアウト生成時に script が持っていた importance をそのまま pages[].panels[].importance に反映する。
+      // false の場合は従来通り再計算(normalizeImportanceDistribution)を行う。
+      preserveScriptImportance: true,
+      // preserveScriptImportance が true で script 側に欠損や不正値があった場合のみフォールバック再計算を行うか
+      recomputeImportanceFallback: true,
+    },
     chunking: {
       defaultChunkSize: 4000,
       defaultOverlapSize: 100,
@@ -59,9 +68,12 @@ export const appConfig = {
         userPromptTemplate: `### コンテキスト\nチャンク(0始): {{chunkIndex}} / {{chunksNumber}}\n前要約: {{previousChunkSummary}}\n次要約: {{nextChunkSummary}}\n既存メモリ(JSON):\n{{previousElementMemoryJson}}\n\n### 対象本文\n{{chunkText}}\n\n### 指示\n1. memory.characters / scenes を必要に応じ更新 (再登場のみは追加しない)。\n2. situations を重要事象で作成。\n3. script パネル列を生成 (1パネル1要点, no昇順, dialogueは speaker/ text, 60字目安)。\n4. summary を160字以内。\n5. characters[*].id は c<number> 形式 (例 c1,c2)。既存メモリにあるIDは再利用し、新規のみ未使用最大番号+1。数値単体IDや c 以外の接頭辞、重複IDは禁止。dialogue[*].speaker もその ID か '不明' のみ。\n6. 仕様に合う JSON のみを1つだけ出力 (前後に説明文やコードフェンス禁止)。`,
       },
       narrativityClassification: {
+        // narrativitySampleChars: 先頭 N 文字のみを LLM に渡して高速・低コスト分類 (要件: 1000文字)
+        narrativitySampleChars: 1000,
         systemPrompt: `あなたは文章をマンガ脚本前処理用に分類するアナライザーです。以下の3クラスから厳密に1つを JSON で返します。\n\n分類基準:\n1. EXPAND: 入力が極端に短い / 断片的 / タイトル+一文 / 設定が不足し、このままでは十分な複数パネル脚本展開が困難な場合。意味は把握できるが展開に必要な舞台・登場人物・動機などが足りないものを含む。\n2. EXPLAINER: 叙述的な物語展開ではなく、説明・解説・手順・箇条書き・見出し列挙・仕様・教科書的説明など、ストーリーの時間的進行やキャラクター間の相互作用を主目的としないテキスト。\n3. NORMAL: 上記どちらにも当てはまらない、物語的（キャラクター/出来事/進行）テキスト。短すぎない場合はこちら。\n\n注意:\n- 返答は JSON 1行のみ。キーは branch, reason。\n- branch は "EXPAND" | "EXPLAINER" | "NORMAL" のみ。\n- reason は日本語で簡潔に (最大300字)。\n- 入力文字数や不足情報を根拠に必須なら EXPAND を選ぶ。`,
         userPromptTemplate: `【入力テキスト】(length={{length}} chars / targetForExpansion={{expansionTarget}})\n{{text}}\n\n必ず JSON で: {"branch":"EXPAND|EXPLAINER|NORMAL","reason":"..."}`,
-        providerOrder: ['vertexai_lite','openai_nano','gemini'] as const,
+        // 軽量モデル優先: gemini (flash-lite) -> vertexai_lite -> openai_nano
+        providerOrder: ['gemini','vertexai_lite','openai_nano'] as const,
       },
       // EXPAND ブランチ用: 短い/断片的な入力を「展開シナリオ本文」に拡張し、その結果を通常の chunkConversion に流す前処理。
       // 出力は単純な JSON: { "expandedText": string, "notes": string[] }
@@ -102,7 +114,7 @@ JSONのみ。expandedText は改行を保持。文字数は target ±20% 以内�
       defaultPageSize: { width: 1190, height: 1684 },
       pageSizePresets: { a4Portrait: { width: 595, height: 842 }, a4Landscape: { width: 842, height: 595 }, b4Portrait: { width: 728, height: 1031 }, b4Landscape: { width: 1031, height: 728 } },
       limits: { maxPages: 5000 },
-  verticalText: { enabled: true, defaults: { fontSize: 24, lineHeight: 1.6, letterSpacing: 0, padding: 12, maxCharsPerLine: 14 }, maxConcurrent: 4, dynamicCoverage: { enabled: true, heightCoverage: 0.75, minCharsPerLine: 4 } as { enabled: boolean; heightCoverage: number; minCharsPerLine: number } },
+  verticalText: { enabled: true, defaults: { fontSize: 24, lineHeight: 1.6, letterSpacing: 0, padding: 12, maxCharsPerLine: 14 }, maxConcurrent: 1, dynamicCoverage: { enabled: true, heightCoverage: 0.75, minCharsPerLine: 4 } as { enabled: boolean; heightCoverage: number; minCharsPerLine: number } },
       canvas: {
         sfx: { enabled: true, mainFontSize: { min: 24, max: 48, scaleFactor: 0.12 }, supplementFontSize: { scaleFactor: 0.35, min: 10 }, mainTextStyle: { fillStyle: '#000000', strokeStyle: '#ffffff', lineWidth: 4, fontWeight: 'bold' as 'bold' | 'normal' }, supplementTextStyle: { fillStyle: '#666666', strokeStyle: '#ffffff', lineWidth: 2, fontWeight: 'normal' as 'bold' | 'normal' }, rotation: { enabled: true, maxAngle: 0.15 }, placement: { avoidOverlap: true, preferredPositions: ['top-left','bottom-left','top-center','middle-left','bottom-right'] } },
         bubble: { fillStyle: '#ffffff', strokeStyle: '#000000', normalLineWidth: 2, shoutLineWidth: 3, thoughtShape: { bumps: 18, amplitudeRatio: 0.12, randomness: 0.3, minRadiusPx: 6, prng: { seedScale: 0.01337, sinScale: 12.9898, multiplier: 43758.5453 } }, thoughtTail: { enabled: true, count: 3, startRadiusRatio: 0.12, decay: 0.65, gapRatio: 0.28, angle: Math.PI * 0.75 } },
@@ -115,11 +127,11 @@ JSONのみ。expandedText は改行を保持。文字数は target ±20% 以内�
     generateThumbnails: false,
       newPipeline: {
         // 同時に描画する最大ページ数（CPUコア-1 を後で clamp する想定）
-        maxConcurrency: 4,
+        maxConcurrency: 1,
         // 先行してユーザーにプレビューしたいページ数（優先キュー）
         priorityPreviewPages: 2,
         // 縦書きアセット生成の1バッチ上限（dialogue-assets.config との整合に注意）
-        dialogueBatchLimit: 32,
+        dialogueBatchLimit: 1,
       },
     },
     api: {
@@ -129,14 +141,14 @@ JSONのみ。expandedText は改行を保持。文字数は target ±20% 以内�
       maxPayloadSize: { text: 1024 * 1024, image: 5 * 1024 * 1024, json: 512 * 1024 },
     },
     processing: {
-      maxConcurrentChunks: 3,
+      maxConcurrentChunks: 2,
       maxConcurrentJobs: 2,
       batchSize: { chunks: 6, analysis: 3 },
       retry: { maxAttempts: 3, initialDelay: 1000, maxDelay: 10000, backoffFactor: 2 },
       cache: { ttl: 24 * 60 * 60, minTtlSec: 60, validationTtlSec: 30, recommended: { analysisSec: 60 * 60, layoutSec: 30 * 60 }, maxItemSizeMB: 25, analysisCache: true, layoutCache: true },
       episode: { targetCharsPerEpisode: 8000, minCharsPerEpisode: 1, maxCharsPerEpisode: 12000, smallPanelThreshold: 8, minPanelsPerEpisode: 10, maxPanelsPerEpisode: 1000 },
     },
-  features: { enableLayoutGeneration: true, enableImageGeneration: false, enableAutoSave: true, enableCaching: true, enableCoverageCheck: false, enableParallelProcessing: true, enableProgressTracking: true, enableTokenCounter: true, enableTokenCounterUI: true, enableTokenCounterTelemetry: true },
+  features: { enableLayoutGeneration: true, enableImageGeneration: false, enableAutoSave: true, enableCaching: true, enableCoverageCheck: false, enableParallelProcessing: false, enableProgressTracking: true, enableTokenCounter: true, enableTokenCounterUI: true, enableTokenCounterTelemetry: true },
     characterMemory: {
       summaryMaxLength: 700,
       promptMemory: { maxTokens: 4000, recentChunkWindow: 15, topProminentCount: 10, tokenEstimatePerChar: 2.5 },

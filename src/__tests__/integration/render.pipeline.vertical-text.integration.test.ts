@@ -58,7 +58,13 @@ function makeMemoryRenderPorts() {
 // Mock vertical text API client and @napi-rs/canvas image creation
 vi.mock('@/services/vertical-text-client', () => ({
   renderVerticalText: vi.fn().mockResolvedValue({
-    meta: { image_base64: 'x', width: 120, height: 300 },
+    meta: {
+      image_base64: 'x',
+      width: 120,
+      height: 300,
+      trimmed: true,
+      content_bounds: { x: 0, y: 0, width: 120, height: 300 },
+    },
     pngBuffer: Buffer.from('iVBOR', 'base64'),
   }),
 }))
@@ -77,13 +83,18 @@ describe.skip('integration: renderBatchFromYaml with vertical text', () => {
     // Set up mocks like the bounds test does
     const { renderVerticalText } = await import('@/services/vertical-text-client')
     ;(renderVerticalText as any).mockResolvedValue({
-      meta: { image_base64: 'x', width: 120, height: 300 },
+      meta: {
+        image_base64: 'x',
+        width: 120,
+        height: 300,
+        trimmed: true,
+        content_bounds: { x: 0, y: 0, width: 120, height: 300 },
+      },
       pngBuffer: Buffer.from('iVBOR', 'base64'),
     })
 
     // Mock createImageFromBuffer
     const canvasMod = await import('@/lib/canvas/canvas-renderer')
-    // @ts-expect-error test shim
     canvasMod.CanvasRenderer.createImageFromBuffer = vi.fn().mockResolvedValue({
       image: { __img: true },
       width: 120,

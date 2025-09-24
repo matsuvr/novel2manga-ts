@@ -1,4 +1,5 @@
 import type { Dialogue } from '@/types/panel-layout'
+import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
 
 interface UnknownDialogue {
   speaker?: unknown
@@ -12,7 +13,74 @@ interface UnknownDialogue {
  * 文字列が含まれている場合はDialogueオブジェクトに変換
  */
 export function normalizeDialogues(dialogues: unknown[]): Dialogue[] {
-  return dialogues.map((dialogue, index) => {
+  const MAX_LEN = 50
+
+  // BudouX区切りを利用しつつ 50 文字以下になるまで再帰的に分割
+  const splitLongText = (text: string): string[] => {
+    const trimmed = text.trim()
+    if (trimmed.length <= MAX_LEN) return [trimmed]
+
+    // BudouXでフレーズに分割
+    let phrases: string[]
+    try {
+      phrases = wrapJapaneseByBudoux(trimmed, MAX_LEN * 2) // 上限は緩めにしてフレーズ取得のみ利用
+      // wrapJapaneseByBudoux は行長制御が入るため、MAX_LEN*2 として分割を抑制し、あとで独自境界判定
+      if (phrases.length === 0) return [trimmed]
+    } catch {
+      // 失敗時はフォールバック: 強制 50 文字チャンク
+      const chunks: string[] = []
+      for (let i = 0; i < trimmed.length; i += MAX_LEN) {
+        chunks.push(trimmed.slice(i, i + MAX_LEN))
+      }
+      return chunks
+    }
+
+    // wrapJapaneseByBudoux は既に行に分割している可能性があるため、改行を除去して再度フレーズ化したい場合がある。
+    // ここでは単純に結合→BudouX純粋フレーズ境界取得をしたいが、既存 util にはフレーズのみ返す関数が無い。
+    // そのため既存の行配列を再結合し再度 BudouX parser を使うより低コストな近似として、行配列自体をフレーズ配列扱いする。
+    const candidateBoundaries: number[] = []
+    let acc = 0
+    for (const p of phrases) {
+      acc += p.length
+      candidateBoundaries.push(acc)
+    }
+
+    // 全体長
+    const total = trimmed.length
+    if (total <= MAX_LEN) return [trimmed]
+
+    // 目標: 約 half = total / 2 に一番近い境界を選ぶ。ただし境界後ろ/前のどちらかが 1 文字以下にならないよう調整
+    const ideal = total / 2
+    let bestIdx = 0
+    let bestDist = Number.POSITIVE_INFINITY
+    candidateBoundaries.forEach((b, i) => {
+      if (b < 5 || total - b < 5) return // 1文字・極小断片回避 (閾値を5文字とする: 要調整可)
+      const d = Math.abs(b - ideal)
+      if (d < bestDist) {
+        bestDist = d
+        bestIdx = i
+      }
+    })
+
+    // 適切な境界が見つからない場合は 50 文字付近で強制分割
+    if (bestDist === Number.POSITIVE_INFINITY) {
+      const forced = Math.min(MAX_LEN, total - MAX_LEN > 5 ? MAX_LEN : Math.ceil(total / 2))
+      const left = trimmed.slice(0, forced)
+      const right = trimmed.slice(forced)
+      return [...splitLongText(left), ...splitLongText(right)]
+    }
+
+    const boundaryPos = candidateBoundaries[bestIdx]
+    const left = trimmed.slice(0, boundaryPos)
+    const right = trimmed.slice(boundaryPos)
+
+    // それぞれ再帰（再帰により 50 以下まで細分化）
+    return [...splitLongText(left), ...splitLongText(right)]
+  }
+
+  const result: Dialogue[] = []
+
+  dialogues.forEach((dialogue, index) => {
     // すでに正しいDialogueオブジェクトの場合
     if (
       typeof dialogue === 'object' &&
@@ -23,14 +91,34 @@ export function normalizeDialogues(dialogues: unknown[]): Dialogue[] {
       const obj = dialogue as UnknownDialogue
       // textプロパティがある場合
       if ('text' in dialogue && typeof obj.text === 'string') {
-        return { speaker: obj.speaker as string, text: obj.text }
+        // type / emotion 等が既に存在するなら保持（リファクタで消失した thought バブル復元目的）
+        const base: Omit<Dialogue, 'text'> & { text?: string } = {
+          speaker: obj.speaker as string,
+          ...(typeof (obj as { type?: unknown }).type === 'string'
+            ? { type: (obj as { type?: string }).type as Dialogue['type'] }
+            : {}),
+          ...(typeof (obj as { emotion?: unknown }).emotion === 'string'
+            ? { emotion: (obj as { emotion?: string }).emotion }
+            : {}),
+        }
+        const parts = splitLongText(obj.text)
+        parts.forEach((p) => result.push({ ...base, text: p }))
+        return
       }
       // linesプロパティがある場合（古い形式への対応）
       if ('lines' in dialogue && typeof obj.lines === 'string') {
-        return {
+        const base: Omit<Dialogue, 'text'> = {
           speaker: obj.speaker as string,
-          text: obj.lines,
+          ...(typeof (obj as { type?: unknown }).type === 'string'
+            ? { type: (obj as { type?: string }).type as Dialogue['type'] }
+            : {}),
+          ...(typeof (obj as { emotion?: unknown }).emotion === 'string'
+            ? { emotion: (obj as { emotion?: string }).emotion }
+            : {}),
         }
+        const parts = splitLongText(obj.lines)
+        parts.forEach((p) => result.push({ ...base, text: p }))
+        return
       }
     }
 
@@ -42,25 +130,33 @@ export function normalizeDialogues(dialogues: unknown[]): Dialogue[] {
       // "話者名：セリフ内容" の形式を検出
       const speakerMatch = text.match(/^([^：:]+)[：:](.+)$/)
       if (speakerMatch) {
-        return {
-          speaker: speakerMatch[1].trim(),
-          text: speakerMatch[2].trim(),
-        }
+        const sp = speakerMatch[1].trim()
+        const body = speakerMatch[2].trim()
+        // NOTE: ここでは type 推論を行わない。元ソース（chunkConversion 等）が付与する type を唯一の真実とする。
+        const speaker = sp.replace(/（心の声）/, '').trim()
+        const parts = splitLongText(body)
+        parts.forEach((p) => result.push({ speaker, text: p }))
+        return
       }
 
       // 括弧や記号で話者を判定
       if (text.startsWith('「') || text.startsWith('"')) {
-        return {
-          speaker: '登場人物',
-          text: text,
-        }
+        splitLongText(text).forEach((p) =>
+          result.push({
+            speaker: '登場人物',
+            text: p,
+          }),
+        )
+        return
       }
 
-      // ナレーション的なテキストとして扱う
-      return {
-        speaker: 'ナレーション',
-        text: text,
-      }
+      // ナレーション風テキスト。ただしここでも type を自動付与しない。
+      // 『（心の声）』などの表現は speaker 判定目的でのみ利用し、type は付与しない。
+      const isInnerMonologue = /（心の声）/.test(text)
+      const cleaned = text.replace(/（心の声）/g, '').trim()
+      const speaker = isInnerMonologue ? '登場人物' : 'ナレーション'
+      splitLongText(cleaned).forEach((p) => result.push({ speaker, text: p }))
+      return
     }
 
     // その他の場合は空のDialogueオブジェクトを返す（詳細を付与して警告）
@@ -82,11 +178,15 @@ export function normalizeDialogues(dialogues: unknown[]): Dialogue[] {
       `[DialogueNormalizer] Unexpected dialogue format at index ${index}: ${details}`,
       dialogue,
     )
-    return {
-      speaker: 'ナレーション',
-      text: String(dialogue || ''),
-    }
+    splitLongText(String(dialogue || '')).forEach((p) =>
+      result.push({
+        speaker: 'ナレーション',
+        text: p,
+      }),
+    )
   })
+
+  return result
 }
 
 interface UnknownPanel {
