@@ -1,6 +1,7 @@
 import { appConfig } from '@/config/app.config'
 import type { DialogueSegmentsPipeline } from '@/services/application/rendering/assets/dialogue-segments-pipeline'
 import type { MangaLayout } from '@/types/panel-layout'
+import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
 import { getDialogueAsset } from '../assets/dialogue-cache'
 import { buildDialogueKey } from '../assets/dialogue-key'
 import { createCanvas, ensureCanvasInited } from '../core/canvas-init'
@@ -134,7 +135,11 @@ function renderPanelDialogues(
     // 2) フォールバック: 水平テキスト（従来ロジック簡素形）
     const fallbackFont = font
     const maxBubbleWidth = Math.min(box.w * 0.9, maxBubbleWidthPx)
-    const lines = simpleWrapLines(ctx, raw, maxBubbleWidth - bubblePadding * 2)
+    // フォールバック時でもフレーズ単位の自然な改行を維持する
+    const phraseSegments = _deps?.segmentsPipeline
+      ? _deps.segmentsPipeline.getSegments(raw)
+      : wrapJapaneseByBudoux(raw, 12) // BudouX を直接利用（セグメント長ヒューリスティック）
+    const lines = wrapLinesByPhrase(ctx, phraseSegments, maxBubbleWidth - bubblePadding * 2)
     const lineHeight = vtDefaults.lineHeight // bubbleKey と整合
     const bubbleHeight = lines.length * lineHeight + bubblePadding * 2
     const bubbleWidth = Math.max(...lines.map(l => measureTextWidthCached(ctx, l)), 10) + bubblePadding * 2
@@ -155,6 +160,7 @@ function renderPanelDialogues(
   }
 }
 
+// simpleWrapLines: 互換用途で残す（他箇所から呼ばれる可能性があるため export せず維持）
 function simpleWrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const lines: string[] = []
   let current = ''
@@ -166,6 +172,26 @@ function simpleWrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: 
     } else {
       current = tentative
     }
+  }
+  if (current) lines.push(current)
+  return lines
+}
+
+function wrapLinesByPhrase(
+  ctx: CanvasRenderingContext2D,
+  phrases: string[] | readonly string[],
+  maxWidth: number,
+): string[] {
+  const lines: string[] = []
+  let current = ''
+  for (const seg of phrases) {
+    const tentative = current ? current + seg : seg
+    if (tentative && ctx.measureText(tentative).width > maxWidth && current) {
+      lines.push(current)
+      current = seg
+      continue
+    }
+    current = tentative
   }
   if (current) lines.push(current)
   return lines
@@ -183,10 +209,14 @@ function fallbackHorizontalText(
 ) {
   ctx.font = font
   ctx.fillStyle = '#000'
-  const lines = simpleWrapLines(ctx, text, bubbleWidth - padding * 2)
+  // 画像 draw 失敗時フォールバック: BudouX + phrase wrap（自然性維持）
+  const phrases = wrapJapaneseByBudoux(text, 12)
+  const lines = wrapLinesByPhrase(ctx, phrases, bubbleWidth - padding * 2)
+  // フォールバック安全弁: phrase wrap が 0 行になる理論的異常時に simpleWrapLines へ
+  const finalLines = lines.length === 0 ? simpleWrapLines(ctx, text, bubbleWidth - padding * 2) : lines
   const lineHeight = 18
   let ty = bubbleY + padding + lineHeight * 0.8
-  for (const line of lines) {
+  for (const line of finalLines) {
     ctx.fillText(line, bubbleX + padding, ty)
     ty += lineHeight
     if (ty > bubbleY + bubbleHeight - padding) break
