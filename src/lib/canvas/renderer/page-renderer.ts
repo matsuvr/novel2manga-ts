@@ -5,7 +5,7 @@ import { wrapJapaneseByBudoux } from '@/utils/jp-linebreak'
 import { getDialogueAsset } from '../assets/dialogue-cache'
 import { buildDialogueKey } from '../assets/dialogue-key'
 import { createCanvas, ensureCanvasInited } from '../core/canvas-init'
-import { drawBasicBubble, drawPanelFrame, fillBackgroundWhite } from '../core/draw-primitives'
+import { drawBasicBubble, drawPanelFrame, drawThoughtBubble, fillBackgroundWhite } from '../core/draw-primitives'
 import { measureTextWidthCached } from '../metrics/measure-text-cache'
 import { SfxPlacer } from '../sfx-placer'
 
@@ -179,15 +179,32 @@ function renderPanelDialogues(
   const prevFont = ctx.font
 
   for (const inst of instructions) {
-    ctx.fillStyle = 'rgba(255,255,255,0.9)'
-    ctx.strokeStyle = '#000'
-    drawBasicBubble(ctx as unknown as import('../core/draw-primitives').Basic2DContext, {
-      x: inst.bubbleX,
-      y: inst.bubbleY,
-      width: inst.bubbleWidth,
-      height: inst.bubbleHeight,
-      type: inst.dialogue.type || 'speech',
-    })
+    const bubbleCfg = appConfig.rendering.canvas.bubble
+    ctx.fillStyle = bubbleCfg.fillStyle || 'rgba(255,255,255,0.95)'
+    ctx.strokeStyle = bubbleCfg.strokeStyle || '#000'
+    ctx.lineWidth = bubbleCfg.normalLineWidth || 2
+    const dialogueType = inst.dialogue.type || 'speech'
+    if (dialogueType === 'thought') {
+      drawThoughtBubble(
+        ctx as unknown as import('../core/draw-primitives').Basic2DContext & { quadraticCurveTo: (...a: number[]) => void },
+        inst.bubbleX,
+        inst.bubbleY,
+        inst.bubbleWidth,
+        inst.bubbleHeight,
+        {
+          ...bubbleCfg.thoughtShape,
+          tail: bubbleCfg.thoughtTail,
+        },
+      )
+    } else {
+      drawBasicBubble(ctx as unknown as import('../core/draw-primitives').Basic2DContext, {
+        x: inst.bubbleX,
+        y: inst.bubbleY,
+        width: inst.bubbleWidth,
+        height: inst.bubbleHeight,
+        type: dialogueType,
+      })
+    }
 
     let rendered = false
     if (inst.asset) {

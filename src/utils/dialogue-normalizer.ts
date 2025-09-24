@@ -14,6 +14,8 @@ interface UnknownDialogue {
  */
 export function normalizeDialogues(dialogues: unknown[]): Dialogue[] {
   const MAX_LEN = 50
+  // NOTE: 断片が極端に短くならないようにするための最小文字長 (元: マジックナンバー 5)
+  const MIN_FRAGMENT_LENGTH = 5
 
   // BudouX区切りを利用しつつ 50 文字以下になるまで再帰的に分割
   const splitLongText = (text: string): string[] => {
@@ -54,7 +56,7 @@ export function normalizeDialogues(dialogues: unknown[]): Dialogue[] {
     let bestIdx = 0
     let bestDist = Number.POSITIVE_INFINITY
     candidateBoundaries.forEach((b, i) => {
-      if (b < 5 || total - b < 5) return // 1文字・極小断片回避 (閾値を5文字とする: 要調整可)
+      if (b < MIN_FRAGMENT_LENGTH || total - b < MIN_FRAGMENT_LENGTH) return // 1文字・極小断片回避
       const d = Math.abs(b - ideal)
       if (d < bestDist) {
         bestDist = d
@@ -64,7 +66,10 @@ export function normalizeDialogues(dialogues: unknown[]): Dialogue[] {
 
     // 適切な境界が見つからない場合は 50 文字付近で強制分割
     if (bestDist === Number.POSITIVE_INFINITY) {
-      const forced = Math.min(MAX_LEN, total - MAX_LEN > 5 ? MAX_LEN : Math.ceil(total / 2))
+      const forced = Math.min(
+        MAX_LEN,
+        total - MAX_LEN > MIN_FRAGMENT_LENGTH ? MAX_LEN : Math.ceil(total / 2),
+      )
       const left = trimmed.slice(0, forced)
       const right = trimmed.slice(forced)
       return [...splitLongText(left), ...splitLongText(right)]
